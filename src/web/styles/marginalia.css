@@ -6,8 +6,8 @@
 
    **Visibly ours.** Small sans, soft ink and no hue: the accent belongs to the
    reader's own marks (docs/research/260828c-decorated-mode-ideas.md § The
-   channel budget), so these can never be mistaken for a comment, and comments
-   can join this column one day without being mistaken for ours. Upright, not
+   channel budget), so these can never be mistaken for a comment; the reader's
+   comments in this column retain their own words. Upright, not
    italic: the article's own synopsis under the title is italic, and a margin
    in the same voice read as the author's.
 
@@ -119,6 +119,10 @@
   cursor: pointer;
   color: var(--ink-soft);
   border-radius: 2px;
+}
+.marg-shut-label {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -164,6 +168,14 @@ p.marg-shut {
 .marg-open-by {
   color: var(--ink-faint);
 }
+.marg-open-answer {
+  color: var(--ink-faint);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
 .marg-open a {
   color: inherit;
   text-decoration: underline 1px var(--rule-strong);
@@ -207,7 +219,7 @@ p.marg-shut {
   left: var(--marg-gap);
   right: 0.5rem;
   bottom: 0;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule-strong);
   pointer-events: none;
 }
 .marg-head::after {

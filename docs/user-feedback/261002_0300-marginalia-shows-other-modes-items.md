@@ -29,7 +29,7 @@ on `9689-full-spya-m43th2`:
 
 - **Other modes' items in the margin, shut.** Beside a block, at most one line per kind: an FAQ
   question the block answers, a page on the web that answers a claim made there (Debate), a work
-  first cited there, and the reader's own notes and bookmarks. One item shows its title; several
+  first cited there, and the reader's own comments (a bookmark with no words stays a mark in the gutter). One item shows its title; several
   show a count. Pressing the line opens the rest underneath. Nothing is generated: each list is read
   only if it already exists, through read-only hooks that cannot start a run. Citations stay
   owner-only, as their prose marks are. Plan:
@@ -40,6 +40,10 @@ on `9689-full-spya-m43th2`:
   [marginalia.md](../project/marginalia.md), with a section on keeping an eye out for new kinds of
   item. [mode.md](../project/mode.md) points to it from its list of patterns, because there is no
   `new-mode.md`.
+
+Worth knowing: citations are the busiest kind. Gwern's *The Scaling Hypothesis* (12,646 words) gets
+24 citation lines. Shut, that still reads as a sparse column, so they stayed in. If a denser paper
+proves otherwise, taking citations out is one loop in `src/web/marginalia/notes.ts`.
 
 One question for Greg is left in [interface-vision.md](../project/interface-vision.md) (open
 question 2, now narrower). Should Debate show every row in the margin, as built, or only the rows

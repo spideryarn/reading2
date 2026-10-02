@@ -22,9 +22,11 @@ read. A visitor's lists come in their payload.
   spya-rczgjb).
 - **Each part's Socratic question**, beside the part's first real paragraph.
 - **An idea stamp** ("assumes", "introduces") where each idea first occurs.
-- **Other modes' items, shut by default**: FAQ questions, Debate's claim rows, Citations and the
-  reader's comments and bookmarks. Each block gets at most one line of each kind. One item shows its
-  title; several show a count ("3 works"). Pressing the line opens the rest underneath. This was
+- **Other modes' items, shut by default**: FAQ questions, Debate's claim rows, Citations and comments
+  (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
+  One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
+  quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
+  reason for a citation, or the comment and the first lines of its AI answer. This was
   [report 82](../user-feedback/261002_0300-marginalia-shows-other-modes-items.md), and the reasons
   are in [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md):
 
@@ -38,7 +40,7 @@ read. A visitor's lists come in their payload.
   | FAQ | the question's earliest answering passage that is still there | the quoted words must still be in that block |
   | Debate | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
   | Citations | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([citations.md](citations.md)) |
-  | Comments | the comment's block | a referee note (one with a `criterionId`) is left out |
+  | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |
 
   The quote check is there because a visitor's payload carries no staleness flag (no "this was
   written against an older version of the article"). A list written before a block changed could

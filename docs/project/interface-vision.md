@@ -63,7 +63,7 @@ always the simpler-first version, not the end state.
 
 ## Where each mode's content would live
 
-Read from the mode docs and the code, 2026-10-01. "Exists" means the data is already stored and
+Read from the mode docs and the code, 2026-10-02. "Exists" means the data is already stored and
 anchored, so placing it costs layout, not a model call.
 
 | Content | Anchored to | Where it would live | Exists today? |
@@ -85,7 +85,8 @@ anchored, so placing it costs layout, not a model call.
 | Tweets | the whole, posts linked to passages | left | yes, as a wide band (Greg already called it *"its own left-hand column"*, 5A) |
 | Diagram / Sketch / Illustrated | the whole | left, or a surface of its own | yes, as bands |
 | Skim | a route through quotes | left? it is walked, not read | yes, as a band |
-| Search, Chat, Remember / Quiz, Referee, Comments | the reader's own actions | tools, not columns | — |
+| Comments and bookmarks | blocks or quoted passages | right: collapsed | **in the margin** since 261002b; a visitor sees the owner's published comments |
+| Search, Chat, Remember / Quiz, Referee | the reader's own actions | tools, not columns | — |
 
 The finding that matters: **most of the right-hand column's content is already made and already
 anchored.** The expensive items — rebuttals, conclusions, explanations — are the two that need a new
@@ -94,8 +95,9 @@ model pass, and they can come last.
 ## What is already true
 
 - **The right column exists.** Marginalia's notes sit level with their blocks, push each other down
-  when they collide, generate nothing, show visitors the same thing, and are faint, small and
-  hueless so they read as the machine's voice
+  when they collide, and generate nothing. Visitors see the public Ideas, FAQ and Debate artefacts
+  plus the owner's published comments, but never the owner's Citations. The notes are faint, small
+  and hueless
   ([261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md)).
 - **Left and right already coexist.** Since 261001i the margin is a switch of its own, `?margin=1`,
   beside whichever band is open. From 900px both are drawn; from 612px to 899px whichever was
@@ -139,8 +141,8 @@ These are the reasons to go carefully, each one already said by Greg in another 
   heavily decorated middle pulls the other way, so the decorations have to be quiet by default
   (progressive disclosure is the whole point) and few at a time.
 - **Who owns the right margin.** The decorated research gave the right margin to *the reader* (their
-  comments and bookmarks, the only hue on the page); Marginalia gave it to *the machine*, kept faint
-  so the reader's notes could join later. If both live there, they need different voices — the
+  comments and bookmarks, the only hue on the page); Marginalia began with *the machine*, kept faint.
+  Both now live there, and still need different voices — the
   typefaces experiment (7C: author serif, AI Courier, reader Arial) is one answer.
 - **Cost and consent.** Marginalia generates nothing and shows only what other modes have already
   made. A margin that is useful on first open would have to run those modes, which spends money on
@@ -166,8 +168,8 @@ Each step is useful on its own, and none commits us to the next.
 3. **Every mark explains itself on hover and on tap** — the app-side version of the playground's
    check, before adding marks.
 4. **Recede the single-purpose modes** from the Dock into an overflow and the command bar — each
-   one only once its content reaches the reader through the middle or the right, which for Ideas,
-   Timeline and FAQ it does not yet.
+   one only once its content reaches the reader through the middle or the right; Timeline does not
+   reach either yet.
 5. **New model passes for the margin** — relation words, rebuttals, conclusions — measured on the
    eval corpus before shipping, as any new prompt is ([prompting-guide.md](prompting-guide.md)).
 6. **The left as a column of its own**, if the band turns out not to be enough.
@@ -198,8 +200,7 @@ question comes off this list.
 - How the single-purpose modes recede (an overflow and the command bar, or removal as Hierarchy
   was) — not askable until each one's content reaches the reader another way.
 - What a phone reader gets: the text and marks only, with each column a sheet opened on demand?
-- Whether the reader's comments and bookmarks share the right margin with the machine's notes, and
-  how the two voices differ.
+- How the reader's comments and bookmarks differ in voice from the machine's notes in the margin.
 - Whether the decorated text stays a playground or becomes the default middle, and if so whether it
   is a density dial (bare → loud, the designer's idea in [260828c](../research/260828c-decorated-mode-ideas.md))
   or a set of toggles.

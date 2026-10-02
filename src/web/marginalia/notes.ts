@@ -49,7 +49,10 @@ export type MarginaliaNote =
      docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md.
      `items` is never empty. */
   /** FAQ questions this block answers, each with the words here that do. */
-  | { kind: "faq"; items: { question: FaqQuestion; quote: string }[] }
+  | {
+      kind: "faq";
+      items: { question: FaqQuestion; quote: string; morePassages: number }[];
+    }
   /** Pages on the web that answer a claim made in this block. */
   | { kind: "debate"; items: MarginClaim[] }
   /** Works first cited in this block. Owner only — the caller's rule. */
@@ -69,8 +72,25 @@ export type MarginSources = {
 };
 
 type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
+type GroupedItems = Partial<{
+  [K in GroupedKind["kind"]]: Extract<GroupedKind, { kind: K }>["items"];
+}>;
 /** The order the kinds are drawn in below the question and the stamps. */
 const GROUPED_ORDER = ["faq", "debate", "citation", "comment"] as const;
+
+/** Turn the placement accumulator into the discriminated notes the renderer consumes. */
+function inGroupedOrder(grouped: ReadonlyMap<BlockId, GroupedItems>): Map<BlockId, GroupedKind[]> {
+  const out = new Map<BlockId, GroupedKind[]>();
+  for (const [blockId, byKind] of grouped) {
+    const list: GroupedKind[] = [];
+    for (const kind of GROUPED_ORDER) {
+      const items = byKind[kind];
+      if (items && items.length > 0) list.push({ kind, items } as GroupedKind);
+    }
+    if (list.length > 0) out.set(blockId, list);
+  }
+  return out;
+}
 
 /** A sentence's worth: fewer words than this is a heading, a date or a byline. */
 export const PARAGRAPH_MIN_WORDS = 12;
@@ -181,7 +201,7 @@ function groupedNotes(
   blocks: readonly Block[],
   more: MarginSources,
 ): Map<BlockId, GroupedKind[]> {
-  const grouped = new Map<BlockId, Partial<{ [K in GroupedKind["kind"]]: Extract<GroupedKind, { kind: K }>["items"] }>>();
+  const grouped = new Map<BlockId, GroupedItems>();
   const put = <K extends GroupedKind["kind"]>(
     blockId: BlockId,
     kind: K,
@@ -221,12 +241,19 @@ function groupedNotes(
   };
 
   for (const question of more.faq ?? []) {
+    const surviving = question.passages.filter((p) => holds(p.blockId, p.quote, p.start));
     const passage = earliest(
-      question.passages,
+      surviving,
       (p) => p.blockId,
-      (p) => holds(p.blockId, p.quote, p.start),
+      () => true,
     );
-    if (passage) put(passage.blockId, "faq", { question, quote: passage.quote });
+    if (passage) {
+      put(passage.blockId, "faq", {
+        question,
+        quote: passage.quote,
+        morePassages: surviving.length - 1,
+      });
+    }
   }
   for (const row of more.claims ?? []) {
     if (holds(row.blockId, row.claimQuote)) put(row.blockId, "debate", row);
@@ -237,22 +264,17 @@ function groupedNotes(
   }
   /* **Referee notes are not reading notes**: a comment with a `criterionId` is
      a peer-review placement (referee-mode.md), meaningless here without its
-     criterion. A visitor's payload never carries one. GPT Sol, F6 on the plan. */
+     criterion. A visitor's payload never carries one. GPT Sol, F6 on the plan.
+     **Nor is a bare bookmark**: with no words and no answer there is nothing to
+     say, the gutter already marks its block, and in the browser a column of
+     lone "Bookmark" stamps read as noise (2026-10-02). */
   for (const comment of more.comments ?? []) {
     if ("criterionId" in comment && comment.criterionId !== undefined) continue;
+    if (!comment.body && !comment.answer) continue;
     if (index.has(comment.blockId)) put(comment.blockId, "comment", comment);
   }
 
-  const out = new Map<BlockId, GroupedKind[]>();
-  for (const [blockId, byKind] of grouped) {
-    const list: GroupedKind[] = [];
-    for (const kind of GROUPED_ORDER) {
-      const items = byKind[kind];
-      if (items && items.length > 0) list.push({ kind, items } as GroupedKind);
-    }
-    if (list.length > 0) out.set(blockId, list);
-  }
-  return out;
+  return inGroupedOrder(grouped);
 }
 
 /**

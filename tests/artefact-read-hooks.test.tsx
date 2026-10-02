@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const asked: { url: string; method: string }[] = [];
 /** Which artefacts exist; the rest answer 404. */
 let present = new Set<string>();
+let failNext = new Set<string>();
 
 const BODIES: Record<string, unknown> = {
   ideas: {
@@ -92,6 +93,7 @@ vi.mock("../src/web/lib/api.js", async () => {
     asked.push({ url, method: init?.method ?? "GET" });
     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
     const kind = /^\/api\/(ideas|faq|debate|timeline)\//.exec(url)?.[1];
+    if (kind && failNext.delete(kind)) throw new Error(`${kind} read failed`);
     if (kind && present.has(kind)) return new Response(JSON.stringify(BODIES[kind]), { status: 200 });
     return new Response(null, { status: 404 });
   };
@@ -103,6 +105,7 @@ const faqHooks = await import("../src/web/useFaq.js");
 const { useFaq, useFaqRead } = faqHooks;
 const { useDebate, useDebateRead } = await import("../src/web/useDebate.js");
 const { useTimeline, useTimelineRead } = await import("../src/web/useTimeline.js");
+const { OwnerMarginFeed } = await import("../src/web/marginalia/MarginaliaColumn.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -111,6 +114,7 @@ let seen: Record<string, unknown> = {};
 beforeEach(() => {
   asked.length = 0;
   present = new Set();
+  failNext = new Set();
   seen = {};
   host = document.createElement("div");
   document.body.append(host);
@@ -147,6 +151,21 @@ const READS = [
 ] as const;
 
 describe("the read hooks start no job", () => {
+  it("the actual owner Marginalia feed performs only its three artefact GETs", async () => {
+    await act(async () => {
+      root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", onFeed: vi.fn() }));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+    expect(asked.map((request) => request.url).sort()).toEqual([
+      "/api/debate/read-hooks",
+      "/api/faq/read-hooks",
+      "/api/ideas/read-hooks",
+    ]);
+    expect(jobRequests()).toEqual([]);
+  });
+
   for (const [kind, use] of READS) {
     it(`${kind}: one GET, no job request, even when there is nothing there`, async () => {
       await mount(use, kind);
@@ -166,6 +185,19 @@ describe("the read hooks start no job", () => {
     const timeline = seen.timeline as ReturnType<typeof useTimelineRead>;
     expect([timeline.status, timeline.timeline?.events]).toEqual(["ready", []]);
     expect(jobRequests()).toEqual([]);
+  });
+
+  it("FAQ retryRead repeats only its failed GET", async () => {
+    failNext.add("faq");
+    await mount(useFaq, "faq");
+    const failed = seen.faq as ReturnType<typeof useFaq>;
+    expect([failed.status, failed.error]).toEqual(["error", "faq read failed"]);
+
+    await act(async () => failed.retryRead());
+    const retried = seen.faq as ReturnType<typeof useFaq>;
+    expect([retried.status, retried.error]).toEqual(["none", null]);
+    expect(asked.filter((r) => r.url === "/api/faq/read-hooks")).toHaveLength(2);
+    expect(jobRequests().filter((request) => request.method === "POST")).toEqual([]);
   });
 });
 

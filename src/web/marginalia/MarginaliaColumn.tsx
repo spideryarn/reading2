@@ -160,9 +160,9 @@ function ShutNote({
   const [open, setOpen] = useState(false);
   const panel = useId();
   const label = (
-    <>
+    <span className="marg-shut-label">
       <span className="marg-stamp">{stamp}</span> <span className="marg-shut-line">{line}</span>
-    </>
+    </span>
   );
   if (children === null) {
     return (
@@ -202,10 +202,13 @@ function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["i
       tip="A question a careful reader might ask, which this passage answers. From FAQ mode."
       line={only ? only.question.question : plural(items.length, "question", "questions")}
     >
-      {items.map(({ question, quote }) => (
+      {items.map(({ question, quote, morePassages }) => (
         <div key={question.id} className="marg-open-item">
           {!only && <p className="marg-open-head">{question.question}</p>}
           <p className="marg-open-quote">Answered here: “{quote}”</p>
+          {morePassages > 0 && (
+            <p className="marg-open-by">+{plural(morePassages, "more passage", "more passages")}</p>
+          )}
         </div>
       ))}
     </ShutNote>
@@ -231,13 +234,14 @@ function DebateNote({ items }: { items: readonly MarginClaim[] }) {
       line={only ? rowWork(only).headline : plural(items.length, "page on the web", "pages on the web")}
     >
       {items.map((row) => (
-        <div key={row.url} className="marg-open-item">
+        <div key={row.id} className="marg-open-item">
           <p className="marg-open-head">
             {!only && <span className="marg-stamp">{RELATION_WORD[row.relation]}</span>}{" "}
             <a href={row.url} target="_blank" rel="noreferrer noopener">
               {rowWork(row).headline}
             </a>
           </p>
+          <p className="marg-open-quote">“{row.sourceQuote}”</p>
           {row.applies && <p>{row.applies}</p>}
         </div>
       ))}
@@ -268,23 +272,23 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
   );
 }
 
+/** The reader's comments. Bare bookmarks never reach here: notes.ts leaves
+    them to the gutter's mark. */
 function CommentNote({ items }: { items: readonly MarginComment[] }) {
   const only = items.length === 1 ? items[0] : undefined;
-  const written = items.filter((c) => c.body);
   return (
     <ShutNote
       kind="comment"
-      stamp={only && !only.body ? "Bookmark" : "Note"}
-      tip="A comment or bookmark on this passage. All of them are in the drawer at the foot of the window."
-      line={only ? (only.body ?? "") : plural(items.length, "note", "notes")}
+      stamp="Note"
+      tip="A comment on this passage. All of them are in the drawer at the foot of the window."
+      line={only ? (only.body ?? "AI answer") : plural(items.length, "note", "notes")}
     >
-      {written.length === 0 && only
-        ? null
-        : items.map((c) => (
-            <p key={c.id} className="marg-open-item">
-              {c.body ?? "Bookmarked."}
-            </p>
-          ))}
+      {items.map((c) => (
+        <div key={c.id} className="marg-open-item">
+          {c.body && <p>{c.body}</p>}
+          {c.answer && <p className="marg-open-answer">{c.answer}</p>}
+        </div>
+      ))}
     </ShutNote>
   );
 }

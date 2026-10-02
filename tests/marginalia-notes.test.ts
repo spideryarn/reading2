@@ -238,7 +238,9 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
     ]);
     const notes = marginaliaNotes(null, quoted, null, { faq: [q] });
     expect([...notes.keys()]).toEqual(["spya-aaaaa3"]);
-    expect(notes.get("spya-aaaaa3")).toEqual([{ kind: "faq", items: [{ question: q, quote: say(2) }] }]);
+    expect(notes.get("spya-aaaaa3")).toEqual([
+      { kind: "faq", items: [{ question: q, quote: say(2), morePassages: 1 }] },
+    ]);
   });
 
   it("passes over an FAQ passage whose block is gone, or whose words are no longer in it", () => {
@@ -250,6 +252,17 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
     expect([...marginaliaNotes(null, quoted, null, { faq: [q] }).keys()]).toEqual(["spya-aaaaa4"]);
     const none = faqQ("f3", [{ blockId: "spya-aaaaa2", quote: "nothing like it" }]);
     expect(marginaliaNotes(null, quoted, null, { faq: [none] }).size).toBe(0);
+  });
+
+  it("counts only other FAQ passages whose quoted words still survive", () => {
+    const q = faqQ("f4", [
+      { blockId: "spya-aaaaa2", quote: say(1) },
+      { blockId: "spya-aaaaa4", quote: say(3) },
+      { blockId: "spya-aaaaa5", quote: "words this block never said" },
+      { blockId: "spya-zzzzzz", quote: say(5) },
+    ]);
+    const notes = marginaliaNotes(null, quoted, null, { faq: [q] }).get("spya-aaaaa2") ?? [];
+    expect(notes[0]?.kind === "faq" && notes[0].items[0]?.morePassages).toBe(1);
   });
 
   it("groups several of one kind in one block into one note", () => {
@@ -277,14 +290,14 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
     expect([...notes.keys()]).toEqual(["spya-aaaaa3"]);
   });
 
-  it("leaves referee notes out of the reader's comments, and keeps bookmarks", () => {
+  it("leaves referee notes and bare bookmarks out of the reader's comments", () => {
     const comments = [
       { id: "m1", blockId: "spya-aaaaa2", createdAt: "t", body: "mine", status: "none" },
       { id: "m2", blockId: "spya-aaaaa2", createdAt: "t", status: "none" },
       { id: "m3", blockId: "spya-aaaaa2", createdAt: "t", body: "a referee note", status: "none", criterionId: "k" },
     ] as unknown as MarginComment[];
     const here = marginaliaNotes(null, quoted, null, { comments }).get("spya-aaaaa2") ?? [];
-    expect(here[0]?.kind === "comment" && here[0].items.map((c) => c.id)).toEqual(["m1", "m2"]);
+    expect(here[0]?.kind === "comment" && here[0].items.map((c) => c.id)).toEqual(["m1"]);
   });
 
   it("orders the kinds on one block: question, idea, FAQ, Debate, citations, the reader's own", () => {
@@ -299,7 +312,7 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
     } as Partial<Idea> & Pick<Idea, "id" | "name">);
     const kinds = (
       marginaliaNotes(tree2, quoted, [here], {
-        comments: [{ id: "m", blockId: "spya-aaaaa2", createdAt: "t", status: "none" }] as unknown as MarginComment[],
+        comments: [{ id: "m", blockId: "spya-aaaaa2", createdAt: "t", body: "x", status: "none" }] as unknown as MarginComment[],
         citations: [work("c", ["spya-aaaaa2"])],
         claims: [claim("https://c.example", "spya-aaaaa2", say(1))],
         faq: [faqQ("f", [{ blockId: "spya-aaaaa2", quote: say(1) }])],

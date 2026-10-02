@@ -64,8 +64,8 @@ owner's public comments, as they already get Ideas. **Citations stay owner-only*
 prose marks' decision ([citations.md § Who sees it](../project/citations.md)): the margin is not the
 place to quietly reverse it.
 
-**The head** (spya-rczgjb): a hairline rule under it, the same `--rule` colour as the app's other
-dividers, above the existing fade. Greg offered a box or a line; the line is the quieter of the two
+**The head** (spya-rczgjb): a hairline rule under it in `--rule-strong` (plain `--rule` was too faint
+on the dark page in the browser check), above the existing fade. Greg offered a box or a line; the line is the quieter of the two
 and the column's notes have no rules of their own below the head except the question's left rule,
 so a horizontal rule reads as a different thing. One CSS declaration.
 
@@ -130,3 +130,28 @@ GPT Sol on the plan (`--sandbox review`) and on the code (`--sandbox workspace-w
 6. **Referee notes are not reading notes** — owner comments with a `criterionId` are left out.
 7. **One disclosure per kind per block** — accepted, replacing the two-level count: one item shows
    its title shut; several show "3 citations", and opening shows them all.
+
+## After the browser check and GPT Sol's code review
+
+**The browser check** (Playwright, desktop and 390px, local articles `vb-spya-vu3xen`,
+`cargocult-spya-rz663q`, `scaling-hypothesis`, `writes`): all eight checks passed. Lines open in
+place, the notes below move down without overlapping, a press changes neither the row nor `?at=`,
+Enter and Space toggle, opening the column made only GETs, and at 390px nothing new appears. Two
+changes came out of it:
+
+- **Bare bookmarks left out.** A bookmark with no words showed as a lone "BOOKMARK" stamp with
+  nothing after it, beside a block the gutter already marks with the bookmark icon. Comments with
+  words (or an AI answer) stay.
+- **The head's rule in `--rule-strong`**, because `--rule` was barely visible on the dark page.
+
+**Citation density, measured** (Sol's F3 on the plan, F1 on the code): on Gwern's *The Scaling
+Hypothesis* (12,646 words, the most citation-heavy local article) the column carries 24 citation
+lines. Shut, one line each, they read as a sparse column rather than a second article. So citations
+stay, and the note to Greg names the measurement. If a denser paper shows otherwise, dropping the
+kind is one loop in `notes.ts`.
+
+[Sol's code review](261002b-marginalia-code-review-sol.md): no P0. Sol fixed, inside the stage: the
+promised open content (FAQ's remaining passages, Debate's source quote, a comment's AI answer),
+Debate rows keyed on `id` rather than `url` (two rows can share a URL), the ellipsis clipping the
+chevron, and tests for the owner feed's requests, post-job refresh, and taps inside TableView. It
+confirmed that "nothing generates" holds.
