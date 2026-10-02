@@ -5,7 +5,7 @@
  * Sol found it in one of two plan reviews — the IDs (F…, G…) are its findings,
  * and docs/plans/260909b-usage-limits-tab-fleet-dashboard-24h-history.md is the
  * specification. The dead ends are in
- * docs/research/260909a-usage-history-the-dead-ends-and-how-the-plan-was-wrong-twice.md.
+ * docs/investigations/260909a-usage-history-the-dead-ends-and-how-the-plan-was-wrong-twice.md.
  *
  * The theme running through the whole file: **a history record must not be able
  * to claim more than it observed.** Most of these tests are about a wrong answer

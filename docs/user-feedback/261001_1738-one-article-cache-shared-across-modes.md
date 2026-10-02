@@ -24,7 +24,7 @@ The time in the file name is when this session wrote the note.
 
 So the effort-vs-quality eval was run
 ([plan 261001p](../plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md),
-[research 261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md)).
+[research 261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md)).
 Eight full-length articles, two draws per arm, two blind judges, about $26 of API spend.
 
 - **Sketch: `high` → `low`.** Neither judge saw a loss. Each call is 58% cheaper and four times
@@ -39,7 +39,7 @@ The caching plumbing (option B) is not built, as recommended; it can be raised a
 Everything below is the original note, kept. The plan it pointed to is
 [261001o](../plans/261001o-one-shared-article-first-prefix-cached-across-modes.md) and the
 measurement is
-[research 261001b](../research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
+[research 261001b](../investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
 
 What was found, in plain words:
 

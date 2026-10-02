@@ -179,6 +179,7 @@ function owner(over: Partial<UseSimple> = {}): UseSimple {
     retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},
+    refresh: async () => {},
     cancel: () => {},
     ...over,
   };
@@ -539,7 +540,8 @@ describe("Summary's band, arriving on an old outline link", () => {
   it("draws the owner the default plain-words level, not the outline", async () => {
     await band("owner");
     noOutline();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Simple");
+    /* Brief, the default since 8N (plan 261002c). */
+    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
     /* The plain-words body, at its empty state — the GET answered 404. */
     expect(text()).toContain(SIMPLE_NONE_OWNER);
     expect(posts, "arriving on a link spends nothing").toEqual([]);
@@ -548,9 +550,44 @@ describe("Summary's band, arriving on an old outline link", () => {
   it("draws a visitor the stored paragraphs at the default level", async () => {
     await band("visitor");
     noOutline();
+    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+    expect(text()).toContain(BRIEF_TEXT);
+    expect(text()).not.toContain(WHAT);
+    expect(gets, "a visitor's band reads nothing").toEqual([]);
+  });
+
+  /* Greg, 2026-10-01 (8N, spya-zw479b): "In summary mode, default to the
+     brief summary when it opens for the first time." No `?summary=` selects
+     that default; explicit Simple and Fuller are remembered in the address. */
+  it("opens on Brief when the address names no level, and Simple only when it says so", async () => {
+    const { NuqsAdapter } = await import("nuqs/adapters/react");
+    const inner = createElement(VisitorSummaryBand, { simple: { levels: artefact().levels }, onJump: () => {} });
+    history.replaceState(null, "", "/read/a-piece?mode=summary");
+    await act(async () => {
+      root.render(createElement(NuqsAdapter, null, inner));
+    });
+    await settle();
+    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+    expect(text()).toContain(BRIEF_TEXT);
+    await act(async () => {
+      root.unmount();
+    });
+    root = createRoot(host);
+    history.replaceState(null, "", "/read/a-piece?mode=summary&summary=simple");
+    await act(async () => {
+      root.render(createElement(NuqsAdapter, null, inner));
+    });
+    await settle();
     expect(slider().getAttribute("aria-valuetext")).toBe("Simple");
     expect(text()).toContain(WHAT);
-    expect(gets, "a visitor's band reads nothing").toEqual([]);
+    /* Back to Brief, the default: nuqs drops it from the address (plan, Sol P2). */
+    const briefEnd = host.querySelector<HTMLButtonElement>('button[aria-label="Show Brief summary"]');
+    await act(async () => {
+      briefEnd?.click();
+    });
+    await settle();
+    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+    expect(new URLSearchParams(location.search).has("summary")).toBe(false);
   });
 
   it("says the slider's three levels without a visible level name beside it", async () => {

@@ -359,7 +359,9 @@ opened. Four things follow, and three of them are the interesting part:
   The band still **revalidates** when it opens, behind the list already showing, and that is not
   optional: `useJobs` treats its first poll as a baseline and does not announce a job that had
   already finished, so a glossary written in another tab while the band was closed has nothing
-  else to bring it in. So the rule is not "fetch once" — it is that **`status` never goes back to
+  else to bring it in. (A completion announced by this tab's engine after the reader left the band
+  is heard by the read itself — `useStepFinished`, src/web/useCitations.ts § An always-mounted read
+  is not an always-fresh read.) So the rule is not "fetch once" — it is that **`status` never goes back to
   `loading` for an article it has already answered for**. Moving to a *different* article does
   reset it, deliberately: that is a list nobody has yet.
 
@@ -638,7 +640,7 @@ not separate the two.
 
 The ~$7 production-shaped Opus-vs-Sol check was not run. The numbers, the models that failed, and
 what would reopen it are
-[research 261002a](../research/261002a-dig-deeper-answer-model.md).
+[investigation 261002a](../investigations/261002a-dig-deeper-answer-model.md).
 
 **Look up** — the typed box, [below](#looking-a-term-up) — is not Dig deeper and did not change: it is
 a first question about a phrase rather than a second look at an answer, so the model still decides

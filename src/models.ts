@@ -1761,7 +1761,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      ways, and no direction holds. It is 58% cheaper and about four times faster
      per call ($0.235 → $0.100, 176 s → 42 s), and validity was the same at both
      levels, 1 malformed draw in 16.
-     docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md
+     docs/investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md
      § Sketch.
 
      The argument this comment used to make for `high` — the stage has to hold a
@@ -1775,7 +1775,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      group; distinct schemas now separate every member anyway. It shares a
      cached article with nothing. That costs close to nothing today, because each
      mode is its own job and two jobs share no cache
-     (docs/research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
+     (docs/investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md).
      It is a constraint on plan 261001o's caching options, which assumed one
      effort per group. */
   sketch: "low",

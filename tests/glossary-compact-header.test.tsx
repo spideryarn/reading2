@@ -94,6 +94,7 @@ function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
     starting: false,
     find: async () => {},
     more: async () => {},
+    refresh: async () => {},
     cancel: noop,
     look: async () => {},
     looking: null,

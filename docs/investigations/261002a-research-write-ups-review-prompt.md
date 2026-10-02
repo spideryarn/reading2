@@ -9,11 +9,11 @@ wrongly, invented, or overstated.
 
 ## The docs to check (all new, untracked)
 
-docs/research/261002a-dig-deeper-answer-model.md  (sources: docs/plans/261001s-dig-deeper-answer-model-eval.md, its three *-sol.md reviews beside it, evals/results/dig-deeper/2026-10-02-main-report.md)
-docs/research/261002b-*.md  docs/research/261002c-*.md  docs/research/261002d-*.md
-docs/research/261002e-*.md  docs/research/261002f-*.md  docs/research/261002g-*.md
-docs/research/261002h-*.md  docs/research/261002i-*.md  docs/research/261002j-*.md
-docs/research/261002k-*.md  docs/research/261002l-*.md  docs/research/261002m-*.md
+docs/investigations/261002a-dig-deeper-answer-model.md  (sources: docs/plans/261001s-dig-deeper-answer-model-eval.md, its three *-sol.md reviews beside it, evals/results/dig-deeper/2026-10-02-main-report.md)
+docs/investigations/261002b-*.md  docs/investigations/261002c-*.md  docs/investigations/261002d-*.md
+docs/investigations/261002e-*.md  docs/investigations/261002f-*.md  docs/investigations/261002g-*.md
+docs/investigations/261002h-*.md  docs/investigations/261002i-*.md  docs/investigations/261002j-*.md
+docs/investigations/261002k-*.md  docs/investigations/261002l-*.md  docs/investigations/261002m-*.md
 Each names its own source plans and results files in its first paragraph and links.
 
 Also the new paragraph in docs/project/glossary.md § "Digging deeper into a term" (search "Why Opus, measured").

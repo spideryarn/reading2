@@ -8,7 +8,7 @@ in this worktree (an untracked file). Base commit: `git log -1 --format=%H`.
 **What it is for:** an eval that decides whether Sketch, Illustrated, Ideas (Sonnet 5, adaptive
 thinking at `high`) and Hierarchy (already `low`) can think less without getting worse, judged
 blind, so their effort can be lowered to save ~9–10% of a normal article's cost. Background numbers:
-`docs/research/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md`. Greg's words
+`docs/investigations/261001b-cost-per-article-and-the-cross-mode-article-cache/README.md`. Greg's words
 and leanings are quoted in the plan.
 
 **Read to check the plan against the code** (start here; it does not limit scope):

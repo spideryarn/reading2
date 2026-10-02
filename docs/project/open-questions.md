@@ -84,7 +84,7 @@ experiment and a demo. Explicitly *not* time-in-app or articles-completed
 ([anti-goals](vision.md#anti-goals)).
 
 A study that would answer it, for Greg to run:
-[260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md](../research/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md)
+[260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md](../investigations/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md)
 — written 2026-09-10, not yet run.
 
 ---

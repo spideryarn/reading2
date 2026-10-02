@@ -203,11 +203,16 @@ the machinery is still open now.
   doc whose wording is a rule still goes through
   [edit-important-docs.md](edit-important-docs.md) when the fix changes what the rule *says*. A fix
   that only makes the doc match the code is covered by this permission.
+- **The reader's help.** If the project has a help page for its users (in this repo, `/help` —
+  [help-page.md](../project/help-page.md)), a change to what a reader sees or can do updates it in
+  the same stage, like a doc.
 - **Tests.** Write the failing test before the fix; a test that was never red proves nothing. Then
   mutate the finished code at the end of the stage and check the suite notices — red-first only tests
   the diff ([silent-success.md](silent-success.md)).
 - **Spikes.** When the answer isn't clear, spend a subagent on a throwaway experiment and find out,
-  rather than arguing it out in prose.
+  rather than arguing it out in prose. If what it found informs a decision (and an eval or a
+  model comparison always does), write it up in the project's investigations folder before the stage
+  is called done.
 - **Static analysis, typecheck, lint** — as well as the suite. Run the gate the project actually
   uses ([code-quality-overview.md](../project/code-quality-overview.md)).
 - **Drive a real browser**, in a subagent, for anything with a UI — with whatever automation the

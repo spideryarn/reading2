@@ -189,6 +189,7 @@ import {
   Network,
   Info,
   Layers,
+  LifeBuoy,
   ListOrdered,
   MessageSquareText,
   MessagesSquare,
@@ -219,6 +220,9 @@ import { withSubMode, type SubMode } from "./sub-modes.js";
    docs/plans/260906h-mode-catalog-and-a-command-bar.md. */
 import { CommandBar, type CommandBarArticle } from "./CommandBar.js";
 import { useDockFit } from "./dock-fit.js";
+/* Plain data and no React (help-anchors.ts says so on purpose), so the bar
+   links into Help without pulling the page's words into its own chunk. */
+import { helpHref, modeAnchor } from "./help/help-anchors.js";
 /* Type only: the bar is *handed* the switch, it does not subscribe to the store
    — see the `experimental` prop. A type import cannot become a subscription. */
 import type { ExperimentalSetting } from "./experimental-store.js";
@@ -1809,6 +1813,10 @@ export function Dock({
      ⌘-K: a visitor's reading view draws the Metadata button too. */
   const metadataHref = readHref(slug, search, "metadata");
   useMetadataChord(view === "article", metadataHref);
+  /* One value for the Help link and the command bar's Help row, for the same
+     reason: two doors that open on different sections teach the reader that
+     neither can be trusted. */
+  const helpLink = helpHrefFor(mode);
 
   /**
    * ## The drawer takes focus, and gives it back
@@ -1980,8 +1988,9 @@ export function Dock({
         diagram={diagram}
         /* The same two values the Metadata link below is built
            from, so the bar's rows and the buttons cannot go to different
-           places. `search` is already through `carriedSearch`. */
-        article={{ slug, search }}
+           places. `search` is already through `carriedSearch`. `help` is the
+           Help link's href, for the same reason. */
+        article={{ slug, search, help: helpLink }}
         /* **The drawer's own callback, bound to its panel**, and `undefined`
            where there is no drawer. `Comments` is the one row in the bar that
            is neither a mode nor a page — it opens the thing that is already
@@ -2225,6 +2234,44 @@ export function Dock({
           <DockExperimentalSwitch setting={experimental} variant={toggle} />
         )}
 
+        {/* **Help, beside Feedback, for everybody.** Greg asked for more (i)
+            icons explaining the interface (SPIDERYARN-READING2-85); GPT Sol's
+            plan review turned that into this one labelled link rather than new
+            glyphs in the spine, which is 12px wide and clips, or in the band's
+            corner, which already holds its (i) — docs/plans/261002b-help-page.md
+            § After GPT Sol's plan review, R5.
+
+            **Here, at the app end of the row**, because Help is about the app
+            rather than about this article: outside the `TooltipGroup` above for
+            the reason the switch is, and just before Feedback because the two
+            are the conventional pair — *how does this work* and *this does not
+            work*. Unlike Feedback it has no gate: a visitor on a shared link is
+            the reader who knows least about what the buttons do, and `/help` is
+            a public page.
+
+            **Contextual**: it opens at the section for the mode the band is in,
+            or at the reading view in Plain and off the reading view —
+            `helpHrefFor`. A real link in the same tab, so Back returns to the
+            article with its address, mode and place intact, and ⌘-click opens
+            Help beside it.
+
+            `dock-help` is so the fit ladder can drop its word on the first rung,
+            with the wordmark's and Feedback's (styles/dock-fit.css § the bar's
+            fit ladder): the app-level words are the ones worth losing before
+            any mode's. On a phone the row already scrolls rather than clips
+            (docs/project/narrow-windows.md), so one more glyph pushes nothing
+            off-screen; it is one more thing to drag to. */}
+        <DockLink
+          href={helpLink}
+          current={false}
+          icon={LifeBuoy}
+          label="Help"
+          className="dock-help"
+          hover={
+            <ControlTip head="Help" what={NOT_A_MODE.help.what} how={NOT_A_MODE.help.how} />
+          }
+        />
+
         {/* **Feedback, at the far end, and only for somebody a report can
             belong to.** It left the top-right corner on 2026-09-06 for the same
             reason the wordmark left the top-left: the corner is being abolished
@@ -2234,7 +2281,8 @@ export function Dock({
 
             **After the switch**, because the two are the bar's app-level pair
             and this is the least urgent thing in the row — which is also why
-            the fit ladder takes its word first (dock-fit.ts § the rungs).
+            the fit ladder takes its word first (dock-fit.ts § the rungs). Help
+            has sat between them since 2026-10-02; see there.
 
             The one thing this makes worse, recorded rather than discovered
             later: on a phone the row already overflows and scrolls, and this
@@ -2280,8 +2328,9 @@ const TITLES: Record<Panel, { own: string; visitor: string }> = {
 };
 
 /**
- * **The three buttons in this bar that are not modes**, and the two sentences
- * each of them says on hover.
+ * **The buttons in this bar that are not modes**, and the two sentences
+ * each of them says on hover. Three of them since Help joined on 2026-10-02 —
+ * Comments, Metadata, Help — after a spell at two when Tweets became a mode.
  *
  * The modes keep theirs in `MODE_CATALOG` because a `Record<Mode, …>`
  * makes the next mode a compile error until somebody writes them
@@ -2378,7 +2427,36 @@ const NOT_A_MODE = {
        visitor's metadata page has no `RerunSection` at all. */
     how: "Opening it spends nothing: every number on it is read off what has already been written, which is why it is the page to go to when something looks wrong. It also says which parts have been built for this article and which have not.",
   },
+  help: {
+    /* Not the button's own word back (the label is *Help*), and true on every
+       surface it is drawn on — owner, visitor, metadata page. */
+    what: "How Spideryarn works: every mode, the map down the side, the gutter, sharing, and what costs what",
+    /* The half nobody would guess: that it is not the top of a manual but the
+       part about what is on screen, and that the sections are linkable. Said
+       about the page rather than about the press, as the cards above are. */
+    how: "It opens at the part about the mode you are in, or at the reading view when no mode is open. Every section has a link of its own, so one can be sent to somebody who asks.",
+  },
 } as const;
+
+/**
+ * **Where the Help link opens**: the section for the mode the band is in, or
+ * the reading view's when there is no band to explain.
+ *
+ * Plain has a section of its own (`mode-plain`), but in Plain the screen is the
+ * reading view and nothing else, so that is what a reader pressing Help there
+ * is asking about. Marginalia's column with no band is the same case — it is a
+ * column beside the prose, not a mode the band is in — and it arrives here as
+ * `plain`, because `mode` is the band (`BandMode` excludes it). Off the reading
+ * view `mode` is undefined, and the page you are on is not a mode either.
+ *
+ * Through `helpHref`, never a hand-built `/help#…`: a mode retired or a section
+ * renamed then turns this red at typecheck rather than into a link that opens
+ * at the top (help-anchors.ts § Typed). Exported for the tests.
+ */
+export function helpHrefFor(mode: BandMode | undefined): string {
+  if (mode === undefined || mode === "plain") return helpHref("the-reading-view");
+  return helpHref(modeAnchor(mode));
+}
 
 /**
  * A carried query string with a drawer panel asked for in it.

@@ -27,8 +27,9 @@ listed here; the names under each are files in `docs/project/`.
 - **[vision.md](docs/project/vision.md)** — the intent, the principles, the anti-goals, and the two
   exceptions Greg has made to "prefer boring".
   <br>↳ `open-questions.md` · `positioning.md` (the website, the name, who it speaks to first) ·
-  `original-version/` (the larger app this is an offshoot of) · and the four folders that hold the
-  project's memory: `plans.md` · `research.md` · `postmortems.md` · `tutorials.md`
+  `original-version/` (the larger app this is an offshoot of) · and the five folders that hold the
+  project's memory: `plans.md` · `research.md` · `investigations.md` · `postmortems.md` ·
+  `tutorials.md`
 - **[architecture.md](docs/project/architecture.md)** — the pipeline stage by stage, what a block
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
@@ -82,6 +83,7 @@ listed here; the names under each are files in `docs/project/`.
   `dictation.md` (talking into a text box) ·
   `copy.md` (reader-facing failure messages) ·
   `website-text.md` (the landing page, the contact address) ·
+  `help-page.md` (`/help`, for readers, and the deploy step that keeps it true) ·
   `privacy.md` (what we do with a reader's data, and the page that says so)
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
@@ -157,7 +159,10 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
   to write one. [tutorials.md](docs/project/tutorials.md)
 - **`docs/research/`** — the working behind a decision: the options weighed, the sources, the dead
   ends. A plan says what we're doing; a research doc says what else we could have done and why not.
-  [research.md](docs/project/research.md)
+  External work: web and literature deep dives, library choices. [research.md](docs/project/research.md)
+- **`docs/investigations/`** — internal work: evals, model comparisons, prompt and effort
+  measurements, spikes against our own code or data. Any that informs a decision is written up here
+  before the work is called done. [investigations.md](docs/project/investigations.md)
 - **`docs/user-feedback/`** — one note per reader report: their words, what we did, and which of the
   three endings it got — [feedback-reports.md](docs/project/feedback-reports.md).
 - **[`docs/reusable/`](docs/reusable/README.md)** — notes that aren't about this project and are
@@ -174,7 +179,7 @@ The individual files are not indexed here — there are a lot of them and they k
 the directory and read the file names; they say what each one is about, and the first paragraph of
 the file says the rest. They are named `yyMMdd<letter>-kebab-description.md` (`.html` for a
 tutorial), so they sort by the day the work started; a plan and its reviews share one letter. Get
-the name from `npx tsx scripts/plan-name.ts` (`--dir=` for the other three) —
+the name from `npx tsx scripts/plan-name.ts` (`--dir=` for the other four) —
 [write-planning-doc.md](docs/reusable/write-planning-doc.md).
 
 ## The one contract that matters

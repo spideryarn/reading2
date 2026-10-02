@@ -52,7 +52,7 @@ The plan this feeds: [261001o](../../plans/261001o-one-shared-article-first-pref
   in a group pays the write premium, because nothing can know in advance whether a sibling will
   follow. The first draft of this doc said 6%; that priced perfect foresight, and GPT Sol caught it.
 - **One rendering everywhere adds about 1 point** (a9, `pipe_eff`, 5%). Effort is part of the cache
-  key (measured, [260826b](../260826b-prompt-caching-anthropic.md)), and the stages run at three
+  key (measured, [260826b](../../research/260826b-prompt-caching-anthropic.md)), and the stages run at three
   levels: Hierarchy at `low`; Glossary, Quotes and Cross-references at `medium`; the rest at
   `high`. Citations sends every block, apparatus included, so it shares with nobody.
 - **One effort level as well gets about 9–10%** (a9, `pipe_one_nohier` and `pipe_one`). That would

@@ -75,7 +75,7 @@ which is what [`infra/hetzner/cloud-init.yaml`](../../infra/hetzner/cloud-init.y
 
 What it gives: roaming across IP changes, surviving suspend, no idle timeout, and predictive local
 echo so typing stays responsive. When typing nonetheless feels slow, measure before tuning —
-[260831b-gjd-remote-typing-latency.md](260831b-gjd-remote-typing-latency.md) found the box
+[260831b-gjd-remote-typing-latency.md](../investigations/260831b-gjd-remote-typing-latency.md) found the box
 responsible for 0.12% of it, and `uptime`, `top` and PSI all pointed the wrong way.
 
 What it costs, in the order these will bite you:

@@ -7,7 +7,7 @@ file. Read-only review.
 ## Read
 
 1. The protocol under review:
-   `docs/research/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md`
+   `docs/investigations/260910a-reader-study-protocol-do-the-reading-tools-help-understanding.md`
 2. Its brief: `docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md`, section
    "P — test the product's purpose before adding more modes", and "Read this before taking a stage".
 3. `docs/project/vision.md` (intent, principles, anti-goals) and `docs/project/open-questions.md` § Q6.

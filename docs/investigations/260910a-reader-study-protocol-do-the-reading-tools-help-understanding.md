@@ -26,7 +26,7 @@ The claim under test is the one in [vision.md](../project/vision.md):
 > — Greg, 2026-08-24
 
 and the tiebreak that makes it measurable, from
-[Greg's notes](260902k-greg-notes-the-edge-between-ease-and-difficulty.md):
+[Greg's notes](../research/260902k-greg-notes-the-edge-between-ease-and-difficulty.md):
 
 > what will help the human to best form their own rich updated internal representations?
 

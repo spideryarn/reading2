@@ -19,7 +19,7 @@ it sparingly and for good reason, and do not add complexity for small savings.
 The research is [261001a](../research/261001a-prompt-caching-best-practice-2026.md). The audit (call
 site census, production `ai_calls` over 30 days, read-only, SQL included) is summarised below; its
 numbers are the basis of every ranking here — the full audit is
-[261001a-prompt-caching-production-audit](../research/261001a-prompt-caching-production-audit/README.md).
+[261001a-prompt-caching-production-audit](../investigations/261001a-prompt-caching-production-audit/README.md).
 
 ## What the audit found
 

@@ -76,6 +76,7 @@ export function ProfileBox({
   disabled,
   rows = 4,
   save,
+  onBusyChange,
 }: {
   id: string;
   label: string;
@@ -91,6 +92,14 @@ export function ProfileBox({
   rows?: number;
   /** Where the save stands. The page owns the save; the box owns saying so. */
   save: SaveState;
+  /**
+   * Told when the microphone goes on, or its words start or stop being on
+   * their way. For a container that can be dismissed from under the box — the
+   * profile popover — because dictation's unmount *aborts*, and a panel closed
+   * mid-sentence would throw the spoken words away. A page that cannot be
+   * dismissed has no use for it. ProfilePanel.tsx.
+   */
+  onBusyChange?(busy: boolean): void;
 }) {
   const box = useRef<HTMLTextAreaElement>(null);
 
@@ -121,6 +130,14 @@ export function ProfileBox({
   const busy = dictation.armed || dictation.transcribing;
   const latest = useRef({ save, onCommit, busy });
   latest.current = { save, onCommit, busy };
+
+  /* Through a ref, so a caller passing a fresh arrow each render does not
+     re-announce an unchanged `busy`. */
+  const tell = useRef(onBusyChange);
+  tell.current = onBusyChange;
+  useEffect(() => {
+    tell.current?.(busy);
+  }, [busy]);
 
   /* **Saved after a pause.** Keyed on the text, never on the state: a refused
      save moves the state to `error`, and a timer re-armed by that would retry a

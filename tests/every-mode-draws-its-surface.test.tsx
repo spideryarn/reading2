@@ -412,8 +412,9 @@ const CITATIONS: Citations = {
 /**
  * **A plain-words paragraph** — what Summary's band draws since its outline
  * went (plan 261001p). The default level's first paragraph; the others are
- * different strings, so the row proves the band opened on `simple`.
+ * different strings, so the row proves the band opened on `brief`.
  */
+const BRIEF_PARA = "A short one about the rig.";
 const SIMPLE_PARA = "The piece says the instrument was built before anyone knew what it measured.";
 
 const SIMPLE: SimpleSummary = {
@@ -426,7 +427,7 @@ const SIMPLE: SimpleSummary = {
   profileHash: null,
   levels: {
     brief: [
-      { text: "A short one about the rig.", ids: ["spya-bbbbbb" as BlockId] },
+      { text: BRIEF_PARA, ids: ["spya-bbbbbb" as BlockId] },
       { text: "And why it matters.", ids: ["spya-cccccc" as BlockId] },
     ],
     simple: [
@@ -1455,7 +1456,7 @@ const DRAWS: Record<Mode, Draws> = {
   structure: { kind: "band", where: ".mode-band.struct", says: OUTLINE_ROW, about: "corner" },
   /* The default level's first paragraph, off `/api/simple/` — the outline
      that drew the root's gist here went on 2026-10-01 (plan 261001p). */
-  summary: { kind: "band", where: ".mode-band.summ", says: SIMPLE_PARA, about: "corner" },
+  summary: { kind: "band", where: ".mode-band.summ", says: BRIEF_PARA, about: "corner" },
   /* An entry's name, which is what a closed row shows — a canary the panel
      cannot draw without having drawn the list. */
   glossary: { kind: "band", where: ".mode-band.gloss", says: GLOSSARY_TERM, about: "corner" },

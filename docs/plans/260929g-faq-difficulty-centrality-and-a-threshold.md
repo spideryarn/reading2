@@ -1,6 +1,6 @@
 # FAQ: a few big questions first, and the Glossary's scores and threshold
 
-Research write-up: [docs/research/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md](../research/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md).
+Investigation write-up: [docs/investigations/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md](../investigations/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md).
 
 **Status:** planned, 2026-09-29. Feedback report SPIDERYARN-READING2-5D (`spya-yyf38a`).
 

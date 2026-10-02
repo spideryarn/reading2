@@ -11,7 +11,13 @@
  * docs/plans/261001s-metadata-contents-opens-and-flashes-its-section-and-a-search-box-above-it.md.
  */
 import { describe, expect, it } from "vitest";
-import { searchSections, type SearchableSection } from "../src/web/page-search.js";
+import { HELP_SYNONYMS } from "../src/web/help/help-content.js";
+import {
+  METADATA_SYNONYMS,
+  searchSections,
+  searchStem,
+  type SearchableSection,
+} from "../src/web/page-search.js";
 
 function section(
   label: string,
@@ -182,4 +188,85 @@ describe("searchSections", () => {
     expect(find("café")).toEqual(searchSections("cafe", PAGE));
     expect(find("what-it-cost")[0]).toBe("What it cost");
   });
+});
+
+/* **A page's own synonym table** — the Help page passes one (plan 261002b,
+   R1). The default must stay Metadata's, and a page's table must replace it
+   rather than add to it, or Help's words would widen Metadata's matches. */
+describe("searchSections with a synonym table of its own", () => {
+  const SPINE = [section("Reading the spine", { keywords: "marks" })];
+  const OWN = [["rail", "sidebar", "spine"]] as const;
+
+  it("finds through the page's own groups", () => {
+    expect(searchSections("sidebar", SPINE, OWN)).toEqual(["Reading the spine"]);
+  });
+
+  it("does not find through them by default", () => {
+    expect(searchSections("sidebar", SPINE)).toEqual([]);
+  });
+
+  it("replaces the default table rather than adding to it", () => {
+    // `price` → `cost` is Metadata's group; the custom table does not have it.
+    expect(find("price")[0]).toBe("What it cost");
+    expect(searchSections("price", PAGE, OWN)).toEqual([]);
+  });
+});
+
+/* **Forgiving about a word nothing on the page has** — Greg, `spya-nkjpte`,
+   2026-10-02 ("more flexible/forgiving"). After an AND miss, a query word that
+   matches no section at all is set aside and AND is tried again; two words
+   that each mean something still narrow, so *delete cost* finds nothing. The
+   code review argued for strict AND; the trade is in page-search.ts §
+   searchSections and plan 261002c. */
+describe("searchSections sets aside a word that matches nothing anywhere", () => {
+  it("finds the section the other words agree on", () => {
+    expect(find("regenerate my glossary zebra")[0]).toBe("AI processing");
+    expect(find("delete zebra")).toEqual(find("delete"));
+  });
+
+  it("still narrows when every word means something", () => {
+    expect(find("delete cost")).toEqual([]);
+  });
+
+  it("still finds nothing when no word means anything", () => {
+    expect(find("zebra giraffe")).toEqual([]);
+  });
+});
+
+describe("searchSections's question furniture", () => {
+
+  it("keeps `get` meaningful except in the phrase `get rid`", () => {
+    expect(
+      searchSections(
+        "get it back",
+        [
+          section("Jumping around, and getting back"),
+          section("How do I get it back?"),
+        ],
+        [],
+      ),
+    ).toEqual(["How do I get it back?", "Jumping around, and getting back"]);
+    expect(find("get rid of it forever")[0]).toBe("Delete this article");
+  });
+});
+
+/* `groupsOf` keeps the last group a stem appears in, silently — so a word in
+   two groups loses its first meaning with no error. Checked on stems, since two
+   spellings can stem to one word. GPT Sol, plan review of 261002c, P2. */
+describe("each synonym table puts a word in one group only", () => {
+  for (const [name, table] of [
+    ["Metadata", METADATA_SYNONYMS],
+    ["Help", HELP_SYNONYMS],
+  ] as const) {
+    it(name, () => {
+      const seen = new Map<string, number>();
+      table.forEach((group, i) => {
+        for (const word of group) {
+          const stem = searchStem(word);
+          expect(seen.get(stem) ?? i, `"${word}" is in groups ${seen.get(stem)} and ${i}`).toBe(i);
+          seen.set(stem, i);
+        }
+      });
+    });
+  }
 });

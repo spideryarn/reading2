@@ -80,7 +80,7 @@ import {
 } from "./params.js";
 import { isArchived, narrowShelf, topicCountsForVisible } from "./shelf-narrow.js";
 import { ShelfTerms, ShelfTermsLoading } from "./ShelfTerms.js";
-import { useShelfTopics } from "./useShelfTerms.js";
+import { shelfKeyOf, useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { media } from "./media.js";
@@ -92,7 +92,9 @@ import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useJobs } from "./useJobs.js";
-import { useLibrarySearch } from "./useLibrarySearch.js";
+import { MIN_QUERY, useLibrarySearch } from "./useLibrarySearch.js";
+import { usePublicShelf } from "./PublicLibraryPage.js";
+import { type ArchivedTally, ShelfSearchAlso } from "./ShelfSearchAlso.js";
 import { useNow } from "./useNow.js";
 import { useSession } from "./useSession.js";
 import { useShelf } from "./useShelf.js";
@@ -253,12 +255,12 @@ export function Library({
   );
 
   /* Every slug that is yours, so Include public does not list your own shared
-     articles a second time without your verbs on them. The archive too, when it
-     is loaded — the public listing already leaves archived articles out, so
-     this is belt and braces rather than the rule. */
+     articles a second time without your verbs on them. Include archive edits
+     even before the archive is loaded: the shared public snapshot can still
+     contain an article you have just archived. */
   const ownSlugs = useMemo(
-    () => new Set([...(articles ?? []), ...(shelf.archived ?? [])].map((a) => a.slug)),
-    [articles, shelf.archived],
+    () => new Set([...(articles ?? []), ...shelf.archivedVisible].map((a) => a.slug)),
+    [articles, shelf.archivedVisible],
   );
 
   /* The archive is fetched when the chip is on and the list is missing — on a
@@ -387,7 +389,37 @@ export function Library({
   const queue = useJobs("watches-queue", reload);
 
   // Matcher two: the passages inside the articles, from the server.
-  const passages = useLibrarySearch(query, archivedOn);
+  /* Counts and passages belong to this shelf snapshot too. Archiving,
+     restoring, or publishing a revision changes the answer at the same query.
+     Use the existing shelf identity; opens and other reading state leave it
+     unchanged. Include known archive edits even with the chip off. */
+  const searchShelfKey = useMemo(
+    () => `${readerId}:${shelfKeyOf(articles, shelf.archivedVisible, true) ?? ""}`,
+    [readerId, articles, shelf.archivedVisible],
+  );
+  const passages = useLibrarySearch(query, archivedOn, searchShelfKey);
+
+  /* **One read of the public listing**, for the Include public section and for
+     the count beside the search's answer, so the two are the same snapshot
+     (plan 261002b § Part D). Started only once the live owner shelf is in —
+     a saved copy cannot say which public articles are somebody else's — and
+     only when something wants it. */
+  const publicListing = usePublicShelf(
+    shelf.liveArticlesLoaded && (publicOn || queryTerms(query).length > 0),
+  );
+
+  /* The archive's half of that count: the server's, off the passage search
+     run without the archive — taken only from the answer to *this* query, and
+     only once the query is long enough to have been searched at all. */
+  const archivedTally: ArchivedTally = useMemo(() => {
+    const eligible = query.trim().length >= MIN_QUERY;
+    const current =
+      passages.asked && passages.resultsQuery === query.trim() && !passages.resultsArchived;
+    return {
+      count: eligible && current ? (passages.archivedArticles ?? null) : null,
+      checking: eligible && passages.searching,
+    };
+  }, [query, passages]);
 
   const searching = query.trim().length > 0;
   /* Every count is over the one list: `total` is what is in scope, `showing`
@@ -825,6 +857,23 @@ export function Library({
           something you have already read" is the useful half of that answer. */}
       {searching && <Passages state={passages} query={query} only={unread} archived={archivedOn} />}
 
+      {/* **Right after the search's answer: what it left out, how much, and the
+          button.** Greg, spya-s9fhmw. ShelfSearchAlso.tsx; plan 261002b § Part D. */}
+      {searching && (!archivedOn || !publicOn) && (
+        <ShelfSearchAlso
+          query={query}
+          archivedOn={archivedOn}
+          publicOn={publicOn}
+          archived={archivedTally}
+          listing={publicListing}
+          listingReady={shelf.liveArticlesLoaded}
+          ownSlugs={ownSlugs}
+          narrowedElsewhere={show === "unread" || topics.length > 0}
+          onArchived={() => pushView(() => void setArchivedOn(true))}
+          onPublic={() => pushView(() => void setPublicOn(true))}
+        />
+      )}
+
       {/* After your own articles and their passages, because it is the
           further reach: the same search box, someone else's shelf. */}
       {/* A saved shelf copy is deliberately enough to paint the owner's cards,
@@ -832,6 +881,7 @@ export function Library({
           missing an article added since the last visit. Wait for the live
           owner list before starting the anonymous public read. */}
       <ShelfPublicSection
+        listing={publicListing}
         enabled={publicOn}
         ownerLoaded={articles !== null}
         ownerReady={shelf.liveArticlesLoaded}
@@ -1179,11 +1229,9 @@ function Passages({
     return (
       <p className="tw:mt-8 tw:text-sm tw:text-muted-foreground">
         Nothing in the articles' text matches “{query.trim()}”.
-        {/* Said once, here, at the end of the search's two answers. Greg
-            searched for an article he had just archived, found nothing, and
-            could not tell whether that was the archive or the search
-            (SPIDERYARN-READING2-72). */}
-        {!archived && <> {NOT_SEARCHING_ARCHIVE}</>}
+        {/* That the archive was not searched used to be said here, as a
+            sentence (SPIDERYARN-READING2-72). It is the line straight after
+            now, with a count and a button — ShelfSearchAlso.tsx, spya-s9fhmw. */}
       </p>
     );
   }
@@ -1212,7 +1260,6 @@ function Passages({
       <section className="tw:mt-8">
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
           Nothing in an unopened article's text matches “{query.trim()}”.
-          {!archived && <> {NOT_SEARCHING_ARCHIVE}</>}
         </p>
         {alsoIn}
       </section>
@@ -1239,12 +1286,6 @@ function Passages({
     </section>
   );
 }
-
-/**
- * What the passages say when they found nothing and the archive was not asked.
- * The chip's visible words, so the reader can see which one it means.
- */
-const NOT_SEARCHING_ARCHIVE = "Archived articles aren't searched — turn on Include archived to search them too.";
 
 /** How much of the paragraph to show. Wide enough to judge, short enough to skim. */
 const SNIPPET_CHARS = 200;

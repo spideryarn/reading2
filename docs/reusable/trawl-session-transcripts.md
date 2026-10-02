@@ -64,7 +64,7 @@ complaints are.
 
 The question it answers is *how often*, with names attached. "This keeps happening" is a feeling
 until eight readers hand back the same shape forty times with timestamps. The first run of this
-([260903b-facts-that-were-wrong.md](../research/260903b-facts-that-were-wrong.md)) found the
+([260903b-facts-that-were-wrong.md](../investigations/260903b-facts-that-were-wrong.md)) found the
 thing it was sent for, and also the thing that changed the answer: five cases where the rule being
 proposed already existed, was loaded, and did not hold.
 

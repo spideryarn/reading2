@@ -61,7 +61,7 @@ and quietly measures a recipe nothing ships. It is the evals' version of "a copi
     `parseJson` wraps.
   - `tests/hierarchy-structure-eval.test.ts` has a preamble case, seen red before the fix.
   - The Hierarchy thinking-off arm was re-run through the corrected parser
-    ([research 261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md) § Hierarchy).
+    ([research 261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md) § Hierarchy).
 - **Right for the long term:** every stage exports the one function that turns its raw answer into
   its artefact, and an eval reads answers only through it. The structure eval now does. The
   generator-driven harnesses (`evals/thinking-effort/`, `evals/sketch/`) already did, because they

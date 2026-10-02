@@ -1,6 +1,6 @@
 # The quiz adapts heavily to who is reading and why
 
-Research write-up: [docs/research/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md](../research/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md).
+Investigation write-up: [docs/investigations/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md](../investigations/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md).
 
 Status: on `dev` 2026-10-01 as a partial step (see *The decision*), not deployed. Follow-up to
 SPIDERYARN-READING2-6Q ([260930j](260930j-quiz-questions-shaped-by-the-readers-reading-goal.md), note

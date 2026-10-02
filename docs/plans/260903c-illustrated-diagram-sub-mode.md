@@ -1,6 +1,6 @@
 # Illustrated: a fifth diagram sub-mode, drawn by an image model from Sketch's data
 
-Research write-up: [docs/research/261002i-illustrated-diagram-model-prompt-tuning-and-paper-figures.md](../research/261002i-illustrated-diagram-model-prompt-tuning-and-paper-figures.md).
+Investigation write-up: [docs/investigations/261002i-illustrated-diagram-model-prompt-tuning-and-paper-figures.md](../investigations/261002i-illustrated-diagram-model-prompt-tuning-and-paper-figures.md).
 
 Status: **stages 1–3 built, reviewed and on `dev`**; stage 4 (the client) in progress, stage 5 (docs
 and the final review) after it. Built 2026-09-03 in worktree `illustrated-260903`.

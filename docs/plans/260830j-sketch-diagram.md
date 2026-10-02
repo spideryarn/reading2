@@ -1,6 +1,6 @@
 # Sketch — a fifth diagram, drawn by a model rather than by an algorithm
 
-Research write-up: [docs/research/261002j-sketch-first-runs-debate-themes-and-arc-thread-glossary-effort.md](../research/261002j-sketch-first-runs-debate-themes-and-arc-thread-glossary-effort.md).
+Investigation write-up: [docs/investigations/261002j-sketch-first-runs-debate-themes-and-arc-thread-glossary-effort.md](../investigations/261002j-sketch-first-runs-debate-themes-and-arc-thread-glossary-effort.md).
 
 > I've been disappointed by Diagram mode so far. Let's add a new kind of Diagram
 > called "Agent's choice" (or come up with your own name), where the goal is to

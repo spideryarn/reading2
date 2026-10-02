@@ -97,10 +97,21 @@ function OwnerSimple({
   useRenderCount("OwnerSimple");
   const owner = useSimple(slug);
   /* Provenance, not a warning — GlossaryPanel.tsx's reasoning. Owner-only:
-     `profileHash` never reaches a visitor. */
+     `profileHash` never reaches a visitor. Its panel's Regenerate is the
+     forced run, which replaces the paragraphs (plan 261002b). */
   const badge =
     owner.simple && owner.profiled ? (
-      <WrittenForYou written changed={owner.profileChanged} slug={slug} compact />
+      <WrittenForYou
+        written
+        changed={owner.profileChanged}
+        slug={slug}
+        compact
+        regenerate={{
+          run: () => void owner.regenerate(),
+          busy: owner.job !== null || owner.starting,
+          refresh: () => owner.refresh(),
+        }}
+      />
     ) : null;
   /* Who wrote the paragraphs, for the band's (i) — owner only, since a
      visitor's artefact carries no provenance (src/public-types.ts). Only once

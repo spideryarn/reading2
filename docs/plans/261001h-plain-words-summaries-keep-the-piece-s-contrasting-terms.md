@@ -1,6 +1,6 @@
 # Simple's "feedback loops" terminology collision: a prompt rule tried, not shipped, and the guard proposed
 
-Research write-up: [docs/research/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md](../research/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md).
+Investigation write-up: [docs/investigations/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md](../investigations/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md).
 
 **Status as of 2026-10-01:** the two prompt wordings were measured and backed out; the screen and
 probe provenance are built; the guard is a proposal, not built. It was measured the same day

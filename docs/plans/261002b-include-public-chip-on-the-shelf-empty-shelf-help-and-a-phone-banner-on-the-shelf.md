@@ -123,3 +123,72 @@ bounded, and "nobody else has shared" is not said when every row sent was yours 
 `isPhone` refuses an unmeasured screen (0 or `NaN`) and the 599/600 boundary is pinned; the
 landscape sentence is picked by an orientation media query so it follows a rotation; library.md,
 public-shelf.md and touch.md record the change.
+
+## Part D — the chips beside the search's answer, with counts (spya-s9fhmw)
+
+Added the same day, relayed by the Overseer:
+
+> I did a search in the logged-in homepage. It said: "Nothing in the articles' text matches
+> 'holland'. Archived articles aren't searched — turn on Include archived to search them too."
+> Let's add an extra button right there next to that empty-results-message for including archived
+> (and another one for including public), so the user doesn't have to hunt around for it. For extra
+> points, (always) include a sense of how many archived and public results would have matched, so
+> that the user knows whether it's worth bothering to include them.
+>
+> — Greg, 2026-10-02 (spya-s9fhmw)
+
+**One line under the search's answers, whenever a query is typed and either chip is off** — so it
+sits right after "Nothing in the articles' text matches …" when that is the answer, and is still
+there when there are results ("always"). Each half is a count and a button that does exactly what
+the chip does (same setter, so it lands in the URL and Back undoes it):
+
+```
+Also matching: 2 archived articles [Include archived] · 1 public article [Include public]
+```
+
+- **Archived count** = distinct archived articles that match by their card's words
+  (`filterEntries` over the archive list, which is loaded for this — the same
+  `GET /api/library?archived=1` the chip makes) **or** by their text (a second passage search with
+  `&archived=1`, the existing route, counting the slugs of hits marked `archived`). If that search
+  came back `capped`, the number is a floor and reads "2+".
+- **Public count** = public cards by other readers matching the query (`filterEntries`, the same rule
+  as the Include public section), off `usePublicShelf`. "+" when the listing is truncated. Public
+  text is not searched, as in Part A; the button's section says so.
+- **Zero is said too** ("no archived articles", no button) — knowing it is not worth bothering is
+  the point of the counts.
+- While a count is loading, that half says "checking…"; on failure that half is dropped rather than
+  shown as zero.
+- The existing *"Archived articles aren't searched — turn on Include archived"* sentence goes: the
+  line says the same with a number and a button.
+
+**Cost, named:** with Include archived off, each settled query makes a second passage search (the
+archive-inclusive one) and the shelf fetches the archive list once; with Include public off, one
+anonymous public listing read per typed search session. All existing routes; no server change.
+*Simpler option passed over:* buttons without counts. Greg asked for counts "for extra points", and
+the counts are what tell the reader whether to bother, so they are in.
+
+### Part D, as built after the plan review
+
+[261002b-part-d-plan-review-sol.md](261002b-part-d-plan-review-sol.md) — no P0, five P1s, all taken.
+What changed from the sketch above:
+
+- **The buttons are always there; the counts are the extra.** Whenever a query is typed and either
+  chip is off, the line carries the button for each chip that is off — at zero, while counting, and
+  when a count failed. A count is supporting information, not a condition.
+- **Archived: one number, counted on the server, uncapped.** `/api/library/search` (with Include
+  archived off) also returns `archivedArticles` — distinct archived articles with a passage matching
+  the query, by the same predicates as the passage search, counted *before* any cap. It replaces the
+  second search the sketch proposed, which could only ever give a floor (30 passages ranked across
+  both halves), and the archive-list load, which had visible side effects (`actionError`). So the
+  archived count is about the **text**; the label says "mention". Archived cards matching only by
+  title are not counted, and that is said by the word.
+- **Public: one listing read, shared.** `usePublicShelf` is lifted into `Library` (it takes an
+  `enabled` flag) and its state is handed to both the count and the Include public section, so the
+  count and what the button reveals are the same snapshot; still gated on the live owner shelf.
+  Truncated reads "at least", and zero-and-truncated says "none among the most recently shared".
+- **When a count is counted at all.** Archived only once the passage search is eligible (the hook's
+  own `MIN_QUERY`, exported, not a second `3`); public only when `queryTerms` keeps a term (else
+  `filterEntries` returns every card). Below either, the button without a number.
+- **Before Unread and topics** — said beside the counts when either is on.
+- `useLibrarySearch` drops an answer whose request was aborted before it is committed, closing the
+  A → B → A race the review found.

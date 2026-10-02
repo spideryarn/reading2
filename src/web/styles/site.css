@@ -438,6 +438,28 @@
   color: var(--spideryarn-orange);
 }
 
+/* ---- the Experimental tag over a mode's title ----
+   The eyebrow's type, but quieter: muted ink and a hairline instead of the
+   orange, because the orange is the page's one accent and this is a footnote
+   about the mode, not a heading. Drawn by `ExperimentalTag` in SiteBits.tsx
+   from MODE_CATALOG, never typed into a caption (docs/plans/261002b, Stage 1).
+   `display: block` + `fit-content` so it sits on its own line above the title
+   in a Tile, a Showcase and a Portrait's caption alike. */
+.site-experimental {
+  display: block;
+  width: fit-content;
+  margin-bottom: 0.5rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--site-hairline-strong);
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
 /* ---- a section heading, one size, on all three pages ---- */
 .site-h2 {
   font-family: var(--font-reading);

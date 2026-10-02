@@ -2176,6 +2176,14 @@ export interface LibrarySearchResponse {
    * silent-success shape this repo keeps meeting.
    */
   capped: boolean;
+  /**
+   * With `archived` false only: how many archived articles have a matching
+   * passage — counted on the server, before any cap, so it is exact. The shelf
+   * puts it beside the Include archived button under the search's answer
+   * (Greg, spya-s9fhmw; plan 261002b § Part D). Absent when `archived` is true,
+   * because then they are in `hits` already.
+   */
+  archivedArticles?: number;
 }
 
 /**

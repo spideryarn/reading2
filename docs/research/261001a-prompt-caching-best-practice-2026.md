@@ -1,7 +1,7 @@
 # Prompt caching best practice, October 2026: what is new since August
 
 A re-check of the three August research docs
-([anthropic](260826b-prompt-caching-anthropic.md), [callsites](260826c-prompt-caching-callsites.md),
+([anthropic](260826b-prompt-caching-anthropic.md), [callsites](../investigations/260826c-prompt-caching-callsites.md),
 [openrouter](260826d-prompt-caching-openrouter.md)) against the primary sources as they stand on
 2026-10-01, plus the OpenAI side, which August barely touched. Open it when you are about to change
 a breakpoint, a TTL, an effort setting or a fan-out, and want to know what the vendors currently say

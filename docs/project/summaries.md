@@ -187,10 +187,16 @@ the other shapes are in [narrow-windows.md](narrow-windows.md).
 | Parameter | Values | History | Why |
 |---|---|---|---|
 | `mode=summary` | | push | A mode is where you are, not a glance — [url-state.md](url-state.md) |
-| `summary` | `brief`, `simple` (default, absent from the address), `fuller` | push | Which level the slider is on |
+| `summary` | `brief` (default, absent from the address), `simple`, `fuller` | push | Which level the slider is on |
 
 `?deep=` and `?summary=gists` went with the outline on 2026-10-01; an old link carrying either lands
-on Summary at `simple`, and `deep` is never remembered, so it cannot be restored over a fresh link.
+on Summary at `brief`, and `deep` is never remembered, so it cannot be restored over a fresh link.
+
+**Summary opens on Brief** — Greg, 2026-10-01 (8N): *"In summary mode, default to the brief summary
+when it opens for the first time."* Simple and Fuller are written into the address; Brief is its
+absence. That resulting view is remembered with the article, so a later bare visit opens where the
+reader left it. A link that already names article state wins over that memory
+([261002c](../plans/261002c-summary-opens-on-brief.md)). Until then the default was `simple`.
 
 ## What this deliberately does not have
 

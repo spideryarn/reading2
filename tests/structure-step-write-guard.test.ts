@@ -280,7 +280,7 @@ describe("generateStructure refuses to hand back an invalid tree", () => {
      block backs up costs the node its provenance mark and costs the reader
      nothing; before this, four structure calls in four made the same wrong
      claim on one article and it was a guaranteed failure loop for that
-     document. docs/research/260830a-opening-an-article-before-the-toc.md § 7b. */
+     document. docs/investigations/260830a-opening-an-article-before-the-toc.md § 7b. */
   it("returns the tree, minus the claim, when a node claims a heading it does not contain", async () => {
     modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
     const result = await run();

@@ -30,7 +30,7 @@ the code; the eval results and docs are evidence for it:
 - **`evals/thinking-effort/tally.ts`**: it now reads the candidate arms off the lineup keys, and
   takes `--judging <subdir>`.
 - **Docs**: `docs/project/{sketch,illustrated,ideas,structure-step,prompt-caching}.md`, and the research
-  doc `docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`.
+  doc `docs/investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`.
   Your decision review is `evals/thinking-effort/reviews/decision-review-sol-r1.md`; check that D1–D7
   are addressed.
 

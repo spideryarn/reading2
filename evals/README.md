@@ -4,7 +4,8 @@ Not tests. [`tests/`](../tests) holds the deterministic ones — same input, sam
 change ([testing.md](../docs/project/testing.md)). An eval calls a model, costs money, takes minutes,
 and gives a slightly different answer each time. It is run by hand when a decision needs it, and its
 results are committed so the next change can be compared against a number rather than against
-somebody's memory of last week.
+somebody's memory of last week. An eval that informs a decision also gets a write-up in
+`docs/investigations/` before the work is called done ([investigations.md](../docs/project/investigations.md)).
 
 ## `pdf/` — three PDFs, and what "read correctly" means
 
@@ -318,7 +319,7 @@ distinctive terms survived. `--shuffle` prints those sets ready to hand to someo
 
 ## `structure-whole-document/` — is the whole-document pass worth what it costs?
 
-Written for [260830a-opening-an-article-before-the-toc.md](../docs/research/260830a-opening-an-article-before-the-toc.md).
+Written for [260830a-opening-an-article-before-the-toc.md](../docs/investigations/260830a-opening-an-article-before-the-toc.md).
 `structure-labels.ts` above judges stage 4's *second* pass; this judges the first — the single model call
 in [src/structure.ts](../src/structure.ts) that proposes the nested structure, which is 163–320 seconds and
 88% of the ingest wait now that the labels run concurrently and the arc is deferred. The decisions queued against it (progressive waves, seeding the

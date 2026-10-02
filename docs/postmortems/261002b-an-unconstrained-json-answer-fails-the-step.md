@@ -26,7 +26,7 @@ range's start. In others, one real id was replaced with another: a change of min
 not a typo.
 
 **It was not only Structure.** The thinking-effort eval
-([research 261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md))
+([research 261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md))
 found Ideas and Sketch writing malformed JSON of a different shape (`{"blockId": "spya-p4pyuy": "", …}`):
 1 in 16 each at today's effort, and Ideas 10 in 16 below `high`. Production's one inspected Sentry
 event of this kind (SPIDERYARN-READING2-5S) was the Quotes stage. Skim (then Trajectory) had the

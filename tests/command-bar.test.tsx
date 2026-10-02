@@ -26,6 +26,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
+import { PUBLIC_SHELF_LABEL } from "../src/messages.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { modeGenerates, pendingActivation, resetActivations } from "../src/web/activation.js";
 import { GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
@@ -1069,6 +1070,45 @@ describe("the rows that are not modes", () => {
     }
   });
 
+  /**
+   * **The words for what you do on the Metadata page reach it** — Greg,
+   * `spya-nkjpte`, 2026-10-02: *"I tried searching for "regenerate" to find
+   * ways to regenerate the AI processing, and nothing matched"*. On the reading
+   * view the bar has no row for re-running anything; the page that does is
+   * Metadata. Plan 261002c.
+   */
+  it("answers the words for re-running and the page's other controls with Metadata", () => {
+    readingSignedIn();
+    openBar();
+    for (const query of [
+      "regenerate",
+      "rerun",
+      "reprocess",
+      "ai processing",
+      "cost",
+      "export",
+      "archive",
+      "delete",
+    ]) {
+      type(query);
+      expect(listed()[0], `typing ${JSON.stringify(query)} did not rank Metadata first`).toBe("Metadata");
+    }
+  });
+
+  it("keeps the existing shared-articles destination first for `share` and `public`", () => {
+    readingSignedIn();
+    openBar();
+    for (const query of ["share", "public"]) {
+      type(query);
+      expect(listed()[0], query).toBe(PUBLIC_SHELF_LABEL);
+    }
+    /* `share` still offers the current article's controls underneath the
+       page whose own name starts with the query. `public` does not borrow that
+       alias: it already names this app-wide destination. */
+    type("share");
+    expect(listed()).toContain("Metadata");
+  });
+
   it("navigates to this article's metadata page, carrying the reader's place", () => {
     history.replaceState(null, "", "/read/a-piece?at=spya-k3m9qt");
     readingSignedIn();
@@ -1326,5 +1366,54 @@ describe("off the reading view", () => {
     expect(host.querySelector(".dock-commands")).toBeNull();
     expect(host.querySelector("dialog.cmdbar")).toBeNull();
     expect(chord()).toBe(false);
+  });
+});
+
+/**
+ * **Help, as a row in the bar** — docs/plans/261002b-help-page.md § After GPT
+ * Sol's plan review, R8: the footer, the command bar, and the Dock link are the
+ * three ways in.
+ *
+ * `help` was already one of Feedback's aliases, and it stays one: somebody who
+ * types it may well mean *something is wrong*. But the page whose name it is
+ * has to come first, or the bar answers a request for the manual with a bug
+ * report form. That falls out of the ranking rather than being forced — a label
+ * prefix outranks an alias prefix (command-match.ts § `TIERS`) — and this is
+ * what would notice if either half moved.
+ */
+describe("the help command", () => {
+  it("ranks the Help page first for `help`, with Feedback still offered", () => {
+    readingSignedIn();
+    openBar();
+    type("help");
+    const names = listed();
+    expect(names[0]).toBe("Help");
+    expect(names, "Feedback lost its `help` alias").toContain("Feedback");
+  });
+
+  it("is found by the other words a reader would type for it", () => {
+    reading();
+    openBar();
+    for (const query of ["manual", "guide", "documentation", "how do i", "faq"]) {
+      type(query);
+      expect(listed(), `typing ${JSON.stringify(query)} did not offer Help`).toContain("Help");
+    }
+  });
+
+  /* The same section the Dock's Help link opens at, because the two are built
+     from one function — a reader who learned one door has learned the other. */
+  it("goes to the section for the mode the band is in, and in Plain to the reading view", () => {
+    reading({ mode: "glossary" });
+    openBar();
+    type("help");
+    press("Enter");
+    expect(location.pathname + location.hash).toBe("/help#mode-glossary");
+
+    history.replaceState(null, "", "/read/a-piece");
+    reading({ mode: "plain" });
+    openBar();
+    type("help");
+    press("Enter");
+    expect(location.pathname + location.hash).toBe("/help#the-reading-view");
   });
 });

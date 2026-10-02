@@ -285,7 +285,7 @@ than thrifty. **Use 1MB (1,048,576)**, the smallest tested cap that loses nothin
 917,843 bytes is the largest in the sample.
 
 Fixing that doc's claim is part of this stage. A doc that says "build it this way" and is wrong about
-the mechanism is the trap [260903b-facts-that-were-wrong.md](../research/260903b-facts-that-were-wrong.md)
+the mechanism is the trap [260903b-facts-that-were-wrong.md](../investigations/260903b-facts-that-were-wrong.md)
 is about. **Deliberately not doing:** changing `fetchDocument` to return truncated text instead of
 throwing. That is a real change to a shared safety-critical file to save a few hundred KB per URL
 fetched once ever, and the cap already covers the corpus.
