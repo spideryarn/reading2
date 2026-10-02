@@ -157,8 +157,8 @@ building once the Help outgrows a prompt.
 
 ## The line: what it may do without asking
 
-This is the part that is a **defence** ([security-map.md](security-map.md)). It is written here for
-Greg to decide, not built.
+This is the part that is a **defence** ([security-map.md](security-map.md)). Greg accepted it as the
+starting rule on 2026-10-02 (§ Decided); it is not built yet.
 
 Chat has held one line since 2026-08-26: *nothing chat can call writes a file, deletes anything, or
 spends money* ([chat-tools.md § Security](chat-tools.md#security-a-tool-result-is-data-and-one-of-them-is-a-strangers)).
@@ -208,13 +208,15 @@ to hold), and chat's command buttons second, reusing its command list and its pr
 - **Measured**: Jev choosing a command, once, on a hand-made set (§ Jev first).
 - **Not built**: the interface model, Help search, chat command buttons, tags.
 
-## Questions for Greg
+## Decided
 
-1. **The line** (§ The line). Is *navigate freely, propose anything that writes or spends, never
-   destroy or publish from a sentence* the right one?
-2. **One run on the stronger model.** Today *more powerful AI* is a switch per article. Should the
-   bar also offer *Glossary › Run again on Opus* for one run, and what would that cost a reader?
-3. **Speech.** Dictation into the bar's box would be the three lines [dictation.md](dictation.md)
-   says any box needs. Do you want that now, with the bar as it is, before any model?
-4. **Tags.** *"add a tag of X"* needs tags to exist: on the shelf, per article, the reader's own. Is
-   that a feature you want regardless of commands?
+Greg's answers, 2026-10-02, to the four questions this section used to ask:
+
+1. **The line** (§ The line): *"Let's try those rules to start with and see how it goes."* Navigate
+   freely, propose anything that writes or spends, and never destroy or publish from a sentence.
+   That is the rule the first interface model is built to.
+2. **One run on the stronger model:** *"maybe let's hold off on changes to this for now."* It stays
+   two commands: High-powered AI, then Run again.
+3. **Speech in the bar:** *"ok"*. Queued with the bar's next session (`fbwh2xys`).
+4. **Tags:** *"we definitely do want to be able to add tags, but it can wait till tomorrow's
+   session"* (`fbqmev0s`).
