@@ -1017,12 +1017,12 @@ describe("a note to them, from whoever gave the gift", () => {
     /* Sol, plan review F4: a lone CR or a Unicode separator draws a line a
        `\n`-only rule would not see, and NUL has no business in a mail. Built
        from char codes so this file holds no raw separator byte. */
-    const controls = [0, 13, 0x2028, 0x2029, 9].map((c) => String.fromCharCode(c));
-    const [nul, cr, ls, ps, tab] = controls;
-    const raw = `one${cr}two${ls}three${ps}four${nul}five${tab}six\n\n\n\nseven`;
+    const controls = [0, 13, 0x2028, 0x2029, 9, 0x7f, 0x85].map((c) => String.fromCharCode(c));
+    const [nul, cr, ls, ps, tab, del, nextLine] = controls;
+    const raw = `one${cr}\ntwo${cr}three${ls}four${ps}five${nul}six${tab}seven${del}eight${nextLine}nine\n\n\n\nten`;
     const mail = giftMessage(3, { kind: "invite" }, raw);
-    expect(mail.text).toContain("one\ntwo\nthree\nfour five six\n\nseven");
-    expect(mail.html).toContain("one<br>two<br>three<br>four five six<br><br>seven");
+    expect(mail.text).toContain("one\ntwo\nthree\nfour\nfive six seven eight nine\n\nten");
+    expect(mail.html).toContain("one<br>two<br>three<br>four<br>five six seven eight nine<br><br>ten");
     for (const c of controls) {
       expect(mail.text.includes(c)).toBe(false);
       expect((mail.html ?? "").includes(c)).toBe(false);
@@ -1072,6 +1072,13 @@ describe("a note to them, from whoever gave the gift", () => {
         ADMIN_USER_ID_LOCAL,
       );
     expect((await make("x".repeat(501))).status).toBe(400);
+    /* Postgres char_length counts Unicode code points, not JavaScript UTF-16
+       code units: one emoji is one character at this seam. */
+    expect((await make("😀".repeat(500))).status).toBe(201);
+    expect((await make("😀".repeat(501))).status).toBe(400);
+    /* The input limit applies before cleaning too. Otherwise an arbitrarily
+       large request made only of trimmable/control characters evades it. */
+    expect((await make(`${"x".repeat(500)}\u0000`)).status).toBe(400);
     expect((await make(7)).status).toBe(400);
     const blank = await make("   ");
     expect(blank.status).toBe(201);
@@ -1113,6 +1120,32 @@ describe("a note to them, from whoever gave the gift", () => {
     );
     expect(box.sent[2]?.to).toEqual([again]);
     expect(box.sent[2]?.text).toContain("Third words.");
+  });
+
+  it("retries the body frozen at create time after the stored note changes", async () => {
+    const first = mailbox({ answer: async () => new Response("{}", { status: 500 }) });
+    control.deps = first.deps;
+    const { id, delivery } = await givenVoucher(READER, 4, CREATOR_A, null, "First words.");
+    await sendQueuedVoucherEmail(delivery, first.deps);
+
+    await drive(
+      "PATCH",
+      `/api/admin/vouchers/${id}`,
+      JSON.stringify({ recipientNote: "Second words." }),
+      ADMIN_USER_ID_LOCAL,
+    );
+
+    const retried = mailbox();
+    control.deps = retried.deps;
+    const answer = await drive(
+      "POST",
+      `/api/admin/voucher-emails/${delivery}/retry`,
+      "",
+      ADMIN_USER_ID_LOCAL,
+    );
+    expect(answer.status).toBe(202);
+    expect(retried.sent[0]?.text).toContain("First words.");
+    expect(retried.sent[0]?.text).not.toContain("Second words.");
   });
 });
 

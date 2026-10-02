@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { type Gift, type ReaderPlan, planExplainer, planTip } from "../src/billing-plan.js";
+import { type Gift, type ReaderPlan, describePlan, planExplainer, planTip } from "../src/billing-plan.js";
 
 const GIFT: Gift = { articles: 20, claimedAt: "2026-10-01T10:00:00.000Z", noticeKey: "v1" };
 
@@ -102,12 +102,36 @@ describe("a paid plan", () => {
     expect(words).not.toContain("starts again on");
   });
 
+  it("does not claim the current allowance lasts to an ending after this period", () => {
+    const ending = { ...PAID, endsAt: "2026-11-20T10:00:00.000Z" };
+    const words = all(ending);
+    expect(words).toContain("scheduled to end on 20 November 2026");
+    expect(words).not.toContain("20 articles until it ends on 20 November 2026");
+    expect(words).toContain("starts again on 3 November 2026, back to 20");
+  });
+
   it("promises no reset out of a trial (Sol F2)", () => {
     const trial = { ...PAID, trial: true };
-    const words = all(trial);
+    const words = `${all(trial)} ${describePlan(trial).detail ?? ""}`;
     expect(words).toContain("trial");
     expect(words).not.toContain("starts again on");
     expect(words).not.toContain("back to");
+    expect(words).not.toContain("what you have paid for");
+    expect(words).toContain("If the trial finishes without becoming a paid plan");
+  });
+
+  it("uses a trial's scheduled ending rather than calling a later period end its end", () => {
+    const trial = { ...PAID, trial: true, endsAt: "2026-10-20T10:00:00.000Z" };
+    const words = all(trial);
+    expect(words).toContain("20 October 2026");
+    expect(words).not.toContain("3 November 2026");
+  });
+
+  it("does not call a later plan cancellation the end of the current trial", () => {
+    const trial = { ...PAID, trial: true, endsAt: "2026-11-20T10:00:00.000Z" };
+    const words = all(trial);
+    expect(words).toContain("3 November 2026");
+    expect(words).not.toContain("20 November 2026");
   });
 
   it("says a gift held while subscribed is waiting for Free", () => {

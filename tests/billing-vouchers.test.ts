@@ -160,7 +160,7 @@ async function claims(...args: Parameters<typeof claimVouchersFor>): Promise<num
   return (await claimVouchersFor(...args)).claimed;
 }
 
-async function makePaid(owner: string, status = "active"): Promise<void> {
+async function makePaid(owner: string, status = "active", priceId = READER_PRICE): Promise<void> {
   if (!pool) return;
   const start = new Date(Date.now() - 5 * 86_400_000);
   const end = new Date(Date.now() + 25 * 86_400_000);
@@ -175,7 +175,7 @@ async function makePaid(owner: string, status = "active"): Promise<void> {
        price_id = excluded.price_id, status = excluded.status,
        current_period_start = excluded.current_period_start,
        current_period_end = excluded.current_period_end`,
-    [owner, `cus_${owner}`, `sub_${owner}`, READER_PRICE, status, start, end],
+    [owner, `cus_${owner}`, `sub_${owner}`, priceId, status, start, end],
   );
 }
 
@@ -499,6 +499,31 @@ describe("the routes", () => {
     const reply = await drive("GET", "/api/billing/usage", "", OTHER);
     expect(reply.status).toBe(200);
     expect(reply.body.plan).not.toHaveProperty("gifts");
+  });
+
+  it("carries a claimed gift on the paid wire while leaving the paid limit unchanged", async () => {
+    if (!pool) return;
+    const { rows } = await pool.query<{ stripe_price_id: string; ingests_per_period: number }>(
+      `select stripe_price_id, ingests_per_period
+         from spideryarn.billing_tiers
+        where id = 'reader' and active and stripe_price_id is not null`,
+    );
+    const tier = rows[0];
+    if (!tier) throw new Error("the active reader tier needs a Stripe price for this test");
+
+    const id = await givenVoucher(READER, 20);
+    await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) });
+    await makePaid(READER, "active", tier.stripe_price_id);
+
+    const reply = await drive("GET", "/api/billing/usage", "", READER);
+    expect(reply.status).toBe(200);
+    expect(reply.body.plan).toMatchObject({
+      kind: "paid",
+      limit: tier.ingests_per_period,
+      periodAllowance: tier.ingests_per_period,
+      trial: false,
+      gifts: [{ articles: 20, noticeKey: id }],
+    });
   });
 
   it("serves the plan without the gift when the Auth service cannot confirm", async () => {

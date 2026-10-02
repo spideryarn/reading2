@@ -110,11 +110,13 @@ describe("/profile's plan card", () => {
     expect(gifts?.textContent).toContain("Part of your free allowance");
   });
 
-  it("links its (i) to Pricing, with where the reader stands as its name", async () => {
+  it("links its (i) to Pricing with a short name and a finger-sized target", async () => {
     await show(GIFTED);
     const info = host.querySelector<HTMLAnchorElement>("[data-testid=plan-info]");
     expect(info?.getAttribute("href")).toBe("/pricing");
-    expect(info?.getAttribute("aria-label")).toContain("23 articles for the lifetime of the account (3 free + 20 from a gift)");
+    expect(info?.getAttribute("aria-label")).toBe("How your plan works — open Pricing");
+    expect(info?.className).toContain("tw:size-7");
+    expect(info?.className).toContain("tw:pointer-coarse:size-10");
   });
 
   it("explains how the plan works, linking to Pricing and not to the page it is on", async () => {
@@ -138,9 +140,10 @@ describe("/profile's plan card", () => {
   it("tells a subscriber their gift is waiting, and when the month starts again", async () => {
     await show(PAID);
     expect(host.querySelector("[data-testid=gift-list]")?.textContent).toContain("Waiting");
-    expect(host.querySelector("[data-testid=plan-info]")?.getAttribute("aria-label")).toContain(
-      "starts again on 3 November 2026, back to 20",
-    );
+    const info = host.querySelector<HTMLAnchorElement>("[data-testid=plan-info]");
+    await act(async () => info?.focus());
+    expect(info?.getAttribute("aria-describedby")).toBeTruthy();
+    expect(document.body.textContent).toContain("starts again on 3 November 2026, back to 20");
     expect(host.querySelector("[data-testid=how-your-plan-works] summary")?.textContent).toBe("How your plan works");
   });
 });

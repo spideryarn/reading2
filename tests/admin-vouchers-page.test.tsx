@@ -531,6 +531,9 @@ describe("/admin/vouchers", () => {
 
     it("sketches the email, with the note where it will go", async () => {
       await mount();
+      /* Native maxLength counts UTF-16 units, unlike Postgres char_length, so
+         it must not reject a valid 500-emoji note before the server sees it. */
+      expect(host.querySelector("#voucher-new-recipient-note")?.hasAttribute("maxlength")).toBe(false);
       expect(sketch()?.textContent).toContain("A gift of 20 free articles on Spideryarn");
       expect(sketch()?.textContent).toContain("Your note to them goes here");
       await write("Great to meet you today.");

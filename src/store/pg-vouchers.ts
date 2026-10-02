@@ -584,10 +584,18 @@ function parseArticles(value: unknown): Parsed<number> {
 function parseNote(value: unknown, field: "note" | "recipientNote" = "note"): Parsed<string | null> {
   if (value === null) return { ok: true, value: null };
   if (typeof value !== "string") return { ok: false, message: `${field} must be a string or null.` };
+  const tooLong = (text: string) => [...text].length > VOUCHER_NOTE_MAX;
+  /* Bound the recipient's request as submitted as well as the value stored
+     below. Cleaning is allowed to make it shorter, but not to turn an
+     over-limit input into an accepted one. Both counts use code points,
+     matching Postgres char_length rather than JavaScript's UTF-16 `.length`. */
+  if (field === "recipientNote" && tooLong(value)) {
+    return { ok: false, message: `${field} must be at most ${VOUCHER_NOTE_MAX} characters.` };
+  }
   /* The note to the recipient reaches a stranger's inbox, so its line breaks
      and control characters are made plain before it is stored (`noteText`). */
   const note = field === "recipientNote" ? noteText(value) : value.trim();
-  if ([...note].length > VOUCHER_NOTE_MAX) {
+  if (tooLong(note)) {
     return { ok: false, message: `${field} must be at most ${VOUCHER_NOTE_MAX} characters.` };
   }
   return { ok: true, value: note === "" ? null : note };

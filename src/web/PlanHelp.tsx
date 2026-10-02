@@ -53,8 +53,8 @@ export function PlanInfo({ plan }: { plan: ReaderPlan }) {
       <Link
         href={PRICING_HREF}
         data-testid="plan-info"
-        aria-label={`How your plan works: ${tip} See Pricing.`}
-        className="tw:inline-flex tw:size-5 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-full tw:align-middle tw:text-muted-foreground tw:hover:text-highlight tw:focus-visible:text-highlight"
+        aria-label="How your plan works — open Pricing"
+        className="tw:inline-flex tw:size-7 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-full tw:align-middle tw:text-muted-foreground tw:hover:text-highlight tw:focus-visible:text-highlight tw:pointer-coarse:size-10"
       >
         <Info size={14} aria-hidden="true" />
       </Link>

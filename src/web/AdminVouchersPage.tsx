@@ -87,7 +87,7 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
       email,
       articles: count,
       note: note.trim() === "" ? null : note,
-      recipientNote: recipientNote.trim() === "" ? null : recipientNote.trim(),
+      recipientNote: recipientNote.trim() === "" ? null : recipientNote,
     });
     setBusy(false);
     setRefusal(answer.kind === "refused" ? answer.message : null);
@@ -163,7 +163,6 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
           <textarea
             id="voucher-new-recipient-note"
             rows={3}
-            maxLength={500}
             value={recipientNote}
             onChange={(e) => setRecipientNote(e.target.value)}
             className={`${TEXTAREA} tw:w-full`}
@@ -426,7 +425,7 @@ function VoucherRow({
     if (count !== voucher.articles) patch.articles = count;
     const nextNote = note.trim() === "" ? null : note.trim();
     if (nextNote !== voucher.note) patch.note = nextNote;
-    const nextRecipientNote = recipientNote.trim() === "" ? null : recipientNote.trim();
+    const nextRecipientNote = recipientNote.trim() === "" ? null : recipientNote;
     if (nextRecipientNote !== voucher.recipientNote) patch.recipientNote = nextRecipientNote;
     if (unclaimed && email.trim().toLowerCase() !== voucher.email) patch.email = email;
     if (Object.keys(patch).length === 0) {
@@ -496,7 +495,6 @@ function VoucherRow({
               aria-label="Note to them"
               form={`voucher-${voucher.id}`}
               rows={3}
-              maxLength={500}
               value={recipientNote}
               onChange={(e) => setRecipientNote(e.target.value)}
               className={`${TEXTAREA} tw:w-56`}

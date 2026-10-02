@@ -725,6 +725,25 @@ function lapsedCopy(plan: Extract<ReaderPlan, { kind: "lapsed" }>): PlanCopy {
       };
 }
 
+/** The paid detail's ending, trial or renewal sentence. */
+function paidTiming(plan: Extract<ReaderPlan, { kind: "paid" }>, ends: string | null): string {
+  if (plan.endsAt !== null) {
+    /* **Says the date, and then says what does not change.** The promise this
+       product makes is that reading what you have already added is never gated
+       (docs/project/vision.md), so a cancelling reader most needs the second
+       sentence. */
+    return (
+      `Your plan ends on ${ends ?? "the end of the period"}, and the account then goes ` +
+      "back to the free allowance. Everything you have added stays where it is, and " +
+      "reading is never limited."
+    );
+  }
+  if (plan.trial) {
+    return `Your trial runs until ${readableDate(plan.periodEnd) ?? "its end"}. What follows depends on whether it becomes a paid plan.`;
+  }
+  return `The allowance starts again on ${readableDate(plan.periodEnd) ?? "your renewal date"}.`;
+}
+
 export function describePlan(plan: ReaderPlan): PlanCopy {
   switch (plan.kind) {
     case "off":
@@ -772,17 +791,7 @@ export function describePlan(plan: ReaderPlan): PlanCopy {
         headline: isRatio(plan)
           ? `${plan.tierName} — ${plan.used} of ${plan.limit} articles this month`
           : `${plan.tierName} — ${articleCount(plan.used)} this month, on an allowance of ${plan.limit}`,
-        detail:
-          shared +
-          (plan.endsAt !== null
-            ? /* **Says the date, and then says what does not change.** The
-                 promise this product makes is that reading what you have
-                 already added is never gated (docs/project/vision.md), so the
-                 sentence a cancelling reader most needs is the second one. */
-              `Your plan ends on ${ends ?? "the end of the period"}, and the account then goes ` +
-              "back to the free allowance. Everything you have added stays where it is, and " +
-              "reading is never limited."
-            : `The allowance starts again on ${readableDate(plan.periodEnd) ?? "your renewal date"}.`),
+        detail: shared + paidTiming(plan, ends),
       };
     }
   }
@@ -822,15 +831,16 @@ export function planTip(plan: ReaderPlan): string | null {
     case "paid": {
       const waiting = giftsWaiting(plan.gifts);
       if (plan.trial) {
+        const trialEnds = trialEndDate(plan) ?? "the trial ends";
         return (
           `You are on a trial of ${plan.tierName}, with ${articleCount(plan.limit)} until ` +
-          `${readableDate(plan.periodEnd) ?? "the trial ends"}.${waiting}`
+          `${trialEnds}.${waiting}`
         );
       }
       if (plan.endsAt !== null) {
         return (
           `Your ${plan.tierName} plan ends on ${readableDate(plan.endsAt) ?? "the end of the period"}. ` +
-          `${FREE_AFTER_PAID}${waiting}`
+          `${resetBeforeEnding(plan)}${freeAfterPaid("plan")}${waiting}`
         );
       }
       const renews = readableDate(plan.periodEnd) ?? "your renewal date";
@@ -854,9 +864,12 @@ export function planTip(plan: ReaderPlan): string | null {
  * The free allowance a subscriber goes back to, said so it cannot be read as
  * a fresh one (Sol, plan review F1).
  */
-const FREE_AFTER_PAID =
-  "After that you are on the free allowance, which is for the lifetime of the account and already " +
-  "counts the articles you added while subscribed, so it does not start afresh.";
+function freeAfterPaid(ending: "plan" | "trial"): string {
+  return (
+    `Once the ${ending} has ended, you are on the free allowance, which is for the lifetime of the account ` +
+    "and already counts the articles you added while subscribed, so it does not start afresh."
+  );
+}
 
 /** *" Your gift of 20 articles is waiting for the Free plan."* — or nothing. */
 function giftsWaiting(gifts: readonly Gift[] | undefined): string {
@@ -865,6 +878,28 @@ function giftsWaiting(gifts: readonly Gift[] | undefined): string {
   return gifts.length === 1
     ? ` Your gift of ${articleCount(total)} is waiting until you are on the Free plan.`
     : ` Your gifts of ${articleCount(total)} are waiting until you are on the Free plan.`;
+}
+
+/** A trial stops at its period end, or at an earlier scheduled plan ending. */
+function trialEndDate(plan: Extract<ReaderPlan, { kind: "paid" }>): string | null {
+  const period = Date.parse(plan.periodEnd);
+  const scheduled = plan.endsAt === null ? Number.NaN : Date.parse(plan.endsAt);
+  const end =
+    Number.isFinite(scheduled) && (!Number.isFinite(period) || scheduled < period)
+      ? (plan.endsAt ?? plan.periodEnd)
+      : plan.periodEnd;
+  return readableDate(end);
+}
+
+/** A scheduled ending after this period still has a renewal before it. */
+function resetBeforeEnding(plan: Extract<ReaderPlan, { kind: "paid" }>): string {
+  if (plan.endsAt === null) return "";
+  const ending = Date.parse(plan.endsAt);
+  const period = Date.parse(plan.periodEnd);
+  if (!Number.isFinite(ending) || !Number.isFinite(period) || ending <= period) return "";
+  const renews = readableDate(plan.periodEnd) ?? "your renewal date";
+  const allowance = plan.periodAllowance === null ? "" : `, back to ${plan.periodAllowance}`;
+  return `Before then, your allowance starts again on ${renews}${allowance}; unused articles do not carry over. `;
 }
 
 /**
@@ -891,10 +926,11 @@ export function planExplainer(plan: ReaderPlan): readonly string[] {
         ...(plan.gifts ? ["Gifts count while you are on the Free plan."] : []),
       ];
     case "paid": {
+      const trialEnds = trialEndDate(plan) ?? "it ends";
       const month = plan.trial
-        ? `Your trial gives you ${articleCount(plan.limit)} until ${readableDate(plan.periodEnd) ?? "it ends"}.`
+        ? `Your trial gives you ${articleCount(plan.limit)} until ${trialEnds}.`
         : plan.endsAt !== null
-          ? `Your plan gives you ${articleCount(plan.limit)} until it ends on ${readableDate(plan.endsAt) ?? "the end of the period"}.`
+          ? `Your plan is scheduled to end on ${readableDate(plan.endsAt) ?? "the end of the period"}. ${resetBeforeEnding(plan)}`.trim()
           : `Your allowance is counted month by month, from the day you subscribed. The next month starts on ` +
             `${readableDate(plan.periodEnd) ?? "your renewal date"}` +
             `${plan.periodAllowance === null ? "" : `, with ${articleCount(plan.periodAllowance)}`}, ` +
@@ -903,7 +939,9 @@ export function planExplainer(plan: ReaderPlan): readonly string[] {
         month,
         "An article you share publicly counts as half.",
         reading,
-        `If the plan ends, you keep what you have paid for. ${FREE_AFTER_PAID}`,
+        plan.trial
+          ? `If the trial finishes without becoming a paid plan, everything you have added stays. ${freeAfterPaid("trial")}`
+          : `${plan.endsAt !== null ? "When" : "If"} the plan ends, everything you have added stays. ${freeAfterPaid("plan")}`,
         ...(plan.gifts ? ["Gifts count only on the Free plan, so yours are kept until then."] : []),
       ];
     }
