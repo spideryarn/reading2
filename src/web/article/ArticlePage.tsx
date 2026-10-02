@@ -50,6 +50,7 @@ import { FeedbackTrigger } from "../FeedbackButton.js";
 import { type ArchiveControl, useArchive } from "../useArchive.js";
 import { useArticleAccess } from "./access.js";
 import { UnreadPaperPage } from "./UnreadPaperPage.js";
+import type { OnRenamed } from "../TitleEditor.js";
 
 /**
  * One article, fetched **once for all of its views**.
@@ -286,8 +287,10 @@ function OwnedArticle({
    * a rule that used to be load-bearing and would fail silently if the key ever
    * moved. GPT Sol, 2026-08-27.
    */
-  const [renamed, setRenamed] = useState<{ slug: string; title: string } | null>(null);
-  const title = renamed?.slug === slug ? renamed.title : null;
+  const [renamed, setRenamed] = useState<{ slug: string; title: string; overridden: boolean } | null>(
+    null,
+  );
+  const mine = renamed?.slug === slug ? renamed : null;
 
   /**
    * **Who can read this, if the reader has just changed it** — the second thing
@@ -345,7 +348,12 @@ function OwnedArticle({
        extractor's title, and `Meta.title` may be the empty string. Read as
        truthy that would silently fall through to `fetched`, which is still
        carrying the override that was just cleared. */
-    const titled = title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched;
+    /* With whose words it now is, so the masthead's face follows the rename
+       (src/types.ts § `Article.titleOverridden`). */
+    const titled =
+      mine !== null
+        ? { ...fetched, meta: { ...fetched.meta, title: mine.title }, titleOverridden: mine.overridden }
+        : fetched;
     const guessedAt = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
     if (visibility === null) return guessedAt;
     if (visibility === "unknown") {
@@ -356,10 +364,11 @@ function OwnedArticle({
       return rest;
     }
     return { ...guessedAt, visibility };
-  }, [fetched, title, guessed, visibility]);
+  }, [fetched, mine, guessed, visibility]);
 
   const renameTo = useCallback(
-    (forSlug: string, next: string) => setRenamed({ slug: forSlug, title: next }),
+    (forSlug: string, next: string, overridden: boolean) =>
+      setRenamed({ slug: forSlug, title: next, overridden }),
     [],
   );
   /**
@@ -448,7 +457,7 @@ function OwnedReader({
 }: {
   slug: string;
   article: Article;
-  onRenamed: (slug: string, title: string) => void;
+  onRenamed: OnRenamed;
   archive: ArchiveControl;
 }) {
   const comments = useComments(slug);

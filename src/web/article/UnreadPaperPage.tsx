@@ -34,7 +34,7 @@ import { ReadThisButton } from "../ReadThis.js";
 import { readThisJobFor } from "../read-this.js";
 import { NotProcessedBadge } from "../ShelfEntry.js";
 import { SourceLink } from "../SourceLink.js";
-import { withVoice } from "../voice.js";
+import { articleTitleVoice, withVoice } from "../voice.js";
 
 /** The DOI shape the metadata step keeps (src/paper-metadata.ts); anything else is not linked. */
 const DOI_SHAPE = /^10\.\d{4,9}\/[^\s"'<>?#]+$/;
@@ -94,9 +94,14 @@ export function UnreadPaperPage({
         <p className="tw:m-0 tw:text-xs">
           <NotProcessedBadge />
         </p>
-        {/* No voice of its own: whether the reader renamed it is not known
-            here (voice.ts § `articleTitleVoice`). */}
-        <h1 className="tw:mt-3 tw:mb-0 tw:font-prose tw:text-2xl tw:leading-snug tw:break-words">
+        {/* The paper's own title, or the reader's rename (voice.ts §
+            `articleTitleVoice`). */}
+        <h1
+          className={withVoice(
+            "tw:mt-3 tw:mb-0 tw:text-2xl tw:leading-snug tw:break-words",
+            articleTitleVoice(paper.titleOverridden),
+          )}
+        >
           {paper.title}
         </h1>
         {paper.authors.length > 0 && (

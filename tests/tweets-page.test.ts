@@ -26,6 +26,7 @@ import type { Article, TweetThread } from "../src/types.js";
 function article(url: string | null = "https://paulgraham.com/writes.html"): Article {
   return {
     highPowerSince: null,
+    titleOverridden: false,
     meta: {
       slug: "writes",
       title: "Writes and Write-Nots",

@@ -25,6 +25,7 @@ import type { LibraryHit } from "../src/types.js";
 const hit = (text: string, over: Partial<LibraryHit> = {}): LibraryHit => ({
   slug: "an-article",
   title: "An Article",
+  titleOverridden: false,
   blockId: "spya-k3m9qt",
   text,
   rank: 1,

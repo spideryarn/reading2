@@ -634,6 +634,9 @@ const rawPgLibrarySearch: LibrarySearch = {
       .select({
         slug: articles.slug,
         title: sql<string>`coalesce(${articles.titleOverride}, ${articleRevisions.title}, ${articles.slug})`,
+        /* The first rung of that `coalesce`, so the flag cannot disagree with
+           the title it describes. */
+        titleOverridden: sql<boolean>`${articles.titleOverride} is not null`,
         blockId: revisionBlocks.blockId,
         text: revisionBlocks.text,
         rank,
@@ -672,6 +675,7 @@ const rawPgLibrarySearch: LibrarySearch = {
     const hits: LibraryHit[] = rows.slice(0, limit).map((row) => ({
       slug: row.slug,
       title: row.title,
+      titleOverridden: row.titleOverridden,
       blockId: row.blockId,
       text: row.text,
       rank: Number(row.rank),

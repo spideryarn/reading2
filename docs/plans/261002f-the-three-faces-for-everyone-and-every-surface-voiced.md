@@ -211,11 +211,8 @@ typed seam — a component that computes a `Voice` must call something with it �
 ## 6. Deferred, by name
 
 - **The public shelf's gist** — needs a column on a defended query (§ 4). For Greg.
-- **Titles where a rename is not known** — the masthead, Metadata (until a rename), the unread-paper
-  page, library search hits and Citations' "in your library" matches. Voicing them means carrying
-  `titleOverridden` on the owner's `Article`, `UnreadPaper`, `LibraryHit` and `CitedInSpideryarn`
-  payloads, and seeding the rename hook from it; those types sit beside the public DTOs, whose
-  default-absent allowlist is a defence, so it is its own piece of work.
+- ~~**Titles where a rename is not known**~~ — done the same evening, at the Overseer's request; see
+  the follow-up below. Citations' "in your library" matches (`CitedInSpideryarn`) are the one left.
 - **`root_gist_source`**, if the gist's equality test ever misfires (§ 4).
 - **Sketch's SVG labels and Illustrated's painted captions** stay as 261002b left them, for its
   reasons (measured at Geist's width; painted into the image). The same for Diagram's SVG labels.
@@ -266,3 +263,34 @@ typed seam — a component that computes a `Voice` must call something with it �
 Also deferred, found while building: **ReturnChip's "back to {section}" and BlockLinkCard's section
 line** put a section title inside one of our own sentences; voicing them means splitting the
 string into markup, so they stay in the app's face for now.
+
+## Follow-up, the same evening: the rename flag, and a red test on dev
+
+The Overseer asked for the small follow-up named in § 6, and for the red test found while landing
+this one.
+
+**The rename flag.** `Article.titleOverridden: boolean` (required, as `assets` is, so a loader that
+forgot it is a type error) and `UnreadPaper.titleOverridden`, set in `src/store/pg.ts` from
+`titleRenamed(shelf)` — a predicate beside `titleFor` in `src/library-scalars.ts`, which the shelf
+card's flag now uses too. `LibraryHit.titleOverridden`, selected beside the very `coalesce` that
+picks the hit's title. The visitor arm (`src/web/article/access.ts`) sets `false` explicitly: the
+public payload never shows an owner's rename, and `PublicArticle` is its own type, so nothing new
+reaches a stranger. On the client, `onRenamed` gained a third argument (named once, `OnRenamed` in
+`TitleEditor.tsx`), `ArticlePage` folds it back into `article.titleOverridden` so the masthead
+follows a rename made on either page, and `useArticleRename` starts from the article's flag — so
+the editor's hint ("empty to restore “…”") is right from the first open, not only after a write.
+An article saved in the browser before today has no flag and is drawn in the app's face.
+
+Tests: the store sets and clears the flag on the article and on a search hit
+(`store-shelf-pg.test.ts`, watched red with the loader mutated to `false`); the masthead's three
+voices and Metadata's title (`article-rename.test.tsx`); the hint starting from `false`, watched red
+with the seed removed — `true` would not have been a test, since an unknown flag takes the same
+branch; the unread paper's title.
+
+**The red test.** `public-network-trace` › "labels the owner's note in the gutter from the
+visitor's side" read the mark's `title`. It was written at 16:14 (`ae5cd7569`); `220d1723a` at 16:52
+deliberately moved every gutter control's tooltip from a native `title` to `data-tip`, drawn by the
+house card (`BlockLinkCard.tsx` § `GUTTER_CONTROL`), and the two met at the merge `d6b64c869`. **The
+test was wrong, not the code**: the visitor still reads "whoever added this article". It now reads
+`data-tip` and `aria-label`, and asserts no native `title` comes back as a second tooltip; watched
+red with the visitor's words changed to "Your note".

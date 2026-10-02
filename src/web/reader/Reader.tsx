@@ -165,6 +165,7 @@ import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-conte
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
 import { proseFound, selectPassages } from "./passages.js";
+import type { OnRenamed } from "../TitleEditor.js";
 
 /** A module constant for `NO_QUOTES`'s reason: the visitor's Skim band keys memos on it by identity. */
 const NO_PUBLIC_QUOTES: Quote[] = [];
@@ -233,7 +234,7 @@ export function Reader({
    * have, so the button could only ever fail, and a button that can only fail is
    * worse than no button because pressing it is how you find out.
    */
-  onRenamed?: ((slug: string, title: string) => void) | undefined;
+  onRenamed?: (OnRenamed) | undefined;
   /** The owner's controller, kept above the article/metadata view switch. */
   archive?: ArchiveControl | undefined;
 }) {

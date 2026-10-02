@@ -76,6 +76,7 @@ const SLUG = "a-piece";
 
 const ARTICLE: Article = {
   highPowerSince: null,
+  titleOverridden: false,
   meta: { slug: SLUG, title: "A piece" },
   blocks: [
     {

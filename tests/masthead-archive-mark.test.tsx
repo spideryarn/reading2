@@ -44,6 +44,7 @@ const WHEN = "2026-10-01T12:00:00.000Z";
 function article(archivedAt: string | null | undefined, visibility: Visibility | undefined): Article {
   return {
     highPowerSince: null,
+    titleOverridden: false,
     meta: { slug: SLUG, title: "A piece", url: "https://example.com/the-piece" },
     blocks: [
       {

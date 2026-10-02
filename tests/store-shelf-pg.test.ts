@@ -527,13 +527,20 @@ describe("the Postgres shelf and library search", () => {
       // The half a review found missing: the masthead reads `meta.title`.
       const article = await pgArticleReader.loadArticle(SLUG);
       expect(article.meta.title).toBe("What I call it");
+      /* And whose words it is, so the masthead puts it in the reader's face
+         (src/web/voice.ts § articleTitleVoice; plan 261002f § 6). */
+      expect(article.titleOverridden).toBe(true);
 
       // And the search results, so one article is not listed under two names.
       expect((await mine(RARE))[0]?.title).toBe("What I call it");
+      expect((await mine(RARE))[0]?.titleOverridden).toBe(true);
 
       const cleared = await pgShelfStore.patch(SLUG, { title: null });
       expect(cleared.title).toBe("The Current Title");
       expect(cleared.titleOverridden).toBeUndefined();
+      /* Cleared everywhere at once: the article's own title is the author's. */
+      expect((await pgArticleReader.loadArticle(SLUG)).titleOverridden).toBe(false);
+      expect((await mine(RARE))[0]?.titleOverridden).toBe(false);
     });
 
     it("applies both fields in one write", async () => {

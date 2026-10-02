@@ -78,6 +78,7 @@ const BLOCKS: Block[] = [
 function article(meta: Partial<Meta> = {}, sourceGuess?: SourceGuess): Article {
   return {
     highPowerSince: null,
+    titleOverridden: false,
     meta: {
       slug: "an-upload",
       title: TITLE,

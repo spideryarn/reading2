@@ -65,14 +65,15 @@ export function gistVoice(entry: { gistVoice?: "ai" | "author" | undefined }): V
 /**
  * **An article's title is the author's, unless the reader renamed it.**
  *
- * `overridden` is `true` or `false` only where the page actually knows: a shelf
- * row (`Boolean(entry.titleOverridden)`, which the server sets only when there
- * IS a rename), or the rename hook once it has heard. `undefined` — the
- * reading view's masthead, Metadata before a rename, a library search hit — is
- * drawn as ours rather than guessed, because a guess of "author" would put the
- * reader's own words in the author's face (GPT Sol, plan review of 261002f, P1).
- * A public page never shows an owner's rename (src/public/dto.ts), so it
- * passes `false`.
+ * `overridden` comes from the server wherever a title is drawn: a shelf row
+ * (`Boolean(entry.titleOverridden)`, set only when there IS a rename), the
+ * owner's `Article` and `UnreadPaper`, a `LibraryHit`, and the rename hook once
+ * a write has answered — all decided by `titleRenamed` / the same `coalesce`
+ * that chose the title. `undefined` means a payload saved before the flag
+ * existed, and is drawn as ours rather than guessed, because a guess of
+ * "author" would put the reader's own words in the author's face (GPT Sol,
+ * plan review of 261002f, P1). A public page never shows an owner's rename
+ * (src/public/dto.ts), so it passes `false`.
  */
 export function articleTitleVoice(overridden: boolean | undefined): Voice {
   if (overridden === undefined) return "ui";

@@ -101,7 +101,7 @@ import { useShelf } from "./useShelf.js";
 import { useSlow } from "./useSlow.js";
 import { useRenderCount } from "./perf.js";
 import { layoutViewportWidth } from "./reader/measure.js";
-import { withVoice } from "./voice.js";
+import { articleTitleVoice, voiceClass, withVoice } from "./voice.js";
 
 export function Library({
   readerId,
@@ -1305,8 +1305,9 @@ function Passage({ hit, query }: { hit: LibraryHit; query: string }) {
       className="tw:block tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-4 tw:py-3 tw:no-underline tw:hover:border-highlight/60"
     >
       <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-xs tw:text-muted-foreground">
-        {/* No voice: a hit does not say whether the title is a rename. */}
-        {hit.title}
+        {/* The author's title, or the reader's rename (voice.ts). `undefined`
+            on a hit from before the flag, which `articleTitleVoice` draws as ours. */}
+        <span className={voiceClass(articleTitleVoice(hit.titleOverridden))}>{hit.title}</span>
         {/* Only ever set with Include archived on. Marked as the card is, so a
             passage that opens an article you archived is not a ghost. */}
         {hit.archived && <ArchivedMark />}

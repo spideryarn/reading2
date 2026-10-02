@@ -135,9 +135,9 @@ export function TitleEditor({
             superseded title (`LibraryEntry` ships a `titleOverridden` flag
             rather than both strings, so nothing puts a string on the wire that
             nothing renders), and saying less is better than saying something
-            false. Found in a browser pass, 2026-08-26. `undefined` — the
-            reading view, which has no way to know — takes the same branch, for
-            the same reason: it is true in both cases. */}
+            false. Found in a browser pass, 2026-08-26. `undefined` — an
+            article saved in the browser before it carried the flag — takes the
+            same branch, for the same reason: it is true in both cases. */}
         {overridden === false ? (
           <>empty to restore “{title}”</>
         ) : (
@@ -183,16 +183,28 @@ export interface ArticleRename {
  * update: a heading that changes and then silently is not saved is the version
  * of this that costs somebody their title.
  */
+/**
+ * **A rename landed**: which article, what it is called now, and whether that is
+ * the reader's own title (`true`) or the article's again (`false`, a cleared
+ * override). The page that holds the article folds all three back in, so the
+ * masthead and the metadata page put the title in the right face
+ * (`Article.titleOverridden`; voice.ts § `articleTitleVoice`).
+ */
+export type OnRenamed = (slug: string, title: string, overridden: boolean) => void;
+
 export function useArticleRename(
   slug: string,
-  onRenamed: (slug: string, title: string) => void,
+  onRenamed: OnRenamed,
+  /** `Article.titleOverridden` — what the payload said before any write here. */
+  known: boolean | undefined,
 ): ArticleRename {
   const [editing, setEditing] = useState(false);
-  /* Starts unknown and stays unknown until a write answers it — see
-     `overridden` on the editor above for why that is a state rather than a
-     gap. After a rename the response says which it is, so the hint is exact
-     from then on. */
-  const [overridden, setOverridden] = useState<boolean | undefined>(undefined);
+  /* What the last write here answered, which is newer than the payload's
+     `known`; `undefined` until one answers. The hint and the title's voice read
+     the pair, so a reader looking at their own rename is told so from the
+     start, not only after a second rename. */
+  const [written, setWritten] = useState<boolean | undefined>(undefined);
+  const overridden = written ?? known;
   const [error, setError] = useState<string | null>(null);
   /**
    * Which write is the current one.
@@ -228,7 +240,7 @@ export function useArticleRename(
         .then((r) => readJson<{ entry: LibraryEntry }>(r))
         .then(({ entry }) => {
           if (seq.current !== mine) return;
-          setOverridden(Boolean(entry.titleOverridden));
+          setWritten(Boolean(entry.titleOverridden));
           /* **The slug goes back with the title.** This resolves after the
              component that owns it may have gone: the reader renames one
              article, navigates, and the answer lands with a page about a
@@ -236,7 +248,7 @@ export function useArticleRename(
              and this one does not, so it says which article it is talking
              about rather than assuming it is still the one being looked at.
              GPT Sol, 2026-08-27. */
-          onRenamed(slug, entry.title);
+          onRenamed(slug, entry.title, Boolean(entry.titleOverridden));
         })
         .catch((e: Error) => {
           if (seq.current !== mine) return;

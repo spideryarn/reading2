@@ -73,6 +73,7 @@ function article(siteName: string, authors?: Author[]): Article {
   }
   return {
     highPowerSince: null,
+    titleOverridden: false,
     meta: {
       slug: SLUG,
       title: "Antikythera mechanism",

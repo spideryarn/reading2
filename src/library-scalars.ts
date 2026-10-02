@@ -255,7 +255,7 @@ export function describeArticle(input: {
     // Through `titleFor`, which is also what `loadArticle` uses — so the card
     // and the masthead cannot end up calling one article two things.
     title: titleFor(meta, shelf).title,
-    ...(shelf.title ? { titleOverridden: true as const } : {}),
+    ...(titleRenamed(shelf) ? { titleOverridden: true as const } : {}),
     opens: shelf.opens,
     ...(shelf.lastOpenedAt ? { lastOpenedAt: shelf.lastOpenedAt } : {}),
     ...(shelf.archivedAt ? { archivedAt: shelf.archivedAt } : {}),
@@ -302,4 +302,14 @@ export function describeArticle(input: {
  */
 export function titleFor(meta: Meta, shelf: ShelfState | undefined): Meta {
   return shelf?.title ? { ...meta, title: shelf.title } : meta;
+}
+
+/**
+ * **Whether `titleFor` used the reader's rename** — its own test, beside it, so the flag
+ * that says whose words the title is (the card's `titleOverridden`, the
+ * article's) cannot disagree with the title itself. src/web/voice.ts §
+ * `articleTitleVoice`.
+ */
+export function titleRenamed(shelf: ShelfState | undefined): boolean {
+  return Boolean(shelf?.title);
 }

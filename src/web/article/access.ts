@@ -383,7 +383,10 @@ export async function resolveAccess(
            they archived it is not here to strip: `PublicArticle` is an
            allowlist without `archivedAt`, so the masthead draws no Archive
            button for a visitor (plan 261002a). */
-        { ...found.article, sourceGuess: undefined, highPowerSince: null };
+        /* And never an owner's rename: the public payload carries the
+           article's own title (src/public/dto.ts), so the title is the
+           author's. */
+        { ...found.article, sourceGuess: undefined, highPowerSince: null, titleOverridden: false };
   const presentable = await renderArticleMaths(sanitizeArticle(drawn), {
     signal: load.signal,
   });
@@ -553,6 +556,9 @@ function isUnreadPaper(value: unknown): value is UnreadPaper {
     (p.doi === undefined || typeof p.doi === "string") &&
     (p.filename === undefined || typeof p.filename === "string") &&
     (p.kind === "pdf" || p.kind === "html" || p.kind === null) &&
+    /* Tolerated when absent — an answer from a server older than the flag —
+       and drawn as ours then (voice.ts § `articleTitleVoice`). */
+    (p.titleOverridden === undefined || typeof p.titleOverridden === "boolean") &&
     typeof p.addedAt === "string"
   );
 }

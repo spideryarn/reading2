@@ -79,7 +79,8 @@ import { AuthorNames } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { FoldAllButton } from "./FoldToggle.js";
 import type { ArchiveControl } from "./useArchive.js";
-import { EditableTitle, useArticleRename } from "./TitleEditor.js";
+import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
+import { articleTitleVoice, withVoice } from "./voice.js";
 
 interface Props {
   article: Article;
@@ -112,7 +113,7 @@ interface Props {
    * fail is worse than no button because pressing it is how you find out —
    * the same rule Delete follows on the metadata page. 2026-08-28.
    */
-  onRenamed?: ((slug: string, title: string) => void) | undefined;
+  onRenamed?: (OnRenamed) | undefined;
   /** The owner's one archive controller, kept above the article/metadata view switch. */
   archive?: ArchiveControl | undefined;
 }
@@ -170,9 +171,10 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
    */
   const heading = (
     <>
-      {/* No voice of its own: the reading view does not know whether the
-          reader renamed it (voice.ts § `articleTitleVoice`). */}
-      <h1 className="tw:min-w-0 tw:flex-1">
+      {/* The author's title in the author's face, a rename in the reader's
+          (voice.ts § `articleTitleVoice`). `ArticlePage` folds a rename made
+          here or on the metadata page back into `article`, so this follows it. */}
+      <h1 className={withVoice("tw:min-w-0 tw:flex-1", articleTitleVoice(article.titleOverridden))}>
         {source ? (
           <a href={source} target="_blank" rel="noreferrer noopener">
             {meta.title}
@@ -255,7 +257,12 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
             pencil hides, what replaces the heading, and what a failed write
             says, because the metadata page needs all three the same way. */}
         {onRenamed ? (
-          <RenameableTitle slug={slug} meta={meta} onRenamed={onRenamed}>
+          <RenameableTitle
+            slug={slug}
+            meta={meta}
+            overridden={article.titleOverridden}
+            onRenamed={onRenamed}
+          >
             {heading}
           </RenameableTitle>
         ) : (
@@ -1027,15 +1034,18 @@ function SeeTheOriginal({
 function RenameableTitle({
   slug,
   meta,
+  overridden,
   onRenamed,
   children,
 }: {
   slug: string;
   meta: Meta;
-  onRenamed: (slug: string, title: string) => void;
+  /** `Article.titleOverridden`, which the editor's hint starts from. */
+  overridden: boolean | undefined;
+  onRenamed: OnRenamed;
   children: ReactNode;
 }) {
-  const rename = useArticleRename(slug, onRenamed);
+  const rename = useArticleRename(slug, onRenamed, overridden);
   return (
     <EditableTitle
       rename={rename}
