@@ -80,7 +80,7 @@ import {
 } from "./params.js";
 import { isArchived, narrowShelf, topicCountsForVisible } from "./shelf-narrow.js";
 import { ShelfTerms, ShelfTermsLoading } from "./ShelfTerms.js";
-import { useShelfTopics } from "./useShelfTerms.js";
+import { shelfKeyOf, useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { media } from "./media.js";
@@ -255,12 +255,12 @@ export function Library({
   );
 
   /* Every slug that is yours, so Include public does not list your own shared
-     articles a second time without your verbs on them. The archive too, when it
-     is loaded — the public listing already leaves archived articles out, so
-     this is belt and braces rather than the rule. */
+     articles a second time without your verbs on them. Include archive edits
+     even before the archive is loaded: the shared public snapshot can still
+     contain an article you have just archived. */
   const ownSlugs = useMemo(
-    () => new Set([...(articles ?? []), ...(shelf.archived ?? [])].map((a) => a.slug)),
-    [articles, shelf.archived],
+    () => new Set([...(articles ?? []), ...shelf.archivedVisible].map((a) => a.slug)),
+    [articles, shelf.archivedVisible],
   );
 
   /* The archive is fetched when the chip is on and the list is missing — on a
@@ -389,7 +389,15 @@ export function Library({
   const queue = useJobs("watches-queue", reload);
 
   // Matcher two: the passages inside the articles, from the server.
-  const passages = useLibrarySearch(query, archivedOn);
+  /* Counts and passages belong to this shelf snapshot too. Archiving,
+     restoring, or publishing a revision changes the answer at the same query.
+     Use the existing shelf identity; opens and other reading state leave it
+     unchanged. Include known archive edits even with the chip off. */
+  const searchShelfKey = useMemo(
+    () => `${readerId}:${shelfKeyOf(articles, shelf.archivedVisible, true) ?? ""}`,
+    [readerId, articles, shelf.archivedVisible],
+  );
+  const passages = useLibrarySearch(query, archivedOn, searchShelfKey);
 
   /* **One read of the public listing**, for the Include public section and for
      the count beside the search's answer, so the two are the same snapshot

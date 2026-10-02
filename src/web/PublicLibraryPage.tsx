@@ -411,10 +411,10 @@ export function usePublicShelf(
    * **Which read is allowed to answer**, and it is a ref rather than state
    * because nothing renders from it.
    *
-   * Two reads really are in the air at once in the ordinary case: `main.tsx`
-   * mounts the app inside `<StrictMode>`, so in development every effect runs
-   * mount → cleanup → mount and this hook starts two. Without a generation the
-   * loser can land last and put a stale answer on screen — and before the
+   * Retries can overlap a pending read. StrictMode replays the mount effect,
+   * but `started` below keeps that replay from starting a second request.
+   * Without a generation a superseded read can land last and put a stale
+   * answer on screen — and before the
    * discriminated state above it could do worse, leaving the failure and the
    * list up together.
    */

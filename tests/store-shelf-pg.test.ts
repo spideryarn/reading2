@@ -65,7 +65,7 @@ import {
   uploadSourceGuesses,
 } from "../src/db/schema.js";
 import { mintId } from "../src/ids.js";
-import { currentOwnerId } from "../src/owner.js";
+import { currentOwnerId, EVAL_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { MAX_PURPOSE_CHARS } from "../src/profile.js";
 import { MAX_TITLE_CHARS } from "../src/shelf.js";
 import { deriveLibraryScalars } from "../src/library-scalars.js";
@@ -614,6 +614,15 @@ describe("the Postgres shelf and library search", () => {
       expect(await pgLibrarySearch.countArchivedMatches(RARE)).toBe(0);
       await pgShelfStore.patch(SLUG, { archived: true });
       try {
+        expect(await pgLibrarySearch.countArchivedMatches(RARE)).toBe(1);
+        // The positive control above makes an omitted owner guard observable.
+        expect(currentOwnerId()).not.toBe(EVAL_OWNER_ID);
+        expect(await runAsOwner(EVAL_OWNER_ID, () => pgLibrarySearch.countArchivedMatches(RARE))).toBe(0);
+        // Current-revision and gistable predicates matter to the count too:
+        // these words appear only in the old draft and the heading respectively.
+        expect(await pgLibrarySearch.countArchivedMatches(`${RARE} "older draft"`)).toBe(0);
+        expect(await pgLibrarySearch.countArchivedMatches(`${RARE} heading`)).toBe(0);
+        expect((await pgLibrarySearch.searchLibrary(RARE, 1, { includeArchived: true })).capped).toBe(true);
         expect(await pgLibrarySearch.countArchivedMatches(RARE)).toBe(1);
         expect(await pgLibrarySearch.countArchivedMatches("")).toBe(0);
       } finally {
