@@ -34,6 +34,7 @@ import {
   FloatingDelayGroup,
   FloatingFocusManager,
   FloatingPortal,
+  FloatingTree,
   arrow,
   autoUpdate,
   flip,
@@ -43,6 +44,7 @@ import {
   useDelayGroup,
   useDismiss,
   useFloating,
+  useFloatingTree,
   useFocus,
   useHover,
   useInteractions,
@@ -200,12 +202,6 @@ export function Tooltip({
   }, [disabledWhileOpen, setOpen]);
   const arrowRef = useRef<SVGSVGElement>(null);
 
-  /* The two elements, for `changeOpen`, which is handed to `useFloating`
-     before `useFloating` has returned them. Written on every render below. */
-  const placed = useRef<{ reference: Element | null; floating: HTMLElement | null }>({
-    reference: null,
-    floating: null,
-  });
   /**
    * **What an interactive card does about focus when something asks it to
    * close.** A no-op for every other card: `setOpen`, unchanged.
@@ -222,17 +218,20 @@ export function Tooltip({
    */
   const changeOpen = (next: boolean, _event?: Event, reason?: OpenChangeReason) => {
     if (interactive && !next) {
-      const { reference, floating } = placed.current;
+      // Read the committed DOM refs, including a trigger replaced in this
+      // commit before Floating UI's element state has rerendered.
+      const reference = refs.domReference.current;
+      const floating = refs.floating.current;
       const active = floating?.ownerDocument.activeElement ?? null;
       if (floating && active && floating.contains(active)) {
         if (reason === "hover" || reason === "safe-polygon") return;
-        if (reason === "escape-key" && reference instanceof HTMLElement) reference.focus();
+        if (reason === "escape-key" && reference instanceof HTMLElement) reference.focus({ preventScroll: true });
       }
     }
     setOpen(next);
   };
 
-  const { refs, elements, floatingStyles, context } = useFloating({
+  const { refs, floatingStyles, context } = useFloating({
     open,
     onOpenChange: changeOpen,
     placement,
@@ -254,8 +253,6 @@ export function Tooltip({
       arrow({ element: arrowRef, padding: 8 }),
     ],
   });
-
-  placed.current = { reference: elements.domReference, floating: elements.floating };
 
   // Zero when there is no <TooltipGroup> above us, in which case we want our
   // own delay. A group always supplies an object, which is truthy.
@@ -416,12 +413,17 @@ function FocusReach({
   context: Parameters<typeof FloatingFocusManager>[0]["context"];
   children: ReactElement;
 }) {
+  const tree = useFloatingTree();
   if (!on) return children;
-  return (
+  const manager = (
     <FloatingFocusManager context={context} modal={false} initialFocus={-1} returnFocus={false}>
       {children}
     </FloatingFocusManager>
   );
+  // In 0.27.20, the portal-without-tree capture workaround marks every blur
+  // as insideReactTree and suppresses direct focus-out dismissal. Supply the
+  // library's context (no DOM), retaining an enclosing tree when one exists.
+  return tree ? manager : <FloatingTree>{manager}</FloatingTree>;
 }
 
 /**

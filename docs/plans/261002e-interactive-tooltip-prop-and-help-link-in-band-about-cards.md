@@ -178,3 +178,43 @@ Verdict: keep the opt-in design; fix focus loss and the role first. All six take
   default-path test is that case), without the focus manager there are no guards.
 - **F6 (P3)** — added a controlled, grouped, non-interactive case (the spine's shape): still a
   `tooltip`, still the trigger's description, no pointer, no guards.
+
+## Code review (GPT Sol, 2026-10-02) — fixed by the reviewer
+
+[261002e-interactive-tooltip-prop-code-review-sol.md](261002e-interactive-tooltip-prop-code-review-sol.md),
+exit 0, verdict *pass after fixes*. It changed `Tooltip.tsx` and the two test files; I read the diff
+and re-ran the gates (typecheck, lint, the nine tooltip/band/spine/help/doc-links suites, 214 tests).
+
+- **F7 (P1)**: a card could stick open after focus left it directly (focus on the link, pointer
+  away, then focus moved by something other than Tab). Floating UI 0.27.20's portal workaround
+  treats every blur as "inside the React tree" when there is no `FloatingTree`, so dismissal was
+  swallowed. Fixed: `FocusReach` supplies a `FloatingTree` (no DOM) unless one already encloses it.
+- **F8 (P1)**: the `placed` ref written during render could hold a detached trigger if the trigger
+  was replaced in the same commit as an Escape. Fixed: read Floating UI's live `refs` instead;
+  `focus({ preventScroll: true })`.
+- **F9 (P2)**: the "hover does not take focus" test asserted before queued focus work ran, so it
+  passed with `initialFocus={0}`. Fixed, and it added mouse-toggle, simulated-touch and
+  focus-transition cases. It reports six behaviour mutations now fail an assertion.
+
+## Browser pass (Sonnet subagent, Playwright on the box, 2026-10-02)
+
+Article `/read/fowler-phrenology?mode=faq`, real `page.mouse` moves, on 982025104 (Sol's edits
+landed mid-run; see A).
+
+| | Check | Result |
+|---|---|---|
+| A | Pointer from (i) into the card: down, down-left, down-right, fast | Pass on the final runs (card 10px below the (i); all five moves twice). **One early down-left failure** that did not recur in 8 fresh loads — re-run on the committed final tree, below. |
+| B | Pointer away from the card | Closes in 80–180ms |
+| C | *More in Help →* | `/help#mode-faq`, section in view; Back returns to the article |
+| D | Spine scrub, 40 positions | One card each time, always `role=tooltip`, never `interactive`, `pointer-events: none`; `elementFromPoint` inside a spine card hits the band beneath; nothing sticks |
+| E | Dock cards | `role=tooltip`, not interactive |
+| F | Keyboard | Tab → link (card open); Shift+Tab → (i); Tab past the link → next control, card closed; Escape from the link → closed, focus on (i); hover moves no focus |
+| G | Focus in the card, pointer wanders off | Stays open, focus kept |
+| H | Mouse click on a hover-opened (i) | Closes it (hover opens, click toggles) — the behaviour before this change too; left alone |
+| I | 390px, touch emulation | Tap (i) opens; tap link navigates; tap outside closes; tap twice toggles |
+
+![Desktop: the FAQ band's (i) card, ending in More in Help](261002e-shot-desktop-card.png)
+![Phone width: the same card after a tap](261002e-shot-phone-card.png)
+![Keyboard focus on the link](261002e-shot-keyboard-link.png)
+![A spine card, unchanged](261002e-shot-spine-card.png)
+![Help, arrived at the FAQ section](261002e-shot-help-section.png)

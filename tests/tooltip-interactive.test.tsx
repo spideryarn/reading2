@@ -2,8 +2,8 @@
 /**
  * **`<Tooltip interactive>`: a card the pointer and the keyboard can get into.**
  *
- * Every card in the app is `pointer-events: none` and closes the moment the
- * pointer leaves its trigger — right for the spine, whose cards would otherwise
+ * By default, Tooltip cards take no pointer events and close after the pointer
+ * leaves their trigger — right for the spine, whose cards would otherwise
  * sit on the band being pointed at and hold themselves open, and a failure of
  * WCAG 2.1 § 1.4.13 for a card that holds a link. Greg chose per-use, 2026-10-02
  * (docs/plans/261002e-interactive-tooltip-prop-and-help-link-in-band-about-cards.md).
@@ -16,7 +16,7 @@
  * The first test is the default, and it is the one that matters most: the
  * spine has to keep exactly what it had.
  */
-import { act, useState } from "react";
+import { act, useLayoutEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Tooltip, TooltipGroup } from "../src/web/Tooltip.js";
@@ -183,7 +183,25 @@ describe("a card with `interactive`", () => {
     draw(true);
     const before = document.activeElement;
     await hover();
+    // Focus management queues its focus after the opening render. Wait for
+    // that work too, otherwise initialFocus={0} incorrectly passes this test.
+    await settle();
     expect(document.activeElement).toBe(before);
+  });
+
+  it("keeps the card open when focus moves within it or back to its trigger", async () => {
+    draw(true);
+    await act(async () => trigger().focus());
+    await settle();
+    const link = document.querySelector(".card-link") as HTMLAnchorElement;
+    await act(async () => link.focus());
+    await act(async () => (anchor() as HTMLElement).focus());
+    await settle();
+    expect(anchor()).not.toBeNull();
+    await act(async () => trigger().focus());
+    await settle();
+    expect(document.activeElement).toBe(trigger());
+    expect(anchor()).not.toBeNull();
   });
 
   it("closes on Escape with focus on its link", async () => {
@@ -199,6 +217,31 @@ describe("a card with `interactive`", () => {
     expect(anchor()).toBeNull();
     /* Not dropped on <body>: the link it was on has gone, so it goes back to
        the control that opened the card. GPT Sol, plan review F1. */
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  it("returns Escape focus to a replacement trigger before its ref state rerenders", async () => {
+    function Replacement({ swapped }: { swapped: boolean }) {
+      useLayoutEffect(() => {
+        if (swapped) {
+          document.querySelector(".card-link")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        }
+      }, [swapped]);
+      return (
+        <Tooltip interactive={{ label: "About" }} content={<a href="/help" className="card-link">Help</a>}>
+          <button type="button" key={String(swapped)} className="trigger">i</button>
+        </Tooltip>
+      );
+    }
+    await act(async () => root.render(<Replacement swapped={false} />));
+    await act(async () => trigger().focus());
+    await settle();
+    await act(async () => (document.querySelector(".card-link") as HTMLElement).focus());
+    const oldTrigger = trigger();
+    await act(async () => root.render(<Replacement swapped />));
+    await settle();
+    expect(trigger()).not.toBe(oldTrigger);
+    expect(anchor()).toBeNull();
     expect(document.activeElement).toBe(trigger());
   });
 
@@ -218,6 +261,45 @@ describe("a card with `interactive`", () => {
     await settle();
     expect(anchor()).not.toBeNull();
     expect(document.activeElement).toBe(link);
+  });
+
+  it("closes when focus moves directly out of its link after the pointer leaves", async () => {
+    draw(true);
+    await hover();
+    const link = document.querySelector(".card-link") as HTMLAnchorElement;
+    await act(async () => link.focus());
+    trigger().dispatchEvent(new MouseEvent("mouseleave", { relatedTarget: document.body, clientX: 500, clientY: 500 }));
+    trigger().dispatchEvent(
+      new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body, clientX: 500, clientY: 500 }),
+    );
+    document.body.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 600, clientY: 600 }));
+    await settle();
+    expect(anchor()).not.toBeNull();
+    const elsewhere = host.querySelector(".elsewhere") as HTMLButtonElement;
+    await act(async () => elsewhere.focus());
+    await settle();
+    expect(document.activeElement).toBe(elsewhere);
+    expect(anchor()).toBeNull();
+  });
+
+  it("closes on an outside press after protecting focus from pointer leave", async () => {
+    draw(true);
+    await hover();
+    const link = document.querySelector(".card-link") as HTMLAnchorElement;
+    await act(async () => link.focus());
+    trigger().dispatchEvent(new MouseEvent("mouseleave", { relatedTarget: document.body, clientX: 500, clientY: 500 }));
+    document.body.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 600, clientY: 600 }));
+    await settle();
+    expect(anchor()).not.toBeNull();
+    const elsewhere = host.querySelector(".elsewhere") as HTMLButtonElement;
+    await act(async () => {
+      elsewhere.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      elsewhere.focus();
+      elsewhere.click();
+    });
+    await settle();
+    expect(document.activeElement).toBe(elsewhere);
+    expect(anchor()).toBeNull();
   });
 
   /* A card with a link in it is a small non-modal dialog, not a tooltip: ARIA's
@@ -241,10 +323,11 @@ describe("a controlled, grouped card without `interactive`", () => {
     return (
       <TooltipGroup delay={{ open: 240, close: 90 }}>
         <Tooltip content="Part one" open={open} onOpenChange={setOpen}>
-          <button type="button" className="trigger" aria-label="Part one">
+          <button type="button" className="trigger" aria-label="Part one" aria-describedby="standing-note">
             band
           </button>
         </Tooltip>
+        <p id="standing-note">A standing description.</p>
       </TooltipGroup>
     );
   }
@@ -254,7 +337,7 @@ describe("a controlled, grouped card without `interactive`", () => {
     await hover();
     expect(anchor()?.getAttribute("role")).toBe("tooltip");
     expect(anchor()?.classList.contains("interactive")).toBe(false);
-    expect(trigger().getAttribute("aria-describedby")).toBe(anchor()?.id);
+    expect(trigger().getAttribute("aria-describedby")).toBe(`${anchor()?.id} standing-note`);
     expect(trigger().hasAttribute("aria-haspopup")).toBe(false);
     expect(document.querySelector("[data-floating-ui-focus-guard]")).toBeNull();
     await travelIntoTheCard();
