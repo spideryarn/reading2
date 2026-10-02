@@ -155,7 +155,7 @@ that the furniture filter missed ([261001b](../plans/261001b-public-article-visi
 
 ## The orders, and the bar
 
-Four, under the glossary's order buttons ([glossary.md](glossary.md)):
+Five, under the glossary's order buttons ([glossary.md](glossary.md)):
 
 - **prioritised**, the default — `(2 × relevance + influence) / 3` against the threshold bar, in
   first-cited order. A work missing a score survives every position of the bar
@@ -167,6 +167,16 @@ Four, under the glossary's order buttons ([glossary.md](glossary.md)):
   when no position of the bar would hide anything.
 - **first cited** — the artefact's own order.
 - **relevance**, **influence** — descending, a work missing that score last.
+- **date** — publication year, oldest first, as Debate's date order is; same year in first-cited
+  order, undated last. The year is the one the row draws (`workByLine`: the article's, the
+  registry's only where the article gives none), read as its first four-digit year, so `2017a` is
+  2017 and `n.d.` is undated. Offered only when some work has a year, and `?citeby=date` on a list
+  with none draws first cited. Asked for by Greg, 2026-10-01 (`spya-xpxmjn`):
+
+  > In Citations mode, add a `sort` option for publication-date.
+
+  No newest-first: one direction until somebody asks
+  ([261002j](../plans/261002j-citations-sort-by-publication-year.md)).
 
 Only the two raw scores are drawn on a row, never the combination — the glossary's rule. An **(i)**
 in the band's top-right corner (`BandAbout`, shared by every mode) says `influence` is the model's

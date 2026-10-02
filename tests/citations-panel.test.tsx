@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Citations mode's panel: the four orders, the bar, and the one thing a row
+ * Citations mode's panel: the five orders, the bar, and the one thing a row
  * must never blur — whether its link is an address the article gave or a
  * search we built. docs/project/citations.md, src/web/CitationsPanel.tsx.
  */
@@ -11,6 +11,7 @@ import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { PublicCitations } from "../src/public-types.js";
 import type { BlockId, Citations, CitedWork, InvestigatedPaper, Job } from "../src/types.js";
 import type { UseCitations } from "../src/web/useCitations.js";
+import type { CiteOrder } from "../src/web/params.js";
 import { citePassageKey } from "../src/web/rows.js";
 
 const {
@@ -40,6 +41,7 @@ const {
   effectiveOrder,
   orderWorks,
   priorityOf,
+  publicationYear,
   readNoteOf,
   scoresOf,
   sourceOf,
@@ -124,6 +126,103 @@ describe("the score orders", () => {
 
   it("first cited is the artefact's own order, untouched", () => {
     expect(orderWorks(WORKS, "document")).toEqual(WORKS);
+  });
+});
+
+/* spya-xpxmjn, Greg, 2026-10-01: "In Citations mode, add a `sort` option for
+   publication-date." Oldest first, as Debate's date order is; the year is the
+   one the row draws, so the order cannot disagree with the by-line. */
+describe("the date order", () => {
+  const OLD = work({ id: "spya-b2c3d4", title: "Old", year: "1932" });
+  const SUFFIXED = work({ id: "spya-c2d3e4", title: "Suffixed", year: "2017a" });
+  const UNDATED = work({ id: "spya-e3f4g5", title: "Undated", year: "n.d." });
+  const BLANK = work({ id: "spya-f3g4h5", title: "Blank" });
+  const FILLED = work({
+    id: "spya-g3h4j5",
+    title: "Filled",
+    registry: { kind: "found", source: "crossref", title: "Filled", authors: [], year: 1999 },
+  });
+  const ALSO_2017 = work({ id: "spya-h3j4k5", title: "Also 2017", year: "2017" });
+  /* First-cited order, deliberately not the date order. */
+  const LIST = [UNDATED, SUFFIXED, BLANK, FILLED, ALSO_2017, OLD];
+
+  it("puts the oldest first, reads the year out of its string, and keeps first-cited order among ties", () => {
+    expect(titles(orderWorks(LIST, "date"))).toEqual(["Old", "Filled", "Suffixed", "Also 2017", "Undated", "Blank"]);
+  });
+
+  it("dates a work by the registry only where the article gives no year, as the by-line does", () => {
+    const disagree = work({
+      id: "spya-j3k4m5",
+      title: "Disagree",
+      year: "2020",
+      registry: { kind: "found", source: "crossref", title: "Disagree", authors: [], year: 1900 },
+    });
+    expect(titles(orderWorks([disagree, OLD], "date"))).toEqual(["Old", "Disagree"]);
+  });
+
+  it("reads any four-digit year from 1000 to 9999, the first of a range, and nothing longer", () => {
+    const at = (year: string) => publicationYear({ year });
+    expect(at("2100")).toBe(2100);
+    expect(at("2019–2020")).toBe(2019);
+    expect(at("c. 1066")).toBe(1066);
+    expect(at("12345")).toBeNull();
+    expect(at("0999")).toBeNull();
+    expect(at("in press")).toBeNull();
+  });
+
+  it("draws the list in that order, presses date, and shows no threshold", async () => {
+    const scored = [...LIST, CENTRAL, FAMOUS];
+    await draw(owner({ citations: artefact(scored) }), null, () => {}, "date");
+    const drawn = [...host.querySelectorAll<HTMLElement>("[data-citation-id]")].map((el) => el.dataset.citationId);
+    expect(drawn).toEqual(orderWorks(scored, "date").map((w) => w.id));
+    expect(drawn[0]).toBe(OLD.id);
+    const pressed = [...host.querySelectorAll(".gloss-sort-btn[aria-pressed=true]")].map((b) => b.textContent);
+    expect(pressed).toEqual(["date"]);
+    expect(host.querySelector(".gloss-gate")).toBeNull();
+  });
+
+  it("orders a visitor's rows by the same year, a registry-filled one included", async () => {
+    const pub = (id: string, title: string, over: object) => ({
+      id,
+      title,
+      why: "Cited.",
+      mentions: [],
+      citedAt: [FIRST],
+      firstCited: FIRST,
+      citedInBody: true,
+      url: "https://doi.org/10.1000/x",
+      linkFrom: "doi" as const,
+      ...over,
+    });
+    await drawVisitor(
+      {
+        capped: false,
+        citations: [
+          pub("spya-v3w4x5", "Late", { year: "2020" }),
+          pub("spya-w3x4y5", "Registry", {
+            registry: { kind: "found", source: "crossref", title: "Registry", authors: [], year: 1950 },
+          }),
+          pub("spya-x3y4z5", "Undated", {}),
+        ],
+      },
+      "date",
+    );
+    const drawn = [...host.querySelectorAll<HTMLElement>("[data-citation-id]")].map((el) => el.dataset.citationId);
+    expect(drawn).toEqual(["spya-w3x4y5", "spya-v3w4x5", "spya-x3y4z5"]);
+  });
+
+  it("falls back to first cited when no work has a year", () => {
+    expect(effectiveOrder([UNDATED, BLANK], "date")).toBe("document");
+    expect(effectiveOrder(LIST, "date")).toBe("date");
+  });
+
+  it("offers the button only when some work has a year", async () => {
+    await draw(owner({ citations: artefact([UNDATED, BLANK, CENTRAL]) }));
+    const labels = () => [...host.querySelectorAll(".gloss-sort-btn")].map((b) => b.textContent);
+    expect(labels(), "the order row is drawn, so its missing button means something").toContain("relevance");
+    expect(labels()).not.toContain("date");
+    await draw(owner({ citations: artefact([UNDATED, OLD]) }));
+    expect(labels()).toContain("date");
   });
 });
 
@@ -213,12 +312,13 @@ async function draw(
   o: UseCitations,
   bar: number | null = null,
   onJump: (id: BlockId, passage?: string) => void = () => {},
+  order: CiteOrder = "prioritised",
 ) {
   await act(async () =>
     root.render(
       createElement(CitationsPanel, {
         access: { kind: "owner", owner: o },
-        order: "prioritised",
+        order,
         onOrder: () => {},
         bar,
         onBar: () => {},
@@ -228,12 +328,12 @@ async function draw(
   );
 }
 
-async function drawVisitor(citations: PublicCitations) {
+async function drawVisitor(citations: PublicCitations, order: CiteOrder = "prioritised") {
   await act(async () =>
     root.render(
       createElement(CitationsPanel, {
         access: { kind: "visitor", citations },
-        order: "prioritised",
+        order,
         onOrder: () => {},
         bar: null,
         onBar: () => {},

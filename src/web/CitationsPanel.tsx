@@ -339,15 +339,29 @@ export function canPrioritise(works: readonly ShownWork[]): boolean {
  * one. `GlossaryPanel.effectiveSort`.
  */
 export function effectiveOrder(works: readonly ShownWork[], order: CiteOrder): CiteOrder {
+  if (order === "date") return works.some((w) => publicationYear(w) !== null) ? "date" : "document";
   if (order !== "prioritised") return order;
   return canPrioritise(works) ? "prioritised" : "document";
+}
+
+/**
+ * **The year the date order sorts by: the one the row draws** — `workByLine`'s,
+ * the article's own and the registry's only where the article gives none — so
+ * the order cannot disagree with the by-line. The first four-digit year in it,
+ * 1000–9999 as Debate's `readPublishedYear` (`2017a` is 2017, `2019–2020` is
+ * 2019); none (`n.d.`, `in press`, a five-digit run) is undated.
+ */
+export function publicationYear(work: Pick<ShownWork, "authors" | "year" | "registry">): number | null {
+  const year = workByLine(work).year?.match(/(?<!\d)[1-9]\d{3}(?!\d)/)?.[0];
+  return year === undefined ? null : Number(year);
 }
 
 /**
  * The list in one flat order. `document` is the artefact's own first-cited
  * order; `prioritised` is that order with what is below the bar taken out; the
  * two score orders are descending, unscored last, and first-cited order breaks
- * ties so equal scores do not shuffle.
+ * ties so equal scores do not shuffle. `date` is oldest first, undated last, as
+ * Debate's date order is (debate-order.ts), with the same tie-break.
  */
 export function orderWorks<W extends ShownWork>(
   works: readonly W[],
@@ -374,6 +388,16 @@ export function orderWorks<W extends ShownWork>(
         })
         .map(({ work }) => work);
     }
+    case "date":
+      return works
+        .map((work, index) => ({ work, index, year: publicationYear(work) }))
+        .sort((a, b) => {
+          if (a.year === null && b.year === null) return a.index - b.index;
+          if (a.year === null) return 1;
+          if (b.year === null) return -1;
+          return a.year - b.year || a.index - b.index;
+        })
+        .map(({ work }) => work);
     default: {
       const unhandled: never = order;
       return unhandled;
@@ -842,6 +866,15 @@ function orderOptions(works: readonly ShownWork[]): { key: CiteOrder; label: str
             key: "influence" as const,
             label: "influence",
             title: "The model's memory of how influential each work is in its field — not a citation count",
+          },
+        ]
+      : []),
+    ...(works.some((w) => publicationYear(w) !== null)
+      ? [
+          {
+            key: "date" as const,
+            label: "date",
+            title: "Oldest first, by the year each work was published; works with no year last",
           },
         ]
       : []),
