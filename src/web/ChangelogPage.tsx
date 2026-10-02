@@ -445,6 +445,13 @@ function VersionBlock({ version, release, now, open, onOpenChange }: {
             {version.deployment_id === null ? "Built from commit " : "Changes through commit "}
             <span className="tw:font-mono">{version.sha.slice(0, 7)}</span>
           </a>
+          {/* The notes were written a little before the deploy, and what landed
+              in between is the next release's to describe — docs/plans/261002h. */}
+          {version.deployed_sha !== null && version.deployed_sha !== version.sha ? (
+            <span className="tw:ml-1">
+              — a few later changes in this release are described under the next one.
+            </span>
+          ) : null}
         </p>
       </div>
     </details>

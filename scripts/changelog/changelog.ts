@@ -2050,11 +2050,11 @@ function promotedRelease(
  *    a deploy.
  *
  * **Its `sha` is the deployed commit, unless the deploy shipped release commits
- * its notes do not cover.** The deploy gate makes the second case need
- * `--force-gate=changelog`. Then the line stops at the described tip, so the
- * next `prepare`'s range starts there and describes what the forced deploy
- * shipped; recording the deployed commit would put that work behind the
- * watermark, described by nobody.
+ * its notes do not cover** — commits that landed after `prepare` planned, which
+ * the deploy gate lets through since 261002h, or a `--force-gate=changelog`
+ * deploy. Then the line stops at the described tip, so the next `prepare`'s
+ * range starts there and describes them; recording the deployed commit would
+ * put that work behind the watermark, described by nobody.
  *
  * A serving build with no pending file in its tree, and no line, predates this
  * process: refused, with the recovery named, rather than written as quiet.
@@ -2118,7 +2118,7 @@ export function planPromotion(a: {
   const sha = uncovered.length === 0 ? serving.commit : described;
   if (uncovered.length > 0) {
     notes.push(
-      `${uncovered.length} release commits shipped without notes (a forced deploy?) — the line stops at ` +
+      `${uncovered.length} release commits shipped after the notes — the line stops at ` +
         `${described.slice(0, 8)}, so the next prepare describes them`,
     );
   }
@@ -2134,6 +2134,9 @@ export function planPromotion(a: {
     version,
     deployment_id: serving.deploymentId,
     sha,
+    /* What was built, whether or not the notes reached it — the fleet
+       dashboard's distance is measured from here, not from `sha` (261002h). */
+    deployed_sha: serving.commit,
     previous_sha: last.sha,
     commit_count: commitCount,
     invisible: entries.length === 0,

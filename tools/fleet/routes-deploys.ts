@@ -177,7 +177,7 @@ export async function deploysPayload(deps: DeploysRouteDeps, limit: number): Pro
         ? { kind: "newest-unreadable" }
         : newest === null
           ? { kind: "none" }
-          : { kind: "sha", sha: newest.sha };
+          : { kind: "sha", sha: newest.deployedSha };
   const git = await deps.git.snapshot(watermark);
 
   return {
@@ -194,7 +194,7 @@ export async function deploysPayload(deps: DeploysRouteDeps, limit: number): Pro
        rather than this withholding the number, because the number is still the
        best lower bound available. Sol's F1, second half. */
     lastGeneratedAt: lastGeneratedAt(read),
-    newestRecordedSha: newest?.sha ?? null,
+    newestRecordedSha: newest?.deployedSha ?? null,
     newestLineRead: read.newestLineRead,
     git,
     servedAtMs: deps.nowMs(),

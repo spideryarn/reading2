@@ -366,6 +366,7 @@ function deploysView(over: Partial<Extract<DeploysView, { kind: "deploys" }>> = 
         release: 74,
         deploymentId: "dpl_test",
         sha: "8cd2206ae24e16c65f76ea9f954c5b300616cd57",
+        deployedSha: "8cd2206ae24e16c65f76ea9f954c5b300616cd57",
         previousSha: "3b4d32f0a1b2c3d4e5f60718293a4b5c6d7e8f90",
         commitCount: 137,
         invisible: false,

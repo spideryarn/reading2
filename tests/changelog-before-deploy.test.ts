@@ -10,13 +10,14 @@
  *  - `plan --upcoming` — one version, no deployment id, or nothing at all.
  *  - `installPending` — the pending file replaced whole, or not at all.
  *  - `planPromotion` — one history line per production deploy, with the serving
- *    build's own id and time, and nothing a forced deploy shipped left
- *    behind the watermark undescribed.
- *  - `changelogGap` / `notesAt` — the deploy gate, strict: nothing a reader
- *    would see may ship after the notes stop.
+ *    build's own id and time, and nothing shipped after the notes left behind
+ *    the watermark undescribed.
+ *  - `changelogGap` / `notesAt` — the deploy gate: notes were written for this
+ *    deploy, and anything after them rolls to the next release (261002h).
  *
- * Real commits from this repo's history, because the ancestry questions are
- * asked of git and a fixture repo would be testing a different history shape.
+ * Mostly real commits from this repo's history, because the ancestry questions
+ * are asked of git and a fixture repo would be testing a different history
+ * shape; `repoWithALateCommit` builds the one shape the history lacks.
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -35,6 +36,7 @@ import {
   Refused,
   servingFrom,
 } from "../scripts/changelog/changelog.js";
+import { fastForwardTo, Stop } from "../scripts/changelog/release-notes.js";
 import { isReleasePath, notesAt, releaseCommits } from "../scripts/changelog/release-paths.js";
 import { changelogGap, servingUnrecorded } from "../scripts/deploy-checks.js";
 
@@ -111,6 +113,39 @@ function history(...lines: Record<string, unknown>[]): ChangelogVersion[] {
 
 const SERVING = { commit: CODE, deploymentId: "dpl_one", builtAt: "2026-10-01T01:20:30.456Z" };
 
+/**
+ * A real repo: one recorded deploy (`first`), notes describing a later commit
+ * (`noted`, committed in `notesCommit`), and a commit a reader can see that
+ * landed after `prepare` planned (`late`) — 261002h's case.
+ */
+function repoWithALateCommit(): { repo: string; first: string; noted: string; notesCommit: string; late: string } {
+  const repo = scratch();
+  const run = (...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], {
+      cwd: repo,
+      encoding: "utf8",
+    }).trim();
+  const commit = (file: string, text: string, msg: string): string => {
+    mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    writeFileSync(path.join(repo, file), text);
+    run("add", file);
+    run("commit", "--quiet", "-m", msg);
+    return run("rev-parse", "HEAD");
+  };
+  run("init", "--quiet");
+  const first = commit("src/a.ts", "a\n", "the first deploy");
+  commit("src/web/changelog-pending.json", "null\n", "nothing pending");
+  commit("src/web/changelog-versions.ndjson", `${JSON.stringify(line({ sha: first }))}\n`, "its line");
+  const noted = commit("src/b.ts", "b\n", "a change the notes describe");
+  const notesCommit = commit(
+    "src/web/changelog-pending.json",
+    `${JSON.stringify(pending({ sha: noted, previous_sha: first }))}\n`,
+    "the notes",
+  );
+  const late = commit("src/c.ts", "c\n", "a change that landed after prepare planned");
+  return { repo, first, noted, notesCommit, late };
+}
+
 describe("release paths", () => {
   it("does not count the changelog's own files as a change", () => {
     expect(isReleasePath("src/web/changelog-versions.ndjson")).toBe(false);
@@ -143,6 +178,20 @@ describe("parsePending", () => {
   it("refuses one that claims a deployment it cannot have had", () => {
     expect(parsePending(JSON.stringify(pending({ deployment_id: "dpl_x" })), h()).problems.join()).toMatch(
       /must be null/,
+    );
+  });
+
+  it("refuses one that names a deployed commit it cannot have had", () => {
+    expect(parsePending(JSON.stringify(pending({ deployed_sha: CODE })), h()).problems.join()).toMatch(
+      /deployed_sha must be absent/,
+    );
+  });
+
+  it("reads a history line's deployed commit, and refuses one that is not a sha", () => {
+    expect(history(line({ deployed_sha: CODE }))[0]?.deployed_sha).toBe(CODE);
+    expect(history(line())[0]?.deployed_sha).toBeNull();
+    expect(parseChangelog(JSON.stringify(line({ deployed_sha: "nope" }))).problems.join()).toMatch(
+      /deployed_sha is neither absent nor a sha/,
     );
   });
 
@@ -251,6 +300,7 @@ describe("promote", () => {
       version: "2026-10-01T01:20:30Z",
       deployment_id: "dpl_one",
       sha: CODE,
+      deployed_sha: CODE,
       previous_sha: CODE_PARENT,
       commit_count: 1,
     });
@@ -289,8 +339,32 @@ describe("promote", () => {
     if (p.kind !== "append") return;
     expect(p.line.sha).toBe(CODE_PARENT);
     expect(p.line.commit_count).toBe(0);
-    expect(p.notes.join()).toMatch(/without notes/);
+    expect(p.notes.join()).toMatch(/after the notes/);
     expect(parseChangelog([line(), p.line].map((l) => JSON.stringify(l)).join("\n")).problems).toEqual([]);
+  });
+
+  /**
+   * The claim 261002h rests on: a commit the deploy gate let through after the
+   * notes is not lost behind the watermark — the line stops at the notes, so
+   * the next `prepare`'s range (from the last line's `sha`) contains it.
+   */
+  it("leaves a commit that landed after the notes in the next release's range", () => {
+    const { repo, first, noted, late } = repoWithALateCommit();
+    const notesText = JSON.stringify(pending({ sha: noted, previous_sha: first }));
+    const p = promote({
+      root: repo,
+      history: history(line({ sha: first })),
+      serving: { ...SERVING, commit: late },
+      servingPendingText: notesText,
+      localPendingText: notesText,
+    });
+    expect(p.kind).toBe("append");
+    if (p.kind !== "append") return;
+    expect(p.line.sha).toBe(noted);
+    /* And what was built, for the fleet dashboard's distance. */
+    expect(p.line.deployed_sha).toBe(late);
+    expect(p.line.entries).toEqual([entry()]);
+    expect(releaseCommits(`${String(p.line.sha)}..${late}`, repo)).toEqual([late]);
   });
 
   it("records a redeploy of a release already promoted as a line with nothing in it", () => {
@@ -373,15 +447,26 @@ describe("promote", () => {
 });
 
 describe("changelogGap — the deploy gate", () => {
-  const base = { problems: [], described: CODE, describedInCandidate: true, uncovered: [] };
+  const base = { problems: [], described: CODE, describedInCandidate: true, pendingPresent: true, uncovered: [] };
 
   it("passes notes that cover everything the candidate ships", () => {
     expect(changelogGap(base)).toBeNull();
   });
 
-  /** The revert that lands after the notes: the reason the rule is strict (261001q § The deploy gate). */
-  it("refuses a release commit after the notes, however fresh they are", () => {
-    expect(changelogGap({ ...base, uncovered: [DOCS] })).toMatch(/no release notes describe them/);
+  /**
+   * A commit that landed after `prepare` planned rolls to the next release's
+   * notes rather than sending `prepare` round again — 261002h. Strict until
+   * then (261001q § The deploy gate).
+   */
+  it("passes a release commit after the notes, which the next release describes", () => {
+    expect(changelogGap({ ...base, uncovered: [DOCS] })).toBeNull();
+  });
+
+  /** No notes at all since the last promote means prepare did not run for this deploy. */
+  it("refuses a release commit when nothing is pending", () => {
+    expect(changelogGap({ ...base, pendingPresent: false, uncovered: [DOCS] })).toMatch(
+      /no release notes describe them/,
+    );
   });
 
   it("refuses notes about some other history", () => {
@@ -410,6 +495,28 @@ describe("changelogGap — the deploy gate", () => {
 
     expect(notesAt(sha, repo).gap).toMatch(/history has no releases/);
   });
+
+  describe("notesAt, against a real history", () => {
+    const build = repoWithALateCommit;
+
+    it("passes a late commit after the notes, and names it as the next release's", () => {
+      const { repo, noted, late } = build();
+      const notes = notesAt(late, repo);
+      expect(notes.gap).toBeNull();
+      expect(notes.described).toBe(noted);
+      expect(notes.late).toEqual([late]);
+    });
+
+    it("names nothing late when the notes cover the candidate", () => {
+      const { repo, notesCommit } = build();
+      expect(notesAt(notesCommit, repo)).toMatchObject({ gap: null, late: [] });
+    });
+
+    it("still refuses a release commit when no notes are pending", () => {
+      const { repo, noted } = build();
+      expect(notesAt(noted, repo).gap).toMatch(/no release notes describe them/);
+    });
+  });
 });
 
 /**
@@ -434,5 +541,73 @@ describe("servingUnrecorded — the deploy gate's second question", () => {
     expect(servingUnrecorded({ servingDeploymentId: null, recordedDeploymentIds: ["dpl_one"] })).toMatch(
       /could not read/,
     );
+  });
+});
+
+/**
+ * `prepare` brings the primary to `origin/dev` by fast-forward only, in a tree
+ * that holds other agents' uncommitted edits. `merge --ff-only` on its own says
+ * "Already up to date" from a HEAD that is AHEAD and leaves it there — GPT Sol
+ * on 261002h — so `fastForwardTo` asks ancestry first and checks after.
+ */
+describe("fastForwardTo — prepare's only way of moving HEAD", () => {
+  function repo(): { dir: string; run: (...args: string[]) => string; commit: (file: string, msg: string) => string } {
+    const dir = scratch();
+    const run = (...args: string[]) =>
+      execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com", ...args], {
+        cwd: dir,
+        encoding: "utf8",
+      }).trim();
+    const commit = (file: string, msg: string): string => {
+      writeFileSync(path.join(dir, file), `${msg}\n`);
+      run("add", file);
+      run("commit", "--quiet", "-m", msg);
+      return run("rev-parse", "HEAD");
+    };
+    run("init", "--quiet");
+    return { dir, run, commit };
+  }
+
+  it("moves a HEAD that is behind to exactly the target, keeping an unrelated edit", () => {
+    const { dir, run, commit } = repo();
+    const a = commit("a.txt", "a");
+    const b = commit("b.txt", "b");
+    run("reset", "--quiet", "--hard", a);
+    writeFileSync(path.join(dir, "a.txt"), "somebody's edit\n");
+
+    fastForwardTo(b, dir);
+    expect(run("rev-parse", "HEAD")).toBe(b);
+    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("somebody's edit\n");
+  });
+
+  it("stops on a HEAD that is AHEAD, rather than calling it up to date", () => {
+    const { dir, run, commit } = repo();
+    const a = commit("a.txt", "a");
+    const b = commit("b.txt", "b");
+    expect(() => fastForwardTo(a, dir)).toThrow(Stop);
+    expect(() => fastForwardTo(a, dir)).toThrow(/ahead or has diverged/);
+    expect(run("rev-parse", "HEAD")).toBe(b);
+  });
+
+  it("stops on a HEAD that has diverged", () => {
+    const { dir, run, commit } = repo();
+    const a = commit("a.txt", "a");
+    const b = commit("b.txt", "b");
+    run("reset", "--quiet", "--hard", a);
+    const c = commit("c.txt", "c");
+    expect(() => fastForwardTo(b, dir)).toThrow(/ahead or has diverged/);
+    expect(run("rev-parse", "HEAD")).toBe(c);
+  });
+
+  it("stops, and keeps the edit, when the target would change a file somebody is editing", () => {
+    const { dir, run, commit } = repo();
+    const a = commit("a.txt", "a");
+    const b = commit("a.txt", "a again");
+    run("reset", "--quiet", "--hard", a);
+    writeFileSync(path.join(dir, "a.txt"), "somebody's edit\n");
+
+    expect(() => fastForwardTo(b, dir)).toThrow(/could not fast-forward/);
+    expect(run("rev-parse", "HEAD")).toBe(a);
+    expect(readFileSync(path.join(dir, "a.txt"), "utf8")).toBe("somebody's edit\n");
   });
 });

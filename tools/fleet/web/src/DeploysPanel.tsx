@@ -400,7 +400,7 @@ function DeployRow({
           {/* Plain text, not a link: an anchor inside a `<summary>` both
               follows and toggles, and it is a poor tap target on a phone. The
               linked sha is in the body, where it always was. */}
-          <span className="tw:font-mono tw:text-[12px] tw:text-ink-faint">{shortSha(version.sha)}</span>
+          <span className="tw:font-mono tw:text-[12px] tw:text-ink-faint">{shortSha(version.deployedSha)}</span>
           {/* **Null is not zero.** A line that has forgotten what it shipped
               has not shipped nothing, and drawing "0 commits" would be a
               number somebody could act on. */}
@@ -436,6 +436,16 @@ function DeployRow({
                     implied. */}
                 <span>
                   since <Sha sha={version.previousSha} />
+                </span>
+              </>
+            ) : null}
+            {version.deployedSha !== version.sha ? (
+              <>
+                <span aria-hidden="true">·</span>
+                {/* The notes stopped short of the build: later commits rolled to
+                    the next release's (docs/plans/261002h). */}
+                <span>
+                  built from <Sha sha={version.deployedSha} />
                 </span>
               </>
             ) : null}

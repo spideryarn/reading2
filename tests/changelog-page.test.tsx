@@ -190,6 +190,16 @@ describe("the pending release", () => {
     await draw(fixtureVersions());
     expect(host.textContent).toContain("Changes through commit");
     expect(host.textContent).not.toContain("Built from commit");
+    expect(host.textContent).not.toContain("described under the next one");
+  });
+
+  /** Notes that stopped short of the build say so — docs/plans/261002h. */
+  it("says when later changes in a release are described under the next one", async () => {
+    const versions = fixtureVersions().map((v, i, all) =>
+      i === all.length - 1 ? { ...v, deployed_sha: SHA_E } : v,
+    );
+    await draw(versions);
+    expect(host.textContent).toContain("a few later changes in this release are described under the next one");
   });
 });
 

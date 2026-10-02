@@ -74,6 +74,7 @@ deployed twice (2026-08-27 shipped `903b33e6` twice), and keying on the sha woul
   "version": "2026-09-05T22:19:14Z",        // the deploy's `created`, UTC, and the version's id
   "deployment_id": "dpl_FxhrqYZ4M62WstKNP8mu4j4XUpk4",
   "sha": "fc1d64f6696b072b0f9029fe49d98e07dd44c703",
+  "deployed_sha": "fc1d64f6696b072b0f9029fe49d98e07dd44c703", // since 2026-10-02 — § The pending release
   "previous_sha": "6eecb377f24d92446086a006d5b3103daae40aef",
   "commit_count": 28,
   "invisible": false,                        // no entry a reader would notice
@@ -139,19 +140,47 @@ change is reverted. So:
   whole** by each `prepare`, never appended to, so a failed deploy's notes are simply rewritten to
   cover the retry too.
 - **`changelog.ts promote`** appends it to the history once production is serving it, from
-  production's own `/build.json`: the real deployment id, the build time as `version`, and the
-  deployed commit as `sha`. Every production deploy gets one line, including one nobody described
+  production's own `/build.json`: the real deployment id, the build time as `version`, the
+  deployed commit as `deployed_sha`, and as `sha` the deployed commit or, when commits landed after
+  the notes, the last one they describe. Every production deploy gets one line, including one nobody described
   and a redeploy, so the history stays the deploy record the fleet dashboard reads.
 
 **The page draws the pending release on top**, numbered as the line it will become, dated and linked
 by the build carrying it (`ChangelogPage.tsx` § `withPending`). That is true by construction: the
 bundle a reader is running was compiled from the commit that holds the file.
 
-**The deploy gate makes it complete.** `npm run deploy` refuses a commit whose own notes stop short of
-anything it ships that a reader could see (`deploy-checks.ts` § `changelogGap`). Strict on purpose: a
-revert landing after the notes would otherwise ship notes for a feature the deployed tree no longer
-has. `--force-gate=changelog` is the hotfix escape; `promote` then stops that deploy's line at what
-was described, so the next `prepare` describes the rest rather than nobody. The same gate also
+**The deploy gate makes sure notes were written for it.** `npm run deploy` refuses a commit that
+carries no notes (`null`) yet ships something a reader could see since the last release — `prepare`
+has not run since the last deploy was promoted (`deploy-checks.ts` § `changelogGap`). It also refuses
+notes that do not parse or chain, and notes describing a commit the candidate does not contain.
+
+**Commits that land after the notes roll to the next release's** — since 2026-10-02,
+[261002h](../plans/261002h-late-commits-roll-to-the-next-release-notes.md). Until then the gate was
+strict: nothing a reader could see could sit after the sha the notes describe. With half a dozen
+sessions pushing to `dev`, every push between `prepare` and the deploy meant another 25-minute model
+run, and every run gave the next push another window — a treadmill. Now the gate lets them through and
+the deploy names them; `promote` stops that deploy's line at what was described, so the next
+`prepare` plans from there and describes them. Greg, 2026-10-02:
+
+> we don't want the perfect to be the enemy of the good, so consider whether there's a slightly
+> simpler approach that would get us almost all of the value … not if it's going to involve a huge
+> trade-off, but a small trade-off is fine.
+
+**The trade-off:** a release's entry can miss a few late commits, which appear under the next release
+instead, and the page says so under a release whose notes stopped short of its build. A revert that
+lands after the notes is the sharp case, and the reason the gate was strict until then: the page
+announces a feature the deploy never had, the next release says it went, and because the history is
+append-only **the first claim stays wrong for good**. The gate also proves less than it did: notes
+in the candidate show that a `prepare` ran since the last promote, not that it ran for this attempt —
+a failed deploy's notes are reused by the retry, however much has landed since, and the lag has no
+bound in age or count.
+
+**So a line has two shas.** `sha` is the last commit its notes describe — the watermark the next
+range starts from, which `previous_sha` chains. `deployed_sha`, written by `promote` since 2026-10-02,
+is the commit production was built from; the fleet dashboard measures "commits since the newest
+deploy" from it, falling back to `sha` on older lines, which have none.
+
+`--force-gate=changelog` is the hotfix escape for the refusals that are left. The same gate also
 refuses to deploy over a build that was never promoted (`servingUnrecorded`): `promote` can only
 record what is serving, so a deploy replacing an unrecorded one would lose that deploy's line.
 
@@ -428,8 +457,11 @@ gitignored; `prepare` gives each run its own directory there.
    record the wrong one without anyone noticing.
 7. **Commit and push it.** Nobody reads it first. Greg, 2026-09-10: *"I don't want there to be a
    human review/gate — just go live with them as part of the deploy."* The gates are Sol's review in
-   step 4 and `write`'s checks in step 6. If `dev` gained a commit a reader could see while the model
-   stages ran, `prepare` plans again rather than ship notes that stop short (up to three rounds).
+   step 4 and `write`'s checks in step 6. **One round**: `prepare` fast-forwards over whatever landed
+   on `dev` while the model stages ran, says how many of those commits a reader could see, and pushes
+   — they are the next release's (§ The pending release). Until 2026-10-02 it planned again, up to
+   three rounds. It fast-forwards at the start too, rather than stopping because the primary was
+   behind.
 
 **Help reads the notes next.** Straight after `prepare`, the Overseer reads the pending release for
 anything that makes `/help` untrue or incomplete, and updates it —

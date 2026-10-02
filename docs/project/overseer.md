@@ -522,20 +522,22 @@ Every few hours, as a tmux loop like the feedback sweep's:
    pull. Greg, 2026-10-01: *"make sure that the latest release notes are included in the deploy
    itself"*. It commits and pushes the notes for what is about to ship
    ([changelog.md § Running it](changelog.md#running-it)), and the deploy's `changelog` gate refuses
-   a commit without them.
+   a commit without them. Commits that land on `dev` after it planned do not send it round again:
+   they roll to the next release's notes, and the deploy names them
+   ([changelog.md § The pending release](changelog.md#the-pending-release), since 2026-10-02).
 4. **Then bring Help up to date.** Read the notes you just pulled for anything that changes what a
    reader sees or can do, and check `/help` still tells the truth about it — the brief is
    [help-page.md § Bringing it up to date](help-page.md#bringing-it-up-to-date); most releases need
    nothing. Greg, 2026-10-01: *"add a process step when deploying (after Changelog) to make sure this
-   Help page has been updated accordingly"*. If you commit a change to Help, it is a commit the notes
-   do not cover, so run step 3 again before deploying. It is a step, not a gate: the deploy does not
-   check it.
+   Help page has been updated accordingly"*. A Help commit rolls to the next release's notes like
+   any late commit; there is no need to run step 3 again. It is a step, not a gate: the deploy does
+   not check it.
 5. Run `npm run deploy` under `scripts/tmux-job.ts`, logging to a file. It applies the migrations by
    default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
    release's; say which tests in the report. `--force-gate=changelog` only for a fix that cannot wait
    for the notes; say so in the report. If it fails only because `dev` moved during the run
-   (*"level with origin/dev"*, or `changelog` naming new commits), pull, re-run step 3 if `changelog`
-   asked for it, and deploy once more.
+   (*"level with origin/dev"*), pull and deploy once more — the notes still pass. `changelog` asks for
+   step 3 again only when the candidate carries no notes at all.
 6. It is not deployed until three things agree: the exit code, the `Target:` line naming the
    production Supabase project, and the commit in `https://www.spideryarn.com/build.json` matching
    HEAD and `origin/main`. The success line alone is not evidence —
