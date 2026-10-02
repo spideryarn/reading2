@@ -148,6 +148,7 @@ describe("an old hand-written HTML page whose only heading is its title", () => 
     const report: BuildReport = {
       repairs: [],
       droppedChildren: [],
+      rangelessChildren: [],
       droppedHeadings: [],
       collapsedRungs: [],
       droppedQuestions: [],

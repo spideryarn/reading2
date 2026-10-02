@@ -87,6 +87,16 @@ export interface AutosavedText {
   commit(): void;
   /** For a load that failed: said in the status line, the box stays shut. */
   fail(message: string): void;
+  /**
+   * Whether a write is still on the wire, including one for an older draft.
+   *
+   * This cannot be recovered from `state`: that deliberately says `dirty`
+   * rather than `saving` when the box has moved on, and it can say `clean`
+   * when the reader has moved back to the value loaded before that older
+   * write. A caller that promises not to close until every write has settled
+   * needs the request fact as well as the words shown under the box.
+   */
+  inFlight: boolean;
   state: SaveState;
 }
 
@@ -139,13 +149,18 @@ export function useAutosavedText({
 
   const commit = useCallback(() => {
     const { saved: stored, draft: text } = now.current;
-    // Nothing loaded, or nothing changed: a PATCH per blur would rewrite the
-    // row every time the reader tabbed past.
-    if (stored === null || text === stored) return;
+    // Nothing loaded cannot be saved. Test the request before "nothing
+    // changed", though: the draft may have returned to `stored` while an
+    // older write is still on its way to replace it. That needs a correction
+    // queued behind the write, not an early return that lets the older value
+    // win after the box already said clean.
+    if (stored === null) return;
     if (inFlight.current) {
       queued.current = true;
       return;
     }
+    // A PATCH per blur would rewrite the row every time the reader tabbed past.
+    if (text === stored) return;
     inFlight.current = true;
     const mine = epoch.current;
     setSending(text);
@@ -212,5 +227,5 @@ export function useAutosavedText({
     savedThisVisit,
   });
 
-  return { saved, draft, setDraft, seed, commit, fail, state };
+  return { saved, draft, setDraft, seed, commit, fail, inFlight: sending !== null, state };
 }

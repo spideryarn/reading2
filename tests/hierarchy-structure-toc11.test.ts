@@ -17,6 +17,7 @@ const blocks: Block[] = Array.from({ length: 4 }, (_, i) => ({
 const emptyReport = (): BuildReport => ({
   repairs: [],
   droppedChildren: [],
+  rangelessChildren: [],
   droppedHeadings: [],
   collapsedRungs: [],
   droppedQuestions: [],

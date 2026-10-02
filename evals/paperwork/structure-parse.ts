@@ -43,6 +43,7 @@ export interface StructureAnswerFields {
 const emptyReport = (): BuildReport => ({
   repairs: [],
   droppedChildren: [],
+  rangelessChildren: [],
   droppedHeadings: [],
   collapsedRungs: [],
   droppedQuestions: [],

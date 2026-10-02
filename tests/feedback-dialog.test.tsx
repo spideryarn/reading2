@@ -116,6 +116,7 @@ beforeEach(() => {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const { FeedbackDialog } = await import("../src/web/FeedbackDialog.js");
+const { FeedbackHost, useFeedbackOpen } = await import("../src/web/FeedbackButton.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -1758,5 +1759,132 @@ describe("the Earlier tab", () => {
     await act(async () => {});
     expect(lists).toHaveLength(2);
     expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
+  });
+});
+
+/**
+ * **A request to fill the box**, from a failed import's *Report this*.
+ * Plan 261001s, stage 1, as GPT Sol's review item 7 shaped it: each id once,
+ * and never over the reader's own words.
+ */
+describe("a prefill", () => {
+  const REPORT = { id: "req-1", kind: "problem" as const, body: "This import failed.\n\nJob: spya-jobaaa" };
+
+  it("travels through the host opener into the one mounted dialog", () => {
+    function ReportThis() {
+      const openFeedback = useFeedbackOpen();
+      return createElement(
+        "button",
+        { type: "button", onClick: () => openFeedback?.(REPORT) },
+        "Report this",
+      );
+    }
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => {
+      root.render(createElement(FeedbackHost, null, createElement(ReportThis)));
+    });
+    const trigger = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Report this",
+    );
+    act(() => trigger?.click());
+    expect(host.querySelector("dialog")?.open).toBe(true);
+    expect(firstBox().value).toBe(REPORT.body);
+    expect(host.querySelector('.fb-kind-button[aria-pressed="true"]')?.textContent).toContain(
+      "A problem",
+    );
+  });
+
+  function showWith(prefill: { id: string; kind: "problem" | "suggestion"; body: string } | null, open = true) {
+    act(() => {
+      root.render(
+        createElement(FeedbackDialog, {
+          open,
+          onClose: () => {},
+          where: { url: "https://www.spideryarn.com/", slug: null },
+          prefill,
+        }),
+      );
+    });
+  }
+
+  function mountWith(prefill: Parameters<typeof showWith>[0]) {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    showWith(prefill);
+  }
+
+  function kindPressed(): string | null {
+    const pressed = host.querySelector<HTMLButtonElement>('.fb-kind-button[aria-pressed="true"]');
+    return pressed === null ? null : (pressed.textContent ?? "");
+  }
+
+  it("into an empty draft, puts the body in and chooses the kind", () => {
+    mountWith(REPORT);
+    expect(firstBox().value).toBe(REPORT.body);
+    expect(kindPressed()).toContain("A problem");
+  });
+
+  it("into a draft, goes after the reader's words and keeps the kind they chose", () => {
+    mountWith(null);
+    type("The shelf looked odd.");
+    pick("A suggestion");
+    showWith(REPORT);
+    expect(firstBox().value).toBe(`The shelf looked odd.\n\n${REPORT.body}`);
+    expect(kindPressed()).toContain("A suggestion");
+  });
+
+  it("is applied once per id — not again on a re-render, or a close and reopen", () => {
+    mountWith(REPORT);
+    /* The reader replaces it with their own words, so a second application
+       would show — the guard against appending text already in the box would
+       otherwise hide one. */
+    type("My own words instead.");
+    showWith({ ...REPORT });
+    showWith(REPORT, false);
+    showWith(REPORT, true);
+    expect(firstBox().value).toBe("My own words instead.");
+  });
+
+  it("is applied once more for a new id — a second press of the button", () => {
+    mountWith(REPORT);
+    type("My own words instead.");
+    showWith({ ...REPORT, id: "req-2" });
+    expect(firstBox().value).toBe(`My own words instead.\n\n${REPORT.body}`);
+  });
+
+  /* A smoke test rather than a proof: StrictMode's second run of a mount effect
+     sees the same empty draft, so a double application would write the same
+     text twice over rather than twice in a row. The test above is the one that
+     can see the ref missing. */
+  it("is applied once under StrictMode", () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => {
+      root.render(
+        createElement(
+          StrictMode,
+          null,
+          createElement(FeedbackDialog, {
+            open: true,
+            onClose: () => {},
+            where: { url: "https://www.spideryarn.com/", slug: null },
+            prefill: REPORT,
+          }),
+        ),
+      );
+    });
+    expect(firstBox().value).toBe(REPORT.body);
+  });
+
+  it("does not push a draft past the length cap", () => {
+    mountWith(null);
+    const long = "x".repeat(MAX_FEEDBACK_ANSWER_CHARS - 5);
+    type(long);
+    showWith(REPORT);
+    expect(firstBox().value).toBe(long);
   });
 });

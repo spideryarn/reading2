@@ -55,6 +55,10 @@ const STILL = "block-flash-still";
 /** The same pair on a passage's own `mark.hit` fragments (prose.css § the flash). */
 const PASSAGE_MOVING = "passage-flash";
 const PASSAGE_STILL = "passage-flash-still";
+/** The same pair on any other element — a Metadata section (`flashElement`). */
+const ELEMENT_MOVING = "element-flash";
+const ELEMENT_STILL = "element-flash-still";
+const ALL = [MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL, ELEMENT_MOVING, ELEMENT_STILL];
 
 /**
  * **What to wash inside the block.** Omitted, the whole prose cell — every
@@ -82,8 +86,23 @@ function proseCovered(): boolean {
 function stop(): void {
   if (!live) return;
   clearTimeout(live.timer);
-  for (const el of live.els) el.classList.remove(MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL);
+  for (const el of live.els) el.classList.remove(...ALL);
   live = null;
+}
+
+/**
+ * Put `cls` on `els` for `ms`, ending whatever was washing before.
+ * **Restartable**: take the class off, make the browser notice, put it back.
+ * Without the reflow the removal and the re-add land in one style pass and the
+ * animation does not start again, so a second click on the same link would look
+ * like nothing happened.
+ */
+function wash(els: HTMLElement[], cls: string, ms: number): void {
+  stop();
+  for (const el of els) el.classList.remove(...ALL);
+  void els[0]?.offsetWidth;
+  for (const el of els) el.classList.add(cls);
+  live = { els, timer: setTimeout(stop, ms) };
 }
 
 export function flashBlock(id: BlockId, target: FlashTarget = {}): void {
@@ -94,20 +113,24 @@ export function flashBlock(id: BlockId, target: FlashTarget = {}): void {
     pending = { id, target };
     return;
   }
-  stop();
   const marks = target.passage ? passageMarks(cell, target.passage) : [];
   const els = marks.length > 0 ? marks : [cell];
   const still = reducedMotion();
   const cls = marks.length > 0 ? (still ? PASSAGE_STILL : PASSAGE_MOVING) : still ? STILL : MOVING;
-  /* **Restartable**: take the class off, make the browser notice, put it back.
-     Without the reflow the removal and the re-add land in one style pass and
-     the animation does not start again, so a second click on the same link
-     would look like nothing happened. */
-  for (const el of els) el.classList.remove(MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL);
-  void cell.offsetWidth;
-  for (const el of els) el.classList.add(cls);
   const cited = marks.length > 0 && marks.every((m) => m.matches("mark.cite"));
-  live = { els, timer: setTimeout(stop, cited ? CITE_FLASH_MS : FLASH_MS) };
+  wash(els, cls, cited ? CITE_FLASH_MS : FLASH_MS);
+}
+
+/**
+ * **The same flash on an element that is not a block** — a Metadata section
+ * its contents list or search box just took the reader to (PageContents.tsx;
+ * Greg, SPIDERYARN-READING2-7Y: *"expand that section (if needed) and flash to
+ * show where it is in the page"*). The block flash's colour, length and
+ * reduced-motion rule; none of its block machinery, because there is no band
+ * to hide behind and no passage to narrow to. prose.css § the flash on arrival.
+ */
+export function flashElement(el: HTMLElement): void {
+  wash([el], reducedMotion() ? ELEMENT_STILL : ELEMENT_MOVING, FLASH_MS);
 }
 
 /** The prose is exposed again: fire whatever was held for it. */

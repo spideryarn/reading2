@@ -98,13 +98,20 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import type { Placement } from "@floating-ui/react";
 import { MessageSquareWarning } from "lucide-react";
 
-import { FeedbackDialog } from "./FeedbackDialog.js";
+import { FeedbackDialog, type FeedbackPrefill } from "./FeedbackDialog.js";
 import { useRoute } from "./router.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 
-/** What a trigger may do, and it is the whole of the contract: open the box. */
+/**
+ * What a trigger may do, and it is the whole of the contract: open the box —
+ * **optionally with words in it**, since 2026-10-01. A failed import's *Report
+ * this* is the caller (AddArticle.tsx § `JobCard`; Greg, spya-a5gzb9, plan
+ * 261001s). Still one verb: a request is something to open *with*, not a second
+ * thing a caller can do to the dialog. FeedbackDialog.tsx § `FeedbackPrefill`
+ * says what may go in one and how it is applied.
+ */
 interface FeedbackApi {
-  open(): void;
+  open(request?: FeedbackPrefill): void;
 }
 
 /**
@@ -154,7 +161,7 @@ const FeedbackContext = createContext<FeedbackApi | null>(null);
  * return type every caller has to read, instead of in a `useContext` a caller
  * can forget to check.
  */
-export function useFeedbackOpen(): (() => void) | null {
+export function useFeedbackOpen(): ((request?: FeedbackPrefill) => void) | null {
   const api = useContext(FeedbackContext);
   return api === null ? null : api.open;
 }
@@ -171,10 +178,22 @@ export function useFeedbackOpen(): (() => void) | null {
 export function FeedbackHost({ children }: { children: ReactNode }) {
   const route = useRoute();
   const [open, setOpen] = useState(false);
+  /* **The last request, kept rather than cleared.** The dialog applies each id
+     once (FeedbackDialog.tsx § `applied`), so holding it costs nothing and
+     clearing it would be a second state change to keep in step with this one. */
+  const [prefill, setPrefill] = useState<FeedbackPrefill | null>(null);
   /* **Stable**, so that opening the box does not re-render the bar and every
-     button in it. `setOpen` is itself stable, so an empty dependency list is
-     honest rather than a lie the linter happens to accept. */
-  const api = useMemo<FeedbackApi>(() => ({ open: () => setOpen(true) }), []);
+     button in it. Both setters are themselves stable, so an empty dependency
+     list is honest rather than a lie the linter happens to accept. */
+  const api = useMemo<FeedbackApi>(
+    () => ({
+      open: (request) => {
+        if (request) setPrefill(request);
+        setOpen(true);
+      },
+    }),
+    [],
+  );
   return (
     <FeedbackContext.Provider value={api}>
       {children}
@@ -205,6 +224,7 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
           about which article a report is against. */}
       <FeedbackDialog
         open={open}
+        prefill={prefill}
         onClose={() => setOpen(false)}
         where={{
           url: location.href,
@@ -496,7 +516,9 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
            exception in the bar's row would make a last-rung bar scroll where it
            would otherwise have fitted. GPT Sol, G7 and T2. */
         className={shape.button}
-        onClick={api.open}
+        /* Not `onClick={api.open}`: since `open` takes a request, handing it
+           straight to `onClick` would pass the click event in as one. */
+        onClick={() => api.open()}
         /* **The accessible name, now that `title` is not supplying one.**
            Three of the four shapes hide the word at some width — the corner's
            under the 731px query, the dock's under the fit ladder, and the

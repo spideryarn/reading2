@@ -1427,6 +1427,7 @@ export function normaliseExpansion<C extends ProposedChild>(opts: {
   const planned: BuildReport = {
     repairs: result.repairs,
     droppedChildren: result.droppedChildren,
+    rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
     droppedQuestions: [],

@@ -109,6 +109,66 @@
   font-size: 0.79rem;
 }
 
+/* -------------------------------------- profile: the first-open prompt --
+   "Why are you reading this?", asked once when an article opened straight
+   from the add page with its box untouched — PurposePrompt.tsx, plan 261001s
+   § Stage 3. A native modal `<dialog>` with a ProfileBox in it; the dialog
+   box is `.fb-dialog`'s shape (feedback.css), for its reasons: `inset: 0`
+   rather than `100vw`, the UA's max sizes undone, and the backdrop a literal
+   colour because `::backdrop` has not reliably inherited custom properties. */
+.purpose-prompt {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.purpose-prompt[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.purpose-prompt::backdrop {
+  background: rgb(10 10 10 / 0.7);
+  backdrop-filter: blur(2px);
+}
+/* `100vw - 32px`: the 16px side gutter at 390px. `max-height: 90%` of the
+   dialog, which PurposePrompt.tsx sizes to the visual viewport on iOS — the
+   same one-line keyboard fix `.fb-panel` explains. */
+.purpose-prompt-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(30rem, calc(100vw - 32px));
+  max-height: 90%;
+  overflow-y: auto;
+  padding: 1rem 1.15rem 1.15rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+.purpose-prompt-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.purpose-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 /* -------------------------------------------- profile: dictation feedback --
    The strip under the box while the microphone is on. It exists because the
    old version rendered *nothing at all* until the first transcript came back —

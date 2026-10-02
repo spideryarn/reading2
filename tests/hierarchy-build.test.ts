@@ -555,6 +555,7 @@ describe("the Socratic question", () => {
   const report = {
     repairs: [],
     droppedChildren: [],
+    rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
     droppedQuestions: [],
@@ -678,6 +679,7 @@ describe("a question lost to a collapsed rung", () => {
   const report = {
     repairs: [],
     droppedChildren: [],
+    rangelessChildren: [],
     droppedHeadings: [],
     collapsedRungs: [],
     droppedQuestions: [],

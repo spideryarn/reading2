@@ -153,10 +153,32 @@ export interface FeedbackWhere {
  * hover card on the Feedback button (FeedbackButton.tsx) and on /privacy, both
  * of which say it without naming anybody.
  */
+/**
+ * **Words another surface asks to have put in the box**, and the kind with
+ * them — the first caller is a failed import's *Report this* (AddArticle.tsx §
+ * `JobCard`). Greg, 2026-10-01, spya-a5gzb9; plan 261001s § Stage 1.
+ *
+ * `id` is what makes it applied **once**: see `applied` in the component. A
+ * caller mints a fresh one per press, so a second press is a second request
+ * and a re-render is not.
+ *
+ * What may go in `body` is bounded by docs/project/feedback.md § The one rule,
+ * which a pre-typed value does not get round by being in the box — the import
+ * report is ids, closed values and times for exactly that reason
+ * (src/web/import-report.ts).
+ */
+export interface FeedbackPrefill {
+  id: string;
+  kind: FeedbackKind;
+  body: string;
+}
+
 interface Props {
   open: boolean;
   onClose(): void;
   where: FeedbackWhere;
+  /** The latest request to fill the box, if anything has asked. */
+  prefill?: FeedbackPrefill | null;
 }
 
 /**
@@ -336,7 +358,7 @@ function reportBody(input: {
   };
 }
 
-export function FeedbackDialog({ open, onClose, where }: Props) {
+export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The one box. `useDictationField` needs it to find the caret. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -571,6 +593,42 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
   const dismissToast = useCallback(() => setToast(null), []);
   const bodyRef = useRef(body);
   bodyRef.current = body;
+
+  /**
+   * **A prefill is applied once per request id, and never over the reader's
+   * words.** Plan 261001s, GPT Sol's review item 7.
+   *
+   * `applied` is a ref of the ids already taken, so a re-render, a close and
+   * reopen, or StrictMode running this effect twice cannot put the same text
+   * in a second time — the host keeps the last request in state for as long as
+   * the page lives, and this effect sees it again on every change of it.
+   *
+   * An empty draft takes the body and the kind. A draft with something in it is
+   * the reader's, which the header's rule about drafts surviving everything
+   * exists to protect: the request goes **after** it, past a blank line, and
+   * their kind stands unless they had not chosen one. If that would take the
+   * box past `MAX_FEEDBACK_ANSWER_CHARS`, or the text is already in it from an
+   * earlier press, nothing is added — a box made unsendable by a button is
+   * worse than a box that is missing a paragraph they can see on the card.
+   *
+   * A layout effect for the same reason as the one above: it lands in the
+   * commit that opens the dialog, so the reader never sees the empty box first.
+   */
+  const applied = useRef(new Set<string>());
+  useLayoutEffect(() => {
+    if (prefill === null || applied.current.has(prefill.id)) return;
+    applied.current.add(prefill.id);
+    const draft = bodyRef.current;
+    if (draft.trim() === "") {
+      setBody(prefill.body);
+      setKind(prefill.kind);
+      return;
+    }
+    const joined = `${draft.replace(/\s+$/, "")}\n\n${prefill.body}`;
+    if (draft.includes(prefill.body.trim()) || joined.length > MAX_FEEDBACK_ANSWER_CHARS) return;
+    setBody(joined);
+    setKind((chosen) => chosen ?? prefill.kind);
+  }, [prefill]);
 
   const takeFile = useCallback(async (file: File) => {
     const mine = ++shotGeneration.current;

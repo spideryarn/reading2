@@ -14,7 +14,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
-const { FLASH_MS, dropPendingFlash, flashBlock, flushPendingFlash, resetFlash } = await import(
+const { FLASH_MS, dropPendingFlash, flashBlock, flashElement, flushPendingFlash, resetFlash } =
+  await import(
   "../src/web/flash.js"
 );
 
@@ -124,8 +125,46 @@ describe("flashBlock", () => {
   });
 });
 
+describe("flashElement — a Metadata section, plan 261001s", () => {
+  it("washes the element for the block flash's length, restartably", () => {
+    document.body.innerHTML = '<section id="a"></section><section id="b"></section>';
+    const a = document.getElementById("a") as HTMLElement;
+    const b = document.getElementById("b") as HTMLElement;
+    flashElement(a);
+    expect(a.classList.contains("element-flash")).toBe(true);
+    vi.advanceTimersByTime(FLASH_MS - 100);
+    flashElement(a);
+    vi.advanceTimersByTime(200);
+    expect(a.classList.contains("element-flash"), "still on the second clock").toBe(true);
+    flashElement(b);
+    expect(a.classList.contains("element-flash"), "the older one ends").toBe(false);
+    vi.advanceTimersByTime(FLASH_MS);
+    expect(b.classList.contains("element-flash")).toBe(false);
+  });
+
+  it("holds a still wash under reduced motion", () => {
+    reduceMotion(true);
+    document.body.innerHTML = '<section id="a"></section>';
+    const a = document.getElementById("a") as HTMLElement;
+    flashElement(a);
+    expect(a.classList.contains("element-flash-still")).toBe(true);
+    expect(a.classList.contains("element-flash")).toBe(false);
+  });
+});
+
 describe("the flash stylesheet", () => {
   const css = readFileSync("src/web/styles/prose.css", "utf8");
+
+  it("turns the element flash class into a visible, pointer-transparent overlay", () => {
+    const overlay = css.match(
+      /\.element-flash::after,\s*\.element-flash-still::after\s*\{([^}]*)\}/,
+    )?.[1];
+    expect(overlay).toContain('content: ""');
+    expect(overlay).toContain("background: var(--spideryarn-orange)");
+    expect(overlay).toContain("pointer-events: none");
+    expect(css).toMatch(/\.element-flash::after\s*\{\s*animation: element-flash/);
+    expect(css).toMatch(/\.element-flash-still::after\s*\{\s*opacity: 0\.22/);
+  });
 
   it("composes the still wash with a literal search-hit rail", () => {
     const body = css.match(
