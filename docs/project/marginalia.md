@@ -59,6 +59,30 @@ one would otherwise be missed; it would not be, so it is not
   written against an older version of the article"). A list written before a block changed could
   otherwise sit beside prose that no longer says what it quotes.
 
+## Every note says where it came from
+
+> I can't tell what that Annotation is from or why or whether AI-generated (if so, it should be in
+> the AI-generated font). Make sure all annotations have rich tooltips (see tooltips.md) explaining
+> their origin, and anything else that might be helpful for the reader.
+>
+> — Greg, 2026-10-01 (spya-atv4nx)
+
+**Every note, and the head's path and arc, has a house card**: what it is, then which mode made it,
+who wrote the words (AI, the author, the reader) and why it sits beside this passage. The words are
+one table, `src/web/marginalia/tips.ts`; **a new kind of note needs a row there**, and the `Record`
+over the keys makes a missing row a type error. The shut lines carry their key as `data-marg-tip` and
+the reading view's one delegated card draws it ([tooltips.md](tooltips.md)); a question is a button
+with a card of its own, because it has nothing to press and the delegated card answers neither a
+keyboard nor a finger. **And each note's words are in their writer's face** ([fonts.md](fonts.md)):
+the shut line takes the voice of the one item it shows, a count is ours. Tested in
+`tests/marginalia-note-cards.test.tsx`;
+[261002g](../plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md).
+
+**The arc in the head is at most 20 words** (`arc/6`), after Greg found the head's language *"too
+complex"* (spya-g4yrew): at 30-odd words it was hard going and cut mid-sentence by the three-line
+clamp, now four lines ([261002p](../investigations/261002p-arc-sentences-shorter-and-plainer.md)). An arc written by an older prompt stays on screen while the owner's open writes a new one
+(`useArc`, `isArcOutdated`).
+
 ## Keep an eye out for new kinds
 
 Greg, 2026-10-01: *"make a note … that we should keep an eye out for where new mode-items might be

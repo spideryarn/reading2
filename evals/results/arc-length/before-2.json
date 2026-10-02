@@ -1,0 +1,68 @@
+{
+  "arm": "before-2",
+  "promptVersion": "arc/5",
+  "arcSha": "406ebfb7f14f",
+  "at": "2026-10-02T17:36:54.568Z",
+  "articles": [
+    {
+      "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+      "sentences": [
+        "What follows rests on an untested wager: that the roughly 30,000 concepts a human-sized brain manages are a matter of scale rather than a ceiling, so a brain with far more neurons would simply hold more of the world's pockets of computational reducibility in mind.",
+        "Before asking what more neurons could do, the shared machinery of brains and neural nets—many sensors funneled into few decisions through bounded memory—gets pinned down as the fixed chassis any bigger mind would still have to run on.",
+        "Within that chassis, language's discreteness and single-file order trace back to the brain's one-thread structure, so a bigger brain would shift the balance of grammar rather than escape the irreducibility keeping full generality out of reach.",
+        "The same question of capacity is now asked of input and output rather than concepts: more neurons could track more sensed features and drive more actuators, but only within whatever pockets of reducibility the world of senses and motion happens to contain.",
+        "Having tied concepts to pockets of reducibility, their historical buildup into towers of abstraction is traced to its outer limit, the ruliad, where bigger brains could climb further even though the physics we perceive stays fixed by traits that scaling alone would not change.",
+        "Computational language becomes the test case for how far up that tower a bigger brain might go, showing real headroom in higher-order 'meta' constructs before hitting the same irreducibility that already cuts off ordinary language.",
+        "Set beside pure scaling, many ordinary-sized brains linked by communication offer an alternative route to the capacities bigger brains might have, suggesting society is already one place where complexity beyond a single mind gets built.",
+        "Drawing the threads together, a bigger mind amounts to no more than a larger region of the same rulial space of concepts and abstractions, while what such a mind would actually want, and whether we could ever follow it, is left deliberately open."
+      ]
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "sentences": [
+        "Before any evidence can be weighed, it must be settled whether machine consciousness is even a coherent prospect worth fearing or hoping for.",
+        "Before turning to the technical case against machine minds, the pull toward believing in them must first be traced to psychology rather than proof.",
+        "With the psychological traps named, what remains is to test the actual premise—that computation suffices for experience—on its merits.",
+        "Having found that premise shaky rather than refuted, the question shifts from what AI is to what we should do under that remaining uncertainty.",
+        "What stays unresolved about machines is left open, while what has been reclaimed is a sense of our own aliveness as the thing no simulation can borrow."
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "sentences": [
+        "A single scaled-up 2018-era architecture, trained the same dumb way as its predecessor but 117 times larger, now does things no benchmark anticipated, leaving the question of why scale alone produces this and how much further it goes still open.",
+        "That GPT-3's gains came from scale alone rather than architectural cleverness is now read as one instance of a general pattern across vision, games, and robotics, elevating scale from an explanation of this one model to a candidate theory of intelligence itself.",
+        "Granting that scale breeds generalization still leaves unexplained why predicting text specifically should force a model toward understanding rather than mere pattern-matching, a question answered only retrospectively since no one could specify in advance how much data or loss reduction understanding would require.",
+        "With the mechanism by which scale produces capability now sketched but still unproven as a fixed law, the question becomes institutional: given the same hardware and evidence, which organizations will actually bet on scaling, and only one so far has.",
+        "The skeptics this bet is aimed at have already been wrong before, repeatedly and without correction, which the piece uses to discount their authority rather than to settle whether scaling will keep working.",
+        "Having argued that scale alone, without special design, yields capabilities like meta-learning, the same logic is pushed further to its uncomfortable edge: that scale trained on human data yields not just skill but agency, an emergent property rather than a deliberate feature.",
+        "Pressed further, the question of whether agency can be bred out of training data by avoiding human-generated examples is answered no, since even abstract rule systems with no people in them invite the same agent-like modeling, suggesting agency cannot be reliably engineered away from any sufficiently capable learned system.",
+        "Outside the argument itself, the page offers only pointers to where else this claim about scale and emergent agency is discussed or cited."
+      ]
+    },
+    {
+      "slug": "antikythera-mechanism-spya-zhxrzm",
+      "sentences": [
+        "Before any gear could be read as evidence of ancient skill, the lump itself had to be recognized as a precision instrument, and even now its birthplace and exact build year remain contested among rival Hellenistic centres.",
+        "What is known of that disputed instrument rests entirely on a scatter of broken bronze, so the case for its sophistication depends on what can be read out of a handful of surviving pieces.",
+        "Among those pieces, the front face offers the clearest picture of daily use, though even its basic day-count is now being revised downward from the long-assumed solar total toward a lunar one.",
+        "Beyond simply counting days, that same face carried pointers meant to locate the Sun and Moon against the stars, turning star-rising lore and lunar irregularity into visible, moving indicators.",
+        "Turning from the sky overhead to longer reckonings, the reverse face added dials spanning years and decades, letting one hand-crank motion forecast eclipses and games far in advance.",
+        "That forecasting machinery turns out to need more gearing than the known dials alone explain, leaving one orphaned gear as the chief clue that planets, not just Sun and Moon, may once have had pointers of their own.",
+        "That missing planetary display has never been settled by argument alone, so successive scholars have built rival gear schemes to test what could have worked, and none yet fits all the evidence or the era's engineering limits.",
+        "Granting that no single reconstruction is certain still leaves the question of how such a device came to exist at all, and ancient accounts of lost planetariums by Archimedes and Posidonius, alongside later Byzantine, Islamic, and Chinese instruments, suggest it belonged to a now-vanished tradition rather than standing alone.",
+        "What could not be recovered from the wreck itself has instead been supplied by museums, documentaries, and fiction, which display and dramatize the mechanism's workings without resolving the questions its missing parts still leave open."
+      ]
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "sentences": [
+        "What separates real science from its hollow imitations has not yet been named, only promised as a matter of honesty rather than method or subject matter.",
+        "Having sampled beliefs that fail the one test that matters—whether they actually work—the task becomes finding a name for whatever these failures share, beyond simply being wrong.",
+        "Named now as Cargo Cult Science, the gap between form and substance is traced to a single missing habit: reporting evidence against yourself as faithfully as evidence for yourself.",
+        "That habit of guarding against self-deception, just defined in the abstract, is now tested against real cases—Millikan's drifting measurements, a scientist asked to hide his honest answer—to show how easily it erodes under pressure or convenience.",
+        "The pattern already traced from witch doctors through Millikan's drift closes not with a fix but with examples of the same lapse recurring in rats, physics, and ESP, and a wish that institutions stop forcing researchers to abandon the vigilance already described."
+      ]
+    }
+  ]
+}

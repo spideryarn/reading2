@@ -79,7 +79,10 @@ describe("the head's path", () => {
 
     const describedBy = step?.getAttribute("aria-describedby");
     expect(describedBy, "the title card did not open").toBeTruthy();
-    expect(document.getElementById(describedBy ?? "")?.textContent).toBe(title);
+    const card = document.getElementById(describedBy ?? "")?.textContent ?? "";
+    expect(card).toContain(title);
+    /* And where it came from — spya-atv4nx, plan 261002g. */
+    expect(card).toContain("Where you are: the part, then the section.");
   });
 
   it("pins the two-line clamp declarations that jsdom cannot lay out", () => {

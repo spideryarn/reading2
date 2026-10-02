@@ -1412,7 +1412,8 @@ export function Reader({
       comments,
     });
     const out = new Map<BlockId, ReactElement>();
-    for (const [blockId, notes] of byBlock) out.set(blockId, <MarginNotesSlot notes={notes} />);
+    for (const [blockId, notes] of byBlock)
+      out.set(blockId, <MarginNotesSlot notes={notes} viewer={capability.kind === "owner" ? "owner" : "visitor"} />);
     return out;
   }, [
     marginRoom,

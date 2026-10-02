@@ -57,6 +57,7 @@
  * See docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.2.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isArcOutdated } from "../arc-version.js";
 import type { Arc, ArcFound } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
@@ -159,8 +160,18 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
      being a boolean, so opening a second article in the same mount asks again
      while a re-render or StrictMode's second pass does not. */
   const started = useRef<string | null>(null);
+  /* **Or when the payload's arc is from an older prompt** — it stays on screen
+     while a new one is written, and the completion's `refresh` swaps it in.
+     The payload carries no staleness, so without this a prompt change never
+     reached an article that already had an arc: Greg's two were still on
+     arc/2 and arc/3 when he asked for a shorter, plainer one (spya-g4yrew). A
+     version compare only, no hashing on every open; strictly older only, so a
+     rolled-back build leaves a newer arc alone (`isArcOutdated`). Plan 261002g
+     § 2, after GPT Sol's review: blanking it instead would take the arc off
+     Structure too for the length of a model call. */
+  const outdated = fromPayload !== undefined && isArcOutdated(fromPayload.version);
   useEffect(() => {
-    if (status !== "absent") return;
+    if (status !== "absent" && !outdated) return;
     if (started.current === slug) return;
     started.current = slug;
     /* Unforced. The step's own freshness check is the thing being trusted here,
@@ -169,7 +180,7 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
        unforced run regenerates. Forcing would also work and would cost a model
        call on any race where another tab wrote one first. */
     void queue.start();
-  }, [status, slug, queue]);
+  }, [status, outdated, slug, queue]);
 
   return {
     status,

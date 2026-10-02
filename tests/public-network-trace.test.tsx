@@ -2349,8 +2349,8 @@ describe("a signed-out browser on a shared document", () => {
     const marks = [...host.querySelectorAll(".blk-cmt")];
     expect(marks.length, "the owner's note is marked in the gutter").toBeGreaterThan(0);
     for (const mark of marks) {
-      expect(mark.getAttribute("title")).toMatch(/whoever added this article/);
-      expect(mark.getAttribute("title")).not.toMatch(/\byour\b/i);
+      expect(mark.getAttribute("data-tip")).toMatch(/whoever added this article/);
+      expect(mark.getAttribute("data-tip")).not.toMatch(/\byour\b/i);
       expect(mark.getAttribute("aria-label")).not.toMatch(/\byour\b/i);
     }
   });

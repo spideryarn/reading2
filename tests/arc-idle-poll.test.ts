@@ -82,6 +82,7 @@ vi.mock("../src/web/lib/api.js", () => ({
 const { useArc } = await import("../src/web/useArc.js");
 const { useJobs } = await import("../src/web/useJobs.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
+const { ARC_PROMPT_VERSION } = await import("../src/arc-version.js");
 
 const SLUG = "an-arc-at-rest";
 
@@ -283,5 +284,56 @@ describe("the arc's job subscription", () => {
     expect(statusPolls().length).toBeGreaterThan(20);
     expect(requests.some((u) => u.includes("/advance")), "and it is still driven").toBe(true);
     expect(lastWorking, "and the arc knows its job is running").toBe(true);
+  });
+});
+
+/**
+ * **An arc an older prompt wrote is rewritten when its owner opens it, and
+ * stays on screen meanwhile.** The payload carries no staleness, so before
+ * 261002g a prompt change never reached an article that already had an arc —
+ * Greg's two were on arc/2 and arc/3 when he asked for a plainer one
+ * (spya-g4yrew). Strictly older only: a rolled-back build must not rewrite a
+ * newer arc, and a version nobody can read is not evidence (GPT Sol, plan
+ * review). docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
+ */
+describe("an arc from another prompt version, in the payload", () => {
+
+  function probeFor(version: string) {
+    const arc: Arc = { ...ARC, version };
+    return () => {
+      const got = useArc(SLUG, arc);
+      lastArc = got.arc;
+      if (got.working) everWorking = true;
+      return null;
+    };
+  }
+
+  beforeEach(() => {
+    override = (url, method) => {
+      if (method === "POST" && url === "/api/jobs") {
+        queue = [arcJob("queued")];
+        return json(arcJob("queued"));
+      }
+      return null;
+    };
+  });
+
+  it("older: asks for one new arc, and keeps drawing the old one meanwhile", async () => {
+    await mount(probeFor("arc/1"));
+    await advance(2_000);
+    expect(calls.filter((c) => c === "POST /api/jobs"), "one job asked for").toHaveLength(1);
+    expect(lastArc?.version, "the old arc is still drawn").toBe("arc/1");
+    expect(calls.some((c) => c.startsWith("GET /api/arc/")), "no read: the payload is drawn").toBe(false);
+  });
+
+  it.each([
+    ["current", ARC_PROMPT_VERSION],
+    ["newer (a rolled-back build)", "arc/999"],
+    ["unparseable", "test"],
+  ])("%s: asks for nothing", async (_label, version) => {
+    await mount(probeFor(version));
+    await advance(2_000);
+    expect(calls.filter((c) => c.startsWith("POST")), "no job").toEqual([]);
+    expect(lastArc?.version).toBe(version);
   });
 });

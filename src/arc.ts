@@ -58,6 +58,7 @@ import { partsOf } from "./tree-parts.js";
 export { partsOf };
 import { plainWords } from "./plain-words.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
+import { ARC_PROMPT_VERSION } from "./arc-version.js";
 
 /**
  * Exported since 2026-08-29 so that the pipeline's `stamp` can compare against it
@@ -69,8 +70,18 @@ import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from 
  *
  * `arc/5`, 2026-10-02: the request gained `ARC_OUTPUT_SCHEMA`; the prompt text
  * is unchanged.
+ *
+ * `arc/6`, 2026-10-02: **at most 20 words, one idea, everyday words.** Greg, on
+ * the sentence heading Marginalia (spya-g4yrew): *"the language is too complex.
+ * Can you make it shorter and simpler."* Production's arcs ran a median 29–34
+ * words at every version, plain-words rule or not, and the head shows about
+ * 20. Measured in evals/arc-length/run.ts;
+ * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
+ *
+ * Lives in src/arc-version.ts, which imports nothing, so the reader can compare
+ * a payload's arc against it (useArc.ts) without bundling this file.
  */
-export const PROMPT_VERSION = "arc/5";
+export const PROMPT_VERSION = ARC_PROMPT_VERSION;
 
 const SYSTEM = `You are writing the leftmost, coarsest column of a reading view for a long
 article. The reader sees, side by side: your column, then a one-sentence gist
@@ -86,14 +97,35 @@ far, and what it still owes the reader. It is a claim about the whole article,
 made from a position inside it.
 
   part gist (the next column): "Feeling is metabolic, not computational."
-  arc  (yours):                "Intelligence has been cut loose from
-                                consciousness; what remains is to say what
-                                consciousness is made of."
+  arc  (yours):                "Intelligence is cut loose from consciousness;
+                                next, what consciousness is made of."
 
 RULES
 
 - Exactly ONE sentence per part. Same number of sentences as there are parts,
   in the same order. No numbering, no part titles.
+- SHORT AND SIMPLE. At most 20 words; 12 to 16 is better. It sits in a narrow
+  margin and is read at a glance. The two halves below are ONE sentence and
+  ONE string in the array, joined by the semicolon — never two entries. No clause inside a clause, no list of
+  three, no "whether X or whether Y". Prefer the everyday word to the field's
+  term wherever both say the same thing; keep a term only when the article's
+  argument is about that term.
+- SPEND THE WORDS ON THE RELATION, NOT THE CONTENT. Short is where an arc
+  sentence most easily turns into a gist. Its usual shape is two halves around
+  a semicolon: what is now settled, then what is still open or what this part
+  sets out to show. Leave the part's own details to its gist.
+    gist, wrong: "Bees use a waggle dance to say where the food is."
+    arc, right:  "Bees do share where food is; whether the dance alone carries
+                  it is still open."
+- Never claim more than the article has shown by this point. "Still open",
+  "argued, not yet shown" and "next" are honest; "proved" and "vindicated"
+  need the article to have done it.
+    too long: "Prior work has shown only that some schema signal exists around
+               mPFC for simple pairings, without establishing that these
+               regions distinguish which schema is active, a gap the
+               restaurant-versus-airport contrast is set up to close."
+    better:   "Earlier studies found a schema signal in mPFC, but not whether it
+               tells one script from another."
 - NEVER restate the part's own gist. That sentence is already on screen an inch
   to the right, and two columns saying the same thing is why this column exists
   at all. If your sentence would still make sense with the rest of the article
@@ -106,12 +138,11 @@ RULES
   clause saying that you are summarising something, which the reader can see.
   Write the state of the argument directly, in the article's own terms.
     bad:  "The piece opens by asking whether machines could be conscious."
-    good: "Whether machines could be conscious is still open, and their moral
-           status turns on the answer."
+    good: "Whether machines can be conscious is still open, and their moral
+           status turns on it."
     bad:  "Having shown brains are not Turing machines, the argument turns to
            the substrate."
-    good: "Brains are not Turing machines; what is left is to say what the
-           substrate must be."
+    good: "Brains are not Turing machines; so what must they be made of?"
 - The first part's sentence says what is at stake and unsettled. The last
   part's says what has been settled and what deliberately has not.
 - No empty meta-narration: never "this section explores", "the author then
