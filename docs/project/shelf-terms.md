@@ -189,8 +189,8 @@ is still read to a screen reader). [261001j](../plans/261001j-five-small-feedbac
   on it. Chosen over cards and two-line rows from screenshots, plan
   [260928d](../plans/260928d-shelf-topics-diversity-coverage-and-detail-view.md) § Stage 2.
 - **Each article link in a row has the paper card** on hover and focus — title, authors and site,
-  the gist, when it was added and last opened, its length, and every topic it is in, each with its
-  hue. Greg: *"add rich tooltips … to the paper-links that are matched for each
+  the gist (or the abstract, for a paper not yet AI-processed), when it was added and last opened,
+  its length, and every topic it is in, each with its hue. Greg: *"add rich tooltips … to the paper-links that are matched for each
   faceted-text-search-pill"* (`spya-f28vqj`). The topics are over every topic the server chose, not
   only those drawn, so a card does not change as the view narrows. The card itself is reusable and
   knows nothing about topics —

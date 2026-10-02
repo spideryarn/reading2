@@ -327,14 +327,36 @@ describe("the paper card on an article link", () => {
     expect(topics).toEqual(["topic00", "topic01", "topic02"]);
   });
 
-  it("leaves a link bare when the slug is on no list loaded", async () => {
-    titleOf = (slug) => (slug === "a0" ? undefined : `Title of ${slug}`);
+  it("names a topic the view is not drawing, because it has nothing left to show", async () => {
+    /* topic01 at zero is not drawn (availableTopics); a2 is still in it. */
+    liveCountOf = (key) => (key === "topic01" ? 0 : countOf(key));
     await show("/?topicsView=detail");
-    const link = linksOf("topic00").find((a) => a.getAttribute("href") === "/read/a0");
-    expect(link, "a link to a0 in topic00's row").toBeTruthy();
+    expect(linksOf("topic01"), "topic01 is not drawn").toHaveLength(0);
+    const link = linksOf("topic00").find((a) => a.getAttribute("href") === "/read/a2");
     link?.dispatchEvent(new MouseEvent("mouseenter"));
     await settle(400);
-    expect(document.querySelectorAll(".tooltip")).toHaveLength(0);
+    const topics = [...document.querySelectorAll(".tooltip .tip-topics li")].map((li) => li.textContent);
+    expect(topics).toEqual(["topic00", "topic01", "topic02"]);
+  });
+
+  it("opens on keyboard focus, and its description does not read the link's title again", async () => {
+    await show("/?topicsView=detail");
+    const link = linksOf("topic00").find((a) => a.getAttribute("href") === "/read/a1");
+    expect(link, "a link to a1 in topic00's row").toBeTruthy();
+    await act(async () => link?.focus());
+    await settle(400);
+    const cards = [...document.querySelectorAll<HTMLElement>('[role="tooltip"]')];
+    expect(cards, "exactly one card open").toHaveLength(1);
+    const card = cards[0] as HTMLElement;
+    /* The card is the link's description, by id (tooltips.md § Five things, 4). */
+    expect(link?.getAttribute("aria-describedby")).toBe(card.id);
+    /* What a screen reader reads as that description: the card less anything
+       aria-hidden. The title is on screen, and is the link's name already. */
+    const read = card.cloneNode(true) as HTMLElement;
+    for (const hidden of read.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+    expect(card.textContent).toContain("Title of a1");
+    expect(read.textContent).not.toContain("Title of a1");
+    expect(read.textContent).toContain("The gist of a1.");
   });
 });
 
@@ -398,6 +420,20 @@ describe("copies of one article", () => {
     expect(links.map((a) => a.getAttribute("href"))).toEqual(["/read/ball-1", "/read/storms", "/read/sprites"]);
     // The counts stay physical: seven articles use it, copies and all.
     expect(row?.textContent).not.toContain("of 7");
+  });
+
+  it("gives the named copy its own card, looked up by slug, not by title", async () => {
+    data = COPIES;
+    titleOf = (slug) => TITLES[slug];
+    scopeSlugs = Object.keys(TITLES);
+    await show("/?topicsView=detail");
+    const link = detailList()?.querySelector<HTMLAnchorElement>('a[href="/read/ball-1"]');
+    link?.dispatchEvent(new MouseEvent("mouseenter"));
+    await settle(400);
+    const cards = [...document.querySelectorAll<HTMLElement>(".tooltip")];
+    expect(cards).toHaveLength(1);
+    // entryFor gives each copy its own gist, so this is ball-1's and no other's.
+    expect(cards[0]?.textContent).toContain("The gist of ball-1.");
   });
 
   it("names distinct titles in the tooltip too", () => {

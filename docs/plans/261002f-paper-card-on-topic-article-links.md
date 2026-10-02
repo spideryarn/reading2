@@ -55,7 +55,8 @@ nothing picked up:
 - **No touch reveal.** A tap follows the link, as the table row card's title does
   (library.md § The table's row card). The detail view itself is the touch answer for topics.
 - **Preview = the gist** (`LibraryEntry.gist`, the tree root's one sentence), already on the wire.
-  No new fetch, no abstract, no first paragraph: those would need a new endpoint.
+  No new fetch and no first paragraph, which would need a new endpoint. (The abstract, for a paper
+  with no gist yet, is already on the entry — see § Plan review.)
 - **Topics capped at six**, then *+N more*: a paper in a dozen topics would otherwise make the card
   a list of topics.
 
@@ -77,3 +78,27 @@ nothing picked up:
 3. Browser check (Sonnet subagent, Playwright on the box): hover a link in `?topicsView=detail`,
    computed background opaque, card content right, narrow window.
 4. GPT Sol code review; gates; commit; push to dev.
+
+## Plan review (GPT Sol), and what changed
+
+[Review](261002f-paper-card-on-topic-article-links-plan-review-sol.md): no P0, four P1, two P2. The first
+build had gone ahead in parallel; every finding was taken into it.
+
+- **P1, minimal papers.** The abstract *is* on the wire (`LibraryEntry.abstract`), and "not read yet"
+  was ambiguous. Now: no Length line, `Status — Not AI-processed yet` (the shelf card's own
+  `NOT_PROCESSED_MARK`), and the preview is the gist, else the abstract cut at 280 characters on a
+  word. Tested with and without an abstract.
+- **P1, the title read twice.** A plain card is its link's `aria-describedby`, and the link is named
+  by the title. `PaperCard`'s `titleIsTriggerName` hides the title line from assistive technology,
+  keeping it on screen; this caller sets it. A jsdom test focuses the link and reads the description;
+  it goes red without the prop.
+- **P1, `keepSide`** on the links' tooltip, so a card never flips sideways over the next link.
+- **P1, one scope.** `entryOf` is now built from the same lists as `inScope` (the archive only while
+  it is on), so a link that `topArticles` keeps always has an entry; the bare link is a defence, and
+  the test of it, which needed an impossible state, is gone. A test pins that a copy's card is looked
+  up by its own slug.
+- **P2, the owner.** `entryOf`/`topicsOf` are a `PaperScope` handed only to `ShelfTermsDetail`, not
+  added to `TermTipScope`, which every chip carries; `TermTipScope.titleOf` is derived from `entryOf`.
+- **P2, tests.** Added: keyboard focus and the description; a zero-count topic not drawn but still
+  named on the card; same-title copies. Not added: a jsdom test of `keepSide` (positioning is not
+  measurable there), left to the browser check.

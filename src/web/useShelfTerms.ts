@@ -261,11 +261,13 @@ export function useShelfTopics({
      chips' cards and the detail rows (`LibraryEntry.title`, which the server
      has already resolved through the title fallback, library.md), and the
      whole entry for the paper card on a detail row's links (PaperCard.tsx). */
+  /* From the same lists as `inScope`, so the two cannot disagree about which
+     articles are here (GPT Sol's plan review of 261002f, P1). */
   const entryOf = useMemo(() => {
     const bySlug = new Map<string, LibraryEntry>();
-    for (const e of [...(articles ?? []), ...(archivedList ?? [])]) bySlug.set(e.slug, e);
+    for (const e of [...(articles ?? []), ...(inArchive ?? [])]) bySlug.set(e.slug, e);
     return (slug: string) => bySlug.get(slug);
-  }, [articles, archivedList]);
+  }, [articles, inArchive]);
 
   return { terms, inArchive, topics, members, inScope, entryOf };
 }

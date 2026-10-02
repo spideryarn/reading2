@@ -36,7 +36,7 @@ import type { PaperTopic } from "./PaperCard.js";
 import { libraryTopicsViewParam } from "./params.js";
 import { availableTopics } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope } from "./ShelfTermChip.js";
-import { ShelfTermsDetail } from "./ShelfTermsDetail.js";
+import { type PaperScope, ShelfTermsDetail } from "./ShelfTermsDetail.js";
 import { topicHueStops } from "./topic-colour.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
@@ -268,9 +268,8 @@ export function ShelfTerms({
     inScope,
     scopeWord: archived ? "on the shelf and in the archive" : "on the shelf",
     titleOf: (slug) => entryOf(slug)?.title,
-    entryOf,
-    topicsOf: (slug) => topicsBySlug.get(slug) ?? [],
   };
+  const papers: PaperScope = { entryOf, topicsOf: (slug) => topicsBySlug.get(slug) ?? [] };
 
   /* Every child of this row keeps its position in both views — a view's
      absent parts are `false`, not missing — so React keeps the one toggle
@@ -331,6 +330,7 @@ export function ShelfTerms({
           chosen={chosen}
           onToggle={onToggle}
           scope={tipScope}
+          papers={papers}
         />
       )}
     </div>

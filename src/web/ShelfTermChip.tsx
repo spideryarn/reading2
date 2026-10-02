@@ -10,9 +10,7 @@
  * docs/project/shelf-terms.md.
  */
 import { X } from "lucide-react";
-import type { LibraryEntry } from "../types.js";
 import { chipClass } from "./lib/DataTable.js";
-import type { PaperTopic } from "./PaperCard.js";
 import type { ShelfTerm } from "./shelf-narrow.js";
 import { topicColourStyle } from "./topic-colour.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
@@ -28,10 +26,6 @@ export interface TermTipScope {
   scopeWord: string;
   /** The title the card shows, or `undefined` for a slug not on the lists loaded. */
   titleOf: (slug: string) => string | undefined;
-  /** The whole shelf entry, for the paper card on a detail row's links (PaperCard.tsx). */
-  entryOf: (slug: string) => LibraryEntry | undefined;
-  /** Every topic the server chose that the article is in, in rank order, for its paper card. */
-  topicsOf: (slug: string) => readonly PaperTopic[];
 }
 
 /**

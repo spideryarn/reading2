@@ -36,7 +36,8 @@
  * titles drop to a second line under the chip.
  */
 import { Link } from "./Link.js";
-import { PaperCard } from "./PaperCard.js";
+import type { LibraryEntry } from "../types.js";
+import { PaperCard, type PaperTopic } from "./PaperCard.js";
 import { readHref } from "./router.js";
 import type { ShelfTerm } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope, TopicDot, topArticles } from "./ShelfTermChip.js";
@@ -46,6 +47,18 @@ import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 /** How many articles a row names. */
 const ROW_ARTICLES = 3;
 
+/**
+ * What a row's links need for their paper cards, and only they — kept out of
+ * `TermTipScope`, which every chip in both views carries (GPT Sol's plan
+ * review of 261002f, P2).
+ */
+export interface PaperScope {
+  /** The shelf entry, from the same lists as `TermTipScope.inScope`. */
+  entryOf: (slug: string) => LibraryEntry | undefined;
+  /** Every topic the server chose that the article is in, in rank order. */
+  topicsOf: (slug: string) => readonly PaperTopic[];
+}
+
 export function ShelfTermsDetail({
   terms,
   slotOf,
@@ -53,6 +66,7 @@ export function ShelfTermsDetail({
   chosen,
   onToggle,
   scope,
+  papers,
 }: {
   /** The topics to draw, in the order to draw them. */
   terms: readonly ShelfTerm[];
@@ -63,6 +77,7 @@ export function ShelfTermsDetail({
   chosen: ReadonlySet<string>;
   onToggle: (key: string) => void;
   scope: TermTipScope;
+  papers: PaperScope;
 }) {
   /* The bar is relative to the biggest count drawn, not to the shelf: it is
      there so the eye can compare rows, and the exact number is on the chip. */
@@ -93,7 +108,7 @@ export function ShelfTermsDetail({
               </span>
               <CountBar n={n} most={most} slot={slot} scopeWord={scope.scopeWord} />
               <span className="tw:col-span-full tw:min-w-0 tw:pl-[1.375rem] tw:sm:col-span-1 tw:sm:pl-0">
-                <Titles term={t} scope={scope} />
+                <Titles term={t} scope={scope} papers={papers} />
               </span>
             </li>
           );
@@ -151,8 +166,12 @@ function CountBar({
  * The articles that use the topic most, one per title, as links — each with
  * the paper card on hover or focus (PaperCard.tsx; Greg's `spya-f28vqj`:
  * *"add rich tooltips … to the paper-links that are matched for each
- * faceted-text-search-pill"*, plan 261002f). A slug on no list loaded keeps
- * the bare link: there is nothing true to put on its card.
+ * faceted-text-search-pill"*, plan 261002f). `topArticles` has already kept
+ * only slugs in scope, and `entryOf` is built from the same lists, so every
+ * link here has an entry; the bare link is a defence, not a state.
+ *
+ * `keepSide`: a card that flipped to the side would cover the neighbouring
+ * links the pointer is moving towards.
  *
  * Inside the view's `TooltipGroup`, so running the pointer down the titles
  * opens each card at once rather than waiting out the delay every time. The
@@ -163,12 +182,12 @@ function CountBar({
  * the proportion, and the chip's own card still gives both denominators
  * (ShelfTermChip.tsx § `TermTip`). Greg's `spya-f28vqj`.
  */
-function Titles({ term, scope }: { term: ShelfTerm; scope: TermTipScope }) {
+function Titles({ term, scope, papers }: { term: ShelfTerm; scope: TermTipScope; papers: PaperScope }) {
   const top = topArticles(term, scope.inScope, ROW_ARTICLES, scope.titleOf);
   return (
     <span className="tw:text-muted-foreground">
       {top.map((a, i) => {
-        const entry = scope.entryOf(a.slug);
+        const entry = papers.entryOf(a.slug);
         const link = (
           <Link
             href={readHref(a.slug)}
@@ -183,7 +202,8 @@ function Titles({ term, scope }: { term: ShelfTerm; scope: TermTipScope }) {
             {entry ? (
               <Tooltip
                 placement="bottom-start"
-                content={<PaperCard entry={entry} topics={scope.topicsOf(a.slug)} />}
+                keepSide
+                content={<PaperCard entry={entry} topics={papers.topicsOf(a.slug)} titleIsTriggerName />}
               >
                 {link}
               </Tooltip>
