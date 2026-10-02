@@ -1,7 +1,7 @@
 # Feedback reports lost after the response
 
 Up: [feedback.md](../project/feedback.md) · [feedback-reports.md](../project/feedback-reports.md) ·
-postmortem [261002b](../postmortems/261002b-feedback-reports-lost-after-the-response.md)
+postmortem [261002b](../postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md)
 
 Raised by the Overseer, 2026-10-02 ~00:50: of Greg's 2026-10-01 reports, 13 were never dispatched
 by the three-hourly sweep, and only a handful had `mirrored_at` set. Find out whether mirroring
@@ -128,6 +128,24 @@ is the reader of the state it describes.
   ```sql
   select count(*), count(mirrored_at) from spideryarn.feedback where created_at > '<deploy time>'
   ```
+
+### GPT Sol's plan review, and what changed
+
+No P0s. Three P1s, all taken. Sol also confirmed the root cause and the `waitUntil` fix against
+Vercel's runtime source: its Node launcher mounts a `(req, res)` export as an HTTP listener, and
+installs the request context before user code loads.
+
+- **Coverage reads structured fields only.** A queue item's free text can mention a report in
+  passing, and the queue's own duplicate check only catches a reused queue id. So the script matches
+  report ids in items' `source`, live and settled, and never in their text. The sweep writes the
+  report id into `--source`.
+- **A Sentry-absent reader's report had no way to be read**, because `feedback-reporter.ts` prints
+  words for admins only. So now `--show <id>` prints one row's words, marked untrusted whoever filed
+  it, and each listed line names that command.
+- **A queue that is unreadable or has `problems` is exit 2**, not empty. A note whose header does
+  not parse is named in the output, and the report it was for is listed again.
+- **And one real bug, found from its P2:** call `context.waitUntil(promise)` as a method, as the
+  package does. Detaching it loses `this`. The test's fake now needs its `this`.
 
 ## Tests, red first
 

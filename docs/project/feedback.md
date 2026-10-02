@@ -576,5 +576,13 @@ Two columns worth knowing when you do:
   column until GPT Sol pointed out that the SDK sends asynchronously and swallows transport
   failures, so the single column said "delivered" about reports that never arrived. A row with an
   attempt and no delivery is the interesting one.
+  **Before the 2026-10-02 fix it was most rows, and it meant little.** Vercel froze the instance
+  once the response had gone, and the mirror runs after it. So 86% of rows never recorded an
+  acknowledgement, including many Sentry had received, and some were never sent at all.
+  `handler` now registers its work with the platform's `waitUntil` (src/wait-until.ts). The rows
+  from before that are left as they are, and they under-report delivery —
+  [261002b](../postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md).
+  **Anything that must not miss a report reads this table, not Sentry:**
+  `scripts/feedback-unswept.ts`, [feedback-reports.md § Where the queue lives](feedback-reports.md).
 - **`request_vercel_id`** is the feedback POST's own id, read from the request headers on the
   server — the browser cannot put its own response header into its own request.

@@ -146,7 +146,7 @@ const logger = log("http");
  * that says *handed over*. Worth two seconds of a warm function; not worth
  * holding a reader.
  */
-const MIRROR_ACK_MS = 2000;
+export const MIRROR_ACK_MS = 2000;
 
 /**
  * How long the source and article store reads may hold a report before each
@@ -351,8 +351,15 @@ export async function mirrorFeedback(input: FeedbackMirrorInput): Promise<void> 
       settle?.(response);
     });
     /* `unref`, so a pending wait can never be the thing keeping a process
-       alive — the same care src/log.ts takes about its own timers. */
-    const timer = setTimeout(() => settle?.(null), MIRROR_ACK_MS);
+       alive — the same care src/log.ts takes about its own timers.
+
+       **The ceiling yields once before it settles.** An instance that wakes
+       late has the reply waiting and this timer overdue, and Node runs timers
+       before I/O — so without the yield the timer won and a report Sentry had
+       taken was recorded as not acknowledged (`spya-r2auqd`, 2026-10-01).
+       `setImmediate` runs after the I/O phase, so a reply already here wins.
+       docs/postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md. */
+    const timer = setTimeout(() => setImmediate(() => settle?.(null)), MIRROR_ACK_MS);
     timer.unref?.();
 
     try {

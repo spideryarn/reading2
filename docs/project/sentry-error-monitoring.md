@@ -146,6 +146,14 @@ not take.** The acknowledgement is best-effort with a two-second ceiling and is 
 reader has been answered, so it costs a warm function and never a spinner; if it does not arrive the
 row honestly says attempted-not-confirmed.
 
+**"Awaited after the reader has been answered" only works because `handler` registers that wait
+with the platform's `waitUntil`** (src/wait-until.ts), since 2026-10-02. Before that, Vercel froze
+the instance at the response, and the same applied to every error event's flush. 86% of feedback
+rows never recorded an acknowledgement, and 13 of Greg's reports on 2026-10-01 never reached
+Sentry at all:
+[261002b](../postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md). If a
+deployment logs `no vercel waitUntil`, that protection is gone.
+
 ### A screenshot is decoded and written again, and only PNG
 
 The bytes a reader pastes are taken apart and a new file is written from the raster
