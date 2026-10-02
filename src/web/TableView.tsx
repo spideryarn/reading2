@@ -70,6 +70,8 @@ import {
   type ZoomedFigure,
 } from "./zoomable.js";
 import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
+import { useFoldArticle } from "./fold.js";
+import { FoldToggle } from "./FoldToggle.js";
 
 /**
  * How long the live region stays empty between two announcements.
@@ -749,6 +751,9 @@ function TableViewInner({
 }: Props) {
   useRenderCount("TableView");
   const { blocks } = article;
+  /* Which article the fold store is about, and ⌘⌥T — fold.ts. Subscribes to
+     nothing, so folding never re-renders this table; the chevrons do that. */
+  useFoldArticle(slug, blocks);
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   /**
    * The figure the reader asked to see larger, or null. A *copy* of the html
@@ -1576,6 +1581,11 @@ function TableViewInner({
                   onJump={onJump}
                   announce={announce}
                 />
+                {/* The chevron that folds this heading's section away — outside
+                    `.prose`, like everything after it here, so comment offsets
+                    are untouched. Nothing on a heading with nothing under it.
+                    FoldToggle.tsx; plan 261002e. */}
+                {block.kind === "heading" && <FoldToggle id={block.id} />}
                 {/* **The heading the source never wrote.** Gwern's page ends
                     `## Bibliography` and then nine bare `<li>`s; Wikipedia
                     writes its own `References` and gets nothing from us. A real

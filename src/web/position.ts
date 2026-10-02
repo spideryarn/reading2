@@ -103,11 +103,25 @@ export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
  * -1: there is always a section you are in, even if it hasn't reached the top
  * of the screen yet.
  */
-export function activeSectionIndex(tops: number[], line: number): number {
+export function activeSectionIndex(
+  tops: number[],
+  line: number,
+  /**
+   * **Entries that cannot be the answer** — a row folded away (fold.ts). A
+   * folded row sits at zero height at the top of the next visible row, so it
+   * ties with that row and the "last one past the line" rule would pick it
+   * whenever the array holds no visible row after it: a sparse list of
+   * Structure starts, or a folded last section. Skipped entries neither win
+   * nor stop the walk, and the index returned is still into `tops`. GPT Sol's
+   * plan review of 261002e, finding 2.
+   */
+  skip?: (i: number) => boolean,
+): number {
   let active = 0;
   // `.entries()` rather than an index loop: it hands out the value already
   // typed, so there is no indexing to bounds-check.
   for (const [i, top] of tops.entries()) {
+    if (skip?.(i)) continue;
     if (top > line) break;
     active = i;
   }
@@ -210,6 +224,8 @@ export function positionToWrite(opts: {
    * GPT Sol F1). Omitted means none.
    */
   anchored?: BlockId | null;
+  /** Sections whose start is folded away, which cannot be named — fold.ts. */
+  skip?: (i: number) => boolean;
 }): { at: BlockId | null } | null {
   const { sections, rowOf, tops, line, jumpInFlight, atTop, held } = opts;
   if (jumpInFlight) return null;
@@ -221,7 +237,7 @@ export function positionToWrite(opts: {
   // Above the first section there is no section to name, and saying so keeps
   // ?at= out of the URL until the reader has actually moved.
   if (atTop) return held === null ? null : { at: null };
-  const visible = sections[activeSectionIndex(tops, line)]?.blockId ?? null;
+  const visible = sections[activeSectionIndex(tops, line, opts.skip)]?.blockId ?? null;
   if (visible === null) return null;
   if (visible === sectionContaining(sections, rowOf, held)) return null;
   return { at: visible };

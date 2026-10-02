@@ -73,6 +73,7 @@ import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { AuthorNames } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { FoldAllButton } from "./FoldToggle.js";
 import type { ArchiveControl } from "./useArchive.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 
@@ -277,6 +278,11 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
             // biome-ignore lint/suspicious/noArrayIndexKey: static line, rebuilt whole, no child state
             <span key={i}>{f}</span>
           ))}
+          {/* Beside the count of sections it acts on. A button, not a span,
+              so `.facts > span + span` draws no dot before it, and it renders
+              nothing on an article with no heading to fold. FoldToggle.tsx;
+              plan 261002e. */}
+          <FoldAllButton />
         </p>
 
         {/* **Where this article came from, when the answer is not "a web page".**
