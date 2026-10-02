@@ -1,0 +1,54 @@
+/* **One close cross for every modal and panel** — the comment card, the
+   annotate box, the chat dialog, Feedback, the Dock's drawer, the figure
+   lightbox, Referee's explanation. Greg, 2026-10-01, on an iPad: *"Can you make
+   the little cross to close a comment a little bit larger? I kept missing it …
+   if there are any other similar to the modals or panels, apply it to them as
+   well."* The comment card's was a 15px glyph with 2px of padding: about
+   20 × 15px of target.
+
+   **The size lives here and nowhere else.** Imported straight after shell.css,
+   so each component's own rule — colour, border, radius, margin, which side of
+   its header it sits on — comes later and wins on order; those rules no longer
+   set a width, a height or a padding, and that is the whole contract. A close
+   button that sets its own size again is a second number to drift.
+
+   **The glyph is drawn at 18px whatever the JSX asked for**: CSS beats the
+   `width`/`height` attributes lucide writes, so `<X size={13} />` and
+   `<X size={16} />` stop being two different crosses.
+
+   **On a device with a finger the target is 40px and the box is still 32** —
+   40px being the house number for a thumb — and the `::after` that makes it
+   is invisible, so it costs the header nothing. **It reaches 4px past the box
+   on every side, so whatever sits beside a close needs at least 4px of gap or
+   the cross steals its taps** (`.annotate-head-actions`, where Copy sat 2.4px
+   away until GPT Sol's plan review). That is why it
+   asks `any-pointer` rather than the `pointer` touch.md asks of a size rule —
+   the rationing argument there is about chrome you can see, and an iPad with a
+   keyboard attached reports `pointer: fine` while its reader taps the glass
+   (narrow-windows.md § What a control owes a finger).
+   docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md. */
+.close-x {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* px, not rem: the app supports a 12px root, where 2rem is 24px.
+     tests/annotate-dialog-copy.test.tsx § the header's targets has the trap. */
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  line-height: 1;
+  border-radius: 6px;
+}
+.close-x > svg {
+  width: 18px;
+  height: 18px;
+}
+@media (any-pointer: coarse) {
+  .close-x::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+  }
+}

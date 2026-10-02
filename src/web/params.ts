@@ -621,13 +621,14 @@ export const gateParam = createParser<number>({
  * first cites it. `document` is that order with nothing hidden — "first cited"
  * on the button, and the artefact's own order. `relevance` and `influence` are
  * the reader asking for the model's judgment, descending, unscored last.
+ * `date` is publication year, oldest first, undated last (spya-xpxmjn).
  * docs/plans/260911g-citations-mode.md § Scores, and the prioritised order.
  *
  * `push`, like `sort`: changing the order is a deliberate act on the view. An
  * unknown value parses to the default, so a link written by a version with
  * more orders still shows a list.
  */
-export const CITE_ORDERS = ["prioritised", "document", "relevance", "influence"] as const;
+export const CITE_ORDERS = ["prioritised", "document", "relevance", "influence", "date"] as const;
 export type CiteOrder = (typeof CITE_ORDERS)[number];
 
 export const citeOrderParam = createParser<CiteOrder>({

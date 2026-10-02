@@ -256,7 +256,7 @@ export function AnnotateDialog({
           />
           <button
             type="button"
-            className="annotate-close"
+            className="annotate-close close-x"
             onClick={onCancel}
             title="Close (Esc)"
             aria-label="Close"

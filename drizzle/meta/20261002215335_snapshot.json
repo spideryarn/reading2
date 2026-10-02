@@ -1,5 +1,5 @@
 {
-  "id": "1ce1b96f-cb87-4df0-9660-6aed5cd09845",
+  "id": "cb069312-fc54-43f1-994b-541483a2b1fa",
   "prevId": "779369ec-fcdc-4b55-a0fd-dd7b85a50b79",
   "version": "7",
   "dialect": "postgresql",
@@ -2380,22 +2380,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "chat_threads_one_tutorial": {
-          "name": "chat_threads_one_tutorial",
-          "columns": [
-            {
-              "expression": "article_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"spideryarn\".\"chat_threads\".\"kind\" = 'tutorial'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -2460,7 +2444,7 @@
         },
         "chat_threads_kind": {
           "name": "chat_threads_kind",
-          "value": "\"spideryarn\".\"chat_threads\".\"kind\" in ('chat','remember','candidates','tutorial')"
+          "value": "\"spideryarn\".\"chat_threads\".\"kind\" in ('chat','remember','candidates')"
         }
       },
       "isRLSEnabled": false
@@ -4635,7 +4619,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice')"
         }
       },
       "isRLSEnabled": false

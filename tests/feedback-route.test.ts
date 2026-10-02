@@ -86,6 +86,22 @@ function storedReport(input: NewFeedback): FeedbackReport {
   };
 }
 
+/**
+ * Every admin notice the route asked for (plan 261002j), and whether the
+ * reader's response had already ended when it was asked — the notice must
+ * never sit in front of the reader.
+ */
+let notices: { id: string; ownerId: string; afterResponse: boolean; mirroredYet: boolean }[] = [];
+/** Set by the fake response's `end`, read by the fake notice. */
+let responseEnded = false;
+
+vi.mock("../src/feedback-notice.js", () => ({
+  noticeFeedback: async (report: FeedbackReport, ownerId: string) => {
+    notices.push({ id: report.id, ownerId, afterResponse: responseEnded, mirroredYet: mirrored.length > 0 });
+    return { kind: "sent" };
+  },
+}));
+
 /* The notes' endings, fixed here rather than read from docs/user-feedback/, so
    a note's header changing cannot move this file's answers. */
 vi.mock("../src/feedback-endings.generated.js", () => ({
@@ -230,6 +246,7 @@ async function call(
     },
     end(chunk: string) {
       text = chunk;
+      responseEnded = true;
     },
   } as unknown as ServerResponse;
 
@@ -332,6 +349,8 @@ beforeEach(() => {
   answer = undefined as unknown as FeedbackSubmission;
   captureBehaviour = () => "sentry-event-id";
   sendResponse = { statusCode: 200 };
+  notices = [];
+  responseEnded = false;
 });
 
 afterEach(() => {
@@ -533,6 +552,7 @@ describe("POST /api/feedback", () => {
     const reply = await call(body);
     expect(reply.status).toBe(200);
     expect(reply.body.status).toBe("duplicate");
+    expect(notices).toEqual([]);
     /* Not mirrored. Feedback is not deduped by Sentry, so a retry that filed a
        second copy is a bug nobody would ever see. */
     expect(mirrored).toHaveLength(0);
@@ -545,6 +565,7 @@ describe("POST /api/feedback", () => {
     expect(reply.headers["retry-after"]).toBe("90");
     expect(String(reply.body.error)).toMatch(/\[fb-often\]/);
     expect(mirrored).toHaveLength(0);
+    expect(notices).toEqual([]);
   });
 
   it("answers 413 for a body past its own limit", async () => {
@@ -973,6 +994,16 @@ describe("POST /api/feedback", () => {
     const calls = payload.api;
     /* Which endpoint, and not which article. The slug is a column already. */
     expect(calls[0]?.path).toBe("/api/chat/:x/live");
+  });
+
+  it("tells the admin about a newly created report, after the reader is answered", async () => {
+    const body = minimal();
+    const reply = await call(body);
+    expect(reply.status).toBe(201);
+    /* Started beside the Sentry mirror, not behind its acknowledgement. */
+    expect(notices).toEqual([
+      { id: body.id, ownerId: TEST_OWNER, afterResponse: true, mirroredYet: false },
+    ]);
   });
 
   it("mirrors a newly created report and records the event id", async () => {

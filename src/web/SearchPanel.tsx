@@ -116,6 +116,8 @@ import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { useSlow } from "./useSlow.js";
+import { isImeComposing } from "./key-chord.js";
+import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
 
 /**
  * **Whose searches these are, and therefore what may be done to them.**
@@ -140,9 +142,39 @@ import { useSlow } from "./useSlow.js";
  * nobody asked.
  * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
  */
+/**
+ * **Quick search as you type** — what the box tells the typing session
+ * (`useTypingSession` in src/web/modes/search/SearchMode.tsx, the rules in
+ * src/web/quick-session.ts). Only with *quick* chosen; words and meaning never
+ * call these.
+ */
+export interface TypingControls {
+  /** The reader changed the box. */
+  edit(text: string): void;
+  /** Enter or *find*: flush changed words into the row, and end the session. */
+  flush(text: string): void;
+  /** ↺, or anything else that starts the next words afresh. */
+  end(): void;
+  blur(): void;
+  focus(): void;
+}
+
 export type SearchAccess =
   | {
       kind: "owner";
+      /**
+       * Search-as-you-type for *quick* (plan 261002h). Absent, quick asks on
+       * Enter and *find* only, as it did before — which is what a test that
+       * mounts the panel on its own gets.
+       */
+      typing?: TypingControls;
+      /**
+       * **The draft this box shares with the bar's box** (plan 261002h stage
+       * 3, src/web/search-draft.ts). Absent — a test mounting the panel on its
+       * own — the box gets a private draft of the same shape, so there is one
+       * code path either way.
+       */
+      draft?: SearchDraft;
       /** False until the first fetch has answered, either way — `SearchApi.loaded`. */
       loaded: boolean;
       /**
@@ -154,8 +186,8 @@ export type SearchAccess =
       error: string | null;
       /** Requests this tab started and still has in flight, by run id. */
       running: ReadonlySet<string>;
-      /** Ask a new question, as a quick search or a meaning one. */
-      onAsk(criterion: string, kind: SearchKind): void;
+      /** Ask a question; flesh-out identifies the quick row it came from. */
+      onAsk(criterion: string, kind: SearchKind, sourceId?: string): void;
       onRetry(id: string): void;
       /**
        * Pin one saved search to a palette slot — `null` hands it back to the hash.
@@ -268,12 +300,28 @@ export function SearchPanel({
    * changed — which is the shape of the bug this component used to carry, where
    * a criterion arriving from a fetch overwrote what the reader was typing. A
    * click is not a race; an effect watching a value is.
+   *
+   * **Since plan 261002h stage 3 it lives in a store shared with the bar's
+   * box** (src/web/search-draft.ts), because Search mode closing takes this
+   * component with it and the bar's box needs the words to outlive that. The
+   * rule above is unchanged: only a reader's edit or ↺ writes it.
    */
-  const [draft, setDraft] = useState("");
+  const [ownDraft] = useState(createSearchDraft);
+  const store = own?.draft ?? ownDraft;
+  const draft = useDraftText(store);
+  const setDraft = store.set;
   const box = useRef<HTMLInputElement>(null);
+  /* Sol F2: opened from the bar's box, the panel leaves focus where the reader
+     is typing. Read once, at mount, which is the only moment it matters. */
+  const [quietMount] = useState(() => store.barFocused());
+  /* The ⚡ in the bar focuses this box inside its own tap, when it is here. */
+  useEffect(() => store.registerBox(() => box.current?.focus({ preventScroll: true })), [store]);
 
   /** Put a saved question back in the box, ready to be edited into the next one. */
   function reuse(criterion: string) {
+    // The words put back are the start of the next search, not a revision of
+    // the one being typed.
+    own?.typing?.end();
     setDraft(criterion);
     /* Focus, because the only reason to press ↺ is to change the words. Without
        it the text appears somewhere the reader is not, and they have to click
@@ -324,6 +372,8 @@ export function SearchPanel({
           running={running}
           loaded={loaded}
           onAsk={own.onAsk}
+          typing={own.typing}
+          quietMount={quietMount}
         />
       )}
 
@@ -467,12 +517,20 @@ const Box = forwardRef<
     running: ReadonlySet<string>;
     /**
      * **Has the saved list come back — answered, failed or given up on?** Find
-     * waits for it: `SearchApi.loaded` says why. Typing does not.
+     * waits for it: `SearchApi.loaded` says why. Quick session controls hold
+     * submission until then, so Enter/find can still record the intent.
      */
     loaded: boolean;
     onAsk(criterion: string, kind: SearchKind): void;
+    /** Search-as-you-type, for quick only — see `TypingControls`. */
+    typing: TypingControls | undefined;
+    /** Do not take focus on mount: the bar's box has it (Sol F2). */
+    quietMount: boolean;
   }
->(function Box({ matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk }, ref) {
+>(function Box(
+  { matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk, typing, quietMount },
+  ref,
+) {
   /* The parent needs this to focus the box from ↺, and the input needs it for
      the focus-on-mount below and for `switchTo`. `useImperativeHandle` would
      hand back a narrowed object; there is nothing to narrow, so the ref is
@@ -488,8 +546,15 @@ const Box = forwardRef<
      it is handled there rather than here because it must depend on *how* the
      matcher was switched: a pointer click means "I want to type now", and a
      keyboard press inside the radio group means "I am still using this group".
-     Same distinction, and the same `e.detail` test, as Dock.tsx § DockModes. */
-  useEffect(() => box.current?.focus(), []);
+     Same distinction, and the same `e.detail` test, as Dock.tsx § DockModes.
+
+     **Except when the bar's box opened the mode** (plan 261002h, Sol F2): the
+     reader is mid-word down there, and pulling focus up here would put the
+     rest of their question somewhere they are not looking. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on mount only, as above — `quietMount` is read once.
+  useEffect(() => {
+    if (!quietMount) box.current?.focus({ preventScroll: true });
+  }, []);
 
   const setDraft = onDraft;
   const value = matcher === "words" ? (find ?? "") : draft;
@@ -497,10 +562,17 @@ const Box = forwardRef<
      repeat of one still running — same words, same kind — is refused. See
      `running` in SearchPanel. */
   const asking = asksTheServer(matcher) ? matcher : null;
-  const repeat = asking !== null && running.has(runningKey(draft, asking));
-  const ready = asking !== null && loaded && draft.trim().length > 0 && !repeat;
+  /* Quick, as you type: the session owns the asking, and Enter or *find*
+     flushes the words into its row and ends it — **even when those words are
+     already running** (Sol F5), which is exactly the state a pause leaves. */
+  const session = matcher === "quick" ? typing : undefined;
+  const repeat = asking !== null && session === undefined && running.has(runningKey(draft, asking));
+  const ready =
+    asking !== null && (loaded || session !== undefined) && draft.trim().length > 0 && !repeat;
   const ask = () => {
-    if (ready && asking !== null) onAsk(draft, asking);
+    if (!ready || asking === null) return;
+    if (session) session.flush(draft);
+    else onAsk(draft, asking);
   };
 
   /**
@@ -556,10 +628,18 @@ const Box = forwardRef<
           }
           onChange={(e) => {
             if (matcher === "words") onFind(e.target.value || null);
-            else setDraft(e.target.value);
+            else {
+              setDraft(e.target.value);
+              session?.edit(e.target.value);
+            }
           }}
+          onFocus={() => session?.focus()}
+          onBlur={() => session?.blur()}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            /* Not the Enter that ends an IME composition: a reader typing
+               Japanese or Chinese presses it to pick a word, not to ask half a
+               question (keyboard.md § Enter in a text box; Sol's D9). */
+            if (e.key === "Enter" && !isImeComposing(e)) {
               e.preventDefault();
               if (ready) ask();
               /* Words mode has nothing to ask — the hits arrived as the reader
@@ -580,7 +660,10 @@ const Box = forwardRef<
                  showing, and a key that silently unticked them would undo work
                  the reader can see they did. */
               if (matcher === "words") onFind(null);
-              else setDraft("");
+              else {
+                setDraft("");
+                session?.edit("");
+              }
             }
           }}
         />
@@ -1037,7 +1120,7 @@ function Saved({
                   }
                   onClick={() => {
                     if (fleshing) return;
-                    own.onAsk(run.criterion, "meaning");
+                    own.onAsk(run.criterion, "meaning", run.id);
                     onToggle(run.id, false);
                   }}
                 >

@@ -279,6 +279,7 @@ import {
    header before calling it from anywhere else, because the scope handling in it
    is the part that is easy to get wrong and impossible to see wrong. */
 import { mirrorFeedback } from "./feedback.js";
+import { noticeFeedback } from "./feedback-notice.js";
 import { isFeedbackShipped, shippedFeedbackIds } from "./feedback-ending.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
@@ -4248,7 +4249,13 @@ async function checkAnchor(anchor: ChatAnchor, blocks: Block[]): Promise<void> {
  * running process can tell a search in flight from one that died with the
  * process that was writing it.
  */
-const searching = new Set<string>();
+/* **A map to the attempt holding the key, not a set** (plan 261002h, Sol F7).
+   A revision re-asks the same run id while the superseded attempt may still be
+   unwinding, so two requests can hold one key at once. With a set, the old
+   attempt's `finally` deleted the key out from under the newer one, and a sweep
+   could then bury a run this process is still answering. Each request releases
+   the key only if it is still the holder. */
+const searching = new Map<string, symbol>();
 
 /**
  * What this process is searching *in this article*, as bare run ids.
@@ -4256,11 +4263,13 @@ const searching = new Set<string>();
  * The same conversion `liveMessages` does, and for the same two reasons: the
  * set's key has to stay unique across articles, and the store's `keep` is a
  * set of row ids rather than of composites it would have to take apart.
+ * Exported for tests/routes.test.ts, which checks a superseded attempt cannot
+ * release a newer one's hold.
  */
-function liveRuns(slug: string): Set<string> {
+export function liveRuns(slug: string): Set<string> {
   const prefix = `${slug}/`;
   const ids = new Set<string>();
-  for (const key of searching) {
+  for (const key of searching.keys()) {
     if (key.startsWith(prefix)) ids.add(key.slice(prefix.length));
   }
   return ids;
@@ -4335,9 +4344,18 @@ async function refuseAPaperNotReadYet(slug: string): Promise<void> {
 }
 
 async function search(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { id, criterion, kind = "meaning" } = (body ?? {}) as Record<string, unknown>;
+  const { id, criterion, kind = "meaning", revises = false } = (body ?? {}) as Record<
+    string,
+    unknown
+  >;
   if (typeof criterion !== "string" || criterion.trim() === "") {
     throw httpError(400, "Expected { criterion }");
+  }
+  /* Search-as-you-type (plan 261002h): `revises` re-asks the quick row named by
+     `id` with these words, in place. What it does to anything else is
+     `withRun`'s to decide (src/searches.ts). */
+  if (typeof revises !== "boolean") {
+    throw httpError(400, "revises must be true or false");
   }
   /* Which matcher (plan 261002e): absent is a meaning search, which is every
      client that predates the quick one; anything else named is refused rather
@@ -4363,11 +4381,14 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     criterion.trim(),
     kind,
     typeof id === "string" ? id : undefined,
+    undefined,
+    { revises },
   );
   const key = `${slug}/${run.id}`;
-  searching.add(key);
+  const holder = Symbol(run.id);
+  searching.set(key, holder);
   try {
-    const { frame } = sse(res);
+    const { frame, gone } = sse(res);
     frame("begin", run);
 
     let patch: Partial<SearchRun>;
@@ -4379,12 +4400,18 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
          `withRun` resets only a row of the same kind — but the row is what the
          answer is written onto, so it is the one that decides which matcher
          writes it. */
+      /* **`gone` for quick only** (plan 261002h, Sol F7). Search-as-you-type
+         abandons a quick attempt every time the reader keeps typing, and a
+         superseded Jev call left running is money for an answer nobody will
+         see. Meaning keeps running when the tab closes, as it always has:
+         changing that is a product call this plan did not need to make. */
       const events =
         run.kind === "quick"
           ? quickPassagesStream({
               meta: article.meta,
               blocks: article.blocks,
               criterion: run.criterion,
+              signal: gone,
             })
           : findPassagesStream({
               power: powerOf(article),
@@ -4402,7 +4429,13 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
       }
       patch = { status: "done", hits, model };
     } catch (err) {
-      captureFailure(err, { route: "search", slug, id: run.id });
+      /* A reader who left — or a typing session that moved on to newer words —
+         is expected, not a fault. It still finishes as an error below, through
+         the attempt fence: a superseded attempt's write updates nothing, and an
+         abandoned one does not sit `pending` where the trim cannot reach it. */
+      if (run.kind !== "quick" || !gone.aborted) {
+        captureFailure(err, { route: "search", slug, id: run.id });
+      }
       patch = { status: "error", error: sayToReader(err, { route: "search", slug }) };
     }
 
@@ -4433,8 +4466,9 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     /* Held from the moment the pending row exists until the answer is stored.
        Releasing it straight after the model call let a GET sweep the row before
        `finish`; registering it outside this finally let a failed SSE setup pin
-       it for the life of the process. */
-    searching.delete(key);
+       it for the life of the process. Only by the holder: a revision may have
+       taken the key since (see `searching`). */
+    if (searching.get(key) === holder) searching.delete(key);
   }
 }
 
@@ -6855,7 +6889,22 @@ async function fileFeedback(
     createdAt: answer.report.createdAt,
     status: answer.kind,
   });
-  if (mirror) await mirror;
+  /* **The third destination: a mail to the admin**, for a newly created report
+     only — a retry must not mail twice. `noticeFeedback` skips an admin's own
+     report and anything past its allowance itself (src/feedback-notice.ts,
+     plan 261002j).
+
+     Started **after** `send`, so the reader is never waiting on Resend, and
+     **beside** the mirror rather than behind it: `afterResponse` would start
+     it only once this function returned, which is after Sentry's
+     acknowledgement — so a slow Sentry would hold the mail. Like the mirror it
+     cannot throw. Started here rather than queued also keeps it inside the
+     reader's owner scope, which its allowance counts by. */
+  const notice =
+    answer.kind === "created"
+      ? noticeFeedback(answer.report, user.id, { allowance: fetchAllowanceStore })
+      : null;
+  await Promise.all([mirror, notice]);
 }
 
 

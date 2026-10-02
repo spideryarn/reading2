@@ -132,7 +132,7 @@ export function Lightbox({ figure, onClose, onJump }: Props) {
       }}
     >
       <div className="lightbox-panel">
-        <button type="button" className="lightbox-close" onClick={onClose} aria-label="Close">
+        <button type="button" className="lightbox-close close-x" onClick={onClose} aria-label="Close">
           <X size={16} strokeWidth={1.75} />
         </button>
         {/* `.prose` so a table keeps the article's own table styling rather
