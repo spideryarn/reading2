@@ -113,6 +113,7 @@ function Harness() {
       lookUpLinks: false,
       canAddToShelf: false,
       showInSpideryarn: false,
+      termActions: null,
     }),
     createElement(VisitorGlossaryBand, { glossary: GLOSSARY, onJump, onSelected: () => {} }),
   );

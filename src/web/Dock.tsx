@@ -2410,7 +2410,7 @@ const NOT_A_MODE = {
        before it were each false, a few hours apart.**
 
        *"Nothing on it is generated"* was inherited from `Metadata.tsx`'s own
-       header, and the page opens with the hierarchy's `gist` and `summary`
+       header, and the page opens with the tree's `gist` and `summary`
        under *In one sentence*, which are model output. GPT Sol.
 
        *"The page itself generates nothing and makes no model call"* survived
@@ -2927,7 +2927,7 @@ function DockModeLinks({
  * Not `HomeLogo` rendered somewhere else: that component is `position: fixed`
  * in the top-left of the window, and a control carrying its own position cannot
  * be re-homed by being moved in the markup. What it shares is its *identity* —
- * the same glyph, the same word, the same `--highlight` — which is the thing
+ * the same glyph and the same white word — which is the thing
  * Greg's decision to move it turned on: the way home moves from the top-left
  * corner to the bottom-left as you go from the shelf into an article, and it is
  * survivable only because it still looks like itself.

@@ -714,8 +714,8 @@ describe("the prompt, with and without Ideas", () => {
 
 function storeWith(quotes: Quote[] | null, ideas: Ideas | null = null, withTree: Tree = tree) {
   const store = memoryArtefacts();
-  store.plant(SLUG, "hierarchy", "blocks", { blocks });
-  store.plant(SLUG, "hierarchy", "tree", withTree);
+  store.plant(SLUG, "structure", "blocks", { blocks });
+  store.plant(SLUG, "structure", "tree", withTree);
   if (ideas) store.plant(SLUG, "ideas", "ideas", ideas);
   if (quotes) {
     store.plant(SLUG, "quotes", "quotes", {

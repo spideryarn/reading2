@@ -314,13 +314,14 @@ export interface PublicCrossrefs {
  * all; the third was put to Greg on 2026-08-28 and deferred — one field and one
  * sentence, addable any time.
  *
- * **No `entry.lookup` on a glossary entry.** A lookup is the owner's requested
- * answer, its citations, its search count, its model and its exact time — and
- * the Postgres read seam attaches them to the glossary deliberately, which is
- * correct for the owner and is the leak this projection exists to stop.
- * `glossary_lookups` stays unreachable from the public graph, and the
- * four-table guard in tests/public-imports.test.ts is what makes that a fact
- * rather than an intention.
+ * **No `entry.lookup` or `entry.hidden` on a glossary entry.** A lookup is the
+ * owner's requested answer, its citations, its search count, its model and its
+ * exact time; `hidden` is their choice about what appears while they read. The
+ * Postgres read seam attaches both deliberately for the owner, and neither is a
+ * stranger's to see.
+ * Both private tables stay unreachable from the public graph, and the
+ * schema-derived table guard in tests/public-imports.test.ts is what makes that
+ * a fact rather than an intention.
  *
  * **No generator, version, slug, sourceHash, passes, generatedAt or elapsedMs**
  * on any of them. Facts about our pipeline and its timings.
@@ -340,7 +341,7 @@ export interface PublicArtefactSet {
 }
 
 /**
- * One glossary entry, minus the reader's lookup.
+ * One glossary entry, minus the reader's lookup and hide preference.
  *
  * Structurally assignable to `GlossaryEntry`, exactly as `PublicBlock` is to
  * `Block` and for the same reason: the glossary panel is one panel, and a

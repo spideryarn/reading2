@@ -287,7 +287,7 @@ to underline the occurrences. **Those two must agree**, or the panel says a term
 the block shows nothing underlined — the feature looks like it is working and is quietly lying about
 where the words are.
 
-Three things in it are not obvious:
+Four things in it are not obvious:
 
 - **The word boundary is not `\b`.** `\b` is defined against `[A-Za-z0-9_]` even under the `u` flag,
   so an accented letter is a non-word character to it — and that breaks in both directions at once.
@@ -300,6 +300,21 @@ Three things in it are not obvious:
   and without this "attention head" silently misses the sentence about "attention heads" — which is
   usually the sentence you wanted. The honest cost: `bus` matches the text `buss`. Rare, and wrong in
   the harmless direction.
+- **Between two words, a space and a hyphen are the same thing**, since 2026-10-02: each interior
+  run of whitespace or hyphens (`-`, U+2010, U+2011) in a form matches any run of either, so
+  *delayed win-shift task* finds *delayed-win-shift task*. Greg's report found one block of six for
+  that entry (spya-n04d5p). **Not the en dash**, which is the range dash (*1990–2000*), and not a
+  hyphen against nothing (*e-mail*/*email*), which would mean matching inside words. The separators
+  are made canonical **before** the dedup and the longest-first sort, or `alpha----beta` could sort
+  ahead of `alpha beta gamma` and win a match it should lose. The cost: *co-op* matches *co op*.
+  [261002c](../plans/261002c-glossary-hide-an-entry-dig-deeper-from-the-card-hyphens-match-spaces.md) § 1.
+
+**Both reads match again, every time.** `entry.blocks` is worked out when the list is written, so
+a matcher fix used to reach a glossary only when somebody pressed *Find more*. Since 2026-10-02
+the owner's read (`loadGlossary`) and the public one each recompute every entry's blocks against
+the blocks they already hold, through one helper,
+[`src/glossary-occurrences.ts`](../../src/glossary-occurrences.ts) — stale or not, because on a
+stale list an empty `blocks` already says nothing (`occurrencesFitTheArticle`).
 
 ### Where the underlines are drawn
 
@@ -359,7 +374,9 @@ opened. Four things follow, and three of them are the interesting part:
   The band still **revalidates** when it opens, behind the list already showing, and that is not
   optional: `useJobs` treats its first poll as a baseline and does not announce a job that had
   already finished, so a glossary written in another tab while the band was closed has nothing
-  else to bring it in. So the rule is not "fetch once" — it is that **`status` never goes back to
+  else to bring it in. (A completion announced by this tab's engine after the reader left the band
+  is heard by the read itself — `useStepFinished`, src/web/useCitations.ts § An always-mounted read
+  is not an always-fresh read.) So the rule is not "fetch once" — it is that **`status` never goes back to
   `loading` for an article it has already answered for**. Moving to a *different* article does
   reset it, deliberately: that is a list nobody has yet.
 
@@ -414,6 +431,51 @@ Three details worth knowing before changing it:
 - **A mark carrying two terms commits to neither.** Where two entries overlap the same phrase the
   card draws both, because which matched the longer phrase is not something the mark records. A
   second tap there does nothing and leaves the reader the two named buttons.
+- **An owner's card has *Dig deeper* and *Hide*** too, since 2026-10-02, in a row under the foot.
+  Greg: *"We have a 'Dig deeper' in Glossary mode. Add that to the in-text glossary tooltip."*
+  (spya-p09u4s). *Dig deeper* starts the same lookup the band's button does, opens the band on that
+  term (through `openTermInGlossary`, which lowers the threshold if it would hide the row) and
+  closes the card, so the answer streams into the row where the wait, the draft and a failure are
+  already drawn; it is disabled, with the band's sentence, while any dig runs or on an unquoted
+  term. That works because the lookup's state lives on `useGlossaryRead`, not the band — closing
+  the band no longer disowns a running dig. *Hide* is [below](#hiding-an-entry); the card closes
+  only once the write has landed, and says a refusal on a line of its own. A visitor gets neither:
+  `termActions` is the owner's read and a visitor has none. Both are plain buttons, so a finger
+  reaches them the way it reaches *in the glossary* — a tap inside the card is left alone.
+
+## Hiding an entry
+
+> Give me a way to hide a Glossary entry (e.g. because I know it already, and/or it keeps showing
+> up too much). … I can't decide whether it should just hide (for me) or delete (for everyone, e.g.
+> for a public article). Let's go with Hide for now.
+>
+> — Greg, 2026-10-02 (spya-yqfzkm)
+
+**For the owner, on their own article.** A hidden entry has no underline (so no card and no G), no
+row in the band, no part in its counts, sorts or threshold, and no chip on Skim's stop cards; a
+`?term=` naming one is cleared in every order. It is listed under a collapsed **Hidden (n)** at the
+foot of the band, each with *Unhide* — the undo for a mis-tap. The entry itself is untouched: chat
+and the glossary export still see it, because a hide is a preference about the screen, not a
+judgement that the entry is wrong.
+
+- **One visible list**, defined once — `shownEntries` in
+  [`src/web/glossary-shown.ts`](../../src/web/glossary-shown.ts) — and used by Reader's `terms`,
+  the band, and [`stop-card.ts`](../../src/web/stop-card.ts). A hidden entry leaking into any one
+  of them would be the hide working on one surface and not the next.
+- **Stored** in `glossary_hidden_entries` (`article_id`, `entry_id`), keyed on the entry id, which
+  *Find more* keeps — so a hide outlives a top-up and a new revision. Owner-only through
+  `articleIdForOwned`; `PUT`/`DELETE /api/glossary/:slug/hidden/:entryId`, both idempotent, and a
+  `PUT` refuses an id the current glossary does not have. `loadGlossary` attaches `hidden: true` at
+  the read seam, as it attaches `lookup`, so the public payload — which never calls it, and copies
+  field by field — cannot carry it. Exported beside reading time.
+- **Pessimistic on the client**: the button waits, the write is awaited, then the list is read
+  again. An optimistic flip could be overwritten by a GET already in flight.
+- **The trash button is a sibling of the row's button**, never inside it; *"Hide — only for you"*.
+- **Deferred, by name**: delete for everyone; a visitor hiding terms on someone else's public
+  article (that needs a reader id that is not the owner); swipe to reveal the trash can.
+
+[261002c](../plans/261002c-glossary-hide-an-entry-dig-deeper-from-the-card-hyphens-match-spaces.md)
+§§ 2–3, and GPT Sol's plan review beside it.
 
 ## What we deliberately do not do
 

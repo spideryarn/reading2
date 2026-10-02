@@ -76,6 +76,7 @@ import type {
   CitationInvestigationStore,
   CommentStore,
   ReadingTimeStore,
+  GlossaryHiddenStore,
   FeedbackStore,
   FetchAllowanceStore,
   GlossaryLookupStore,
@@ -112,6 +113,7 @@ import { pgCitationInvestigationStore } from "./pg-citation-investigations.js";
 import { pgCitedInSpideryarnStore } from "./pg-cited-in-spideryarn.js";
 import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
+import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
@@ -338,6 +340,8 @@ export const citationFindStore: CitationFindStore = guarded("citation-finds", pg
 
 /** Seconds spent per block — the spine's and gutter's reading-time layer. */
 export const readingTimeStore: ReadingTimeStore = guarded("reading-time", pgReadingTimeStore);
+/** The glossary entries an owner hid on one article — plan 261002c § 2. */
+export const glossaryHiddenStore: GlossaryHiddenStore = guarded("glossary-hidden", pgGlossaryHiddenStore);
 
 /**
  * Explaining a term the reader typed into the glossary's box.

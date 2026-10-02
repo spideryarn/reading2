@@ -53,8 +53,8 @@ export const STEP_ORDER = [
   "metadata",
   "extract",
   "blocks",
-  "hierarchy",
-  /* **Immediately after `hierarchy`, and its position here is not load-bearing
+  "structure",
+  /* **Immediately after `structure`, and its position here is not load-bearing
      the way `quotes`, `timeline`, `quiz` and `illustrated` are.** It is in no
      article-cache group — the label prompt sends an outline and a batch of
      paragraphs, not the article the way `articleText` or `articleWithIds` do —
@@ -62,7 +62,7 @@ export const STEP_ORDER = [
      the second half of stage 4 and reads the tree that step just cut.
 
      **Not in `DEFAULT_INGEST_STEPS`** (src/pipeline.ts), which is the entire
-     point of the split: `hierarchy` writes a pending manifest and the labels
+     point of the split: `structure` writes a pending manifest and the labels
      are bought later by a free successor job, so pasting a URL no longer waits
      on the 79.5–92% of stage 4 that this pass was.
 
@@ -70,7 +70,7 @@ export const STEP_ORDER = [
      decision from the one `arc` made in the same position — see the note there.
      docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
   "labels",
-  /* After `hierarchy` because it reads stage 4's `blocks.json` — the copy the reader
+  /* After `structure` because it reads stage 4's `blocks.json` — the copy the reader
      will actually render, and the one its own freshness stamp is computed from
      (`assetsInputHash`, src/collect-assets.ts), so freshness comes from the
      machinery that is here rather than from a second one invented for this
@@ -193,6 +193,30 @@ export const STEP_ORDER = [
 ] as const satisfies readonly StepName[];
 
 /**
+ * **Step names that were renamed, and the step each became.** A name here can
+ * still arrive after the rename's deploy: a job row enqueued by old code in the
+ * minutes between the migration and the new code going live, or a feedback
+ * report from a tab loaded before it. Both readers translate through this one
+ * table — `toJob` in src/store/pg-jobs.ts and src/feedback-payload.ts — so a
+ * stale job runs under its new name (and a Retry copies the new name) rather
+ * than meeting `registry[step.name] === undefined` and throwing outside
+ * `runStep`'s catch. Plan 261002b § The deploy, for the Overseer.
+ *
+ * `trajectory` was Skim's step until 2026-10-01 (plan 261001r); `hierarchy` was
+ * Structure's until 2026-10-02 (plan 261002b). The ledger has its own table,
+ * `RENAMED` in src/cost-categories.ts, because it also renames jobs.
+ */
+export const RETIRED_STEPS: Readonly<Record<string, StepName>> = {
+  trajectory: "skim",
+  hierarchy: "structure",
+};
+
+/** A retired step name's successor, or the name as it came. */
+export function currentStepName(name: string): string {
+  return Object.hasOwn(RETIRED_STEPS, name) ? (RETIRED_STEPS[name] ?? name) : name;
+}
+
+/**
  * **Every `StepName` that `STEP_ORDER` above does not list.** Always `never`.
  *
  * Add a step to `StepName` (src/types.ts) and forget the row above, and this
@@ -233,7 +257,7 @@ export type StepsMissingFromOrder<
  * caller names the steps that have to run before its own inside one job. The
  * server does not honour that word — `orderSteps` (src/jobs.ts) sorts whatever
  * arrives by `STEP_ORDER` and nothing else — so `precededBy: ["assets"]` on
- * `hierarchy` would come back as `["hierarchy", "assets"]`, a "preceding" step
+ * `structure` would come back as `["structure", "assets"]`, a "preceding" step
  * that runs afterwards, with nothing anywhere saying so. GPT Sol reproduced
  * exactly that on 2026-09-03; the one caller in the tree is safe, so what this
  * closes is the next caller rather than a live bug.

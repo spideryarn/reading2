@@ -87,13 +87,15 @@
    **`.dock-home` and deliberately not `.dock-btn`.** The one thing that would
    make this read as a mode is the wash: `.dock-btn:hover` paints
    `var(--panel)`, and in this bar a wash means hovered-or-selected. So it takes
-   `.logo`'s colour and metrics (§ the wordmark, far above — same glyph, same
-   `--highlight`, same 0.82rem as the corner copy on every other page) and this
-   rule supplies the box. Fable's call, 2026-09-06.
+   `.logo`'s metrics (§ the wordmark, far above — same glyph, same 0.82rem as
+   the corner copy on every other page; the letters' white is their own,
+   styles/tokens.css § .logo-letter) and this rule supplies the box. Fable's
+   call, 2026-09-06.
 
    It hovers by opacity instead, which is `.logo-home`'s answer to the same
-   question and for the same reason: the wordmark is already `--highlight`, and
-   every other colour in the palette would be a step *down* from it.
+   question and for the same reason: the wordmark is already the brightest ink
+   in the bar — orange until 2026-10-02, white since — and any other colour
+   would be a step *down* from it.
 
    `padding` matches `.dock-btn`'s 0.6rem so it sits on the row's rhythm; rung 3
    tightens it alongside the buttons (§ the bar's fit ladder). */

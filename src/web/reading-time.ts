@@ -12,7 +12,7 @@
  */
 import type { BlockId } from "../types.js";
 
-/** How read a block looks: 0 draws nothing, 4 is "on screen as long as it takes to read". */
+/** How read a block looks: 0 draws nothing, 2 is "read once", 4 is "read slowly, or several times" — `readLevel`. */
 export type ReadLevel = 0 | 1 | 2 | 3 | 4;
 
 /** Words per minute a block's expected reading time is measured at. */
@@ -38,15 +38,47 @@ export function expectedSeconds(words: number): number {
  * for ten minutes would make the rest of the piece look unread. Four steps
  * rather than a width in pixels, so that neighbouring blocks merge into runs on
  * the spine and the gutter's style sheet changes only when a block crosses one.
+ *
+ * **Each level's elapsed-time threshold is twice the preceding threshold**
+ * (0.35, 0.7, 1.4, 2.8 of the reading time), so the later levels grow
+ * progressively farther apart:
+ *
+ * > It seems to get brighter too fast. […] Or make it kind of […] like
+ * > finishing marginal returns of brightness with passing of time.
+ * >
+ * > — Greg, 2026-10-01 (spya-d940uu)
+ *
+ * A glance draws nothing; one brisk read is a faint line; full strength is a
+ * slow read or nearly three. 0.7 is a boundary on purpose: it is what the
+ * quiz calls read (read-filter.ts § `READ_ENOUGH`), and it did not move.
+ * docs/plans/261002e-reading-time-line-brightens-more-slowly-and-its-card-says-the-time.md.
  */
 export function readLevel(seconds: number, words: number): ReadLevel {
   if (!(seconds > 0)) return 0;
   const ratio = seconds / expectedSeconds(words);
-  if (ratio < 0.1) return 0;
-  if (ratio < 0.35) return 1;
-  if (ratio < 0.7) return 2;
-  if (ratio < 1) return 3;
+  if (ratio < 0.35) return 0;
+  if (ratio < 0.7) return 1;
+  if (ratio < 1.4) return 2;
+  if (ratio < 2.8) return 3;
   return 4;
+}
+
+/**
+ * A duration as words a reader says — "45 s", "1 min 20 s", "14 min", "1 h 5 min" —
+ * for the reading-time card. Seconds are dropped from ten minutes up, where
+ * they are noise. Not mic-recording.ts § `formatDuration`, which is a
+ * stopwatch's `m:ss`.
+ */
+export function spentWords(seconds: number): string {
+  if (!(seconds >= 1)) return "under a second";
+  const s = Math.round(seconds);
+  if (s < 60) return `${s} s`;
+  const mins = Math.floor(s / 60);
+  if (mins < 10) return s % 60 ? `${mins} min ${s % 60} s` : `${mins} min`;
+  const roundMins = Math.round(s / 60);
+  if (roundMins < 60) return `${roundMins} min`;
+  const h = Math.floor(roundMins / 60);
+  return roundMins % 60 ? `${h} h ${roundMins % 60} min` : `${h} h`;
 }
 
 /** A row's vertical extent in viewport pixels — `getBoundingClientRect().top` and `.bottom`. */

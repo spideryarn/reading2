@@ -35,7 +35,7 @@
  *
  * `labels` is deliberately not one: it rewrites `tree` and `nav_label_status`
  * as well as `labels`, and writes the base revision on failure, so a column copy
- * is the wrong model of it. `hierarchy`, `assets` and the ingest steps change
+ * is the wrong model of it. `structure`, `assets` and the ingest steps change
  * what every mode reads.
  *
  * ## Exhaustive over `StepName`
@@ -72,7 +72,7 @@ export const STEP_SHARING = {
   metadata: "exclusive",
   extract: "exclusive",
   blocks: "exclusive",
-  hierarchy: "exclusive",
+  structure: "exclusive",
   labels: "exclusive",
   assets: "exclusive",
   arc: { column: "arc", reads: [] },

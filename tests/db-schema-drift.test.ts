@@ -237,6 +237,7 @@ describe("declaredTables", () => {
       "citation_investigations",
       "comments",
       "feedback",
+      "glossary_hidden_entries",
       "glossary_lookups",
       "ingest_events",
       "jobs",
@@ -327,7 +328,8 @@ describe("against a real database", () => {
     await inRollback(async (c) => {
       const report = await reportFrom(c);
       expect(report.schemaUsable).toBe(true);
-      /* Forty-one since `billing_voucher_emails`, 2026-10-01 (plan 261001p).
+      /* Forty-two since `glossary_hidden_entries`, 2026-10-02 (plan 261002c).
+         Forty-one since `billing_voucher_emails`, 2026-10-01 (plan 261001p).
          Thirty-nine since the three `bibliographic_*` tables, 2026-10-01 (plan
          261001a); thirty-six since `reader_arrivals` arrived, 2026-09-30 (thirty-five since
          `citation_investigations` the same day, thirty-four
@@ -337,7 +339,7 @@ describe("against a real database", () => {
          a second copy of the list above and it is deliberate: it is what makes a
          table that reaches the *schema* and not the *database* say so, which is
          the whole of the drift guard. */
-      expect(report.declaredTables).toBe(41);
+      expect(report.declaredTables).toBe(42);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

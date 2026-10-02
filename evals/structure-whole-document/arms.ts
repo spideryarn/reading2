@@ -182,7 +182,7 @@ export type ArmSpec =
  * both files at once, which is the only way a restated constant is ever found.
  *
  * Hence `PRODUCTION_EFFORT`: the drift is now unrepresentable, not documented.
- * The runs under evals/results/structure-whole-document/ dated 2026-08-30 all
+ * The runs under evals/results/hierarchy-structure/ dated 2026-08-30 all
  * predate this, their `incumbent` is `"high"`, and they are not one series
  * with anything measured after it.
  */

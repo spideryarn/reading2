@@ -972,7 +972,8 @@ td.text.kind-heading .blk-gutter[data-open] {
      stuff I've been reading a lot, there is a visible line"*.
 
      Steeper than it was (0.1 a level, 0.1 → 0.4): `level × (level + 1) × 0.025`
-     is 0, .05, .15, .30, .50, so a glance barely shows and a passage read
+     is 0, .05, .15, .30, .50, so level 1 barely shows (a glance is level 0
+     since 261002e and draws nothing) and a passage read
      through plainly does. **Zero at level 0, and it has to be**: this 2px line
      is not clipped by its strip, which is zero wide on an unread row, so a
      floor of even 0.02 would draw a faint line beside every paragraph (GPT

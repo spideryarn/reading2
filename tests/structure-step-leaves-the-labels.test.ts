@@ -1,5 +1,5 @@
 /**
- * **What a `hierarchy` run produces now that it buys no labels — asked of the
+ * **What a `structure` run produces now that it buys no labels — asked of the
  * functions rather than of the plan.**
  *
  * Stage 2 of docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md
@@ -157,7 +157,7 @@ describe("checkCoverage's home", () => {
   });
 
   it("is no longer called by generateStructure", () => {
-    /* **`generateStructure`, not `STEPS.hierarchy.run`**, and the first draft of
+    /* **`generateStructure`, not `STEPS.structure.run`**, and the first draft of
        this file got that wrong too: the call was never in the step's closure, it
        was in the stage the closure calls, so the assertion passed over a function
        that had never mentioned `checkCoverage` and would have gone on passing

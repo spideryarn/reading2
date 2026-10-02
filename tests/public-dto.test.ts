@@ -779,7 +779,7 @@ describe("the public article payload", () => {
  * deliberately over-full.
  *
  * Every fixture below carries the private field as well as the public one —
- * a `lookup` on a glossary entry, `profileHash` on
+ * a `lookup` and the owner's `hidden` preference on a glossary entry, `profileHash` on
  * each, the generator and the timings — so a projection that copied its
  * argument, spread it, or filtered a denylist would fail here rather than pass
  * for want of anything to leak. A fixture with nothing forbidden in it proves
@@ -787,8 +787,9 @@ describe("the public article payload", () => {
  */
 describe("the artefacts a shared link carries", () => {
   /**
-   * A glossary with **a lookup on one of its entries**, which is the single
-   * most private thing in any of these four.
+   * A glossary with **a lookup and the owner's hide preference on one of its
+   * entries**. The lookup is the single most private thing in any of these four;
+   * the hide is still the reader's and must not cross either.
    *
    * `glossary_lookups` is the owner's own research — their requested answer,
    * its citations, how many web searches it ran, which model answered and the
@@ -819,6 +820,7 @@ describe("the artefacts a shared link carries", () => {
         difficulty: 0.8,
         centrality: 0.9,
         fromOutside: true,
+        hidden: true,
         blocks: ["spya-k3m9qt"],
         lookup: {
           answer: "What the owner asked the web, and what it said back.",
@@ -1330,7 +1332,7 @@ describe("the artefacts a shared link carries", () => {
     expect(built.quotes?.quotes[0]?.text).toBe(QUOTES.quotes[0]?.text);
   });
 
-  it("carries a glossary entry's fields and never its lookup", () => {
+  it("carries a glossary entry's public fields and never its lookup or hide preference", () => {
     expect(pathsUnder("glossary")).toEqual(
       [
         "entries",
@@ -1353,6 +1355,7 @@ describe("the artefacts a shared link carries", () => {
        renamed, and the owner's answer is the thing that must not travel. */
     expect(JSON.stringify(built.glossary)).not.toContain("What the owner asked the web");
     expect(JSON.stringify(built.glossary)).not.toContain("some-search-model");
+    expect(built.glossary?.entries[0]).not.toHaveProperty("hidden");
     /* And the provenance the plan's table forbids. */
     for (const forbidden of ["profileHash", "passes", "generatedAt", "elapsedMs", "sourceHash"]) {
       expect(pathsUnder("glossary"), forbidden).not.toContain(forbidden);

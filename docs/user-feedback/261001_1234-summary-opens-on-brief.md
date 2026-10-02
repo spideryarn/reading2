@@ -1,5 +1,5 @@
 ---
-reports: spya-zw479b
+reports: spya-zw479b, spya-dvdt7y
 ending: shipped
 ---
 # Summary opens on Brief
@@ -19,3 +19,11 @@ picked a level shows Brief. Simple and Fuller are written into the address; Brie
 That view is remembered with the article, so a later bare visit opens where you left it. One thing
 that moves with it: a view remembered before this change that was on Simple stored no level, so it
 reopens on Brief once. [261002c](../plans/261002c-summary-opens-on-brief.md).
+
+## A second report of the same thing (spya-dvdt7y)
+
+Greg, 2026-10-02 12:59 UTC, on production, which did not yet have this fix:
+
+> The Summary mode should default to Briefer sub-mode
+
+The fix above covers it (ac466a12e), and it goes out in the next deploy. Added by the Overseer.

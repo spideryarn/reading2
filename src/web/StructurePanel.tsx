@@ -621,7 +621,7 @@ export function StructurePanel({
     >
       {nothing ? (
         /* **A sentence, not an error.** A piece with no parts is a real article
-           — a short one the hierarchy stage put under a single root — so this
+           — a short one the structure stage put under a single root — so this
            says what is true of it rather than reporting a failure. */
         <p className="struct-empty">This piece has no parts to lay out — it is one run of prose.</p>
       ) : (

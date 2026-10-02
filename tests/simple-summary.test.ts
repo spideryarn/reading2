@@ -1289,8 +1289,8 @@ describe("the step", () => {
     const { memoryArtefacts } = await import("./helpers/memory-artefacts.js");
     const { nullCheckpointStore } = await import("../src/store/checkpoints.js");
     const store = memoryArtefacts();
-    store.plant("simple-step", "hierarchy", "blocks", { blocks: BLOCKS });
-    store.plant("simple-step", "hierarchy", "tree", example.tree);
+    store.plant("simple-step", "structure", "blocks", { blocks: BLOCKS });
+    store.plant("simple-step", "structure", "tree", example.tree);
     answer = {};
     const result = await STEPS.simple.run(
       {

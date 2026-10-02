@@ -287,7 +287,7 @@ It went the same afternoon:
 >
 > — Greg, 2026-10-01 (spya-b3ggv4)
 
-What was removed is the drawing, not the data: the gists, the Hierarchy stage, `buildSummaryTree`
+What was removed is the drawing, not the data: the gists, the structure stage, `buildSummaryTree`
 and `TreeNode.question` all stay, because Structure, Marginalia, the masthead, the shelf and others
 read them. [261001p](../plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md) is the
 removal.

@@ -116,3 +116,13 @@ the idle interval, and counts queue requests.
 
 One stage: the test (already red), the fix, the docs, `npm test` on touched files,
 `npm run typecheck`, Sol code review, push.
+
+## Follow-up, the same day: the always-mounted reads
+
+The Overseer asked for the neighbouring gap to be closed as well, on Greg's "ideally update
+itself": `useStepFinished(slug, step, refresh)` added inside `useCitationsRead`, `useGlossaryRead`
+and `useQuotesRead`, one line each, red first in `tests/always-mounted-reads-refresh.test.tsx`. The
+comments that called the gap deliberate now say what is still not heard (another tab while this
+tab's engine is idle, a CLI run). With the band open, both listeners refresh; an otherwise idle
+read gets one extra trailing GET, while both callbacks coalesce if a read is already outstanding.
+`src/web/useCitations.ts` § An always-mounted read is not an always-fresh read names the cases.

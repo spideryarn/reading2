@@ -433,7 +433,7 @@ export type PauseOutcome =
    * `settleExpired`'s requeue keeps it too.** On a first ingest there is no
    * published revision to copy from, so a fresh draft re-runs `blocks` as a
    * genuine first ingest and **mints every block id afresh** (src/ids.ts).
-   * Everything keyed on those ids — the hierarchy structure checkpoint above all
+   * Everything keyed on those ids — the structure step's whole-document checkpoint above all
    * — becomes permanently unreachable, so every window re-buys the most
    * expensive call in the pipeline. ⟨GPT Sol, finding 2 on the plan, reproduced:
    * `same: false` over identical HTML; and finding 1 on the built stage, which
@@ -643,7 +643,7 @@ export interface JobStore {
    * `releaseStep` is the hand-back *between* two steps, and the walk takes it
    * when there is not enough deadline left for the next one. It cannot cover a
    * step that overruns once started, and a step that cannot fit in one 740 s
-   * window is routine rather than rare: a 142-page PDF's `hierarchy` needs
+   * window is routine rather than rare: a 142-page PDF's `structure` needs
    * 658–778 s on its own. Until 2026-09-04 that ended the job terminal `error`
    * with a Retry button on a claimant that was alive, had unwound cleanly, and
    * could have handed the job back.

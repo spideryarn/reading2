@@ -46,7 +46,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Job, Quotes, QuotesResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
-import { type StepFailure, useStepJob } from "./useStepJob.js";
+import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -80,20 +80,22 @@ type QuotesStatus = "loading" | "none" | "ready" | "error";
  *
  * ## An always-mounted read is not an always-fresh read
  *
- * The opening GET happens once, and **every later revalidation belongs to the
- * band**: its mount `reload`, and its job-completion `refresh`. So a list
- * written while the band was closed — a job that finished after the reader left
- * it, another tab, a CLI run with no job row at all — does not reach the prose
- * until the band is opened again or the page is reloaded.
+ * The opening GET happens once, and until 2026-10-02 **every later
+ * revalidation belonged to the band**: its mount `reload`, and its
+ * job-completion `refresh`. So a run that finished after the reader had left
+ * the band did not reach the prose until the band was opened again or the
+ * page reloaded. It was named rather than fixed, to match the glossary, and
+ * the fix this comment asked for — *"a completion event that does not put a
+ * subscriber on the job engine's idle cadence"* — is what landed:
+ * `useStepFinished` (useStepJob.ts), one line here and one in each of the
+ * glossary and citations reads (tests/always-mounted-reads-refresh.test.tsx).
  *
- * **Named rather than fixed, and the reason is that the glossary has exactly
- * this gap and says so** — `useGlossaryRead`'s header, since 2026-08-27:
- * *"a glossary written in another tab while this band was closed would otherwise
- * never arrive"*. Its answer is the same mount `reload`, and matching the
- * established pattern beats inventing a second one here. The honest fix is one
- * thing and it belongs to both: a completion event that does not put a
- * subscriber on the job engine's idle cadence, plus focus revalidation for the
- * CLI case.
+ * Still not heard: a run in **another tab** while this tab's engine is idle,
+ * and a CLI run with no job row — the mount `reload` and a page reload cover
+ * those; focus revalidation would be the rest. With the band open, both
+ * listeners refresh; the request cost depends on whether a read is already
+ * outstanding. useCitations.ts § An always-mounted read is not an always-fresh
+ * read names the cases.
  *
  * It is a **staleness** gap and not a disagreement — the panel and the prose
  * read the same `QuotesRead`, so they are stale together and can never show
@@ -250,6 +252,10 @@ export function useQuotesRead(slug: string): QuotesRead {
      seven other artefact readers — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
+  /* A run that finishes after the reader left the band still reaches the prose.
+     useCitations.ts § An always-mounted read is not an
+     always-fresh read. */
+  useStepFinished(slug, "quotes", refresh);
 
   /* The opening read. Everything after it goes through `reload`, which does not
      return `status` to `loading` — including `QuotesBand`'s own mount effect,

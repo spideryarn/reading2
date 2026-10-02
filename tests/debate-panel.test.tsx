@@ -269,7 +269,7 @@ const text = () => host.textContent ?? "";
 function card(): string {
   const info = host.querySelector(".mode-band > .band-about");
   press(info);
-  const said = document.querySelector('[role="tooltip"]')?.textContent ?? "";
+  const said = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
   press(info);
   return said;
 }

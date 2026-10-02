@@ -77,7 +77,7 @@
  *
  * **Nine, not the twelve the plan lists**, re-counted 2026-09-05: that list
  * carries `corpus-materialise`, whose `copied` is a different function's
- * (`["data/", "output/"]`), `hierarchy-structure-eval`, which asserts on
+ * (`["data/", "output/"]`), `structure-whole-document-eval`, which asserts on
  * `copiedHeadings`, and `scratch-article.ts` itself, which passes the value
  * through as `ScratchArticle.copied` rather than asserting on it. Three false
  * positives from grepping a common word, and the correction is here rather than
@@ -141,7 +141,7 @@ function fixtureLocations(root: string, slug: string): FixtureLocations {
  * Where each `(step, kind)` is on disk. **The one place, after stage G.**
  *
  * Keyed by step and then by kind, because two kinds share a path and one kind
- * has two paths. `blocks` appearing under both `blocks` and `hierarchy` is not a
+ * has two paths. `blocks` appearing under both `blocks` and `structure` is not a
  * mistake: stage 3 writes `output/<slug>.blocks.json` and stage 4 writes
  * `data/<slug>/blocks.json`, and `copyArtefacts` carries both. `extractedHtml`
  * and `stampedHtml` are one file for the same reason — stage 3 overwrites stage
@@ -166,12 +166,12 @@ const LAYOUT: {
     blocks: (at) => at.htmlFile.replace(/\.html$/, ".blocks.json"),
     stampedHtml: (at) => at.htmlFile,
   },
-  hierarchy: {
+  structure: {
     tree: (at) => path.join(at.dir, "tree.json"),
     labels: (at) => path.join(at.dir, "labels.json"),
     blocks: (at) => path.join(at.dir, "blocks.json"),
   },
-  /* The same two files as `hierarchy` above, and for the same reason
+  /* The same two files as `structure` above, and for the same reason
      `blocks` appears twice: two steps write one site. The fixture corpus
      predates the split (2026-09-06), so on disk these are the files stage 4 as
      a whole produced. */
@@ -212,9 +212,9 @@ function isText(kind: ArtifactKind): boolean {
  * **copies an artefact the old source refused**. Reproduced 2026-09-05 against a
  * fixture whose shared `output/<slug>.html` was 33 MiB: the filesystem store
  * returned `null` for `extract/extractedHtml` and `blocks/stampedHtml`, so
- * `copyArtefacts` refused both steps as half-present and copied `["hierarchy"]`;
+ * `copyArtefacts` refused both steps as half-present and copied `["structure"]`;
  * this reader handed back all 34,603,015 characters and copied
- * `["extract", "blocks", "hierarchy"]`. That is the equivalence this whole stage
+ * `["extract", "blocks", "structure"]`. That is the equivalence this whole stage
  * rests on, broken. Found by the stage's cross-family review, and **the
  * five-corpus-article probe could not have caught it** — every fixture in the
  * corpus is under 154 KB, so nothing in it is near any ceiling.

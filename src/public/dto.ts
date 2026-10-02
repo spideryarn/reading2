@@ -340,24 +340,23 @@ function publicArc(arc: Arc): Arc {
 }
 
 /**
- * The glossary, rebuilt entry by entry — **and `lookup` is not among the
- * fields.**
+ * The glossary, rebuilt entry by entry — **and neither `lookup` nor `hidden` is
+ * among the fields.**
  *
  * This is the projection GPT Sol's design input named as the hazardous one, and
  * it is worth saying why in the file that does it rather than only in the plan.
- * `loadGlossary` on the owner's side attaches `glossary_lookups` to each entry
- * at the read seam, on purpose and with a comment saying why
- * ([pg.ts](../store/pg.ts)): a lookup is what came back when *that reader*
- * pressed "check the web", and it carries their requested answer, its
- * citations, how many searches it ran, which model answered and the exact
- * minute. Correct for the owner; somebody's private research here.
+ * `loadGlossary` on the owner's side attaches `glossary_lookups` and the
+ * owner's hidden ids to entries at the read seam, on purpose. A lookup is what
+ * came back when *that reader* pressed "check the web", and `hidden` is what
+ * they chose not to see. Both are correct for the owner; neither belongs on a
+ * shared link.
  *
  * Two things stop it, and neither is this function on its own. The public
  * reader selects the `glossary` column off `article_revisions` and joins
- * nothing, and tests/public-imports.test.ts refuses any public module that can
- * name the `glossary_lookups` table by import, by raw SQL or through Drizzle's
- * relational API. This is the third: even handed an entry that carried one, the
- * field is not copied.
+ * neither private table, and tests/public-imports.test.ts derives every
+ * forbidden table from the schema and refuses a public module that names one.
+ * This is the third: even handed an entry that carried either field, neither is
+ * copied.
  */
 function publicGlossary(glossary: Glossary): PublicGlossary {
   return {

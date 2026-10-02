@@ -170,9 +170,9 @@ succeeded, an incomplete stamp would have let a **stale artefact skip**.
 `assets` keeps the narrow blocks-only hash, honestly: it fetches the images the blocks name and has
 no prompt.
 
-`hierarchy` still has no stamp and is done when its artefacts exist, whatever they were generated
+`structure` still has no stamp and is done when its artefacts exist, whatever they were generated
 from. That is deliberate rather than pending, and [`src/pipeline.ts`](../../src/pipeline.ts) §
-`hierarchy` explains at length why a stamp there needs consumer invalidation first. When it comes to
+`structure` explains at length why a stamp there needs consumer invalidation first. When it comes to
 generalising this, copy their choice of **hash input**, not just the idea: `hashBlocks` hashes
 `id \t text` per block, deliberately *not* the serialised blocks, because those bytes change when an
 unread field is recomputed and *don't* change when two blocks swap ids — and the article
@@ -260,7 +260,7 @@ or debate step arrives at the gate holding artefacts it never looked at. `checkT
 against an *unchanged* pair are pre-existing — they are in front of readers either way — so they are
 carried out on `PublishRevisionResult.carriedTreeProblems` and logged after the commit rather than
 refusing. Anything that alters either half is judged in full, and everything else the gate checks —
-no blocks, no tree, the `hierarchy` run's status, its `input_hash` — stays unconditional. The
+no blocks, no tree, the `structure` run's status, its `input_hash` — stays unconditional. The
 comparison is one boolean computed in the database over both halves, because `checkTree` validates
 the pair and a tree-only test would let a changed block launder a fresh problem through.
 
@@ -1296,25 +1296,27 @@ attempt.
 
 ## Checkpoints — work a failed attempt already paid for
 
-Two stages keep working state that has to **survive their own failure**: `hierarchy` records each
+Two stages keep working state that has to **survive their own failure**: `structure` records each
 batch of nav labels as it comes back — the `labels` step's since 2026-09-06, though the namespace
 still carries the old owner's name (below) — and the PDF reader records each transcribed chunk. A 429 eight
 batches into a book then costs one batch rather than eight, and these are the expensive calls.
 
 **Four namespaces**, and the list is `CheckpointNamespace` in
 [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts): `pdf-chunk` for a transcribed chunk,
-and three named for the `hierarchy` step — `hierarchy-structure` (the one whole-document
-call for the tree), `hierarchy-deepen` (each scoped call that splits a section too fat to read,
-[`src/structure-deepen.ts`](../../src/structure-deepen.ts)) and `hierarchy-labels` (the nav-label
+and three named for the `structure` step (called `hierarchy` until 2026-10-02) — `structure-whole-document` (the one whole-document
+call for the tree), `structure-deepen` (each scoped call that splits a section too fat to read,
+[`src/structure-deepen.ts`](../../src/structure-deepen.ts)) and `structure-labels` (the nav-label
 batches). They are separate because they are separate questions with separate prices: a run that
 dies in the labels must not buy the tree again.
 
-**`hierarchy-labels` belongs to the `labels` step since 2026-09-06, and keeps its name on purpose.**
+**`structure-labels` belongs to the `labels` step since 2026-09-06, and carries the old owner's name on purpose.**
 `batchFingerprint` carries no step and no job identity, so every stored row survived the split
 ([260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md)) — but only because the
 namespace did not move. Renaming it to match the new owner would have invalidated every row and
 bought the next run nothing. So the name records where these batches came from rather than who asks
-for them now, and that is the trade. Adding one is a migration, since the CHECK on the
+for them now, and that is the trade. (It was `hierarchy-labels` until 2026-10-02, when the step was
+renamed and the migration moved every row along with the name, so nothing was orphaned —
+[261002b](../plans/261002b-rename-the-hierarchy-step-to-structure-everywhere.md).) Adding one is a migration, since the CHECK on the
 table is the other copy of the list — and since 2026-09-05 `tests/db-schema.test.ts` inserts a row
 under every name, so the two cannot drift in silence. Before that they could, and the symptom would
 have been a `warn` nobody reads and a bill that goes up.

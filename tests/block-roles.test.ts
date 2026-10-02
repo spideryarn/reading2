@@ -394,7 +394,7 @@ describe("all five roles", () => {
    * until 2026-09-05.**
    *
    * It built a `createFsArtifactStore` over a `mkdtemp`, wrote
-   * `blocksArtefact(SYNTHETIC)` as `(hierarchy, blocks)`, read it back, and
+   * `blocksArtefact(SYNTHETIC)` as `(structure, blocks)`, read it back, and
    * asserted the whole artefact equal plus the three fields by name: `role` on
    * five of the six blocks, `treatment: "supplement"` on four (the appendix
    * deliberately has a role and no treatment), and a `noteId` on all five

@@ -14,10 +14,10 @@
  * ## The seam, and why there is no declared bypass
  *
  * Every call goes through [`streamMessage`](../../src/messages-stream.ts) with
- * task `"hierarchy"`, so it is production's model, production's routing and
+ * task `"structure"`, so it is production's model, production's routing and
  * production's cache pin, and it is **metered in-band** — `withLedger("eval", …)`
  * in [`run.ts`](run.ts) opens the collector.
- * `evals/hierarchy-structure` needs a declared bypass because its arms vary
+ * `evals/structure-whole-document` needs a declared bypass because its arms vary
  * model and effort per call and `streamMessage` owns both on purpose; this eval
  * varies neither, so it has nothing to declare and adds no row to
  * `src/spend-declarations.ts`.
@@ -323,7 +323,7 @@ export type Generator = (req: {
 
 /** The real one: production's model, production's routing, metered in-band. */
 export const liveGenerator: Generator = async ({ system, user, maxTokens }) => {
-  const call = streamMessage("hierarchy", {
+  const call = streamMessage("structure", {
     max_tokens: maxTokens,
     thinking: { type: "adaptive" },
     output_config: { effort: PRODUCTION_EFFORT },

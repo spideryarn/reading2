@@ -96,7 +96,7 @@ export async function fileFixture(filePath: string, name: string): Promise<{ fix
 /* ------------------------------------------ the checkpoint store, recorded -- */
 
 export interface RecordingCheckpoints extends CheckpointStore {
-  /** Every read and write, in order, as `read hierarchy-deepen/<key>`. */
+  /** Every read and write, in order, as `read structure-deepen/<key>`. */
   readonly touched: string[];
   /** Which namespaces were touched at all. The question the seam probe asks. */
   namespaces(): Set<CheckpointNamespace>;
@@ -265,7 +265,7 @@ export interface RendezvousOutcome {
    * Not decoration. The hold is *inside* the load job's claim and after its
    * step's clock has started, so every one of these milliseconds is both a
    * millisecond off that claim's 740 s deadline and a millisecond added to the
-   * `hierarchy` window question 5 reads. `runPhaseD` says so out loud when it is
+   * `structure` window question 5 reads. `runPhaseD` says so out loud when it is
    * more than a moment.
    */
   held: { slug: string; ms: number }[];
@@ -276,9 +276,9 @@ export interface RendezvousOutcome {
  * actually intersect.**
  *
  * The arithmetic in `peakConcurrency` was right and the phase did not arrange
- * the thing it measures. The book's job is a forced `hierarchy` and begins its
+ * the thing it measures. The book's job is a forced `structure` and begins its
  * measured step at once; the load articles begin at `fetch` and reach
- * `hierarchy` only after stages 1-3. Whether all windows shared a common
+ * `structure` only after stages 1-3. Whether all windows shared a common
  * intersection was left to how long those stages happened to take — and a peak
  * below the planned width makes question 5 unanswerable *after* the money has gone.
  * ⟨GPT Sol, DPN-15.⟩
@@ -289,7 +289,7 @@ export interface RendezvousOutcome {
  * only the two load steps and then releasing them before driving the book left
  * the same hole one party over: with another job holding the third queue slot,
  * both released loads could finish their measured step before the book ever
- * reached `hierarchy`, and the outcome still said `"all"`. ⟨GPT Sol, DPN-20-R.⟩
+ * reached `structure`, and the outcome still said `"all"`. ⟨GPT Sol, DPN-20-R.⟩
  *
  * **So there are two waits, and only the second one opens the gate.**
  *
@@ -301,7 +301,7 @@ export interface RendezvousOutcome {
  *    the same hook, and every job is released together.
  *
  * **The book does arrive inside its own claim, and that is sound rather than a
- * concession.** Its `hierarchy` needs 658-778 s against a 740 s deadline and can
+ * concession.** Its `structure` needs 658-778 s against a 740 s deadline and can
  * give up none of it — but by the time it is driven, everybody else is already
  * waiting *for it*, so its own wait is one microtask. The load steps are the
  * ones that really hold, inside their claims, and what they pay is in `held`.
@@ -506,7 +506,7 @@ export function abandonStep(opts: {
  * book is queued and before a penny of it is spent.
  *
  * Phase D used to drive it unconditionally. So both load jobs could fail before
- * `hierarchy`, the readiness wait end `"jobs finished first"` with their DPN-18
+ * `structure`, the readiness wait end `"jobs finished first"` with their DPN-18
  * findings already on the record, and the run then buy the book's whole wave
  * into a phase that could not answer the only question that pass exists for.
  * Question 1 is phases A and B only; **the phase-D book pass is for question 5
@@ -548,7 +548,7 @@ export function loadReadiness(ready: RendezvousOutcome): {
  * That function reads findings and only findings, so anything not made into one
  * is, to the run, a clean job — and the next phase is purchased over it.
  *
- * 1. **A terminal status that is not `done`** (DPN-18). A phase-B `hierarchy`
+ * 1. **A terminal status that is not `done`** (DPN-18). A phase-B `structure`
  *    writes valid deepening records and then label generation throws; the job
  *    ends `error`, `driveJob` records that, and phase C is bought anyway.
  * 2. **`done`, deepening on, and no records file** (DPN-19). `saveDeepenRecords`
@@ -593,7 +593,7 @@ export function jobIntegrityFindings(opts: {
   }
   /* **Only on a job that finished**, and that is DPN-27 rather than caution.
      "The records were LOST" is a claim about something having been asked for,
-     and a job that ended `error` may have failed before `hierarchy` ran at all —
+     and a job that ended `error` may have failed before `structure` ran at all —
      a step this eval abandoned at the rendezvous never runs, so it never
      requests anything. Saying "lost" over that is inventing the very fact DPN-19
      was about not inventing, one branch further on. The status finding above
@@ -629,7 +629,7 @@ export function jobIntegrityFindings(opts: {
  * so one nominal pass of the book could buy its wave three times, none of it in
  * the printed estimate. ⟨GPT Sol reviewing the stage-5b harness, DPN-07.⟩
  *
- * An ordinary pass is re-driven and must be: a book's `hierarchy` step needs
+ * An ordinary pass is re-driven and must be: a book's `structure` step needs
  * 658–778 s against a 740 s deadline, so a requeue there is routine, and without
  * the lever the re-drive resumes every answer it has already paid for.
  *
@@ -708,7 +708,7 @@ export function requeueFinding(opts: {
  * Four separate guards had already been fitted for four separate ways of buying
  * something the run already knew it could not use, and here was a fifth: the
  * measured jobs were driven concurrently and *drained* together, and
- * nothing else passed between them. Load 1's `hierarchy` could fail on its
+ * nothing else passed between them. Load 1's `structure` could fail on its
  * structure call while the book and load 2 went on admitting expansion and label
  * calls — for a question 5 that could no longer reach every required completion.
  * ⟨GPT Sol, DPN-26.⟩
@@ -729,7 +729,7 @@ export function requeueFinding(opts: {
  *
  * - **Before each claim**, `lost()` refuses: no further step and no re-drive.
  * - **Inside a running claim**, `signal` cancels. One claim runs the *whole*
- *   `hierarchy` step — structure call, expansion wave **and a full pass of
+ *   `structure` step — structure call, expansion wave **and a full pass of
  *   labels**, which `generateStructure` starts even after the wave failed — so
  *   "stops starting" was true of steps and false of calls, and up to ~$10.80 of
  *   phase D could still be bought after question 5 was lost.
@@ -752,7 +752,7 @@ export interface PhaseFate {
    *
    * This is the half that reaches *inside* a claim, and it exists because
    * stopping before the next claim was not enough (DPN-30). One claim runs the
-   * whole `hierarchy` step, and that step buys a structure call, an expansion
+   * whole `structure` step, and that step buys a structure call, an expansion
    * wave **and a whole pass of labels** — `generateStructure` catches a failed
    * wave and falls straight through to `generateLabels` regardless
    * (src/structure.ts § the `deepenFailed` catch). So a sibling could *begin* an
@@ -910,10 +910,10 @@ export function assertSeamProof(proof: SeamProof): void {
         "report rows nobody used. src/structure-deepen.ts § REASK_ENV.",
     );
   }
-  if (proof.namespaces.some((n) => n !== "hierarchy-deepen")) {
+  if (proof.namespaces.some((n) => n !== "structure-deepen")) {
     throw new Error(
       `The deepening path touched ${proof.namespaces.join(", ")}. It must touch ` +
-        "`hierarchy-deepen` and nothing else — the structure checkpoint being left alone is what " +
+        "`structure-deepen` and nothing else — the structure checkpoint being left alone is what " +
         "holds the seed constant across repeats, and it is the half of the mechanism that would " +
         "otherwise be taken on trust.",
     );
@@ -1095,7 +1095,7 @@ export const ESTIMATE_BASIS: Readonly<Record<string, EstimateRow>> = {
       "for a 296-call four-wave cascade. Stage 5b buys ONE wave, so this is an upper bound.",
   },
   bookStructureRepeat: {
-    what: "book, forced hierarchy, structure + labels resumed",
+    what: "book, forced structure step, whole-document call + labels resumed",
     jobs: 0,
     usdEach: 7.4,
     basis:
@@ -1115,7 +1115,7 @@ export const ESTIMATE_BASIS: Readonly<Record<string, EstimateRow>> = {
       "is measuring, so it is an assumption here and a result there.",
   },
   articleStructureResumed: {
-    what: "ordinary article, forced hierarchy, everything resumed",
+    what: "ordinary article, forced structure step, everything resumed",
     jobs: 0,
     usdEach: 0.1,
     basis:
@@ -1135,7 +1135,7 @@ export interface CostEstimate {
    * nothing caps it.
    *
    * The nominal total was printed as an "upper bound" and was not one. A
-   * claimant that reaches its own 740 s deadline inside the `hierarchy` step
+   * claimant that reaches its own 740 s deadline inside the `structure` step
    * requeues the job (src/jobs.ts § `REQUEUE_BUDGET`, which permits three
    * windows), and the driver used to re-claim it immediately — with the slug
    * still named in `SPIDERYARN_DEEPEN_REASK`, so the next claim ignored the
