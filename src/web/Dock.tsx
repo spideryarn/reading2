@@ -2927,7 +2927,7 @@ function DockModeLinks({
  * Not `HomeLogo` rendered somewhere else: that component is `position: fixed`
  * in the top-left of the window, and a control carrying its own position cannot
  * be re-homed by being moved in the markup. What it shares is its *identity* —
- * the same glyph, the same word, the same `--highlight` — which is the thing
+ * the same glyph and the same white word — which is the thing
  * Greg's decision to move it turned on: the way home moves from the top-left
  * corner to the bottom-left as you go from the shelf into an article, and it is
  * survivable only because it still looks like itself.

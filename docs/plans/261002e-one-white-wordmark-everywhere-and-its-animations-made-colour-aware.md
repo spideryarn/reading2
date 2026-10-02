@@ -147,7 +147,21 @@ slightly dim white is still white.
   (tracking centralised too). It confirmed omitted stops take the underlying value, that animation
   values outrank the letters' declared colour, that Retype's `currentColor` cursor follows the
   letter, and that the Dock's fit ladder remeasures, so a wider 600 word only drops a little sooner.
-- Code: GPT Sol, workspace-write — (pending).
+- Code: GPT Sol (`gpt-5.6-sol`, high, `--sandbox workspace-write`) on `8c279cc7a`, exit 0, answer
+  file fresh. No P0 or P1; it confirmed the cascade (the letters' own declarations beat anything
+  inherited from a wrapper, a Tailwind utility or the global `h1`), that every copy draws
+  `LogoLetters`, and Dew's and the loader's timing. Two P2s, which it fixed and I read: the
+  resting-colour test could have parsed nothing and passed (its regex needed a `\n}` closing
+  brace), so it is now brace-aware with a positive control, and I watched it go red again against
+  the old Strain stop; and stale counts and "the wordmark is orange" claims in comments, docs and
+  three neighbouring tests. One broken sentence in its sweep (`eager-client-graph.test.ts`) was
+  mine to mend.
+
+## What landed
+
+Stage 1 and stage 2 together in `8c279cc7a` plus the review commit. `npm test`: everything green
+except the five files a fresh worktree reds (no `api-dist/`, no fleet client build), none of them
+near the wordmark. `npm run typecheck` green.
 
 ## Done looks like
 

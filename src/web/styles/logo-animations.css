@@ -25,7 +25,7 @@
    `.spya-anim` plus the animation's id and takes them away again; `:hover` is
    only one of the three ways that happens. A rule written as `.logo:hover` is
    dead on a long press (a finger is not a hover) and dead on `/design`, which
-   applies the classes directly so all dozen can be looked at side by side.
+   applies the classes directly so the whole set can be looked at side by side.
 
    **And therefore: keep every keyframe animation near its resting state, and
    end it there.** Class removal is instantaneous, and a keyframe animation cut
@@ -60,12 +60,13 @@
    this file. There is one, globally, and it already covers everything here.
    GPT Astra corrected this section, 2026-09-07.
 
-   **Tokens, never hex.** `--highlight` is the wordmark's own orange,
-   `--highlight-ink` the same orange lifted with white; `--ink`, `--panel` and
-   `--rule` are the surfaces around it. The app is dark only and unconditionally
-   so (styles/tokens.css:9), which means a glow or an additive blend can be used
-   freely here — but it is still a token that has to say so, because a hex would
-   survive a palette change looking exactly as wrong as it did before.
+   **Tokens, never hex.** `--wordmark-ink` is the name's white at rest,
+   `--highlight` the spider's orange, and `--highlight-ink` that orange lifted
+   with white; `--ink`, `--panel` and `--rule` are the surfaces around it. The
+   app is dark only and unconditionally so (styles/tokens.css:9), which means a
+   glow or an additive blend can be used freely here — but it is still a token
+   that has to say so, because a hex would survive a palette change looking
+   exactly as wrong as it did before.
 
    **`animation-fill-mode: forwards` only where the 100% frame is a wordmark you
    would be happy to ship as a still.** This file said "never `forwards`" for an
@@ -933,9 +934,9 @@
    is light going *along* the strand the name is spun on.
 
    **No 0% or 100% stop, on purpose.** CSS fills both from the letter's own
-   computed value, so each letter starts and ends exactly as its host draws it,
-   whatever that is — the rule a keyframe that touches the letters' colour has
-   to meet (tests/logo-animation § resting colour). No fill mode either: a
+   computed `--wordmark-ink`, so each starts and ends in the shared resting
+   colour — the rule a keyframe that touches the letters' colour has to meet
+   (tests/logo-animation § resting colour). No fill mode either: a
    letter waiting out its delay is simply at rest.
 
    Colour and `text-shadow` only, so no box moves. The glow's blur is in

@@ -641,7 +641,7 @@
 
 /* The wordmark. Structure and class names are the original app's, and on
    2026-09-07 that stopped being a bet and started paying: `.logo-letter` and
-   `.logo-image` are what styles/logo-animations.css keys its dozen hover
+   `.logo-image` are what styles/logo-animations.css keys its hover
    animations off, so the set arrived as one new sheet and two spread props
    rather than as a change to the markup. docs/project/design-logo.md.
 
@@ -733,10 +733,9 @@
      § the bar's fit ladder and .dock above. */
   z-index: 60;
   text-decoration: none;
-  /* Opacity rather than a second colour: the wordmark is already `--highlight`
-     (see .logo above), and every other colour in the palette would be a step
-     *down* from it on hover, which reads as the control going away when you
-     point at it. */
+  /* Opacity rather than a second colour: the wordmark is already the brightest
+     ink, and every other colour in the palette would be a step *down* from it
+     on hover, which reads as the control going away when you point at it. */
   opacity: 0.85;
   transition: opacity 0.15s;
 }

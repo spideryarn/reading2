@@ -70,8 +70,8 @@ export const SHELL = "tw:mx-auto tw:w-full tw:max-w-6xl tw:px-6";
  * per copy, so no spider ever plays twice.
  * docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md.
  *
- * **All thirteen since 2026-09-29, not the spider's six.** The name was plain
- * text until then, so `lettersDrawn` found nothing and only the mark
+ * **The whole set since 2026-09-29, not only the mark animations.** The name
+ * was plain text until then, so `lettersDrawn` found nothing and only the mark
  * animations were offered; it is `LogoLetters` now, the same ten spans
  * HomeLogo draws (LogoGlyphs.tsx).
  * docs/plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md.

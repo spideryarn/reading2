@@ -171,8 +171,8 @@ export const LOGO_ANIMATIONS: readonly LogoAnimation[] = [
  * A random animation that is **not** the one just shown.
  *
  * The exclusion is the whole reason this is a function rather than one line at
- * the call site. With a dozen animations a uniform draw repeats the previous
- * one about one hover in twelve, and a repeat does not read as chance — it
+ * the call site. With fourteen animations a uniform draw repeats the previous
+ * one about one hover in fourteen, and a repeat does not read as chance — it
  * reads as the feature being broken, because the reader's model is "a new one
  * each time". Excluding the last pick costs nothing and removes the only
  * outcome that looks like a bug.
@@ -395,7 +395,7 @@ export function useLogoAnimation(
      * letters so a `transform` applies at all, the `position: relative` that
      * lets a pseudo-element be placed against a letter, and the same on
      * `.logo-mark` so one can be placed against the spider. Writing those into
-     * each animation instead is how the fourteenth one ships without them and
+     * each animation instead is how a new one ships without them and
      * nobody can see why it does nothing.
      */
     className: active ? `spya-anim ${active}` : "",

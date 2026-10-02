@@ -1227,10 +1227,10 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
  * than 2,807: no route, no props, no per-animation component, no reference
  * "original" beside each one. It maps the registry and puts the class on.
  *
- * It exists because the alternative is worse. A dozen animations that fire on
+ * It exists because the alternative is worse. Fourteen animations that fire on
  * hover, one at random, cannot otherwise be compared — you cannot get two of
  * them on screen together, you cannot get the one you are working on twice in a
- * row, and the only way to see the twelfth is to keep hovering until chance
+ * row, and the only way to see a particular one is to keep hovering until chance
  * offers it. That is not a gallery, it is a lottery, and it makes reviewing the
  * set impossible.
  *
@@ -1245,16 +1245,17 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
  * The shell below is `HomeLogo`'s, copied rather than imported, and that is
  * the one deliberate duplication here: the component is a `Link` to the library
  * and hangs itself in `position: fixed` in the corner of the window, neither of
- * which is wanted twelve times in a grid. **The glyphs inside it are not
+ * which is wanted fourteen times in a grid. **The glyphs inside it are not
  * copied** since 2026-09-29 — `LogoMark` and `LogoLetters` (LogoGlyphs.tsx)
  * are the same components every page's wordmark draws, so this gallery cannot
  * drift from them.
  *
  * **The two copies of the wordmark were set in different faces** until
  * 2026-09-08, which is why this section draws both. `--font-brand` now
- * resolves to Geist (styles/tokens.css), the same face `.dock-btn-label`
- * inherits from `--font-ui`, so what remains between them is the weight and the
- * orange that `.logo-text` sets and the dock's label does not.
+ * resolves to Geist (styles/tokens.css), and since 2026-10-02 `.logo-letter`
+ * gives both wrappers the same weight, tracking and white. What remains between
+ * the two gallery copies is the wrapper itself, because each real host hides it
+ * by a different mechanism.
  * docs/project/design-logo.md § The two copies are not the same typeface.
  */
 function LogoAnimations() {
@@ -1292,10 +1293,10 @@ function LogoAnimations() {
       </p>
       <div className="design-panel">
         <p className="design-note">
-          The same wordmark in its two forms. Both are Geist since 2026-09-08; what still differs
-          is that the corner copy sets weight 600 and the orange and the reading view's inherits
-          neither. They were two different faces until then, which is why every animation here is
-          written against the letter's own box rather than a measured coordinate.
+          The same wordmark in its two forms. Both are Geist 600 and white; what differs is the
+          wrapper, because the corner and reading view hide the word by different mechanisms. They
+          were two different faces until 2026-09-08, which is why every animation here is written
+          against the letter's own box rather than a measured coordinate.
         </p>
         <div className="design-logo-row">
           <span className="logo">

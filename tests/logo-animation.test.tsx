@@ -15,9 +15,9 @@
  * agreement by nothing but attention. Drop either half and the failure is
  * silent in the precise sense of docs/reusable/silent-success.md: the picker
  * still returns the entry, the class still goes on the element, nothing throws,
- * no test goes red, and one hover in twelve simply does nothing at all. Nobody
+ * no test goes red, and one hover in fourteen simply does nothing at all. Nobody
  * would report that — a reader who hovers and sees no animation assumes they
- * imagined the feature, and an agent who hovers once has an 11-in-12 chance of
+ * imagined the feature, and an agent who hovers once has a 13-in-14 chance of
  * seeing a different one work.
  *
  * The same reasoning covers the two style rules the animations live under, both
@@ -46,6 +46,77 @@ const CSS = readFileSync(
 
 /** The stylesheet with its comments removed, so a class named in prose is not evidence. */
 const RULES = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+
+type KeyframeStop = { animation: string; selectors: string[]; body: string };
+
+/** The matching brace, including nested conditional blocks around keyframes. */
+function closingBrace(text: string, open: number): number {
+  let depth = 1;
+  let quote: "\"" | "'" | null = null;
+  for (let i = open + 1; i < text.length; i++) {
+    const char = text[i];
+    if (quote !== null) {
+      if (char === "\\") i++;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "\"" || char === "'") quote = char;
+    else if (char === "/" && text[i + 1] === "*") {
+      const end = text.indexOf("*/", i + 2);
+      if (end === -1) throw new Error(`Unclosed CSS comment at ${i}`);
+      i = end + 1;
+    } else if (char === "{") depth++;
+    else if (char === "}" && --depth === 0) return i;
+  }
+  throw new Error(`Unclosed CSS block at ${open}`);
+}
+
+/** Every stop in every keyframe, independent of line breaks and conditional nesting. */
+function keyframeStops(source: string): KeyframeStop[] {
+  const stops: KeyframeStop[] = [];
+  const keyframe = /@keyframes\s+([a-z0-9-]+)\s*\{/gi;
+  for (let match = keyframe.exec(source); match !== null; match = keyframe.exec(source)) {
+    const open = source.indexOf("{", match.index);
+    const close = closingBrace(source, open);
+    const body = source.slice(open + 1, close);
+    let boundary = 0;
+    for (let i = 0; i < body.length; i++) {
+      if (body[i] !== "{") continue;
+      const end = closingBrace(body, i);
+      stops.push({
+        animation: match[1] as string,
+        selectors: body
+          .slice(boundary, i)
+          .split(",")
+          .map((selector) => selector.trim()),
+        body: body.slice(i + 1, end),
+      });
+      i = end;
+      boundary = end + 1;
+    }
+    keyframe.lastIndex = close + 1;
+  }
+  return stops;
+}
+
+function restingColourOffenders(source: string): string[] {
+  const offenders: string[] = [];
+  for (const stop of keyframeStops(source)) {
+    const ends = stop.selectors.some((selector) => {
+      const normal = selector.toLowerCase();
+      if (normal === "from" || normal === "to") return true;
+      if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)%$/.test(normal)) return false;
+      const percentage = Number(normal.slice(0, -1));
+      return percentage === 0 || percentage === 100;
+    });
+    const colors = [...stop.body.matchAll(/(?:^|;)\s*color\s*:\s*([^;]+)/gi)];
+    const color = colors.at(-1)?.[1]?.trim();
+    if (ends && color !== undefined && color !== "var(--wordmark-ink)") {
+      offenders.push(`${stop.animation} @ ${stop.selectors.join(", ")}`);
+    }
+  }
+  return offenders;
+}
 
 describe("the registry and the stylesheet agree", () => {
   it("gives every registered animation a rule of its own", () => {
@@ -156,7 +227,7 @@ describe("the two rules the stylesheet is written under", () => {
   });
 
   it("never writes the letters' resting colour into a keyframe's ends", () => {
-    /* **The resting colour is the host's, and a keyframe cannot know it.**
+    /* **The resting colour is the letter rule's, and a keyframe must name its token.**
        Until 2026-10-02 the corner and the Dock drew the name orange and the
        marketing bar, the footer and the shelf drew it white, and Strain and
        Dawn wrote `color: var(--highlight)` at 0% and 100% — so on every white
@@ -165,18 +236,40 @@ describe("the two rules the stylesheet is written under", () => {
        it from the letter's own computed value, or names `--wordmark-ink`, the
        one token the resting colour is (styles/tokens.css). Report
        spya-p52ccp; docs/plans/261002e-one-white-wordmark-everywhere-and-its-animations-made-colour-aware.md. */
-    const offenders: string[] = [];
-    for (const m of RULES.matchAll(/@keyframes\s+([a-z0-9-]+)\s*\{([\s\S]*?)\n\}/g)) {
-      for (const stop of (m[2] as string).matchAll(/([^{}]+)\{([^}]*)\}/g)) {
-        const at = (stop[1] as string).split(",").map((s) => s.trim());
-        const ends = at.some((s) => s === "0%" || s === "100%" || s === "from" || s === "to");
-        const color = (stop[2] as string).match(/(?:^|;)\s*color\s*:\s*([^;]+)/)?.[1]?.trim();
-        if (ends && color !== undefined && color !== "var(--wordmark-ink)") {
-          offenders.push(`${m[1]} @ ${at.join(", ")}`);
-        }
+    const stops = keyframeStops(RULES);
+    expect(stops.length).toBeGreaterThan(0);
+    const declared = [...RULES.matchAll(/@keyframes\s+([a-z0-9-]+)/gi)].map(
+      (match) => match[1] as string,
+    );
+    expect([...new Set(stops.map((stop) => stop.animation))]).toEqual(declared);
+    expect(restingColourOffenders(RULES)).toEqual([]);
+  });
+
+  it("reads nested, one-line and combined keyframe ends before judging their colour", () => {
+    /* A positive control for the parser above. Without it, changing only the
+       stylesheet's formatting could make the guard inspect nothing and pass. */
+    const specimen = `
+      @supports (color: color-mix(in oklab, white, black)) {
+        @keyframes nested { from, 0% { color: var(--highlight); } 50% { opacity: .5; } to { color: var(--wordmark-ink); } }
       }
-    }
-    expect(offenders).toEqual([]);
+      @keyframes compact {\n  0.0%, 100.00% { color: var(--wordmark-ink); color: var(--highlight-ink); }\n}
+      @KEYFRAMES quoted { TO { content: "} {"; COLOR: var(--highlight); } }`;
+    expect(
+      keyframeStops(specimen).map(
+        (stop) => `${stop.animation} @ ${stop.selectors.join(", ")}`,
+      ),
+    ).toEqual([
+      "nested @ from, 0%",
+      "nested @ 50%",
+      "nested @ to",
+      "compact @ 0.0%, 100.00%",
+      "quoted @ TO",
+    ]);
+    expect(restingColourOffenders(specimen)).toEqual([
+      "nested @ from, 0%",
+      "compact @ 0.0%, 100.00%",
+      "quoted @ TO",
+    ]);
   });
 
   it("keeps the letters positioned, so a pseudo-element resolves against one", () => {
@@ -245,8 +338,8 @@ describe("pickLogoAnimation", () => {
     if (LOGO_ANIMATIONS.length < 2) return;
     for (const a of LOGO_ANIMATIONS) {
       /* Enough draws that a uniform picker excluding nothing would repeat with
-         overwhelming probability — at a dozen animations, (11/12)^200 is about
-         4e-8. A flake here is a real bug. */
+         overwhelming probability — at fourteen animations, (13/14)^200 is
+         about 4e-7. A flake here is a real bug. */
       for (let i = 0; i < 200; i++) {
         expect(pickLogoAnimation(a.id)?.id).not.toBe(a.id);
       }
@@ -496,7 +589,7 @@ describe("the draw, when the word is not on the screen", () => {
      go through `.logo-letter` reaches the spider or the whole anchor, and those
      are drawn whether or not the word is — so an animation with one such rule
      is `mark`, and one with none is `letters`. Without this the tag is a claim
-     nothing checks, and a fourteenth that moves only letters but is tagged
+     nothing checks, and a new animation that moves only letters but is tagged
      `mark` is a null draw on every reading view again. */
   it("tags each animation by whether any rule of its reaches past the letters", () => {
     const selectors = [...RULES.matchAll(/([^{}]+)\{/g)]

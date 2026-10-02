@@ -12,7 +12,7 @@ word looks like at rest, and the five ways a new one can silently do nothing.
 The code is [`src/web/logo-animation.ts`](../../src/web/logo-animation.ts) (the registry, the
 picker, the trigger) and [`src/web/styles/logo-animations.css`](../../src/web/styles/logo-animations.css)
 (every keyframe, each with its own note). The whole set is drawn at once on **`/design` § Wordmark
-animations**, which is the only way to compare a dozen effects that otherwise arrive one at a time
+animations**, which is the only way to compare fourteen effects that otherwise arrive one at a time
 at random.
 
 ## Where this came from, and what it deliberately is not
@@ -150,8 +150,7 @@ look at rest). Two things follow for this file:
 
 - **The variable weight axis is now available to an animation**, which it was not while one copy was
   a two-weight face. Nothing here uses it yet, and anything that does must still be checked in both
-  places — `.dock-btn-label` does not set 600, so the two copies start from different weights even
-  in one face.
+  wrappers; since 2026-10-02 the shared `.logo-letter` rule gives both the same 600 starting weight.
 - **`font-weight: 600` is drawn rather than synthesised.** Trebuchet ships 400 and 700 and the
   browser was faux-bolding the wordmark; Geist is variable across 100–900. The corner wordmark is
   very slightly lighter and cleaner than it was, which is the visible half of this change.
@@ -313,9 +312,9 @@ most likely to have failed quietly — `@property` interpolating through the Vit
 Then [Fable reviewed the build against its own spec](../plans/260907f-logo-animations-fable-review.md)
 and found two more dropped lines, six of its own numbers that were wrong once they existed rather
 than being described, and a claim in this file's stylesheet that was simply false. Its conclusion on
-the set is worth keeping: **thirteen is right, and nothing needed replacing** — the three animations
-held in reserve were each conditional on a sibling disappointing, and the two that did disappoint
-disappointed on numbers rather than on concept.
+the original set is worth keeping: **the thirteen were right, and nothing needed replacing** — the
+three animations held in reserve were each conditional on a sibling disappointing, and the two that
+did disappoint disappointed on numbers rather than on concept.
 
 **`/design` cannot show you everything**, and it could show you less before 2026-09-08 than it can
 now. Its gallery draws both wrappers, and until that date they were two different faces, so a fault

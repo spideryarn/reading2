@@ -1492,8 +1492,9 @@ function Tip({ children }: { children: ReactNode }) {
  *
  * **The heading is still a heading**: `LogoLetters` puts ten spans inside it
  * with no whitespace between them, so its text, and its accessible name, is
- * still "Spideryarn". It keeps its own face, size and colour; Dawn's glow turns
- * it orange for a moment and back, as it does the footer's.
+ * still "Spideryarn". It keeps the heading's size; the letters share every
+ * copy's face, weight, tracking and white, and Dawn turns them orange for a
+ * moment and back, as it does the footer's.
  *
  * **A tap plays one here, where on the reading view it goes home**, because
  * here it does nothing else — `{ tap: true }`, decided on the click.
