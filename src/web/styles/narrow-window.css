@@ -325,7 +325,10 @@
    "full width" meant here. */
 .reader.band-covers .mode-band {
   left: calc(var(--spine-w) + var(--safe-left));
-  width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));
+  /* `right` rather than a `100vw` width, which counts a classic scrollbar and
+     ran the panel under it — dock.css § `.dock` has the same change and why. */
+  right: var(--safe-right);
+  width: auto;
   border-right: none;
 }
 

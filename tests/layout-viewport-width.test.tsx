@@ -211,10 +211,44 @@ describe("useWindowWidth under zoom", () => {
     expect(seen.at(-1)).toBe(1180);
   });
 
-  it("keeps innerWidth where it is the wider one — a desktop's classic scrollbar", () => {
-    // `@media (max-width)` includes the scrollbar, and so does innerWidth.
+  /* **Inverted on 2026-10-02**, and this test used to pin the bug. It kept
+     `innerWidth` here so `layout.ts` would agree with `@media (max-width)`,
+     which counts the scrollbar — but the page is laid out in the root's
+     `clientWidth`, which does not, so every band mode built `.reader` 15px
+     wider than the room it had and a Mac with classic scrollbars showed a
+     horizontal scrollbar on every article. Greg, spya-y3747g;
+     docs/postmortems/261002a-the-reading-view-laid-out-for-the-width-under-the-scrollbar.md. */
+  it("lays out for the width beside a desktop's classic scrollbar, not the width under it", () => {
     setWidths(1280, 1265);
     act(() => root.render(<Probe />));
-    expect(seen.at(-1)).toBe(1280);
+    expect(seen.at(-1)).toBe(1265);
+  });
+
+  /* A scrollbar that arrives after the first measure fires no `resize` — the
+     article loads and the page grows tall — so the hook has to hear the root
+     change size, or it keeps the width from before the scrollbar. */
+  it("re-measures when a vertical scrollbar appears without a resize", () => {
+    const observed: { cb: ResizeObserverCallback; target: Element }[] = [];
+    const Original = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      constructor(private cb: ResizeObserverCallback) {}
+      observe(target: Element) {
+        observed.push({ cb: this.cb, target });
+      }
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    try {
+      setWidths(1280, 1280);
+      act(() => root.render(<Probe />));
+      expect(seen.at(-1)).toBe(1280);
+      const onRoot = observed.filter((o) => o.target === document.documentElement);
+      expect(onRoot.length).toBe(1);
+      setWidths(1280, 1265);
+      act(() => onRoot[0]!.cb([], {} as ResizeObserver));
+      expect(seen.at(-1)).toBe(1265);
+    } finally {
+      globalThis.ResizeObserver = Original;
+    }
   });
 });

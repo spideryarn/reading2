@@ -21,9 +21,15 @@
    the viewport has nowhere to drift to. */
 .dock {
   position: fixed;
+  /* **`right: 0`, not `width: 100vw`, since 2026-10-02.** `100vw` counts a
+     classic scrollbar, so on a Mac with a mouse plugged in the bar ran 15px
+     under it — and since 2026-10-01 the Feedback button sits at exactly that
+     end (§ the Feedback circle). The two zeroes are the viewport beside the
+     scrollbar, which is lightbox.css's reason for `inset: 0`. Greg,
+     spya-y3747g; postmortem 261002a. */
   left: 0;
+  right: 0;
   bottom: 0;
-  width: 100vw;
   /* `--dock-space`, not `--dock-h`: the bar's own height plus whatever the home
      indicator has claimed, with the extra spent as padding below the buttons so
      they sit above it rather than under it. On anything without one both terms

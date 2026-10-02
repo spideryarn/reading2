@@ -2477,6 +2477,12 @@ export function Reader({
         {
           minWidth: fit.minWidth + horizontalInset(safeAreaInsets()),
           "--mode-w": `${fit.modeW}px`,
+          /* The width `fitView` was given — the page beside the scrollbar,
+             notch already out — for the two sticky bars, which were `100vw`
+             and so 15px wider than the page beside a classic scrollbar
+             (measure.ts § `pageWidth`, postmortem 261002a). One number for
+             the layout and the bars, rather than CSS guessing it again. */
+          "--page-w": `${windowWidth}px`,
           /* The table's own width, so the masthead can be as wide as the
              reading column when it is centred over it (styles.css § plain,
              centred) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
