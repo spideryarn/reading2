@@ -28,6 +28,12 @@ what moved.
   rather than a fixed eight.
 - **No job, not only no token** (Sol P2-2): the integration test counts POSTs as well.
 
+The code review ([261002g-code-review-sol.md](261002g-code-review-sol.md)) fixed two more in place:
+choosing Marginalia from the command bar while it is on no longer turns it off, and a press that
+changes nothing (Plain with nothing open, a command naming the mode you are in, a band brought back
+from stepping aside) no longer pushes an empty history entry, which made Back take two presses. It
+raised the radio semantics again as P1. That stays deferred, and is put to Greg in the feedback note.
+
 ## What Greg asked for
 
 > If I click the "Plain" mode, it should close both left-hand and right-hand column modes.
