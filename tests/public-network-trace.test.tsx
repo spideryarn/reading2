@@ -1966,10 +1966,9 @@ describe("a signed-out browser on a shared document", () => {
     );
 
     /* **The second pass: the hidden modes, each at the address that reaches it.**
-       Pressing a button that is already checked is a real reader action — it is
-       what the empty state's "try again" amounts to — and it runs the same
-       `armActivationForMode` + `onMode` path the first pass exercises, which is
-       the branch a POST would hide in. */
+       Pressing a button that is already checked is a real reader action — since
+       2026-10-02 it closes the band (261002g) — and it runs the same `onMode`
+       path the first pass exercises, which is the branch a POST would hide in. */
     for (const mode of MODES) {
       if (pressed.includes(mode)) continue;
       /* **Marginalia is a toggle beside the radios** since 2026-10-01, and its
@@ -2014,8 +2013,16 @@ describe("a signed-out browser on a shared document", () => {
       await settle();
       expect(outsidePublic(), `after pressing ${mode}`).toEqual([]);
       expect(trace.filter((r) => r.method !== "GET"), `after pressing ${mode}`).toEqual([]);
-      expect(button?.getAttribute("aria-checked"), `${mode} stays checked`).toBe("true");
-      expectBandFor(mode, `after pressing ${mode}`);
+      /* **And the press closes it**, since 2026-10-02: a second press on the
+         band you are in goes to Plain (261002g, Greg's 96), so the radio that
+         ends up checked is Plain's. */
+      expect(
+        modeRadios()
+          .find((b) => b.getAttribute("aria-checked") === "true")
+          ?.getAttribute("aria-label"),
+        `pressing ${mode} again closes it`,
+      ).toBe(MODE_LABEL.plain);
+      expect(host.querySelector(".mode-band"), `after pressing ${mode}: no band`).toBeNull();
       pressed.push(mode);
     }
 

@@ -64,9 +64,26 @@
    something: read on to answer it. Its rule hangs in the gap, so its words
    start on the column's one edge. */
 .marg-question {
+  /* A button since 261002g, so its card opens on a tap and on focus; drawn as
+     the paragraph it was (MarginaliaColumn.tsx § QuestionNote). */
+  appearance: none;
+  display: block;
+  box-sizing: border-box;
+  width: calc(100% + 0.5rem + 1px);
+  padding: 0 0 0 0.5rem;
+  border: 0;
   border-left: 1px solid var(--rule-strong);
-  margin-left: calc(-0.5rem - 1px);
-  padding-left: 0.5rem;
+  margin: 0 0 0 calc(-0.5rem - 1px);
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  cursor: help;
+}
+.marg-question:focus-visible {
+  outline: 2px solid var(--rule-strong);
+  outline-offset: 2px;
 }
 
 /* An idea, at its first occurrence: a stamp in small capitals, then the idea's
@@ -186,7 +203,7 @@ p.marg-shut {
    Pinned flush under the controls bar, across the whole column, with the page
    behind it and a short fade below: notes scrolling up pass under one clean
    edge rather than showing through a gap or stopping at a box. Orientation,
-   not a summary — the path on one line, the arc cut at three, the whole of it
+   not a summary — the path on one line, the arc cut at four, the whole of it
    in a card. */
 .marg-head {
   position: fixed;
@@ -236,7 +253,7 @@ p.marg-shut {
 /* The part above, small caps and faint; the section under it, in the head's
    own voice. Each wraps rather than ending in an ellipsis — Greg, 7M: "the
    text is truncated too much" (261001k). Two lines each, so the path is at most
-   four and the head (with the arc's three) at most seven — the backstop for a
+   four and the head (with the arc's four) at most eight — the backstop for a
    long title, not the ordinary case (GPT Sol on the plan). */
 .marg-path {
   display: grid;
@@ -272,8 +289,12 @@ p.marg-shut {
   all: unset;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  /* Four, not three, since 261002g: the arc is now at most 20 words, which in
+     the AI face (a monospace, about a third wider than Geist) is four lines at
+     288px for 32 of 35 measured sentences, and three for 3
+     (evals/arc-length/run.ts). Three cut nearly every one mid-sentence. */
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
   overflow: hidden;
   cursor: help;
   color: var(--ink-soft);

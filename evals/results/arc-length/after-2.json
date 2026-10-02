@@ -1,0 +1,68 @@
+{
+  "arm": "after-2",
+  "promptVersion": "arc/6",
+  "arcSha": "b1e9ee2f33a3",
+  "at": "2026-10-02T17:48:48.308Z",
+  "articles": [
+    {
+      "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+      "sentences": [
+        "Opens asking what scale alone could unlock in a mind; the rest must show whether 'bigger' means more of the same or something new.",
+        "Having raised the question of bigger brains, now grounds it in how brains and neural nets actually work, setting the bounds any answer must respect.",
+        "With that shared architecture in hand, turns to language as its clearest product, and to what scaling it up would and would not change.",
+        "Language explained, but a brain also needs inputs and outputs; this asks how far sensing and acting, not just thinking, could stretch.",
+        "Having mapped perception's limits, climbs to abstraction itself, asking how far a bigger brain could travel up its tower before irreducibility stops it.",
+        "Abstraction in the abstract becomes concrete here: a working computational language shows what lies past ordinary words, and where even that stalls.",
+        "Having treated one mind's reach, now asks what changes when many brains, not one, must coordinate as a single social thread.",
+        "Draws every earlier thread together: bigger brains gain reach within the ruliad, not supremacy, closing where the opening question is finally answered."
+      ]
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "sentences": [
+        "Machine consciousness sounds like science fiction, but the stakes for ethics and self-understanding are real and still unresolved.",
+        "Before asking if machines can feel, the pull to believe they do turns out to be mostly bias, not evidence.",
+        "Bias explains the temptation, but does the deeper science of computation actually permit machine consciousness; four arguments say probably not.",
+        "With real machine consciousness left uncertain and probably unlikely, the sharper danger turns out to be machines that merely seem conscious.",
+        "Having warned against both reckless creation and false belief, the closing turn is toward what consciousness in us is actually made of."
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "sentences": [
+        "GPT-3 scales an old architecture up and meta-learning appears unbidden; how far can scaling go?",
+        "Scale alone produced meta-learning; why should bigger models generalize instead of merely memorizing?",
+        "Ensembles explain why scale helps; pretraining itself is argued to force real understanding as loss shrinks.",
+        "Scaling up works and is affordable; whether any lab besides OpenAI will risk betting on it is unsettled.",
+        "Scaling's wins are undeniable now; left unexplained is why experts confidently predicted it would fail.",
+        "Scaling and reduction are vindicated; left open is whether scaled models thereby gain real agency.",
+        "Agency plausibly emerges from human-generated data; even bare formal systems resist being ruled agency-free.",
+        "Scaling and agency remain open questions; what follows is only reference material, not further argument."
+      ]
+    },
+    {
+      "slug": "antikythera-mechanism-spya-zhxrzm",
+      "sentences": [
+        "Pulled from the sea and first dismissed as junk, the device's maker and build date remain disputed.",
+        "Direct evidence survives only in broken pieces, yet a handful of them anchor every claim that follows.",
+        "The overall layout is settled, but how many days its calendar ring marked is still argued.",
+        "Pointers for Sun and Moon show positions and phases, leaving the question of planets still open.",
+        "The back dials complete the known functions, covering cycles the front face alone could not track.",
+        "With both faces now accounted for, one stray gear keeps open whether planets were once displayed too.",
+        "Rival gear schemes have tried to fill that gap, but none fits all the evidence perfectly.",
+        "Ancient writers describe kindred devices, suggesting this one was not unique but part of a wider, partly lost tradition.",
+        "The mechanism's workings are now largely understood, while its exact origin and full original scope stay unresolved."
+      ]
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "sentences": [
+        "Nothing is settled yet; the talk promises a method for catching self-deception in science.",
+        "Many popular beliefs fail the simple test of working, setting up the need to name what's missing.",
+        "That missing piece gets a name, Cargo Cult Science, and a cause: lack of scientific integrity.",
+        "Integrity means guarding against your own bias; next is whether scientists extend that honesty outward.",
+        "Across fields, skipping repetition and control is shown to be exactly how Cargo Cult Science survives."
+      ]
+    }
+  ]
+}

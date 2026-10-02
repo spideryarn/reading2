@@ -355,7 +355,7 @@ interface Props {
    * (`subModeParams` in sub-modes.ts). The press has already been armed for the
    * sub-mode by then — `useActivateSubMode` — so the receiver arms nothing for it.
    */
-  onMode?(next: Mode, sub?: SubMode): void;
+  onMode?(next: Mode, sub?: SubMode, toggle?: boolean): void;
   /**
    * **Whether Marginalia's column is on** (`?margin=1`) — the reading view
    * passes it; off it, the carried query string says (`marginInSearch`).
@@ -1526,6 +1526,8 @@ function useActivateMode(
   diagram: DiagramKind,
   onMode: Props["onMode"],
   arms: boolean,
+  current: BandMode | undefined,
+  toggles: boolean,
 ): (next: Mode) => void {
   return useCallback(
     (next: Mode) => {
@@ -1533,10 +1535,24 @@ function useActivateMode(
         navigate(modeLinkHref(slug, search, next));
         return;
       }
-      if (arms) armActivationForMode(slug, next, { diagram });
-      onMode(next);
+      /* **Two doors, two meanings, since 2026-10-02.** The bar's buttons
+         `toggle`: a press on the band you are in closes it (`modePress` in
+         src/web/reader/mode-press.ts, Greg's 96). The command bar names a
+         destination, so choosing the mode you are in leaves you there, as it
+         always did (GPT Sol, plan review).
+
+         **A toggling press on the band you are in arms nothing.** It closes
+         the band, or brings back one that stepped aside, and the band is
+         mounted either way — so a token here would be claimed by the very
+         mount that is closing and could start a paid run in the instant
+         before it goes. Retrying a band that failed is now close, then
+         reopen: the reopen is a fresh press on a fresh mount.
+         docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
+      const again = toggles && next === current;
+      if (arms && !again) armActivationForMode(slug, next, { diagram });
+      onMode(next, undefined, toggles);
     },
-    [slug, search, diagram, onMode, arms],
+    [slug, search, diagram, onMode, arms, current, toggles],
   );
 }
 
@@ -1716,7 +1732,9 @@ export function Dock({
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const activateMode = useActivateMode(slug, search, diagram, onMode, !isVisitor);
+  const activateMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, false);
+  /* The bar's own buttons: the same door, but a second press closes. */
+  const pressMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, true);
   const activateSubMode = useActivateSubMode(slug, search, onMode, !isVisitor);
 
   /* **How much of itself the bar spells out is measured, not guessed** — the
@@ -2080,9 +2098,9 @@ export function Dock({
           <DockModes
             modes={visible}
             mode={mode}
-            /* One callback for both doors into a mode — see `activateMode`
-               above, which is where the arming and the `?mode=` write live. */
-            onActivate={activateMode}
+            /* The command bar's door, but toggling — see `useActivateMode`,
+               which is where the arming and the `?mode=` write live. */
+            onActivate={pressMode}
             marked={marked}
             margin={margin}
           />
@@ -2677,18 +2695,115 @@ function DockModes({
    *
    * tests/arrows-belong-to-the-article.test.tsx holds all of it.
    */
-  const starts = groupStarts(modes);
   /* **Marginalia is a toggle, not one of the radios**, since 2026-10-01: its
      column sits right of the prose beside whichever band is open, so it is not
      one of the things the middle column shows and cannot be the one checked
-     radio. It is last in `MODES_UI`, and drawn after the radiogroup (which
-     has one flex share per radio, so the segment still grows as one row of
-     equal controls) — `MarginToggle` and dock-fit.css.
-     docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+     radio. It is last in `MODES_UI`, and drawn after the radiogroup —
+     `MarginToggle` and dock-fit.css.
+     docs/plans/261001i-annotations-column-beside-a-band-mode.md.
+
+     **Plain, the bands and Marginalia are three frames**, since 2026-10-02 —
+     Greg: *"move the Plain and Marginalia modes into their own icon-groups"*
+     (spya-ba8kqp). Plain is still a radio in the same radiogroup (exactly one
+     of Plain and the bands is on), so the radiogroup holds two frames. The
+     lines between runs (`groupStarts`) are drawn inside the bands' frame
+     only: a frame's edge already separates the other two.
+     docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
   const radios = modes.filter((m) => m.mode !== "marginalia");
+  const exits = radios.filter((m) => m.group === "exit");
+  const bands = radios.filter((m) => m.group !== "exit");
   const toggle = modes.find((m) => m.mode === "marginalia");
+  const starts = groupStarts(bands);
+  const radio = (m: ModeUi) => (
+    <Tooltip
+      key={m.mode}
+      placement="top"
+      className="tip-soon"
+      /* **A `ControlTip`, since 2026-09-07, and the second paragraph is
+         the point.** This was a head and one sentence — the same sentence
+         the command bar draws inline beside the name — so the hover cost
+         a reader 300ms to be told what the label already said. The bar
+         was the last row of controls in the app without the shape every
+         other row has, and it is the row where the unguessable half
+         matters most. Nine of these buttons start a model call the instant
+         they are pressed, four wait on the reader's own words, three read
+         a tree written before the reader arrived and one generates
+         nothing at all — and nothing on screen tells them apart.
+         `how` lives in the catalog
+         beside `description` (src/mode-catalog.ts § `how`), which is also
+         where the two rules it obeys are written down.
+         docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
+      content={
+        <ControlTip
+          head={MODE_LABEL[m.mode]}
+          /* **The visitor's sentence goes first, not last.** It was a
+             third paragraph while the card had two; with `how` it would
+             be the third of three, which buries the one line explaining
+             why the button looks the way it does. `state` is exactly this
+             case — Tooltip.tsx § `state` argues it for the experimental
+             switch: what the control is doing *right now* goes above the
+             description, because somebody who opened the card because the
+             button looked wrong should not read two paragraphs first.
+
+             A supplement, never the message: the sentence that actually
+             explains the boundary is in the band this button opens, and
+             this is the band's own string rather than a second one saying
+             the same thing. visitor.ts § `markedModes`. */
+          state={marked?.get(m.mode)}
+          what={MODE_CATALOG[m.mode].description}
+          how={MODE_CATALOG[m.mode].how}
+        />
+      }
+    >
+      {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern — a real <input type="radio"> cannot carry an icon beside a label, and styling one as a bar button means hiding the input and faking every state it already had */}
+      <button
+        type="button"
+        role="radio"
+        className={`dock-btn${m.mode === mode ? " on" : ""}${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
+        aria-checked={m.mode === mode}
+        /* Explicit, because the visible label is `display: none` at
+           narrow widths and an accessible name computed from the text
+           would go with it — leaving a screen reader six radio buttons
+           called nothing at all. */
+        aria-label={MODE_LABEL[m.mode]}
+        /* Every button, not a roving one. See the note above the
+           radiogroup: with no arrow keys to move within the group, a
+           single tab stop would leave thirteen of the fourteen modes
+           unreachable by keyboard. */
+        tabIndex={0}
+        onClick={(e) => {
+          /* **The whole of what a press on a mode does**, and it is one
+             call rather than two since 2026-09-07 — the token and the
+             `?mode=` write are `Dock` § `activateMode`, which the command
+             bar calls too so that the two doors cannot come to mean
+             different things. */
+          onActivate(m.mode);
+          // A real click leaves the keyboard to the article; Enter and
+          // Space (detail 0) leave focus where the reader put it. See the
+          // header — this is Greg's ← / → complaint, 2026-08-26.
+          //
+          // **Presentation, and deliberately not inside `activateMode`**:
+          // it is about this button having been clicked, not about the
+          // mode being opened, and the command bar's own after-work
+          // (close, clear, hand focus back) is the mirror of it.
+          if (e.detail > 0) e.currentTarget.blur();
+        }}
+      >
+        <m.icon size={15} />
+        {/* Classed so the stylesheet can drop it on a narrow window.
+            Every one of these buttons already carries its label in the
+            tooltip above and in its accessible name below, so hiding the
+            text costs the sighted reader a hover and costs a screen
+            reader nothing — which is why the label is the thing that
+            gives way rather than the button. See § the bar's fit ladder. */}
+        <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{MODE_LABEL[m.mode]}</span>
+      </button>
+    </Tooltip>
+  );
   return (
-    <div className="dock-modes">
+    /* `--dock-mode-count`: on a coarse pointer the row grows by one share per
+       button it holds (narrow-window.css), not a fixed eight. */
+    <div className="dock-modes" style={{ "--dock-mode-count": modes.length } as CSSProperties}>
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div
           className="dock-modes-radios"
@@ -2696,101 +2811,24 @@ function DockModes({
           aria-label="What the middle column shows"
           style={{ "--dock-radio-count": radios.length } as CSSProperties}
         >
-          {radios.map((m) => (
-          <Tooltip
-            key={m.mode}
-            placement="top"
-            className="tip-soon"
-            /* **A `ControlTip`, since 2026-09-07, and the second paragraph is
-               the point.** This was a head and one sentence — the same sentence
-               the command bar draws inline beside the name — so the hover cost
-               a reader 300ms to be told what the label already said. The bar
-               was the last row of controls in the app without the shape every
-               other row has, and it is the row where the unguessable half
-               matters most. Nine of these buttons start a model call the instant
-               they are pressed, four wait on the reader's own words, three read
-               a tree written before the reader arrived and one generates
-               nothing at all — and nothing on screen tells them apart.
-               `how` lives in the catalog
-               beside `description` (src/mode-catalog.ts § `how`), which is also
-               where the two rules it obeys are written down.
-               docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
-            content={
-              <ControlTip
-                head={MODE_LABEL[m.mode]}
-                /* **The visitor's sentence goes first, not last.** It was a
-                   third paragraph while the card had two; with `how` it would
-                   be the third of three, which buries the one line explaining
-                   why the button looks the way it does. `state` is exactly this
-                   case — Tooltip.tsx § `state` argues it for the experimental
-                   switch: what the control is doing *right now* goes above the
-                   description, because somebody who opened the card because the
-                   button looked wrong should not read two paragraphs first.
-
-                   A supplement, never the message: the sentence that actually
-                   explains the boundary is in the band this button opens, and
-                   this is the band's own string rather than a second one saying
-                   the same thing. visitor.ts § `markedModes`. */
-                state={marked?.get(m.mode)}
-                what={MODE_CATALOG[m.mode].description}
-                how={MODE_CATALOG[m.mode].how}
-              />
-            }
-          >
-            {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern — a real <input type="radio"> cannot carry an icon beside a label, and styling one as a bar button means hiding the input and faking every state it already had */}
-            <button
-              type="button"
-              role="radio"
-              className={`dock-btn${m.mode === mode ? " on" : ""}${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
-              aria-checked={m.mode === mode}
-              /* Explicit, because the visible label is `display: none` at
-                 narrow widths and an accessible name computed from the text
-                 would go with it — leaving a screen reader six radio buttons
-                 called nothing at all. */
-              aria-label={MODE_LABEL[m.mode]}
-              /* Every button, not a roving one. See the note above the
-                 radiogroup: with no arrow keys to move within the group, a
-                 single tab stop would leave thirteen of the fourteen modes
-                 unreachable by keyboard. */
-              tabIndex={0}
-              onClick={(e) => {
-                /* **The whole of what a press on a mode does**, and it is one
-                   call rather than two since 2026-09-07 — the token and the
-                   `?mode=` write are `Dock` § `activateMode`, which the command
-                   bar calls too so that the two doors cannot come to mean
-                   different things. */
-                onActivate(m.mode);
-                // A real click leaves the keyboard to the article; Enter and
-                // Space (detail 0) leave focus where the reader put it. See the
-                // header — this is Greg's ← / → complaint, 2026-08-26.
-                //
-                // **Presentation, and deliberately not inside `activateMode`**:
-                // it is about this button having been clicked, not about the
-                // mode being opened, and the command bar's own after-work
-                // (close, clear, hand focus back) is the mirror of it.
-                if (e.detail > 0) e.currentTarget.blur();
-              }}
-            >
-              <m.icon size={15} />
-              {/* Classed so the stylesheet can drop it on a narrow window.
-                  Every one of these buttons already carries its label in the
-                  tooltip above and in its accessible name below, so hiding the
-                  text costs the sighted reader a hover and costs a screen
-                  reader nothing — which is why the label is the thing that
-                  gives way rather than the button. See § the bar's fit ladder. */}
-              <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{MODE_LABEL[m.mode]}</span>
-            </button>
-          </Tooltip>
-          ))}
+          {exits.length > 0 && (
+            <div className="dock-frame" style={{ "--dock-frame-count": exits.length } as CSSProperties}>
+              {exits.map(radio)}
+            </div>
+          )}
+          <div className="dock-frame" style={{ "--dock-frame-count": bands.length } as CSSProperties}>
+            {bands.map(radio)}
+          </div>
         </div>
         {toggle && (
-          <MarginToggle
-            m={toggle}
-            on={margin}
-            groupStart={starts.has(toggle.mode)}
-            onActivate={onActivate}
-            state={marked?.get(toggle.mode)}
-          />
+          <div className="dock-frame" style={{ "--dock-frame-count": 1 } as CSSProperties}>
+            <MarginToggle
+              m={toggle}
+              on={margin}
+              onActivate={onActivate}
+              state={marked?.get(toggle.mode)}
+            />
+          </div>
         )}
       </TooltipGroup>
     </div>
@@ -2808,13 +2846,11 @@ function DockModes({
 function MarginToggle({
   m,
   on,
-  groupStart,
   onActivate,
   state,
 }: {
   m: ModeUi;
   on: boolean;
-  groupStart: boolean;
   onActivate(next: Mode): void;
   state: string | undefined;
 }) {
@@ -2833,7 +2869,7 @@ function MarginToggle({
     >
       <button
         type="button"
-        className={`dock-btn${on ? " on" : ""}${groupStart ? " dock-group-start" : ""}`}
+        className={`dock-btn${on ? " on" : ""}`}
         aria-pressed={on}
         aria-label={MODE_LABEL[m.mode]}
         onClick={(e) => {
