@@ -222,3 +222,11 @@ GPT Sol on this plan before stage 1, and on the code before push.
   Both read and accepted; gates rerun green. C3 (P1, pre-existing) `paragraphs` and `ids` may be
   empty under the schema — not this change's; left for the schema's owner, named here. C4 (P2) the
   probe records no retries or guard outcomes — noted in 261002o.
+- **Browser check** (Sonnet, Playwright, after merging dev's `structure` step rename): every check
+  passed on `ds-spya-me0d4g` rewritten by the new code: the prose look, the card on hover (including
+  a wrapped sentence) and on Tab focus, the jump, the wash following the scroll, all three levels, and
+  an old summary unchanged. Two earlier attempts failed with `PublishRefused`, because the worktree
+  predated the step rename that the shared local database had already been migrated to. That had
+  nothing to do with this change. **Gates:** `npm test` gave 6 reds, all fresh-worktree build gaps
+  plus the feedback-endings map, and each passed after `npm run build`, `build:fleet` and
+  `scripts/feedback-endings.ts`. `npm run typecheck` is clean.
