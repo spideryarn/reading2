@@ -4009,7 +4009,7 @@ function Questions({
                 const p = passageOf(entry.item, paragraphs.get(entry.item.blockId));
                 return p.whole ? (
                   <>
-                    <em>Whole paragraph</em> — {p.text}
+                    <em className="passage-whole">Whole paragraph</em> — {p.text}
                   </>
                 ) : (
                   p.text

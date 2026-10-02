@@ -59,7 +59,7 @@
  * - **The drain is finite only because a caller bounds it**, and the first
  *   draft of this docblock claimed otherwise: it said every caller either
  *   aborted in flight (src/pdf-read.ts) or was bounded by the claimant's
- *   deadline signal (src/hierarchy-deepen.ts). The second half is not true. The
+ *   deadline signal (src/structure-deepen.ts). The second half is not true. The
  *   deepening wave is reachable from the CLI and from an exported function with
  *   **no signal at all**, and its `ExpansionExecutor` seam has no abort contract
  *   even when there is one — so a single wedged call parked the wave for ever.
@@ -67,7 +67,7 @@
  *   `drainMs`: past it the original failure is rethrown with the stragglers
  *   still running, which is worse than draining and much better than hanging.
  *   The number belongs to the caller, because only the caller knows what one of
- *   its stragglers is worth waiting for — src/hierarchy-deepen.ts §
+ *   its stragglers is worth waiting for — src/structure-deepen.ts §
  *   `EXPANSION_DRAIN_MS` derives one.
  * - **`allSettled`, not `all`**, so a second failure arriving during the drain
  *   is handled rather than becoming an unhandled rejection — the same reason the
@@ -209,7 +209,7 @@ interface Ticket {
  * nothing look like the wave that met everything.
  *
  * So a caller opens a window, and what it gets back is scoped to it. **Not
- * scoped to its own calls**: the gate is shared on purpose (src/hierarchy-deepen.ts
+ * scoped to its own calls**: the gate is shared on purpose (src/structure-deepen.ts
  * § `sharedGate`), so a refusal here may have been another job's. What this
  * answers is *"what was the upstream doing while I ran"*, which is the question
  * a slow wave has to be able to explain itself with.
@@ -561,7 +561,7 @@ function abortedWaiting(): Error {
 /**
  * A wait that a cancelled step does not sit through.
  *
- * Exported since 2026-09-05 for the deepening wave (src/hierarchy-deepen.ts),
+ * Exported since 2026-09-05 for the deepening wave (src/structure-deepen.ts),
  * which needs a floor under its retry loop and would otherwise be a third copy
  * of these fifteen lines — src/pdf-read.ts § `waitOrGiveUp` is the second, and it
  * is not moved here only because that file's own timing arguments hang off it.

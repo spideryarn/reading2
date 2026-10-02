@@ -372,7 +372,9 @@ recurring form.
   down.** Greg, 2026-09-30: *"DO NOT fall back to Luna for important stuff or skip the GPT reviews.
   If we run out of usage limits for Sol, then we accept that yes that blocks further progress … I'd
   rather we stop working than risk pushing lower-quality stuff."* Pause the sessions that need a
-  review, tell Greg, and resume when the limit resets.
+  review and **tell Greg straight away**, because he can buy more rather than wait: Greg, 2026-10-02:
+  *"If GPT account does hit usage limits, I can do a reset to get extra. But you need to let me
+  know."* Resume when he has, or when the limit resets.
   <br>**Since 2026-09-10 that command also prints one block per REGISTERED account** — every Claude
   and Codex subscription the box can launch work on, not just the one you are logged in as — and the
   Usage limits tab draws the same readings as sections. What each says and what it may not claim is

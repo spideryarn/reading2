@@ -311,7 +311,7 @@ export function parseJsonFrom<T>(text: string, source: string): T {
  * that is itself embedded in another string. It reaches neither the message nor
  * the stack. src/labels.ts is where that was written down first.
  *
- * The history is the argument for one copy. src/hierarchy.ts learned this the hard
+ * The history is the argument for one copy. src/structure.ts learned this the hard
  * way; src/labels.ts was then written without it and a review caught it. Five
  * files carrying the same fifteen lines is five chances for the sixth file to be
  * written by someone who never read them.
@@ -330,7 +330,7 @@ export function stripFence(raw: string): string {
  *
  * ## Why this exists
  *
- * `src/hierarchy.ts` asks for a `question` field on the root and depth-1 nodes
+ * `src/structure.ts` asks for a `question` field on the root and depth-1 nodes
  * and for it to be **omitted** deeper. On a deep node the model writes the comma
  * that would have preceded the field and then obeys the instruction, leaving
  * `{"gist":"…",}`. Measured on 2026-09-06 while the `toc/6` gist rules were being

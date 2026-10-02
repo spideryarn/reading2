@@ -442,7 +442,7 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
                     key={p.sceneId}
                     placement="bottom"
                     keepSide
-                    className="tip-soon"
+                    className="tip-soon ill-plate-tip"
                     content={
                       <ControlTip
                         head={p.title}
@@ -617,7 +617,7 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
         <details className="ill-brief">
           <summary>What the illustrator was asked for</summary>
           {illustrated.style && <p className="ill-style">{illustrated.style}</p>}
-          <p>{plate.prompt}</p>
+          <p className="ill-prompt">{plate.prompt}</p>
         </details>
       </div>
     </>

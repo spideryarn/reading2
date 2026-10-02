@@ -212,6 +212,10 @@ Then the residue, which is why this page exists:
   [reading-view-overview.md § The modes in the band](reading-view-overview.md#the-modes-in-the-band)
   with the doc that owns it. *[`tests/doc-links.test.ts`](../../tests/doc-links.test.ts), for the
   doc; nothing for the line.*
+- **Each voice in its face**: apply the provenance rule in [fonts.md](fonts.md), with a class per
+  element in [`voices.css`](../../src/web/styles/voices.css). *[`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) §
+  `VOICES_BY_MODE`, a `Record<Mode, …>`: the mode's AI classes, or why it has none. It cannot see an
+  element you forgot to name.*
 
 A mode that shows nothing generated — Plain, Search — stops here.
 
@@ -350,7 +354,8 @@ one of them a total record, so the new kind or step stays red until it has one: 
 ([`src/jobs.ts`](../../src/jobs.ts)), `STEPS` ([`src/pipeline.ts`](../../src/pipeline.ts)) and — via
 `StepsMissingFromOrder` — `STEP_ORDER`, which moved to
 [`src/step-order.ts`](../../src/step-order.ts) on 2026-09-04 so the browser could read the order
-without naming a server module, and which `pipeline.ts` re-exports; `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`,
+without naming a server module, and which `pipeline.ts` re-exports; `ARTICLE_OUTPUT_FORMAT`
+([`src/pipeline.ts`](../../src/pipeline.ts)), each article stage's answer format; `TASK_TIER`, `TASK_WIRE`, `MODEL_ENV_VAR`,
 `STAGE_EFFORT` and `ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts));
 `REVISION_CARRY_POLICY` ([`pg-revisions.ts`](../../src/store/pg-revisions.ts)); and `ArticleReader`
 ([`contracts.ts`](../../src/store/contracts.ts)) with its adapter,
@@ -430,7 +435,9 @@ Then the residue nothing refuses at compile time:
 
 A new mode's prompt takes the shared plain-words rule, `plainWords(...)`, naming each kind of text
 it writes — [prompting-guide.md](prompting-guide.md) is the rule, the trade-off and how to measure a
-change.
+change. If the model answers in JSON, the request sends a strict schema through
+`withMessagesJsonSchema` (or `withChatJsonSchema`) — no `enum` of block ids, and the ids still
+resolved after the parse — [prompting-guide.md § What the model writes back](prompting-guide.md).
 
 ## Its cost
 
@@ -526,6 +533,7 @@ written since have the same shape and the same purpose:
 |---|---|
 | [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx) § `SPENDS` **and** § `DRAWS` | two errors, not one — what the press buys, and what the band draws |
 | [`tests/command-bar.test.tsx`](../../tests/command-bar.test.tsx) § `GENERATES` | whether the bar marks the row `generates`, checked against `MODE_TARGET` from the other side |
+| [`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) § `VOICES_BY_MODE` | which of the band's text uses the AI voice under [fonts.md](fonts.md)'s provenance rule (added 2026-10-02, not in either measurement) |
 
 That is the mechanism working rather than drifting: each new table is an independently written
 `Record<Mode, …>`, so every one of them adds a place a new mode has to be decided rather than

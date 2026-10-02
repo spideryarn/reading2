@@ -337,7 +337,9 @@ export function ThreadPosts({
               <span className="tw:mr-2 tw:font-mono tw:text-xs tw:text-ink-faint">
                 {i + 1}/{total}
               </span>
-              {tweet.text}
+              {/* The post is the model's; a span because `tw:font-prose` on the
+                  <p> would beat voices.css on the same element. */}
+              <span className="tweets-text">{tweet.text}</span>
             </p>
             <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1 tw:text-xs tw:text-ink-faint">
               {tweet.blocks && tweet.blocks.length > 0 && (

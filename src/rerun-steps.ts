@@ -14,7 +14,7 @@
  * What the plan settled, so it is not re-litigated a row at a time:
  *
  *  - **`hierarchy` is out.** A forced run writes an empty pending-label manifest
- *    (src/hierarchy.ts § the merge), which deletes the carried `labels` receipt,
+ *    (src/structure.ts § the merge), which deletes the carried `labels` receipt,
  *    so the press strips every paragraph label the reader had and the article
  *    goes back to saying *"Paragraph labels are still arriving"*.
  *

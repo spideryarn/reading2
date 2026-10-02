@@ -25,7 +25,7 @@
  * from a position in it.
  *
  * **A separate artefact, not a field on the tree.** `tree.json` is stage 4's
- * (architecture.md#stage-ownership) and a re-run of `npm run hierarchy` rewrites it
+ * (architecture.md#stage-ownership) and a re-run of `npm run structure` rewrites it
  * wholesale, which would silently drop anything we had merged in. So the arc
  * lives in its own `arc.json` and is joined back on at load time — by block
  * range, never by node id, because node ids are positional and a re-run

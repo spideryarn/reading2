@@ -18,7 +18,7 @@
  * `tests/public-imports.test.ts` walks this file's imports by pattern and would
  * read a quoted one in prose as a real edge — it did, and went red.)
  *
- *     [vite] src/hierarchy.ts changed, restarting server...
+ *     [vite] src/structure.ts changed, restarting server...
  *     [vite] server restarted.
  *
  * The restart loads the config from a **uniquely named** temp file, so the

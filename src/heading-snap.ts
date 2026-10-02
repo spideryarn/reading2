@@ -5,8 +5,8 @@
  * ## Why it is a file of its own
  *
  * There are two places that turn a set of claimed starts into a tiling:
- * `planChildRanges` (src/hierarchy.ts), which the incumbent whole-document call
- * goes through, and `normaliseExpansion` (src/hierarchy-cascade.ts), which
+ * `planChildRanges` (src/structure.ts), which the incumbent whole-document call
+ * goes through, and `normaliseExpansion` (src/structure-cascade.ts), which
  * every scoped call in the cascade goes through. From wave 2 on those two meet:
  * a scoped call is shown a slice `planChildRanges` derived, and its own answer
  * is derived by `normaliseExpansion`. Two rules over one tree is a boundary
@@ -18,15 +18,15 @@
  * the model's claimed ends to fall back on when a start carries no information
  * and `normaliseExpansion` does not, and a previous review ruled against
  * threading an optional `ends` parameter through one merged helper to paper
- * over that ⟨GPT Sol, 2026-09-04, quoted in tests/hierarchy-cascade.test.ts §
+ * over that ⟨GPT Sol, 2026-09-04, quoted in tests/structure-step-cascade.test.ts §
  * "the differential test"⟩.
  *
- * **Its own file rather than either of theirs**, because `hierarchy.ts` and
- * `hierarchy-cascade.ts` cannot import each other: the cascade already imports
+ * **Its own file rather than either of theirs**, because `structure.ts` and
+ * `structure-cascade.ts` cannot import each other: the cascade already imports
  * `BuildReport` and `ModelNode` from the incumbent, and `npm run cycles`
  * (biome `noImportCycles`) is a gate at zero. A third module both can reach
  * costs one file and no cycle; the alternative was moving `PartitionRepair` out
- * of `hierarchy.ts`, which is a rename across the repo for no gain.
+ * of `structure.ts`, which is a rename across the repo for no gain.
  *
  * ## The measurement it comes from
  *
@@ -58,7 +58,7 @@ export interface KeptChild {
 
 /**
  * What the snap records — structurally the `"heading"` member of
- * `PartitionRepair` (src/hierarchy.ts), narrowed to the one `kind` this file
+ * `PartitionRepair` (src/structure.ts), narrowed to the one `kind` this file
  * can produce.
  *
  * Declared here rather than imported so that this module depends on nothing
@@ -84,7 +84,7 @@ export interface HeadingSnapRepair {
  *
  * The obvious rule — snap any start that sits one block after a heading — takes
  * headings the model deliberately left in the section before it. The fixture is
- * in tests/hierarchy-repairs.test.ts: a model that puts "The First Part" inside
+ * in tests/structure-step-repairs.test.ts: a model that puts "The First Part" inside
  * child 1 and starts child 2 on the paragraph beneath it has proposed a
  * boundary, and moving that heading forward would invent a different one.
  * **Requiring the child's own `sourceHeading` to name a heading in the run makes

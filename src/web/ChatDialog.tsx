@@ -686,7 +686,12 @@ export function ChatDialog({
           {target.kind === "draft" ? (
             <>Ask about {shortBlockId(target.anchor.blockId)}</>
           ) : (
-            <>{thread?.title ?? "New conversation"}</>
+            /* A thread's title is the reader's own words; the fallback is ours. */
+            thread ? (
+              <span className="chat-dialog-title">{thread.title}</span>
+            ) : (
+              <>New conversation</>
+            )
           )}
         </span>
         {stopControl}

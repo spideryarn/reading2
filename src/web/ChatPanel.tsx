@@ -491,7 +491,16 @@ export function ChatPanel({
               is one Remember conversation per article, so the title names
               nothing the reader could mistake it for — and it is their first
               sixty characters, often "Um, so…". Plan 261001m § 4. */}
-          <h2>{remember ? "Remember" : open ? open.title : "Chat"}</h2>
+          <h2>
+            {remember ? (
+              "Remember"
+            ) : open ? (
+              /* The title is the reader's first question, or their rename. */
+              <span className="chat-head-title">{open.title}</span>
+            ) : (
+              "Chat"
+            )}
+          </h2>
           {subMode}
           {remember ? (
             /* **Start over, and nothing else.** No close, because there is no
@@ -880,7 +889,17 @@ function ThreadList({
                   onClick={() => onOpen(t.id)}
                 >
                   <span className="chat-thread-title">{t.title}</span>
-                  {last && <span className="chat-thread-last">{last}</span>}
+                  {/* Usually the model's reply, but the reader's question when
+                      that was the last thing said — so the row says whose. */}
+                  {last && (
+                    <span
+                      className={
+                        last.role === "assistant" ? "chat-thread-last model" : "chat-thread-last you"
+                      }
+                    >
+                      {last.text}
+                    </span>
+                  )}
                   <span className="chat-thread-meta">
                     {/* No kind tag: until 2026-10-01 the list was shared with
                         Remember and tagged its rows; now only chat lists, and
@@ -943,10 +962,13 @@ const LAST_MAX = 120;
  * conversation whose first answer has not started — it returns undefined and
  * the row simply has one line fewer.
  */
-function lastSaid(t: ChatThread): string | undefined {
+function lastSaid(t: ChatThread): { text: string; role: ChatMessage["role"] } | undefined {
   for (let i = t.messages.length - 1; i >= 0; i--) {
-    const said = t.messages[i]?.text.replace(/\s+/g, " ").trim();
-    if (said) return said.length > LAST_MAX ? `${said.slice(0, LAST_MAX)}…` : said;
+    const message = t.messages[i];
+    const said = message?.text.replace(/\s+/g, " ").trim();
+    if (message && said) {
+      return { text: said.length > LAST_MAX ? `${said.slice(0, LAST_MAX)}…` : said, role: message.role };
+    }
   }
   return undefined;
 }

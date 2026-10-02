@@ -129,3 +129,73 @@ export function readMachine(): Omit<SmallScreenEnvironment, "bandCovers"> {
     dismissed: wasDismissed(),
   };
 }
+
+/* ------------------------------------------------------------ the shelf --- */
+
+/**
+ * **The shelf's banner asks about the device, not the layout**, and that is the
+ * whole difference from the article's one above. That banner explains one
+ * layout decision, so it asks the layout. This one says *a phone is not the
+ * best screen for Spideryarn* — Greg, spya-fcbnhq, 2026-10-01 — which is a fact
+ * about the machine, true held either way up.
+ *
+ * So: a finger, and a **screen** whose shorter side is under 600 CSS px. The
+ * screen and not the window, so that a phone turned sideways is still a phone
+ * and a laptop window dragged narrow never is (its pointer is fine anyway). The
+ * shorter side, so that orientation does not matter. 600 because every phone is
+ * well under it (an iPhone Pro Max is 440) and every iPad well over (a mini is
+ * 744). docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md § Part C.
+ */
+export interface PhoneEnvironment {
+  coarsePointer: boolean;
+  screen: { width: number; height: number };
+}
+
+const PHONE_SHORT_SIDE = 600;
+
+export function isPhone(env: PhoneEnvironment): boolean {
+  const short = Math.min(env.screen.width, env.screen.height);
+  /* A screen the browser would not measure (0, or `NaN`) is "cannot tell", and
+     cannot tell is not a phone — otherwise every coarse pointer without a
+     `screen` would qualify. GPT Sol, plan review, 2026-10-02. */
+  if (!Number.isFinite(short) || short <= 0) return false;
+  return env.coarsePointer && short < PHONE_SHORT_SIDE;
+}
+
+/**
+ * **Until dismissed, on this device** — the article banner's contract (see
+ * docs/project/touch.md § One banner, once for why not "the first time"), and
+ * its own bit, so that dismissing one says nothing about the other: they say
+ * different things.
+ */
+export function shouldShowShelfPhoneHint(env: PhoneEnvironment & { dismissed: boolean }): boolean {
+  return isPhone(env) && !env.dismissed;
+}
+
+const SHELF_KEY = "spya.shelfPhoneHint.dismissed";
+
+/** `wasDismissed`'s guard and its reason: "cannot tell" shows the banner. */
+export function shelfPhoneHintDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(SHELF_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function rememberShelfPhoneHintDismissed(): void {
+  try {
+    window.localStorage.setItem(SHELF_KEY, "1");
+  } catch {
+    /* It will come back on the next visit. */
+  }
+}
+
+/** Asked once, on arrival — `readMachine`'s reasoning. */
+export function readPhone(): PhoneEnvironment & { dismissed: boolean } {
+  return {
+    coarsePointer: media("(pointer: coarse)"),
+    screen: { width: window.screen?.width ?? 0, height: window.screen?.height ?? 0 },
+    dismissed: shelfPhoneHintDismissed(),
+  };
+}

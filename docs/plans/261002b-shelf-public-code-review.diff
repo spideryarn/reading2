@@ -1,0 +1,1437 @@
+diff --git a/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md b/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md
+new file mode 100644
+index 000000000..46ced9ec2
+--- /dev/null
++++ b/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md
+@@ -0,0 +1,125 @@
++# Include public on the shelf, help for an empty shelf, and a phone banner
++
++Two reader reports from Greg, both suggestions, both about the signed-in homepage (the shelf,
++[library.md](../project/library.md)).
++
++> We have a button to include archived when displaying stuff in the shelf and searching the shelf.
++> Perhaps let's also have a button for include public. And if the user has no articles in their
++> shelf, we probably actually want to, as well as saying you have no articles yet, you know, upload
++> them, you know, see above or whatever with a link that points them to the top.
++>
++> We might also want to see or browse our public articles, you know, click include public. So just
++> kind of provide a bit more help to new users that don't yet have anything on their shelf and be
++> able to include public for everybody they want, including in searching, etc.
++>
++> — Greg, 2026-10-01 (spya-yy5x66)
++
++> Spideryarn does not work that well on a mobile phone. It works, but because of the small screen
++> the experience is suboptimal. So I wonder if we should show some kind of banner to people when they
++> open it on a phone to say that it's probably best on a larger screen, and failing that, in
++> Landscape mode.
++>
++> We'd show it on the logged-in homepage, and ideally only once/the first time they use it on a
++> phone.
++>
++> — Greg, 2026-10-01 (spya-fcbnhq)
++
++Nothing on `origin/dev` had started either (checked `git log`, 2026-10-02).
++
++## Part A — an **Include public** chip
++
++A chip beside **Include archived**, in `ShelfControls`, same shape, same words pattern, its own URL
++bit: `?public=1` (`libraryPublicParam` in `params.ts`, `history: "push"` like archived). Off by
++default, and it does not fetch until it is on.
++
++On, the shelf fetches `GET /api/public/library` through the existing `loadPublicLibrary`
++(`src/web/public-api.ts` — the same anonymous read `/read/public` makes; no new server route, no new
++query, so nothing new in the public import graph) and draws **a second section under the shelf's
++list**: a heading — *Shared by other readers* — and the matching public articles as `PublicCard`s
++(exported from `PublicLibraryPage.tsx` rather than copied).
++
++- **Narrowed by the same search box**, by the same rule the shelf's own cards use — `filterEntries`'
++  four fields (title, byline, siteName, gist), which `PublicLibraryEntry` also carries. The rule is
++  lifted to take any `{title, byline, siteName, gist}` so there is one matcher, not two.
++- **Not narrowed by Unread or Topics.** Both are facts about *your* reading (opens; terms picked from
++  your shelf). The section says it is narrowed by the search only when either is on.
++- **Your own public articles are left out** (by slug, against everything already in the shelf
++  scope) — they are already above, with your verbs on them.
++- **The cap is said**, with `PUBLIC_SHELF_TRUNCATED`, exactly as `/read/public` says it.
++- **Passages are not searched in public articles.** With the chip on and a query typed, the passages
++  list carries one line saying public articles were matched by their cards only. See § Deferred.
++
++### The simpler option passed over, and the bigger one
++
++- *Simpler:* a link to `/read/public` beside the chip, and no chip. Rejected — Greg asked for it
++  "including in searching", and a link leaves the search box blind to it.
++- *Bigger:* public articles **inside** the one list, as archived became on 260929a (sorted, topics,
++  table view, Unread). That needs a `LibraryEntry`-shaped row for an article with no owner fields
++  (opens, comments, rename, archive) and a `ShelfCard` with every owner verb switched off — exactly
++  the six-optional-branches design [public-shelf.md](../project/public-shelf.md) § The parts rejected
++  for `PublicCard`. A section is the v1; if Greg wants sorting and topics across both, that is the
++  next step and it is named as a question.
++
++## Part B — an empty shelf that helps
++
++Today: *"Nothing on the shelf yet. Paste a URL above and it'll be here in a minute or two."* Now:
++
++- **"Paste a URL above"** becomes a link to the add box (`#add-url`) whose click scrolls to it and
++  focuses it — Greg's *"a link that points them to the top"*.
++- **A second sentence offers the public shelf**: *"Or see what other readers have shared —"* and a
++  button that turns **Include public** on (the same setter as the chip). With it already on, the
++  sentence is not drawn.
++- The chip itself is already drawn over an empty shelf (the `bare` row in `ShelfControls`), so
++  Include public is added to the bare row too.
++
++## Part C — a phone banner on the shelf
++
++A `role="note"` banner at the top of the shelf, the `.small-screen-hint` styles reused, the shape of
++`SmallScreenHint` (lazy initialiser, × writes one bit):
++
++> **Spideryarn works best on a larger screen** — a tablet or a computer. On a phone, turning it
++> sideways gives the reading view more room.
++
++(the landscape sentence dropped when the phone is already sideways, `moreRoomSideways`).
++
++**Who gets it — a phone, not a narrow window.** `coarsePointer` *and* the screen's **shorter side
++under 600 CSS px** (`screen.width`/`screen.height`, not the window — a phone is a phone in either
++orientation, and an iPad mini's short side is 744). The article banner asks the layout because it
++explains one layout decision; this one is about the device, so it asks the device. A laptop window
++dragged narrow has a fine pointer and never sees it.
++
++**Until dismissed, on this device** — the same contract as the article banner, its own
++`localStorage` key (`spya.shelfPhoneHint.dismissed`), every read and write in try/catch. Greg's ask
++says *"ideally only once/the first time"*; touch.md § One banner, once records why the article banner
++chose *until dismissed* instead (a banner spent on a visit where the reader scrolled past explained
++nothing), and the same holds here. Asked back as a question rather than decided silently.
++
++The pure parts (`isPhone(env)`, `shouldShowShelfPhoneHint(env)`, the storage pair) go in
++`small-screen-hint.ts` beside their siblings, so one file holds both banners' conditions.
++
++## Tests
++
++- `filterEntries` over public entries; the dedup by slug; the section's empty and capped states.
++- The chip: off makes no public request; on makes one, and the section draws; `?public=1` on arrival.
++- The empty shelf: the link targets `#add-url`; the button turns the chip on.
++- The phone rule: a phone portrait and landscape → yes; iPad (short side 744/820) → no; a fine
++  pointer at 390 → no; dismissed → no; storage throwing → shows (cannot tell = show).
++
++## Deferred, said rather than left
++
++- **Passage search in public articles** — a server query that returns public block text for a
++  query: a new listing-shaped read in the unauthenticated namespace, which
++  [security-map.md](../project/security-map.md) treats as the sharpest kind. Worth doing on its own
++  plan if Greg wants it; the UI says it is not done.
++- **Public articles in the one sorted list** (above).
++
++## Plan review (GPT Sol, 2026-10-02)
++
++[261002b-plan-review-sol.md](261002b-plan-review-sol.md): no P0. Confirmed the separate section, the
++anonymous read (no credentials, query never sent), and that a signed-in reader opens another
++reader's public article through the visitor path (`access.ts`, owned 404 → public 200). Taken:
++the failure/Retry contract is tested (P1); the cap gets its own sentence saying the *search* is
++bounded, and "nobody else has shared" is not said when every row sent was yours and there are more;
++`isPhone` refuses an unmeasured screen (0 or `NaN`) and the 599/600 boundary is pinned; the
++landscape sentence is picked by an orientation media query so it follows a rotation; library.md,
++public-shelf.md and touch.md record the change.
+diff --git a/docs/plans/261002b-plan-review-prompt.md b/docs/plans/261002b-plan-review-prompt.md
+new file mode 100644
+index 000000000..090f43ae8
+--- /dev/null
++++ b/docs/plans/261002b-plan-review-prompt.md
+@@ -0,0 +1,14 @@
++You are reviewing a plan, read-only, in the Spideryarn repo (this worktree). Read
++docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md
++and the code it touches: src/web/Library.tsx, src/web/ShelfControls.tsx, src/web/shelf-narrow.ts,
++src/web/PublicLibraryPage.tsx, src/web/public-api.ts, src/web/small-screen-hint.ts,
++src/web/SmallScreenHint.tsx, src/web/params.ts (libraryArchivedParam), docs/project/library.md,
++docs/project/public-shelf.md, docs/project/touch.md § One banner, once.
++
++Tell me: (1) anything in the plan that is wrong about the code; (2) security or privacy problems
++(e.g. the signed-in shelf calling the anonymous public listing; anything leaking); (3) whether a
++signed-in reader can actually open another reader's public article from /read/<slug> (trace it);
++(4) simpler designs I missed; (5) edge cases the tests list misses; (6) whether the phone rule
++(coarse pointer AND min(screen.width, screen.height) < 600) is sound. Also check the conclusion:
++is a separate section under the list (not merged into the one list) the right v1 for Greg's words?
++Rank findings P0/P1/P2, be concrete, cite file:line.
+diff --git a/docs/plans/261002b-plan-review-sol.md b/docs/plans/261002b-plan-review-sol.md
+new file mode 100644
+index 000000000..9d10667d5
+--- /dev/null
++++ b/docs/plans/261002b-plan-review-sol.md
+@@ -0,0 +1,60 @@
++No P0 findings. One P1 and several P2s. The separate public section is the right v1, and I found no security/privacy blocker.
++
++## Findings
++
++- **P1 — The plan omits the public section’s failure contract.** `loadPublicLibrary()` returns `PublicRead<PublicLibrary>`, not a bare library; a 404 or rejected request must be a failure, never an empty public shelf. The existing hook deliberately models `loading | loaded | failed`, includes Retry, and guards overlapping responses ([PublicLibraryPage.tsx:378](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/PublicLibraryPage.tsx:378), [PublicLibraryPage.tsx:390](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/PublicLibraryPage.tsx:390), [PublicLibraryPage.tsx:431](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/PublicLibraryPage.tsx:431)). The plan only specifies empty and capped states and tests neither failure nor Retry ([plan:102](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md:102)). Require the same state machine in the section and test failure → Retry → success, including a late superseded response.
++
++- **P2 — “Search public articles” actually means “search the newest 200 public cards.”** The anonymous endpoint is capped before the browser filters it ([public-library.ts:86](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/public-library.ts:86)). Consequently an older matching article can produce “no match.” Reusing `PUBLIC_SHELF_TRUNCATED` verbatim, as proposed at [plan:48](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md:48), only says that the page is capped; it does not explain that the search was incomplete ([messages.ts:3247](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/messages.ts:3247)). Use section-specific copy such as “Only the most recently shared articles are searched here.” Do not claim “nobody else has shared anything” when the returned window is truncated and deduplication removed every returned row.
++
++- **P2 — The phone predicate needs an “unknown dimensions” guard.** The proposed conjunction is a reasonable device heuristic, but the implementation’s fallback dimensions are `0 × 0`, which satisfies `< 600` whenever the pointer is coarse ([small-screen-hint.ts:156](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/small-screen-hint.ts:156), [small-screen-hint.ts:190](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/small-screen-hint.ts:190)). Require both dimensions to be finite and positive. Add cases for 599, exactly 600, 0, and `NaN`.
++
++- **P2 — Orientation copy is not demonstrably reactive.** The plan promises different copy when already sideways ([plan:80](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md:80)), but the phone facts are read once and the orientation is merely sampled during render ([ShelfPhoneHint.tsx:27](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/ShelfPhoneHint.tsx:27), [ShelfPhoneHint.tsx:34](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/ShelfPhoneHint.tsx:34)). After the reader follows the advice and rotates, nothing here guarantees a render. Either subscribe to orientation/resize, or explicitly decide that the sentence only reflects arrival orientation.
++
++- **P2 — The empty-shelf test does not test the promised behaviour.** Checking only that the link targets `#add-url` ([plan:104](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md:104)) does not prove the plan’s “scrolls and focuses” promise. The target really is the input ([AddArticle.tsx:288](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/AddArticle.tsx:288)); click it in the test, assert `document.activeElement`, and spy on `scrollIntoView`.
++
++- **P2 — The documentation changes need to be explicit in the plan.** The current public-shelf doc says the owner’s shelf is only “your articles” and retains the badge-not-filter decision ([public-shelf.md:13](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/project/public-shelf.md:13)). The library doc stresses one integrated list for archived articles and “two different shelves” ([library.md:301](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/project/library.md:301), [library.md:899](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/project/library.md:899)). `touch.md` also describes one banner and one dismissal bit ([touch.md:588](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/project/touch.md:588)). The new second section does not invalidate the underlying distinction, but all three docs need wording that records it.
++
++## Security and privacy
++
++I found no leak in the proposed anonymous call:
++
++- `publicFetch` cannot attach an authorization header and explicitly uses `credentials: "omit"` ([public-api.ts:55](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/public-api.ts:55), [public-api.ts:103](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/public-api.ts:103)).
++- The public listing projection excludes owner ID, private rename, purpose, archive/open state, source URL, excerpts, and prose ([public-library.ts:194](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/public-library.ts:194)).
++- `byline` is the article’s author, not the reader who shared it ([public-library-types.ts:41](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/public-library-types.ts:41)).
++- Search is client-side, so the signed-in reader’s query is not sent to the anonymous endpoint.
++- Slug-based deduplication is safe because article slugs are globally unique ([schema.ts:154](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/db/schema.ts:154)).
++
++Calling public data anonymously from an authenticated page is therefore the correct boundary: it prevents the public response from becoming personalized or accidentally dependent on a session.
++
++## Can a signed-in reader open another reader’s public article?
++
++Yes.
++
++1. `PublicCard` links to the normal `/read/<slug>` address through `readHref` ([PublicLibraryPage.tsx:319](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/PublicLibraryPage.tsx:319)).
++2. With a session, access first requests the owner-scoped `/api/article/<slug>` ([access.ts:479](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/article/access.ts:479)).
++3. Its 404 means “not mine,” after which the client requests `/api/public/article/<slug>` ([access.ts:481](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/article/access.ts:481), [access.ts:509](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/article/access.ts:509)).
++4. A public 200 becomes `kind: "public"`; `ArticlePage` mounts `VisitorArticle`, not owner components ([ArticlePage.tsx:220](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/article/ArticlePage.tsx:220)). The visitor reader receives an explicit visitor capability ([ArticlePage.tsx:635](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/article/ArticlePage.tsx:635)).
++
++That is exactly the supported `owned 404 + public 200` case documented in the access seam ([access.ts:162](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/article/access.ts:162)).
++
++## Additional test cases
++
++Add:
++
++- Public 404/failure, Retry, and overlapping-response ordering.
++- One own public row plus one other row, proving dedup removes only the own row.
++- Public response resolves before the owner shelf; never briefly label an own article as “other.”
++- Empty endpoint, all returned rows deduped, and query-matched-none as distinct states.
++- `truncated: true` with and without a query.
++- Unread/topics visibly leave public results unchanged.
++- Back/Forward around `?public=1`, including a pending debounced `?q=`.
++- Actual phone-banner rendering, dismissal click, portrait copy, landscape copy, and rotation if live updating is intended.
++- The anonymous integration request carries neither credentials nor the shelf query.
++
++## Simpler design and conclusion
++
++The separate section is the right v1. `PublicLibraryEntry` deliberately lacks the owner relationship fields that make the main shelf work ([public-library-types.ts:12](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/public-library-types.ts:12)). Merging it into the owner list would either invent meaningless values or spread owner/visitor branches through sorting, table rows, actions, topics, and Unread. Greg explicitly asked for inclusion and search; he did not explicitly require one interleaved order.
++
++The simplest implementation shape is one `ShelfPublicSection`, mounted only while the chip is on, owning the existing public state machine and rendering the existing `PublicCard`. If exporting page internals feels awkward, move `PublicCard` and `usePublicShelf` into a neutral public-shelf module used by both pages; do not create a fake `LibraryEntry` adapter.
++
++The phone rule is sound as a pragmatic proxy, not as perfect device detection. It will miss phones whose primary pointer reports fine and treat some small coarse-pointer tablets/foldables as phones, but browser APIs offer no clean literal “phone” test. With positive-dimension guards and boundary tests, the proposed rule is a sensible v1.
+\ No newline at end of file
+diff --git a/docs/project/library.md b/docs/project/library.md
+index d5daaf4e0..48c1db385 100644
+--- a/docs/project/library.md
++++ b/docs/project/library.md
+@@ -351,6 +351,38 @@ article on their own shelf while strangers go on finding it, and since the paylo
+ `archived_at` at all, nothing on either end would ever show that it had. Listing is the half
+ archiving owns; the link is the half sharing owns, and `publicSlug` is deliberately left alone.
+ 
++### Include public, and an empty shelf that says where to go
++
++> Perhaps let's also have a button for include public. And if the user has no articles in their
++> shelf, … a link that points them to the top. … be able to include public for everybody they want,
++> including in searching, etc.
++>
++> — Greg, 2026-10-01 (spya-yy5x66)
++
++An **Include public** chip sits beside Include archived (`?public=1`, off by default, nothing fetched
++until it is on). On, what other readers have shared is drawn **in a section of its own under the
++list** — [`ShelfPublicSection.tsx`](../../src/web/ShelfPublicSection.tsx) — and not in the one list
++the archive joined. That is the difference that matters: an archived article is still yours, with
++opens and a rename and Put back; a public one has none of those, so a row for it would be a
++`ShelfCard` with every owner verb switched off, the design [public-shelf.md](public-shelf.md)
++§ The parts rejected. It draws the public page's own `PublicCard` off the same anonymous read
++`/read/public` makes, so it adds nothing to the public import graph. Your own shared articles are
++left out of it, being already above.
++
++**The search box narrows it, by the cards' words only.** The same `filterEntries` rule as the shelf
++(title, byline, site, gist), in the browser. The *text* of public articles is not searched — the
++section says so whenever a query is typed — because that would be a new listing-shaped read in the
++unauthenticated namespace, and the listing is capped, so the section says too that only the most
++recently shared are shown and searched when it is. Unread and Topics do not apply to it (both are
++about your reading), and it says that when either is on.
++
++**An empty shelf now links to the add box** — the link puts the cursor in it — and offers to turn
++Include public on. Plan
++[261002b](../plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md).
++
++**On a phone, the shelf opens with one line** saying Spideryarn is best on a bigger screen, until
++dismissed — the article banner's sibling, [touch.md § One banner, once](touch.md#one-banner-once-when-both-will-not-fit).
++
+ #### This section was called "Delete means archive", and that was the bug
+ 
+ Greg's choice above was made on 2026-08-26 and built the same day. **Every control that carried it
+diff --git a/docs/project/public-shelf.md b/docs/project/public-shelf.md
+index 7ff591ceb..af48dcb70 100644
+--- a/docs/project/public-shelf.md
++++ b/docs/project/public-shelf.md
+@@ -176,6 +176,15 @@ Two consequences worth knowing before changing it:
+   `tests/pricing-page-current-plan.test.tsx` asserts a signed-out `/pricing` makes no network request
+   at all.
+ 
++## On the owner's shelf too, as a section
++
++Since 2026-10-02 the owner's shelf has an **Include public** chip that draws this listing in a
++section under the owner's own articles, narrowed by the shelf's search box
++([library.md § Include public](library.md#include-public-and-an-empty-shelf-that-says-where-to-go)).
++It is the same anonymous read through `loadPublicLibrary` and the same `PublicCard`, so the rule at
++the top of this page still holds: the owner's shelf is *your articles*, and what anybody has shared
++sits beside it, never inside it.
++
+ ## What is deliberately not here
+ 
+ - **No search indexing.** `robots.txt` is `Disallow: /` and stays that way for now.
+diff --git a/docs/project/touch.md b/docs/project/touch.md
+index 6586ef18f..e99359634 100644
+--- a/docs/project/touch.md
++++ b/docs/project/touch.md
+@@ -628,6 +628,23 @@ which tells an iOS reader how to get the browser's own chrome out of the way, an
+ `media()` in [`src/web/media.ts`](../../src/web/media.ts). They say different things and sit in
+ different places: this one is in flow at the top of the article, that one is fixed above the dock.
+ 
++### Its sibling on the shelf, which asks about the device
++
++> show some kind of banner to people when they open it on a phone to say that it's probably best on
++> a larger screen, and failing that, in Landscape mode. … on the logged-in homepage
++>
++> — Greg, 2026-10-01 (spya-fcbnhq)
++
++[`ShelfPhoneHint.tsx`](../../src/web/ShelfPhoneHint.tsx), at the top of the shelf. Same contract —
++until dismissed, its own `localStorage` bit — but a different gate: this one says *a phone is not the
++best screen*, which is about the device, so it asks the device. A coarse pointer **and a screen whose
++shorter side is under 600 CSS px** (`isPhone` in [`small-screen-hint.ts`](../../src/web/small-screen-hint.ts)):
++true in either orientation, false on any iPad (a mini's short side is 744), false on a laptop window
++however narrow. The landscape sentence is picked by an orientation media query rather than read in
++render, so it follows a rotation. Plan
++[261002b](../plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md)
++§ Part C.
++
+ ## A passage link in a covering band shows the passage
+ 
+ A band lying over the article has a problem of its own: every passage link in it — a `BlockRef`, a
+diff --git a/docs/user-feedback/261001_1904-include-public-on-the-shelf-and-help-for-an-empty-shelf.md b/docs/user-feedback/261001_1904-include-public-on-the-shelf-and-help-for-an-empty-shelf.md
+new file mode 100644
+index 000000000..59285de32
+--- /dev/null
++++ b/docs/user-feedback/261001_1904-include-public-on-the-shelf-and-help-for-an-empty-shelf.md
+@@ -0,0 +1,29 @@
++---
++reports: spya-yy5x66
++ending: shipped
++---
++# Include public on the shelf, and an empty shelf that says where to go
++
++Report `spya-yy5x66`, a suggestion, from Greg (admin), 2026-10-01, dispatched by the Overseer on
++2026-10-02 with no Sentry mirror, on `https://www.spideryarn.com/`:
++
++> We have a button to include archived when displaying stuff in the shelf and searching the shelf.
++> Perhaps let's also have a button for include public. And if the user has no articles in their
++> shelf, we probably actually want to, as well as saying you have no articles yet, you know, upload
++> them, you know, see above or whatever with a link that points them to the top.
++>
++> We might also want to see or browse our public articles, you know, click include public. So just
++> kind of provide a bit more help to new users that don't yet have anything on their shelf and be
++> able to include public for everybody they want, including in searching, etc.
++
++**Ending: Shipped**, on `dev`. Plan
++[261002b](../plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md)
++§ Part A and § Part B.
++
++What changed: an **Include public** chip beside Include archived (`?public=1`). On, the articles
++other readers have shared appear in their own section under your shelf, and the search box narrows
++them by title, author, site and description. An empty shelf now links to the add box (and puts the
++cursor in it) and offers to show what other readers have shared.
++
++Not done, and asked back: searching the *text* of public articles (only their cards are matched),
++and folding them into the one sorted list rather than a section of their own.
+diff --git a/docs/user-feedback/261001_2003-a-phone-banner-on-the-shelf.md b/docs/user-feedback/261001_2003-a-phone-banner-on-the-shelf.md
+new file mode 100644
+index 000000000..a0c9d394b
+--- /dev/null
++++ b/docs/user-feedback/261001_2003-a-phone-banner-on-the-shelf.md
+@@ -0,0 +1,29 @@
++---
++reports: spya-fcbnhq
++ending: shipped
++---
++# A banner on the shelf, on a phone: best on a larger screen
++
++Report `spya-fcbnhq`, a suggestion, from Greg (admin), 2026-10-01, dispatched by the Overseer on
++2026-10-02 with no Sentry mirror, on `https://www.spideryarn.com/changelog`:
++
++> Spideryarn does not work that well on a mobile phone. It works, but because of the small screen
++> the experience is suboptimal. So I wonder if we should show some kind of banner to people when
++> they open it on a phone to say that it's probably best on a larger screen, and failing that, in
++> Landscape mode.
++>
++> We'd show it on the logged-in homepage, and ideally only once/the first time they use it on a
++> phone.
++
++**Ending: Shipped**, on `dev`. Plan
++[261002b](../plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md)
++§ Part C.
++
++What changed: on a phone (a finger, and a screen whose short side is under 600px — so not an iPad,
++and not a laptop window dragged narrow), the shelf opens with one line: *Spideryarn works best on a
++larger screen — a tablet or a computer*, plus a suggestion to turn sideways when in portrait. The ×
++puts it away for good on that device.
++
++One deliberate difference from the ask: it shows **until dismissed** rather than only the first
++time, which is the article banner's rule — a banner spent on a visit where the reader scrolled past
++it has told them nothing. Asked back.
+diff --git a/src/feedback-endings.generated.ts b/src/feedback-endings.generated.ts
+index 992bd348e..2c46d3618 100644
+--- a/src/feedback-endings.generated.ts
++++ b/src/feedback-endings.generated.ts
+@@ -72,6 +72,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-f28vqj": "shipped",
+   "spya-f65rcm": "shipped",
+   "spya-fc0h87": "shipped",
++  "spya-fcbnhq": "shipped",
+   "spya-fjajs7": "shipped",
+   "spya-fmj0az": "shipped",
+   "spya-fsryfr": "shipped",
+@@ -264,6 +265,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-ygj9xz": "shipped",
+   "spya-yvwpek": "shipped",
+   "spya-yxcdxn": "shipped",
++  "spya-yy5x66": "shipped",
+   "spya-yyf38a": "shipped",
+   "spya-z39d04": "shipped",
+   "spya-z6daky": "shipped",
+diff --git a/src/web/Library.tsx b/src/web/Library.tsx
+index a837c8a30..ce7f9ccea 100644
+--- a/src/web/Library.tsx
++++ b/src/web/Library.tsx
+@@ -70,6 +70,7 @@ import { useLogoAnimation } from "./logo-animation.js";
+ import { foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
+ import {
+   libraryArchivedParam,
++  libraryPublicParam,
+   libraryByParam,
+   libraryQueryParam,
+   libraryShowParam,
+@@ -85,6 +86,8 @@ import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
+ import { media } from "./media.js";
+ import { ArchivedMark, ShelfCard } from "./ShelfEntry.js";
+ import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
++import { ShelfPhoneHint } from "./ShelfPhoneHint.js";
++import { ShelfPublicSection } from "./ShelfPublicSection.js";
+ import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
+ import { SiteFooter } from "./SiteFooter.js";
+ import { Tooltip, TooltipGroup } from "./Tooltip.js";
+@@ -137,6 +140,9 @@ export function Library({
+   /* The topics row and the archive switch — docs/project/shelf-terms.md. */
+   const [requestedTopics, setTopics] = useQueryState("topics", libraryTopicsParam);
+   const [archivedOn, setArchivedOn] = useQueryState("archived", libraryArchivedParam);
++  /* Include public — what other readers have shared, in its own section under
++     the list. ShelfPublicSection.tsx; plan 261002b § Part A. */
++  const [publicOn, setPublicOn] = useQueryState("public", libraryPublicParam);
+ 
+   /**
+    * Whether the shelf is showing every row or only the first `SHELF_ROW_CAP`.
+@@ -246,6 +252,15 @@ export function Library({
+     [articles, archivedOn, shelf.archivedVisible],
+   );
+ 
++  /* Every slug that is yours, so Include public does not list your own shared
++     articles a second time without your verbs on them. The archive too, when it
++     is loaded — the public listing already leaves archived articles out, so
++     this is belt and braces rather than the rule. */
++  const ownSlugs = useMemo(
++    () => new Set([...(articles ?? []), ...(shelf.archived ?? [])].map((a) => a.slug)),
++    [articles, shelf.archived],
++  );
++
+   /* The archive is fetched when the chip is on and the list is missing — on a
+      press, on a direct `?archived=1` visit, and after anything sets the list
+      back to `null` (a change of reader). An effect rather than a call in the
+@@ -593,6 +608,11 @@ export function Library({
+             docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md. */}
+       </header>
+ 
++      {/* **On a phone, until dismissed: a bigger screen is better.** Greg,
++          spya-fcbnhq. Above the add box so it is the first thing read, and in
++          flow so it scrolls away. ShelfPhoneHint.tsx; plan 261002b § Part C. */}
++      <ShelfPhoneHint />
++
+       <AddArticle queue={queue} />
+ 
+       {/* **Several files dropped at once**, each added with only its title,
+@@ -654,6 +674,8 @@ export function Library({
+           onFilter={(f) => pushView(() => void setShow(f))}
+           archived={archivedOn}
+           onArchived={(on) => pushView(() => void setArchivedOn(on ? true : null))}
++          publicOn={publicOn}
++          onPublic={(on) => pushView(() => void setPublicOn(on ? true : null))}
+           bare={total === 0}
+         />
+       )}
+@@ -711,11 +733,11 @@ export function Library({
+           While the archive is still loading, it is not said at all — it may
+           be about to be untrue. */}
+       {articles !== null && total === 0 && (!archivedOn || inArchive !== null) && (
+-        <p className="tw:text-sm tw:text-muted-foreground">
+-          {archivedOn
+-            ? "Nothing on the shelf, and nothing archived. Paste a URL above and it'll be here in a minute or two."
+-            : "Nothing on the shelf yet. Paste a URL above and it'll be here in a minute or two."}
+-        </p>
++        <EmptyShelf
++          archivedOn={archivedOn}
++          publicOn={publicOn}
++          onPublic={() => pushView(() => void setPublicOn(true))}
++        />
+       )}
+       {showing === 0 && total > 0 && (
+         <p className="tw:text-sm tw:text-muted-foreground">
+@@ -803,6 +825,16 @@ export function Library({
+           something you have already read" is the useful half of that answer. */}
+       {searching && <Passages state={passages} query={query} only={unread} archived={archivedOn} />}
+ 
++      {/* After your own articles and their passages, because it is the
++          further reach: the same search box, someone else's shelf. */}
++      {publicOn && articles !== null && (
++        <ShelfPublicSection
++          query={query}
++          ownSlugs={ownSlugs}
++          narrowedElsewhere={show === "unread" || topics.length > 0}
++        />
++      )}
++
+       {/* **No "Show archived" here any more** (plan 260929a): it was a
+           disclosure at the foot of the shelf, with its own second list, and
+           is the Archived chip beside Unread now — ShelfControls.tsx. */}
+@@ -827,6 +859,71 @@ export function Library({
+   );
+ }
+ 
++/**
++ * **An empty shelf, with somewhere to go from it.**
++ *
++ * > if the user has no articles in their shelf, we probably actually want to,
++ * > as well as saying you have no articles yet, you know, upload them, you know,
++ * > see above or whatever with a link that points them to the top. … So just
++ * > kind of provide a bit more help to new users that don't yet have anything
++ * > on their shelf
++ * >
++ * > — Greg, 2026-10-01 (spya-yy5x66)
++ *
++ * Two ways on: the add box, as a link that takes you to it and puts the cursor
++ * in it, and the public shelf, as a button that turns Include public on — the
++ * same act as the chip, so it lands in the URL and Back undoes it. With Include
++ * public already on, the second is not offered.
++ */
++function EmptyShelf({
++  archivedOn,
++  publicOn,
++  onPublic,
++}: {
++  archivedOn: boolean;
++  publicOn: boolean;
++  onPublic: () => void;
++}) {
++  return (
++    <p className="tw:text-sm tw:text-muted-foreground">
++      {archivedOn ? "Nothing on the shelf, and nothing archived." : "Nothing on your shelf yet."}{" "}
++      <a
++        href={`#${ADD_URL_ID}`}
++        onClick={(e) => {
++          /* Focus does the scrolling, and it is the half a fragment link alone
++             would not do: the reader lands *in* the box, ready to paste. */
++          const box = document.getElementById(ADD_URL_ID);
++          if (!box) return;
++          e.preventDefault();
++          box.focus();
++          box.scrollIntoView({ block: "center" });
++        }}
++        className="tw:text-highlight tw:underline"
++      >
++        Paste a link to an article in the box at the top
++      </a>{" "}
++      and it'll be here in a minute or two.
++      {!publicOn && (
++        <>
++          {" "}
++          Or{" "}
++          <button
++            type="button"
++            onClick={onPublic}
++            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline"
++          >
++            browse what other readers have shared
++          </button>
++          .
++        </>
++      )}
++    </p>
++  );
++}
++
++/** The add box's input — AddArticle.tsx. */
++const ADD_URL_ID = "add-url";
++
+ /**
+  * Why nothing is on screen.
+  *
+diff --git a/src/web/PublicLibraryPage.tsx b/src/web/PublicLibraryPage.tsx
+index 1cdc3e88f..c84cac683 100644
+--- a/src/web/PublicLibraryPage.tsx
++++ b/src/web/PublicLibraryPage.tsx
+@@ -296,7 +296,7 @@ export function PublicLibraryPage({
+  * owner's card follows for the same reason: *"why is this one at the top?"* has
+  * to be answerable from the card, and here the answer is when it was shared.
+  */
+-function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
++export function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
+   /* Only the facts this article actually has — `byline`, `gist`, `siteName` and
+      `words` are all nullable on the wire, and a filtered join beats a chain of `&&`s
+      that can leave a stranded separator. Same shape as `ShelfCard`'s. */
+@@ -375,7 +375,7 @@ function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
+  * component, and giving it a member here would invite somewhere else to
+  * construct one without having asked.
+  */
+-type ShelfState =
++export type ShelfState =
+   | { kind: "loading" }
+   | { kind: "loaded"; shelf: PublicLibrary }
+   | { kind: "failed" };
+@@ -397,7 +397,7 @@ type ShelfState =
+  * a reader something false about the world with complete confidence, which is
+  * worse than admitting we could not read it. src/web/public-api.ts.
+  */
+-function usePublicShelf(): { state: ShelfState; again: () => void } {
++export function usePublicShelf(): { state: ShelfState; again: () => void } {
+   const [state, setState] = useState<ShelfState>({ kind: "loading" });
+   /**
+    * **Which read is allowed to answer**, and it is a ref rather than state
+diff --git a/src/web/ShelfControls.tsx b/src/web/ShelfControls.tsx
+index e2ceb37e7..47c392bb1 100644
+--- a/src/web/ShelfControls.tsx
++++ b/src/web/ShelfControls.tsx
+@@ -27,7 +27,7 @@
+  * first (2026-09-28) and got one small menu of its own, `ColumnsMenu`, shown
+  * in table view only: one dimension did not yet earn a popover of popovers.
+  */
+-import { Archive, EyeOff, Rows3, Table as TableIcon } from "lucide-react";
++import { Archive, EyeOff, Globe, Rows3, Table as TableIcon } from "lucide-react";
+ import { RadioGroup } from "radix-ui";
+ import type { Table } from "@tanstack/react-table";
+ import type { LibraryEntry } from "../types.js";
+@@ -46,6 +46,8 @@ export function ShelfControls({
+   onFilter,
+   archived,
+   onArchived,
++  publicOn,
++  onPublic,
+   bare = false,
+ }: {
+   table: Table<LibraryEntry>;
+@@ -58,6 +60,9 @@ export function ShelfControls({
+   /** `?archived=1`: archived articles on the shelf too. */
+   archived: boolean;
+   onArchived: (on: boolean) => void;
++  /** `?public=1`: what other readers have shared, in a section under the list. */
++  publicOn: boolean;
++  onPublic: (on: boolean) => void;
+   /**
+    * **Nothing is in scope** — no active article, and the archive either off
+    * or empty — so only the Archived chip is drawn. A sort control over an
+@@ -90,10 +95,31 @@ export function ShelfControls({
+     </Chip>
+   );
+ 
++  /* **Include public**, the same shape and the same verb as Include archived,
++     because it does the same kind of thing: it adds. Greg, 2026-10-01
++     (spya-yy5x66): *"Perhaps let's also have a button for include public."*
++     What it adds is drawn in its own section under the list rather than in
++     it — plan 261002b § Part A says why. */
++  const publicChip = (
++    <Chip
++      pressed={publicOn}
++      describe={
++        publicOn
++          ? "Include public — articles other readers have shared are listed below yours, and the search box narrows them too. Activate to hide them."
++          : "Include public — also list articles other readers have shared, below yours"
++      }
++      onClick={() => onPublic(!publicOn)}
++    >
++      <Globe size={12} />
++      Include public
++    </Chip>
++  );
++
+   if (bare) {
+     return (
+       <div className="tw:mb-4 tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
+         {archivedChip}
++        {publicChip}
+       </div>
+     );
+   }
+@@ -138,6 +164,7 @@ export function ShelfControls({
+               of the shelf. On, the archived articles join the one list, so the
+               sort, the search, Unread and the topics all apply to them. */}
+           {archivedChip}
++          {publicChip}
+ 
+           {/* **Columns, in table view only** — the cards have no columns to
+               hide. Beside the switch, because which columns the table shows is a
+diff --git a/src/web/ShelfPhoneHint.tsx b/src/web/ShelfPhoneHint.tsx
+new file mode 100644
+index 000000000..5d864cf66
+--- /dev/null
++++ b/src/web/ShelfPhoneHint.tsx
+@@ -0,0 +1,61 @@
++/**
++ * One banner on the shelf, on a phone, until dismissed: Spideryarn is better
++ * on a bigger screen, and failing that, sideways.
++ *
++ * > Spideryarn does not work that well on a mobile phone. It works, but because
++ * > of the small screen the experience is suboptimal. So I wonder if we should
++ * > show some kind of banner to people when they open it on a phone to say that
++ * > it's probably best on a larger screen, and failing that, in Landscape mode.
++ * >
++ * > — Greg, 2026-10-01 (spya-fcbnhq)
++ *
++ * The sibling of `SmallScreenHint`, and built the same way on purpose — a lazy
++ * initialiser, one bit that the × writes, `role="note"`, the same
++ * `.small-screen-hint` styles. Who sees it is `small-screen-hint.ts` §
++ * `isPhone`, which asks the device rather than the layout.
++ * docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md § Part C.
++ */
++import { useState } from "react";
++import { X } from "lucide-react";
++import {
++  readPhone,
++  rememberShelfPhoneHintDismissed,
++  shouldShowShelfPhoneHint,
++} from "./small-screen-hint.js";
++
++export function ShelfPhoneHint() {
++  const [phone, setPhone] = useState(readPhone);
++  if (!shouldShowShelfPhoneHint(phone)) return null;
++
++  return (
++    <div className="small-screen-hint" role="note">
++      <p className="small-screen-hint-text">
++        <b>Spideryarn works best on a larger screen</b> — a tablet or a computer.
++        {/* The landscape advice only where there is a landscape to turn to —
++            `SmallScreenHint`'s rule, and its reason: told to rotate a phone
++            already sideways, a reader learns we are not looking. **Chosen by
++            CSS, not read in render**, so it follows a rotation with nothing to
++            subscribe to: this component reads its facts once, and a reader who
++            takes the advice would otherwise be left holding it. GPT Sol, plan
++            review, 2026-10-02. */}
++        <span className="tw:landscape:hidden">
++          {" "}
++          On a phone, turning it sideways gives the reading view more room.
++        </span>
++        <span className="tw:portrait:hidden"> On a phone, this way round gives it the most room.</span>
++      </p>
++      <button
++        type="button"
++        className="small-screen-hint-close"
++        onClick={() => {
++          rememberShelfPhoneHintDismissed();
++          setPhone((p) => ({ ...p, dismissed: true }));
++        }}
++        title="Don't show this again"
++        aria-label="Dismiss"
++      >
++        <X size={14} />
++      </button>
++    </div>
++  );
++}
+diff --git a/src/web/ShelfPublicSection.tsx b/src/web/ShelfPublicSection.tsx
+new file mode 100644
+index 000000000..72c17bd7c
+--- /dev/null
++++ b/src/web/ShelfPublicSection.tsx
+@@ -0,0 +1,132 @@
++/**
++ * **What other readers have shared, under your own shelf** — the half of the
++ * page the Include public chip turns on.
++ *
++ * > We have a button to include archived when displaying stuff in the shelf and
++ * > searching the shelf. Perhaps let's also have a button for include public.
++ * > … be able to include public for everybody they want, including in
++ * > searching, etc.
++ * >
++ * > — Greg, 2026-10-01 (spya-yy5x66)
++ *
++ * **Its own section, not rows in the shelf's one list**, and that is the v1's
++ * one real decision. The archive could join the list (plan 260929a) because an
++ * archived article is still *yours*: it has opens, a rename, Put back. A public
++ * article has none of that, so a row for it would be a `ShelfCard` with every
++ * owner verb switched off — the design public-shelf.md § The parts rejected for
++ * the public page's card. So this draws `PublicCard`, the public page's own,
++ * and the same anonymous read (`usePublicShelf`) that page makes: no new route,
++ * no new query, nothing new in the public import graph.
++ *
++ * Mounted only while the chip is on, so the read happens only then.
++ *
++ * docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md § Part A.
++ */
++import { useMemo } from "react";
++import { PUBLIC_SHELF_FAILED, PUBLIC_SHELF_RETRY } from "../messages.js";
++import { PublicCard, usePublicShelf } from "./PublicLibraryPage.js";
++import { filterEntries } from "./shelf-narrow.js";
++import { useSlow } from "./useSlow.js";
++
++export function ShelfPublicSection({
++  query,
++  ownSlugs,
++  narrowedElsewhere,
++}: {
++  /** The shelf's search box — the one narrowing that applies here. */
++  query: string;
++  /**
++   * Every slug already on the shelf above. **Your own public articles are left
++   * out here**, because they are already up there with your verbs on them, and
++   * a second copy without them would read as somebody else's.
++   */
++  ownSlugs: ReadonlySet<string>;
++  /**
++   * Unread or a topic is on. Neither applies here — both are facts about *your*
++   * reading — so the section says so rather than looking unnarrowed by mistake.
++   */
++  narrowedElsewhere: boolean;
++}) {
++  const { state, again } = usePublicShelf();
++  const slow = useSlow(state.kind === "loading");
++
++  const others = useMemo(
++    () =>
++      state.kind === "loaded" ? state.shelf.entries.filter((e) => !ownSlugs.has(e.slug)) : [],
++    [state, ownSlugs],
++  );
++  const shown = useMemo(() => filterEntries(others, query), [others, query]);
++  const searching = query.trim() !== "";
++
++  return (
++    <section aria-labelledby="shelf-public-heading" className="tw:mt-10">
++      <h2
++        id="shelf-public-heading"
++        className="tw:mb-1 tw:font-sans tw:text-base tw:font-semibold tw:text-foreground"
++      >
++        Shared by other readers
++      </h2>
++      <p className="tw:mt-0 tw:mb-4 tw:text-sm tw:text-muted-foreground">
++        {/* What narrows this list, and what does not — said every time,
++            because a search box that silently skips half of what it seems to
++            cover reads as a broken search. */}
++        {searching
++          ? "Matched on title, author, site and description; the text of these articles isn't searched."
++          : "Articles other readers have made public. The search box above narrows these too."}
++        {narrowedElsewhere && " Unread and topics apply to your own articles only."}
++      </p>
++
++      {slow && <p className="tw:text-sm tw:text-muted-foreground">Reading the public shelf…</p>}
++
++      {state.kind === "failed" && (
++        <p role="alert" className="tw:text-sm tw:text-foreground">
++          {PUBLIC_SHELF_FAILED}{" "}
++          <button
++            type="button"
++            onClick={again}
++            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline"
++          >
++            {PUBLIC_SHELF_RETRY}
++          </button>
++        </p>
++      )}
++
++      {state.kind === "loaded" && shown.length === 0 && (
++        <p className="tw:text-sm tw:text-muted-foreground">
++          {others.length > 0
++            ? `No public article matches “${query.trim()}”.`
++            : state.shelf.truncated
++              ? /* Every row we were sent is yours, and there are more we were
++                   not sent — so "nobody else" would be a claim about rows we
++                   never saw. */
++                "None of the most recently shared articles is somebody else's."
++              : "Nobody else has shared anything yet."}
++        </p>
++      )}
++
++      {shown.length > 0 && (
++        // biome-ignore lint/a11y/noRedundantRoles: Safari drops list semantics from a `ul` whose `list-style` is `none` — PublicLibraryPage.tsx's reason
++        <ul role="list" className="tw:m-0 tw:grid tw:list-none tw:gap-4 tw:p-0 tw:sm:grid-cols-2">
++          {shown.map((entry) => (
++            <li key={entry.slug} className="tw:m-0">
++              <PublicCard entry={entry} />
++            </li>
++          ))}
++        </ul>
++      )}
++
++      {/* **The cap, and what it does to the search.** The listing is the
++          newest shared articles up to a ceiling, and this filters it in the
++          browser — so past the ceiling an older article that matches is
++          simply not here, and "no match" would be false. Not
++          `PUBLIC_SHELF_TRUNCATED`, which says the *page* is capped and not
++          that the *search* was. GPT Sol, plan review, 2026-10-02. */}
++      {state.kind === "loaded" && state.shelf.truncated && (
++        <p className="tw:mt-6 tw:text-sm tw:text-muted-foreground">
++          There are more shared articles than this lists. Only the most recently shared are shown
++          {searching ? " and searched" : ""} here.
++        </p>
++      )}
++    </section>
++  );
++}
+diff --git a/src/web/params.ts b/src/web/params.ts
+index 91c3a5d82..a400357fb 100644
+--- a/src/web/params.ts
++++ b/src/web/params.ts
+@@ -1645,6 +1645,13 @@ export const libraryTopicsParam = createParser<string[]>({
+  */
+ export const libraryArchivedParam = parseAsBit.withDefault(false).withOptions({ history: "push" });
+ 
++/**
++ * `?public=1`: the **Include public** chip — what other readers have shared,
++ * in its own section under the shelf and narrowed by the same search box.
++ * `push` for the archive's reason. Greg, spya-yy5x66; plan 261002b § Part A.
++ */
++export const libraryPublicParam = parseAsBit.withDefault(false).withOptions({ history: "push" });
++
+ /**
+  * How the Topics row is drawn — pills on one line (absent), or one row per
+  * topic with its colour, a count bar and its top articles: `topicsView=detail`.
+diff --git a/src/web/shelf-narrow.ts b/src/web/shelf-narrow.ts
+index 347029d47..2300eff3a 100644
+--- a/src/web/shelf-narrow.ts
++++ b/src/web/shelf-narrow.ts
+@@ -34,9 +34,16 @@ export type ShelfTerm = LibraryTermsResponse["terms"][number];
+  * matching something invisible would look like a bug from the outside.
+  *
+  * Lived in Library.tsx until 2026-09-28; moved here so the archived list is
+- * searched by the same rule rather than a copy of it.
++ * searched by the same rule rather than a copy of it — and generic since
++ * 2026-10-02, so the public articles under Include public are too (plan 261002b).
+  */
+-export function filterEntries(articles: readonly LibraryEntry[], query: string): LibraryEntry[] {
++export function filterEntries<
++  T extends Pick<LibraryEntry, "title"> & {
++    byline?: string | null;
++    siteName?: string | null;
++    gist?: string | null;
++  },
++>(articles: readonly T[], query: string): T[] {
+   const terms = queryTerms(query);
+   if (terms.length === 0) return [...articles];
+   return articles.filter((a) => {
+diff --git a/src/web/small-screen-hint.ts b/src/web/small-screen-hint.ts
+index e4178bf2a..becdf82ac 100644
+--- a/src/web/small-screen-hint.ts
++++ b/src/web/small-screen-hint.ts
+@@ -129,3 +129,73 @@ export function readMachine(): Omit<SmallScreenEnvironment, "bandCovers"> {
+     dismissed: wasDismissed(),
+   };
+ }
++
++/* ------------------------------------------------------------ the shelf --- */
++
++/**
++ * **The shelf's banner asks about the device, not the layout**, and that is the
++ * whole difference from the article's one above. That banner explains one
++ * layout decision, so it asks the layout. This one says *a phone is not the
++ * best screen for Spideryarn* — Greg, spya-fcbnhq, 2026-10-01 — which is a fact
++ * about the machine, true held either way up.
++ *
++ * So: a finger, and a **screen** whose shorter side is under 600 CSS px. The
++ * screen and not the window, so that a phone turned sideways is still a phone
++ * and a laptop window dragged narrow never is (its pointer is fine anyway). The
++ * shorter side, so that orientation does not matter. 600 because every phone is
++ * well under it (an iPhone Pro Max is 440) and every iPad well over (a mini is
++ * 744). docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md § Part C.
++ */
++export interface PhoneEnvironment {
++  coarsePointer: boolean;
++  screen: { width: number; height: number };
++}
++
++const PHONE_SHORT_SIDE = 600;
++
++export function isPhone(env: PhoneEnvironment): boolean {
++  const short = Math.min(env.screen.width, env.screen.height);
++  /* A screen the browser would not measure (0, or `NaN`) is "cannot tell", and
++     cannot tell is not a phone — otherwise every coarse pointer without a
++     `screen` would qualify. GPT Sol, plan review, 2026-10-02. */
++  if (!Number.isFinite(short) || short <= 0) return false;
++  return env.coarsePointer && short < PHONE_SHORT_SIDE;
++}
++
++/**
++ * **Until dismissed, on this device** — the article banner's contract (see
++ * docs/project/touch.md § One banner, once for why not "the first time"), and
++ * its own bit, so that dismissing one says nothing about the other: they say
++ * different things.
++ */
++export function shouldShowShelfPhoneHint(env: PhoneEnvironment & { dismissed: boolean }): boolean {
++  return isPhone(env) && !env.dismissed;
++}
++
++const SHELF_KEY = "spya.shelfPhoneHint.dismissed";
++
++/** `wasDismissed`'s guard and its reason: "cannot tell" shows the banner. */
++export function shelfPhoneHintDismissed(): boolean {
++  try {
++    return window.localStorage.getItem(SHELF_KEY) === "1";
++  } catch {
++    return false;
++  }
++}
++
++export function rememberShelfPhoneHintDismissed(): void {
++  try {
++    window.localStorage.setItem(SHELF_KEY, "1");
++  } catch {
++    /* It will come back on the next visit. */
++  }
++}
++
++/** Asked once, on arrival — `readMachine`'s reasoning. */
++export function readPhone(): PhoneEnvironment & { dismissed: boolean } {
++  return {
++    coarsePointer: media("(pointer: coarse)"),
++    screen: { width: window.screen?.width ?? 0, height: window.screen?.height ?? 0 },
++    dismissed: shelfPhoneHintDismissed(),
++  };
++}
+diff --git a/tests/shelf-include-public.test.tsx b/tests/shelf-include-public.test.tsx
+new file mode 100644
+index 000000000..afc576d42
+--- /dev/null
++++ b/tests/shelf-include-public.test.tsx
+@@ -0,0 +1,243 @@
++// @vitest-environment jsdom
++/**
++ * **Include public, and an empty shelf that says where to go.**
++ *
++ * Greg, 2026-10-01 (spya-yy5x66): *"Perhaps let's also have a button for
++ * include public. And if the user has no articles in their shelf … a link that
++ * points them to the top. … be able to include public for everybody they want,
++ * including in searching"*.
++ *
++ * What is pinned here: the chip is off by default and off means **no public
++ * read at all**; on, the other readers' articles appear in their own section,
++ * your own shared ones are not listed twice, and the shelf's search box narrows
++ * them; an empty shelf links to the add box and offers the public shelf.
++ *
++ * Mocks follow tests/shelf-archived-in-the-list.test.tsx, which mounts the same
++ * page. docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { PublicLibraryEntry } from "../src/public-library-types.js";
++import type { LibraryEntry, LibraryTermsResponse } from "../src/types.js";
++
++function entry(slug: string, title: string): LibraryEntry {
++  return {
++    slug,
++    title,
++    addedAt: "2026-09-01T00:00:00.000Z",
++    words: 1000,
++    minutes: 5,
++    blocks: 10,
++    parts: 1,
++    sections: 1,
++    comments: 0,
++    opens: 1,
++    has: { arc: false, tweets: false, glossary: false },
++  } as LibraryEntry;
++}
++
++function pub(slug: string, title: string, byline: string | null = null): PublicLibraryEntry {
++  return { slug, title, byline, gist: null, siteName: null, words: 900, publicAt: "2026-09-02T00:00:00.000Z" };
++}
++
++let active: LibraryEntry[];
++let shared: PublicLibraryEntry[];
++let truncated: boolean;
++let publicReads: number;
++let publicFails: boolean;
++
++const NO_TERMS: LibraryTermsResponse = { terms: [], scope: { articles: 0, works: 0, skipped: 0 }, pending: 0, chosenBy: "program", refreshing: false };
++
++vi.mock("../src/web/lib/api.js", () => ({
++  apiFetch: async (url: string) => {
++    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
++    if (url.startsWith("/api/library/terms")) return json(NO_TERMS);
++    if (url === "/api/library") return json({ articles: [...active] });
++    if (url.startsWith("/api/library/search?")) {
++      const params = new URLSearchParams(url.slice(url.indexOf("?") + 1));
++      return json({ query: params.get("q") ?? "", archived: false, hits: [], articles: 0, capped: false });
++    }
++    return json({ error: "unmocked" }, 404);
++  },
++  fetchOk: async () => new Response(null, { status: 200 }),
++  readJson: async (r: Response) => {
++    if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
++    return r.json();
++  },
++  statusOf: () => null,
++}));
++/* The public listing is the anonymous read `/read/public` makes; counted, so
++   "off means not fetched" is an observation rather than an assumption. */
++vi.mock("../src/web/public-api.js", async (orig) => ({
++  ...(await orig<typeof import("../src/web/public-api.js")>()),
++  loadPublicLibrary: async () => {
++    publicReads++;
++    if (publicFails) throw new Error("network");
++    return { kind: "ok", body: { entries: [...shared], truncated } };
++  },
++}));
++vi.mock("../src/web/lib/cached-shelf.js", () => ({ readCachedShelf: async () => null }));
++vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => ({}) }));
++/* The real add box pulls in the whole ingest machinery; this stands in for its
++   one fact the empty shelf depends on — an input with id `add-url`. */
++vi.mock("../src/web/AddArticle.js", () => ({
++  AddArticle: () => createElement("input", { id: "add-url" }),
++}));
++vi.mock("../src/web/FeedbackButton.js", () => ({ FeedbackTrigger: () => null }));
++vi.mock("../src/web/useSession.js", () => ({
++  useSession: () => ({ session: null, user: null, loading: false }),
++}));
++
++class NoResizeObserver {
++  observe(): void {}
++  unobserve(): void {}
++  disconnect(): void {}
++}
++Object.assign(globalThis, { ResizeObserver: NoResizeObserver });
++Object.defineProperty(window, "matchMedia", {
++  writable: true,
++  value: (query: string) => ({
++    matches: false,
++    media: query,
++    addEventListener() {},
++    removeEventListener() {},
++    addListener() {},
++    removeListener() {},
++    onchange: null,
++    dispatchEvent: () => false,
++  }),
++});
++Element.prototype.scrollIntoView = function scrollIntoView() {};
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++enableHistorySync();
++
++const { Library } = await import("../src/web/Library.js");
++
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  active = [entry("alpha", "Alpha"), entry("mine-shared", "Mine, shared")];
++  shared = [pub("mine-shared", "Mine, shared"), pub("zebra", "Zebra crossings", "Ann Other"), pub("yak", "Yak shaving")];
++  truncated = false;
++  publicReads = 0;
++  publicFails = false;
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++async function show(path: string) {
++  history.replaceState(null, "", path);
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++  await act(async () => {
++    root.render(createElement(NuqsAdapter, null, createElement(Library, { readerId: "reader" })));
++  });
++  await settle();
++}
++
++async function settle(ms = 80) {
++  await act(async () => {
++    await new Promise((r) => setTimeout(r, ms));
++  });
++}
++
++const publicChip = () =>
++  [...host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")].find((b) =>
++    (b.getAttribute("aria-label") ?? "").startsWith("Include public"),
++  );
++const section = () => host.querySelector('section[aria-labelledby="shelf-public-heading"]');
++const publicTitles = () => [...(section()?.querySelectorAll("li h2") ?? [])].map((h) => h.textContent?.trim());
++
++describe("the Include public chip", () => {
++  it("is off by default, and off reads nothing public", async () => {
++    await show("/");
++    expect(publicChip()?.getAttribute("aria-pressed")).toBe("false");
++    expect(section()).toBeNull();
++    expect(publicReads).toBe(0);
++  });
++
++  it("on, lists what others shared — not your own a second time — and goes in the URL", async () => {
++    await show("/");
++    act(() => publicChip()?.click());
++    await settle();
++    expect(new URLSearchParams(location.search).get("public")).toBe("1");
++    expect(publicReads).toBe(1);
++    expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
++  });
++
++  it("is narrowed by the shelf's search box, on the card's words", async () => {
++    await show("/?public=1&q=ann");
++    expect(publicTitles()).toEqual(["Zebra crossings"]);
++    expect(section()?.textContent).toContain("isn't searched");
++  });
++
++  it("says when a search leaves none, and says the cap", async () => {
++    truncated = true;
++    await show("/?public=1&q=nothing-like-this");
++    expect(publicTitles()).toEqual([]);
++    expect(section()?.textContent).toContain("No public article matches");
++    expect(section()?.textContent).toContain("Only the most recently shared are shown and searched");
++  });
++
++  it("does not say nobody else has shared when the only rows it was sent are yours and there are more", async () => {
++    shared = [pub("mine-shared", "Mine, shared")];
++    truncated = true;
++    await show("/?public=1");
++    expect(section()?.textContent).not.toContain("Nobody else");
++    shared = [pub("mine-shared", "Mine, shared")];
++  });
++
++  it("is not narrowed by Unread, and says so", async () => {
++    await show("/?public=1&show=unread");
++    expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
++    expect(section()?.textContent).toContain("apply to your own articles only");
++  });
++
++  it("says a failed read is a failure, not an empty shelf, and Try again reads again", async () => {
++    publicFails = true;
++    await show("/?public=1");
++    expect(section()?.querySelector("[role=alert]")).toBeTruthy();
++    expect(section()?.textContent).not.toContain("Nobody else");
++    publicFails = false;
++    const retry = [...(section()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Try again");
++    act(() => retry?.click());
++    await settle();
++    expect(publicReads).toBe(2);
++    expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
++  });
++});
++
++describe("an empty shelf", () => {
++  beforeEach(() => {
++    active = [];
++  });
++
++  it("links to the add box and puts the cursor in it", async () => {
++    await show("/");
++    const link = host.querySelector<HTMLAnchorElement>('a[href="#add-url"]');
++    expect(link, "a link to the add box").toBeTruthy();
++    act(() => link?.click());
++    expect(document.activeElement?.id).toBe("add-url");
++  });
++
++  it("offers the public shelf, which turns the chip on, and the chip is there too", async () => {
++    await show("/");
++    expect(publicChip(), "the chip is drawn over an empty shelf").toBeTruthy();
++    const offer = [...host.querySelectorAll("button")].find((b) =>
++      b.textContent?.includes("browse what other readers have shared"),
++    );
++    expect(offer).toBeTruthy();
++    act(() => offer?.click());
++    await settle();
++    expect(publicTitles()).toEqual(["Mine, shared", "Zebra crossings", "Yak shaving"]);
++    expect(host.textContent).not.toContain("browse what other readers have shared");
++  });
++});
+diff --git a/tests/shelf-phone-hint.test.ts b/tests/shelf-phone-hint.test.ts
+new file mode 100644
+index 000000000..5625a206e
+--- /dev/null
++++ b/tests/shelf-phone-hint.test.ts
+@@ -0,0 +1,156 @@
++// @vitest-environment jsdom
++/**
++ * **Who is told on the shelf that a phone is not the best screen for this.**
++ *
++ * The shelf's banner is about the *device*, not the layout — Greg, spya-fcbnhq:
++ * *"show some kind of banner to people when they open it on a phone to say that
++ * it's probably best on a larger screen, and failing that, in Landscape mode."*
++ * So the rule is a finger and a short screen side, in either orientation, and
++ * the cases worth writing down are the ones a width would get wrong: a phone
++ * held sideways (wide, still a phone), an iPad mini (coarse, not a phone), and
++ * a laptop window dragged narrow (narrow, not a phone).
++ *
++ * docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md § Part C.
++ */
++import { act, createElement } from "react";
++import { createRoot } from "react-dom/client";
++import { afterEach, describe, expect, it, vi } from "vitest";
++import { ShelfPhoneHint } from "../src/web/ShelfPhoneHint.js";
++import {
++  isPhone,
++  rememberShelfPhoneHintDismissed,
++  shelfPhoneHintDismissed,
++  shouldShowShelfPhoneHint,
++} from "../src/web/small-screen-hint.js";
++
++const screen = (width: number, height: number) => ({ width, height });
++
++describe("isPhone", () => {
++  it("is a phone in portrait and in landscape", () => {
++    expect(isPhone({ coarsePointer: true, screen: screen(390, 844) })).toBe(true);
++    expect(isPhone({ coarsePointer: true, screen: screen(844, 390) })).toBe(true);
++    expect(isPhone({ coarsePointer: true, screen: screen(375, 667) })).toBe(true);
++  });
++
++  it("is not an iPad, mini or otherwise, either way up", () => {
++    expect(isPhone({ coarsePointer: true, screen: screen(744, 1133) })).toBe(false);
++    expect(isPhone({ coarsePointer: true, screen: screen(1180, 820) })).toBe(false);
++  });
++
++  it("is not a laptop, however narrow its window, because the pointer is fine", () => {
++    expect(isPhone({ coarsePointer: false, screen: screen(390, 844) })).toBe(false);
++  });
++
++  it("draws the line at 600, and a screen nobody measured is not a phone", () => {
++    expect(isPhone({ coarsePointer: true, screen: screen(599, 900) })).toBe(true);
++    expect(isPhone({ coarsePointer: true, screen: screen(600, 900) })).toBe(false);
++    expect(isPhone({ coarsePointer: true, screen: screen(0, 0) })).toBe(false);
++    expect(isPhone({ coarsePointer: true, screen: screen(Number.NaN, 844) })).toBe(false);
++  });
++});
++
++describe("shouldShowShelfPhoneHint", () => {
++  it("shows on a phone until dismissed", () => {
++    const phone = { coarsePointer: true, screen: screen(390, 844) };
++    expect(shouldShowShelfPhoneHint({ ...phone, dismissed: false })).toBe(true);
++    expect(shouldShowShelfPhoneHint({ ...phone, dismissed: true })).toBe(false);
++  });
++});
++
++/**
++ * A working store, `tests/small-screen-banner.test.tsx`'s reason: Node's own
++ * `localStorage` shadows jsdom's under vitest, so without this the round trip
++ * can never be observed. `throwing` is Safari's private mode.
++ */
++function storage(throwing = false): Map<string, string> {
++  const store = new Map<string, string>();
++  const fail = () => {
++    throw new Error("SecurityError");
++  };
++  Object.defineProperty(window, "localStorage", {
++    configurable: true,
++    value: {
++      getItem: throwing ? fail : (k: string) => store.get(k) ?? null,
++      setItem: throwing ? fail : (k: string, v: string) => void store.set(k, v),
++      removeItem: (k: string) => void store.delete(k),
++      clear: () => store.clear(),
++      key: () => null,
++      length: 0,
++    },
++  });
++  return store;
++}
++
++describe("the dismissal", () => {
++  afterEach(() => vi.restoreAllMocks());
++
++  it("is remembered, and is its own bit rather than the article banner's", () => {
++    const store = storage();
++    expect(shelfPhoneHintDismissed()).toBe(false);
++    rememberShelfPhoneHintDismissed();
++    expect(shelfPhoneHintDismissed()).toBe(true);
++    expect([...store.keys()]).toEqual(["spya.shelfPhoneHint.dismissed"]);
++  });
++
++  it("reads as not dismissed when storage throws, and writing does not throw", () => {
++    storage(true);
++    expect(shelfPhoneHintDismissed()).toBe(false);
++    expect(() => rememberShelfPhoneHintDismissed()).not.toThrow();
++  });
++});
++
++describe("the banner itself", () => {
++  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++  function machine(coarse: boolean, width: number, height: number) {
++    Object.defineProperty(window, "matchMedia", {
++      configurable: true,
++      writable: true,
++      value: (query: string) => ({
++        matches: coarse && query === "(pointer: coarse)",
++        media: query,
++        addEventListener() {},
++        removeEventListener() {},
++        addListener() {},
++        removeListener() {},
++        onchange: null,
++        dispatchEvent: () => false,
++      }),
++    });
++    Object.defineProperty(window, "screen", { configurable: true, value: { width, height } });
++  }
++
++  function mount() {
++    const host = document.createElement("div");
++    document.body.append(host);
++    const root = createRoot(host);
++    act(() => root.render(createElement(ShelfPhoneHint)));
++    return { host, root };
++  }
++
++  it("draws on a phone, and the × puts it away for good on this device", () => {
++    storage();
++    machine(true, 390, 844);
++    const first = mount();
++    expect(first.host.textContent).toContain("works best on a larger screen");
++    act(() => first.host.querySelector<HTMLButtonElement>("button[aria-label=Dismiss]")?.click());
++    expect(first.host.textContent).toBe("");
++    act(() => first.root.unmount());
++
++    const again = mount();
++    expect(again.host.textContent, "a later visit, same device").toBe("");
++    act(() => again.root.unmount());
++  });
++
++  it("does not draw on a laptop or an iPad", () => {
++    storage();
++    machine(false, 390, 844);
++    const laptop = mount();
++    expect(laptop.host.textContent).toBe("");
++    act(() => laptop.root.unmount());
++    machine(true, 820, 1180);
++    const ipad = mount();
++    expect(ipad.host.textContent).toBe("");
++    act(() => ipad.root.unmount());
++  });
++});
+diff --git a/tests/shelf-table-hide-columns.test.tsx b/tests/shelf-table-hide-columns.test.tsx
+index 80adb812b..d9c1cc932 100644
+--- a/tests/shelf-table-hide-columns.test.tsx
++++ b/tests/shelf-table-hide-columns.test.tsx
+@@ -435,6 +435,8 @@ describe("the Columns menu", () => {
+         onFilter: () => {},
+         archived: false,
+         onArchived: () => {},
++        publicOn: false,
++        onPublic: () => {},
+       });
+     }
+     act(() => root.render(createElement(Controls, { view: "table" })));
+diff --git a/tests/shelf-view-switch.test.tsx b/tests/shelf-view-switch.test.tsx
+index a18472338..e61d158a0 100644
+--- a/tests/shelf-view-switch.test.tsx
++++ b/tests/shelf-view-switch.test.tsx
+@@ -84,6 +84,8 @@ function render(view: "cards" | "table", onView = vi.fn()) {
+         onFilter: vi.fn(),
+         archived: false,
+         onArchived: vi.fn(),
++        publicOn: false,
++        onPublic: vi.fn(),
+       }),
+     );
+   });

@@ -4,8 +4,8 @@ Files changed:
 
 - [messages-structured-output.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/messages-structured-output.ts) — runtime schema validator, block-id enum assertion, Messages adapter.
 - [start-ranges.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/start-ranges.ts) — shared starts-to-ranges kernel with explicit whole-document/scoped policies.
-- [hierarchy-starts.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/hierarchy-starts.ts) — starts-only DTO and converter.
-- [hierarchy-cascade.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/hierarchy-cascade.ts) — `normaliseExpansion` now uses the shared kernel.
+- [hierarchy-starts.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/structure-starts.ts) — starts-only DTO and converter.
+- [hierarchy-cascade.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/structure-cascade.ts) — `normaliseExpansion` now uses the shared kernel.
 - [structure-starts-replay.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/paperwork/structure-starts-replay.ts) — read-only offline replay and gate.
 - Three new test files covering the validator/adapter, converter/kernel, and replay.
 

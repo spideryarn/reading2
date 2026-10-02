@@ -1002,7 +1002,7 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   eval: {
     providerDefault:
       "Through the gateway an eval call takes the provider default. An eval comparing efforts " +
-      "posts its own request (evals/hierarchy-structure/model-arms.ts § chatBody), not via here.",
+      "posts its own request (evals/structure-whole-document/model-arms.ts § chatBody), not via here.",
   },
   embeddings: {
     providerDefault: "An embedding model, which does not think; there is nothing to decide.",
@@ -1192,7 +1192,7 @@ export class ProviderRefused extends Error {
  * this function — see `ProviderRefused`.
  *
  * **Exported since 2026-09-05** for the deepening wave
- * (src/hierarchy-deepen.ts), which meets its 429s on the Anthropic SDK's road
+ * (src/structure-deepen.ts), which meets its 429s on the Anthropic SDK's road
  * rather than this one and so has an `APIError` with a `Headers` on it instead
  * of a `ProviderRefused`. The header is the same header; a second parser for it
  * would be a second opinion about what "a minute" means, and the two would

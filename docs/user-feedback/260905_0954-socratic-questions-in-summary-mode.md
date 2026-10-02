@@ -66,5 +66,5 @@ questions it was written about — see § *The gist stayed for one day* in
 
 [The plan](../plans/260905e-feedback-diagram-text-column-and-socratic-summaries.md) § 1V, which has
 the before-and-after questions in full;
-[hierarchy.md § The question under the claim](../project/hierarchy.md#the-question-under-the-claim)
+[hierarchy.md § The question under the claim](../project/structure-step.md#the-question-under-the-claim)
 is the doc.

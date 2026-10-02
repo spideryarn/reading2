@@ -4,8 +4,9 @@
  *
  * Sets `data-voices` on `<html>`, which is the only thing
  * `src/web/styles/voices.css` matches on — the author's words in a serif, the
- * model's in Courier, the reader's in Arial. Greg's v1, 2026-10-01:
- * docs/plans/261001d-typeface-per-voice.md.
+ * model's in IBM Plex Mono, the reader's in Arial. Greg's v1 and its typeface
+ * follow-up: docs/plans/261001d-typeface-per-voice.md and
+ * docs/plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md.
  *
  * **On `<html>` rather than on the reader's own root** because some of what it
  * restyles is not inside that root: tooltips, hover cards and dialogs are

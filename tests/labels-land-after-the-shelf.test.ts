@@ -54,7 +54,7 @@
  * carries `extracted_html` and `fetch`/`extract` receipts — and `hierarchy` is
  * a fake whose product is built from the **real** `buildTree` and
  * `mergeLabels`, so the artefacts it hands the session are the shape
- * `generateHierarchy` really produces (src/hierarchy.ts § `pending`). `blocks`
+ * `generateStructure` really produces (src/structure.ts § `pending`). `blocks`
  * is the real step.
  *
  * What that leaves unproven is nothing this file claims: `fetch` and `extract`
@@ -88,7 +88,7 @@ import {
   revisionStepRuns,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { buildTree, type ModelNode } from "../src/hierarchy.js";
+import { buildTree, type ModelNode } from "../src/structure.js";
 import { mintId } from "../src/ids.js";
 import { advanceJobWith, type AdvanceParts, type StepRegistry } from "../src/jobs.js";
 import { LABELS_PROMPT_VERSION, mergeLabels } from "../src/labels.js";
@@ -220,7 +220,7 @@ const OLD_LABEL = "A LABEL FROM THE PREVIOUS RUN, WHICH THIS INGEST INVALIDATES"
 const NEW_LABEL = "A LABEL THE SUCCESSOR JOB BOUGHT AFTER THE ARTICLE WAS ON THE SHELF";
 
 /**
- * The whole article as one section — the shape `generateHierarchy` hands
+ * The whole article as one section — the shape `generateStructure` hands
  * `buildTree`, minus the model call that chose the sections.
  */
 function rootOver(blocks: Block[]): ModelNode {
@@ -242,7 +242,7 @@ const labelsFor = (blocks: Block[], text: string): Record<string, string> =>
  * `buildTree` then `mergeLabels`, both real, because the invariant both writers
  * of the column keep is `tree === mergeLabels(structure, labels.labels)` — a
  * hand-built literal would satisfy the publication gate while quietly not being
- * that (src/hierarchy.ts § `parts`).
+ * that (src/structure.ts § `parts`).
  */
 function treeFor(slug: string, blocks: Block[], labels: Record<string, string>): Tree {
   return mergeLabels(buildTree(rootOver(blocks), labels, blocks, slug), labels);
@@ -347,7 +347,7 @@ async function publishLabelledArticle(slug: string): Promise<Fixture> {
 
 /**
  * `hierarchy` without the structure call: a tree over the blocks the real step
- * would have read, and the **empty** manifest src/hierarchy.ts writes beside it.
+ * would have read, and the **empty** manifest src/structure.ts writes beside it.
  *
  * Every field is computed by the same function production computes it with, so
  * what the session is handed is a `PendingLabelsFile` rather than something
@@ -355,7 +355,7 @@ async function publishLabelledArticle(slug: string): Promise<Fixture> {
  * `writeArtefacts` reads as *set `nav_label_status` to `pending` and delete the
  * labels receipt*.
  */
-function fakeHierarchy(): PipelineStep<"hierarchy"> {
+function fakeStructure(): PipelineStep<"hierarchy"> {
   return {
     name: "hierarchy",
     label: STEPS.hierarchy.label,
@@ -382,7 +382,7 @@ function fakeHierarchy(): PipelineStep<"hierarchy"> {
 }
 
 /** The registry the jobs are driven with: the real steps, with one fake over them. */
-const REGISTRY: StepRegistry = { ...STEPS, hierarchy: fakeHierarchy() };
+const REGISTRY: StepRegistry = { ...STEPS, hierarchy: fakeStructure() };
 
 const PARTS: AdvanceParts = {
   power: async () => "standard",
@@ -792,8 +792,8 @@ describe("an ingest that publishes before its labels are bought", () => {
    * there, it *becomes* the tree.
    *
    * What stops it is one line — `checkCoverage(parts.labels.labels, parts.tree,
-   * file.blocks)` in `STEPS.labels.run`, moved there from `generateHierarchy` by
-   * stage 2 — and the hazard tests/hierarchy-leaves-the-labels.test.ts names is
+   * file.blocks)` in `STEPS.labels.run`, moved there from `generateStructure` by
+   * stage 2 — and the hazard tests/structure-step-leaves-the-labels.test.ts names is
    * that removing it from **both** steps leaves no symptom at all. That file
    * pins where the call lives by reading the source; this one pins what happens
    * when it fires, over the real store.

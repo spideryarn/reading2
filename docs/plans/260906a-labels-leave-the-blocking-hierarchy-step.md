@@ -105,7 +105,7 @@ Two things follow that are *not* this plan's business but should not be lost:
 
 `navLabel` is **a pointer to prose, never a substitute for it** — the distinction
 [granularity-zoom.md](../project/granularity-zoom.md) draws against `gist`, which *is* substitutable
-prose. A label's whole job, from [hierarchy.md](../project/hierarchy.md):
+prose. A label's whole job, from [hierarchy.md](../project/structure-step.md):
 
 > A row's only job is to distinguish itself from its siblings.
 
@@ -150,7 +150,7 @@ blocking step, still publishes, still builds geometry, is never provisional. Wha
 field that is *already legal to be absent* — [`tree-invariants.ts`](../../src/tree-invariants.ts):239
 warns rather than fails, publish guards
 ([`pg-revisions.ts`](../../src/store/pg-revisions.ts):1376) count only `problems`, and
-[hierarchy.md](../project/hierarchy.md) already says an unlabelled leaf is "tiled by the tree,
+[hierarchy.md](../project/structure-step.md) already says an unlabelled leaf is "tiled by the tree,
 rendered verbatim in the reading view, addressable by its id — and invisible in Hierarchy. Nothing is
 lost; nothing is duplicated."
 
@@ -171,13 +171,13 @@ Five things, each verified against the code.
    cannot simply call it.
 3. **Three hard gates live inside stage 4** and would fire on a deferred run:
    `assertEveryBlockLabelled`, `assertInsideCoverageFloor` (`COVERAGE_FLOOR = 0.95`) and
-   `checkCoverage` ([`hierarchy.ts`](../../src/hierarchy.ts):636). They have to go somewhere.
+   `checkCoverage` ([`hierarchy.ts`](../../src/structure.ts):636). They have to go somewhere.
 4. **`planBatches` assumes the whole tree.** It walks from `tree.rootId`, sorts globally, and ends in
    `assertCoversEveryBlock`. Worse, `renderOutline` puts the **whole article's outline** into every
    batch's prompt *and* into `batchFingerprint`, so a per-section call would show the model less
    context and could never match a whole-tree run's checkpoints in either direction.
 5. **Absence is overloaded.** The same missing field would mean "deliberately unlabelled — a
-   pull-quote, a caption, a supplement" *and* "not written yet". [`hierarchy.ts`](../../src/hierarchy.ts):2090
+   pull-quote, a caption, a supplement" *and* "not written yet". [`hierarchy.ts`](../../src/structure.ts):2090
    already names this: deferring the labels "needs a state that says 'still arriving' rather than an
    absence that says nothing."
 
@@ -344,7 +344,7 @@ Sol's Q7 answer, with its stamp pre-stage deleted for the reason above.
   stamp on it at all. **And it keeps no free heading labels**, which is the other thing this bullet
   got wrong: `buildHeadingTree` ([`heading-tree.ts`](../../src/heading-tree.ts):157) does mint one per
   heading and has no caller outside `evals/`; `generateHierarchy` uses `buildTree` in
-  [`hierarchy.ts`](../../src/hierarchy.ts), which labels nothing it is not handed. A
+  [`hierarchy.ts`](../../src/structure.ts), which labels nothing it is not handed. A
   structure-only tree carries **no** navigation labels — see `tests/hierarchy-leaves-the-labels.test.ts`.
   `checkCoverage` moves out of
   `generateHierarchy` into the new runner, after the candidate merged tree and before any `ready`
@@ -486,7 +486,7 @@ in this plan's scope unless the review says otherwise:
   would delete this machinery rather than move it. Its blocker is that it is unmeasured: in a
   read-only count over four labelled fixtures an unmodified first sentence met the 6–20-word contract
   for only 43–59% of paragraphs. The eval already emits the materials for a blinded sibling test
-  (`npm run eval:hierarchy -- … --shuffle`, [`evals/hierarchy-labels.ts`](../../evals/hierarchy-labels.ts):409).
+  (`npm run eval:hierarchy -- … --shuffle`, [`evals/hierarchy-labels.ts`](../../evals/structure-labels.ts):409).
 - **A cheaper model for labels.**
 
 ## Alternatives considered
@@ -543,7 +543,7 @@ article shows *"Paragraph labels are still arriving"* until somebody runs
 "keeps the author's own heading labels, minted for free at `heading-tree.ts:157`", and the stage
 bullet above said the same. `buildHeadingTree` really does mint one per heading — and **it has no
 caller outside `evals/`**. `generateHierarchy` uses `buildTree` in
-[`hierarchy.ts`](../../src/hierarchy.ts), which sets `navLabel` from the map it is handed and from
+[`hierarchy.ts`](../../src/structure.ts), which sets `navLabel` from the map it is handed and from
 nothing else, and `mergeLabels` *deletes* the key wherever the map has none. So a structure-only tree
 carries **no** navigation labels at all, and the reader's withheld state covers every paragraph
 rather than the ones between headings. `tests/hierarchy-leaves-the-labels.test.ts` states it both
@@ -591,7 +591,7 @@ shipped the stage as it stood.** Three P2s, all real when checked and all fixed 
   not hash it — which is now pinned in
   [`tests/labels-batching.test.ts`](../../tests/labels-batching.test.ts) on both of `structureHash`'s
   canonical forms, watched red by adding `navLabel` to the hashed row. `hierarchy`'s half is pinned
-  end to end in [`tests/hierarchy-write-guard.test.ts`](../../tests/hierarchy-write-guard.test.ts);
+  end to end in [`tests/hierarchy-write-guard.test.ts`](../../tests/structure-step-write-guard.test.ts);
   the `labels` step's half was already pinned, in `generateLabels`'s manifest case.
 
   **Two corrections the code made to the brief.** First, the check has to be *"where the manifest
@@ -817,7 +817,7 @@ else, because waiting for a genuine `jobs_pkey` collision is not a test.
 
 **`pg-glossary.ts` does not call `publishRevisionIn`.** I asserted it did, in the stage brief, without
 checking; it went into a source comment at [`pg-revisions.ts`](../../src/store/pg-revisions.ts):2057,
-into this plan, into [hierarchy.md](../project/hierarchy.md) and into the test's header. What
+into this plan, into [hierarchy.md](../project/structure-step.md) and into the test's header. What
 `pg-glossary.ts` actually says is the opposite, at length: it *"mutates a published revision, which
 nothing else here does"*, deliberately not opening a draft.
 
@@ -1129,7 +1129,7 @@ scheduled, a structure-only tree carries no labels — and none of those is the 
 `generateHierarchy` that started calling `generateLabels` again would have satisfied every test in
 the tree while putting the whole 600 s back inside the blocking step, and the only symptom would have
 been the clock. There are now two cases in
-[`tests/hierarchy-leaves-the-labels.test.ts`](../../tests/hierarchy-leaves-the-labels.test.ts) reading
+[`tests/hierarchy-leaves-the-labels.test.ts`](../../tests/structure-step-leaves-the-labels.test.ts) reading
 the function's own source, comments stripped — because the paragraph src/hierarchy.ts leaves where the
 call used to be *names* `generateLabels`, so a check over the raw source would go red on the
 documentation of the removal.

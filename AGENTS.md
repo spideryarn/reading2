@@ -32,7 +32,7 @@ listed here; the names under each are files in `docs/project/`.
 - **[architecture.md](docs/project/architecture.md)** — the pipeline stage by stage, what a block
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
-  two) · `hierarchy.md` ·
+  two) · `structure-step.md` ·
   `article-images.md` (stage 4.5 — the figures the piece came with, hosted by us) ·
   `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
@@ -88,6 +88,7 @@ listed here; the names under each are files in `docs/project/`.
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
   Its live counterpart is `/design`.
   <br>↳ `colour-scales.md` · `typography.md` (one sans, the weight axis, the vertical rhythm) ·
+  `fonts.md` (a face for each voice: the author's, the model's, the reader's) ·
   `controls.md` (one height, one radius, and the preflight we do not import) ·
   `narrow-windows.md` (rows wrap, columns are given up in JS, and the notch) · `icons.md` ·
   `loading-spinner.md` (the wordmark for a whole page waiting, `LoaderCircle` for the rest) ·
@@ -179,7 +180,7 @@ the name from `npx tsx scripts/plan-name.ts` (`--dir=` for the other three) —
 
 ## The one contract that matters
 
-Every block of the article gets a **stable id** (`spya-k3m9qt`), and every feature — Hierarchy, summaries,
+Every block of the article gets a **stable id** (`spya-k3m9qt`), and every feature — Structure, summaries,
 scroll position, highlights, notes, questions — addresses text by that id, never by character offset
 or CSS selector. Ids are minted once and preserved on every later run, so they survive re-extraction.
 
@@ -443,9 +444,9 @@ nothing else has a copy of.
   rather than only the idea. Which steps do, which decide freshness another way, and how:
   [architecture.md § Conventions](docs/project/architecture.md#conventions) — read it before you
   trust a skipped step or add one.
-- **Hierarchy — the deeply-nested table of contents — and the granularity-zoom tree are
+- **Structure — the deeply-nested table of contents — and the granularity-zoom tree are
   [the same structure](docs/project/granularity-zoom.md#the-tree)**, produced by stages 4 and 5
-  together. They must not diverge into two trees.
+  together. They must not diverge into two trees. (The step was called `hierarchy` until 2026-10-02.)
 - **Log from the server, `console.log` from the CLI** — the rule is the destination, not the
   function name. Anything in a request path goes through [`src/log.ts`](src/log.ts), and a
   `console.log` there is a bug. Never log anything sensitive or any article prose.
@@ -459,6 +460,8 @@ nothing else has a copy of.
   runners are hand-rolled copies not to imitate. A batch call in the pipeline, which
   nobody is watching, doesn't need this.
 - **Writing or changing a prompt?** Read [prompting-guide.md](docs/project/prompting-guide.md) first.
+- **Putting words on screen that are not the app's own — a model's, the reader's, the author's?**
+  Read [fonts.md](docs/project/fonts.md) first.
 - **Before writing any Anthropic SDK code**, load the `claude-api` skill for current model ids and
   parameters. Don't hardcode a model from memory.
 - **Before rebuilding something the previous version already solved** — AI headings,

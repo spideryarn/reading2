@@ -257,7 +257,7 @@ at stable `tree.json`/`labels.json`/`blocks.json` paths, so renaming the key orp
 
 **5. `ai_calls.purpose` was missed.** The same call persists `"toc"` twice —
 [`src/db/schema.ts`](../../src/db/schema.ts):1560 as well as `step_name`, originating at
-[`src/hierarchy.ts`](../../src/hierarchy.ts):1461. Migrating one leaves a row reading
+[`src/hierarchy.ts`](../../src/structure.ts):1461. Migrating one leaves a row reading
 `step_name='hierarchy', purpose='toc'` and splits the cost history a second way. The **filesystem**
 ledger `data/_ai-calls.jsonl` holds both fields too and needs a migration or a read-time alias.
 
@@ -279,7 +279,7 @@ then **edit the generated SQL** to insert the data updates between its `DROP CON
 filesystem namespace dirs — but **Sol corrects our cost claim**: the label pipeline does not currently
 use the checkpoint store (it writes `labels-progress.json`), and there are no such directories locally,
 so the "orphans every checkpoint, re-buys model calls" worry above **does not apply to the current
-implementation**. And `"toc/2"` is a persisted *prompt version* ([`src/hierarchy.ts`](../../src/hierarchy.ts):57)
+implementation**. And `"toc/2"` is a persisted *prompt version* ([`src/hierarchy.ts`](../../src/structure.ts):57)
 living in tree JSON and `labels.structureVersion`. Nothing reads it today. **Preserve it deliberately
 as a historical protocol identifier, or migrate it — but say which.**
 
@@ -347,12 +347,12 @@ careful `sed`.** Every row verified here.
 |---|---|---|
 | `revision_step_runs.step_name` | + the `revision_step_runs_step` CHECK | [`schema.ts`](../../src/db/schema.ts):1412. 3 rows locally |
 | `ai_calls.step_name` | no CHECK over it | :1577 |
-| `ai_calls.purpose` | the `Task` union member | :1588, from [`hierarchy.ts`](../../src/hierarchy.ts):1461 via [`ai-spend.ts`](../../src/ai-spend.ts):750 |
+| `ai_calls.purpose` | the `Task` union member | :1588, from [`hierarchy.ts`](../../src/structure.ts):1461 via [`ai-spend.ts`](../../src/ai-spend.ts):750 |
 | `checkpoints.namespace` | `'toc-labels'`, + the `checkpoints_namespace` CHECK | :2219, twin at [`checkpoints.ts`](../../src/store/checkpoints.ts):137 |
 | `jobs.steps` | `JobStep[]` — `{"name":"toc"}` | :1133. **And `jobs.work_key`, which hashes it** |
 | filesystem markers | `steps/toc.running` | `artifacts-fs.ts`:431. **2 exist locally** |
 | filesystem ledger | `data/_ai-calls.jsonl` | both fields, `src/store/ai-calls-fs.ts:70` (deleted 2026-09-05) |
-| artefact metadata | `PROMPT_VERSION = "toc/2"` | [`hierarchy.ts`](../../src/hierarchy.ts):57 → `tree.json`, and `labels.structureVersion` |
+| artefact metadata | `PROMPT_VERSION = "toc/2"` | [`hierarchy.ts`](../../src/structure.ts):57 → `tree.json`, and `labels.structureVersion` |
 | thrown + reader-facing text | `"run the toc step first"`, `"re-run toc"` | correct **today**; flips with the value, not before |
 
 **Two corrections to what the sweeps reported**, because a plan that repeats them is worse than none:

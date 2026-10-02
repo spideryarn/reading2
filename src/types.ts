@@ -163,7 +163,7 @@ export interface TreeNode {
    * Shown in **Marginalia**, beside the first paragraph of each part. It is a
    * second field rather than a change to `gist` because the gist is rendered in
    * several places and is also fed back to the later structure waves as
-   * context; the argument is in `questionFor` (src/hierarchy.ts) and the plan
+   * context; the argument is in `questionFor` (src/structure.ts) and the plan
    * doc.
    *
    * **Absence is ordinary**, unlike a missing `gist`: every tree built before
@@ -178,7 +178,7 @@ export interface TreeNode {
    *
    * **Absence here means "deliberately unlabelled" and nothing else** — a
    * pull-quote, a caption, a rule, anything `isStructural` is false for
-   * (src/hierarchy.ts). *Not yet written* is a different fact and does not live
+   * (src/structure.ts). *Not yet written* is a different fact and does not live
    * on the node: it is `NavLabelStatus` below, one value for the whole
    * revision. Reading a missing field as either one is the overloading
    * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md § 5 names.
@@ -251,7 +251,7 @@ export interface Tree {
  * `TreeNode.navLabel` above already has a legal absence, and it means
  * *deliberately unlabelled*: a caption, a pull-quote, a rule. This is the other
  * question, the one absence cannot answer —
- * [hierarchy.ts](hierarchy.ts) put it in as many words long before there was a
+ * [structure.ts](structure.ts) put it in as many words long before there was a
  * field for it: deferring the labels *"needs a state that says 'still arriving'
  * rather than an absence that says nothing."*
  *

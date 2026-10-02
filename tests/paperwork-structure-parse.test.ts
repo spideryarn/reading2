@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { structureAnswerFields } from "../evals/paperwork/structure-parse.js";
+import { wholeDocumentAnswerFields } from "../evals/paperwork/structure-parse.js";
 import type { Block } from "../src/types.js";
 
 const blocks: Block[] = Array.from({ length: 4 }, (_, i) => ({
@@ -15,7 +15,7 @@ const blocks: Block[] = Array.from({ length: 4 }, (_, i) => ({
 
 describe("the structure validity row", () => {
   it("records build and drop fields for a parsed starts-only answer", () => {
-    const fields = structureAnswerFields(
+    const fields = wholeDocumentAnswerFields(
       JSON.stringify({
         root: {
           title: "Whole",
@@ -57,7 +57,7 @@ describe("the structure validity row", () => {
   });
 
   it("records an invented start as a parsed refusal", () => {
-    const fields = structureAnswerFields(
+    const fields = wholeDocumentAnswerFields(
       JSON.stringify({
         root: {
           title: "Whole",

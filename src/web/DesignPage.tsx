@@ -367,7 +367,7 @@ const FACES: { token: string; used: string }[] = [
   /* The per-voice faces, read only by styles/voices.css and only with the
      Experimental switch on. docs/plans/261001d-typeface-per-voice.md. */
   { token: "--font-author", used: "experimental: the article, and verbatim quotes of it" },
-  { token: "--font-ai", used: "experimental: anything a model wrote" },
+  { token: "--font-ai", used: "experimental: model-generated prose" },
   { token: "--font-reader", used: "experimental: anything the reader typed" },
 ];
 

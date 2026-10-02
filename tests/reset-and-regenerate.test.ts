@@ -62,7 +62,7 @@ import {
   revisionStepRuns,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { buildTree, type ModelNode } from "../src/hierarchy.js";
+import { buildTree, type ModelNode } from "../src/structure.js";
 import { mintId } from "../src/ids.js";
 import {
   advanceJobWith,
@@ -308,7 +308,7 @@ function fakeExtract(calls: Calls): PipelineStep<"extract"> {
 }
 
 /** `hierarchy` without the model call — tests/labels-land-after-the-shelf.test.ts's fake. */
-function fakeHierarchy(fail = false): PipelineStep<"hierarchy"> {
+function fakeStructure(fail = false): PipelineStep<"hierarchy"> {
   return {
     name: "hierarchy",
     label: STEPS.hierarchy.label,
@@ -353,12 +353,12 @@ function fakeAssets(): PipelineStep<"assets"> {
   };
 }
 
-function partsFor(calls: Calls, opts: { failHierarchy?: boolean } = {}): AdvanceParts {
+function partsFor(calls: Calls, opts: { failStructure?: boolean } = {}): AdvanceParts {
   const steps: StepRegistry = {
     ...STEPS,
     fetch: fakeFetch(calls),
     extract: fakeExtract(calls),
-    hierarchy: fakeHierarchy(opts.failHierarchy),
+    hierarchy: fakeStructure(opts.failStructure),
     assets: fakeAssets(),
   };
   return {
@@ -614,7 +614,7 @@ describe("a reset, through the real claim and publication", () => {
     const before = await publishWithExtras(slug, ["quotes", "glossary"]);
     const { job } = await enqueueReset({ slug, regenerate: true, profile: PROFILE, pump: false });
 
-    const finished = await drive(job.id, partsFor({ fetch: 0, extract: 0 }, { failHierarchy: true }));
+    const finished = await drive(job.id, partsFor({ fetch: 0, extract: 0 }, { failStructure: true }));
     expect(finished.job.status).toBe("error");
     expect(await currentRevisionOf(slug)).toBe(before.revisionId);
     expect((await revision(before.revisionId)).quotes).toEqual(marker("quotes"));

@@ -69,7 +69,7 @@ diagnosed this: its Supabase connection is `http://127.0.0.1:54361`, the local s
 ## The workaround, which needed no deploy
 
 **Re-run the `hierarchy` step on the affected article.** `buildTree` applies `collapseRestatedRungs`
-([`src/hierarchy.ts:1657`](../../src/hierarchy.ts)), so the newly built tree does not have the shape,
+([`src/hierarchy.ts:1657`](../../src/structure.ts)), so the newly built tree does not have the shape,
 and its own publication passes. This was true throughout the incident and nobody knew it, because the
 refusal text never reached the reader or Sentry.
 

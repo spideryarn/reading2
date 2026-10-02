@@ -7,7 +7,7 @@ cheap-model field) and [260904c](../plans/260904c-hierarchy-structure-in-waves.m
 The full tables stay in `evals/results/`; this is the one place that says what was asked, what
 was decided and what was ruled out. The later thinking-off comparison (2026-10-01) is in
 [261001c § Hierarchy](261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md),
-not here. The live design is [hierarchy.md](../project/hierarchy.md).
+not here. The live design is [hierarchy.md](../project/structure-step.md).
 
 ## The questions
 
@@ -71,7 +71,7 @@ command in the latter's header):
   arms; `glm-5.3` is the one worth a proper finalist round, not run. Nothing was adopted.
 - **Cascade**: 260904c is marked superseded by
   [260904d](../plans/260904d-deepen-fat-sections.md) (deepening wave, behind a switch that is off:
-  [hierarchy.md § deepening](../project/hierarchy.md#deepening)).
+  [hierarchy.md § deepening](../project/structure-step.md#deepening)).
 
 ## Dead ends and surprises
 
@@ -90,7 +90,7 @@ command in the latter's header):
   control with the same error `low` had failed on, on a draw where `low` passed.
 - **A 3-block tail** (an empty paragraph, a stranded footnote, a footer) was left outside the root
   range by three different arms on `openai-huggingface`. Fixed as the root clamp
-  ([hierarchy.md § root-clamp](../project/hierarchy.md#root-clamp)), not by a model change.
+  ([hierarchy.md § root-clamp](../project/structure-step.md#root-clamp)), not by a model change.
 - **A panel killed by the box** (load average 53) was caught by the run's `completedAt` marker.
 
 ## Caveats
