@@ -97,7 +97,7 @@ What the model adds on top of the bar:
 Greg named the shape: Jev for speed, then a stronger model when Jev is unsure. What we know about
 Jev: it is `typesafe/jev-1.13`, a *decisions* model on OpenRouter's alpha
 `POST /api/alpha/decisions`. It costs about 0.6 s and $0.0005 a call
-([261002e](../research/261002e-shelf-topics-which-model-picks-the-pills.md)). It returns
+([261002e](../investigations/261002e-shelf-topics-which-model-picks-the-pills.md)). It returns
 `probabilities` over named options and a `confidence`, which is close to the shape this needs: *"of
 these 40 commands, which one, and how sure?"*
 

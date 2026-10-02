@@ -287,7 +287,7 @@ throwing the switch, whose own copy states its price), *AI processing*, and *Acc
 (`share`, `publish`, `private`; to the card, which asks before anything goes public) — the way an
 accepted run lands there: a step to Metadata from the reading view, the section added in place on
 Metadata. Not *Export*, which the action below owns, and not *What it cost*, which is an
-administrator's. *Archive this article* — *Unarchive this article* over an archived one, the label
+administrator's. *Archive this article* — *Put this article back* over an archived one, the label
 following the state, and **no row at all while the state is unknown** — presses through the same
 controller as the masthead mark and the page's buttons, so the four cannot disagree and a press while
 another is out sends nothing. *Export this article* downloads the ZIP through the function the

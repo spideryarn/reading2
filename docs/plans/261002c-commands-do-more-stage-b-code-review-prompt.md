@@ -1,0 +1,18 @@
+# Code review (review AND fix): 261002c Stage B
+
+You are a reviewer-fixer in this worktree. Plan: `docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md` (Stage B, and the Review ledger; F4, F6, F9 concern this stage). Your earlier rounds: `docs/plans/261002c-commands-do-more-plan-review-sol.md` and `docs/plans/261002c-commands-do-more-stage-a-code-review-sol.md` (F11–F16, all fixed).
+
+**Candidate (committed):** `92f5c1bf4`. `git show --stat 92f5c1bf4`; diff `git diff 92f5c1bf4~1 92f5c1bf4`. Start with src/web/article-commands.ts (new), src/web/export-download.ts (new), src/web/CommandBar.tsx (archiveRows, exportRow, section rows, goToSection), src/web/useArchive.ts (set() now returns ArchiveResult), src/web/Dock.tsx, src/web/reader/Reader.tsx, src/web/Metadata.tsx (ExportSection now calls downloadExport; shelfRow passed to the Dock), src/web/params.ts, tests/command-bar-metadata-rows.test.tsx, tests/command-match-metadata-rows.test.ts, tests/command-bar.test.tsx. Scope is not limited to these.
+
+**Attack first, independently.** Silent success: a row that is offered but whose press can only fail (Export or Archive where there is no shelf row — the Metadata page's own Export is withheld until provenance proves a shelf row; the bar does not wait — is that a reachable 404?); a press that does nothing visible; a failure sentence that vanishes. Stale state: archiveRows' closure captures `archived` at render — can the bar offer "Archive" on an article that has just been archived elsewhere and then send archived:true twice, or flip it the wrong way? Module-level busy Set in export-download.ts: leaks if a download throws? per-slug correct? Words and ranking: did taking `share`/`download` off the Metadata row, or the new aliases, make any existing typed word land on a worse first row (check tests/command-bar.test.tsx's ranking assertions and think of typical words: share, export, archive, opus, settings, details)? Type safety: is ArchiveResult exhaustively handled?
+
+**One product-wording point I want fixed:** the app's own word for un-archiving is **"Put back"** (the shelf card, Metadata's button, the Undo copy — grep it). A bar row called "Unarchive this article" is a second name for the same act. Make the label match the app ("Put this article back" or similar — your judgement, consistent with the existing copy), keep `unarchive`/`restore` as aliases, and adjust tests.
+
+**Fix what is inside this stage**, narrowly, red-first. **Report, do not fix**, anything wider. You can run: `npx vitest run tests/command-bar-metadata-rows.test.tsx tests/command-match-metadata-rows.test.ts tests/command-bar.test.tsx tests/command-match.test.ts tests/command-bar-rerun-and-find.test.tsx tests/command-match-rerun-and-find.test.ts tests/metadata-section-param.test.tsx` plus any archive/export/metadata jsdom tests (ls tests | grep -iE "archive|export|metadata"), and the TypeScript check (`npx tsc -p tests/tsconfig.json --noEmit` and `npx tsc -p tsconfig.json --noEmit` if the npm wrapper fails in your sandbox). Do not commit or touch the git index.
+
+Severity: P0 data loss / exploitable security / incorrect charging / broadly unusable; P1 user-visible wrong behaviour or contract violated; P2 design/maintainability; P3 prose. IDs continue from F16 (F17–F19 were used for the vision doc's prose — start at F20). Each: severity, established/reasoned, file:line evidence, fixed (+ test) or reported. End with a verdict and the files you changed.
+
+## My suspicions (worth less)
+1. The bar on Metadata offers Export/Archive before provenance lands.
+2. archiveRows' stale `archived`.
+3. Export busy guard in module state.

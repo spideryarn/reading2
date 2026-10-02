@@ -178,7 +178,7 @@ const NEW_ROWS = [
   "AI processing",
   "Access & sharing",
   "Archive this article",
-  "Unarchive this article",
+  "Put this article back",
   "Export this article",
 ];
 
@@ -234,7 +234,7 @@ describe("Archive", () => {
     openBar();
     type("archive");
     expect(listed()).not.toContain("Archive this article");
-    expect(listed()).not.toContain("Unarchive this article");
+    expect(listed()).not.toContain("Put this article back");
   });
 
   it("is absent without a shelf row to act on", () => {
@@ -262,12 +262,12 @@ describe("Archive", () => {
     expect(location.pathname).toBe(`/read/${SLUG}`);
   });
 
-  it("offers Unarchive over an archived article, and puts it back", async () => {
+  it("uses the app's Put back wording over an archived article", async () => {
     const archive = archiveControl({ at: "2026-10-01T00:00:00.000Z" });
     reading({ archive });
     openBar();
     type("restore");
-    expect(listed()[0]).toBe("Unarchive this article");
+    expect(listed()[0]).toBe("Put this article back");
     press("Enter");
     await settle();
     expect(archive.set).toHaveBeenCalledWith(false);

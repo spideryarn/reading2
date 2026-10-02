@@ -72,7 +72,7 @@ money"*, chat-tools.md § Security). That is a defence, so it is written up for 
 - Jev (`typesafe/jev-1.13`): a *decisions* model on OpenRouter's alpha `POST /api/alpha/decisions`,
   ~0.6 s and ~$0.0005 a call, returns `probabilities` and `confidence` per question. Only an eval
   has called it, through the declared bypass `shelf-topics-jev`; the gateway (`src/ai-call.ts`) has
-  no route for it ([261002e](../research/261002e-shelf-topics-which-model-picks-the-pills.md)).
+  no route for it ([261002e](../investigations/261002e-shelf-topics-which-model-picks-the-pills.md)).
 
 ## What we'll build
 
@@ -128,7 +128,7 @@ changed and why is under § Review ledger.
 1. **Section rows**: *High-powered AI* (→ AI processing, where the switch is first), *AI
    processing*, *Access & sharing* (aliases `share`, `public`, `publish`, `private`). Not *Export* —
    the direct action below owns that word (F4). Not *What it cost* — the bar has no admin check.
-2. **Archive / Unarchive this article**, through `useArchive`, plumbed from `OwnedArticle` to the
+2. **Archive / Put this article back**, through `useArchive`, plumbed from `OwnedArticle` to the
    Dock and the bar. **Absent while `archive.at` is unknown** or on a fixture (F6 — the
    controller's own rule: either label could be false), disabled while busy, and the label after
    the press read from the controller, not assumed. The label moves with the state: *Archive* on an
@@ -207,7 +207,7 @@ usable "unsure" signal. A few cents, its own declared bypass beside `shelf-topic
   refusal line, `?section=` classification and late reveal, the `find` parse, Archive's unknown
   state; `npm test`, `npm run typecheck` green; browser check at desktop and 390 px (a typed
   `rerun glossary`, an accepted run landing in AI processing, a section reveal, `find predictive`,
-  archive and unarchive). reading-view-overview.md § The command bar and url-state.md updated. GPT
+  archive and put back). reading-view-overview.md § The command bar and url-state.md updated. GPT
   Sol code review per stage.
 - Stage C: the doc, linked from its entry point, `tests/doc-links.test.ts` green.
 

@@ -505,7 +505,7 @@ function metadataRows(article: CommandBarArticle): readonly Command[] {
 const ARCHIVE_BUSY = "Still saving the last change to this article — a moment.";
 
 /**
- * **Archive, or Unarchive — never while nobody knows which** (GPT Sol's F6).
+ * **Archive, or Put back — never while nobody knows which** (GPT Sol's F6).
  *
  * `at === undefined` is useArchive.ts's *we do not know*: the request is out,
  * or it failed, or a write failed and could not be re-read. Either label could

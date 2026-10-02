@@ -151,7 +151,7 @@ export function sectionCommand(row: SectionRow, run: Run): Command {
 }
 
 /**
- * **Archive, or Unarchive — whichever pressing it would do.**
+ * **Archive, or Put back — whichever pressing it would do.**
  *
  * The label moves with the state, unlike Comments' (CommandBar.tsx § the
  * Comments row), because here a fixed name would be a lie half the time:
@@ -177,12 +177,12 @@ export function archiveCommand(archived: boolean, run: Run): Command {
     ? {
         kind: "action",
         id: "archive",
-        /* *Unarchive* rather than the page's *Put back*: the row has to say
-           what it acts on, and *Put back this article* is not English. *Put
-           back* is the first alias, so the page's word finds it. */
-        label: "Unarchive this article",
+        /* The app calls this act *Put back* on the shelf card, Metadata and the
+           Undo copy. Keep that one reader-facing name here too; `unarchive`
+           remains a search alias for somebody who describes the operation. */
+        label: "Put this article back",
         description: "Back on your shelf, where the library and its search show it again.",
-        aliases: ["put back", "put back on shelf", "restore", "return to shelf"],
+        aliases: ["put back", "put back on shelf", "unarchive", "restore", "return to shelf"],
         generates: false,
         typedOnly: true,
         run,

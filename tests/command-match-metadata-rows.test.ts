@@ -96,7 +96,7 @@ describe("the section rows", () => {
 describe("Archive", () => {
   it("is named for what pressing it does, which follows the state", () => {
     expect(commandText(archiveCommand(false, close)).label).toBe("Archive this article");
-    expect(commandText(archiveCommand(true, close)).label).toBe("Unarchive this article");
+    expect(commandText(archiveCommand(true, close)).label).toBe("Put this article back");
   });
 
   it("is found by its words in each state", () => {
@@ -104,7 +104,7 @@ describe("Archive", () => {
       expect(first(query, false), query).toBe("Archive this article");
     }
     for (const query of ["unarchive", "restore", "put back", "put back on shelf"]) {
-      expect(first(query, true), query).toBe("Unarchive this article");
+      expect(first(query, true), query).toBe("Put this article back");
     }
   });
 
@@ -113,7 +113,7 @@ describe("Archive", () => {
        not reach a row whose Enter does the other thing. */
     expect(labels(rankCommands("unarchive", list(false)))).not.toContain("Archive this article");
     expect(labels(rankCommands("put back", list(false)))).not.toContain("Archive this article");
-    expect(labels(rankCommands("hide", list(true)))).not.toContain("Unarchive this article");
+    expect(labels(rankCommands("hide", list(true)))).not.toContain("Put this article back");
   });
 
   it("has one id whichever way round, so the selection does not jump when it flips", () => {
