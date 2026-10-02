@@ -1787,6 +1787,22 @@ export interface Article {
   assets: Assets | undefined;
 
   /**
+   * **Whether `meta.title` is the reader's rename** rather than the article's
+   * own title — so the masthead can put it in the reader's face or the
+   * author's (src/web/voice.ts § `articleTitleVoice`; docs/project/fonts.md).
+   *
+   * Required, for the reason `assets` is: a loader that forgot it would
+   * typecheck and quietly draw every rename in the author's face. An article
+   * saved in the browser before 2026-10-02 has no such key, and the client
+   * reads that `undefined` as "not known" and draws the title as ours.
+   *
+   * The owner's article only. `PublicArticle` is its own type and never
+   * carries it: the public payload never shows an owner's rename at all
+   * (src/public/dto.ts).
+   */
+  titleOverridden: boolean;
+
+  /**
    * **Where the paragraph nav labels are** — `NavLabelStatus` above, off
    * `article_revisions.nav_label_status`.
    *
@@ -2059,6 +2075,8 @@ export interface LibraryEntry {
 export interface UnreadPaper {
   slug: string;
   title: string;
+  /** `title` is the reader's rename — `Article.titleOverridden`, for the same reason. */
+  titleOverridden: boolean;
   /** In the paper's order; empty when nobody was named. */
   authors: string[];
   abstract?: string;
@@ -2191,6 +2209,12 @@ export interface LibraryHit {
   slug: string;
   /** As the shelf shows it, so a renamed article is named the same in both places. */
   title: string;
+  /**
+   * `title` is the reader's rename rather than the article's own — so the hit
+   * can draw it in the right face (src/web/voice.ts § `articleTitleVoice`).
+   * Decided by the same `coalesce` that chose `title`.
+   */
+  titleOverridden: boolean;
   blockId: BlockId;
   /**
    * The matching block's prose, whole and plain.

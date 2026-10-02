@@ -358,9 +358,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             you can read.
           </li>
           <li>
-            <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions and Structure’s
-            smallest sections while that mode is open. Elsewhere they do what your browser normally
-            does.
+            <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes and
+            Structure’s smallest sections while that mode is open. Elsewhere they do what your browser
+            normally does.
           </li>
           <li>
             <kbd>G</kbd> opens the glossary at a term in the paragraph you are on; press it again for

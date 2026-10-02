@@ -196,6 +196,7 @@ const TREE = {
    because the tree here is fully built: nothing in this file is about labels. */
 const OWNED: Article = {
   highPowerSince: null,
+  titleOverridden: false,
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,

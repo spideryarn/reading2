@@ -216,6 +216,7 @@ export function useHoverCard<T>({
   focusable = false,
   tapSelector,
   onCommit,
+  openDelay,
 }: {
   /** What the pointer has to be on. `"mark.term"`, `"a[href]"`. */
   selector: string;
@@ -286,6 +287,19 @@ export function useHoverCard<T>({
    * 2026-08-27.
    */
   onCommit?: (target: HoverTarget<T>) => void;
+  /**
+   * **How long a pointer must rest before this hit's card opens**, when no
+   * card is open — `HOVER_DELAY.open` if absent. A warm swap between two
+   * targets keeps `WARM_MS` whatever this says, and a tap or a focus opens at
+   * once as before: this is only the cold pointer.
+   *
+   * For a target the reader rests in **while reading** rather than points at
+   * to ask: a quote is a whole passage, often a paragraph, so the ordinary
+   * third of a second would raise a card on every pause
+   * (docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 2).
+   * Read from the hit `read` already built, so it costs no second lookup.
+   */
+  openDelay?: (data: T) => number;
 }): UseHoverCard<T> {
   const [shown, setShown] = useState<HoverTarget<T> | null>(null);
   const arrowRef = useRef<SVGSVGElement>(null);
@@ -314,6 +328,9 @@ export function useHoverCard<T>({
      down and rebuild every listener below several times a second. */
   const commitRef = useRef(onCommit);
   commitRef.current = onCommit;
+  /* And again, for the same reason. */
+  const openDelayRef = useRef(openDelay);
+  openDelayRef.current = openDelay;
   /**
    * Whether the open card was opened by a finger.
    *
@@ -394,10 +411,15 @@ export function useHoverCard<T>({
       closeTimer = setTimeout(shut, HOVER_DELAY.close);
     };
 
-    /** Open against `el` after `wait`, if it is still there and still wanted. */
-    const arm = (el: HTMLElement, wait: number) => {
+    /**
+     * Open against `el` after `wait`, if it is still there and still wanted.
+     * `"cold"` is a pointer arriving with no card open: the consumer's
+     * `openDelay` for this hit if it has one, else `HOVER_DELAY.open`.
+     */
+    const arm = (el: HTMLElement, when: number | "cold") => {
       const data = readRef.current(el);
       if (data === null) return close(); // not ours
+      const wait = when === "cold" ? (openDelayRef.current?.(data) ?? HOVER_DELAY.open) : when;
       if (el === currentRef.current) {
         // Already showing it: cancel the close its own edge began. And take it
         // over from the finger that may have opened it — otherwise a scroll
@@ -438,7 +460,7 @@ export function useHoverCard<T>({
       if (event.pointerType === "touch") return;
       const target = event.target as Element | null;
       const hit = target?.closest?.(selector) as HTMLElement | null;
-      if (hit) return arm(hit, currentRef.current ? WARM_MS : HOVER_DELAY.open);
+      if (hit) return arm(hit, currentRef.current ? WARM_MS : "cold");
       // Inside the card: the reader is reaching for a control in it. Cancel the
       // close that entering it would otherwise have already started.
       if (target?.closest?.(`.${CARD_CLASS}`)) {

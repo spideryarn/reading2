@@ -29,6 +29,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article, BlockId } from "../src/types.js";
+import type { OnRenamed } from "../src/web/TitleEditor.js";
 
 /* The one seam that leaves the browser. Mocked at the module rather than by
    stubbing `fetch`, because `apiFetch` reaches for a Supabase session on its
@@ -62,6 +63,7 @@ function article(title: string): Article {
   const id = "spya-owl001" as BlockId;
   return {
     highPowerSince: null,
+    titleOverridden: false,
     meta: { slug: SLUG, title, byline: "A Writer", siteName: "Somewhere" },
     blocks: [
       { id, tag: "p", kind: "text", text: "Owls are quiet.", words: 3, html: "<p>Owls are quiet.</p>", gistable: true },
@@ -98,7 +100,7 @@ function patched(title: string, overridden: boolean): Response {
 
 let host: HTMLDivElement;
 let root: Root;
-let renamed: ReturnType<typeof vi.fn<(slug: string, title: string) => void>>;
+let renamed: ReturnType<typeof vi.fn<OnRenamed>>;
 
 /**
  * `slug` defaults to the article's own, and is passed separately on purpose:
@@ -106,7 +108,7 @@ let renamed: ReturnType<typeof vi.fn<(slug: string, title: string) => void>>;
  * bug the third test below is about.
  */
 function mount(title = "The Barn Owl", slug = SLUG) {
-  renamed = vi.fn<(slug: string, title: string) => void>();
+  renamed = vi.fn<OnRenamed>();
   act(() => {
     root.render(<Masthead article={article(title)} slug={slug} onRenamed={renamed} />);
   });
@@ -183,7 +185,7 @@ describe("renaming from the masthead", () => {
     // must show, and a clear is the case where the two differ entirely. And the
     // slug goes with it, because this resolves after the page that asked may
     // have gone.
-    expect(renamed).toHaveBeenCalledWith(SLUG, "Saved By The Server");
+    expect(renamed).toHaveBeenCalledWith(SLUG, "Saved By The Server", true);
   });
 
   it("clears the override with null rather than with an empty string", async () => {
@@ -197,7 +199,7 @@ describe("renaming from the masthead", () => {
       title: null,
     });
     await act(async () => {});
-    expect(renamed).toHaveBeenCalledWith(SLUG, "What The Site Called It");
+    expect(renamed).toHaveBeenCalledWith(SLUG, "What The Site Called It", false);
   });
 
   it("renames the address, not whatever meta.json happens to say", async () => {
@@ -207,7 +209,7 @@ describe("renaming from the masthead", () => {
        (src/api.ts § loadArticle, example/meta.json). Renaming through that
        PATCHed the *real* Noema article's shelf row while appearing to rename
        the thing on screen, and reverted on reload. GPT Sol, 2026-08-27. */
-    renamed = vi.fn<(slug: string, title: string) => void>();
+    renamed = vi.fn<OnRenamed>();
     act(() => {
       root.render(
         <Masthead
@@ -228,7 +230,7 @@ describe("renaming from the masthead", () => {
       "/api/library/the-address-in-the-bar",
     );
     await act(async () => {});
-    expect(renamed).toHaveBeenCalledWith("the-address-in-the-bar", "Saved By The Server");
+    expect(renamed).toHaveBeenCalledWith("the-address-in-the-bar", "Saved By The Server", true);
   });
 
   it("lets the newer of two overlapping writes win", async () => {
@@ -259,7 +261,7 @@ describe("renaming from the masthead", () => {
     });
 
     expect(renamed).toHaveBeenCalledTimes(1);
-    expect(renamed).toHaveBeenCalledWith(SLUG, "Second");
+    expect(renamed).toHaveBeenCalledWith(SLUG, "Second", true);
   });
 
   it("puts focus back on the pencil rather than on the body", () => {
@@ -349,7 +351,7 @@ describe("renaming from the metadata page", () => {
       root.render(<Metadata
           slug={SLUG}
           article={article("The Barn Owl")}
-          onRenamed={vi.fn<(slug: string, title: string) => void>()}
+          onRenamed={vi.fn<OnRenamed>()}
           onVisibility={() => {}}
         />);
     });
@@ -375,7 +377,7 @@ describe("renaming from the metadata page", () => {
         <Metadata
           slug={SLUG}
           article={article("The Barn Owl")}
-          onRenamed={vi.fn<(slug: string, title: string) => void>()}
+          onRenamed={vi.fn<OnRenamed>()}
           onVisibility={() => {}}
         />,
       );
@@ -483,5 +485,88 @@ describe("the editor takes the keyboard when it opens", () => {
     } finally {
       select.mockRestore();
     }
+  });
+});
+
+/**
+ * **Whose words the title is, on both pages that rename one article.** The
+ * author's title in the author's face, the reader's rename in theirs, and an
+ * article saved before the flag existed in ours (voice.ts §
+ * `articleTitleVoice`; docs/plans/261002f § 6, the follow-up). The editor's hint
+ * starts from the same flag rather than waiting for a write.
+ */
+describe("the title's voice", () => {
+  const withFlag = (title: string, flag: boolean | undefined): Article =>
+    ({ ...article(title), titleOverridden: flag }) as Article;
+
+  it("draws the masthead's title as the author's, a rename as the reader's, and an unknown as ours", () => {
+    for (const [flag, voice] of [
+      [false, "voice-author"],
+      [true, "voice-reader"],
+      [undefined, "voice-ui"],
+    ] as const) {
+      act(() => {
+        root.render(
+          <Masthead article={withFlag("The Barn Owl", flag)} slug={SLUG} onRenamed={vi.fn<OnRenamed>()} />,
+        );
+      });
+      expect(find("h1").classList.contains(voice), `${String(flag)} → ${voice}`).toBe(true);
+    }
+  });
+
+  /* `false` is the case only the seed can produce: an unknown flag takes the
+     same branch as a rename, so a test on `true` would pass without it. */
+  it("starts the editor's hint from the article's own flag", () => {
+    act(() => {
+      root.render(
+        <Masthead article={withFlag("The Barn Owl", false)} slug={SLUG} onRenamed={vi.fn<OnRenamed>()} />,
+      );
+    });
+    act(() => pencil().click());
+    /* The article's own title, so clearing the field restores exactly it. */
+    expect(host.textContent).toContain("restore “The Barn Owl”");
+  });
+
+  it("does not carry one article's written flag into the next article", async () => {
+    mount("The Barn Owl", "first-article");
+    act(() => pencil().click());
+    type("My owl title");
+    submit();
+    await act(async () => {});
+
+    /* Deliberately re-use the same Masthead instance. ArticlePage normally
+       keys its owner branch by slug, but the hook itself takes `slug` and must
+       not make a second article depend on that parent implementation detail. */
+    mount("The Snowy Owl", "second-article");
+    act(() => pencil().click());
+    expect(host.textContent).toContain("restore “The Snowy Owl”");
+  });
+
+  it("draws the metadata page's title from the same flag", async () => {
+    apiFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          slug: SLUG,
+          dir: SLUG,
+          stages: [],
+          comments: 0,
+          profile: null,
+          purpose: null,
+          archivedAt: null,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    await act(async () => {
+      root.render(
+        <Metadata
+          slug={SLUG}
+          article={withFlag("Mine Now", true)}
+          onRenamed={vi.fn<OnRenamed>()}
+          onVisibility={() => {}}
+        />,
+      );
+    });
+    expect(find("h1").classList.contains("voice-reader")).toBe(true);
   });
 });

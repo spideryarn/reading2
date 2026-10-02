@@ -1180,6 +1180,7 @@ const SKETCH: PublicSketch = {
 
 const OWNED: Article = {
   highPowerSince: null,
+  titleOverridden: false,
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,
@@ -1503,6 +1504,7 @@ function mountQuotes(quotes: Quotes | null): ReactNode {
     bar: null,
     onBar: noop,
     onJump: noop,
+    steps: [],
   });
 }
 

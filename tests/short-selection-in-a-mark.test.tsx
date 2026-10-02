@@ -107,6 +107,7 @@ async function withAMarkedPassage(): Promise<{
   if (!loaded.meta) throw new Error(`${DIR} has no meta.json — the fixture is incomplete`);
   const article: Article = {
     highPowerSince: null,
+    titleOverridden: false,
     meta: loaded.meta,
     blocks: loaded.blocks,
     tree: loaded.tree,

@@ -107,6 +107,7 @@ async function load(): Promise<void> {
     tree: loaded.tree,
     assets: undefined,
     highPowerSince: null,
+    titleOverridden: false,
     navLabelStatus: "ready",
     sourceGuess: undefined,
   };

@@ -77,6 +77,7 @@ const SINCE = "2026-09-30T09:15:00.000Z";
 
 const ARTICLE: Article = {
   highPowerSince: null,
+  titleOverridden: false,
   meta: { slug: SLUG, title: "A hard piece" },
   blocks: [
     {

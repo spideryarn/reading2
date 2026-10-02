@@ -70,10 +70,11 @@ to it means changing the token and its import.
 
   The apparatus's "Notes" and the heading tree's "Before the first heading" are ours.
 - **An article's title is the author's, unless the reader renamed it**, then it is the reader's
-  (`articleTitleVoice`). **Where a page does not know whether there is a rename, the title stays in
-  the app's face** rather than guessing: the masthead, Metadata before a rename, the unread-paper
-  page, a library search hit. Guessing "author" would put the reader's own words in the author's
-  face.
+  (`articleTitleVoice`). Every payload that draws a title says which (`titleOverridden` on the
+  shelf entry, the owner's article, the unread paper and a library search hit), decided beside the
+  code that chose the title. **Where a payload cannot say** — one saved in the browser before the
+  flag existed, or Citations' "in your library" match — the title stays in the app's face rather
+  than guessing: "author" would put the reader's own words in the author's face.
 - **The shelf's blurb is the model's gist, or the article's own excerpt where there is none.** The
   server currently infers which by equality (`gistVoiceOf` in
   [`src/library-scalars.ts`](../../src/library-scalars.ts)). A model gist that copied the excerpt
@@ -143,8 +144,8 @@ you add text that is not the app's own, put it in its voice at the same time.**
   voiced.
 - **A section title inside one of our sentences**: ReturnChip's "back to …" and BlockLinkCard's
   section line. Voicing them means splitting the string into markup.
-- **Article titles where a rename is not known** (above). Voicing them means carrying
-  `titleOverridden` on the owner's article, unread-paper, search-hit and Citations-match payloads —
+- **Citations' "in your library" match titles** (above): `CitedInSpideryarn` does not carry the
+  rename flag yet —
   [261002f § 6](../plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md).
 - **Sketch's SVG labels and Illustrated's painted captions** (§ How to put an element in its voice,
   point 4).

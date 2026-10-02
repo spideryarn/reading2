@@ -136,6 +136,7 @@ describe("the other places an article's URL becomes a link", () => {
 describe("the article title as a link", () => {
   const article = (m: Meta): Article => ({
     highPowerSince: null,
+    titleOverridden: false,
     meta: m,
     blocks: [],
     assets: undefined,

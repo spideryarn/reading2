@@ -133,6 +133,7 @@ const BRAND_TOKENS = '@import "../../styles/tokens.css"';
 const MANIFEST = [
   "tokens.css",
   "shell.css",
+  "crumbs.css",
   "table.css",
   "prose.css",
   "spine.css",

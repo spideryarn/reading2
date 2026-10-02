@@ -395,6 +395,10 @@ export async function resolveAccess(
               ? undefined
               : { status: "found", ...found.article.sourceGuess },
           highPowerSince: null,
+          /* And never an owner's rename: the public payload carries the
+             article's own title (src/public/dto.ts), so the title is the
+             author's. */
+          titleOverridden: false,
         };
   const presentable = await renderArticleMaths(sanitizeArticle(drawn), {
     signal: load.signal,
@@ -565,6 +569,9 @@ function isUnreadPaper(value: unknown): value is UnreadPaper {
     (p.doi === undefined || typeof p.doi === "string") &&
     (p.filename === undefined || typeof p.filename === "string") &&
     (p.kind === "pdf" || p.kind === "html" || p.kind === null) &&
+    /* Tolerated when absent — an answer from a server older than the flag —
+       and drawn as ours then (voice.ts § `articleTitleVoice`). */
+    (p.titleOverridden === undefined || typeof p.titleOverridden === "boolean") &&
     typeof p.addedAt === "string"
   );
 }

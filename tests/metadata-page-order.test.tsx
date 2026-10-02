@@ -78,6 +78,7 @@ function article(): Article {
     assets: undefined,
     navLabelStatus: "ready",
     highPowerSince: null,
+    titleOverridden: false,
     sourceGuess: undefined,
     tree: {
       version: "t",

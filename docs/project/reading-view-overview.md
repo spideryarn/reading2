@@ -16,6 +16,10 @@ beside any band ([261001i](../plans/261001i-annotations-column-beside-a-band-mod
 is open* and *a band is open* are separate questions
 ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
 
+**Above the prose, a reader with Experimental features on also gets a headings breadcrumb** — part ›
+section, following the scroll, in the sticky bar a visitor's read-only chip sits in
+([experimental-features.md](experimental-features.md#what-is-behind-it-today)).
+
 One of the features the app is for is the article at several levels of compression — the tree in
 **[granularity-zoom.md](granularity-zoom.md)**, which [Structure](structure.md) now draws. It is one
 of several, not the reason the app exists; [vision.md](vision.md) has the rest.
