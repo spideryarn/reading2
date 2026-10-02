@@ -155,6 +155,30 @@ describe("the two rules the stylesheet is written under", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("never writes the letters' resting colour into a keyframe's ends", () => {
+    /* **The resting colour is the host's, and a keyframe cannot know it.**
+       Until 2026-10-02 the corner and the Dock drew the name orange and the
+       marketing bar, the footer and the shelf drew it white, and Strain and
+       Dawn wrote `color: var(--highlight)` at 0% and 100% — so on every white
+       copy the word went orange for the length of the animation and snapped
+       back when the class went. So an end either says nothing, and CSS fills
+       it from the letter's own computed value, or names `--wordmark-ink`, the
+       one token the resting colour is (styles/tokens.css). Report
+       spya-p52ccp; docs/plans/261002e-one-white-wordmark-everywhere-and-its-animations-made-colour-aware.md. */
+    const offenders: string[] = [];
+    for (const m of RULES.matchAll(/@keyframes\s+([a-z0-9-]+)\s*\{([\s\S]*?)\n\}/g)) {
+      for (const stop of (m[2] as string).matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+        const at = (stop[1] as string).split(",").map((s) => s.trim());
+        const ends = at.some((s) => s === "0%" || s === "100%" || s === "from" || s === "to");
+        const color = (stop[2] as string).match(/(?:^|;)\s*color\s*:\s*([^;]+)/)?.[1]?.trim();
+        if (ends && color !== undefined && color !== "var(--wordmark-ink)") {
+          offenders.push(`${m[1]} @ ${at.join(", ")}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps the letters positioned, so a pseudo-element resolves against one", () => {
     /* Take `position: relative` off the letters and every other guard here
        stays green while three animations quietly hang their pseudo-element off
@@ -361,7 +385,7 @@ describe("the trigger", () => {
 });
 
 /**
- * **The seven that animate the letters and nothing else**, by name rather than
+ * **The eight that animate the letters and nothing else**, by name rather than
  * read off the registry, so this file cannot agree with a wrong tag by
  * construction. Measured in the dock on 2026-09-15 with the word hidden: each
  * of these left no running animation on any box that was drawn.
@@ -375,6 +399,8 @@ const LETTERS_ONLY = new Set([
   "spya-i",
   "spya-type",
   "spya-abseil",
+  // 2026-10-02: colour and text-shadow on the letters only (plan 261002e).
+  "spya-dew",
 ]);
 
 /**
@@ -456,7 +482,7 @@ describe("the draw, when the word is not on the screen", () => {
     }
   });
 
-  it("still reaches all thirteen when the word is drawn", () => {
+  it("still reaches all fourteen when the word is drawn", () => {
     vi.spyOn(Element.prototype, "getClientRects").mockReturnValue([
       {},
     ] as unknown as DOMRectList);
@@ -491,7 +517,7 @@ describe("the draw, when the word is not on the screen", () => {
     }
   });
 
-  it("tags exactly those seven as needing the word", () => {
+  it("tags exactly those eight as needing the word", () => {
     const tagged = LOGO_ANIMATIONS.filter((a) => a.reach === "letters").map((a) => a.id);
     expect(tagged.sort()).toEqual([...LETTERS_ONLY].sort());
     expect(LOGO_ANIMATIONS.every((a) => a.reach === "letters" || a.reach === "mark")).toBe(true);

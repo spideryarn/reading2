@@ -59,7 +59,7 @@ export type LogoAnimation = {
 };
 
 /**
- * The thirteen, each defined in src/web/styles/logo-animations.css under the
+ * The fourteen, each defined in src/web/styles/logo-animations.css under the
  * `id` below. Order here is the order `/design` lists them in and has no other
  * meaning — the picker is uniform, and deliberately so for a first version.
  *
@@ -71,7 +71,7 @@ export type LogoAnimation = {
  * to reach for if one of these disappoints on screen are in
  * docs/plans/260907f-logo-animations-shortlist.md.
  *
- * **Six of the thirteen animate the mark alone**, and that ratio is not an
+ * **Six of the fourteen animate the mark alone**, and that ratio is not an
  * accident: the word is hidden below 731px in the corner and at the bar's
  * tightest rungs on the reading view, so on a phone a letters-only animation is
  * a hover that does nothing. docs/project/design-logo.md § What a phone sees.
@@ -158,6 +158,12 @@ export const LOGO_ANIMATIONS: readonly LogoAnimation[] = [
     reach: "mark",
     name: "Radius Sweep",
     blurb: "Light travels round the mark like a hand on a clock, lighting each leg in turn. Nothing moves.",
+  },
+  {
+    id: "spya-dew",
+    reach: "letters",
+    name: "Dew on the Thread",
+    blurb: "A bead of the spider's orange runs once along the white word, each letter glowing as it passes.",
   },
 ];
 

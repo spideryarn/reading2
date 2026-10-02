@@ -655,9 +655,9 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  color: var(--highlight);
+  /* No colour, weight or tracking: the letters carry their own, the same in
+     every copy (styles/tokens.css § .logo-letter). */
   font-size: 0.82rem;
-  letter-spacing: 0.02em;
   /* **These two exist for the long press**, which is how a reader with no
      pointer asks the wordmark for an animation (src/web/logo-animation.ts).
      Holding a link on iOS otherwise raises the callout menu and the selection

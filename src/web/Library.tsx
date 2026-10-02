@@ -1516,8 +1516,10 @@ export function ShelfWordmark() {
       </span>
       {/* A wrapper round the ten letters and nothing else, because the stagger
           is `:nth-child` over exactly those (LogoGlyphs.tsx). The `<h1>` is
-          that wrapper. */}
-      <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">
+          that wrapper. Its face, weight, tracking and colour are the letters'
+          own, the same as every other copy (styles/tokens.css §
+          .logo-letter); the size is the heading's. */}
+      <h1 className="tw:text-3xl">
         <LogoLetters />
       </h1>
     </div>

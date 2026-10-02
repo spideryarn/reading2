@@ -41,6 +41,11 @@
     /* ---- brand ------------------------------------------------------- */
     --spideryarn-orange: #DB8A45;
     --highlight: var(--spideryarn-orange);   /* alias: say this when you mean "the orange" */
+    /* The name's colour at rest, in every copy of the wordmark. White since 2026-10-02 (it was
+       orange in the corner and the Dock, white everywhere else): the spider carries the orange.
+       A token rather than --foreground spelled in .logo-letter because the animations that warm
+       the letters hold this between their beats (src/web/styles/logo-animations.css § Strain). */
+    --wordmark-ink: var(--foreground);
 
     /* The search wash — and it is deliberately NOT the orange.
        docs/project/original-version/highlighting.md records the exact mistake this avoids: that
@@ -304,23 +309,28 @@
     color: var(--foreground);
 }
 
-/* Wordmark. Structure copied from the original header so its logo animations could drop in later:
-   an <img class="logo-image"> next to a <span class="logo-text"> of per-letter <span class="logo-letter">.
+/* The wordmark's name: how its ten letters look at rest, in every copy that draws them.
 
-   **--font-brand was Trebuchet MS until 2026-09-08, and the weight below is why it is worth
-   knowing.** The wordmark is drawn twice — this class in the corner (HomeLogo.tsx) and
-   .dock-btn-label in the bottom bar (Dock.tsx), which inherits --font-ui and so was always Geist —
-   so the app's own name was set in two different faces depending on which page you were on. Two
-   agents found it independently while writing docs/project/design-logo.md; Greg's answer was one
-   word, "use Geist". It is still a separate token rather than --font-sans spelled at the call site,
-   for the same reason --font-reading is: the wordmark having its own face is a decision somebody
-   may want back, and this is the one line that gives it back.
+   **On `.logo-letter`, the class only `LogoLetters` emits** (src/web/LogoGlyphs.tsx), so a host
+   gets this by drawing the shared letters and cannot drift from it by forgetting a class. Until
+   2026-10-02 each host set its own, and one name was drawn in two colours and four weights: orange
+   600 in the corner (`.logo-text`, where this rule used to live), orange 400 in the Dock, white 500
+   on the marketing bar, white 700 as the shelf's <h1>, white 400 in the loader. Greg, report
+   spya-p52ccp: *"Sometimes the Spideryarn logo has white text, and sometimes it has orange text. I
+   think probably the white text is better."*
+   docs/plans/261002e-one-white-wordmark-everywhere-and-its-animations-made-colour-aware.md.
 
-   600 is a real weight now rather than a synthesised one. Trebuchet ships 400 and 700, so the
-   browser was faux-bolding a smearing 600; Geist is variable across 100-900 (see --reading-weight
-   above) and draws it. */
-.logo-text {
+   **What stays the host's is size and what hides it** — 0.82rem in the chrome, 1rem in the bar,
+   30px on the shelf; the 731px query on `.logo-text`, the fit ladder on `.dock-btn-label`. The
+   animations scale with the size (logo-animations.css § `--logo-px`).
+
+   --font-brand was Trebuchet MS until 2026-09-08 and is Geist now. It is still a separate token,
+   for the reason --font-reading is: the wordmark having its own face is a decision somebody may
+   want back, and this is the one line that gives it back. 600 is drawn, not synthesised: Geist is
+   variable across 100-900. */
+.logo-letter {
     font-family: var(--font-brand);
     font-weight: 600;
-    color: var(--spideryarn-orange);
+    letter-spacing: 0.02em;
+    color: var(--wordmark-ink);
 }

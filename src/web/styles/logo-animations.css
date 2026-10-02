@@ -239,7 +239,7 @@
 }
 
 /* ==========================================================================
-   The thirteen.
+   The fourteen.
 
    Picked as a *set* rather than one at a time, by Fable on 2026-09-07, out of
    roughly 140 ideas across eight longlists — the arbitration, the diversity
@@ -494,8 +494,9 @@
 /* -- 7. The Spider Strains -----------------------------------------------
    The spider leans hard to the left, legs braced and visibly stretching, as if
    trying to haul the word off the screen — and the word does not budge. After a
-   beat it gives up, springs upright, and the letters brighten a shade, as
-   though acknowledging they were never going anywhere. Then it tries again.
+   beat it gives up, springs upright, and the letters flush the spider's orange,
+   as though they had felt the pull after all and were never going anywhere.
+   Then it tries again.
 
    The one animation here that is an argument: the text does not move, whatever
    the tool does to it (docs/project/vision.md § Principles). The `scaleX(1.1)`
@@ -529,10 +530,20 @@
   animation: spya-strain-hold 1.8s ease-in-out infinite;
 }
 /* After it lets go (58%), not during the hold — which is the beat the note
-   above describes, and was the one thing the first version had out of order. */
+   above describes, and was the one thing the first version had out of order.
+
+   **The rest stops name `--wordmark-ink`, never a colour.** Until 2026-10-02
+   they said `--highlight`, written when the corner's word rested orange — so on
+   every white copy (the marketing bar, the footer, the shelf) the word went
+   orange for as long as you pointed and snapped back white when you stopped.
+   The flush is to the orange now, which the white word makes visible; the
+   corner's orange word could only ever lighten. Omitting 0% would not do here:
+   CSS would then ease toward the flush from the very start of the haul, and
+   the 56% hold is what keeps the beat after the release. tests/logo-animation
+   § resting colour. */
 @keyframes spya-strain-hold {
-  0%, 56%, 100% { color: var(--highlight); }
-  68%, 82% { color: var(--highlight-ink); }
+  0%, 56%, 100% { color: var(--wordmark-ink); }
+  68%, 82% { color: var(--highlight); }
 }
 
 /* -- 8. Only the i -------------------------------------------------------
@@ -554,8 +565,8 @@
 /* -- 9. Dawn Rebuild -----------------------------------------------------
    A soft edge sweeps right to left across the whole control and everything
    behind it is gone — mark and word both eaten — and at once a second edge
-   sweeps left to right and puts it back, the word arriving a shade brighter and
-   cooling to its usual orange. Eaten one way, respun the other. Once.
+   sweeps left to right and puts it back, the word arriving in the spider's
+   orange and cooling to its usual white. Eaten one way, respun the other. Once.
 
    An orb weaver eats its web at dawn and builds a new one the same day, which
    is the least sentimental available statement of what re-reading something is.
@@ -600,10 +611,12 @@
 .spya-dawn .logo-letter {
   animation: spya-dawn-glow 2.1s ease-out 1;
 }
+/* Rest at both ends is `--wordmark-ink`, for Strain's reason above: these said
+   `--highlight` and snapped on every white copy. */
 @keyframes spya-dawn-glow {
-  0%, 50% { color: var(--highlight); }
-  62% { color: var(--highlight-ink); }
-  100% { color: var(--highlight); }
+  0%, 50% { color: var(--wordmark-ink); }
+  62% { color: var(--highlight); }
+  100% { color: var(--wordmark-ink); }
 }
 
 /* -- 10. Retype ----------------------------------------------------------
@@ -903,4 +916,43 @@
 }
 @keyframes spya-radius {
   to { --spya-angle: 360deg; }
+}
+
+/* -- 14. Dew on the Thread -----------------------------------------------
+   A bead of the spider's orange runs once along the word, left to right: each
+   letter warms and glows as it passes and cools behind it, and the word is
+   white again when it has gone by. Nothing moves; the light travels.
+
+   The first animation here that is *about* the colours rather than in spite of
+   them. It became possible on 2026-10-02, when every copy's name went white
+   (styles/tokens.css § .logo-letter) and the orange became the spider's alone
+   — while the corner's word rested orange, an orange bead along it was
+   invisible. Greg, report spya-p52ccp: *"include & build on & improve the
+   animations"*. The Radius Sweep is its sibling on the mark, and the two are
+   different squares of the grid: one is light going round a still thing, this
+   is light going *along* the strand the name is spun on.
+
+   **No 0% or 100% stop, on purpose.** CSS fills both from the letter's own
+   computed value, so each letter starts and ends exactly as its host draws it,
+   whatever that is — the rule a keyframe that touches the letters' colour has
+   to meet (tests/logo-animation § resting colour). No fill mode either: a
+   letter waiting out its delay is simply at rest.
+
+   Colour and `text-shadow` only, so no box moves. The glow's blur is in
+   `--logo-px`, so it grows with the shelf's 30px heading.
+
+   Reduced motion: the guard flattens each letter's run to nothing and leaves
+   the delays, so the word sits white throughout — base style. */
+.spya-dew .logo-letter {
+  animation: spya-dew 900ms ease-in-out 1;
+  /* 70ms × 9 = 630ms across the word: slow enough that the bead is one or two
+     letters wide rather than a flash of the whole word, quick enough that it
+     has reached the `n` inside the median hover. */
+  animation-delay: calc(var(--i) * 70ms);
+}
+@keyframes spya-dew {
+  45% {
+    color: var(--highlight);
+    text-shadow: 0 0 calc(var(--logo-px) * 5) color-mix(in oklab, var(--highlight) 60%, transparent);
+  }
 }

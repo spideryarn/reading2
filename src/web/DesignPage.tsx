@@ -1264,7 +1264,7 @@ function LogoAnimations() {
      and half of these run once and stop by design. */
   const [take, setTake] = useState(0);
   /* **The classes go on a frame after the cells exist, and that is not a
-     nicety.** Three of the thirteen are CSS *transitions* rather than keyframes
+     nicety.** Three of the fourteen are CSS *transitions* rather than keyframes
      (`spya-settle`, `spya-seam`, `spya-i`), because a transition is the only
      mechanism that animates the exit as carefully as the entrance. A transition
      needs a previous value to move from, and an element born with its final
