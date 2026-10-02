@@ -1,0 +1,295 @@
+{
+  "arm": "high-none-fb9pa2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "version": "simple-prompt/5",
+  "sourceSha256": "e5ccff348d97e8bb668d4774a9e72abf6516d93448f9ed18a0e6fd5e44bb197a",
+  "at": "2026-10-02T19:43:59.354Z",
+  "bodyWords": 6489,
+  "bodyBlocks": 92,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "d3b5b8760ff66f03",
+  "systemsSha256": "2b6dfdb3acd015cc3c4a3cec2d03a6da8ee3bec2d0f8854f9cb84d524115683c",
+  "power": "high",
+  "guard": true,
+  "wallMs": 19555,
+  "costUsd": 0.179099,
+  "tokens": {
+    "input": 13558,
+    "output": 3452,
+    "reasoning": 1195
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 201,
+  "fullerWords": 261,
+  "briefWords": 109,
+  "paragraphs": [
+    {
+      "text": "This article proposes a theory of how the brain thinks and becomes aware. Its claim is that brain waves, rhythmic electrical activity shared by huge groups of neurons, may work together with neurons' own electrical pulses, called spikes. Spikes shape the waves, and the waves in turn affect when and where spikes happen.",
+      "ids": [
+        "spya-d238cn",
+        "spya-z9g2s3"
+      ],
+      "sentences": [
+        {
+          "text": "This article proposes a theory of how the brain thinks and becomes aware.",
+          "id": null
+        },
+        {
+          "text": "Its claim is that brain waves, rhythmic electrical activity shared by huge groups of neurons, may work together with neurons' own electrical pulses, called spikes.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "Spikes shape the waves, and the waves in turn affect when and where spikes happen.",
+          "id": "spya-z9g2s3"
+        }
+      ]
+    },
+    {
+      "text": "The older view says each neuron has one fixed job, linked by synapses, the connections between neurons. But many neurons change their job depending on the situation, which the authors call \"mixed selectivity.\" Rewiring synapses seems too slow to steer millions of such neurons within a fraction of a second.",
+      "ids": [
+        "spya-amx5qf",
+        "spya-d73kfb"
+      ],
+      "sentences": [
+        {
+          "text": "The older view says each neuron has one fixed job, linked by synapses, the connections between neurons.",
+          "id": "spya-amx5qf"
+        },
+        {
+          "text": "But many neurons change their job depending on the situation, which the authors call \"mixed selectivity.\"",
+          "id": "spya-amx5qf"
+        },
+        {
+          "text": "Rewiring synapses seems too slow to steer millions of such neurons within a fraction of a second.",
+          "id": "spya-d73kfb"
+        }
+      ]
+    },
+    {
+      "text": "In their \"Spatial Computing\" idea, slower alpha/beta waves act like stencils that block activity in some spots and leave others open. Overlapping waves can also do math by adding together, which the authors call analog computation, and it may use far less energy. Different anesthetic drugs all turn brain waves slow and out of step, hinting that awareness depends on organized waves.",
+      "ids": [
+        "spya-gkfdys",
+        "spya-mgnqxk",
+        "spya-k02vdw"
+      ],
+      "sentences": [
+        {
+          "text": "In their \"Spatial Computing\" idea, slower alpha/beta waves act like stencils that block activity in some spots and leave others open.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "Overlapping waves can also do math by adding together, which the authors call analog computation, and it may use far less energy.",
+          "id": "spya-mgnqxk"
+        },
+        {
+          "text": "Different anesthetic drugs all turn brain waves slow and out of step, hinting that awareness depends on organized waves.",
+          "id": "spya-k02vdw"
+        }
+      ]
+    },
+    {
+      "text": "The authors conclude that consciousness may emerge when wave patterns pull the cortex, the brain's outer layer, into one organized state. They argue it would be surprising if evolution had not used this built-in, energy-saving system.",
+      "ids": [
+        "spya-m9exy5",
+        "spya-m8bzur"
+      ],
+      "sentences": [
+        {
+          "text": "The authors conclude that consciousness may emerge when wave patterns pull the cortex, the brain's outer layer, into one organized state.",
+          "id": "spya-m9exy5"
+        },
+        {
+          "text": "They argue it would be surprising if evolution had not used this built-in, energy-saving system.",
+          "id": "spya-m8bzur"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a theory piece by Earl Miller and colleagues about where thinking and awareness come from in the brain. They propose that both may arise from a two-way link between neuron \"spikes\", the brief electrical pulses neurons fire, and brain waves, the rhythmic electrical activity of large groups of neurons. Spikes shape the waves, and the waves in turn shape when and where spikes happen.",
+      "ids": [
+        "spya-d238cn",
+        "spya-z9g2s3"
+      ],
+      "sentences": [
+        {
+          "text": "This is a theory piece by Earl Miller and colleagues about where thinking and awareness come from in the brain.",
+          "id": null
+        },
+        {
+          "text": "They propose that both may arise from a two-way link between neuron \"spikes\", the brief electrical pulses neurons fire, and brain waves, the rhythmic electrical activity of large groups of neurons.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "Spikes shape the waves, and the waves in turn shape when and where spikes happen.",
+          "id": "spya-z9g2s3"
+        }
+      ]
+    },
+    {
+      "text": "The older view says the brain works only through spikes passed along synapses, the connections between neurons. The authors argue that changing synapses is too slow and clumsy to coordinate millions of neurons within fractions of a second. Also, many neurons do several jobs depending on context, called \"mixed selectivity\", which the older view struggles to explain.",
+      "ids": [
+        "spya-d73kfb",
+        "spya-amx5qf"
+      ],
+      "sentences": [
+        {
+          "text": "The older view says the brain works only through spikes passed along synapses, the connections between neurons.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "The authors argue that changing synapses is too slow and clumsy to coordinate millions of neurons within fractions of a second.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "Also, many neurons do several jobs depending on context, called \"mixed selectivity\", which the older view struggles to explain.",
+          "id": "spya-amx5qf"
+        }
+      ]
+    },
+    {
+      "text": "Waves can nudge nearby neurons directly through their electric fields, without synapses, an effect called ephaptic coupling. In their \"Spatial Computing\" idea, slower alpha/beta waves act like stencils that quiet some patches of the brain's outer layer, letting faster gamma activity and spikes carry information elsewhere. Their recent monkey studies confirmed several predictions of this idea.",
+      "ids": [
+        "spya-bzqaf5",
+        "spya-gkfdys",
+        "spya-azz3c8"
+      ],
+      "sentences": [
+        {
+          "text": "Waves can nudge nearby neurons directly through their electric fields, without synapses, an effect called ephaptic coupling.",
+          "id": "spya-bzqaf5"
+        },
+        {
+          "text": "In their \"Spatial Computing\" idea, slower alpha/beta waves act like stencils that quiet some patches of the brain's outer layer, letting faster gamma activity and spikes carry information elsewhere.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "Their recent monkey studies confirmed several predictions of this idea.",
+          "id": "spya-azz3c8"
+        }
+      ]
+    },
+    {
+      "text": "Waves that sweep across the brain may switch it from one way of representing information to another. Waves may also compute by adding and cancelling, like overlapping ripples, which is fast and saves energy. Different anesthetic drugs all produce slow, out-of-step waves, hinting that awareness depends on well-organized waves.",
+      "ids": [
+        "spya-mrsvfu",
+        "spya-mgnqxk",
+        "spya-k02vdw"
+      ],
+      "sentences": [
+        {
+          "text": "Waves that sweep across the brain may switch it from one way of representing information to another.",
+          "id": "spya-mrsvfu"
+        },
+        {
+          "text": "Waves may also compute by adding and cancelling, like overlapping ripples, which is fast and saves energy.",
+          "id": "spya-mgnqxk"
+        },
+        {
+          "text": "Different anesthetic drugs all produce slow, out-of-step waves, hinting that awareness depends on well-organized waves.",
+          "id": "spya-k02vdw"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion: synapses store knowledge, while brain waves decide moment to moment which knowledge is active. Consciousness, they suggest, may emerge when wave patterns bring the cortex into one organized, connected state.",
+      "ids": [
+        "spya-tdqde5",
+        "spya-m9exy5"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion: synapses store knowledge, while brain waves decide moment to moment which knowledge is active.",
+          "id": "spya-tdqde5"
+        },
+        {
+          "text": "Consciousness, they suggest, may emerge when wave patterns bring the cortex into one organized, connected state.",
+          "id": "spya-m9exy5"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article puts forward an idea about how thinking and awareness might work in the brain. Brain cells talk with quick electric pulses, but the authors say this alone may be too slow and clumsy. They propose that brain waves, rhythms of electrical activity sweeping across the brain, help steer millions of cells at once.",
+      "ids": [
+        "spya-d238cn",
+        "spya-d73kfb"
+      ],
+      "sentences": [
+        {
+          "text": "This article puts forward an idea about how thinking and awareness might work in the brain.",
+          "id": null
+        },
+        {
+          "text": "Brain cells talk with quick electric pulses, but the authors say this alone may be too slow and clumsy.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "They propose that brain waves, rhythms of electrical activity sweeping across the brain, help steer millions of cells at once.",
+          "id": "spya-d238cn"
+        }
+      ]
+    },
+    {
+      "text": "A key idea is analog computing: solving problems as waves add up and cancel out, all at the same time. The authors say this may explain how the brain does so much on very little energy. Their main claim is that awareness may arise when these waves pull the brain into one organized whole.",
+      "ids": [
+        "spya-mgnqxk",
+        "spya-tdqde5",
+        "spya-m9exy5"
+      ],
+      "sentences": [
+        {
+          "text": "A key idea is analog computing: solving problems as waves add up and cancel out, all at the same time.",
+          "id": "spya-mgnqxk"
+        },
+        {
+          "text": "The authors say this may explain how the brain does so much on very little energy.",
+          "id": null
+        },
+        {
+          "text": "Their main claim is that awareness may arise when these waves pull the brain into one organized whole.",
+          "id": "spya-m9exy5"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "simple": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

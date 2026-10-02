@@ -1,0 +1,279 @@
+{
+  "arm": "high-none-fb9pb1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "version": "simple-prompt/4",
+  "sourceSha256": "a9729ecb9458a1e96b8255614e2b71759ac91583a0fd4f3049015c1857f65f27",
+  "at": "2026-10-02T19:29:16.645Z",
+  "bodyWords": 6489,
+  "bodyBlocks": 92,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "d3b5b8760ff66f03",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 23572,
+  "costUsd": 0.200499,
+  "tokens": {
+    "input": 12945,
+    "output": 4429,
+    "reasoning": 2137
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 211,
+  "fullerWords": 247,
+  "briefWords": 115,
+  "paragraphs": [
+    {
+      "text": "This article proposes a theory of how thinking and awareness might arise in the brain. It argues they may come from a two-way link between \"spikes\", the brief electrical pulses neurons fire, and brain waves. Brain waves are rhythmic swings in electrical activity spread across millimeters to centimeters of brain tissue.",
+      "ids": [
+        "spya-d238cn",
+        "spya-z9g2s3"
+      ],
+      "sentences": [
+        {
+          "text": "This article proposes a theory of how thinking and awareness might arise in the brain.",
+          "id": null
+        },
+        {
+          "text": "It argues they may come from a two-way link between \"spikes\", the brief electrical pulses neurons fire, and brain waves.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "Brain waves are rhythmic swings in electrical activity spread across millimeters to centimeters of brain tissue.",
+          "id": "spya-z9g2s3"
+        }
+      ]
+    },
+    {
+      "text": "The older view says the brain works only through spikes passed along connections between neurons, called synapses. The authors say changing synapses is too slow and clumsy for the fast, flexible control thinking needs. Also, many neurons are not specialists: they carry different messages in different situations, which the authors call \"mixed selectivity\".",
+      "ids": [
+        "spya-d73kfb",
+        "spya-amx5qf"
+      ],
+      "sentences": [
+        {
+          "text": "The older view says the brain works only through spikes passed along connections between neurons, called synapses.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "The authors say changing synapses is too slow and clumsy for the fast, flexible control thinking needs.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "Also, many neurons are not specialists: they carry different messages in different situations, which the authors call \"mixed selectivity\".",
+          "id": "spya-amx5qf"
+        }
+      ]
+    },
+    {
+      "text": "Their \"Spatial Computing\" idea is that slower alpha/beta waves act like stencils, holding back activity in some patches of cortex. Faster gamma waves and spikes, carrying sense information, then show up only in the open patches. Waves can also add up or cancel out, which may let them compute all at once and use little energy. Different anesthetic drugs all turn brain waves slow and out of step, hinting awareness depends on wave organization.",
+      "ids": [
+        "spya-gkfdys",
+        "spya-mgnqxk",
+        "spya-k02vdw"
+      ],
+      "sentences": [
+        {
+          "text": "Their \"Spatial Computing\" idea is that slower alpha/beta waves act like stencils, holding back activity in some patches of cortex.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "Faster gamma waves and spikes, carrying sense information, then show up only in the open patches.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "Waves can also add up or cancel out, which may let them compute all at once and use little energy.",
+          "id": "spya-mgnqxk"
+        },
+        {
+          "text": "Different anesthetic drugs all turn brain waves slow and out of step, hinting awareness depends on wave organization.",
+          "id": "spya-k02vdw"
+        }
+      ]
+    },
+    {
+      "text": "The takeaway: synapses store knowledge, while brain waves decide which knowledge is active at each moment. Consciousness, the authors propose, may emerge when these waves pull the cortex into one organized, connected state.",
+      "ids": [
+        "spya-tdqde5",
+        "spya-m9exy5"
+      ],
+      "sentences": [
+        {
+          "text": "The takeaway: synapses store knowledge, while brain waves decide which knowledge is active at each moment.",
+          "id": "spya-tdqde5"
+        },
+        {
+          "text": "Consciousness, the authors propose, may emerge when these waves pull the cortex into one organized, connected state.",
+          "id": "spya-m9exy5"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a theory paper about where thinking and consciousness come from. It argues they may arise from two things working together: spikes, the brief electrical pulses neurons fire, and brain waves. Brain waves are rhythmic rises and falls in electrical activity across patches of brain millimeters to centimeters wide.",
+      "ids": [
+        "spya-d238cn",
+        "spya-z9g2s3"
+      ],
+      "sentences": [
+        {
+          "text": "This is a theory paper about where thinking and consciousness come from.",
+          "id": null
+        },
+        {
+          "text": "It argues they may arise from two things working together: spikes, the brief electrical pulses neurons fire, and brain waves.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "Brain waves are rhythmic rises and falls in electrical activity across patches of brain millimeters to centimeters wide.",
+          "id": "spya-z9g2s3"
+        }
+      ]
+    },
+    {
+      "text": "The classic view says the brain works through spikes passing along synapses, the links between neurons. The authors call this incomplete, because changing synapses is likely too slow and clumsy to steer millions of neurons within a fraction of a second. Many neurons also send different messages in different situations, called mixed selectivity, so something must route signals flexibly.",
+      "ids": [
+        "spya-d73kfb",
+        "spya-fnm872"
+      ],
+      "sentences": [
+        {
+          "text": "The classic view says the brain works through spikes passing along synapses, the links between neurons.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "The authors call this incomplete, because changing synapses is likely too slow and clumsy to steer millions of neurons within a fraction of a second.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "Many neurons also send different messages in different situations, called mixed selectivity, so something must route signals flexibly.",
+          "id": "spya-fnm872"
+        }
+      ]
+    },
+    {
+      "text": "The waves' electric fields can nudge nearby neurons directly, without synapses. In their Spatial Computing idea, slower alpha/beta waves act like stencils that hold back spiking in some spots, while faster gamma waves carry sensory detail elsewhere. Waves that sweep across the brain's outer layer may shift activity from one pattern to another.",
+      "ids": [
+        "spya-bzqaf5",
+        "spya-gkfdys",
+        "spya-mrsvfu"
+      ],
+      "sentences": [
+        {
+          "text": "The waves' electric fields can nudge nearby neurons directly, without synapses.",
+          "id": "spya-bzqaf5"
+        },
+        {
+          "text": "In their Spatial Computing idea, slower alpha/beta waves act like stencils that hold back spiking in some spots, while faster gamma waves carry sensory detail elsewhere.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "Waves that sweep across the brain's outer layer may shift activity from one pattern to another.",
+          "id": "spya-mrsvfu"
+        }
+      ]
+    },
+    {
+      "text": "They also propose waves do analog computing: when waves overlap they add or cancel, working out results all at once rather than step by step. This could help explain how the brain runs on only about 20 watts. Different anesthetic drugs all produce slow, out-of-step waves, suggesting consciousness depends on organized waves.",
+      "ids": [
+        "spya-vp5h33",
+        "spya-jbtup9",
+        "spya-k02vdw"
+      ],
+      "sentences": [
+        {
+          "text": "They also propose waves do analog computing: when waves overlap they add or cancel, working out results all at once rather than step by step.",
+          "id": "spya-vp5h33"
+        },
+        {
+          "text": "This could help explain how the brain runs on only about 20 watts.",
+          "id": "spya-jbtup9"
+        },
+        {
+          "text": "Different anesthetic drugs all produce slow, out-of-step waves, suggesting consciousness depends on organized waves.",
+          "id": "spya-k02vdw"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that synapses store knowledge, while waves decide which stored patterns are active at each moment. Consciousness may emerge when wave patterns pull the brain into one organized, linked-up state.",
+      "ids": [
+        "spya-tdqde5",
+        "spya-m9exy5"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that synapses store knowledge, while waves decide which stored patterns are active at each moment.",
+          "id": "spya-tdqde5"
+        },
+        {
+          "text": "Consciousness may emerge when wave patterns pull the brain into one organized, linked-up state.",
+          "id": "spya-m9exy5"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article proposes an idea about how the brain thinks and becomes aware of things. It says brain waves, which are rhythms of electrical activity shared by many brain cells, may steer thinking. The authors argue that older models, built only on links between cells, seem too slow for this. Steering millions of cells in under a second needs a faster kind of control.",
+      "ids": [
+        "spya-d238cn",
+        "spya-d73kfb"
+      ],
+      "sentences": [
+        {
+          "text": "This article proposes an idea about how the brain thinks and becomes aware of things.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "It says brain waves, which are rhythms of electrical activity shared by many brain cells, may steer thinking.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "The authors argue that older models, built only on links between cells, seem too slow for this.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "Steering millions of cells in under a second needs a faster kind of control.",
+          "id": "spya-d73kfb"
+        }
+      ]
+    },
+    {
+      "text": "In their view, slower waves act like stencils, quieting some brain patches and letting others fire. When waves meet, they add together or cancel out, a kind of math the authors call analog computation. They conclude that thought and consciousness may come from organized wave patterns across the brain's outer layer.",
+      "ids": [
+        "spya-gkfdys",
+        "spya-vp5h33",
+        "spya-m9exy5"
+      ],
+      "sentences": [
+        {
+          "text": "In their view, slower waves act like stencils, quieting some brain patches and letting others fire.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "When waves meet, they add together or cancel out, a kind of math the authors call analog computation.",
+          "id": "spya-vp5h33"
+        },
+        {
+          "text": "They conclude that thought and consciousness may come from organized wave patterns across the brain's outer layer.",
+          "id": "spya-m9exy5"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

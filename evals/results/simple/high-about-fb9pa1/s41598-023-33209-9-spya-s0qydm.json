@@ -1,0 +1,282 @@
+{
+  "arm": "high-about-fb9pa1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s41598-023-33209-9-spya-s0qydm",
+  "version": "simple-prompt/5",
+  "sourceSha256": "e5ccff348d97e8bb668d4774a9e72abf6516d93448f9ed18a0e6fd5e44bb197a",
+  "at": "2026-10-02T19:43:57.853Z",
+  "bodyWords": 8829,
+  "bodyBlocks": 181,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "9ca47252d14dfcf0",
+  "systemsSha256": "2b6dfdb3acd015cc3c4a3cec2d03a6da8ee3bec2d0f8854f9cb84d524115683c",
+  "power": "high",
+  "guard": true,
+  "wallMs": 24729,
+  "costUsd": 0.1102358,
+  "tokens": {
+    "input": 15754,
+    "output": 4127,
+    "reasoning": 2053
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 164,
+  "fullerWords": 230,
+  "briefWords": 94,
+  "paragraphs": [
+    {
+      "text": "This is an experimental study in rats on rearing: standing up on the hind legs to look around. It asks whether hippocampus activity during those moments is needed to form a spatial memory. The team used light to switch off the dorsal hippocampus only while a 3D camera saw a rat rearing, in an eight-arm maze task.",
+      "ids": [
+        "spya-k5rtta",
+        "spya-nbwfy3"
+      ],
+      "sentences": [
+        {
+          "text": "This is an experimental study in rats on rearing: standing up on the hind legs to look around.",
+          "id": "spya-k5rtta"
+        },
+        {
+          "text": "It asks whether hippocampus activity during those moments is needed to form a spatial memory.",
+          "id": "spya-k5rtta"
+        },
+        {
+          "text": "The team used light to switch off the dorsal hippocampus only while a 3D camera saw a rat rearing, in an eight-arm maze task.",
+          "id": "spya-nbwfy3"
+        }
+      ]
+    },
+    {
+      "text": "Most research on how the hippocampus stores spatial memory looks at walking or quiet rest. Rearing comes with strong theta rhythm, a brain wave tied to memory, yet its role in spatial memory was unknown.",
+      "ids": [
+        "spya-j4jhsc",
+        "spya-v3e727"
+      ],
+      "sentences": [
+        {
+          "text": "Most research on how the hippocampus stores spatial memory looks at walking or quiet rest.",
+          "id": "spya-j4jhsc"
+        },
+        {
+          "text": "Rearing comes with strong theta rhythm, a brain wave tied to memory, yet its role in spatial memory was unknown.",
+          "id": "spya-v3e727"
+        }
+      ]
+    },
+    {
+      "text": "Switching off the hippocampus during rearing dropped later accuracy from 77.7% to 65.7%. The same amount of switch-off, delayed six seconds after each rear, caused no significant drop, only a borderline rise in wasted arm visits. Rats without the light-sensitive protein showed no effect.",
+      "ids": [
+        "spya-jnzefy",
+        "spya-b6gdg3"
+      ],
+      "sentences": [
+        {
+          "text": "Switching off the hippocampus during rearing dropped later accuracy from 77.7% to 65.7%.",
+          "id": "spya-jnzefy"
+        },
+        {
+          "text": "The same amount of switch-off, delayed six seconds after each rear, caused no significant drop, only a borderline rise in wasted arm visits.",
+          "id": "spya-b6gdg3"
+        },
+        {
+          "text": "Rats without the light-sensitive protein showed no effect.",
+          "id": "spya-jnzefy"
+        }
+      ]
+    },
+    {
+      "text": "The authors conclude that hippocampus activity during rearing is important for spatial memory. They suggest rearing may be when the brain updates its internal model of the surroundings.",
+      "ids": [
+        "spya-p02v0g",
+        "spya-ehqntm"
+      ],
+      "sentences": [
+        {
+          "text": "The authors conclude that hippocampus activity during rearing is important for spatial memory.",
+          "id": "spya-p02v0g"
+        },
+        {
+          "text": "They suggest rearing may be when the brain updates its internal model of the surroundings.",
+          "id": "spya-ehqntm"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a lab study in rats asking whether the dorsal hippocampus, the top part of the brain's spatial-memory hub, must be active during rearing for memories to form. Rearing means standing up on the hind legs to look and sniff around, a pause in movement used for active sampling of the surroundings.",
+      "ids": [
+        "spya-k5rtta",
+        "spya-nbwfy3"
+      ],
+      "sentences": [
+        {
+          "text": "This is a lab study in rats asking whether the dorsal hippocampus, the top part of the brain's spatial-memory hub, must be active during rearing for memories to form.",
+          "id": "spya-k5rtta"
+        },
+        {
+          "text": "Rearing means standing up on the hind legs to look and sniff around, a pause in movement used for active sampling of the surroundings.",
+          "id": "spya-nbwfy3"
+        }
+      ]
+    },
+    {
+      "text": "Most research on how the hippocampus supports spatial memory looks at walking or quiet rest, such as grooming and eating. Rearing comes with strong 7–12 Hz theta rhythm, a brain wave tied to memory encoding, yet whether rearing itself matters for memory was unknown.",
+      "ids": [
+        "spya-j4jhsc",
+        "spya-v3e727"
+      ],
+      "sentences": [
+        {
+          "text": "Most research on how the hippocampus supports spatial memory looks at walking or quiet rest, such as grooming and eating.",
+          "id": "spya-j4jhsc"
+        },
+        {
+          "text": "Rearing comes with strong 7–12 Hz theta rhythm, a brain wave tied to memory encoding, yet whether rearing itself matters for memory was unknown.",
+          "id": "spya-v3e727"
+        }
+      ]
+    },
+    {
+      "text": "Rats saw four of eight maze arms with food, waited four minutes, then had to find food in the other four. During the first phase only, a 3D camera detected rears and switched on light that silenced hippocampal cells made light-sensitive by a gene called halorhodopsin. A 'Delay' condition gave the same amount of light, but started and ended 6 seconds after each rear.",
+      "ids": [
+        "spya-r7w9n4",
+        "spya-f4z675"
+      ],
+      "sentences": [
+        {
+          "text": "Rats saw four of eight maze arms with food, waited four minutes, then had to find food in the other four.",
+          "id": "spya-r7w9n4"
+        },
+        {
+          "text": "During the first phase only, a 3D camera detected rears and switched on light that silenced hippocampal cells made light-sensitive by a gene called halorhodopsin.",
+          "id": "spya-f4z675"
+        },
+        {
+          "text": "A 'Delay' condition gave the same amount of light, but started and ended 6 seconds after each rear.",
+          "id": "spya-f4z675"
+        }
+      ]
+    },
+    {
+      "text": "Silencing during rears cut accuracy from 77.7% to 65.7% and raised arm entries from 5.1 to 6.5. The Delay condition showed no significant drop, only a trend, and rats without halorhodopsin were unaffected.",
+      "ids": [
+        "spya-jnzefy",
+        "spya-bjwjv6",
+        "spya-b6gdg3"
+      ],
+      "sentences": [
+        {
+          "text": "Silencing during rears cut accuracy from 77.7% to 65.7% and raised arm entries from 5.1 to 6.5.",
+          "id": "spya-jnzefy"
+        },
+        {
+          "text": "The Delay condition showed no significant drop, only a trend, and rats without halorhodopsin were unaffected.",
+          "id": "spya-b6gdg3"
+        }
+      ]
+    },
+    {
+      "text": "The authors conclude that hippocampal activity during rearing is important for spatial memory. They suggest rearing may help update an internal model of the surroundings, but leave open whether the same encoding could happen without rearing.",
+      "ids": [
+        "spya-p02v0g",
+        "spya-ehqntm",
+        "spya-jvweez"
+      ],
+      "sentences": [
+        {
+          "text": "The authors conclude that hippocampal activity during rearing is important for spatial memory.",
+          "id": "spya-p02v0g"
+        },
+        {
+          "text": "They suggest rearing may help update an internal model of the surroundings, but leave open whether the same encoding could happen without rearing.",
+          "id": "spya-jvweez"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This research article asks when a brain part called the hippocampus helps rats remember places. Most studies looked at it while rats walk or rest. But rats often stand on their hind legs to look around, called rearing, and its role was unknown.",
+      "ids": [
+        "spya-k5rtta",
+        "spya-j4jhsc"
+      ],
+      "sentences": [
+        {
+          "text": "This research article asks when a brain part called the hippocampus helps rats remember places.",
+          "id": "spya-k5rtta"
+        },
+        {
+          "text": "Most studies looked at it while rats walk or rest.",
+          "id": "spya-j4jhsc"
+        },
+        {
+          "text": "But rats often stand on their hind legs to look around, called rearing, and its role was unknown.",
+          "id": "spya-k5rtta"
+        }
+      ]
+    },
+    {
+      "text": "In an experiment with rats in a maze, researchers briefly switched off the hippocampus only during rearing. Later, the rats chose correctly less often: about 66% versus 78%. Switching it off a few seconds later instead caused no clear drop. So brain activity during rearing can be important for remembering places.",
+      "ids": [
+        "spya-jnzefy",
+        "spya-b6gdg3",
+        "spya-p02v0g"
+      ],
+      "sentences": [
+        {
+          "text": "In an experiment with rats in a maze, researchers briefly switched off the hippocampus only during rearing.",
+          "id": "spya-p02v0g"
+        },
+        {
+          "text": "Later, the rats chose correctly less often: about 66% versus 78%.",
+          "id": "spya-jnzefy"
+        },
+        {
+          "text": "Switching it off a few seconds later instead caused no clear drop.",
+          "id": "spya-b6gdg3"
+        },
+        {
+          "text": "So brain activity during rearing can be important for remembering places.",
+          "id": "spya-p02v0g"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "simple": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

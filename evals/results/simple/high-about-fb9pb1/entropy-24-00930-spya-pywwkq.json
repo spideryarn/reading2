@@ -1,0 +1,271 @@
+{
+  "arm": "high-about-fb9pb1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple-prompt/4",
+  "sourceSha256": "a9729ecb9458a1e96b8255614e2b71759ac91583a0fd4f3049015c1857f65f27",
+  "at": "2026-10-02T19:29:16.873Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 29167,
+  "costUsd": 0.2360832,
+  "tokens": {
+    "input": 14446,
+    "output": 5669,
+    "reasoning": 3411
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 210,
+  "fullerWords": 244,
+  "briefWords": 111,
+  "paragraphs": [
+    {
+      "text": "This review explains how a tool called partial information decomposition (PID) can show how real neurons process information. PID splits what several input neurons tell you about a target neuron into parts. Redundant information is what any single input could tell you, unique is what only one input carries, and synergistic appears only in the inputs' joint pattern.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ],
+      "sentences": [
+        {
+          "text": "This review explains how a tool called partial information decomposition (PID) can show how real neurons process information.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "PID splits what several input neurons tell you about a target neuron into parts.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "Redundant information is what any single input could tell you, unique is what only one input carries, and synergistic appears only in the inputs' joint pattern.",
+          "id": "spya-xn9j9k"
+        }
+      ]
+    },
+    {
+      "text": "The authors argue that measures like transfer entropy track information flowing between neurons but cannot show how separate streams combine. They treat synergy as a sign that the target neuron is actually computing on its inputs taken together.",
+      "ids": [
+        "spya-s0db2g",
+        "spya-e94ury"
+      ],
+      "sentences": [
+        {
+          "text": "The authors argue that measures like transfer entropy track information flowing between neurons but cannot show how separate streams combine.",
+          "id": "spya-s0db2g"
+        },
+        {
+          "text": "They treat synergy as a sign that the target neuron is actually computing on its inputs taken together.",
+          "id": "spya-e94ury"
+        }
+      ]
+    },
+    {
+      "text": "In cultured mouse cortex, synergy was reliably about a quarter of the information flowing into a target neuron. A \"rich club\" of densely interlinked hub neurons held under 40% of neurons but about 88% of all synergy. Synergy rose as two inputs fired more alike, peaked near 7% of the maximum shared information, then fell as redundancy took over.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-ybmve2"
+      ],
+      "sentences": [
+        {
+          "text": "In cultured mouse cortex, synergy was reliably about a quarter of the information flowing into a target neuron.",
+          "id": "spya-kqkb58"
+        },
+        {
+          "text": "A \"rich club\" of densely interlinked hub neurons held under 40% of neurons but about 88% of all synergy.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "Synergy rose as two inputs fired more alike, peaked near 7% of the maximum shared information, then fell as redundancy took over.",
+          "id": "spya-ybmve2"
+        }
+      ]
+    },
+    {
+      "text": "In monkeys doing a reach-and-grasp task, activity was mostly synergistic, but redundancy rose sharply during movement. The authors suggest the brain may copy the \"move\" signal to make sure it arrives intact. Their main conclusion is that neurons do not just add up inputs; they respond to input patterns, shaped by network position and behavior.",
+      "ids": [
+        "spya-t8fayf",
+        "spya-sp50v3"
+      ],
+      "sentences": [
+        {
+          "text": "In monkeys doing a reach-and-grasp task, activity was mostly synergistic, but redundancy rose sharply during movement.",
+          "id": "spya-t8fayf"
+        },
+        {
+          "text": "The authors suggest the brain may copy the \"move\" signal to make sure it arrives intact.",
+          "id": "spya-t8fayf"
+        },
+        {
+          "text": "Their main conclusion is that neurons do not just add up inputs; they respond to input patterns, shaped by network position and behavior.",
+          "id": "spya-sp50v3"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a review that introduces partial information decomposition (PID), a way to split up what several neurons jointly tell you about one target neuron. It mixes a tutorial on the method with findings, mostly from the authors' own lab.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ],
+      "sentences": [
+        {
+          "text": "This is a review that introduces partial information decomposition (PID), a way to split up what several neurons jointly tell you about one target neuron.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "It mixes a tutorial on the method with findings, mostly from the authors' own lab.",
+          "id": "spya-gzwbsr"
+        }
+      ]
+    },
+    {
+      "text": "The authors call working out how brains process information a grand challenge of neuroscience. Transfer entropy, a directed version of mutual information, tracks how information flows from one neuron to the next. But it cannot show how separate streams interact to produce new information, which is what the authors mean by processing.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s0db2g"
+      ],
+      "sentences": [
+        {
+          "text": "The authors call working out how brains process information a grand challenge of neuroscience.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "Transfer entropy, a directed version of mutual information, tracks how information flows from one neuron to the next.",
+          "id": null
+        },
+        {
+          "text": "But it cannot show how separate streams interact to produce new information, which is what the authors mean by processing.",
+          "id": "spya-s0db2g"
+        }
+      ]
+    },
+    {
+      "text": "PID splits what two inputs say about a target into redundant (either input reveals it), unique (only one does) and synergistic (only their joint pattern does) parts. Synergy is treated as the signature of computation. There is still no agreed way to measure redundancy, and the number of parts explodes as inputs grow: six inputs give 7,828,354.",
+      "ids": [
+        "spya-h5jzvm",
+        "spya-rc76qn",
+        "spya-aby2dp"
+      ],
+      "sentences": [
+        {
+          "text": "PID splits what two inputs say about a target into redundant (either input reveals it), unique (only one does) and synergistic (only their joint pattern does) parts.",
+          "id": "spya-h5jzvm"
+        },
+        {
+          "text": "Synergy is treated as the signature of computation.",
+          "id": null
+        },
+        {
+          "text": "There is still no agreed way to measure redundancy, and the number of parts explodes as inputs grow: six inputs give 7,828,354.",
+          "id": "spya-aby2dp"
+        }
+      ]
+    },
+    {
+      "text": "In mouse cortex cultures, groups inside the rich club, the most densely interlinked neurons, had 2.7 times more synergy than groups outside it. Synergy peaked when two inputs shared about 7% of their maximum possible mutual information, then fell as overlap turned redundant. In monkeys, redundancy rose sharply during reaching, perhaps to send the move signal reliably.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-ybmve2",
+        "spya-t8fayf"
+      ],
+      "sentences": [
+        {
+          "text": "In mouse cortex cultures, groups inside the rich club, the most densely interlinked neurons, had 2.7 times more synergy than groups outside it.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "Synergy peaked when two inputs shared about 7% of their maximum possible mutual information, then fell as overlap turned redundant.",
+          "id": "spya-ybmve2"
+        },
+        {
+          "text": "In monkeys, redundancy rose sharply during reaching, perhaps to send the move signal reliably.",
+          "id": "spya-t8fayf"
+        }
+      ]
+    },
+    {
+      "text": "The authors conclude that neurons do not simply add up inputs; they respond to particular input patterns. How much they do depends on network position and behavior, though PID shows statistical patterns, not the biological mechanism behind them.",
+      "ids": [
+        "spya-sp50v3",
+        "spya-spdx0y"
+      ],
+      "sentences": [
+        {
+          "text": "The authors conclude that neurons do not simply add up inputs; they respond to particular input patterns.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "How much they do depends on network position and behavior, though PID shows statistical patterns, not the biological mechanism behind them.",
+          "id": "spya-spdx0y"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review introduces partial information decomposition (PID), a tool for studying how neural circuits process information. PID splits what several input neurons tell you about a target neuron into redundant, unique, and synergistic parts. Synergy is information carried only by the inputs' joint pattern, not by any single input. The authors call how brains process information one of neuroscience's most basic open questions.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-rxcze4"
+      ],
+      "sentences": [
+        {
+          "text": "This review introduces partial information decomposition (PID), a tool for studying how neural circuits process information.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "PID splits what several input neurons tell you about a target neuron into redundant, unique, and synergistic parts.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "Synergy is information carried only by the inputs' joint pattern, not by any single input.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "The authors call how brains process information one of neuroscience's most basic open questions.",
+          "id": "spya-xn9j9k"
+        }
+      ]
+    },
+    {
+      "text": "In mouse cortex cultures, synergy was 2.7 times higher in rich clubs, a densely linked core. Synergy peaked when two inputs were moderately similar, then fell as they grew more alike. The takeaway: neurons don't just sum inputs; they respond to input patterns, shaped by wiring and behavior.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-ybmve2",
+        "spya-sp50v3"
+      ],
+      "sentences": [
+        {
+          "text": "In mouse cortex cultures, synergy was 2.7 times higher in rich clubs, a densely linked core.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "Synergy peaked when two inputs were moderately similar, then fell as they grew more alike.",
+          "id": "spya-ybmve2"
+        },
+        {
+          "text": "The takeaway: neurons don't just sum inputs; they respond to input patterns, shaped by wiring and behavior.",
+          "id": "spya-sp50v3"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

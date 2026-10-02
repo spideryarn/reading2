@@ -1,0 +1,250 @@
+{
+  "arm": "high-none-fb9pb2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "source-spya-f550ta",
+  "version": "simple-prompt/4",
+  "sourceSha256": "a9729ecb9458a1e96b8255614e2b71759ac91583a0fd4f3049015c1857f65f27",
+  "at": "2026-10-02T19:29:15.340Z",
+  "bodyWords": 10003,
+  "bodyBlocks": 97,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "2488a426e2cd8696",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 19949,
+  "costUsd": 0.2006208,
+  "tokens": {
+    "input": 12233,
+    "output": 2585,
+    "reasoning": 621
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 164,
+  "fullerWords": 211,
+  "briefWords": 76,
+  "paragraphs": [
+    {
+      "text": "Ball lightning is a glowing ball sometimes seen during thunderstorms; it lasts a few seconds and nobody can yet explain it. This article is a review that gathers 41 sightings by scientists and other trained observers, from eight countries, between 1868 and 2020.",
+      "ids": [
+        "spya-v4ps0c",
+        "spya-wtg508"
+      ],
+      "sentences": [
+        {
+          "text": "Ball lightning is a glowing ball sometimes seen during thunderstorms; it lasts a few seconds and nobody can yet explain it.",
+          "id": "spya-v4ps0c"
+        },
+        {
+          "text": "This article is a review that gathers 41 sightings by scientists and other trained observers, from eight countries, between 1868 and 2020.",
+          "id": "spya-wtg508"
+        }
+      ]
+    },
+    {
+      "text": "Ball lightning appears at random, so cameras and instruments almost never catch it. One search of about 12,000 sky photos found only two likely events. So the author argues that careful reports from trained observers are some of the best evidence available.",
+      "ids": [
+        "spya-f0dmn4",
+        "spya-wtg508"
+      ],
+      "sentences": [
+        {
+          "text": "Ball lightning appears at random, so cameras and instruments almost never catch it.",
+          "id": "spya-f0dmn4"
+        },
+        {
+          "text": "One search of about 12,000 sky photos found only two likely events.",
+          "id": "spya-f0dmn4"
+        },
+        {
+          "text": "So the author argues that careful reports from trained observers are some of the best evidence available.",
+          "id": "spya-wtg508"
+        }
+      ]
+    },
+    {
+      "text": "The reported balls ranged from 1.5 centimetres to 15 metres across, most under 20 centimetres. Sightings lasted from 1.5 to 180 seconds, most under 3 seconds. The cases vary so much that they are hard to fit into one explanation, so there may be several types.",
+      "ids": [
+        "spya-hrcct6",
+        "spya-rjs9xh",
+        "spya-p9uvh9"
+      ],
+      "sentences": [
+        {
+          "text": "The reported balls ranged from 1.5 centimetres to 15 metres across, most under 20 centimetres.",
+          "id": "spya-hrcct6"
+        },
+        {
+          "text": "Sightings lasted from 1.5 to 180 seconds, most under 3 seconds.",
+          "id": "spya-rjs9xh"
+        },
+        {
+          "text": "The cases vary so much that they are hard to fit into one explanation, so there may be several types.",
+          "id": "spya-p9uvh9"
+        }
+      ]
+    },
+    {
+      "text": "The author concludes that well-documented cases can spur field studies and help test theories. Combined with physical traces and phone videos, such reports could build a database for judging which theories hold up.",
+      "ids": [
+        "spya-zz7g2q",
+        "spya-wtg508"
+      ],
+      "sentences": [
+        {
+          "text": "The author concludes that well-documented cases can spur field studies and help test theories.",
+          "id": "spya-wtg508"
+        },
+        {
+          "text": "Combined with physical traces and phone videos, such reports could build a database for judging which theories hold up.",
+          "id": "spya-zz7g2q"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This article is a history of sightings of ball lightning: glowing balls of light seen during storms, usually lasting a few seconds. It gathers 41 reports from scientists and other trained observers in eight countries, from 1868 to 2020. The author says the collection does not claim to be complete.",
+      "ids": [
+        "spya-wtg508",
+        "spya-v4ps0c"
+      ],
+      "sentences": [
+        {
+          "text": "This article is a history of sightings of ball lightning: glowing balls of light seen during storms, usually lasting a few seconds.",
+          "id": "spya-v4ps0c"
+        },
+        {
+          "text": "It gathers 41 reports from scientists and other trained observers in eight countries, from 1868 to 2020.",
+          "id": "spya-wtg508"
+        },
+        {
+          "text": "The author says the collection does not claim to be complete.",
+          "id": "spya-wtg508"
+        }
+      ]
+    },
+    {
+      "text": "Ball lightning is still unexplained, with thousands of eyewitness stories but few camera or instrument records and no agreed theory. Because it appears at random, catching it directly is very unlikely; one search of about 12,000 sky photos found only two probable cases. So reports from people trained to observe carefully seem especially worth collecting.",
+      "ids": [
+        "spya-wtg508",
+        "spya-f0dmn4"
+      ],
+      "sentences": [
+        {
+          "text": "Ball lightning is still unexplained, with thousands of eyewitness stories but few camera or instrument records and no agreed theory.",
+          "id": "spya-wtg508"
+        },
+        {
+          "text": "Because it appears at random, catching it directly is very unlikely; one search of about 12,000 sky photos found only two probable cases.",
+          "id": "spya-f0dmn4"
+        },
+        {
+          "text": "So reports from people trained to observe carefully seem especially worth collecting.",
+          "id": "spya-f0dmn4"
+        }
+      ]
+    },
+    {
+      "text": "Most sightings came in summer months and in the afternoon or evening, matching when thunderstorms are common. In this sample, 73 % happened during a thunderstorm, and 41 % of witnesses saw a lightning strike at the same moment. Reported sizes ranged from 1.5 cm to 15 m, mostly under 20 cm.",
+      "ids": [
+        "spya-gzckgk",
+        "spya-mj9yck",
+        "spya-hrcct6"
+      ],
+      "sentences": [
+        {
+          "text": "Most sightings came in summer months and in the afternoon or evening, matching when thunderstorms are common.",
+          "id": "spya-gzckgk"
+        },
+        {
+          "text": "In this sample, 73 % happened during a thunderstorm, and 41 % of witnesses saw a lightning strike at the same moment.",
+          "id": "spya-mj9yck"
+        },
+        {
+          "text": "Reported sizes ranged from 1.5 cm to 15 m, mostly under 20 cm.",
+          "id": "spya-hrcct6"
+        }
+      ]
+    },
+    {
+      "text": "Even these careful observers described very different sizes, durations and behaviours, which is hard to fit into one model. The author concludes that well-documented reports like these can push fieldwork forward and help test theories. Combined with physical evidence and phone or webcam footage, they could build a database for judging ball lightning theories.",
+      "ids": [
+        "spya-p9uvh9",
+        "spya-jybqrk",
+        "spya-zz7g2q"
+      ],
+      "sentences": [
+        {
+          "text": "Even these careful observers described very different sizes, durations and behaviours, which is hard to fit into one model.",
+          "id": "spya-p9uvh9"
+        },
+        {
+          "text": "The author concludes that well-documented reports like these can push fieldwork forward and help test theories.",
+          "id": "spya-jybqrk"
+        },
+        {
+          "text": "Combined with physical evidence and phone or webcam footage, they could build a database for judging ball lightning theories.",
+          "id": "spya-zz7g2q"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "Ball lightning is a glowing ball of light sometimes seen in thunderstorms. It lasts a few seconds, and no one can yet explain it. This article gathers 41 sightings by scientists and other trained observers, from 1868 to 2020.",
+      "ids": [
+        "spya-wtg508",
+        "spya-v4ps0c"
+      ],
+      "sentences": [
+        {
+          "text": "Ball lightning is a glowing ball of light sometimes seen in thunderstorms.",
+          "id": "spya-v4ps0c"
+        },
+        {
+          "text": "It lasts a few seconds, and no one can yet explain it.",
+          "id": "spya-v4ps0c"
+        },
+        {
+          "text": "This article gathers 41 sightings by scientists and other trained observers, from 1868 to 2020.",
+          "id": "spya-wtg508"
+        }
+      ]
+    },
+    {
+      "text": "Cameras almost never catch it, so careful eyewitness reports matter. Even these trained observers saw very different sizes, lengths of time, and behaviours. The author concludes that well-recorded cases can guide field research and help test explanations.",
+      "ids": [
+        "spya-f0dmn4",
+        "spya-p9uvh9",
+        "spya-zz7g2q"
+      ],
+      "sentences": [
+        {
+          "text": "Cameras almost never catch it, so careful eyewitness reports matter.",
+          "id": "spya-f0dmn4"
+        },
+        {
+          "text": "Even these trained observers saw very different sizes, lengths of time, and behaviours.",
+          "id": "spya-p9uvh9"
+        },
+        {
+          "text": "The author concludes that well-recorded cases can guide field research and help test explanations.",
+          "id": "spya-zz7g2q"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

@@ -1,0 +1,273 @@
+{
+  "arm": "high-about-fb9pb1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "version": "simple-prompt/4",
+  "sourceSha256": "a9729ecb9458a1e96b8255614e2b71759ac91583a0fd4f3049015c1857f65f27",
+  "at": "2026-10-02T19:29:17.080Z",
+  "bodyWords": 6489,
+  "bodyBlocks": 92,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "d3b5b8760ff66f03",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 28354,
+  "costUsd": 0.223907,
+  "tokens": {
+    "input": 13819,
+    "output": 5658,
+    "reasoning": 3205
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 218,
+  "fullerWords": 251,
+  "briefWords": 103,
+  "paragraphs": [
+    {
+      "text": "This perspective piece argues that brain waves, not just spikes and synaptic weights, may do the brain's moment-to-moment control and computation. In the authors' hybrid view, synapses store memories, while waves organize millions of neurons into lower-dimensional, coordinated patterns in real time. Spikes shape the waves, and the waves' electric fields in turn shape when and where spikes occur.",
+      "ids": [
+        "spya-d238cn",
+        "spya-z9g2s3"
+      ],
+      "sentences": [
+        {
+          "text": "This perspective piece argues that brain waves, not just spikes and synaptic weights, may do the brain's moment-to-moment control and computation.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "In the authors' hybrid view, synapses store memories, while waves organize millions of neurons into lower-dimensional, coordinated patterns in real time.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "Spikes shape the waves, and the waves' electric fields in turn shape when and where spikes occur.",
+          "id": "spya-z9g2s3"
+        }
+      ]
+    },
+    {
+      "text": "Classic connectionist models explain feedforward sensory processing well but not flexible top-down control. Adjusting synapses would require knowing which ones serve each representation, then coordinating them with subsecond precision. And many neurons show mixed selectivity, so the same cells must be rerouted into different networks in different contexts.",
+      "ids": [
+        "spya-d73kfb",
+        "spya-amx5qf",
+        "spya-dtnkkk"
+      ],
+      "sentences": [
+        {
+          "text": "Classic connectionist models explain feedforward sensory processing well but not flexible top-down control.",
+          "id": "spya-amx5qf"
+        },
+        {
+          "text": "Adjusting synapses would require knowing which ones serve each representation, then coordinating them with subsecond precision.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "And many neurons show mixed selectivity, so the same cells must be rerouted into different networks in different contexts.",
+          "id": "spya-dtnkkk"
+        }
+      ]
+    },
+    {
+      "text": "In their \"Spatial Computing\" theory, alpha/beta rhythms (about 13–30 Hz) act as temporary inhibitory stencils across the cortex. These stencils decide where faster gamma rhythms and spiking, which carry sensory content, are allowed to appear. Waves that sweep across the cortex may move population activity from one coding subspace to another. Interfering waves could also compute in an analog, parallel way, which may help explain how the brain runs on about 20 watts.",
+      "ids": [
+        "spya-gkfdys",
+        "spya-mrsvfu",
+        "spya-jbtup9"
+      ],
+      "sentences": [
+        {
+          "text": "In their \"Spatial Computing\" theory, alpha/beta rhythms (about 13–30 Hz) act as temporary inhibitory stencils across the cortex.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "These stencils decide where faster gamma rhythms and spiking, which carry sensory content, are allowed to appear.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "Waves that sweep across the cortex may move population activity from one coding subspace to another.",
+          "id": "spya-mrsvfu"
+        },
+        {
+          "text": "Interfering waves could also compute in an analog, parallel way, which may help explain how the brain runs on about 20 watts.",
+          "id": "spya-jbtup9"
+        }
+      ]
+    },
+    {
+      "text": "Anesthetics acting on different molecular targets all produce slow, misaligned cortical waves, suggesting consciousness depends on large-scale wave organization. The authors conclude that consciousness may emerge when wave patterns bring the cortex into an organized, globally integrated state.",
+      "ids": [
+        "spya-k02vdw",
+        "spya-m9exy5"
+      ],
+      "sentences": [
+        {
+          "text": "Anesthetics acting on different molecular targets all produce slow, misaligned cortical waves, suggesting consciousness depends on large-scale wave organization.",
+          "id": "spya-k02vdw"
+        },
+        {
+          "text": "The authors conclude that consciousness may emerge when wave patterns bring the cortex into an organized, globally integrated state.",
+          "id": "spya-m9exy5"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a theory paper by Earl Miller and colleagues arguing that thought and consciousness may come from two-way traffic between neuron spikes and brain waves. Brain waves here mean rhythmic electric fields spread over millimeters to centimeters of cortex; spikes shape the waves, and the waves shape when and where spikes happen.",
+      "ids": [
+        "spya-d238cn",
+        "spya-z9g2s3"
+      ],
+      "sentences": [
+        {
+          "text": "This is a theory paper by Earl Miller and colleagues arguing that thought and consciousness may come from two-way traffic between neuron spikes and brain waves.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "Brain waves here mean rhythmic electric fields spread over millimeters to centimeters of cortex; spikes shape the waves, and the waves shape when and where spikes happen.",
+          "id": "spya-z9g2s3"
+        }
+      ]
+    },
+    {
+      "text": "The authors say spikes and synaptic weights alone cannot explain flexible top-down control. Any given task engages about a third of prefrontal neurons, and many neurons mix several kinds of information, called \"mixed selectivity\". Routing signals through such overlapping networks by tuning individual synapses within a fraction of a second seems implausible.",
+      "ids": [
+        "spya-amx5qf",
+        "spya-d73kfb"
+      ],
+      "sentences": [
+        {
+          "text": "The authors say spikes and synaptic weights alone cannot explain flexible top-down control.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "Any given task engages about a third of prefrontal neurons, and many neurons mix several kinds of information, called \"mixed selectivity\".",
+          "id": "spya-amx5qf"
+        },
+        {
+          "text": "Routing signals through such overlapping networks by tuning individual synapses within a fraction of a second seems implausible.",
+          "id": "spya-d73kfb"
+        }
+      ]
+    },
+    {
+      "text": "Weak electric fields can nudge nearby neurons toward or away from firing without any synapse, an effect called ephaptic coupling. In their \"Spatial Computing\" model, slower alpha/beta waves (about 13–30 Hz) act as inhibitory stencils, deciding where faster gamma activity carrying sensory content can appear. Waves sweeping across cortex may switch population activity from one coding subspace to another.",
+      "ids": [
+        "spya-bzqaf5",
+        "spya-gkfdys",
+        "spya-mrsvfu"
+      ],
+      "sentences": [
+        {
+          "text": "Weak electric fields can nudge nearby neurons toward or away from firing without any synapse, an effect called ephaptic coupling.",
+          "id": "spya-bzqaf5"
+        },
+        {
+          "text": "In their \"Spatial Computing\" model, slower alpha/beta waves (about 13–30 Hz) act as inhibitory stencils, deciding where faster gamma activity carrying sensory content can appear.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "Waves sweeping across cortex may switch population activity from one coding subspace to another.",
+          "id": "spya-mrsvfu"
+        }
+      ]
+    },
+    {
+      "text": "Overlapping waves may also compute directly, in analog fashion, combining context signals into a unique activity pattern for each combination. This could help explain how the brain runs on about 20 watts, while digital AI needs enormous energy. Anesthetics with different chemical targets all produce slow, out-of-step waves, hinting that consciousness depends on wave organization.",
+      "ids": [
+        "spya-prykb8",
+        "spya-jbtup9",
+        "spya-k02vdw"
+      ],
+      "sentences": [
+        {
+          "text": "Overlapping waves may also compute directly, in analog fashion, combining context signals into a unique activity pattern for each combination.",
+          "id": "spya-prykb8"
+        },
+        {
+          "text": "This could help explain how the brain runs on about 20 watts, while digital AI needs enormous energy.",
+          "id": "spya-jbtup9"
+        },
+        {
+          "text": "Anesthetics with different chemical targets all produce slow, out-of-step waves, hinting that consciousness depends on wave organization.",
+          "id": "spya-k02vdw"
+        }
+      ]
+    },
+    {
+      "text": "The takeaway: synapses store knowledge, while waves decide moment to moment which representations are active. Consciousness, the authors propose, emerges when wave patterns bring the cortex into one organized, globally integrated state.",
+      "ids": [
+        "spya-tdqde5",
+        "spya-m9exy5"
+      ],
+      "sentences": [
+        {
+          "text": "The takeaway: synapses store knowledge, while waves decide moment to moment which representations are active.",
+          "id": "spya-tdqde5"
+        },
+        {
+          "text": "Consciousness, the authors propose, emerges when wave patterns bring the cortex into one organized, globally integrated state.",
+          "id": "spya-m9exy5"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This perspective piece argues that thought and consciousness may arise from neuron spikes interacting with brain waves. Brain waves here are rhythmic electric fields spanning millimeters to centimeters of cortex, which also nudge when neurons fire. The authors say changing synapses is too slow and clumsy for flexible, split-second top-down control.",
+      "ids": [
+        "spya-d238cn",
+        "spya-z9g2s3",
+        "spya-d73kfb"
+      ],
+      "sentences": [
+        {
+          "text": "This perspective piece argues that thought and consciousness may arise from neuron spikes interacting with brain waves.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "Brain waves here are rhythmic electric fields spanning millimeters to centimeters of cortex, which also nudge when neurons fire.",
+          "id": "spya-z9g2s3"
+        },
+        {
+          "text": "The authors say changing synapses is too slow and clumsy for flexible, split-second top-down control.",
+          "id": "spya-d73kfb"
+        }
+      ]
+    },
+    {
+      "text": "In their \"Spatial Computing\" model, slower waves act as temporary stencils, blocking firing in chosen patches of cortex. Overlapping waves may also compute directly, analog-style, perhaps explaining the brain's roughly 20-watt power budget. Their conclusion: synapses store knowledge, while waves decide which representations are active and may bind them into unified experience.",
+      "ids": [
+        "spya-gkfdys",
+        "spya-jbtup9",
+        "spya-tdqde5"
+      ],
+      "sentences": [
+        {
+          "text": "In their \"Spatial Computing\" model, slower waves act as temporary stencils, blocking firing in chosen patches of cortex.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "Overlapping waves may also compute directly, analog-style, perhaps explaining the brain's roughly 20-watt power budget.",
+          "id": "spya-jbtup9"
+        },
+        {
+          "text": "Their conclusion: synapses store knowledge, while waves decide which representations are active and may bind them into unified experience.",
+          "id": "spya-tdqde5"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}
