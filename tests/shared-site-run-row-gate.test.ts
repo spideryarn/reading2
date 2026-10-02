@@ -2,7 +2,7 @@
  * **Two steps, one storage site, and doneness that is still each step's own.**
  *
  * `STORAGE` in src/store/artifacts-pg.ts maps `blocks`/`blocks` and
- * `hierarchy`/`blocks` to the *same rows* — its own comment says so in as many
+ * `structure`/`blocks` to the *same rows* — its own comment says so in as many
  * words: *"The same rows as `blocks`/`blocks` above, not a second copy."* On
  * disk those were two files; in Postgres there is one set of block rows and two
  * steps that both call it theirs.
@@ -12,22 +12,22 @@
  * That sharing a site does **not** share doneness. `hasArtefacts` asks two
  * questions and the second one is per-step: every requested kind must read
  * back, *and* `revision_step_runs` must hold a `done` row **for the asking
- * step**. So when `blocks` writes the block rows, `hierarchy` does not become
+ * step**. So when `blocks` writes the block rows, `structure` does not become
  * done by proximity — its own row is still absent, `has` still says no, and
- * `stepIsDone` (src/pipeline.ts) therefore still says no, because `hierarchy`
+ * `stepIsDone` (src/pipeline.ts) therefore still says no, because `structure`
  * has neither a `stamp` nor an `isDone` and is exactly `interrupted → has`.
  *
  * ## Why it exists
  *
  * Because a design may want to put a second step's artefact at a site the first
- * one already writes — that is what the `blocks`/`hierarchy` pair already is —
+ * one already writes — that is what the `blocks`/`structure` pair already is —
  * and the whole safety of doing so rests on this one line. If it went, the
  * failure would be silent and expensive in the direction that matters: a job of
- * `["blocks", "hierarchy"]` would run stage 3, find "hierarchy's" blocks
+ * `["blocks", "structure"]` would run stage 3, find "structure's" blocks
  * sitting there, skip stage 4, and publish last week's tree over this week's
  * blocks under a row of green ticks — `arc` entries silently dropped wherever a
  * range no longer matches a node (src/web/tree.ts), which is the exact hazard
- * the `hierarchy` stamp was withdrawn to avoid.
+ * the `structure` stamp was withdrawn to avoid.
  *
  * tests/store-artefacts-pg.test.ts already covers the run row *per step* — no
  * row, `running`, `error`. It never crosses two steps at one site, which is the
@@ -39,8 +39,8 @@
  * `if (run?.status !== "done") return false;` in `hasArtefacts` was replaced
  * with `void run;` — the artefact's presence alone deciding — and three of the
  * five cases below went red, each on an assertion rather than a timeout:
- * `expected true to be false`, twice from `has("hierarchy", ["blocks"])` with
- * no hierarchy row anywhere, and once from `stepIsDone(STEPS.hierarchy, …)`
+ * `expected true to be false`, twice from `has("structure", ["blocks"])` with
+ * no structure row anywhere, and once from `stepIsDone(STEPS.structure, …)`
  * with the whole of stage 4 unrun. The line was then put back exactly.
  *
  * The two that stayed green are the first two, and they should have: they
@@ -125,7 +125,7 @@ const TREE: Tree = {
 /**
  * `sourceHash` is `hashBlocks(BLOCKS)` on purpose.
  *
- * `STAMP_SOURCE.hierarchy` is `labels` (src/store/artifacts.ts), so
+ * `STAMP_SOURCE.structure` is `labels` (src/store/artifacts.ts), so
  * `assertStampAgrees` compares this against the `inputHash` handed to `write` —
  * and more to the point, a labels file describing *these* blocks is what makes
  * the fourth case below about the run row and nothing else.
@@ -201,7 +201,7 @@ class RollBack extends Error {}
 
 const JOB_STEPS: JobStep[] = [
   { name: "blocks", label: "Splitting into blocks", status: "pending" },
-  { name: "hierarchy", label: "Building the hierarchy", status: "pending" },
+  { name: "structure", label: "Building the structure", status: "pending" },
 ];
 
 /**
@@ -251,21 +251,21 @@ async function runBlocksStep(tx: Tx, claimed: JobDraftRef): Promise<void> {
 /**
  * Stage 4, the same way — and it writes `blocks` too, which is the point.
  *
- * The `inputHash` is not optional decoration: `hierarchy` has no
+ * The `inputHash` is not optional decoration: `structure` has no
  * `PipelineStep.stamp`, and `reasonsNotToPublish` compares this column against
  * the stored blocks, so the runner has to supply it (src/pipeline.ts § the
- * `hierarchy` step).
+ * `structure` step).
  */
 async function runStructureStep(tx: Tx, claimed: JobDraftRef): Promise<void> {
   const store = pgArtifactsIn(claimed, tx);
-  const attempt = await store.beginStep(SLUG, "hierarchy");
+  const attempt = await store.beginStep(SLUG, "structure");
   await store.write(
     SLUG,
-    "hierarchy",
+    "structure",
     { tree: TREE, labels: LABELS, blocks: { blocks: BLOCKS } },
     { inputHash: hashBlocks(BLOCKS) },
   );
-  await store.finishStep(SLUG, "hierarchy", attempt);
+  await store.finishStep(SLUG, "structure", attempt);
 }
 
 /** Nothing here sends the article anywhere, so there is no prefix to pay for. */
@@ -279,22 +279,22 @@ const ctx: StepContext = {
 
 describe("two steps that share one storage site", () => {
   it("really do share it, which is what makes the rest of this file worth having", () => {
-    /* Asserted rather than assumed. If the map ever gave `hierarchy` its own
+    /* Asserted rather than assumed. If the map ever gave `structure` its own
        place for blocks, every case below would go on passing while testing
        nothing — the shape docs/reusable/silent-success.md is about. */
     expect(STORAGE.blocks.blocks).toEqual({ at: "blocks" });
-    expect(STORAGE.hierarchy.blocks).toEqual({ at: "blocks" });
-    expect(STORAGE.hierarchy.blocks).toEqual(STORAGE.blocks.blocks);
+    expect(STORAGE.structure.blocks).toEqual({ at: "blocks" });
+    expect(STORAGE.structure.blocks).toEqual(STORAGE.blocks.blocks);
   });
 
   it("hands the same rows back under either step's name", async () => {
     await withClaim(async (tx, claimed) => {
       await runBlocksStep(tx, claimed);
       const asBlocks = await readArtefact(claimed, tx, SLUG, "blocks", "blocks");
-      const asStructure = await readArtefact(claimed, tx, SLUG, "hierarchy", "blocks");
+      const asStructure = await readArtefact(claimed, tx, SLUG, "structure", "blocks");
       expect(asBlocks?.blocks.map((b) => b.id)).toEqual([B1, B2]);
       /* One artefact, two names. This is what stops the next case being
-         explicable by "hierarchy's blocks simply are not there". */
+         explicable by "structure's blocks simply are not there". */
       expect(asStructure).toEqual(asBlocks);
     });
   });
@@ -305,26 +305,26 @@ describe("two steps that share one storage site", () => {
       expect(await hasArtefacts(claimed, tx, SLUG, "blocks", ["blocks"])).toBe(true);
       /* The artefact is there — the case above proves it reads back under this
          very step's name — and `has` still says no, because
-         `revision_step_runs` holds no `hierarchy` row. Doneness is the asking
+         `revision_step_runs` holds no `structure` row. Doneness is the asking
          step's own row, never the artefact's presence. */
-      expect(await hasArtefacts(claimed, tx, SLUG, "hierarchy", ["blocks"])).toBe(false);
+      expect(await hasArtefacts(claimed, tx, SLUG, "structure", ["blocks"])).toBe(false);
     });
   });
 
   it("flips once the second step's own run finishes", async () => {
     await withClaim(async (tx, claimed) => {
       await runBlocksStep(tx, claimed);
-      expect(await hasArtefacts(claimed, tx, SLUG, "hierarchy", ["blocks"])).toBe(false);
+      expect(await hasArtefacts(claimed, tx, SLUG, "structure", ["blocks"])).toBe(false);
       await runStructureStep(tx, claimed);
-      expect(await hasArtefacts(claimed, tx, SLUG, "hierarchy", ["blocks"])).toBe(true);
-      expect(await hasArtefacts(claimed, tx, SLUG, "hierarchy", ["tree", "labels", "blocks"])).toBe(
+      expect(await hasArtefacts(claimed, tx, SLUG, "structure", ["blocks"])).toBe(true);
+      expect(await hasArtefacts(claimed, tx, SLUG, "structure", ["tree", "labels", "blocks"])).toBe(
         true,
       );
     });
   });
 
   it("is what makes the pipeline run the second step at all", async () => {
-    /* The consequence, at the altitude where it costs something. `hierarchy`
+    /* The consequence, at the altitude where it costs something. `structure`
        has no `stamp` and no `isDone` (src/pipeline.ts), so `stepIsDone` is
        `interrupted → has` and nothing else — the run-row gate is the *only*
        thing between stage 3's write and stage 4 skipping itself. `tree` and
@@ -333,9 +333,9 @@ describe("two steps that share one storage site", () => {
     await withClaim(async (tx, claimed) => {
       const reads = readsPgArtifacts(claimed, tx);
       await runBlocksStep(tx, claimed);
-      expect(await stepIsDone(STEPS.hierarchy, ctx, reads)).toBe(false);
+      expect(await stepIsDone(STEPS.structure, ctx, reads)).toBe(false);
       await runStructureStep(tx, claimed);
-      expect(await stepIsDone(STEPS.hierarchy, ctx, reads)).toBe(true);
+      expect(await stepIsDone(STEPS.structure, ctx, reads)).toBe(true);
     });
   });
 });

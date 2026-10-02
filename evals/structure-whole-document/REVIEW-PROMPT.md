@@ -18,7 +18,7 @@ findings you read code for and which you inferred.
 - `evals/structure-whole-document/arms.ts` — all nine arms declared as data.
 - `evals/structure-whole-document/run.ts` — the runner.
 - `tests/structure-whole-document-eval.test.ts` — 21 tests over the scorer.
-- `evals/results/structure-whole-document-headings+incumbent-disk-2026-08-30-07-58-02.json` — the committed
+- `evals/results/hierarchy-structure-headings+incumbent-disk-2026-08-30-07-58-02.json` — the committed
   free run.
 - `src/structure.ts` — the stage under evaluation. Its structure call is 163–320s and ~88% of the ingest
   wait. `evals/structure-labels.ts` judges only the *second* pass; nothing judged this one until now.

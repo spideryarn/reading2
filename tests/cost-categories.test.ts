@@ -22,14 +22,14 @@ import { AI_JOB_WIRE } from "../src/models.js";
 
 describe("classifying one row", () => {
   it("calls a default pipeline step default-step work, by its STEP not its job", () => {
-    /* `labels` runs inside the `hierarchy` step and is recorded
-       `job: "labels", step_name: "hierarchy"`. A classifier that asked the job
+    /* `labels` runs inside the `structure` step and is recorded
+       `job: "labels", step_name: "structure"`. A classifier that asked the job
        would put half of every default ingest in `unknown` — the step name is
        what says which pipeline slot was paid for. */
-    expect(costCategoryOf({ scopeKind: "job_step", job: "labels", stepName: "hierarchy" })).toBe(
+    expect(costCategoryOf({ scopeKind: "job_step", job: "labels", stepName: "structure" })).toBe(
       "default-step work",
     );
-    expect(costCategoryOf({ scopeKind: "job_step", job: "hierarchy", stepName: "hierarchy" })).toBe(
+    expect(costCategoryOf({ scopeKind: "job_step", job: "structure", stepName: "structure" })).toBe(
       "default-step work",
     );
   });
@@ -48,12 +48,12 @@ describe("classifying one row", () => {
   });
 
   it("does not pretend a job_step row knows whether it was an upload or a rerun", () => {
-    /* The row from a reader pressing "generate" on a stale hierarchy is
+    /* The row from a reader pressing "generate" on a stale tree is
        byte-identical to the row from the first ingest — same scope, same job,
        same step. The category is therefore named for the mechanism, and this
        test is the statement that the two are deliberately indistinguishable
        rather than accidentally so. GPT Sol, 2026-09-02. */
-    const initial = { scopeKind: "job_step", job: "hierarchy", stepName: "hierarchy" };
+    const initial = { scopeKind: "job_step", job: "structure", stepName: "structure" };
     const rerun = { ...initial };
     expect(costCategoryOf(initial)).toBe(costCategoryOf(rerun));
     expect(costCategoryOf(initial)).toBe("default-step work");
@@ -84,7 +84,7 @@ describe("classifying one row", () => {
        against is how a price gets set wrong — the same argument `pocket()` in
        scripts/ai-cost.ts already makes for printing eval spend apart. */
     expect(costCategoryOf({ scopeKind: "eval", job: "chat", stepName: null })).toBe("non-product");
-    expect(costCategoryOf({ scopeKind: "cli", job: "hierarchy", stepName: null })).toBe(
+    expect(costCategoryOf({ scopeKind: "cli", job: "structure", stepName: null })).toBe(
       "non-product",
     );
   });
@@ -108,7 +108,7 @@ describe("a job or step this build has never heard of", () => {
   it("puts a retired name from an old row in unknown too", () => {
     /* Real data: `data/_ai-calls.jsonl` on this box carries 34 rows of
        `job: "summarise", step_name: "summary"`, a stage that was split into
-       `hierarchy` and `labels` long ago. Folding those into `default-step work`
+       what are now `structure` and `labels` long ago. Folding those into `default-step work`
        would be inventing provenance one rename later. */
     expect(costCategoryOf({ scopeKind: "job_step", job: "summarise", stepName: "summary" })).toBe(
       "unknown",
@@ -116,7 +116,7 @@ describe("a job or step this build has never heard of", () => {
   });
 
   it("puts a job_step row with no step name in unknown rather than guessing", () => {
-    expect(costCategoryOf({ scopeKind: "job_step", job: "hierarchy", stepName: null })).toBe(
+    expect(costCategoryOf({ scopeKind: "job_step", job: "structure", stepName: null })).toBe(
       "unknown",
     );
   });
@@ -284,7 +284,7 @@ describe("placing every job the app can bill for", () => {
     /* An interactive job recorded as a pipeline step is not something to
        classify by whichever step it happens to name — it is something to look
        at. `unknown` is where the report prints it. */
-    expect(costCategoryOf({ scopeKind: "job_step", job: "chat", stepName: "hierarchy" })).toBe(
+    expect(costCategoryOf({ scopeKind: "job_step", job: "chat", stepName: "structure" })).toBe(
       "unknown",
     );
     /* And a step-driven job in request scope, which is the mirror. */
@@ -299,7 +299,7 @@ describe("placing every job the app can bill for", () => {
        sense belongs, and it makes no sense: `src/live.ts` records usage in
        request scope and nothing else can produce this triple. */
     expect(
-      costCategoryOf({ scopeKind: "job_step", job: "live_conversation", stepName: "hierarchy" }),
+      costCategoryOf({ scopeKind: "job_step", job: "live_conversation", stepName: "structure" }),
     ).toBe("unknown");
     expect(
       costCategoryOf({ scopeKind: "retired-in-2025", job: "live_conversation", stepName: null }),
@@ -311,11 +311,11 @@ describe("placing every job the app can bill for", () => {
   });
 
   it("still classifies a RETIRED job by its step, because the table cannot know it", () => {
-    /* `summarise` was split into `hierarchy` and `labels` long ago and is in no
+    /* `summarise` was split into what are now `structure` and `labels` long ago and is in no
        union, so `dispositionOf` returns null and the old step-name path runs.
        Holding a historical row to a table written after it was retired would
        reclassify the past every time somebody edits the table. */
-    expect(costCategoryOf({ scopeKind: "job_step", job: "summarise", stepName: "hierarchy" })).toBe(
+    expect(costCategoryOf({ scopeKind: "job_step", job: "summarise", stepName: "structure" })).toBe(
       "default-step work",
     );
     expect(costCategoryOf({ scopeKind: "job_step", job: "summarise", stepName: "summary" })).toBe(

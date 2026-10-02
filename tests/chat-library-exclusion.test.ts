@@ -76,7 +76,7 @@ const CROWD = 34;
  * over-fetch argument false without anything saying so.
  *
  * **Not `constitution`, which has eighty-four and would have done.** Its
- * `labels.json` carries no `sourceHash`, so it has no `hierarchy` input hash and
+ * `labels.json` carries no `sourceHash`, so it has no `structure` input hash and
  * `publishRevision` refuses it — *pristine*, before this file touches anything.
  * It is the one article in the committed corpus that cannot be loaded into
  * Postgres at all.
@@ -144,7 +144,7 @@ beforeAll(async () => {
   /* **The seed is asserted, not assumed**: an article whose blocks did not take
      would make every case below "nothing found", which is the exact failure this
      file is about and would read as a regression. */
-  expect(open.copied).toContain("hierarchy");
+  expect(open.copied).toContain("structure");
   expect(open.blocks.filter((b) => b.text.includes(RARE))).toHaveLength(CROWD);
 }, 60_000);
 

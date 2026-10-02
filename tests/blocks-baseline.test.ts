@@ -197,7 +197,7 @@ describe("the baseline, as the store answers it", () => {
        were files under `PATHS` until 2026-09-05; stage 4's is here because a
        real article has been through stage 4 by now. */
     store.plant("a", "blocks", "blocks", blocksArtefact(first.blocks));
-    store.plant("a", "hierarchy", "blocks", blocksArtefact(first.blocks));
+    store.plant("a", "structure", "blocks", blocksArtefact(first.blocks));
 
     /* Stage 2 runs again and overwrites the HTML with an id-free document —
        the case random ids exist for. */
@@ -223,7 +223,7 @@ describe("the baseline, as the store answers it", () => {
        copy — the baseline — has gone. block-ids.md calls it a source artefact
        rather than a cache for exactly this reason. A `plant` and a `forget`,
        where this was a `writeFile` and an `rm`. */
-    store.plant("a", "hierarchy", "blocks", blocksArtefact(first.blocks));
+    store.plant("a", "structure", "blocks", blocksArtefact(first.blocks));
     store.forget("a", "blocks", "blocks");
 
     await expect(previousBlocksFrom(store, "a")).rejects.toBeInstanceOf(BaselineMissing);
@@ -261,7 +261,7 @@ describe("the baseline, as the store answers it", () => {
        answers **yes** — unusable is not absent — and the refusal below is what
        this case is about. */
     const whole = JSON.stringify(blocksArtefact(first.blocks));
-    store.plant("a", "hierarchy", "blocks", whole.slice(0, whole.length >> 1));
+    store.plant("a", "structure", "blocks", whole.slice(0, whole.length >> 1));
     store.forget("a", "blocks", "blocks");
 
     await expect(previousBlocksFrom(store, "a")).rejects.toBeInstanceOf(BaselineMissing);

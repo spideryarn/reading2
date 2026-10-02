@@ -27,7 +27,7 @@
  *
  * That is narrower than *nothing here is generated*, which is what this line
  * said until 2026-09-08 and which had stopped being true twice over: the page
- * shows the hierarchy's `gist` and `summary` (§ In one sentence), and since
+ * shows the tree's `gist` and `summary` (§ In one sentence), and since
  * 2026-09-07 it can start a run of its own (§ AI processing, below, one
  * button per step). Neither happens on arrival, and *on arrival* is the half a
  * reader here is trusting.
@@ -92,7 +92,7 @@
  *    decision two paragraphs up, and the reversal is narrower than it looks:
  *    what was wrong about mtimes was the *verdict* drawn from them, never the
  *    number. Nothing compares two of these. The staleness question is exactly
- *    as unanswered as it was, and a person reading "hierarchy ran 3 days ago, arc ran
+ *    as unanswered as it was, and a person reading "structure ran 3 days ago, arc ran
  *    in March" can draw the conclusion this page still refuses to draw for them.
  *  - **Where a PDF came from** — `CameFrom`, below. Their Document Information
  *    had a "file type" row and ours never took it, because until 2026-08-26
@@ -146,7 +146,7 @@
  *
  * **Whether anything is stale.** The first version of this page led with a red
  * warning when a later artefact was older than an earlier one. That check is
- * wrong: a *successful* hierarchy run writes the tree and then copies the blocks
+ * wrong: a *successful* structure run writes the tree and then copies the blocks
  * beside it, so every correct run tripped it. More deeply, an mtime records when
  * a file was written, not what it was written *from*. A confident wrong verdict
  * is worse here than no verdict, because this is the page you open once you have
@@ -338,7 +338,7 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   metadata: IdCard,
   extract: FileText,
   blocks: Blocks,
-  hierarchy: ListTree,
+  structure: ListTree,
   /* A luggage tag: the short label each paragraph is given so it can be told
      apart from its neighbours. Beside the tree it is written onto, and
      deliberately not another tree glyph — the two are one stage of the pipeline
@@ -1541,7 +1541,7 @@ function StageRecord({
                 key={stage.step}
                 stage={stage}
                 generator={
-                  stage.step === "hierarchy"
+                  stage.step === "structure"
                     ? structureGenerator
                     : stage.step === "arc"
                       ? arcGenerator
@@ -1991,7 +1991,7 @@ function ExportSection({
 
         <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
           A zip of everything we hold for this article: the text as we read it, and every
-          augmentation on top of it — hierarchy, glossary, ideas, quotes, timeline, quiz, comments,
+          augmentation on top of it — structure, glossary, ideas, quotes, timeline, quiz, comments,
           chats. Plain files, readable without Spideryarn. Not the original page or PDF, which you
           already have, and not the image files themselves — those are listed rather than included.
         </p>
@@ -2732,7 +2732,7 @@ function ArchiveArticle({
  *
  * It names the reader's own work first and ours second, which is the order the
  * loss is felt in. Everything in it is true of the cascade: comments, notes,
- * highlights, questions, chats, summaries and the hierarchy all hang off the
+ * highlights, questions, chats, summaries and the structure all hang off the
  * article by a foreign key and go with it (docs/plans/260906h § *What survives
  * a delete, deliberately* has the short list that does not, none of which is
  * anything the reader would look for afterwards).
@@ -2745,7 +2745,7 @@ function ArchiveArticle({
  */
 const DELETE_ERASES =
   "This erases the article and everything you have done with it — your comments, notes, " +
-  "highlights, questions and chats, its summaries and hierarchy — and it cannot be undone. " +
+  "highlights, questions and chats, its summaries and structure — and it cannot be undone. " +
   "If you only want it off the shelf, Archive above does that and can be reversed.";
 
 /** Said only when we KNOW it is public — see `shared` at the call site. */
@@ -3640,7 +3640,7 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
         <span className="tw:text-sm tw:text-foreground">{label}</span>
         <span className="tw:font-mono tw:text-xs tw:text-ink-faint">{step}</span>
         {/* `done &&` is load-bearing. The generator string comes off the tree
-            and the arc, which are in hand because the article loaded — so a hierarchy
+            and the arc, which are in hand because the article loaded — so a structure
             stage whose blocks copy is missing would otherwise print a model
             name next to the words "not run". */}
         {done && generator && (

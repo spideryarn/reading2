@@ -23,7 +23,7 @@
  *
  * ## What is faked, and why that costs no claim
  *
- * `fetch` reaches the network, and `extract`-on-a-PDF and `hierarchy` are paid
+ * `fetch` reaches the network, and `extract`-on-a-PDF and `structure` are paid
  * model calls, so those three and `assets` (which fetches images) are fakes
  * over the real registry, the way tests/labels-land-after-the-shelf.test.ts
  * does it. **`blocks` is the real step**, because it is the one that keeps a
@@ -267,7 +267,7 @@ async function publishWithExtras(
 
   for (const name of ["fetch", "extract"] as StepName[]) await stepRun(begun.revisionId, name);
   await stepRun(begun.revisionId, "blocks", hashBlocks(blocks));
-  await stepRun(begun.revisionId, "hierarchy", hashBlocks(blocks));
+  await stepRun(begun.revisionId, "structure", hashBlocks(blocks));
   for (const name of extras) await stepRun(begun.revisionId, name, hashBlocks(blocks));
 
   await publishRevision({ slug, revisionId: begun.revisionId });
@@ -307,14 +307,14 @@ function fakeExtract(calls: Calls): PipelineStep<"extract"> {
   };
 }
 
-/** `hierarchy` without the model call — tests/labels-land-after-the-shelf.test.ts's fake. */
-function fakeStructure(fail = false): PipelineStep<"hierarchy"> {
+/** `structure` without the model call — tests/labels-land-after-the-shelf.test.ts's fake. */
+function fakeStructure(fail = false): PipelineStep<"structure"> {
   return {
-    name: "hierarchy",
-    label: STEPS.hierarchy.label,
+    name: "structure",
+    label: STEPS.structure.label,
     produces: ["tree", "labels", "blocks"],
     async run(ctx, store) {
-      if (fail) throw new Error("the fixture's hierarchy gave up on purpose");
+      if (fail) throw new Error("the fixture's structure gave up on purpose");
       const file = await store.read(ctx.slug, "blocks", "blocks");
       if (!file?.blocks) throw new Error(`no blocks for ${ctx.slug}`);
       const structure = mergeLabels(buildTree(rootOver(file.blocks), {}, file.blocks, ctx.slug), {});
@@ -358,7 +358,7 @@ function partsFor(calls: Calls, opts: { failStructure?: boolean } = {}): Advance
     ...STEPS,
     fetch: fakeFetch(calls),
     extract: fakeExtract(calls),
-    hierarchy: fakeStructure(opts.failStructure),
+    structure: fakeStructure(opts.failStructure),
     assets: fakeAssets(),
   };
   return {

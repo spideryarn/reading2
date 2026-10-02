@@ -179,7 +179,7 @@ describe("the lineup", () => {
     expect(labelsFor(5)).toEqual(["A", "B", "C", "D", "E"]);
   });
 
-  it("maps the blind hierarchy aliases onto both repeats of both measured arms", () => {
+  it("maps the blind structure aliases onto both repeats of both measured arms", () => {
     expect([
       structureTreeFile("base-a", "article"),
       structureTreeFile("base-b", "article"),
@@ -212,7 +212,7 @@ describe("the lineup", () => {
     ]);
   });
 
-  it("renders Hierarchy's sampled deep gists reproducibly", () => {
+  it("renders Structure's sampled deep gists reproducibly", () => {
     /* Built here rather than read from a run's corpus: evals/results/ is
        gitignored, so a test that read it passed only on the checkout where the
        eval ran (docs/postmortems/261002a). Six deep gisted nodes, so the sample

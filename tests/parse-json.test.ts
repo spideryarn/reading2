@@ -318,7 +318,7 @@ describe("parseJsonFrom", () => {
 
   it("says a complete document with material after it is exactly that", () => {
     /* Stage 3 of docs/plans/260903k. *"It breaks at position 5409 of 13547
-       characters"* is what the hierarchy failure said, and it is
+       characters"* is what the structure step's failure said, and it is
        indistinguishable from a syntax error part-way through a document — so it
        sent that diagnosis chasing a token ceiling for half an hour, when in
        fact the tree was whole and 8,138 characters of something else followed
@@ -465,7 +465,7 @@ describe("objectEnd", () => {
 /* -------------------------------------------------------- parseJsonAnswer --
    Eleven stages used to spell `parseJsonFrom(stripFence(raw), …)`, which
    assumes the model's JSON *is* the whole response. On 2026-09-03 the
-   hierarchy and timeline steps both died in production because it is not:
+   structure and timeline steps both died in production because it is not:
    prose before the fence in one, 8,138 characters after a complete tree in the
    other. docs/plans/260903k-model-json-answer-extraction-in-the-shared-parse-seam.md. */
 
@@ -474,7 +474,7 @@ const WRAPPED: ReadonlyArray<readonly [string, string]> = [
   // The timeline failure: the fence is not at index 0, so nothing is stripped
   // and the first character is a letter.
   ["prose before a fenced document", `Here you go:\n${F}json\n{"a":1}\n${F}`],
-  // The hierarchy failure: the close fence is not at the very end, so it
+  // The structure step's failure: the close fence is not at the very end, so it
   // survives `stripFence` and lands after a complete document.
   ["a close fence followed by prose", `${F}json\n{"a":1}\n${F}\nHope that helps!`],
   ["a complete document followed by prose", `{"a":1}\n\nLet me know if I can help.`],
@@ -535,7 +535,7 @@ describe("parseJsonAnswer", () => {
    * the broken rate understates how close the clean answers are. The raw bytes
    * are in `evals/results/summaries/trailing-comma/`.
    *
-   * A production hierarchy build fails on this, and nothing keeps the response
+   * A production structure build fails on this, and nothing keeps the response
    * — so there is nothing to diagnose it from afterwards.
    */
   it("reads a document the model closed with a trailing comma", () => {

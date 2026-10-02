@@ -1,5 +1,5 @@
 /**
- * **"Is this hierarchy run current" is answered by one function, in one place.**
+ * **"Is this structure run current" is answered by one function, in one place.**
  *
  * Before 2026-09-07 it was answered by two independently-maintained inline
  * expressions: `isCurrent`/`stages` in [`src/store/pg.ts`](../src/store/pg.ts),
@@ -18,7 +18,7 @@
  *
  * It had already happened, in 2026-08. **Until `e18ac5f` on 2026-08-27** the
  * publication guard read `input_hash` and never
- * `status`, so a `hierarchy` run that **crashed** — or one still going in
+ * `status`, so a `structure` run that **crashed** — or one still going in
  * another process — left a row whose hash matched the blocks exactly, because
  * nothing had touched the blocks since. The one case the hash check existed to
  * catch was the only case it could refuse. The metadata page had the correct
@@ -47,7 +47,7 @@
  * — the same two-answers-to-one-question shape, moved one level down.
  *
  * The name follows the step: the postmortem asks for `isTocCurrent`, and `toc`
- * was renamed `hierarchy` afterwards.
+ * was renamed `hierarchy` afterwards, and `structure` on 2026-10-02.
  */
 import { describe, expect, it } from "vitest";
 import { NO_INPUT_HASH, structureCurrency } from "../src/store/artifacts.js";
@@ -70,7 +70,7 @@ describe("structureCurrency — the five states, and what each is called", () =>
    * **Before the hash and instead of it**, which is the shape `e18ac5f` chose
    * and the reason it is an ordered result rather than a set of flags: once a
    * run has errored or is still going, its hash cannot mean anything, and *"the
-   * tree was built from different blocks — re-run hierarchy"* would send
+   * tree was built from different blocks — re-run structure"* would send
    * somebody to re-run the thing that has just told them it failed.
    */
   it("calls a run that has not finished unfinished, whatever its hash says", () => {

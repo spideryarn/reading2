@@ -3,7 +3,7 @@
  * that turns ledger rows into a number or a verdict. No database, no network, no
  * model: the part that spends money is not a test.
  *
- * Same split as the hierarchy-structure eval (score.ts pinned here, run.ts not).
+ * Same split as the structure-whole-document eval (score.ts pinned here, run.ts not).
  *
  * Three of these exist because the *baseline* got them wrong first, and the
  * expectations are written as literals rather than derived by re-running the
@@ -83,9 +83,9 @@ function row(over: Partial<AiCallRow> = {}): AiCallRow {
     ownerId: "owner-1",
     articleSlug: "evalcost-x",
     jobId: "spya-job1",
-    stepName: "hierarchy",
+    stepName: "structure",
     wire: "messages",
-    job: "hierarchy",
+    job: "structure",
     requestedModel: "anthropic/claude-sonnet-5",
     answeredModel: "anthropic/claude-sonnet-5",
     upstream: "anthropic",
@@ -183,13 +183,13 @@ describe("totalMoney — BYOK-aware, and unpriced is unknown", () => {
 });
 
 describe("aggregateByStep", () => {
-  /* Two concurrent label batches inside one step run, plus a hierarchy call.
+  /* Two concurrent label batches inside one step run, plus the whole-document call.
      The label batches overlap: 8s of wall clock, 14s of summed duration. */
   const rows: AiCallRow[] = [
     row({
       id: "h",
-      stepName: "hierarchy",
-      job: "hierarchy",
+      stepName: "structure",
+      job: "structure",
       runId: "run-h",
       startedAt: "2026-09-02T10:00:00.000Z",
       finishedAt: "2026-09-02T10:02:00.000Z",
@@ -233,7 +233,7 @@ describe("aggregateByStep", () => {
   const steps = aggregateByStep(rows);
 
   it("groups by step, in first-call order", () => {
-    expect(steps.map((s) => s.step)).toEqual(["hierarchy", "labels"]);
+    expect(steps.map((s) => s.step)).toEqual(["structure", "labels"]);
     expect(steps.map((s) => s.calls)).toEqual([1, 2]);
   });
 
@@ -287,14 +287,14 @@ describe("jobWallClockMs", () => {
 });
 
 describe("checkCold", () => {
-  const paid = row({ stepName: "hierarchy", creditsUsedNanos: 40_000_000 });
+  const paid = row({ stepName: "structure", creditsUsedNanos: 40_000_000 });
 
   it("passes a run where every step that must pay did", () => {
-    expect(checkCold([paid], { mustPay: ["hierarchy"] })).toEqual([]);
+    expect(checkCold([paid], { mustPay: ["structure"] })).toEqual([]);
   });
 
   it("fails a step that was expected to pay and is missing entirely", () => {
-    const findings = checkCold([paid], { mustPay: ["hierarchy", "labels"] });
+    const findings = checkCold([paid], { mustPay: ["structure", "labels"] });
     expect(findings.map((f) => f.kind)).toEqual(["no-spend"]);
     expect(findings[0]!.step).toBe("labels");
     expect(findings[0]!.fatal).toBe(true);
@@ -302,7 +302,7 @@ describe("checkCold", () => {
 
   it("fails a cold step whose calls all cost zero", () => {
     const free = row({ stepName: "labels", creditsUsedNanos: 0, costSource: "provider" });
-    const findings = checkCold([paid, free], { mustPay: ["hierarchy", "labels"] });
+    const findings = checkCold([paid, free], { mustPay: ["structure", "labels"] });
     expect(findings.map((f) => f.kind)).toEqual(["no-spend"]);
     expect(findings[0]!.step).toBe("labels");
   });
@@ -313,7 +313,7 @@ describe("checkCold", () => {
        draw. A cost measurement cannot report `unknown` as its answer.
        `allowUnpriced` is the deliberate override, exercised below. */
     const unpriced = row({ stepName: "labels", creditsUsedNanos: null, costSource: "none" });
-    const findings = checkCold([paid, unpriced], { mustPay: ["hierarchy", "labels"] });
+    const findings = checkCold([paid, unpriced], { mustPay: ["structure", "labels"] });
     expect(findings.map((f) => f.kind)).toEqual(["unpriced"]);
     expect(findings[0]!.fatal).toBe(true);
     expect(findings[0]!.message).toContain("unknown");
@@ -321,7 +321,7 @@ describe("checkCold", () => {
 
   it("refuses a row that leaked out of the eval scope", () => {
     const leaked = row({ id: "leak", scopeKind: "job_step" });
-    const findings = checkCold([leaked], { mustPay: ["hierarchy"] });
+    const findings = checkCold([leaked], { mustPay: ["structure"] });
     expect(findings.map((f) => f.kind)).toEqual(["scope-leak"]);
     expect(findings[0]!.fatal).toBe(true);
     expect(findings[0]!.message).toContain("job_step");
@@ -332,15 +332,15 @@ describe("checkCold", () => {
        signature, and the reason this is a finding rather than a bigger number
        nobody questions. */
     const again = row({ id: "again", runId: "run-2" });
-    const findings = checkCold([paid, again], { mustPay: ["hierarchy"] });
+    const findings = checkCold([paid, again], { mustPay: ["structure"] });
     expect(findings.map((f) => f.kind)).toEqual(["duplicate-execution"]);
     expect(findings[0]!.message).toContain("2");
   });
 
   it("flags a call count that is not what was expected, in either direction", () => {
     const findings = checkCold([paid], {
-      mustPay: ["hierarchy"],
-      expectedCalls: { hierarchy: 3 },
+      mustPay: ["structure"],
+      expectedCalls: { structure: 3 },
     });
     expect(findings.map((f) => f.kind)).toEqual(["call-count"]);
     expect(findings[0]!.fatal).toBe(false);
@@ -348,13 +348,13 @@ describe("checkCold", () => {
 
   it("flags a gateway failure separately from the money", () => {
     const errored = row({ id: "err", runId: "run-1", outcome: "error", creditsUsedNanos: 500_000 });
-    const findings = checkCold([paid, errored], { mustPay: ["hierarchy"] });
+    const findings = checkCold([paid, errored], { mustPay: ["structure"] });
     expect(findings.map((f) => f.kind)).toEqual(["gateway-failure"]);
   });
 
   it("flags spend on a step nobody expected to pay", () => {
     const surprise = row({ id: "s", stepName: "blocks", creditsUsedNanos: 1_000 });
-    const findings = checkCold([paid, surprise], { mustPay: ["hierarchy"] });
+    const findings = checkCold([paid, surprise], { mustPay: ["structure"] });
     expect(findings.map((f) => f.kind)).toEqual(["unexpected-paid-step"]);
     expect(findings[0]!.step).toBe("blocks");
   });
@@ -394,7 +394,7 @@ describe("formatting", () => {
   it("puts the fatal findings first and says so", () => {
     const findings = checkCold(
       [row({ scopeKind: "job_step" }), row({ id: "x", runId: "r2" })],
-      { mustPay: ["hierarchy"], expectedCalls: { hierarchy: 9 } },
+      { mustPay: ["structure"], expectedCalls: { structure: 9 } },
     );
     const text = formatFindings(findings);
     expect(text.indexOf("FATAL")).toBeLessThan(text.indexOf("note"));
@@ -404,7 +404,7 @@ describe("formatting", () => {
     /* Not fatal — the run must go on — but the reader has to see that this draw
        was billed and produced nothing before they read a dollar figure. */
     const text = formatFindings([
-      { kind: "call-count", step: "hierarchy", fatal: false, message: "an ordinary note" },
+      { kind: "call-count", step: "structure", fatal: false, message: "an ordinary note" },
       { kind: "explained-absence", step: "labels", fatal: false, message: "PAID FAILURE — labels" },
     ]);
     expect(text.indexOf("PAID FAILURE")).toBeLessThan(text.indexOf("an ordinary note"));
@@ -420,7 +420,7 @@ describe("formatting", () => {
  */
 function fakeCall(): SpendRecord {
   return {
-    job: "hierarchy",
+    job: "structure",
     wire: "messages",
     model: "DRY-PASS/fake-model",
     answeredBy: "DRY-PASS/fake-model",
@@ -586,21 +586,21 @@ describe("mustPayFor", () => {
   const html = fixtureByName("short-html");
   const pdf = fixtureByName("pdf");
 
-  it("expects hierarchy to pay and extract not to, on an HTML article", () => {
-    expect(mustPayFor(html, ["fetch", "extract", "blocks", "hierarchy", "assets"])).toEqual([
-      "hierarchy",
+  it("expects structure to pay and extract not to, on an HTML article", () => {
+    expect(mustPayFor(html, ["fetch", "extract", "blocks", "structure", "assets"])).toEqual([
+      "structure",
     ]);
   });
 
   it("expects extract to pay on a PDF, where a model reads the pages", () => {
-    expect(mustPayFor(pdf, ["fetch", "extract", "blocks", "hierarchy", "assets"])).toEqual([
+    expect(mustPayFor(pdf, ["fetch", "extract", "blocks", "structure", "assets"])).toEqual([
       "extract",
-      "hierarchy",
+      "structure",
     ]);
   });
 
   it("demands nothing of a step the job was never asked to run", () => {
-    /* Without this a free pass stopping short of hierarchy would report a fatal
+    /* Without this a free pass stopping short of structure would report a fatal
        no-spend for a step that never ran, and the gate would be noise. */
     expect(mustPayFor(html, ["fetch", "extract", "blocks"])).toEqual([]);
   });
@@ -616,30 +616,30 @@ describe("mustPayFor", () => {
 
 describe("the cold check at the AiJob level (real production row shapes)", () => {
   /* **The shape production actually writes.** There is no `labels` step, so
-     `runStep` stamps `stepName: "hierarchy"` on the structure call *and* on
+     `runStep` stamps `stepName: "structure"` on the structure call *and* on
      every label batch; only `job` tells them apart. An earlier version of the
      tests above gave label rows `stepName: "labels"`, which production cannot
      produce — and that fixture hid the hole this describe block exists for. */
   const structure = row({
     id: "structure",
-    stepName: "hierarchy",
-    job: "hierarchy",
+    stepName: "structure",
+    job: "structure",
     creditsUsedNanos: 40_000_000,
   });
   const labelBatch = row({
     id: "label-1",
-    stepName: "hierarchy",
+    stepName: "structure",
     job: "labels",
     creditsUsedNanos: 5_000_000,
   });
 
   it("fails a draw where the structure call was paid for and no label call was", () => {
-    /* One priced row under stepName=hierarchy is enough to satisfy a step-level
+    /* One priced row under stepName=structure is enough to satisfy a step-level
        check, so this is the whole of the gap: every label batch could have been
        skipped or lost and the draw would report a plausible number. */
     const findings = checkCold([structure], {
-      mustPay: ["hierarchy"],
-      mustPayJobs: ["hierarchy", "labels"],
+      mustPay: ["structure"],
+      mustPayJobs: ["structure", "labels"],
     });
     expect(findings.map((f) => f.kind)).toEqual(["no-spend"]);
     expect(findings[0]!.step).toBe("labels");
@@ -649,30 +649,30 @@ describe("the cold check at the AiJob level (real production row shapes)", () =>
   it("passes when both the structure call and the labels were paid for", () => {
     expect(
       checkCold([structure, labelBatch], {
-        mustPay: ["hierarchy"],
-        mustPayJobs: ["hierarchy", "labels"],
+        mustPay: ["structure"],
+        mustPayJobs: ["structure", "labels"],
       }),
     ).toEqual([]);
   });
 
   it("still reports the step-level total under one heading", () => {
     const steps = aggregateByStep([structure, labelBatch]);
-    expect(steps.map((s) => s.step)).toEqual(["hierarchy"]);
+    expect(steps.map((s) => s.step)).toEqual(["structure"]);
     expect(steps[0]!.calls).toBe(2);
   });
 });
 
 describe("an unpriced required step is fatal", () => {
-  const unpriced = row({ stepName: "hierarchy", creditsUsedNanos: null, costSource: "none" });
+  const unpriced = row({ stepName: "structure", creditsUsedNanos: null, costSource: "none" });
 
   it("refuses to accept `unknown` as the answer to `what did this cost`", () => {
-    const findings = checkCold([unpriced], { mustPay: ["hierarchy"] });
+    const findings = checkCold([unpriced], { mustPay: ["structure"] });
     expect(findings.map((f) => f.kind)).toEqual(["unpriced"]);
     expect(findings[0]!.fatal).toBe(true);
   });
 
   it("downgrades it to a note only when the run said so deliberately", () => {
-    const findings = checkCold([unpriced], { mustPay: ["hierarchy"], allowUnpriced: true });
+    const findings = checkCold([unpriced], { mustPay: ["structure"], allowUnpriced: true });
     expect(findings.map((f) => f.kind)).toEqual(["unpriced"]);
     expect(findings[0]!.fatal).toBe(false);
   });
@@ -684,9 +684,9 @@ describe("reconciling the ledger against what the steps said they bought", () =>
        the log sees them; Postgres `forJob` reports `unreadable: 0` because a
        row that was never inserted is unknowable there. Without this the draw
        under-reports and every other check passes. */
-    const findings = checkCold([row({ stepName: "hierarchy" })], {
-      mustPay: ["hierarchy"],
-      observed: [{ step: "hierarchy", calls: 3, pending: 0, writeFailures: 2 }],
+    const findings = checkCold([row({ stepName: "structure" })], {
+      mustPay: ["structure"],
+      observed: [{ step: "structure", calls: 3, pending: 0, writeFailures: 2 }],
     });
     expect(findings.map((f) => f.kind)).toEqual(["ledger-short"]);
     expect(findings[0]!.fatal).toBe(true);
@@ -694,18 +694,18 @@ describe("reconciling the ledger against what the steps said they bought", () =>
   });
 
   it("notices a call that was opened and never finished", () => {
-    const findings = checkCold([row({ stepName: "hierarchy" })], {
-      mustPay: ["hierarchy"],
-      observed: [{ step: "hierarchy", calls: 1, pending: 1, writeFailures: 0 }],
+    const findings = checkCold([row({ stepName: "structure" })], {
+      mustPay: ["structure"],
+      observed: [{ step: "structure", calls: 1, pending: 1, writeFailures: 0 }],
     });
     expect(findings.map((f) => f.kind)).toEqual(["ledger-short"]);
   });
 
   it("is quiet when every call the step made is in the ledger", () => {
     expect(
-      checkCold([row({ stepName: "hierarchy" })], {
-        mustPay: ["hierarchy"],
-        observed: [{ step: "hierarchy", calls: 1, pending: 0, writeFailures: 0 }],
+      checkCold([row({ stepName: "structure" })], {
+        mustPay: ["structure"],
+        observed: [{ step: "structure", calls: 1, pending: 0, writeFailures: 0 }],
       }),
     ).toEqual([]);
   });
@@ -715,8 +715,8 @@ describe("reconciling the ledger against what the steps said they bought", () =>
  * **An absence the job's own status explains, against a row that was lost.**
  *
  * The run that found this: evals/results/cost/2026-09-03-04-59-07-1bpfhts0-long-html.
- * Draw 2's `hierarchy` failed semantically — "Node range not in blocks.json" —
- * after being billed $0.2124. Labels fan out *inside* `hierarchy` and only after
+ * Draw 2's `structure` failed semantically — "Node range not in blocks.json" —
+ * after being billed $0.2124. Labels fan out *inside* `structure` and only after
  * it succeeds, so there were no `labels` rows, and the `no-spend` guard called
  * that fatal and stopped the sweep. Draws 3 and 4 never ran: the eval halted on
  * the very phenomenon it was counting.
@@ -727,19 +727,19 @@ describe("reconciling the ledger against what the steps said they bought", () =>
 describe("a paid failure explains its own missing rows", () => {
   /* Draw 2, in the shape report.ts sees it: the structure call was billed, the
      step errored on its output, the fan-out never happened. */
-  const structure = row({ id: "structure", stepName: "hierarchy", job: "hierarchy", creditsUsedNanos: 212_414_000 });
+  const structure = row({ id: "structure", stepName: "structure", job: "structure", creditsUsedNanos: 212_414_000 });
   const failedAtStructure = [
     { name: "fetch", status: "done" },
     { name: "extract", status: "done" },
     { name: "blocks", status: "done" },
-    { name: "hierarchy", status: "error" },
+    { name: "structure", status: "error" },
   ];
 
   it("does not stop the run when the step that would have bought the rows failed", () => {
     const findings = checkCold([structure], {
-      mustPay: ["hierarchy"],
-      mustPayJobs: ["hierarchy", "labels"],
-      observed: [{ step: "hierarchy", calls: 1, pending: 0, writeFailures: 0 }],
+      mustPay: ["structure"],
+      mustPayJobs: ["structure", "labels"],
+      observed: [{ step: "structure", calls: 1, pending: 0, writeFailures: 0 }],
       stepStatuses: failedAtStructure,
       aiJobStep: AI_JOB_STEP,
     });
@@ -749,18 +749,18 @@ describe("a paid failure explains its own missing rows", () => {
     expect(drawMustStop(findings)).toEqual([]);
     /* The message has to name the step whose failure explains it, or the reader
        is told an absence is fine without being told why. */
-    expect(findings[0]!.message).toContain("hierarchy");
+    expect(findings[0]!.message).toContain("structure");
     expect(findings[0]!.message).toContain("error");
   });
 
   it("still stops when the same job's steps all say done — that is a lost row", () => {
     /* The identical ledger, the identical expectation, and only the step
-       statuses differ. `hierarchy` finished, so the fan-out ran and its rows
+       statuses differ. `structure` finished, so the fan-out ran and its rows
        are simply not there. */
     const findings = checkCold([structure], {
-      mustPay: ["hierarchy"],
-      mustPayJobs: ["hierarchy", "labels"],
-      observed: [{ step: "hierarchy", calls: 1, pending: 0, writeFailures: 0 }],
+      mustPay: ["structure"],
+      mustPayJobs: ["structure", "labels"],
+      observed: [{ step: "structure", calls: 1, pending: 0, writeFailures: 0 }],
       stepStatuses: failedAtStructure.map((s) => ({ ...s, status: "done" })),
       aiJobStep: AI_JOB_STEP,
     });
@@ -775,9 +775,9 @@ describe("a paid failure explains its own missing rows", () => {
        ledger has fewer rows than calls: on 2026-09-02 a run spent $0.0333 into
        a ledger that could not hold it and reported nothing wrong. */
     const findings = checkCold([structure], {
-      mustPay: ["hierarchy"],
-      mustPayJobs: ["hierarchy"],
-      observed: [{ step: "hierarchy", calls: 4, pending: 0, writeFailures: 0 }],
+      mustPay: ["structure"],
+      mustPayJobs: ["structure"],
+      observed: [{ step: "structure", calls: 4, pending: 0, writeFailures: 0 }],
       stepStatuses: failedAtStructure.map((s) => ({ ...s, status: "done" })),
       aiJobStep: AI_JOB_STEP,
     });
@@ -792,9 +792,9 @@ describe("a paid failure explains its own missing rows", () => {
        step ended, and folding the two together would hand every dropped write
        an excuse. */
     const findings = checkCold([structure], {
-      mustPay: ["hierarchy"],
-      mustPayJobs: ["hierarchy", "labels"],
-      observed: [{ step: "hierarchy", calls: 3, pending: 0, writeFailures: 1 }],
+      mustPay: ["structure"],
+      mustPayJobs: ["structure", "labels"],
+      observed: [{ step: "structure", calls: 3, pending: 0, writeFailures: 1 }],
       stepStatuses: failedAtStructure,
       aiJobStep: AI_JOB_STEP,
     });
@@ -803,14 +803,14 @@ describe("a paid failure explains its own missing rows", () => {
   });
 
   it("does not excuse a step whose own failure came after it should have paid", () => {
-    /* `arc` failed; `hierarchy` did not, and its labels are still missing. A
+    /* `arc` failed; `structure` did not, and its labels are still missing. A
        failure downstream of the absence explains nothing about it. */
     const findings = checkCold([structure], {
-      mustPay: ["hierarchy"],
-      mustPayJobs: ["hierarchy", "labels"],
+      mustPay: ["structure"],
+      mustPayJobs: ["structure", "labels"],
       stepStatuses: [
         { name: "blocks", status: "done" },
-        { name: "hierarchy", status: "done" },
+        { name: "structure", status: "done" },
         { name: "arc", status: "error" },
       ],
       aiJobStep: AI_JOB_STEP,
@@ -823,8 +823,8 @@ describe("a paid failure explains its own missing rows", () => {
     /* Nothing to explain the absence with is not the same as an explanation,
        and the older callers pass none. */
     const findings = checkCold([structure], {
-      mustPay: ["hierarchy"],
-      mustPayJobs: ["hierarchy", "labels"],
+      mustPay: ["structure"],
+      mustPayJobs: ["structure", "labels"],
     });
     expect(findings.map((f) => f.kind)).toEqual(["no-spend"]);
     expect(findings[0]!.fatal).toBe(true);
@@ -898,12 +898,12 @@ describe("assertDistinctEvalOwner", () => {
 describe("assertOneOnDemandMode", () => {
   it("allows the ingest steps, which mark no article cache", () => {
     expect(() =>
-      assertOneOnDemandMode(["fetch", "extract", "blocks", "hierarchy", "assets"]),
+      assertOneOnDemandMode(["fetch", "extract", "blocks", "structure", "assets"]),
     ).not.toThrow();
   });
 
   it("allows one on-demand mode after an ingest", () => {
-    expect(() => assertOneOnDemandMode(["fetch", "extract", "blocks", "hierarchy", "arc"])).not.toThrow();
+    expect(() => assertOneOnDemandMode(["fetch", "extract", "blocks", "structure", "arc"])).not.toThrow();
   });
 
   it("refuses two compatible modes in one job, which would share a warm prefix", () => {
@@ -925,16 +925,16 @@ describe("requiredAiJobsFor", () => {
   const pdf = fixtureByName("pdf");
 
   it("requires the label fan-out as well as the structure call", () => {
-    expect(requiredAiJobsFor(html, ["fetch", "extract", "blocks", "hierarchy", "assets"])).toEqual([
-      "hierarchy",
+    expect(requiredAiJobsFor(html, ["fetch", "extract", "blocks", "structure", "assets"])).toEqual([
+      "structure",
       "labels",
     ]);
   });
 
   it("requires the PDF transcription job on a PDF", () => {
-    expect(requiredAiJobsFor(pdf, ["fetch", "extract", "blocks", "hierarchy"])).toEqual([
+    expect(requiredAiJobsFor(pdf, ["fetch", "extract", "blocks", "structure"])).toEqual([
       "pdf",
-      "hierarchy",
+      "structure",
       "labels",
     ]);
   });
@@ -993,8 +993,8 @@ describe("ALL_MODES", () => {
     ]);
   });
 
-  it("holds no ingest step — hierarchy is bought once, by the ingest draw", () => {
-    for (const ingest of ["fetch", "extract", "blocks", "hierarchy", "assets"]) {
+  it("holds no ingest step — structure is bought once, by the ingest draw", () => {
+    for (const ingest of ["fetch", "extract", "blocks", "structure", "assets"]) {
       expect(ALL_MODES).not.toContain(ingest);
     }
   });
@@ -1031,7 +1031,7 @@ describe("assertSweepArgs", () => {
     against: null,
     repeat: 1,
     fixtures: ["short-html"],
-    steps: ["fetch", "extract", "blocks", "hierarchy", "assets"] as StepName[],
+    steps: ["fetch", "extract", "blocks", "structure", "assets"] as StepName[],
     batchedModes: false,
   };
 
@@ -1176,7 +1176,7 @@ describe("checkColdDraw", () => {
     expect(findings[0]!.step).toBe("extract");
   });
 
-  it("asks each step separately, so a cold hierarchy does not vouch for a warm extract", () => {
+  it("asks each step separately, so a cold structure step does not vouch for a warm extract", () => {
     const extract = row({
       id: "x",
       stepName: "extract",
@@ -1191,8 +1191,8 @@ describe("checkColdDraw", () => {
 
   it("allows a later call of an ingest step to read off the first, which is production cost", () => {
     /* Within-run caching is part of what an ingest really costs (Principles):
-       hierarchy's label fan-out shares `stepName: "hierarchy"` with the
-       structure call and legitimately reads off it. A rule of "no cache read
+       the structure step's label fan-out shares `stepName: "structure"` with the
+       whole-document call and legitimately reads off it. A rule of "no cache read
        anywhere" would fail every fan-out we deliberately pay the write premium
        for. */
     const label = row({
@@ -1434,7 +1434,7 @@ describe("checkBatchedDraw", () => {
   });
 
   it("has no opinion about a step in no cache group, however its writes end up", () => {
-    /* **`hierarchy` and its label fan-out are out of scope, not forgiven.** The
+    /* **`structure` and its label fan-out are out of scope, not forgiven.** The
        first version tried to forgive them with a loose matcher, and GPT Sol
        showed that unsafe in both directions: three parallel batches with no
        re-ask — the shape the first three measured label draws actually had —
@@ -1444,7 +1444,7 @@ describe("checkBatchedDraw", () => {
        simply the wrong question to ask it. src/labels.ts, prompt-caching.md § the
        labels row. */
     const batch = (id: string) =>
-      row({ id, stepName: "hierarchy", startedAt: "2026-09-03T05:47:10.000Z", cacheWriteTokens: 1_107 });
+      row({ id, stepName: "structure", startedAt: "2026-09-03T05:47:10.000Z", cacheWriteTokens: 1_107 });
     expect(checkBatchedDraw([batch("b1"), batch("b2"), batch("b3")], "batched", PRE_261001S_GROUPS)).toEqual([]);
     expect(checkBatchedDraw([writer, batch("b1"), batch("b2")], "batched", PRE_261001S_GROUPS)).toHaveLength(1);
   });
@@ -1690,7 +1690,7 @@ describe("observedVariation", () => {
   });
 
   it("counts failures from the stage outcome, not from the gateway's", () => {
-    /* `outcome: "ok"` only means the gateway returned. A truncated hierarchy is
+    /* `outcome: "ok"` only means the gateway returned. A truncated structure run is
        a `bug` failure with a perfectly ok row beside it, and counting the
        gateway's word would report zero failures over a run of them. */
     const v = observedVariation([
@@ -1749,11 +1749,11 @@ describe("observedVariation", () => {
   it("quotes the successful draw and counts the failed one, on the real run's numbers", () => {
     const v = observedVariation([
       draw(326_049_500),
-      draw(212_414_000, { succeeded: false, failure: "hierarchy error" }),
+      draw(212_414_000, { succeeded: false, failure: "structure error" }),
     ]);
     expect(v.succeeded).toBe(1);
     expect(v.failures).toBe(1);
-    expect(v.failureKinds).toEqual({ "hierarchy error": 1 });
+    expect(v.failureKinds).toEqual({ "structure error": 1 });
     expect(v.medianGivenSuccess).toBe(326_049_500);
     expect(v.totalPaidNanos).toBe(538_463_500);
     /* The median over *every* draw is deliberately not the quotable number, and
@@ -1802,11 +1802,11 @@ describe("formatVariation", () => {
       "long-html",
       observedVariation([
         draw(326_049_500),
-        draw(212_414_000, { succeeded: false, failure: "hierarchy error" }),
+        draw(212_414_000, { succeeded: false, failure: "structure error" }),
       ]),
     );
     expect(out).toContain("observed variation");
-    expect(out).toContain("1 succeeded, 1 failed (1 hierarchy error)");
+    expect(out).toContain("1 succeeded, 1 failed (1 structure error)");
     expect(out).toContain("median given success");
   });
 
@@ -1814,11 +1814,11 @@ describe("formatVariation", () => {
     const out = formatVariation(
       "long-html",
       observedVariation([
-        draw(212_414_000, { succeeded: false, failure: "hierarchy error" }),
-        draw(198_000_000, { succeeded: false, failure: "hierarchy error" }),
+        draw(212_414_000, { succeeded: false, failure: "structure error" }),
+        draw(198_000_000, { succeeded: false, failure: "structure error" }),
       ]),
     );
-    expect(out).toContain("NOT ONE produced its artefact (2 hierarchy error)");
+    expect(out).toContain("NOT ONE produced its artefact (2 structure error)");
     expect(out).toContain("no cost to quote");
     expect(out).toContain("the price of failing");
     /* The two phrasings that would let a reader take the median as a cost. */

@@ -243,7 +243,7 @@ interface DuplicateJobStep {
  * **Did any job step run more than once?** — the question nobody had ever asked
  * the ledger.
  *
- * On 2026-08-30 one article's `hierarchy` step ran **eleven times at once**
+ * On 2026-08-30 one article's `structure` step ran **eleven times at once**
  * under a single job id, because a dev-server restart re-evaluated the modules
  * holding the queue's locks while the step already in flight kept going.
  * docs/postmortems/260902c-the-truncation-retry-cost-storm.md fixed the cause
@@ -255,7 +255,7 @@ interface DuplicateJobStep {
  *
  * **Distinct `run_id`s, not rows.** A collector is opened once per execution
  * and every call inside it carries that id, so one step legitimately writes
- * several rows sharing a `run_id` — `hierarchy` makes three — and counting rows
+ * several rows sharing a `run_id` — `structure` makes three — and counting rows
  * would report every ordinary step as a duplicate. What is not ordinary is two
  * *collectors* under one `(job_id, step_name)`. See `AiCallRow.runId` in
  * src/ai-spend.ts.
@@ -352,7 +352,7 @@ function printDuplicateJobSteps(rows: readonly AiCallRow[]): void {
     console.log(`  …and ${repeated.length - MOST_DUPLICATES_SHOWN} more.`);
   note(
     "A step that was interrupted and honestly retried looks exactly like this, so a two " +
-      "here is ordinary. A large number is not: on 2026-08-30 one hierarchy step ran eleven " +
+      "here is ordinary. A large number is not: on 2026-08-30 one structure step ran eleven " +
       "times at once under one job id, and every run was billed. " +
       "docs/postmortems/260902c-the-truncation-retry-cost-storm.md.",
   );

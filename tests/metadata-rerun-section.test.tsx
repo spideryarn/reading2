@@ -338,7 +338,7 @@ describe("the AI processing section", () => {
       "blocks",
       "assets",
       "labels",
-      "hierarchy",
+      "structure",
       "illustrated",
     ]) {
       expect(row(step), `${step} should have no control here`).toBeNull();

@@ -243,7 +243,7 @@ Each of these leaves an article that still renders, so nothing draws attention t
 1. **Turning on `SANITIZE_NAMED_PROPS`.** It is DOM-clobbering protection, it is off by default, and
    it rewrites every `id` to `user-content-<id>`. That renames all 139 block ids on the sample
    article, orphans every comment and every `#spya-…` link, and breaks
-   [the one contract the project rests on](block-ids.md). Nothing throws. Hierarchy just quietly stops
+   [the one contract the project rests on](block-ids.md). Nothing throws. The tree just quietly stops
    resolving.
 2. **Narrowing `ALLOWED_ATTR` by hand.** `id` survives because it is in DOMPurify's *default*
    allowlist. A hand-written list that forgets it takes the spine with it.

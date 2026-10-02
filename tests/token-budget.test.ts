@@ -61,7 +61,7 @@ function withHeadings(count: number, every: number): Block[] {
 
 describe("budgetFor", () => {
   it("is the answer plus room to think, never the answer alone", () => {
-    expect(budgetFor("hierarchy", 1_000)).toBe(1_000 + THINKING_HEADROOM);
+    expect(budgetFor("structure", 1_000)).toBe(1_000 + THINKING_HEADROOM);
   });
 
   it("keeps the whole headroom even when the answer is tiny", () => {
@@ -75,12 +75,12 @@ describe("budgetFor", () => {
     // Clamping to the ceiling here is the tempting wrong answer: the call would
     // run for minutes, cost money, and come back cut off — the original bug,
     // reached more slowly.
-    expect(() => budgetFor("hierarchy", MODEL_MAX_TOKENS)).toThrow(TooLongForOnePass);
+    expect(() => budgetFor("structure", MODEL_MAX_TOKENS)).toThrow(TooLongForOnePass);
   });
 
   it("never returns more than one response can hold", () => {
     for (const answer of [0, 1_000, 50_000, MODEL_MAX_TOKENS - THINKING_HEADROOM]) {
-      expect(budgetFor("hierarchy", answer)).toBeLessThanOrEqual(MODEL_MAX_TOKENS);
+      expect(budgetFor("structure", answer)).toBeLessThanOrEqual(MODEL_MAX_TOKENS);
     }
   });
 
@@ -98,10 +98,10 @@ describe("budgetFor", () => {
   it("rejects a nonsense estimate instead of passing NaN to the API", () => {
     // `max_tokens: NaN` is a 400 from the API and a confusing one; a negative
     // estimate would silently shrink the budget below the headroom.
-    expect(() => budgetFor("hierarchy", Number.NaN)).toThrow(/non-negative/);
-    expect(() => budgetFor("hierarchy", -1)).toThrow(/non-negative/);
-    expect(() => budgetFor("hierarchy", 100, Number.NaN)).toThrow(/non-negative/);
-    expect(() => budgetFor("hierarchy", 100, -1)).toThrow(/non-negative/);
+    expect(() => budgetFor("structure", Number.NaN)).toThrow(/non-negative/);
+    expect(() => budgetFor("structure", -1)).toThrow(/non-negative/);
+    expect(() => budgetFor("structure", 100, Number.NaN)).toThrow(/non-negative/);
+    expect(() => budgetFor("structure", 100, -1)).toThrow(/non-negative/);
   });
 
   it("takes a smaller reservation from a call that reads less than the whole article", () => {
@@ -242,7 +242,7 @@ describe("estimateStructureTokens", () => {
     // 360 blocks, every one gistable — https://www.anthropic.com/constitution,
     // the article that found this bug. It must fit, and it must fit with the
     // reasoning allowance included.
-    expect(budgetFor("hierarchy", estimateStructureTokens(blocks(360)), STRUCTURE_HEADROOM)).toBeLessThan(
+    expect(budgetFor("structure", estimateStructureTokens(blocks(360)), STRUCTURE_HEADROOM)).toBeLessThan(
       MODEL_MAX_TOKENS,
     );
   });
@@ -250,7 +250,7 @@ describe("estimateStructureTokens", () => {
   it("refuses an article too long to describe in one response", () => {
     // Not a number worth pinning — what matters is that some length is refused
     // out loud, before the call, instead of producing half a table of contents.
-    expect(() => budgetFor("hierarchy", estimateStructureTokens(blocks(5_000)), STRUCTURE_HEADROOM)).toThrow(
+    expect(() => budgetFor("structure", estimateStructureTokens(blocks(5_000)), STRUCTURE_HEADROOM)).toThrow(
       TooLongForOnePass,
     );
   });
@@ -287,11 +287,11 @@ describe("estimateStructureTokens", () => {
 
     const estimate = estimateStructureTokens(kuhn);
     expect(estimate).toBeGreaterThan(MEASURED_ANSWER * 1.25);
-    expect(() => budgetFor("hierarchy", estimate, STRUCTURE_HEADROOM)).not.toThrow();
+    expect(() => budgetFor("structure", estimate, STRUCTURE_HEADROOM)).not.toThrow();
     /* And with room to spare rather than at the margin: an article somewhat
        longer than this one has to be admitted too, or the fix is a fix for one
        document. */
-    expect(budgetFor("hierarchy", estimate, STRUCTURE_HEADROOM)).toBeLessThan(120_000);
+    expect(budgetFor("structure", estimate, STRUCTURE_HEADROOM)).toBeLessThan(120_000);
   });
 
   it("leaves that call more room to think than it measurably used", () => {
@@ -300,7 +300,7 @@ describe("estimateStructureTokens", () => {
        51,000 tokens — under the 47,289 of thinking plus 10,996 of answer it
        provably spent — so the free refusal would have become an eight-minute
        paid truncation. The reservation is the other half of the fix. */
-    const budget = budgetFor("hierarchy", estimateStructureTokens(withHeadings(2_025, 8)), STRUCTURE_HEADROOM);
+    const budget = budgetFor("structure", estimateStructureTokens(withHeadings(2_025, 8)), STRUCTURE_HEADROOM);
     expect(budget).toBeGreaterThan(47_289 + 10_996);
     expect(STRUCTURE_HEADROOM).toBeGreaterThan(47_289);
   });
@@ -327,7 +327,7 @@ describe("estimateStructureTokens", () => {
   it("admits the heading-dense handbook, and is under the prompt's own count for it", () => {
     const handbook = withHeadings(2_420, 11);
     const estimate = estimateStructureTokens(handbook);
-    expect(() => budgetFor("hierarchy", estimate, STRUCTURE_HEADROOM)).not.toThrow();
+    expect(() => budgetFor("structure", estimate, STRUCTURE_HEADROOM)).not.toThrow();
 
     /* The faithful count, spelled out rather than asserted about vaguely: 220
        headings, each opening a section, each followed by a run of ten that the

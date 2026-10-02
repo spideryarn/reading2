@@ -317,7 +317,7 @@ const CLAIM_LIMITS = [
   "Nothing here sees an interaction between the new wording and the structure the model proposes in the same breath — that is what the cheap design buys its cheapness with.",
   "Nothing here touches `EXPAND_SYSTEM` (src/structure-expand.ts), so no result covers the deepening cascade. That prompt gained its own QUESTIONS block on 2026-09-07 (`expand/4`), carrying V4's rules — but nothing in this harness measures it.",
   "A win is a reason to put a variant in front of Greg RENDERED (the plan's stage 2), never a reason to ship it.",
-  "Depth-2 gists at two sentences are deferred, not measured: they raise TOKENS_PER_NODE and break evals/hierarchy-structure's baseline.",
+  "Depth-2 gists at two sentences are deferred, not measured: they raise TOKENS_PER_NODE and break evals/structure-whole-document's baseline.",
 ];
 
 function newRunId(): string {
@@ -337,7 +337,7 @@ async function commandPlan(o: Options): Promise<void> {
   const docs = await loadAll(o);
   console.log(`# What a run would buy\n`);
   console.log(`Corpus root: ${o.corpusRoot}`);
-  console.log(`Model:       ${modelFor("hierarchy", "standard")}\n`);
+  console.log(`Model:       ${modelFor("structure", "standard")}\n`);
   let nodes = 0;
   let promptChars = 0;
   for (const doc of docs) {
@@ -401,7 +401,7 @@ async function commandGenerate(o: Options): Promise<void> {
     plan,
     depth: o.depth,
     stub: o.stub,
-    model: o.stub ? "(stub — no model was called)" : modelFor("hierarchy", "standard"),
+    model: o.stub ? "(stub — no model was called)" : modelFor("structure", "standard"),
     claimLimits: CLAIM_LIMITS,
   };
   await writeFile(path.join(dir, "run.json"), `${JSON.stringify(runFile, null, 2)}\n`, "utf-8");
@@ -418,7 +418,7 @@ async function commandGenerate(o: Options): Promise<void> {
       cells.push(cell);
       /* Checkpointed after every cell, so progress is read from the run
          directory rather than from whatever is orchestrating it — the lesson
-         evals/hierarchy-structure wrote down after a laptop lid killed a panel. */
+         evals/structure-whole-document wrote down after a laptop lid killed a panel. */
       await writeFile(path.join(dir, "generated.json"), `${JSON.stringify(cells, null, 2)}\n`, "utf-8");
       console.log(
         `  ${arm.name.padEnd(18)} ${doc.entry.slug.padEnd(56)} ${String(cell.lines.length).padStart(3)}/${String(cell.requested.length).padEnd(3)} lines` +
@@ -428,7 +428,7 @@ async function commandGenerate(o: Options): Promise<void> {
     }
   }
 
-  const coverage = coverageFor(cells, plan, o.stub ? "stub" : modelFor("hierarchy", "standard"));
+  const coverage = coverageFor(cells, plan, o.stub ? "stub" : modelFor("structure", "standard"));
   console.log("");
   for (const line of coverageLines(coverage)) console.log(line);
   console.log(`\nWrote ${dir}`);

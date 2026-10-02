@@ -3,7 +3,7 @@
  * hold for every step written after it.**
  *
  * Stage 2 of docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md took
- * the label pass out of `hierarchy` and made it a step. Most of what that
+ * the label pass out of `structure` and made it a step. Most of what that
  * requires is compiler-enforced — `StepName`, `STEP_ORDER`, `STEPS`,
  * `STEP_BUDGET_MS`, `STORAGE`, `STEP_STORAGE`, `STAMP_SOURCE`, `STAGE_ICONS` are
  * all total records, and `npm run typecheck` names the one you forgot.
@@ -24,7 +24,7 @@
  *   reader pasting a URL no longer waits on the 79.5–92% of stage 4 the label
  *   pass was. Nothing anywhere checks a negative, so it is checked here.
  * - **`FORCE_ONLY_WHEN_NAMED` must NOT hold it either** — the opposite call from
- *   `arc`'s. Re-running `hierarchy` re-cuts the tree, and a label written to
+ *   `arc`'s. Re-running `structure` re-cuts the tree, and a label written to
  *   tell a paragraph apart from *the wrong set of neighbours* is exactly what
  *   this stage exists to prevent, so the positional cascade sweeping the labels
  *   in is correct rather than wasteful.
@@ -39,7 +39,7 @@
  * somebody writes it rather than the first time it runs. The writer we already
  * know is coming is the deepening wave
  * (docs/plans/260904d-deepen-fat-sections.md), which re-cuts the tree *without*
- * running `hierarchy`.
+ * running `structure`.
  *
  * ## Which instrument
  *
@@ -72,7 +72,7 @@ describe("every writer of the tree", () => {
     /* The premise. If `produces` ever stopped naming `tree`, the case below
        would pass over an empty list and prove nothing —
        docs/reusable/silent-success.md. */
-    expect(writesTree).toEqual(["hierarchy", "labels"]);
+    expect(writesTree).toEqual(["structure", "labels"]);
   });
 
   it("also writes a labels manifest, because re-cutting the tree invalidates them", () => {
@@ -127,7 +127,7 @@ describe("the labels step's two negative registrations", () => {
     expect(STEP_ORDER).toContain("labels");
   });
 
-  it("stays out of FORCE_ONLY_WHEN_NAMED, so forcing hierarchy sweeps it in", () => {
+  it("stays out of FORCE_ONLY_WHEN_NAMED, so forcing structure sweeps it in", () => {
     expect(FORCE_ONLY_WHEN_NAMED.has("labels")).toBe(false);
     /* The premise, and the contrast that makes the decision legible: `arc` sits
        in the same position and made the opposite call, because nothing reads
@@ -137,37 +137,37 @@ describe("the labels step's two negative registrations", () => {
 });
 
 describe("the labels step's stamp", () => {
-  it("is read off the labels manifest, the same artefact hierarchy's is", () => {
+  it("is read off the labels manifest, the same artefact structure's is", () => {
     /* Two steps over one artefact, which looks like the clash `assertStampAgrees`
        refuses and is not: `hasArtefacts` asks the asking step's own run row
        before it looks at any artefact. tests/shared-site-run-row-gate.test.ts
-       pins that on the `blocks`/`hierarchy` pair. */
+       pins that on the `blocks`/`structure` pair. */
     expect(STAMP_SOURCE.labels).toBe("labels");
-    expect(STAMP_SOURCE.hierarchy).toBe("labels");
+    expect(STAMP_SOURCE.structure).toBe("labels");
   });
 
-  it("exists at all, unlike hierarchy's", () => {
-    /* `hierarchy` deliberately has none — src/pipeline.ts says why at length.
+  it("exists at all, unlike structure's", () => {
+    /* `structure` deliberately has none — src/pipeline.ts says why at length.
        This step does, and it is what catches a prompt or a model bump with no
-       `hierarchy` run behind it. */
+       `structure` run behind it. */
     expect(typeof STEPS.labels.stamp).toBe("function");
-    expect(STEPS.hierarchy.stamp).toBeUndefined();
+    expect(STEPS.structure.stamp).toBeUndefined();
     /* And no `isDone`: it would be a second check of what the receipt already
        carries. */
     expect(STEPS.labels.isDone).toBeUndefined();
   });
 });
 
-describe("hierarchy after the split", () => {
+describe("structure after the split", () => {
   it("still writes the manifest, so the store's refusal never fires on it", () => {
-    const produces: readonly string[] = STEPS.hierarchy.produces;
+    const produces: readonly string[] = STEPS.structure.produces;
     expect(produces).toContain("tree");
     expect(produces).toContain("labels");
   });
 
   it("runs immediately before labels in STEP_ORDER", () => {
     const at = (name: StepName) => STEP_ORDER.indexOf(name);
-    expect(at("labels")).toBe(at("hierarchy") + 1);
+    expect(at("labels")).toBe(at("structure") + 1);
     /* Before `assets`, which is where the readable-article steps end. */
     expect(at("labels")).toBeLessThan(at("assets"));
   });

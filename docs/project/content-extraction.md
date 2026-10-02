@@ -40,7 +40,7 @@ design, and it is why the PDF path is not a parallel pipeline.
 
 ```
   raw.json says "html"  ──►  Readability  ──┐
-                                            ├──►  article.html + meta.json  ──► blocks ─► hierarchy ─► arc
+                                            ├──►  article.html + meta.json  ──► blocks ─► structure ─► arc
   raw.json says "pdf"   ──►  a model reads ─┘
                              the pages
 ```
@@ -395,7 +395,7 @@ worth knowing from here:
 - **The largest effect was not the chrome.** Parsoid puts MediaWiki's edit link inside the heading's
   own wrapper, and a wrapper of one heading plus one link scores to Readability as navigation — so
   `wiki_transformer.html` was reaching the reader with 19 of its 47 section headings. Taking the edit
-  links out recovers all 47, and every MediaWiki article ingested before this had a hierarchy built
+  links out recovers all 47, and every MediaWiki article ingested before this had a tree built
   on a quarter of its headings. **Those articles are not being repaired.** Greg decided on
   2026-09-07 not to re-extract the shelf, so an article imported before this keeps the outline it
   came in with until its reader re-imports it — the fix is forward-only, and if somebody asks why an

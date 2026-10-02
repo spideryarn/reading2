@@ -4,7 +4,7 @@
  *
  * Anthropic answers a blocked request with `stop_reason: "refusal"` and a
  * `stop_details` object beside it. Seven pipeline stages — arc, glossary, ideas,
- * labels, hierarchy, tweets — see that object, and until 2026-08-26 every one of
+ * labels, structure, tweets — see that object, and until 2026-08-26 every one of
  * them threw `` `Model refused: ${JSON.stringify(message.stop_details)}` ``.
  * A thrown message is not a private thing: src/jobs.ts logs a failed step with
  * `errorFields`, which keeps `message` and `stack`, and copies the same string
@@ -94,7 +94,7 @@ const helper = (name: string) => JSON.stringify(path.join(ROOT, "tests", "helper
  * old way on purpose.
  */
 const LEAK = {
-  hierarchy: "ZQTOCAAAAA",
+  structure: "ZQTOCAAAAA",
   arc: "ZQARCBBBBB",
   tweets: "ZQTWEETSCC",
   glossary: "ZQGLOSSDDD",
@@ -110,7 +110,7 @@ const LEAK = {
  * one stage added after this harness was written was the one stage never checked
  * for the leak the harness exists to catch. GPT Sol pointed it out twice.
  */
-const STAGES = ["hierarchy", "arc", "tweets", "glossary", "ideas", "labels"] as const;
+const STAGES = ["structure", "arc", "tweets", "glossary", "ideas", "labels"] as const;
 
 /**
  * One line per stage, plus the control, each carrying its own `step` field.
@@ -264,7 +264,7 @@ beforeAll(async () => {
       }
     };
 
-    await step("hierarchy", () => generateStructure({ blocks, slug: "stop-details", checkpoints: nullCheckpointStore() }));
+    await step("structure", () => generateStructure({ blocks, slug: "stop-details", checkpoints: nullCheckpointStore() }));
     await step("arc", () => generateArc({ article }));
     await step("tweets", () => generateTweets({ article }));
     await step("glossary", () => generateGlossary({ article, previous: null }));

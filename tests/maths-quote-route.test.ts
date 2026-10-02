@@ -64,7 +64,7 @@ beforeAll(async () => {
   article = await scratchArticleInPg(SLUG, {
     ownerId: TEST_OWNER,
     /* Change the text, keep the ids — `ScratchOptions.mutate`, which mirrors
-       the edit into the other blocks file and re-stamps the hierarchy. */
+       the edit into the other blocks file and re-stamps the `structure` step. */
     mutate: async (dir) => {
       const at = path.join(dir, "blocks.json");
       const doc = JSON.parse(await readFile(at, "utf8")) as { blocks: Block[] };

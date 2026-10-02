@@ -6,7 +6,7 @@
  * it.** Both came back on 2026-09-07, in stage 2a of
  * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md: the label pass
  * is the slowest thing in the app — 682 s measured against a 740 s claimant
- * deadline — so it left the blocking `hierarchy` step and became a free
+ * deadline — so it left the blocking `structure` step and became a free
  * successor job a publication queues for itself. `STEP_ORDER` (src/step-order.ts)
  * has the step and `package.json` has the script.
  *
@@ -42,7 +42,7 @@
  * model raises that, so an article long enough eventually cannot be labelled in
  * one pass however the budget is arithmetic'd. Splitting the labels out is what
  * takes the ceiling from about 55,000 words to about 125,000, and it is what
- * lets the structure call think as hard as it should.
+ * lets the whole-document call think as hard as it should.
  *
  * See docs/plans/260826h-toc-scaling.md for the full design and the alternatives that
  * were weighed against it.
@@ -274,7 +274,7 @@ export function cameBackShort(err: unknown): err is BatchCameBackShort {
  * Writing a dozen labels for a section already handed to you, against a style
  * contract and a fixed outline, is close to mechanical work — the thinking that
  * mattered (where do the boundaries go, what is this section actually about)
- * happened in the structure call, at `"high"`, which is where the budget this
+ * happened in the whole-document call, at `"high"`, which is where the budget this
  * split frees up went.
  *
  * The comparison, on the 141-block test article, 2026-08-26:
@@ -499,7 +499,7 @@ interface LabelsManifest {
    * Atomic writes give us "whole or not there". They do not give us "still
    * true". A `labels.json` with every block labelled is indistinguishable from
    * a current one even when the article has been re-extracted underneath it,
-   * the structure call has been re-run with different boundaries, or the model
+   * the whole-document call has been re-run with different boundaries, or the model
    * has changed — and src/pipeline.ts decides a step is done by whether its
    * files exist, so nothing would ever look again. Raised by GPT-5.6-sol,
    * 2026-08-26; the same shape as `sourceHash` on the glossary and the tweet
@@ -515,7 +515,7 @@ interface LabelsManifest {
    *   the model, which is titles and nothing else — two trees that cut the
    *   article in completely different places print the same outline, so it was
    *   claiming more than it checked.
-   * - `structureVersion` — the hierarchy prompt version off the tree, so the pair of
+   * - `structureVersion` — the structure prompt version off the tree, so the pair of
    *   prompt versions is recorded rather than just this file's own.
    *
    * **`sourceHash` is read; the other two are still evidence.** `STAMP_SOURCE`
@@ -523,7 +523,7 @@ interface LabelsManifest {
    * at the tree, precisely because the tree carries no such field — so
    * `stampFor` returns this hash and `assertStampAgrees` refuses a write whose
    * declared `inputHash` contradicts it. That refusal is what checks the
-   * pipeline's own bookkeeping: the `hierarchy` step records `hashBlocks` of the
+   * pipeline's own bookkeeping: the `structure` step records `hashBlocks` of the
    * blocks it handed to stage 4, `reasonsNotToPublish` compares that recorded
    * hash against the stored blocks, and a step that recorded a hash of some
    * *other* array would make the article unpublishable with nothing to say why
@@ -531,7 +531,7 @@ interface LabelsManifest {
    * store in one write, the two are compared before either lands.
    *
    * `structureHash` and `structureVersion` are the ones nothing reads yet, and
-   * that is the honest state of it: the `hierarchy` step has no freshness check of its
+   * that is the honest state of it: the `structure` step has no freshness check of its
    * own, so the pipeline still decides it is done by whether its artefacts are
    * there. Recording them is what makes writing that check a small job rather
    * than a re-run of every article; until it is written, they are evidence
@@ -2446,11 +2446,11 @@ export async function generateLabels(opts: {
   const fingerprints = batches.map((batch) => batchFingerprint(batch, opts.blocks, outline, opts.power));
   let stored: Map<string, unknown>;
   try {
-    stored = await opts.checkpoints.read<unknown>(opts.slug, "hierarchy-labels", fingerprints);
+    stored = await opts.checkpoints.read<unknown>(opts.slug, "structure-labels", fingerprints);
     log("pipeline").info(
       {
         slug: opts.slug,
-        namespace: "hierarchy-labels",
+        namespace: "structure-labels",
         asked: fingerprints.length,
         found: stored.size,
       },
@@ -2477,7 +2477,7 @@ export async function generateLabels(opts: {
    */
   const keepBatch = async (entry: LabelCheckpointEntry): Promise<void> => {
     try {
-      await opts.checkpoints.write(opts.slug, "hierarchy-labels", entry.fingerprint, entry);
+      await opts.checkpoints.write(opts.slug, "structure-labels", entry.fingerprint, entry);
     } catch (err) {
       log("pipeline").warn(
         { slug: opts.slug, batch: entry.fingerprint, err },

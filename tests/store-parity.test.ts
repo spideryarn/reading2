@@ -504,7 +504,7 @@ describe("the Postgres store, over the whole corpus", () => {
      *
      * `data/constitution/labels.json` was written before stage 4 recorded the
      * `sourceHash` of the blocks it labelled. `publishRevision` requires the
-     * `hierarchy` step's `input_hash` to equal `hashBlocks` of the revision's blocks
+     * `structure` step's `input_hash` to equal `hashBlocks` of the revision's blocks
      * (`reasonsNotToPublish`, src/store/pg-revisions.ts), and an unstamped
      * labels file gives it nothing to compare — so it refuses, which is the
      * right answer to a table of contents that might describe different text.
@@ -538,16 +538,17 @@ describe("the Postgres store, over the whole corpus", () => {
 
       // The copy worked: this is not "nothing happened".
       expect(result.basedOn).toBeNull();
-      expect(result.copied).toContain("hierarchy");
+      expect(result.copied).toContain("structure");
       // And then the gate said no, for the one reason it should have.
       expect(result.published).toBe(false);
-      /* **`hierarchy`, not `toc`.** `265356b` renamed the step in the database
-         and in this message, and this assertion was left naming the old one —
+      /* **`structure`, not `toc`.** `265356b` renamed the step to `hierarchy`
+         (and 261002b to `structure`) in the database and in this message, and
+         this assertion was left naming the old one —
          so it has been failing since, on a string that no longer exists. The
          message is `src/store/pg-revisions.ts` § `reasonsNotToPublish`; matched
          on the two words that carry the meaning rather than the whole sentence,
          which also carries a hash that changes with the fixture. */
-      expect(result.refusedBecause.join(" | ")).toMatch(/hierarchy ran against unstamped/);
+      expect(result.refusedBecause.join(" | ")).toMatch(/structure ran against unstamped/);
     });
 
     it("is therefore not an article either store will serve", async () => {

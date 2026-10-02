@@ -236,7 +236,7 @@ export const KEEP_A_TAB_OPEN =
  * the old `high`-effort wait after those surfaces move.
  *
  * There was a second sentence here, `STEP_USUALLY_A_FEW_MINUTES`, and
- * `hierarchy` had it. It was deleted on 2026-09-01 rather than reworded,
+ * `structure` had it. It was deleted on 2026-09-01 rather than reworded,
  * because the measurement under it turned out to be a median of five failures
  * — see `STEP_TIMING`. A constant nothing can say truthfully is worse than no
  * constant, because the next step to be measured will reach for it.
@@ -280,7 +280,7 @@ export const DRIVER_STALLED =
  *
  * ## Why per step and not one number for the whole job
  *
- * Six minutes into `hierarchy` is well inside what that step has been seen
+ * Six minutes into `structure` is well inside what that step has been seen
  * doing — the longest recorded attempt was still making successful model calls
  * at eight — and six minutes into `fetch` is a fetch that is never coming back.
  * One threshold is wrong for one of them whichever number you pick.
@@ -333,7 +333,7 @@ interface StepTiming {
  * runs — 163s, 182s, 270s, 549s, 604s, 772s; median 409s"*. Both halves of that
  * are wrong, and neither is a rounding error:
  *
- * - **Five of those six jobs failed at `hierarchy`.** Their step durations were
+ * - **Five of those six jobs failed at `structure`.** Their step durations were
  *   0s, 67s, 270s, 492s and 498s. So the median was a **time to failure**
  *   printed on a card as a time to finish.
  * - **It is the wrong clock.** A step's model calls do not begin when the step
@@ -348,7 +348,7 @@ interface StepTiming {
  * that and explaining it is how a wrong number survives two reviews.
  * docs/reusable/silent-success.md. Found by GPT Sol reviewing stage 5.
  *
- * ## `hierarchy` therefore says nothing about how long it usually takes
+ * ## `structure` therefore says nothing about how long it usually takes
  *
  * **One successful attempt is not "usually".** `usually` is absent, and the
  * reader gets the elapsed time and no promise about it.
@@ -361,7 +361,7 @@ interface StepTiming {
  *    the only successful run there has ever been** (180s against 187s). Letting
  *    it default would put a warning under the one shape of run we have evidence
  *    for, every time.
- * 2. Hierarchy steps have been seen doing genuine work for **498 seconds**: the
+ * 2. Structure steps have been seen doing genuine work for **498 seconds**: the
  *    two longest failures ran 15 and 17 model calls each, every one of them
  *    successful, before the answer overran its token budget. A step still
  *    fanning out at eight minutes is not evidently stuck.
@@ -399,7 +399,7 @@ interface StepTiming {
  */
 /**
  * ## `illustrated` needs a threshold for the opposite reason, and gets no
- * `usually` for `hierarchy`'s
+ * `usually` for `structure`'s
  *
  * The default 180s threshold is **below the fastest run this step has ever
  * had**, so left to default it would put *"this has been running for a while —
@@ -422,12 +422,12 @@ interface StepTiming {
  * the method above rather than an aggregate over the call log.
  */
 const STEP_TIMING: Partial<Record<StepName, StepTiming>> = {
-  hierarchy: { slowAfterMs: 600_000 },
-  /* **MEASURED**, and it needs a row for the same reason `hierarchy` does: the
+  structure: { slowAfterMs: 600_000 },
+  /* **MEASURED**, and it needs a row for the same reason `structure` does: the
      fallback below is 180 s, and the worst recorded label pass is **682 s**, so
      without this every long article would raise the alarm — an alarm the code
      knows is false at the moment it raises it, which is the failure this file's
-     header is about. Ten minutes, matching `hierarchy`'s, is past the worst
+     header is about. Ten minutes, matching `structure`'s, is past the worst
      measured pass and inside the 740 s at which the claimant kills itself.
 
      **No `usually`**, at the bar this file sets: the 682 s figure comes from the
@@ -444,7 +444,7 @@ const STEP_TIMING: Partial<Record<StepName, StepTiming>> = {
 /**
  * **GUESS**, for every step that has not been measured — and the direction of
  * the guess is the point. Three minutes is past every successful step in
- * `data/_jobs` that is not `hierarchy` or `sketch` (the slowest is `ideas` at
+ * `data/_jobs` that is not `structure` or `sketch` (the slowest is `ideas` at
  * 129s), so a false alarm is unlikely; and a reader whose fetch has been going
  * for three minutes is right to be told.
  *
@@ -670,7 +670,7 @@ export const DRIVER_STALLED_AFTER = 3;
  * 1. **It is not a fact about the job.** The job is running, and it is the
  *    *connection* that is unwell. Folding it in would make it override
  *    `working`, and the two things the reader needs are precisely both at
- *    once: *Building the hierarchy · 6m 2s* **and** *cannot continue it right
+ *    once: *Building the structure · 6m 2s* **and** *cannot continue it right
  *    now*.
  * 2. **It is not on `Job` at all.** The count lives in the engine's snapshot,
  *    per tab, and is durable nowhere. `displayJob` is pure over the record the

@@ -133,16 +133,16 @@ import type { CheckpointNamespace, CheckpointStore } from "./store/checkpoints.j
 import type { Block, Tree } from "./types.js";
 
 /**
- * The namespace these rows live in — its own, not `hierarchy-structure`'s.
+ * The namespace these rows live in — its own, not `structure-whole-document`'s.
  *
- * The structure call is one row per article: the whole tree, one question. This
+ * The whole-document call is one row per article: the whole tree, one question. This
  * is several rows per article per wave, each keyed on one call's own targets,
  * and a run that dies in wave 3 must keep wave 2's. Sharing a namespace would
  * have cost nothing today and made the retention sweep, the hit-rate log and any
  * future "how much of this article is cached" question unable to tell the two
  * apart. Adding it was a migration: `drizzle/20260905020601_checkpoints_hierarchy_deepen.sql`.
  */
-export const DEEPEN_NAMESPACE: CheckpointNamespace = "hierarchy-deepen";
+export const DEEPEN_NAMESPACE: CheckpointNamespace = "structure-deepen";
 
 /* ----------------------------------------------------------- the frozen seed */
 
@@ -343,7 +343,7 @@ export function canonicalExpansionRequest(id: ExpansionIdentity): Record<string,
     promptVersion: EXPANSION_PROMPT_STAMP,
     /* Built at call time, the way the call builds it, so an environment override
        of the model moves the key rather than silently answering its question. */
-    request: messagesWireBody("hierarchy", id.params, id.power),
+    request: messagesWireBody("structure", id.params, id.power),
     bodyHash: id.bodyHash,
     seedHash: id.seed.hash,
     recipe: canonicalRecipe(id.recipe),
@@ -514,13 +514,13 @@ export function readExpansion(opts: {
  * ## What has to fit inside what
  *
  * A claim's deadline is `LEASE_MS - DEADLINE_MARGIN_MS` = **740 s**, and the walk
- * only starts this step with `STEP_BUDGET_MS.hierarchy` = **700 s** left
+ * only starts this step with `STEP_BUDGET_MS.structure` = **700 s** left
  * (src/jobs.ts). Wave 1, the label pass and the wave share that one window:
  *
  * | | measured | where |
  * |---|---|---|
  * | wave 1, on a book | 102 s (Moby-Dick), 126 s (Origin) | plan § stage 1, 2026-09-04 |
- * | the label pass, on the largest article we have | 150–270 s | `STEP_BUDGET_MS.hierarchy`'s own note: a 658–778 s step of which the structure call was 508 s |
+ * | the label pass, on the largest article we have | 150–270 s | `STEP_BUDGET_MS.structure`'s own note: a 658–778 s step of which the whole-document call was 508 s |
  * | one scoped call | 22 s (382 blocks, 76,558 in), 16 s (30 blocks) | plan § stage 2, three real calls |
  *
  * So the wave's share of a book's step is about `700 - 126 - 270 ≈ 300 s`.
@@ -727,7 +727,7 @@ function rateLimitedForExpansion(error: unknown): number | null | false {
 /**
  * **What one scoped call cost, in the four numbers a bill is made of.**
  *
- * The same four `StructureRun` already reports for the structure call and the
+ * The same four `StructureRun` already reports for the whole-document call and the
  * label batches (src/structure.ts), named the same way, so that summing them is
  * addition rather than translation.
  *
@@ -735,7 +735,7 @@ function rateLimitedForExpansion(error: unknown): number | null | false {
  * resumed one.** A field the provider did not send reads as 0 through
  * `usageOf`, which is an understatement rather than a lie — `CallMeter` in
  * src/messages-stream.ts keeps the nullable version, and the ledger under task
- * `hierarchy` is the authority on money. This is the artefact's copy, and its
+ * `structure` is the authority on money. This is the artefact's copy, and its
  * job is to make one run's records say what that run paid without a join.
  */
 export interface ExpansionUsage {
@@ -841,7 +841,7 @@ export function liveExpansionExecutor(power: ModelPower, signal?: AbortSignal): 
   return async (request) => {
     let message: Anthropic.Message;
     try {
-      const call = streamMessage("hierarchy", request.params, {
+      const call = streamMessage("structure", request.params, {
         power,
         ...(signal ? { signal } : {}),
       });
@@ -1015,7 +1015,7 @@ export interface ExpansionWaveResult {
    * started contributes nothing because it has no outcome.
    *
    * A call that failed fatally is *not* in here, and cannot be: the wave throws
-   * rather than returning. Its draws are on the ledger under task `hierarchy`,
+   * rather than returning. Its draws are on the ledger under task `structure`,
    * which is the authority; this figure is what a successful wave's artefact can
    * say about itself.
    */
@@ -1035,7 +1035,7 @@ export interface ExpansionWaveResult {
  */
 class WaveOutOfTime extends Error {
   constructor() {
-    super("the hierarchy step had too little of its deadline left to start another expansion call");
+    super("the structure step had too little of its deadline left to start another expansion call");
     this.name = "WaveOutOfTime";
   }
 }
@@ -1715,7 +1715,7 @@ export function deepeningEnabled(): boolean {
  * Question 1 of the live wave — *is the verdict stable across repeats?* — is the
  * one stage 6 leans on, and it **cannot be measured without this**. The scoped
  * calls are content-addressed, so a second run over the same article reads its
- * own `hierarchy-deepen` rows back and makes no call at all: the repeat is free
+ * own `structure-deepen` rows back and makes no call at all: the repeat is free
  * and the verdicts come out identical **by construction**, which looks exactly
  * like a perfectly stable signal and is worth nothing.
  * docs/plans/260904d-deepen-fat-sections.md § "What the live run must answer".
@@ -1737,12 +1737,12 @@ export function deepeningEnabled(): boolean {
  *
  * ## The deepening wave only, and wave 1 is left resumed on purpose
  *
- * This does not touch the `hierarchy-structure` checkpoint, and that is the
+ * This does not touch the `structure-whole-document` checkpoint, and that is the
  * point rather than an omission. **A resumed wave 1 is what holds the seed
  * constant**: every repeat expands the identical tree, from the identical frozen
  * outline, with the identical ranges, so a verdict that moves between repeats is
  * the scoped call changing its mind rather than a different tree being asked a
- * different question. Re-asking the structure call too would measure both at
+ * different question. Re-asking the whole-document call too would measure both at
  * once and could not separate them — and would add roughly two dollars and eight
  * minutes to every repeat for the privilege.
  *

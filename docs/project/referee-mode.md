@@ -914,7 +914,7 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
 ## Confidentiality: exact, and unflinching about the tense
 
 By the time a reader reaches Referee mode, the article's text has already gone to a third-party
-model provider — `DEFAULT_INGEST_STEPS` runs extraction, hierarchy and gists at ingest
+model provider — `DEFAULT_INGEST_STEPS` runs extraction, structure and gists at ingest
 ([`src/pipeline.ts`](../../src/pipeline.ts)), and a PDF is read by a model before it is anything
 else. The first draft of this plan put a notice about that fact *inside* Referee mode, phrased as
 something still to decide. The cross-family review called that the single most serious finding in

@@ -63,6 +63,21 @@ import { isSpideryarnId } from "./ids.js";
 import { MODES, RETIRED_MODES } from "./modes.js";
 import { ARTICLE_VIEWS } from "./read-address.js";
 
+/**
+ * `RETIRED_STEPS` in src/step-order.ts, copied — the step names a tab loaded
+ * before a rename may still send, so a stale tab's report keeps its step rather
+ * than losing it. Copied, not imported, for the reason `STEPS` below is: this
+ * file is in every reader's startup bundle (via src/web/log-buffer.ts), and
+ * importing src/step-order.ts put that module there too
+ * (tests/eager-client-graph.test.ts). tests/feedback-payload.test.ts feeds
+ * every key of the real table through `stepOf`. The mode goes through
+ * `RETIRED_MODES` instead, the same table `?mode=` links use.
+ */
+const RETIRED_STEPS: Readonly<Record<string, (typeof STEPS)[number]>> = {
+  trajectory: "skim",
+  hierarchy: "structure",
+};
+
 /** Which shape `FeedbackDiagnostics.payload` has. Stored in its own column. */
 export const FEEDBACK_DIAGNOSTICS_VERSION = 1;
 
@@ -169,8 +184,8 @@ const STEPS = [
   "metadata",
   "extract",
   "blocks",
-  "hierarchy",
-  /* Stage 4b, 2026-09-06 — the paragraph labels, which left the `hierarchy`
+  "structure",
+  /* Stage 4b, 2026-09-06 — the paragraph labels, which left the `structure`
      step. `tests/feedback-payload.test.ts` named it the moment it entered
      `STEP_ORDER`, which is what the header means by keeping the copy honest. */
   "labels",
@@ -191,17 +206,6 @@ const STEPS = [
   "crossrefs",
   "simple",
 ] as const;
-
-/**
- * **Step names a tab loaded before a rename may still send**, and the step each
- * became. `trajectory` was the Skim step's name until 2026-10-01 (plan 261001r);
- * a report from a stale tab should keep its step rather than lose it. The mode
- * goes through `RETIRED_MODES` in src/modes.ts instead, the same table `?mode=`
- * links use.
- */
-const RETIRED_STEPS: Readonly<Record<string, (typeof STEPS)[number]>> = {
-  trajectory: "skim",
-};
 
 /** A retired name's successor, or the value as it came. */
 function current(value: unknown, retired: Readonly<Record<string, string>>): unknown {

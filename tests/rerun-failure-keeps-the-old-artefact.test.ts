@@ -196,7 +196,7 @@ async function draft(withQuotes: Quotes | null): Promise<string> {
     .where(eq(articleRevisions.id, revisionId));
   await recordStepRun({
     revisionId,
-    stepName: "hierarchy",
+    stepName: "structure",
     inputHash: HASH,
     implementationVersion: PIPELINE_RUN,
     status: "done",
