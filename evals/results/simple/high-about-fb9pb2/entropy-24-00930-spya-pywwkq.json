@@ -1,0 +1,280 @@
+{
+  "arm": "high-about-fb9pb2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple-prompt/4",
+  "sourceSha256": "a9729ecb9458a1e96b8255614e2b71759ac91583a0fd4f3049015c1857f65f27",
+  "at": "2026-10-02T19:29:15.776Z",
+  "bodyWords": 8580,
+  "bodyBlocks": 99,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "971b9e6110755087",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 32407,
+  "costUsd": 0.2274832,
+  "tokens": {
+    "input": 14744,
+    "output": 5350,
+    "reasoning": 2980
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 204,
+  "fullerWords": 270,
+  "briefWords": 113,
+  "paragraphs": [
+    {
+      "text": "This review explains how to measure the way a neuron combines signals from several input neurons. Its main tool is partial information decomposition, or PID. PID splits what two inputs tell you about a target into parts: redundant (either alone tells you), unique (only one does), and synergistic (only the pair together does).",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-h5jzvm"
+      ],
+      "sentences": [
+        {
+          "text": "This review explains how to measure the way a neuron combines signals from several input neurons.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "Its main tool is partial information decomposition, or PID.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "PID splits what two inputs tell you about a target into parts: redundant (either alone tells you), unique (only one does), and synergistic (only the pair together does).",
+          "id": "spya-h5jzvm"
+        }
+      ]
+    },
+    {
+      "text": "The authors call working out how brains process information a grand challenge of modern neuroscience. New tools record hundreds or thousands of neurons at once, but ways to make sense of that data lagged behind. The authors treat synergy as a sign of real processing, beyond simply passing a signal along.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa",
+        "spya-wer4cd"
+      ],
+      "sentences": [
+        {
+          "text": "The authors call working out how brains process information a grand challenge of modern neuroscience.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "New tools record hundreds or thousands of neurons at once, but ways to make sense of that data lagged behind.",
+          "id": "spya-s9kmxa"
+        },
+        {
+          "text": "The authors treat synergy as a sign of real processing, beyond simply passing a signal along.",
+          "id": "spya-wer4cd"
+        }
+      ]
+    },
+    {
+      "text": "In slices of mouse cortex grown on electrode arrays, a group's synergy was reliably about a quarter of the information flowing in. Groups inside a \"rich club\", a tightly linked core of the busiest neurons, had 2.7 times more synergy. In monkeys, redundancy rose sharply during reaching, perhaps to send movement signals reliably.",
+      "ids": [
+        "spya-kqkb58",
+        "spya-fud8q3",
+        "spya-t8fayf"
+      ],
+      "sentences": [
+        {
+          "text": "In slices of mouse cortex grown on electrode arrays, a group's synergy was reliably about a quarter of the information flowing in.",
+          "id": "spya-kqkb58"
+        },
+        {
+          "text": "Groups inside a \"rich club\", a tightly linked core of the busiest neurons, had 2.7 times more synergy.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "In monkeys, redundancy rose sharply during reaching, perhaps to send movement signals reliably.",
+          "id": "spya-t8fayf"
+        }
+      ]
+    },
+    {
+      "text": "The takeaway: neurons seem to respond to patterns of input, not just add inputs up toward a firing threshold. Synergy also depends on a neuron's place in the network and on what the animal is doing. Still, PID shows statistical links, not the biological mechanism behind them.",
+      "ids": [
+        "spya-sp50v3",
+        "spya-spdx0y"
+      ],
+      "sentences": [
+        {
+          "text": "The takeaway: neurons seem to respond to patterns of input, not just add inputs up toward a firing threshold.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "Synergy also depends on a neuron's place in the network and on what the animal is doing.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "Still, PID shows statistical links, not the biological mechanism behind them.",
+          "id": "spya-spdx0y"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This review explains how one tool from information theory, partial information decomposition (PID), can show how neurons combine signals from several inputs. PID splits what input neurons tell you about a target neuron into three parts: redundant (any input alone would tell you), unique (only one input tells you), and synergistic (only the inputs together tell you). The authors draw mainly on their own recent work.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ],
+      "sentences": [
+        {
+          "text": "This review explains how one tool from information theory, partial information decomposition (PID), can show how neurons combine signals from several inputs.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "PID splits what input neurons tell you about a target neuron into three parts: redundant (any input alone would tell you), unique (only one input tells you), and synergistic (only the inputs together tell you).",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "The authors draw mainly on their own recent work.",
+          "id": "spya-gzwbsr"
+        }
+      ]
+    },
+    {
+      "text": "Brains turn sensory signals into behavior, but how circuits transform that information is poorly understood. Recordings of hundreds or thousands of neurons now exist, but there have been few ways to pull clear insights from them. The authors treat synergy as their measure of processing, because it captures information no single input carries.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ],
+      "sentences": [
+        {
+          "text": "Brains turn sensory signals into behavior, but how circuits transform that information is poorly understood.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "Recordings of hundreds or thousands of neurons now exist, but there have been few ways to pull clear insights from them.",
+          "id": "spya-s9kmxa"
+        },
+        {
+          "text": "The authors treat synergy as their measure of processing, because it captures information no single input carries.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "In cultured slices of mouse cortex, \"rich clubs\" (tightly interlinked hub neurons) held under 40% of neurons but about 88% of all synergy. Groups with more links between the two input neurons showed more synergy. Synergy peaked when the inputs fired somewhat alike, at about 7% of the maximum possible mutual information; more overlap just added redundancy.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ],
+      "sentences": [
+        {
+          "text": "In cultured slices of mouse cortex, \"rich clubs\" (tightly interlinked hub neurons) held under 40% of neurons but about 88% of all synergy.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "Groups with more links between the two input neurons showed more synergy.",
+          "id": "spya-sd9fzd"
+        },
+        {
+          "text": "Synergy peaked when the inputs fired somewhat alike, at about 7% of the maximum possible mutual information; more overlap just added redundancy.",
+          "id": "spya-ybmve2"
+        }
+      ]
+    },
+    {
+      "text": "In monkeys doing a reach-and-grasp task, activity was mostly synergistic, but redundancy rose sharply during movement, perhaps to send the \"move\" signal reliably. PID has limits: with six inputs there are 7,828,354 parts to compute. It also shows statistical links between neurons, not the biological reason behind them.",
+      "ids": [
+        "spya-t8fayf",
+        "spya-aby2dp",
+        "spya-spdx0y"
+      ],
+      "sentences": [
+        {
+          "text": "In monkeys doing a reach-and-grasp task, activity was mostly synergistic, but redundancy rose sharply during movement, perhaps to send the \"move\" signal reliably.",
+          "id": "spya-t8fayf"
+        },
+        {
+          "text": "PID has limits: with six inputs there are 7,828,354 parts to compute.",
+          "id": "spya-aby2dp"
+        },
+        {
+          "text": "It also shows statistical links between neurons, not the biological reason behind them.",
+          "id": "spya-spdx0y"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that neurons do not just add up inputs and fire past a threshold; they also respond to particular input patterns. How much synergy they show depends on their place in the network and on the animal's behavior, hinting at much future research.",
+      "ids": [
+        "spya-sp50v3"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that neurons do not just add up inputs and fire past a threshold; they also respond to particular input patterns.",
+          "id": "spya-sp50v3"
+        },
+        {
+          "text": "How much synergy they show depends on their place in the network and on the animal's behavior, hinting at much future research.",
+          "id": "spya-sp50v3"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review introduces partial information decomposition (PID), a tool from information theory for studying how neurons process information. The authors call understanding how brains process information a grand challenge of neuroscience. PID splits what several input neurons tell us about a target neuron into redundant, unique, and synergistic parts. Synergy is information visible only in the inputs' joint pattern, and the authors treat it as a sign of computation.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-rxcze4",
+        "spya-e94ury"
+      ],
+      "sentences": [
+        {
+          "text": "This review introduces partial information decomposition (PID), a tool from information theory for studying how neurons process information.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "The authors call understanding how brains process information a grand challenge of neuroscience.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "PID splits what several input neurons tell us about a target neuron into redundant, unique, and synergistic parts.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "Synergy is information visible only in the inputs' joint pattern, and the authors treat it as a sign of computation.",
+          "id": "spya-e94ury"
+        }
+      ]
+    },
+    {
+      "text": "In cultured mouse cortex, triads in the \"rich club\", the most densely connected neurons, had 2.7 times more synergy. In monkeys, redundancy rose sharply while they made reaching movements. The takeaway: neurons seem not to simply add up inputs, but respond to their patterns.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-t8fayf",
+        "spya-sp50v3"
+      ],
+      "sentences": [
+        {
+          "text": "In cultured mouse cortex, triads in the \"rich club\", the most densely connected neurons, had 2.7 times more synergy.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "In monkeys, redundancy rose sharply while they made reaching movements.",
+          "id": "spya-t8fayf"
+        },
+        {
+          "text": "The takeaway: neurons seem not to simply add up inputs, but respond to their patterns.",
+          "id": "spya-sp50v3"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

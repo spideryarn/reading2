@@ -334,7 +334,10 @@ export function SummaryControls({
               onPointerUp={(e) => {
                 pointerActive.current = false;
                 suppressClick.current = true;
-                if (slug !== null) armActivation(slug, "simple");
+                /* A drag armed on its first input. A resting-thumb press has
+                   no input, so it arms here instead. One gesture mints one
+                   token either way. */
+                if (!pointerChanged.current && slug !== null) armActivation(slug, "simple");
                 /* Clicking the resting thumb emits no input event, but still
                    opens that level (or retries one already open). */
                 if (!pointerChanged.current && value !== at(e.currentTarget)) onChange(at(e.currentTarget));
@@ -346,6 +349,12 @@ export function SummaryControls({
               onChange={(e) => {
                 const next = at(e.currentTarget);
                 if (pointerActive.current) {
+                  /* Armed on the drag's first move, not only on pointer-up: a
+                     touch drag the browser takes back for scrolling ends in
+                     pointercancel, and the level has already moved (Sol's plan
+                     review of 261002h, P1). Pointer-up sees `pointerChanged`
+                     and does not mint a second token for the same gesture. */
+                  if (!pointerChanged.current && slug !== null) armActivation(slug, "simple");
                   pointerChanged.current = true;
                   if (value !== next) onChange(next);
                 } else {

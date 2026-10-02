@@ -71,8 +71,14 @@ the paragraphs.
   level; the tooltip names the three, and `aria-valuetext` names the current one for a screen
   reader. ⓤ is the owner's *written for you* badge.
 - **The reader's profile and goal shape all three**, through the shared `PROFILE_RULES` and
-  `profileSection` ([src/profile.ts](../../src/profile.ts)): what the reader says they know is not
-  explained, and the goal decides what leads. Recorded as `profileHash`, not in the stamp — a changed
+  `profileSection` ([src/profile.ts](../../src/profile.ts)): the goal decides what leads, and in
+  Simple and Fuller what the reader says they know is not explained. **Brief ignores the claimed
+  background**: it is for a reader in a hurry from outside the field, with at most two technical
+  terms, each explained, and one plain phrase of method. Greg, 2026-10-02 (`spya-rpqqxb`): *"assume
+  it's for someone with less expertise or in more of a hurry"* — his own profiled Brief had more
+  jargon than the Simple beside it
+  ([261002h](../plans/261002h-brief-summary-plainer-for-a-reader-in-a-hurry.md); what a good
+  summary is, [261002c](../research/261002c-what-makes-a-good-summary.md)). Recorded as `profileHash`, not in the stamp — a changed
   profile makes nothing stale; the badge shows it and *Write it again* picks up the new one. A
   visitor reads the owner's paragraphs, and the owner's *make public* dialog says they were written
   for the owner's profile.

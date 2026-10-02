@@ -41,6 +41,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { loadEnvLocal } from "../../src/env.js";
+import type { SimpleCheck } from "../../src/types.js";
 
 const OUT = path.join(import.meta.dirname, "..", "results", "simple");
 const SOURCE = path.join(import.meta.dirname, "..", "..", "src", "simple-summary.ts");
@@ -89,6 +90,8 @@ interface ArmFile {
    */
   power?: "standard" | "high";
   guard?: boolean;
+  /** Since plan 261002h: the fidelity guard's record (`SimpleCheck`), when it ran. */
+  check?: SimpleCheck;
 }
 
 async function list(): Promise<void> {
@@ -228,6 +231,9 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
             fuller: result.simpleSummary.levels.fuller,
             brief: result.simpleSummary.levels.brief,
             dropped: { ...result.dropped },
+            /* Since plan 261002h (Sol's plan review): the guard's own record,
+               so a run's fidelity verdicts and retries are kept beside it. */
+            ...(result.simpleSummary.check ? { check: result.simpleSummary.check } : {}),
           };
         } catch (err) {
           file = {

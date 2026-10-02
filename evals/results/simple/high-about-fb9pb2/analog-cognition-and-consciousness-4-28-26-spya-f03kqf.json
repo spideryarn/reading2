@@ -1,0 +1,256 @@
+{
+  "arm": "high-about-fb9pb2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "version": "simple-prompt/4",
+  "sourceSha256": "a9729ecb9458a1e96b8255614e2b71759ac91583a0fd4f3049015c1857f65f27",
+  "at": "2026-10-02T19:29:17.302Z",
+  "bodyWords": 6489,
+  "bodyBlocks": 92,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "d3b5b8760ff66f03",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 26624,
+  "costUsd": 0.211707,
+  "tokens": {
+    "input": 13908,
+    "output": 5198,
+    "reasoning": 2971
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 183,
+  "fullerWords": 264,
+  "briefWords": 101,
+  "paragraphs": [
+    {
+      "text": "This is a theory piece arguing that thought and consciousness may come from two-way traffic between neuron spikes and large-scale brain waves. Brain waves here mean rhythmic electric fields that spread over millimeters to centimeters of cortex and directly nudge when and where neurons fire.",
+      "ids": [
+        "spya-d238cn",
+        "spya-z9g2s3"
+      ],
+      "sentences": [
+        {
+          "text": "This is a theory piece arguing that thought and consciousness may come from two-way traffic between neuron spikes and large-scale brain waves.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "Brain waves here mean rhythmic electric fields that spread over millimeters to centimeters of cortex and directly nudge when and where neurons fire.",
+          "id": "spya-z9g2s3"
+        }
+      ]
+    },
+    {
+      "text": "The authors say synapse-and-spike models alone cannot explain flexible control, because changing synaptic weights is too slow and too targeted. Many cortical neurons show \"mixed selectivity\": they carry different information in different contexts, so something must route them on the fly.",
+      "ids": [
+        "spya-d73kfb",
+        "spya-amx5qf"
+      ],
+      "sentences": [
+        {
+          "text": "The authors say synapse-and-spike models alone cannot explain flexible control, because changing synaptic weights is too slow and too targeted.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "Many cortical neurons show \"mixed selectivity\": they carry different information in different contexts, so something must route them on the fly.",
+          "id": "spya-amx5qf"
+        }
+      ]
+    },
+    {
+      "text": "In their \"Spatial Computing\" idea, slower alpha/beta waves act as temporary inhibitory stencils that decide where faster gamma activity and spiking can appear. Waves that add and cancel could also do analog computation, settling on an answer all at once rather than step by step. This efficiency may help explain how the brain runs on about 20 watts, while digital AI needs enormous energy.",
+      "ids": [
+        "spya-gkfdys",
+        "spya-mgnqxk",
+        "spya-jbtup9"
+      ],
+      "sentences": [
+        {
+          "text": "In their \"Spatial Computing\" idea, slower alpha/beta waves act as temporary inhibitory stencils that decide where faster gamma activity and spiking can appear.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "Waves that add and cancel could also do analog computation, settling on an answer all at once rather than step by step.",
+          "id": "spya-mgnqxk"
+        },
+        {
+          "text": "This efficiency may help explain how the brain runs on about 20 watts, while digital AI needs enormous energy.",
+          "id": "spya-jbtup9"
+        }
+      ]
+    },
+    {
+      "text": "Different anesthetics all produce slow, out-of-step cortical waves, suggesting consciousness depends on how large-scale waves are organized. The authors conclude it would be surprising if evolution did not use this built-in analog substrate.",
+      "ids": [
+        "spya-k02vdw",
+        "spya-m8bzur"
+      ],
+      "sentences": [
+        {
+          "text": "Different anesthetics all produce slow, out-of-step cortical waves, suggesting consciousness depends on how large-scale waves are organized.",
+          "id": "spya-k02vdw"
+        },
+        {
+          "text": "The authors conclude it would be surprising if evolution did not use this built-in analog substrate.",
+          "id": "spya-m8bzur"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a theory paper arguing that thought and consciousness may arise from two-way traffic between neuron spikes and brain waves. Synapses store memories, the authors propose, while waves act as a fast control layer that organizes millions of neurons in real time.",
+      "ids": [
+        "spya-d238cn",
+        "spya-z9g2s3"
+      ],
+      "sentences": [
+        {
+          "text": "This is a theory paper arguing that thought and consciousness may arise from two-way traffic between neuron spikes and brain waves.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "Synapses store memories, the authors propose, while waves act as a fast control layer that organizes millions of neurons in real time.",
+          "id": "spya-d238cn"
+        }
+      ]
+    },
+    {
+      "text": "The authors say changing synaptic weights is too clumsy for flexible control, since a controller would need to know which synapses hold each idea. Many cortical neurons also show mixed selectivity: they signal different things in different contexts, so signals must be routed flexibly through overlapping networks.",
+      "ids": [
+        "spya-d73kfb",
+        "spya-amx5qf"
+      ],
+      "sentences": [
+        {
+          "text": "The authors say changing synaptic weights is too clumsy for flexible control, since a controller would need to know which synapses hold each idea.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "Many cortical neurons also show mixed selectivity: they signal different things in different contexts, so signals must be routed flexibly through overlapping networks.",
+          "id": "spya-amx5qf"
+        }
+      ]
+    },
+    {
+      "text": "Brain waves are rhythmic swings in the electric field around neurons, and these fields can nudge nearby neurons to fire without synapses, called ephaptic coupling. In their Spatial Computing model, slower alpha/beta waves act as temporary stencils that silence patches of cortex, letting faster gamma activity and spikes through only in the gaps. This could explain both mixed selectivity and why population activity sits in separate low-dimensional subspaces.",
+      "ids": [
+        "spya-bzqaf5",
+        "spya-gkfdys",
+        "spya-ns23sq"
+      ],
+      "sentences": [
+        {
+          "text": "Brain waves are rhythmic swings in the electric field around neurons, and these fields can nudge nearby neurons to fire without synapses, called ephaptic coupling.",
+          "id": "spya-bzqaf5"
+        },
+        {
+          "text": "In their Spatial Computing model, slower alpha/beta waves act as temporary stencils that silence patches of cortex, letting faster gamma activity and spikes through only in the gaps.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "This could explain both mixed selectivity and why population activity sits in separate low-dimensional subspaces.",
+          "id": "spya-ns23sq"
+        }
+      ]
+    },
+    {
+      "text": "Overlapping waves add and cancel, so the authors propose they perform analog computation, settling on answers all at once rather than step by step. That efficiency could help explain how the brain runs on about 20 watts, while digital AI systems need enormous energy. Anesthetics with different chemical targets all produce slow, out-of-step waves, suggesting consciousness depends on large-scale wave organization.",
+      "ids": [
+        "spya-mgnqxk",
+        "spya-jbtup9",
+        "spya-k02vdw"
+      ],
+      "sentences": [
+        {
+          "text": "Overlapping waves add and cancel, so the authors propose they perform analog computation, settling on answers all at once rather than step by step.",
+          "id": "spya-mgnqxk"
+        },
+        {
+          "text": "That efficiency could help explain how the brain runs on about 20 watts, while digital AI systems need enormous energy.",
+          "id": "spya-jbtup9"
+        },
+        {
+          "text": "Anesthetics with different chemical targets all produce slow, out-of-step waves, suggesting consciousness depends on large-scale wave organization.",
+          "id": "spya-k02vdw"
+        }
+      ]
+    },
+    {
+      "text": "The takeaway: synapses supply what can be represented, while waves decide what is active moment to moment and may bind it into one experience. Because cortex makes these waves cheaply and naturally, the authors argue it would be surprising if evolution had not used them.",
+      "ids": [
+        "spya-tdqde5",
+        "spya-m8bzur"
+      ],
+      "sentences": [
+        {
+          "text": "The takeaway: synapses supply what can be represented, while waves decide what is active moment to moment and may bind it into one experience.",
+          "id": "spya-tdqde5"
+        },
+        {
+          "text": "Because cortex makes these waves cheaply and naturally, the authors argue it would be surprising if evolution had not used them.",
+          "id": "spya-m8bzur"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This perspective piece argues that brain waves, rhythmic electric fields in the cortex, work with neuron spikes to drive cognition. The authors say synapses store memories, but changing them is too slow for flexible, split-second control. Many neurons also do different jobs in different contexts, so something must route their signals.",
+      "ids": [
+        "spya-d238cn",
+        "spya-d73kfb",
+        "spya-amx5qf"
+      ],
+      "sentences": [
+        {
+          "text": "This perspective piece argues that brain waves, rhythmic electric fields in the cortex, work with neuron spikes to drive cognition.",
+          "id": "spya-d238cn"
+        },
+        {
+          "text": "The authors say synapses store memories, but changing them is too slow for flexible, split-second control.",
+          "id": "spya-d73kfb"
+        },
+        {
+          "text": "Many neurons also do different jobs in different contexts, so something must route their signals.",
+          "id": "spya-amx5qf"
+        }
+      ]
+    },
+    {
+      "text": "Their proposal: slower alpha/beta waves act like temporary stencils, muting some patches of cortex so others can fire. Overlapping waves may also compute directly, analog-style, perhaps explaining how the brain runs on about 20 watts. Consciousness, they suggest, may emerge when waves pull the cortex into one organized, integrated state.",
+      "ids": [
+        "spya-gkfdys",
+        "spya-jbtup9",
+        "spya-m9exy5"
+      ],
+      "sentences": [
+        {
+          "text": "Their proposal: slower alpha/beta waves act like temporary stencils, muting some patches of cortex so others can fire.",
+          "id": "spya-gkfdys"
+        },
+        {
+          "text": "Overlapping waves may also compute directly, analog-style, perhaps explaining how the brain runs on about 20 watts.",
+          "id": "spya-jbtup9"
+        },
+        {
+          "text": "Consciousness, they suggest, may emerge when waves pull the cortex into one organized, integrated state.",
+          "id": "spya-m9exy5"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}
