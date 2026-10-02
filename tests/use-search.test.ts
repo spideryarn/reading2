@@ -80,7 +80,9 @@ function oneShotStream(frames: { event: string; data: unknown }[]): ReadableStre
  * test can set this up *before* calling `ask`/`retry` and still echo back
  * whichever id the hook minted, rather than having to guess it.
  */
-let postImpl: ((body: { id: string; criterion: string }) => Promise<Response>) | undefined;
+let postImpl:
+  | ((body: { id: string; criterion: string }, init: RequestInit) => Promise<Response>)
+  | undefined;
 
 beforeEach(() => {
   // React's `act` refuses to run outside a testing library it recognises
@@ -97,7 +99,7 @@ beforeEach(() => {
     }
     if (init.method === "POST") {
       if (!postImpl) throw new Error("no postImpl set for this test");
-      return postImpl(JSON.parse((init.body as string) ?? "{}"));
+      return postImpl(JSON.parse((init.body as string) ?? "{}"), init);
     }
     if (init.method === "PATCH") {
       return Promise.resolve({ ok: true, text: () => Promise.resolve("{}") } as unknown as Response);
@@ -739,5 +741,167 @@ describe("a search's kind", () => {
     expect(posted()).toHaveLength(2);
     expect(posted().at(-1)).toEqual({ id, criterion: Q, kind: "quick" });
     expect(latest?.runs.find((r) => r.id === id)?.kind).toBe("quick");
+  });
+});
+
+/**
+ * **Revising a quick search as the reader types** — plan 261002h, Sol F3/F4.
+ *
+ * One request at a time per row: a revision waits for the previous request's
+ * `begin`, edits meanwhile coalesce to the latest words, and only then is the
+ * old fetch aborted and the revision sent. A superseded send is fenced: its
+ * frames, renames and failures never touch the row.
+ */
+describe("revising a quick search in place", () => {
+  const createdAt = "2026-10-02T00:00:00.000Z";
+  const H1: SearchHit = { blockId: "spya-blk001" as SearchHit["blockId"], quote: "one", confidence: 90, reasoning: "" };
+  const H2: SearchHit = { blockId: "spya-blk002" as SearchHit["blockId"], quote: "two", confidence: 80, reasoning: "" };
+
+  interface Held {
+    body: { id: string; criterion: string; kind?: string; revises?: boolean };
+    signal: AbortSignal | undefined;
+    frame(event: string, data: unknown): void;
+    end(): void;
+    fail(): void;
+  }
+  /** Every POST, held open for the case to feed by hand. */
+  function holdPosts(): Held[] {
+    const held: Held[] = [];
+    postImpl = (body, init) => {
+      let ctl!: ReadableStreamDefaultController<Uint8Array>;
+      const stream = new ReadableStream<Uint8Array>({
+        start(c) {
+          ctl = c;
+        },
+      });
+      held.push({
+        body,
+        signal: init.signal ?? undefined,
+        frame: (event, data) => ctl.enqueue(sseBytes([{ event, data }])),
+        end: () => ctl.close(),
+        fail: () => ctl.error(new DOMException("The operation was aborted.", "AbortError")),
+      });
+      return Promise.resolve({ ok: true, body: stream } as unknown as Response);
+    };
+    return held;
+  }
+  const run = (id: string, criterion: string, over: Partial<SearchRun> = {}): SearchRun => ({
+    id,
+    criterion,
+    kind: "quick",
+    createdAt,
+    status: "pending",
+    hits: [],
+    ...over,
+  });
+
+  it("waits for begin, coalesces to the latest words, then aborts the old fetch and sends one revision", async () => {
+    await mount("a-slug");
+    await flush();
+    const held = holdPosts();
+    let id = "";
+    act(() => {
+      id = latest?.ask("why", "quick") ?? "";
+    });
+    await flush();
+    act(() => latest?.revise(id, "why repl"));
+    act(() => latest?.revise(id, "why replication"));
+    await flush();
+    expect(held).toHaveLength(1);
+    // The row says what the reader is now asking, at once.
+    expect(latest?.runs.find((r) => r.id === id)?.criterion).toBe("why replication");
+
+    held[0]!.frame("begin", run(id, "why"));
+    await flush();
+    expect(held).toHaveLength(2);
+    expect(held[1]!.body).toEqual({ id, criterion: "why replication", kind: "quick", revises: true });
+    expect(held[0]!.signal?.aborted).toBe(true);
+    expect(held[1]!.signal?.aborted).toBe(false);
+  });
+
+  it("drops everything a superseded send says afterwards, and its abort is not an error", async () => {
+    await mount("a-slug");
+    await flush();
+    const held = holdPosts();
+    let id = "";
+    act(() => {
+      id = latest?.ask("why", "quick") ?? "";
+    });
+    await flush();
+    held[0]!.frame("begin", run(id, "why"));
+    await flush();
+    act(() => latest?.revise(id, "why replication"));
+    await flush();
+    expect(held).toHaveLength(2);
+
+    // The old stream speaks after it was superseded, then dies of its abort.
+    held[0]!.frame("hit", { hit: H1 });
+    held[0]!.frame("begin", run("spya-renam2", "why"));
+    held[0]!.frame("done", run(id, "why", { status: "done", hits: [H1] }));
+    held[0]!.fail();
+    await flush();
+    const row = latest?.runs.find((r) => r.id === id);
+    expect(row?.criterion).toBe("why replication");
+    expect(row?.status).toBe("pending");
+    expect(row?.hits).toEqual([]);
+    expect(latest?.error).toBeNull();
+    expect(latest?.runs).toHaveLength(1);
+    expect(latest?.running.has(id)).toBe(true);
+
+    held[1]!.frame("begin", run(id, "why replication"));
+    held[1]!.frame("hit", { hit: H2 });
+    held[1]!.frame("done", run(id, "why replication", { status: "done", hits: [H2] }));
+    held[1]!.end();
+    await flush();
+    expect(latest?.runs.find((r) => r.id === id)?.hits).toEqual([H2]);
+    expect(latest?.running.size).toBe(0);
+  });
+
+  it("keeps the previous answer's hits on screen until the revision's first hit", async () => {
+    await mount("a-slug");
+    await flush();
+    const held = holdPosts();
+    let id = "";
+    act(() => {
+      id = latest?.ask("why", "quick") ?? "";
+    });
+    await flush();
+    held[0]!.frame("begin", run(id, "why"));
+    held[0]!.frame("hit", { hit: H1 });
+    held[0]!.frame("done", run(id, "why", { status: "done", hits: [H1] }));
+    held[0]!.end();
+    await flush();
+
+    act(() => latest?.revise(id, "why replication"));
+    await flush();
+    expect(held).toHaveLength(2);
+    expect(latest?.runs.find((r) => r.id === id)?.hits).toEqual([H1]);
+    held[1]!.frame("begin", run(id, "why replication"));
+    await flush();
+    expect(latest?.runs.find((r) => r.id === id)?.hits, "begin wiped the marks").toEqual([H1]);
+    held[1]!.frame("hit", { hit: H2 });
+    await flush();
+    expect(latest?.runs.find((r) => r.id === id)?.hits).toEqual([H2]);
+  });
+
+  it("never resurrects a row the reader deleted", async () => {
+    await mount("a-slug");
+    await flush();
+    const held = holdPosts();
+    let id = "";
+    act(() => {
+      id = latest?.ask("why", "quick") ?? "";
+    });
+    await flush();
+    act(() => latest?.revise(id, "why replication"));
+    act(() => latest?.remove(id));
+    held[0]!.frame("begin", run(id, "why"));
+    await flush();
+    // The queued revision went with the row.
+    expect(held).toHaveLength(1);
+    act(() => latest?.revise(id, "why replication fails"));
+    await flush();
+    expect(held).toHaveLength(1);
+    expect(latest?.runs).toEqual([]);
   });
 });

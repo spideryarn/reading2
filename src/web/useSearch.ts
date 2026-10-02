@@ -113,6 +113,17 @@ export interface SearchApi {
   /** The same criterion again, and the same kind — for a run whose model call failed. */
   retry(id: string): void;
   /**
+   * **Re-ask a quick row with new words, in place** — search-as-you-type
+   * (plan 261002h). Same id, same colour, same place in the list; the server
+   * resets it under a new attempt (`revises: true`, src/searches.ts § withRun).
+   *
+   * One request at a time per row: while the previous request has not said
+   * `begin`, this only records the words (the latest wins); once it has, the
+   * previous fetch is aborted and the revision sent. A row the reader deleted
+   * is never revised back into existence.
+   */
+  revise(id: string, criterion: string): void;
+  /**
    * The requests this tab has out, by the id the **server** is using — which
    * `begin` can change, see `send`. A `pending` row loaded by the opening GET
    * is not here: it may belong to another process, or to one that died, and
@@ -218,6 +229,31 @@ export function useSearch(
   const deleted = useRef(new Set<string>());
 
   /**
+   * **The request each row has out, by the server's id** — the lane a revision
+   * waits in (plan 261002h, Sol F3/F4).
+   *
+   * The server's attempt fence orders *finishes*, not *begins*: two revisions
+   * sent back to back can begin in either order, and the one that begins last
+   * becomes the row's answer. So a row has one request at a time. A revision
+   * asked before the current request's `begin` is parked in `queued` (the
+   * latest words win) and sent from that `begin`; a revision asked after it
+   * marks the current request `superseded` and aborts its fetch.
+   *
+   * `superseded` is the client's own fence: every frame, rename, failure and
+   * clean-up of a send checks it first, so an old stream can say what it likes
+   * and none of it reaches the row, `?runs=` or the error line. An abort is
+   * therefore never an error row.
+   */
+  const lanes = useRef(
+    new Map<
+      string,
+      { superseded: boolean; abort: AbortController; begun: boolean; queued: string | null }
+    >(),
+  );
+  /** `revise`, for `send` to call from a `begin` without a dependency cycle. */
+  const reviseRef = useRef<(id: string, criterion: string) => void>(() => {});
+
+  /**
    * Colours this tab has chosen, by run id — the reader's word on the subject.
    *
    * It exists for one race, and the race is easy to hit because a meaning
@@ -266,9 +302,11 @@ export function useSearch(
     const picks = chosen.current;
     const chains = patching.current;
     const flying = inFlight.current;
+    const queues = lanes.current;
     return () => {
       if (currentArticle.current === articleToken) currentArticle.current = null;
       gone.clear();
+      queues.clear();
       picks.clear();
       chains.clear();
       if (flying.size > 0) {
@@ -446,18 +484,59 @@ export function useSearch(
    * ends without `done` is reported as a failure.
    */
   const send = useCallback(
-    (id: string, criterion: string, kind: SearchKind, createdAt: string) => {
+    (
+      id: string,
+      criterion: string,
+      kind: SearchKind,
+      createdAt: string,
+      { revises = false }: { revises?: boolean } = {},
+    ) => {
       // Drop whatever the previous attempt left behind, so a retry shows a
       // spinner rather than the old error with a spinner under it. `kind` on
       // every row this function builds — this one, and the error row below —
       // because the panel labels a pending quick run before the server has
       // said anything about it.
       const pending: SearchRun = { id, criterion, kind, createdAt, status: "pending", hits: [] };
-      put(pending);
+      if (revises) {
+        /* **A revision keeps the previous answer's hits on screen** (Opus, plan
+           261002h) until its own first hit arrives — otherwise every pause
+           would wipe every mark in the article and paint them back a second
+           later. The answer's other fields go: it is a new question now. */
+        setRuns((prev) =>
+          prev.some((r) => r.id === id)
+            ? prev.map((r) => {
+                if (r.id !== id) return r;
+                const { model: _m, error: _e, ...rest } = r;
+                return { ...rest, criterion, status: "pending" as const };
+              })
+            : [...prev, pending],
+        );
+      } else {
+        put(pending);
+        // Searching again un-deletes: the reader is plainly no longer finished
+        // with it, whatever they clicked a moment ago. A revision does not —
+        // a typing session never brings back a row the reader deleted.
+        deleted.current.delete(id);
+      }
       setError(null);
-      // Searching again un-deletes: the reader is plainly no longer finished
-      // with it, whatever they clicked a moment ago.
-      deleted.current.delete(id);
+
+      /* This row's lane — see `lanes`. Any request it already had out is
+         superseded; `revise` only gets here once that request has begun. */
+      const me = {
+        superseded: false,
+        abort: new AbortController(),
+        begun: false,
+        queued: null as string | null,
+      };
+      const before = lanes.current.get(id);
+      if (before) {
+        before.superseded = true;
+        before.abort.abort();
+      }
+      lanes.current.set(id, me);
+      /* Has this send's first hit arrived? Until it has, a revision's row
+         still shows the previous answer's hits; the first one replaces them. */
+      let fresh = !revises;
 
       /* The id the *server* is using. Normally the one we minted; see the
          module docstring on why `beginRun` can reset it instead. Everything
@@ -493,6 +572,10 @@ export function useSearch(
         const stale = liveId;
         setRuns((prev) => prev.filter((r) => r.id !== stale));
         liveId = to;
+        if (lanes.current.get(stale) === me) {
+          lanes.current.delete(stale);
+          lanes.current.set(to, me);
+        }
         const flight = inFlight.current.get(stale);
         if (flight?.owner === owner) {
           inFlight.current.delete(stale);
@@ -513,9 +596,12 @@ export function useSearch(
           const r = await apiFetch(`/api/search/${encodeURIComponent(slug)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id, criterion, kind }),
+            body: JSON.stringify(
+              revises ? { id, criterion, kind, revises: true } : { id, criterion, kind },
+            ),
+            signal: me.abort.signal,
           });
-          if (!belongsHere()) return;
+          if (!belongsHere() || me.superseded) return;
           /* A failure before the stream opens is ordinary JSON — the server
              validates before it writes a header. A failure after it opens is
              the stream simply ending, handled below. */
@@ -526,7 +612,7 @@ export function useSearch(
              stopped without ending into the failure it already shows for a
              stream that ended, rather than a spinner nothing can clear. */
           for await (const event of readEvents(r.body, { stallMs: STREAM_STALL_MS })) {
-            if (!belongsHere()) return;
+            if (!belongsHere() || me.superseded) return;
             // Computed once per frame, before acting on it: a delete can land
             // between two frames of the same stream, and every branch below
             // has to see the same answer to "is this gone".
@@ -543,14 +629,45 @@ export function useSearch(
                  effect worth avoiding. */
               if (begun.sourceHash !== undefined) setFingerprint({ hash: begun.sourceHash });
               if (begun.id !== liveId) follow(begun.id);
-              if (!gone) put(begun);
+              me.begun = true;
+              if (!gone) {
+                if (fresh) put(begun);
+                else {
+                  // The revision's begin: everything but the hits, which stay
+                  // until this send's first one arrives.
+                  const kept = chosen.current.has(begun.id)
+                    ? withChoice(begun, chosen.current.get(begun.id))
+                    : begun;
+                  setRuns((prev) =>
+                    prev.some((r) => r.id === kept.id)
+                      ? prev.map((r) => (r.id === kept.id ? { ...kept, hits: r.hits } : r))
+                      : [...prev, kept],
+                  );
+                }
+              }
+              /* A revision asked while this request was on its way: send it now,
+                 which supersedes this one (Sol F3). The latest words only. */
+              if (me.queued !== null) {
+                const words = me.queued;
+                me.queued = null;
+                if (!deleted.current.has(liveId)) {
+                  reviseRef.current(liveId, words);
+                  return;
+                }
+                /* Deleted meanwhile: no revision, and this stream is read to
+                   its end so `done` can re-send the DELETE, as below. */
+              }
               continue;
             }
             if (event.name === "hit") {
               if (!gone) {
                 const { hit } = event.data as { hit: SearchHit };
+                const first = !fresh;
+                fresh = true;
                 setRuns((prev) =>
-                  prev.map((r) => (r.id === liveId ? { ...r, hits: [...r.hits, hit] } : r)),
+                  prev.map((r) =>
+                    r.id === liveId ? { ...r, hits: first ? [hit] : [...r.hits, hit] } : r,
+                  ),
                 );
               }
               continue;
@@ -582,18 +699,47 @@ export function useSearch(
             throw new ReaderFacingError("The search stopped arriving. Try again.");
           }
         } catch (e) {
-          if (!belongsHere()) return;
+          if (!belongsHere() || me.superseded) return;
           if (deleted.current.has(liveId)) return;
           const message = describeFetchFailure(e as Error);
           setError(message);
           put({ id: liveId, criterion, kind, createdAt, status: "error", hits: [], error: message });
         } finally {
-          land();
+          if (!me.superseded) {
+            land();
+            if (lanes.current.get(liveId) === me) lanes.current.delete(liveId);
+            /* Ended before `begin` — a refused POST, a dropped connection — with
+               a revision waiting: send it. The server mints under this id if it
+               never stored the row, so the session keeps its one row. */
+            if (me.queued !== null && belongsHere() && !deleted.current.has(liveId)) {
+              const words = me.queued;
+              me.queued = null;
+              reviseRef.current(liveId, words);
+            }
+          }
         }
       })();
     },
     [slug, put, forget, flown, recolour, articleToken],
   );
+
+  const revise = useCallback(
+    (id: string, criterion: string) => {
+      const words = criterion.trim();
+      if (words === "" || deleted.current.has(id)) return;
+      const lane = lanes.current.get(id);
+      if (lane && !lane.begun) {
+        /* One request at a time: park the words, latest wins, and show them on
+           the row now so the list follows the box. */
+        lane.queued = words;
+        setRuns((prev) => prev.map((r) => (r.id === id ? { ...r, criterion: words } : r)));
+        return;
+      }
+      send(id, words, "quick", new Date().toISOString(), { revises: true });
+    },
+    [send],
+  );
+  reviseRef.current = revise;
 
   const ask = useCallback(
     (criterion: string, kind: SearchKind) => {
@@ -666,6 +812,7 @@ export function useSearch(
     loadError,
     ask,
     retry,
+    revise,
     running,
     isRunning,
     remove,

@@ -140,9 +140,32 @@ import { useSlow } from "./useSlow.js";
  * nobody asked.
  * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4.
  */
+/**
+ * **Quick search as you type** — what the box tells the typing session
+ * (`useTypingSession` in src/web/modes/search/SearchMode.tsx, the rules in
+ * src/web/quick-session.ts). Only with *quick* chosen; words and meaning never
+ * call these.
+ */
+export interface TypingControls {
+  /** The reader changed the box. */
+  edit(text: string): void;
+  /** Enter or *find*: flush changed words into the row, and end the session. */
+  flush(text: string): void;
+  /** ↺, or anything else that starts the next words afresh. */
+  end(): void;
+  blur(): void;
+  focus(): void;
+}
+
 export type SearchAccess =
   | {
       kind: "owner";
+      /**
+       * Search-as-you-type for *quick* (plan 261002h). Absent, quick asks on
+       * Enter and *find* only, as it did before — which is what a test that
+       * mounts the panel on its own gets.
+       */
+      typing?: TypingControls;
       /** False until the first fetch has answered, either way — `SearchApi.loaded`. */
       loaded: boolean;
       /**
@@ -274,6 +297,9 @@ export function SearchPanel({
 
   /** Put a saved question back in the box, ready to be edited into the next one. */
   function reuse(criterion: string) {
+    // The words put back are the start of the next search, not a revision of
+    // the one being typed.
+    own?.typing?.end();
     setDraft(criterion);
     /* Focus, because the only reason to press ↺ is to change the words. Without
        it the text appears somewhere the reader is not, and they have to click
@@ -324,6 +350,7 @@ export function SearchPanel({
           running={running}
           loaded={loaded}
           onAsk={own.onAsk}
+          typing={own.typing}
         />
       )}
 
@@ -471,8 +498,13 @@ const Box = forwardRef<
      */
     loaded: boolean;
     onAsk(criterion: string, kind: SearchKind): void;
+    /** Search-as-you-type, for quick only — see `TypingControls`. */
+    typing: TypingControls | undefined;
   }
->(function Box({ matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk }, ref) {
+>(function Box(
+  { matcher, onMatcher, find, onFind, draft, onDraft, busy, running, loaded, onAsk, typing },
+  ref,
+) {
   /* The parent needs this to focus the box from ↺, and the input needs it for
      the focus-on-mount below and for `switchTo`. `useImperativeHandle` would
      hand back a narrowed object; there is nothing to narrow, so the ref is
@@ -497,10 +529,16 @@ const Box = forwardRef<
      repeat of one still running — same words, same kind — is refused. See
      `running` in SearchPanel. */
   const asking = asksTheServer(matcher) ? matcher : null;
-  const repeat = asking !== null && running.has(runningKey(draft, asking));
+  /* Quick, as you type: the session owns the asking, and Enter or *find*
+     flushes the words into its row and ends it — **even when those words are
+     already running** (Sol F5), which is exactly the state a pause leaves. */
+  const session = matcher === "quick" ? typing : undefined;
+  const repeat = asking !== null && session === undefined && running.has(runningKey(draft, asking));
   const ready = asking !== null && loaded && draft.trim().length > 0 && !repeat;
   const ask = () => {
-    if (ready && asking !== null) onAsk(draft, asking);
+    if (!ready || asking === null) return;
+    if (session) session.flush(draft);
+    else onAsk(draft, asking);
   };
 
   /**
@@ -556,8 +594,13 @@ const Box = forwardRef<
           }
           onChange={(e) => {
             if (matcher === "words") onFind(e.target.value || null);
-            else setDraft(e.target.value);
+            else {
+              setDraft(e.target.value);
+              session?.edit(e.target.value);
+            }
           }}
+          onFocus={() => session?.focus()}
+          onBlur={() => session?.blur()}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -580,7 +623,10 @@ const Box = forwardRef<
                  showing, and a key that silently unticked them would undo work
                  the reader can see they did. */
               if (matcher === "words") onFind(null);
-              else setDraft("");
+              else {
+                setDraft("");
+                session?.edit("");
+              }
             }
           }}
         />

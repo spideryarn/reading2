@@ -283,3 +283,18 @@ SQL). The route validates `revises` as a boolean (400 otherwise), passes `sse(re
 attempt as an error through the fence. `searching` is now a `Map` from key to a per-request symbol,
 and a request releases the key only if it still holds it; `liveRuns` is exported for the test that
 proves it (watched red with the old unconditional delete).
+
+**Stage 2 (panel search-as-you-type), landed.** The rules are `stepQuickSession` in
+`src/web/quick-session.ts` (pure; `tests/quick-session.test.ts`); the timers around it are
+`useTypingSession` in `SearchMode.tsx`, and the box reaches it through an optional
+`typing: TypingControls` on the owner arm of `SearchAccess` (absent, quick asks on Enter/*find*
+only — which is what tests that mount the panel alone get). Two deviations from the letter of the
+rules: Enter/*find* still wait for `loaded` and are dropped before it, as *find* always was (only a
+pause is carried); and *flesh out* on **any** row ends the session, not only on the session's own
+row, because the panel's `onAsk` does not say which row asked. `useSearch.revise(id, words)` keeps
+one lane per row (`lanes`): a revision before the current request's `begin` is parked (latest words
+win) and sent from that `begin`; after it, the old request is marked `superseded`, its fetch aborted,
+and every frame, rename, failure and clean-up of a superseded send is dropped. A revision keeps the
+row's previous hits until its own first hit. A queued revision is still sent if the request it
+waited on failed before `begin` (the server then mints under the same id). Tested through the real
+band in `tests/search-as-you-type.test.tsx` and the hook in `tests/use-search.test.ts`.
