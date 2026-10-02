@@ -207,8 +207,10 @@ export type {
  * `debate/3`, 2026-09-29: each row also says how much the passage `bears` on its target — `directly`, `partly` or `loosely` — so a reader can order the list by relevance (SPIDERYARN-READING2-5P; docs/plans/260929h-debate-mode-clearer-sources-and-orders.md, stage 2). The stage also asked for the work's `title`, `authors` and `year`, checked against the page's extract, and dropped them before shipping: measured, they verified on 1 row of 11, because the search engine's extract is a passage from the middle of the page and the page's head is almost never in it (the plan's § The measurement, as it runs).
  *
  * `debate/4`, 2026-09-30: a third, search-free call reads the kept rows and stores the themes they share and the key sources as `synthesis` (SPIDERYARN-READING2-6M; docs/plans/260930j-debate-themes-and-key-sources.md). The two passes' prompts are unchanged, so a row means what it meant under `debate/3`.
+ *
+ * `debate/5`, 2026-10-02: pass A looks for the work that **cites** the article and says something about it, scholarly papers included, and searches by its title; its witness must contain the title or address in full; and both passes are told to copy an extract's own mistakes (a split word, a stray space, `*`) rather than tidy them. Greg asked for who has cited a piece, for and against (SPIDERYARN-READING2-9D); measured on the old prompt, the right replies were found and then lost to exactly those two checks. No check in code changed. docs/plans/261002i-debate-leads-with-who-has-cited-this-article.md.
  */
-export const PROMPT_VERSION = "debate/4";
+export const PROMPT_VERSION = "debate/5";
 
 /* ------------------------------------------------------------ the four caps --
    **Their scope is stated because it is otherwise ambiguous** (Sol's F22): one
@@ -1124,7 +1126,12 @@ Every quotation you give is COPIED, character for character, out of the text the
 search returned to you. We look each one up in that text. A quotation we cannot
 find drops the whole row — not the quote, the row — and retyping a phrase from
 memory is the commonest way that happens. If the extract you were shown does not
-contain a sentence worth quoting, leave the page out.`;
+contain a sentence worth quoting, leave the page out.
+
+Copy the extract's own mistakes too. Text taken from a PDF or a web page often
+has a word split in two ("argu ing"), a space after a quotation mark, or
+formatting marks such as *asterisks*. Keep them exactly as they appear: a
+quotation you have tidied up is one we cannot find.`;
 
 const READING = `"relation", "lean", "applies", "limits" and "bears" are YOUR READING of the
 passage you quoted, and are shown to the reader as such.
@@ -1172,9 +1179,23 @@ other. If you cannot tell what a page is doing, say so.`;
  * Stage 0's finding said to the model in the model's own terms, and it is what
  * makes an empty answer feel like the right answer rather than a failure.
  */
-export const DIRECT_SYSTEM = `You are looking for pages on the open web that RESPOND TO one specific article:
-reviews of it, replies to it, critiques of it, corrections of it, or later posts
-by its own author revisiting it.
+export const DIRECT_SYSTEM = `You are looking for what other people have written ABOUT one specific article:
+work that cites it and says something about it — to build on it, test it,
+dispute it or qualify it — as well as reviews of it, replies to it, critiques of
+it, corrections of it, or later posts by its own author revisiting it.
+
+The reader most wants to know who has engaged with this piece, and which way:
+who disputes it and who supports it. Scholarly work counts as much as anything
+else — papers, preprints, published comments and replies, theses, book
+chapters — and so does a careful blog post. A page that cites it only in a
+list, saying nothing about it, does not: there is nothing to quote.
+
+WHERE TO LOOK
+
+Work that cites an article names it by its title, so search for that: the exact
+title in quotes; the title with "reply", "comment", "response" or "critique";
+the authors' surnames with the year. A search for the article's subject finds
+pages about the subject, which are not what is wanted here.
 
 MOST ARTICLES HAVE NONE, AND AN EMPTY LIST IS THE RIGHT ANSWER
 
@@ -1194,6 +1215,17 @@ does so, copied from that page, in "articleReferenceQuote". A page that says onl
 "a recent essay" does not qualify. Neither does a page on the same subject by
 somebody who has plainly never read this one.
 
+Those words must CONTAIN THE TITLE, or the address, in full. "The paper by
+Smith [1]" or "Smith and Jones (2018)" does not name it, even on a page that is
+plainly about it, and the row is thrown away. Look in the text you were shown
+for a place that gives the title: a headline that repeats it ("<the title>: a
+reply"), a sentence that cites it in full, or a reference-list entry. Quote
+that. If the text you were shown has no such place, leave the page out, however
+sure you are that it responds to this article.
+
+"sourceQuote" is a different passage: the words in which the page says what it
+makes of the article.
+
 ${QUOTING}
 
 ${RESTRAINT}
@@ -1206,8 +1238,10 @@ Here this row's target is THE ARTICLE ITSELF — the piece described above — s
 "relation" and "lean" are both about that article. Not the passage's tone, and
 not its stance toward some other subject the passage is also about.
 
-Prefer named authors and established venues where you have the choice. No
-ranking by prominence is applied to what you return, and the reader is told so.
+Prefer published work, named authors and established venues where you have the
+choice, and work that takes a position on the article over work that only
+mentions it. No ranking by prominence is applied to what you return, and the
+reader is told so.
 
 ${plainWords("explain")}
 
@@ -1315,8 +1349,8 @@ export function directPrompt(meta: Meta | null, tree: Tree): string {
   ].filter(Boolean);
   return `${lines.join("\n")}
 
-Find pages that respond to this article. Remember that an empty list is the
-usual and honest answer.`;
+Find work that cites this article and says something about it, or responds to
+it. Remember that an empty list is the usual and honest answer.`;
 }
 
 /** What pass B is asked, under the article itself. */
@@ -1716,7 +1750,10 @@ export function admissibleSources(
   articleUrl: string | null,
 ): Map<string, SearchEvidence> {
   const cited = new Map<string, SearchEvidence>();
-  collectSearchEvidence(annotations, cited);
+  /* Every extract of a page, not the first: the model read them all, and the
+     checks run once the answer is complete (openrouter-stream.ts §
+     `extracts: "all"`; plan 261002i). */
+  collectSearchEvidence(annotations, cited, undefined, { extracts: "all" });
   const admissible = new Map<string, SearchEvidence>();
   for (const [url, evidence] of cited) {
     if (articleUrl && sameTarget(url, articleUrl)) continue;

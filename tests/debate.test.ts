@@ -43,6 +43,7 @@ import {
   MAX_DIRECT_ROWS,
   MIN_QUOTE_CHARS,
   MIN_QUOTE_WORDS,
+  admissibleSources,
   namesArticle,
   PROMPT_VERSION,
   blockTextById,
@@ -158,6 +159,60 @@ const groupInput = { admissible, article: ARTICLE, blockText };
 /* One input for both readers since 2026-09-06: group one shingles the article's
    blocks against a page's extract, so it needs them too. */
 const claimInput = groupInput;
+
+/* --------------------------------------------- one page, several extracts -- */
+
+/**
+ * **The search hands back one page several times, with a different extract
+ * each time** — and the model reads all of them. Measured on 2026-10-02 over 48
+ * recorded runs (plan 261002i § Measured): 75 of 565 returned pages came back
+ * with more than one distinct extract, and of the 76 quotations not found in a
+ * page's first extract, 33 were in a later extract of the same page. Each was
+ * a true quotation refused because only the first extract was kept. The row
+ * that showed it was a published reply whose "Citation: …" line, the one
+ * place giving the article's title, was in the second extract.
+ */
+describe("a page the search returned twice, with two different extracts", () => {
+  const REPLY = "https://journal.example/replies/starter-week-3";
+  const annotation = (content: string) => ({
+    type: "url_citation" as const,
+    url_citation: { url: REPLY, title: "A reply", content },
+  });
+  const twice = admissibleSources(
+    [
+      annotation("I thank the author for these notes, but a young starter needs warmer water, not more feeds."),
+      annotation("Citation: Notes on my sourdough starter, week 3: a reply. Journal of Baking 4: e215."),
+    ],
+    ARTICLE_URL,
+  );
+
+  it("checks a quotation against every extract of that page, not only the first", () => {
+    const group = readDirectGroup(
+      [
+        {
+          url: REPLY,
+          sourceQuote: "a young starter needs warmer water, not more feeds",
+          articleReferenceQuote: "Citation: Notes on my sourdough starter, week 3: a reply.",
+          relation: "disputes",
+          lean: "leans-against",
+          applies: "It says the fix is warmth rather than feeding.",
+        },
+      ],
+      { admissible: twice, article: ARTICLE, blockText },
+      2,
+    );
+    expect(group.counts.lost.directnessUnverified).toBe(0);
+    expect(group.counts.lost.unverifiedSource).toBe(0);
+    expect(group.rows.map((r) => r.url)).toEqual([REPLY]);
+  });
+
+  /* Joining two extracts must not let a quotation run from the end of one into
+     the start of the next: those words are next to each other only in our
+     buffer, never on the page. */
+  it("does not find a quotation stitched across the two extracts", () => {
+    expect(locate(twice.get(REPLY)?.excerpt ?? "", "not more feeds. Citation: Notes on my sourdough")).toBeNull();
+  });
+});
 
 /* ------------------------------------------------------ the sourdough fixture -- */
 
@@ -1179,13 +1234,28 @@ describe("what the prompts insist on", () => {
       expect(prompt).toMatch(/UNTRUSTED DATA/);
     }
   });
+
+  /**
+   * **The two instructions `debate/5` added, because each was measured costing
+   * the right rows** (plan 261002i § Measured): the model offered a witness
+   * without the title ("the article by Ioannidis [1]") and tidied an extract's
+   * split word before quoting it, and the code refused both rows as it should.
+   * The fix is the asking, so the asking is held here.
+   */
+  it("asks pass A for citing work, named by its full title, and both passes to keep an extract's mistakes", () => {
+    expect(DIRECT_SYSTEM).toMatch(/cites it and says something about it/);
+    expect(DIRECT_SYSTEM).toMatch(/CONTAIN THE TITLE, or the address, in full/);
+    for (const prompt of [DIRECT_SYSTEM, CLAIMS_SYSTEM]) {
+      expect(prompt).toMatch(/Copy the extract's own mistakes too/);
+    }
+  });
 });
 
 /* ------------------------------------------------------------ the plumbing -- */
 
 describe("the stamp and the failure copy", () => {
   it("has a prompt version that is one constant", () => {
-    expect(PROMPT_VERSION).toBe("debate/4");
+    expect(PROMPT_VERSION).toBe("debate/5");
   });
 
   /**
