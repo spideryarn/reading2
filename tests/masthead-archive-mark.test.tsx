@@ -35,6 +35,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { Masthead } = await import("../src/web/Masthead.js");
+const { useArchive } = await import("../src/web/useArchive.js");
 
 const SLUG = "a-piece";
 const WHEN = "2026-10-01T12:00:00.000Z";
@@ -99,7 +100,6 @@ beforeEach(() => {
   root = createRoot(host);
   history.replaceState(null, "", `/read/${SLUG}`);
   apiFetch.mockReset();
-  onArchived.mockReset();
 });
 
 afterEach(async () => {
@@ -109,21 +109,38 @@ afterEach(async () => {
 
 async function mount(archivedAt: string | null | undefined, owner: boolean) {
   await act(async () => {
-    root.render(
-      createElement(Masthead, {
-        article: article(archivedAt),
-        slug: SLUG,
-        ...(owner ? { onRenamed: () => {}, onArchived } : {}),
-      }),
-    );
+    root.render(createElement(MastheadHarness, { archivedAt, owner }));
   });
 }
 
-/* The answer handed up to ArticlePage, so the metadata page and a remounted
-   masthead read the state after the press rather than the payload's. */
-const onArchived = vi.fn();
+function MastheadHarness({
+  archivedAt,
+  owner,
+}: {
+  archivedAt: string | null | undefined;
+  owner: boolean;
+}) {
+  const archive = useArchive(SLUG, archivedAt, archivedAt !== undefined, false);
+  return createElement(Masthead, {
+    article: article(archivedAt),
+    slug: SLUG,
+    ...(owner ? { onRenamed: () => {}, archive } : {}),
+  });
+}
 
 const button = () => host.querySelector<HTMLButtonElement>('[data-testid="masthead-archive"]');
+
+function ViewSwitchHarness({ showMasthead }: { showMasthead: boolean }) {
+  const archive = useArchive(SLUG, null, true, false);
+  return showMasthead
+    ? createElement(Masthead, {
+        article: article(null),
+        slug: SLUG,
+        onRenamed: () => {},
+        archive,
+      })
+    : createElement("div", { "data-testid": "metadata-view" });
+}
 
 describe("the masthead's Archive button", () => {
   it("offers Archive on the shelf, and shows the server's answer after the press", async () => {
@@ -141,7 +158,6 @@ describe("the masthead's Archive button", () => {
     expect(JSON.parse(init.body as string)).toEqual({ archived: true });
     expect(button()?.dataset.archived).toBe("true");
     expect(button()?.getAttribute("aria-label")).toBe("Archived — put back on the shelf");
-    expect(onArchived).toHaveBeenLastCalledWith(SLUG, WHEN);
   });
 
   it("opens an archived article the right way round, and puts it back", async () => {
@@ -162,6 +178,32 @@ describe("the masthead's Archive button", () => {
 
   it("is not drawn when the payload could not say", async () => {
     await mount(undefined, true);
+    expect(button()).toBeNull();
+  });
+
+  it("keeps an answer that settles while the masthead view is unmounted", async () => {
+    let answer!: (response: Response) => void;
+    apiFetch.mockReturnValueOnce(new Promise<Response>((resolve) => (answer = resolve)));
+    await act(async () => root.render(createElement(ViewSwitchHarness, { showMasthead: true })));
+
+    act(() => button()!.click());
+    await act(async () => root.render(createElement(ViewSwitchHarness, { showMasthead: false })));
+    await act(async () => answer(patched(WHEN)));
+    await act(async () => root.render(createElement(ViewSwitchHarness, { showMasthead: true })));
+
+    expect(button()?.dataset.archived).toBe("true");
+  });
+
+  it("keeps an unknown result hidden across a view switch", async () => {
+    apiFetch.mockRejectedValueOnce(new Error("The response was lost"));
+    apiFetch.mockRejectedValueOnce(new Error("The fresh read failed too"));
+    await act(async () => root.render(createElement(ViewSwitchHarness, { showMasthead: true })));
+
+    await act(async () => button()!.click());
+    expect(button()).toBeNull();
+    await act(async () => root.render(createElement(ViewSwitchHarness, { showMasthead: false })));
+    await act(async () => root.render(createElement(ViewSwitchHarness, { showMasthead: true })));
+
     expect(button()).toBeNull();
   });
 });

@@ -73,7 +73,7 @@ import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { AuthorNames } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
-import { useArchive } from "./useArchive.js";
+import type { ArchiveControl } from "./useArchive.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 
 interface Props {
@@ -108,14 +108,11 @@ interface Props {
    * the same rule Delete follows on the metadata page. 2026-08-28.
    */
   onRenamed?: ((slug: string, title: string) => void) | undefined;
-  /**
-   * The Archive button's latest answer, handed up so the payload the metadata
-   * page and this masthead share carries it — ArticlePage.tsx § `archived`.
-   */
-  onArchived?: ((slug: string, at: string | null) => void) | undefined;
+  /** The owner's one archive controller, kept above the article/metadata view switch. */
+  archive?: ArchiveControl | undefined;
 }
 
-export function Masthead({ article, slug, onRenamed, onArchived }: Props) {
+export function Masthead({ article, slug, onRenamed, archive }: Props) {
   const { meta, tree } = article;
   /* The same rename the shelf offers, from the page you are actually reading —
      Greg, 2026-08-27. See TitleEditor.tsx for why the request lives in a hook
@@ -189,12 +186,9 @@ export function Masthead({ article, slug, onRenamed, onArchived }: Props) {
         slug={slug}
         visibility={onRenamed === undefined ? undefined : article.visibility}
       />
-      {/* Owner-only on the same two guards. No `key`: ArticlePage mounts the
-          owner's page as `OwnedArticle key={slug}`, so another article is a
-          fresh mount and `useArchive`'s state cannot cross to it. */}
-      {onRenamed !== undefined && article.archivedAt !== undefined ? (
-        <ArchiveMark slug={slug} archivedAt={article.archivedAt} onArchived={onArchived} />
-      ) : null}
+      {/* Owner-only: the controller is mounted by OwnedArticle and is absent
+          from the visitor arm altogether. */}
+      {onRenamed !== undefined && archive !== undefined ? <ArchiveMark archive={archive} /> : null}
     </>
   );
 
@@ -852,8 +846,9 @@ function SharingMark({
  * The same act as the Metadata page's two Archive buttons, off the same hook —
  * `useArchive`, which owns the rules: the server's answer rather than the
  * boolean we sent, a fresh read after a failure, and no button while we do not
- * know which way round the article is. Here the starting answer comes on the
- * article itself (`Article.archivedAt`), so `answered` is always true.
+ * know which way round the article is. The controller starts from
+ * `Article.archivedAt` and lives above both article views, so it also outlives
+ * this masthead.
  *
  * **Nothing navigates**, the Metadata buttons' rule: an archived article stays
  * readable by its link, so the honest thing for this page to show afterwards is
@@ -865,16 +860,7 @@ function SharingMark({
  * which is what `SharingMark` beside it shows.
  * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
  */
-function ArchiveMark({
-  slug,
-  archivedAt,
-  onArchived,
-}: {
-  slug: string;
-  archivedAt: string | null;
-  onArchived: ((slug: string, at: string | null) => void) | undefined;
-}) {
-  const archive = useArchive(slug, archivedAt, true, false, onArchived);
+function ArchiveMark({ archive }: { archive: ArchiveControl }) {
   const { at, busy, error, set } = archive;
   /* `at` turns `undefined` only when a failed press could not be re-read —
      we no longer know, so the button goes, as it does on the Metadata page. */

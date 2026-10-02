@@ -436,7 +436,7 @@ export function Metadata({
   article,
   onRenamed,
   onVisibility,
-  onArchived,
+  archive: sharedArchive,
 }: {
   slug: string;
   article: Article;
@@ -457,12 +457,8 @@ export function Metadata({
    * is one of the values.
    */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
-  /**
-   * Archived or not, as this page last heard — handed up for `onVisibility`'s
-   * reason, since the masthead has an Archive button too (plan 261002a).
-   * Optional so the tests that mount this page alone need not pass one.
-   */
-  onArchived?: ((slug: string, at: string | null) => void) | undefined;
+  /** The owner's controller. Optional only for focused tests that mount this page alone. */
+  archive?: ArchiveControl | undefined;
 }) {
   const { meta, tree, arc } = article;
   const stats = useMemo(() => articleStats(article), [article]);
@@ -682,16 +678,17 @@ export function Metadata({
    * One derivation rather than the same two terms written out at each site.
    */
   const hasShelfRow = provenance !== null && !showingFixture;
-  /* One archive state for the two buttons that change it — `useArchive`. */
-  const archive = useArchive(
+  /* A local controller for focused mounts; the app hands in OwnedArticle's. */
+  const metadataArchive = useArchive(
     slug,
     provenance?.archivedAt,
     provenance !== null,
     Boolean(provenanceError),
-    /* Handed up so the masthead one click away agrees; never from the
-       fixture, which has no row and no masthead button. */
-    showingFixture ? undefined : onArchived,
   );
+  /* In the app, one controller survives the switch between Reader and
+     Metadata. The local controller keeps this page independently mountable in
+     its focused tests. */
+  const archive = sharedArchive ?? metadataArchive;
   /* The byline leaves this line when the Authors section below says it one name
      at a time — the same names twice on one screen is noise (plan 260929d). */
   const facts = [meta.authors ? undefined : meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];

@@ -9,7 +9,7 @@
  * that missed one would offer Archive over an archived article.
  * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
  */
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ArticleMetadata } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -56,11 +56,10 @@ import { apiFetch, readJson } from "./lib/api.js";
  * PATCH would 404, so the section says so instead of offering a button whose
  * only outcome is an error. `showingFixture` at the call site.
  *
- * Nothing here needs a `key`: App.tsx already mounts this whole page as
- * `<Metadata key={slug}>`, so switching article remounts everything below it
- * and none of this state can cross from one article to another. An inner key
- * was written first and removed as redundant when a review pointed at the outer
- * one.
+ * Nothing here needs a `key`: `ArticlePage` mounts `OwnedArticle key={slug}`,
+ * and the hook lives there so it survives the article/metadata view switch but
+ * cannot cross into another article. Focused Metadata tests mount their own
+ * local controller; the production page receives this one.
  */
 export type ArchiveControl = {
   /** An ISO date, `null` for *on the shelf*, `undefined` for *we do not know*. */
@@ -92,7 +91,7 @@ function archiveAtFromPatch(value: unknown, slug: string): string | null | undef
 }
 
 /**
- * **The page's one answer to "is this archived", and the one way to change it.**
+ * **The owner's one answer to "is this archived", and the one way to change it.**
  *
  * Lifted out of `ArchiveArticle` on 2026-09-30, when Archive got a second
  * button near the top of the page (`TopActions`, SPIDERYARN-READING2-6Z). Two
@@ -115,13 +114,6 @@ export function useArchive(
   /** Distinguishes an unanswered request from an answered body missing its required field. */
   answered: boolean,
   failed: boolean,
-  /**
-   * Told every known answer, so the article payload the reading view and the
-   * metadata page share can carry it — ArticlePage.tsx § `archived`. Never
-   * told *we do not know*: an unknown leaves the last known answer standing,
-   * and the button that lost track hides itself.
-   */
-  onAnswer?: (slug: string, at: string | null) => void,
 ): ArchiveControl {
   /* What the reader has just done, if anything — `null` means they have not
      touched it, and the server's answer stands. A sentinel object rather than
@@ -197,14 +189,6 @@ export function useArchive(
       setBusy(false);
     }
   }
-
-  /* Latest callback in a ref, so a parent's new function identity is not an
-     answer to report again. */
-  const tell = useRef(onAnswer);
-  tell.current = onAnswer;
-  useEffect(() => {
-    if (at !== undefined) tell.current?.(slug, at);
-  }, [slug, at]);
 
   return {
     at,

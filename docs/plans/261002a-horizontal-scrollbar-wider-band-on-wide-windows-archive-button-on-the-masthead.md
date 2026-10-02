@@ -191,6 +191,19 @@ and the visitor boundary passed.
    was always comparing the window with the scrollbar against a page 15px narrower; this change
    did not alter that relationship, only the JS one, which now matches the page.
 
+## GPT Sol's code review
+
+[261002a-code-review-sol.md](261002a-code-review-sol.md) — *approve after the fixed P1*. Reporting
+answers up from each button lost them when a press settled after its button had unmounted (a red
+test showed it), so Sol did what it had recommended in the plan review: **one `useArchive` in
+`OwnedArticle`**, above the view switch, handed to the masthead and to Metadata. No identity change
+to `Article` on a press, so no Reader rebuild.
+
+**What that gives up, accepted:** in the app the Metadata page's Archive buttons now start from
+the payload's `archivedAt` (read when the article was opened) rather than the metadata endpoint's
+own fresh read. They disagree only if the article was archived elsewhere — another tab, the shelf
+— since it was opened, and then the press still asks the server and shows its answer.
+
 ## Order
 
 1. The scrollbar: red test, fix, postmortem.

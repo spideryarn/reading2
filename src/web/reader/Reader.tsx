@@ -84,6 +84,7 @@ import type { SelectionAnchor } from "../selection.js";
 import type { CiteSelection, TermSelection } from "../annotate.js";
 import { formsOf } from "../../term-match.js";
 import { horizontalInset, safeAreaInsets } from "../safe-area.js";
+import type { ArchiveControl } from "../useArchive.js";
 import { Spine } from "../Spine.js";
 import { AnnotateDialog } from "../AnnotateDialog.js";
 import { CommentDialog } from "../CommentDialog.js";
@@ -216,7 +217,7 @@ export function Reader({
   article,
   capability,
   onRenamed,
-  onArchived,
+  archive,
 }: {
   slug: string;
   article: Article;
@@ -231,8 +232,8 @@ export function Reader({
    * worse than no button because pressing it is how you find out.
    */
   onRenamed?: ((slug: string, title: string) => void) | undefined;
-  /** Straight through to the masthead's Archive button — Masthead.tsx § `ArchiveMark`. */
-  onArchived?: ((slug: string, at: string | null) => void) | undefined;
+  /** The owner's controller, kept above the article/metadata view switch. */
+  archive?: ArchiveControl | undefined;
 }) {
   useRenderCount("Reader");
   /**
@@ -2516,7 +2517,7 @@ export function Reader({
       {/* Everything constant about the article — see Masthead.tsx for why
           constant is the word that decides it belongs here and not in a
           column. */}
-      <Masthead article={article} slug={slug} onRenamed={onRenamed} onArchived={onArchived} />
+      <Masthead article={article} slug={slug} onRenamed={onRenamed} archive={archive} />
       {/* The statement, where a visitor's eye already is on arrival. The
           *persistent* half of it is the chip in the bar below, which is sticky;
           this is the sentence and the ask, which belong with the title. Not
