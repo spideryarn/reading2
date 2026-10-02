@@ -619,7 +619,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
      finished. Every render: `observe` only sends when there is something to. */
   const highPowerSlug = job?.slug ?? completion?.slug ?? null;
   const highPowerAlive = job ? job.status === "queued" || job.status === "running" : completion === null;
-  const highPowerLate = mayHaveStartedOnStandard(job?.steps) || (job === null && completion !== null);
+  const highPowerLate = mayHaveStartedOnStandard(job?.steps, Boolean(job?.upload)) || (job === null && completion !== null);
   useEffect(() => {
     highPower.observe(highPowerSlug, highPowerAlive, highPowerLate);
   }, [highPower, highPowerSlug, highPowerAlive, highPowerLate]);

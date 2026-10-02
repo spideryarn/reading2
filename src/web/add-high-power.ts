@@ -213,14 +213,22 @@ export class HighPowerIntent {
 
 /**
  * **Whether some of this import may already have run on the standard model**
- * — any step other than `fetch` and `blocks` started. `extract` counts because
- * a PDF's is capable-tier; for a web page that makes the line a *may* it
- * cannot sharpen, and the copy says *may*.
+ * — `structure` or anything after it started, or, for an upload, `extract`
+ * (a PDF's front matter is read on the capable tier). A web page's `extract`
+ * makes no model call, and counting it drew the warning over an import that
+ * the browser check showed ran `structure` on Opus. A PDF fetched from a URL
+ * is not known to be one here; the line it then gets ("later work … uses
+ * it") is still true.
  */
 export function mayHaveStartedOnStandard(
   steps: readonly { name: string; status: string }[] | undefined,
+  upload: boolean,
 ): boolean {
   return (steps ?? []).some(
-    (s) => s.name !== "fetch" && s.name !== "blocks" && s.status !== "pending",
+    (s) =>
+      s.status !== "pending" &&
+      s.name !== "fetch" &&
+      s.name !== "blocks" &&
+      (s.name !== "extract" || upload),
   );
 }

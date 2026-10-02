@@ -138,3 +138,22 @@ each read and kept:
   `/help` no longer says *the whole import*.
 - **P2 — tests.** The page test now uses a job slug different from the URL's, and covers
   StrictMode and a new address.
+
+## Browser check
+
+A Sonnet subagent with Playwright on the box, against a dev server from this worktree, 2026-10-03:
+
+- **It does what it says.** `paulgraham.com/useful.html`, a new article, was ticked while the import
+  was on fetch and extract. The `PUT` went out during `blocks`, about 0.2 s after the page learned the
+  slug and before `structure` started. `high_power_since` was set, and the one `ai_calls` row,
+  `structure`, was answered by `anthropic/claude-opus-5.5`. The main-mode `POST /api/jobs` calls came
+  about 24 s later, after the import finished.
+- **It found one defect, now fixed.** The line *"may already have used the standard model"* appeared
+  over that very import, because `mayHaveStartedOnStandard` counted a web page's `extract`. It now
+  counts `extract` only for an upload (a PDF). A PDF fetched from a URL is not known to be one on
+  the page; it gets *"later work in this import uses it"*, which is still true.
+- At 390 px the box wraps cleanly; left unticked, no `PUT` was sent and the column stayed null.
+- Screenshots: [1280, ticked, running](261002k-shot-a1-running.png) (before the fix to the line),
+  [390, drawn](261002k-shot-b0-drawn.png), [390, running, unticked](261002k-shot-b1-running.png).
+- Two articles already on the local shelf were switched on by the check (it re-added them). Both
+  were set back to null in the local database; nothing remote was touched.

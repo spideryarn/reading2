@@ -305,15 +305,21 @@ describe("HighPowerIntent", () => {
 
 describe("mayHaveStartedOnStandard", () => {
   const step = (name: string, status: string) => ({ name, status });
-  it("is false while only fetch and blocks have moved", () => {
-    expect(mayHaveStartedOnStandard(undefined)).toBe(false);
+  it("is false while a web page has only fetched, extracted and split into blocks", () => {
+    expect(mayHaveStartedOnStandard(undefined, false)).toBe(false);
     expect(
-      mayHaveStartedOnStandard([step("fetch", "done"), step("extract", "pending"), step("structure", "pending")]),
+      mayHaveStartedOnStandard(
+        [step("fetch", "done"), step("extract", "done"), step("blocks", "running"), step("structure", "pending")],
+        false,
+      ),
     ).toBe(false);
   });
-  it("is true once extract (capable-tier for a PDF) or anything later has started", () => {
-    expect(mayHaveStartedOnStandard([step("fetch", "done"), step("extract", "running")])).toBe(true);
-    expect(mayHaveStartedOnStandard([step("blocks", "done"), step("structure", "running")])).toBe(true);
-    expect(mayHaveStartedOnStandard([step("structure", "skipped")])).toBe(true);
+  it("counts an upload's extract, which reads a PDF's front matter on the capable tier", () => {
+    expect(mayHaveStartedOnStandard([step("fetch", "done"), step("extract", "running")], true)).toBe(true);
+    expect(mayHaveStartedOnStandard([step("fetch", "done"), step("extract", "pending")], true)).toBe(false);
+  });
+  it("is true once structure or anything later has started", () => {
+    expect(mayHaveStartedOnStandard([step("blocks", "done"), step("structure", "running")], false)).toBe(true);
+    expect(mayHaveStartedOnStandard([step("structure", "skipped")], false)).toBe(true);
   });
 });
