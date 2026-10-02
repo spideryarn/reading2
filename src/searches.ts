@@ -152,8 +152,8 @@ export function withRun(
      the revised row.
 
      Anything else named by `revises` — a meaning row, an unknown id — falls
-     through to the ordinary rules below: an unknown id mints under that id,
-     a held one mints a new id. Meaning stays pressed and never revises: a
+     through to the mint below, always under a NEW id: a held id is taken,
+     and an unknown one is a deleted row that must stay deleted. Meaning stays pressed and never revises: a
      paid half-minute call is not something to overwrite on a pause. */
   const revised =
     options.revises && wantedId && searchKind === "quick"
@@ -242,9 +242,15 @@ export function withRun(
   }
 
   const taken = new Set(runs.map((r) => r.id));
+  /* **A revision never mints under the id it named** (Sol's C7, code review 1
+     of plan 261002h). A session's first ask goes without `revises`, so a
+     revision naming an absent id means the row was there and has gone —
+     deleted in another tab. Minting under that id would resurrect it; a fresh
+     id lets the stale tab carry on as a new row (the client follows a `begin`
+     that answers under another id) and leaves the delete standing. */
   const run: SearchRun = {
     id:
-      wantedId && isSpideryarnId(wantedId) && !taken.has(wantedId)
+      wantedId && !options.revises && isSpideryarnId(wantedId) && !taken.has(wantedId)
         ? wantedId
         : mintUniqueId(taken),
     criterion,

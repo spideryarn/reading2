@@ -1147,7 +1147,8 @@ export interface SearchStore {
    * **`revises`** (plan 261002h, search-as-you-type): a `wantedId` naming an
    * existing **quick** row, asked as quick, is re-asked in place with the new
    * criterion whatever its status — same id, `createdAt` and colour, a new
-   * attempt. Anything else falls back to the rules above. `withRun` in
+   * attempt. Anything else mints, always under a **new** id — an absent id
+   * is a row deleted elsewhere, and must not be recreated. `withRun` in
    * src/searches.ts decides.
    */
   begin(

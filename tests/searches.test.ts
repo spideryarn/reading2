@@ -363,9 +363,14 @@ describe("withRun — revising a quick search in place (plan 261002h)", () => {
     expect(run.id).not.toBe("spya-k3m9qt");
   });
 
-  it("mints under the wanted id when no row has it, as a first ask does", () => {
-    /* The session's row was deleted in another tab, or never existed: the
-       revision falls back to the ordinary rule rather than failing. */
+  it("never recreates a deleted row: an absent id is minted under a NEW id", () => {
+    /* The session's row was deleted in another tab (Sol's C7, code review 1):
+       a stale tab's next pause names an id that no longer exists, and minting
+       under that id would bring the deleted search back. A fresh id instead —
+       the client already follows a `begin` that answers under another id
+       (useSearch § follow), so the stale tab's session carries on as a new
+       row and the other tab's delete stands. A revision is never a first
+       ask: a session's first ask is sent without `revises`. */
     const { kind, run } = withRun(
       [],
       "new words",
@@ -376,7 +381,7 @@ describe("withRun — revising a quick search in place (plan 261002h)", () => {
       { revises: true },
     );
     expect(kind).toBe("minted");
-    expect(run.id).toBe("spya-k3m9qt");
+    expect(run.id).not.toBe("spya-k3m9qt");
     expect(run.createdAt).toBe(later);
   });
 

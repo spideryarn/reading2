@@ -819,6 +819,32 @@ describe("revising a quick search in place", () => {
     expect(held[1]!.signal?.aborted).toBe(false);
   });
 
+  it("follows a revision the server answered under a new id (its row was deleted in another tab)", async () => {
+    /* Sol's C7: the server never recreates a deleted row under the revised
+       id; it mints a fresh one (src/searches.ts § withRun). The tab carries
+       on under that id, with one row, not two. */
+    await mount("a-slug");
+    await flush();
+    const held = holdPosts();
+    let id = "";
+    act(() => {
+      id = latest?.ask("why", "quick") ?? "";
+    });
+    await flush();
+    held[0]!.frame("begin", run(id, "why"));
+    held[0]!.frame("done", run(id, "why", { status: "done" }));
+    held[0]!.end();
+    await flush();
+    act(() => latest?.revise(id, "why replication"));
+    await flush();
+    held[1]!.frame("begin", run("spya-fresh2", "why replication"));
+    held[1]!.frame("done", run("spya-fresh2", "why replication", { status: "done" }));
+    held[1]!.end();
+    await flush();
+    expect(latest?.runs.map((r) => [r.id, r.criterion])).toEqual([["spya-fresh2", "why replication"]]);
+    expect(latest?.running.size).toBe(0);
+  });
+
   it("drops everything a superseded send says afterwards, and its abort is not an error", async () => {
     await mount("a-slug");
     await flush();

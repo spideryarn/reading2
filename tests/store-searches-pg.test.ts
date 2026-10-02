@@ -221,6 +221,18 @@ describe("the Postgres searches store", () => {
       expect((await pgSearchStore.load(SLUG))[0]?.status).toBe("pending");
     });
 
+    it("never recreates a deleted row: a revision of an absent id mints a new one (Sol C7)", async () => {
+      const { run, attempt } = await pgSearchStore.begin(SLUG, "why replic", "quick", "spya-rundd2");
+      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
+      await pgSearchStore.remove(SLUG, run.id);
+      const again = await pgSearchStore.begin(SLUG, "why replicas", "quick", run.id, undefined, {
+        revises: true,
+      });
+      expect(again.run.id).not.toBe(run.id);
+      const ids = (await pgSearchStore.load(SLUG)).map((r) => r.id);
+      expect(ids).toEqual([again.run.id]);
+    });
+
     it("does not revise a meaning row: the meaning row stands and a new one is minted", async () => {
       const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning", "spya-runmm2");
       await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
