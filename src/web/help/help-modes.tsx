@@ -96,8 +96,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     whenToUse: (
       <p>
         For reading straight through. Open a mode when you hit something you want help with, then
-        press <strong>Plain</strong> to come back. It is the first mode button in the bottom bar,
-        and on a phone the only one that keeps its name, so you can always find your way out.
+        press <strong>Plain</strong> to come back; it closes the Marginalia column too. Pressing the
+        mode you are in a second time also closes it. Plain is the first button in the bottom bar,
+        in a box of its own, and on a phone the only one that keeps its name, so you can always find
+        your way out.
       </p>
     ),
     reading: (
@@ -501,7 +503,13 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           <li>
             <strong>Once made, quotes are outlined in the text in every mode.</strong> A thicker, darker
             outline means the AI judged the line more important or more striking. Search results are
-            filled with colour and quotes are only outlined, so the two never look alike.
+            filled with colour and quotes are only outlined, so the two never look alike. A green strip
+            down the left edge of the spine shows where they are in the whole piece.
+          </li>
+          <li>
+            Rest the pointer on an outlined quote for a moment and a card shows its two scores, why it
+            was chosen, <kbd>‹</kbd> <kbd>›</kbd> to the quote before or after it in the text, and a
+            button to open it in Quotes.
           </li>
           <li>
             Each row carries two numbers: how much of the argument rests on the line, and how memorable
@@ -509,7 +517,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             The <strong>(i)</strong> beside a row says why it was chosen. Press a row to jump to it in
-            the text.
+            the text. <kbd>‹</kbd> <kbd>›</kbd> under the list, or <kbd>←</kbd> <kbd>→</kbd> while
+            reading, step from quote to quote in the list’s order.
           </li>
           <li>
             <strong>in order</strong> (the default) lists them as the article says them;{" "}

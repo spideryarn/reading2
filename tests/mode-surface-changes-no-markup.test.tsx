@@ -1504,6 +1504,7 @@ function mountQuotes(quotes: Quotes | null): ReactNode {
     bar: null,
     onBar: noop,
     onJump: noop,
+    steps: [],
   });
 }
 

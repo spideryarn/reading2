@@ -1,0 +1,7 @@
+You are reviewing a PLAN (read-only; do not edit files) in the Spideryarn repo (this worktree). Plan: docs/plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md. Read it, then check its claims against the code:
+- src/web/reader/Reader.tsx (showBar ~line 1961, the .controls bar ~2628, experimental, bandOpen, fit, jumpTo, sections, geometry)
+- src/web/useColumnContext.ts, src/web/position.ts (sectionDepth, activeSectionIndex), src/web/tree.ts (buildSummaryTree, nodeLabel), src/web/structure.ts and StructurePanel.tsx (how Structure picks the current section and draws rows/tooltips)
+- src/web/scroll.ts (stickyOffset, controlsBar, watchBarVisibility), src/web/styles/shell.css (.controls and the --bar-bottom ladder / guards), src/web/styles/tokens.css, narrow-window.css, layout.ts (barHasContent if it still exists), PublicChrome.tsx
+- docs/project/experimental-features.md
+
+Questions: Is reusing the .controls bar sound? What breaks when an OWNER now gets a .controls bar (band modes side by side, the band/table head offsets, the marginalia head, OnScreenLinksStyle, visitor-only assumptions in comments/CSS/tests, e.g. tests asserting no .controls for owners)? Is the guard change right (specificity, the band-covers case)? Is useColumnContext the right source of "where you are", and is crumbPath via buildSummaryTree right (depth, apparatus, folded sections)? Anything simpler? Rank findings P0/P1/P2 with file:line evidence, and say plainly whether the plan is sound.

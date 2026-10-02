@@ -252,3 +252,25 @@ export function proseFound(active: Found[], quotes: Found[]): Found[] {
   if (extra.length === 0) return quotes;
   return [...extra, ...quotes];
 }
+
+/**
+ * **What the rail's search lanes and a band's "N search matches" count are
+ * about: the open mode's passages, less any quote.**
+ *
+ * Since 2026-10-02 the quotes have a strip of their own down the rail's left
+ * edge, in every mode and in their outline colour (spine-marks.ts §
+ * `quoteRailMarks`; Greg, spya-yd2c47). So a quote in a lane would be drawn
+ * twice — and in `--cat-0`, the first saved search's colour, because every
+ * quote's `slot` is `0` — and counted as a search match. Two modes hand the
+ * rail quotes: Quotes, whose slot *is* the quotes, and Skim, whose stop is a
+ * quote's own `Found` (`resolveSkimStop`). Filtering by `quoteStroke` rather
+ * than by mode catches both and any later one. GPT Sol's plan review, P1-1.
+ *
+ * Returns `active` itself when there is nothing to take out, for the identity
+ * reason `proseFound` gives.
+ */
+export function railFound(active: Found[]): Found[] {
+  if (!active.some((f) => f.quoteStroke !== null)) return active;
+  const kept = active.filter((f) => f.quoteStroke === null);
+  return kept.length === 0 ? NO_FOUND : kept;
+}

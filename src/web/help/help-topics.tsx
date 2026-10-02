@@ -133,8 +133,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
           <li>
             <strong>A mode’s panel</strong> opens between the spine and the article when you choose
-            a mode, such as Glossary, Quotes or Chat. Only one is open at a time;{" "}
-            <strong>Plain</strong> closes it.
+            a mode, such as Glossary, Quotes or Chat. Only one is open at a time; press its button
+            again to close it, or <strong>Plain</strong> to close it and the Marginalia column both.
           </li>
           <li>
             <strong>Marginalia</strong> is a column of notes on the right of the article, which can
@@ -358,9 +358,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             you can read.
           </li>
           <li>
-            <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions and Structure’s
-            smallest sections while that mode is open. Elsewhere they do what your browser normally
-            does.
+            <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes and
+            Structure’s smallest sections while that mode is open. Elsewhere they do what your browser
+            normally does.
           </li>
           <li>
             <kbd>G</kbd> opens the glossary at a term in the paragraph you are on; press it again for

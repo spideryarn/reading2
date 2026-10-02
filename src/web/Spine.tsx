@@ -108,6 +108,7 @@ import {
   bandMatchCounts,
   jumpOriginMark,
   laneOrder,
+  quoteRailMarks,
   readingRuns,
   spineMarks,
   type Row,
@@ -278,6 +279,14 @@ interface Props {
    * Empty for a visitor and with experimental features off, so nothing is drawn.
    */
   reading?: ReadonlyMap<BlockId, ReadLevel> | undefined;
+  /**
+   * The quotes the prose outlines, as each block's brightest alpha —
+   * `quoteAlphaByBlock` in spine-marks.ts. **In every mode**, because the
+   * outlines are: unlike `matches`, this is not something the reader asked for
+   * by opening a band, it is the rail showing what the prose already wears.
+   * Drawn as its own strip, never a lane (spine-marks.ts § `quoteRailMarks`).
+   */
+  quotes?: ReadonlyMap<BlockId, number> | undefined;
   onJump(blockId: string): void;
 }
 
@@ -287,6 +296,7 @@ const READING_LINE = 0.35;
 /** Nothing to draw, and a stable identity so the memos below do not rerun. */
 const NO_MATCHES: Map<BlockId, BlockMatch> = new Map();
 const NO_READING: ReadonlyMap<BlockId, ReadLevel> = new Map();
+const NO_QUOTES: ReadonlyMap<BlockId, number> = new Map();
 
 /**
  * What pressing a band should do: show what it is, or go there.
@@ -497,7 +507,14 @@ export function bandClick(
  */
 export const Spine = memo(SpineInner);
 
-function SpineInner({ outline, layoutKey, matches = NO_MATCHES, reading = NO_READING, onJump }: Props) {
+function SpineInner({
+  outline,
+  layoutKey,
+  matches = NO_MATCHES,
+  reading = NO_READING,
+  quotes = NO_QUOTES,
+  onJump,
+}: Props) {
   useRenderCount("Spine");
   /**
    * Which band's card is open, and what opened it.
@@ -899,6 +916,12 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, reading = NO_REA
     [metrics, jumpOrigin],
   );
 
+  /** The quotes' strip — spine-marks.ts § `quoteRailMarks`. */
+  const quoteStrip = useMemo(
+    () => (metrics && quotes.size > 0 ? quoteRailMarks(metrics.rows, quotes) : []),
+    [metrics, quotes],
+  );
+
   /**
    * How many matches fall inside each hoverable band, by its node id.
    *
@@ -1146,6 +1169,33 @@ function SpineInner({ outline, layoutKey, matches = NO_MATCHES, reading = NO_REA
               } as CSSProperties
             }
           />
+        )}
+
+        {/* **Where the quotes are, in every mode** — Greg, 2026-09-10
+            (spya-yd2c47): *"Perhaps show Quotes in the spine (use the same
+            colour we use for their outline-border)"*. The left 2px, which the
+            10px search gutter never reaches, so a quote takes no lane and is
+            never a "search match" on a band's card (spine-marks.ts §
+            `quoteRailMarks`). After the origin tick, which is full width and
+            would otherwise cover it; before the search marks, which it cannot
+            overlap anyway. `aria-hidden` for the search marks' reason: every
+            strip is a row of the Quotes band already. */}
+        {quoteStrip.length > 0 && (
+          <div className="spine-quotes" aria-hidden="true">
+            {quoteStrip.map((q) => (
+              <div
+                key={q.key}
+                className="spine-quote"
+                style={
+                  {
+                    "--quote-top": pct(q.top),
+                    height: pct(q.height),
+                    "--quote-a": q.alpha,
+                  } as CSSProperties
+                }
+              />
+            ))}
+          </div>
         )}
 
         {/* Where the searches matched — Greg, 2026-08-26. One lane per search

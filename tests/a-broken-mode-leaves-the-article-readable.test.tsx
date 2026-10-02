@@ -858,6 +858,11 @@ describe("a press that met a broken mode cannot be spent later", () => {
 
     /* Pressing the mode already showing the fallback. It must reach the
        controller — otherwise the press is parked behind the fallback. */
+    /* Since 2026-10-02 a press on the mode you are in closes it (261002g), so
+       a press at the fallback is close, then reopen: a fresh press on a fresh
+       mount. The closing press must arm nothing. */
+    await press(MODE_LABEL.ideas);
+    expect(jobPosts(), "the closing press spent").toEqual([]);
     await press(MODE_LABEL.ideas);
     expect(probe.bandThrows, "the fresh press never reset the boundary").toBeGreaterThan(
       afterFirst,
@@ -886,6 +891,11 @@ describe("a press that met a broken mode cannot be spent later", () => {
     trace.length = 0;
 
     probe.throwBand = false;
+    /* Since 2026-10-02 a press on the mode you are in closes it (261002g), so
+       a press at the fallback is close, then reopen: a fresh press on a fresh
+       mount. The closing press must arm nothing. */
+    await press(MODE_LABEL.ideas);
+    expect(jobPosts(), "the closing press spent").toEqual([]);
     await press(MODE_LABEL.ideas);
 
     expect(text(), "Ideas did not come back").not.toContain("[mode-render]");
@@ -1299,6 +1309,11 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
     await press(MODE_LABEL.debate);
     const afterFirst = probe.debateThrows;
 
+    /* Since 2026-10-02 a press on the mode you are in closes it (261002g), so
+       a press at the fallback is close, then reopen: a fresh press on a fresh
+       mount. The closing press must arm nothing. */
+    await press(MODE_LABEL.debate);
+    expect(jobPosts(), "the closing press spent").toEqual([]);
     await press(MODE_LABEL.debate);
     expect(probe.debateThrows, "the fresh press never reset the boundary").toBeGreaterThan(
       afterFirst,
@@ -1326,6 +1341,11 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
     trace.length = 0;
 
     probe.throwDebate = false;
+    /* Since 2026-10-02 a press on the mode you are in closes it (261002g), so
+       a press at the fallback is close, then reopen: a fresh press on a fresh
+       mount. The closing press must arm nothing. */
+    await press(MODE_LABEL.debate);
+    expect(jobPosts(), "the closing press spent").toEqual([]);
     await press(MODE_LABEL.debate);
 
     expect(text(), "Debate did not come back").not.toContain("[mode-render]");

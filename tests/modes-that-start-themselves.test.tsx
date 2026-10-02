@@ -44,6 +44,7 @@ import { act, createElement, StrictMode, useState, type ReactElement } from "rea
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type BandMode, isBandMode } from "../src/modes.js";
+import { modePress } from "../src/web/reader/mode-press.js";
 import type { BlockId, Job } from "../src/types.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
@@ -451,8 +452,12 @@ function Reading({ slug, start }: { slug: string; start: BandMode }): ReactEleme
       slug,
       view: "article" as const,
       mode,
-      onMode: (next) => {
-        if (isBandMode(next)) setMode(next);
+      /* Reader's rule, through the same function (`modePress`): a second
+         press on the bar's button closes the band. */
+      onMode: (next, _sub, toggle = false) => {
+        if (!isBandMode(next)) return;
+        const press = modePress({ next, current: mode, bandBack: false, toggle });
+        setMode(press === "close" ? "plain" : next);
       },
       experimental: EXPERIMENTAL_ON,
     }),
@@ -825,17 +830,23 @@ describe("a press", () => {
     expect(posts).toEqual([{ slug: "constitution", steps: ["sketch"] }]);
   });
 
-  it("runs it when the mode pressed is the one already open", async () => {
+  it("closes the mode already open and spends nothing; a press to reopen runs it", async () => {
     /* A reader who arrived by link, saw the empty state, and pressed the button
-       in the bar rather than the one in the band. Without a fresh nonce per
-       press, nothing at all happens — the mode did not change, so no effect
-       re-runs. */
+       in the bar rather than the one in the band. Until 2026-10-02 that press
+       ran it; since then a second press on the bar's button closes the band
+       (Greg, SPIDERYARN-READING2-96), and must arm nothing on the way out — the
+       closing mount would otherwise claim the token and spend. The press that
+       reopens it is an ordinary press from Plain.
+       docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
     await open("ideas");
     expect(posts).toEqual([]);
 
     await press("Ideas");
     await settle();
+    expect(posts, "the closing press spends nothing").toEqual([]);
 
+    await press("Ideas");
+    await settle();
     expect(posts).toHaveLength(1);
   });
 });
@@ -1009,9 +1020,11 @@ describe("the awkward sequences", () => {
   });
 
   it("asks again when the reader presses again after a failed read", async () => {
-    /* **The reader has to be able to get out of a failed GET**, and pressing
-       the mode they are already in is the only control they have: Ideas, Quotes
-       and Timeline draw no button at all in their error state.
+    /* **The reader has to be able to get out of a failed GET**, and the bar
+       is the only control they have: Ideas, Quotes and Timeline draw no button
+       at all in their error state. Since 2026-10-02 a press on the mode they
+       are in closes it (SPIDERYARN-READING2-96), so the way out is close, then
+       reopen — and the reopening press is the fresh one that re-reads.
        The press re-reads rather than spending — a failed GET means we do not
        know whether there is anything there — and the press is still in hand
        when the answer arrives, so an empty answer runs it.
@@ -1025,6 +1038,9 @@ describe("the awkward sequences", () => {
     const readsBefore = artefactGets("ideas").length;
 
     artefactFails = false;
+    await press("Ideas");
+    await settle();
+    expect(posts, "the closing press spends nothing").toEqual([]);
     await press("Ideas");
     await settle();
 

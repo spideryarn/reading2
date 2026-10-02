@@ -48,8 +48,8 @@
  * agreeing is that both call `markedQuotes` below.
  * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  */
-import { useState, type ReactElement } from "react";
-import { Info, Quote as QuoteIcon, RotateCcw, TriangleAlert } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type ReactElement } from "react";
+import { ChevronLeft, ChevronRight, Info, Quote as QuoteIcon, RotateCcw, TriangleAlert } from "lucide-react";
 import { MAX_QUOTES_TOTAL, type BlockId, type Job, type Quote, type QuoteDrops, type Quotes, type QuoteStroke, type QuoteTier } from "../types.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
@@ -57,14 +57,15 @@ import type { StepFailure } from "./useStepJob.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
-import { Tooltip } from "./Tooltip.js";
+import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { StepTip } from "./StepTip.js";
 import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
-import { applyThreshold, hiddenNote, type ThresholdResult } from "./threshold.js";
+import { applyThreshold, floorToGateStep, hiddenNote, type ThresholdResult } from "./threshold.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job choosing the
@@ -112,6 +113,13 @@ interface Props {
   onBar(bar: number | null): void;
   /** Jump the article to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
+  /**
+   * **What ‹ › step through**: the rows this panel shows, less any whose block
+   * is gone — `useQuoteMarks`' `steppable`, which ← / → use too, so the buttons
+   * and the keys walk one list. From `Reader` because only it has resolved the
+   * marks; the panel never sees the blocks.
+   */
+  steps: readonly Quote[];
 }
 
 /* -------------------------------------------------------------- the scores --
@@ -515,10 +523,10 @@ export function rankQuotes(quotes: Quote[], rank: QuoteRank, bar = QUOTE_BAR_DEF
  * **Extracted on 2026-09-05, when the prose started marking every visible
  * quote.** Until then the panel computed this and the band computed a *piece*
  * of it — enough to notice that the bar had hidden the selected row. Now the
- * marks are this exact list, so the two callers have to be asking one function:
- * a row hidden by the bar with its wash still on the paragraph is precisely the
- * failure src/web/threshold.ts exists to prevent, and it would arrive as two
- * expressions that agreed until one of them was edited.
+ * Quotes' own marks are this exact list, so the panel and its marks have to be
+ * asking one function: a row hidden by the bar with its wash still on the
+ * paragraph is precisely the failure src/web/threshold.ts exists to prevent,
+ * and it would arrive as two expressions that agreed until one was edited.
  */
 export function markedQuotes(
   quotes: readonly Quote[],
@@ -527,6 +535,60 @@ export function markedQuotes(
 ): Quote[] {
   const list = [...quotes];
   return rankQuotes(list, effectiveRank(list, rank), snapToStop(barStops(list), bar ?? QUOTE_BAR_DEFAULT));
+}
+
+/**
+ * Lower a prioritised bar just enough to reveal `id`, or leave it alone.
+ *
+ * The prose normally cards only threshold-visible quotes. Skim can add its
+ * current quote to the prose after the bar hid it; *open in Quotes* must then
+ * reveal that row before `useQuoteMarks`' `hiddenSelection` effect clears the
+ * selection. This is Quotes' `gateToReveal` (GlossaryPanel.tsx): preserve the
+ * chosen order, move the visible control, and floor to the URL's hundredth so
+ * serialisation can never put the bar back above the quote.
+ */
+export function barToReveal(
+  quotes: readonly Quote[],
+  id: string,
+  rank: QuoteRank,
+  bar: number,
+): number | null {
+  const list = [...quotes];
+  if (effectiveRank(list, rank) !== "prioritised") return null;
+  const quote = list.find((item) => item.id === id);
+  const priority = quote ? priorityOf(quote) : undefined;
+  const shownAt = snapToStop(barStops(list), bar);
+  if (priority === undefined || priority >= shownAt) return null;
+  return floorToGateStep(priority);
+}
+
+/**
+ * **Where ‹, ›, ← and → go from `currentId`** — the band's stepper and the
+ * keys in Quotes mode both ask this one function, so neither can do more than
+ * the other. Greg, 2026-09-11 (spya-mtyquy):
+ * *"add fairly big Previous/Next icon-buttons to jump around, and use
+ * left/right to navigate between quotes"*.
+ * docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 3.
+ *
+ * `listed` is `markedQuotes`' list — what the panel shows and the prose
+ * outlines — so "next" is the next row the reader can see, in whatever order
+ * they chose. Three rules, all Skim's (skim-route.ts):
+ *
+ * - **Nothing selected, or a selection the list no longer shows** → the first,
+ *   whichever way.
+ * - **← on the first goes to the first again**: the page may be anywhere, and
+ *   "you are already on it" is no answer to a reader asking to be taken there
+ *   (SPIDERYARN-READING2-4K).
+ * - **→ on the last is `null`** — no wrap, so the key goes back to the browser.
+ */
+export function stepQuote(
+  listed: readonly Quote[],
+  currentId: string | null,
+  dir: -1 | 1,
+): Quote | null {
+  const at = currentId === null ? -1 : listed.findIndex((q) => q.id === currentId);
+  if (at === -1) return listed[0] ?? null;
+  return listed[Math.max(0, at + dir)] ?? null;
 }
 
 /** One number to put on a row, with the name of what it is. */
@@ -576,6 +638,7 @@ export function QuotesPanel({
   bar: chosenBar,
   onBar,
   onJump,
+  steps,
 }: Props) {
   useRenderCount("QuotesPanel");
   const owner = access.kind === "owner" ? access.owner : null;
@@ -615,6 +678,27 @@ export function QuotesPanel({
      one. `bar` and `rank` above are still needed on their own,
      by the slider and by the RankBar's pressed state. */
   const shown = quotes ? markedQuotes(all, chosenRank, chosenBar) : [];
+
+  /**
+   * **The selected row follows into view** when the selection changes — by
+   * ‹ ›, by ← / →, or by the prose card's *Open in Quotes* — so the reader can
+   * see which row they are on. A row already fully in view is left alone.
+   * **The list's own `scrollTop`, never `scrollIntoView`**, which scrolls every
+   * scrollable ancestor too, the page included (OutlinePanel.tsx says the same).
+   * Not on every render: a reader who scrolls the list by hand keeps their
+   * place until the selection moves.
+   */
+  const listRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list || quoteId === null || list.clientHeight <= 0) return;
+    const row = list.querySelector<HTMLElement>(`[data-quote-row="${CSS.escape(quoteId)}"]`);
+    if (!row) return;
+    const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+    const bottom = top + row.offsetHeight;
+    const inView = top >= list.scrollTop && bottom <= list.scrollTop + list.clientHeight;
+    if (!inView) list.scrollTop = Math.max(0, top - list.clientHeight / 3);
+  }, [quoteId]);
   /* From the LIST, not from the owner hook — so the sentence appears for a
      visitor as well, which is what makes "the reader is told" true rather than
      true for whoever happens to own the article. */
@@ -732,7 +816,22 @@ export function QuotesPanel({
           own. On an outdated list Find more would not even be what it says: the
           forced run it sends is a rewrite there (src/quotes.ts § existingFor). */
       foot={
-        quotes && owner?.status === "ready" && owner.quotes && !owner.stale && !owner.outdated ? (
+        <>
+          {/* **‹ › first, then the verb**: stepping is what a reader does in
+              this band many times, Find more once. For owners and visitors
+              alike — a visitor's list is just as long. Only once there is a
+              list to step through. */}
+          {quotes && steps.length > 0 && (
+            <QuoteStepper
+              shown={steps}
+              quoteId={quoteId}
+              onStep={(quote) => {
+                onQuote(quote.id);
+                onJump(quote.blockId);
+              }}
+            />
+          )}
+          {quotes && owner?.status === "ready" && owner.quotes && !owner.stale && !owner.outdated ? (
           <Foot list={owner.quotes} running={owner.job !== null || owner.starting} findMore={findMore} />
         ) : /* **Status only, on an outdated list.** Its banner went on
                2026-09-29 (SPIDERYARN-READING2-55, plan 260929c), and that banner
@@ -745,7 +844,8 @@ export function QuotesPanel({
           !owner.stale &&
           (owner.job || owner.starting || owner.failed) ? (
           <div className="quotes-foot">{rerun("Choose them again", true)}</div>
-        ) : null
+        ) : null}
+        </>
       }
     >
 
@@ -839,7 +939,7 @@ export function QuotesPanel({
               2026-08-31 until 2026-09-03, when the bar started hiding what is
               below it instead of grouping it — with nothing to contrast,
               "worth keeping" was a heading over the whole list. */}
-          <div className="quotes-list">
+          <div className="quotes-list" ref={listRef}>
             <ol className="quotes-list-items">
               {shown.map((quote) => (
                 <QuoteRow
@@ -1100,6 +1200,7 @@ function QuoteRow({
   return (
     <li
       className={`quotes-row${selected ? " on" : ""}`}
+      data-quote-row={quote.id}
       {...(unscored && {
         title: "Not scored for prioritising — shown regardless of the threshold",
       })}
@@ -1165,10 +1266,87 @@ function QuoteRow({
  * heading and the order buttons already establish whose judgment these are, and
  * repeating it twice per row is six words of tooltip spent on nothing.
  */
-const LABEL: Record<RowScore["key"], string> = {
+export const LABEL: Record<RowScore["key"], string> = {
   importance: "Importance — how much of the argument rests on this line",
   striking: "Striking — how memorable and well put it is",
 };
+
+/**
+ * **‹ 3 of 14 ›, pinned under the list** — Greg, 2026-09-11 (spya-mtyquy):
+ * *"in Quotes mode, add fairly big Previous/Next icon-buttons to jump around,
+ * and use left/right to navigate between quotes"*. Skim's arrows and size
+ * (`--control-h-lg`, quotes.css § the stepper), each naming its key on its card; the
+ * rule is `stepQuote`, which ← / → share through `Reader`, so the keys can do
+ * no more than these. The position is spoken through a live region, as Skim's
+ * is. docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 3.
+ */
+function QuoteStepper({
+  shown,
+  quoteId,
+  onStep,
+}: {
+  shown: readonly Quote[];
+  quoteId: string | null;
+  onStep(quote: Quote): void;
+}) {
+  const at = quoteId === null ? -1 : shown.findIndex((q) => q.id === quoteId);
+  const prev = stepQuote(shown, quoteId, -1);
+  const next = stepQuote(shown, quoteId, 1);
+  const first = at <= 0;
+  const said = at === -1 ? `${shown.length} quotes` : `Quote ${at + 1} of ${shown.length}`;
+  return (
+    <div className="quotes-step">
+      <TooltipGroup delay={{ open: 240, close: 90 }} timeoutMs={400}>
+        <StepTip
+          head={at === -1 ? "First quote" : first ? "Back to the first quote" : "Previous quote"}
+          what={
+            at === -1
+              ? "Go to the first quote in the list."
+              : first
+                ? "Back to the first quote."
+                : "Back one quote in the list."
+          }
+          keyName="←"
+          placement="top"
+          enabled={prev !== null}
+        >
+          <button
+            type="button"
+            className="quotes-arrow"
+            aria-label={first ? "First quote" : "Previous quote"}
+            disabled={prev === null}
+            onClick={() => prev && onStep(prev)}
+          >
+            <ChevronLeft size={20} />
+          </button>
+        </StepTip>
+        <span className="quotes-step-at" aria-hidden="true">
+          {at === -1 ? `${shown.length}` : `${at + 1} of ${shown.length}`}
+        </span>
+        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {said}
+        </span>
+        <StepTip
+          head={at === -1 ? "First quote" : "Next quote"}
+          what={at === -1 ? "Go to the first quote in the list." : "On to the next quote in the list."}
+          keyName="→"
+          placement="top"
+          enabled={next !== null}
+        >
+          <button
+            type="button"
+            className="quotes-arrow"
+            aria-label={at === -1 ? "First quote" : "Next quote"}
+            disabled={next === null}
+            onClick={() => next && onStep(next)}
+          >
+            <ChevronRight size={20} />
+          </button>
+        </StepTip>
+      </TooltipGroup>
+    </div>
+  );
+}
 
 /**
  * Under the list: the one verb.

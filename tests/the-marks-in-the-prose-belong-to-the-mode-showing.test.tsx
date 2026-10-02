@@ -663,6 +663,8 @@ function barred(): string[] {
 
 /** How many ticks the rail is drawing — `blockMatches`, the third projection. */
 const railTicks = (): number => host.querySelectorAll(".spine-match").length;
+/** How many blocks the rail's quote strip marks — `quoteRailMarks`. */
+const quoteStrips = (): number => host.querySelectorAll(".spine-quote").length;
 
 /**
  * **The one assertion every arm makes**, so no arm can quietly assert less than
@@ -706,7 +708,15 @@ function agree(where: string, blocks: BlockId[], ring: BlockId[], quoted = true)
   );
   expect(barred(), `${where}: the paragraph bars`).toEqual(blocks);
   expect(rung(), `${where}: the ring`).toEqual(ring);
-  expect(railTicks(), `${where}: the rail's ticks`).toBe(blocks.length);
+  /* **The rail, since 2026-10-02**: the quotes left the search lanes for a
+     strip of their own down the left edge, in every mode (plan 261002h,
+     passages.ts § `railFound`). So the lanes are the open mode's passages
+     less the quote — in quotes mode, none — and the strip is the quote,
+     wherever the reader is, exactly when the prose outlines it. */
+  expect(railTicks(), `${where}: the rail's ticks`).toBe(
+    blocks.filter((b) => b !== P_QUOTE).length,
+  );
+  expect(quoteStrips(), `${where}: the rail's quote strip`).toBe(quoted ? 1 : 0);
 }
 
 const onScreen = (phrase: string): boolean => (host.textContent ?? "").includes(phrase);
@@ -815,6 +825,25 @@ async function readingSession(strict: boolean): Promise<void> {
   await press(MODE_LABEL.quotes);
   expect(onScreen(KEPT_QUOTE), "the Quotes panel never mounted").toBe(true);
   agree("quotes", [P_QUOTE], []);
+
+  /* ---- → steps the quotes while Quotes is the mode (plan 261002h § 3):
+     nothing selected, so → goes to the first and rings it; the band's stepper
+     says where the reader is. A second → is the end of the list and takes
+     nothing. Through the whole composition because the wiring is the claim —
+     `Reader` handing `useArrowNav` the quotes' handler in this mode only. */
+  const arrow = async (key: "ArrowLeft" | "ArrowRight"): Promise<void> => {
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    });
+    await settle();
+  };
+  await arrow("ArrowRight");
+  agree("quotes, after →", [P_QUOTE], [P_QUOTE]);
+  expect(host.querySelector(".quotes-step-at")?.textContent, "the stepper's position").toBe(
+    "1 of 1",
+  );
+  await arrow("ArrowRight");
+  agree("quotes, → at the last", [P_QUOTE], [P_QUOTE]);
 
   /* ---- And Plain again, which is the assertion that replaced the Quotes arm
      of tests/passage-mode-cleanup.test.tsx. That arm asserted the marks went
