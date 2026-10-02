@@ -109,7 +109,7 @@ export const HELP_SYNONYMS: SynonymTable = [
   ["shortcut", "keyboard", "key", "hotkey", "keystroke"],
   ["share", "public", "send", "publish"],
   ["ai", "model", "claude", "generated", "llm", "gpt", "machine"],
-  ["wait", "slow", "loading", "spinner", "stuck", "progress"],
+  ["wait", "slow", "loading", "spinner", "stuck", "progress", "long"],
   ["export", "download", "backup", "json"],
   ["delete", "remove", "erase"],
   ["bug", "problem", "broken", "error", "report", "feedback", "complaint"],

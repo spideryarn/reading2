@@ -377,11 +377,14 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         <p>The chips above the picture give other views:</p>
         <ul>
           <li>
-            <strong>Force</strong>, <strong>Drift</strong> and <strong>Trail</strong> are drawn by code
-            from the text, not by the AI. Force shows sections as bubbles that pull together when they
-            talk about the same things. Drift puts one dot per paragraph down the page, placed sideways
-            by subject. Trail joins Drift’s dots in reading order, which shows whether the piece moves
-            forward or circles back — the one picture where lower down does not mean later.
+            <strong>Force</strong>, <strong>Drift</strong> and <strong>Trail</strong> are diagrams
+            assembled by code rather than pictures painted by a generative model. They do use an
+            embedding model to judge semantic likeness: its dotted links are one of Force’s five
+            relationships, and it supplies the positions for Drift and Trail. Force shows sections as
+            bubbles that pull together when they talk about the same things. Drift puts one dot per
+            paragraph down the page, placed sideways by subject. Trail joins Drift’s dots in reading
+            order, which shows whether the piece moves forward or circles back — the one picture where
+            lower down does not mean later.
           </li>
           <li>
             <strong>Illustrated</strong> is the Sketch painted as a picture. It takes four to seven

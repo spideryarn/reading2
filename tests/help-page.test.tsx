@@ -109,12 +109,15 @@ describe("the anchors", () => {
     expect([...seen].sort()).toEqual([...HELP_ANCHORS].sort());
   });
 
-  it("include every anchor ever shipped, live or redirected", () => {
+  it("include every anchor ever shipped, live or redirected, and pin every live anchor", () => {
     for (const a of PINNED_ANCHORS) {
       const isLive = LIVE.has(a);
       const isAlias = Object.hasOwn(HELP_ANCHOR_ALIASES, a);
       expect(isLive || isAlias, `#${a} no longer lands anywhere — add an alias, never delete`).toBe(true);
       expect(resolveHelpAnchor(a), a).not.toBeNull();
+    }
+    for (const a of HELP_ANCHORS) {
+      expect(PINNED_ANCHORS, `#${a} is live but not pinned — append it before shipping`).toContain(a);
     }
   });
 
@@ -204,7 +207,10 @@ describe("the page", () => {
     for (const a of HELP_ANCHORS) {
       const section = host.querySelector(`section[data-section][id="${a}"]`);
       expect(section, a).not.toBeNull();
-      expect(section?.querySelector(`h3 a[href="#${a}"]`), `${a} has no # link`).not.toBeNull();
+      const link = section?.querySelector(`h3 a[href="#${a}"]`);
+      expect(link, `${a} has no # link`).not.toBeNull();
+      const title = section?.querySelector("h3 > span")?.textContent;
+      expect(link?.getAttribute("aria-label"), a).toBe(`Link to ${title}`);
     }
   });
 
@@ -262,6 +268,9 @@ describe("the search box", () => {
       ["skim", "#mode-skim"],
       ["sidebar", "#spine"],
       ["ipad", "#touch"],
+      ["where did my article go", "#faq-find-archived"],
+      ["how long does a mode take", "#faq-why-slow-first-time"],
+      ["can a visitor see my comments", "#sharing"],
     ] as const) {
       type(q);
       expect(resultHrefs()[0], q).toBe(want);
@@ -283,13 +292,14 @@ describe("the search box", () => {
     expect(host.querySelector('[role="status"]')?.textContent).toContain("Find");
   });
 
-  it("goes to the best match on Enter by setting the address, not by scrolling", () => {
+  it("goes to the best match on Enter and arrives once", () => {
     mountAt("/help");
     type("heat");
     act(() => {
       searchBox()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     expect(window.location.hash).toBe("#spine");
+    expect(scrolled.map((el) => el.id)).toEqual(["spine"]);
   });
 });
 
@@ -320,6 +330,18 @@ describe("arriving at a section", () => {
       history.replaceState(null, "", "/help#keyboard");
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     });
+    expect(scrolled.map((el) => el.id)).toEqual(["keyboard"]);
+  });
+
+  it("owns an ordinary fragment click so the browser and the page do not both scroll", () => {
+    mountAt("/help");
+    const link = host.querySelector<HTMLAnchorElement>(
+      'nav[aria-label="Help contents"] a[href="#keyboard"]',
+    );
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    act(() => link?.dispatchEvent(click));
+    expect(click.defaultPrevented).toBe(true);
+    expect(window.location.hash).toBe("#keyboard");
     expect(scrolled.map((el) => el.id)).toEqual(["keyboard"]);
   });
 

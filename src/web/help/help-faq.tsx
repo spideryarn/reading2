@@ -78,15 +78,18 @@ export const HELP_FAQ: Record<FaqId, HelpSection> = {
   },
 
   "faq-beyond-the-article": {
-    title: "Does it ever go beyond the article?",
-    keywords: "web internet search outside sources other articles knowledge where does the answer come from",
+    title: "Does it ever look beyond the article?",
+    keywords: "go web internet search outside sources other articles knowledge where does the answer come from",
     body: (
       <p>
         Sometimes, and it tells you when. Chat can reach the open web, your other saved articles, or a
         page this one links to, and any answer that did has a strip above it saying so.{" "}
         <HelpRef to="mode-debate">Debate</HelpRef> is all about what the rest of the web says, and every
-        row links to its source. The glossary’s <strong>background</strong> notes and Citations’
-        influence bars come from the model’s general knowledge. Everything else works from the article.
+        row links to its source. Glossary’s <strong>Dig deeper</strong>, Citations’{" "}
+        <strong>Dig deeper</strong> and Referee’s <strong>Candidates</strong> can also search or fetch
+        outside sources. The glossary’s <strong>background</strong> notes and Citations’ influence bars
+        come from the model’s general knowledge, and a reader profile can shape how some aids are
+        written. Most other reading aids work from the article itself.
       </p>
     ),
   },
@@ -105,8 +108,8 @@ export const HELP_FAQ: Record<FaqId, HelpSection> = {
   },
 
   "faq-find-archived": {
-    title: "I archived an article by accident. How do I get it back?",
-    keywords: "lost missing disappeared undo restore put back unarchive find",
+    title: "Where did my archived article go, and how do I get it back?",
+    keywords: "lost missing disappeared gone went undo restore put back unarchive find",
     body: (
       <p>
         If the <strong>Undo</strong> is still showing, press it. Otherwise turn on{" "}

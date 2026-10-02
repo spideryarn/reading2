@@ -26,12 +26,12 @@
  *
  * Every link to a place on this page — a contents row, a search result, a
  * heading's `#`, a cross-reference inside a section — is a plain
- * `<a href="#id">`. Never `Link`, which cancels the browser's navigation and so
- * loses Back, reload and Cmd-click (the Changelog's lesson, ChangelogPage.tsx §
- * ContentsList); and never a click handler that scrolls as well, which would
- * make two things move the page. The browser changes the address; this page
- * hears it, on mount and on `hashchange`, and is the only thing that scrolls
- * and flashes (`arrive` below). R3.
+ * `<a href="#id">`, so reload and modified clicks retain the browser's link
+ * semantics. For an ordinary same-tab click, the page prevents the browser's
+ * own fragment scroll, pushes the address itself, then calls `arrive`; otherwise
+ * the native jump and `arrive`'s smooth scroll would both move the page. Mount
+ * and Back/Forward arrive through the effect and `hashchange`. In every path,
+ * `arrive` below is the one thing that scrolls and flashes. R3.
  *
  * The router does not get in the way: `useRoute` subscribes to the *pathname*
  * (router.ts § useRoute), so a fragment change re-renders nothing, and only
@@ -232,22 +232,30 @@ export function HelpPage() {
     };
   }, []);
 
+  /** Change the address without a native fragment scroll, then arrive once. */
+  const go = (anchor: HelpAnchor) => {
+    const hash = `#${anchor}`;
+    if (window.location.hash !== hash) {
+      history.pushState(history.state, "", `${location.pathname}${location.search}${hash}`);
+    }
+    arriveRef.current();
+  };
+
   /**
-   * **A link to the place you are already at.** The browser scrolls back to
-   * it but fires no `hashchange`, so nothing would flash and the second click
-   * would look like the first one did nothing. The click is not prevented —
-   * the browser still does the navigating — this only adds the flash.
+   * **One owner for an ordinary fragment click.** Keep the real href for
+   * copy/open-in-new-tab, but stop the browser's own fragment scroll in the
+   * same tab. `pushState` supplies the history entry without scrolling, then
+   * `go` arrives exactly once. The same-hash case gets no new history entry but
+   * does flash again, which is the visible acknowledgement a native same-hash
+   * click would otherwise lack.
    */
   const onClickCapture = (e: MouseEvent<HTMLElement>) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const a = (e.target as Element).closest?.("a[href^='#']");
-    if (a && a.getAttribute("href") === window.location.hash) arriveRef.current();
-  };
-
-  /** Search's Enter: go to the best match the way a click on it would. */
-  const go = (anchor: HelpAnchor) => {
-    if (window.location.hash === `#${anchor}`) arriveRef.current();
-    else window.location.hash = anchor;
+    const anchor = resolveHelpAnchor(a?.getAttribute("href") ?? "");
+    if (anchor === null) return;
+    e.preventDefault();
+    go(anchor);
   };
 
   return (
@@ -315,7 +323,7 @@ function HelpSectionView({ entry: e }: { entry: Entry }) {
             the point of it (Greg: "lots of anchor links"). */}
         <a
           href={`#${e.anchor}`}
-          aria-label="Link to this section"
+          aria-label={`Link to ${e.title}`}
           className="tw:font-sans tw:text-base tw:text-ink-faint tw:no-underline tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:focus-visible:opacity-100 tw:hover:text-highlight tw:hover-none:opacity-100 tw:any-pointer-coarse:opacity-100"
         >
           #

@@ -55,8 +55,9 @@ catalog, and Help follows.
 
 People will paste `/help#spine` into messages, and the code links into Help by anchor, so:
 
-- **Every link into Help goes through `helpHref`**, which takes a `HelpAnchor`. A link to a section
-  that does not exist does not compile.
+- **Every code link to a Help section goes through `helpHref`**, which takes a `HelpAnchor`, so a
+  link to a section that does not exist does not compile. A hand-written `/help#…` string would
+  bypass the type, so do not write one. (The page itself, with no section, is `HELP_HREF`.)
 - **An anchor is never renamed or deleted.** Retire it by adding an alias in
   `HELP_ANCHOR_ALIASES` to the section that replaced it; arriving at the old one lands on the new.
   A retired mode gets its alias automatically, from `RETIRED_MODES` in src/modes.ts.

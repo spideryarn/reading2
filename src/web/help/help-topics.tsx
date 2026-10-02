@@ -143,8 +143,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             <strong>The bottom bar</strong> holds the way home (the Spideryarn wordmark), the{" "}
             <kbd>⌘</kbd> button for commands, one button per mode, then <strong>Comments</strong>,{" "}
-            <strong>Metadata</strong> and, when you are signed in, the <strong>Experimental</strong>{" "}
-            switch and <strong>Feedback</strong>.
+            <strong>Metadata</strong> and <strong>Help</strong>. When you are signed in, it also has{" "}
+            the <strong>Experimental</strong> switch and <strong>Feedback</strong>.
           </li>
         </ul>
         <p>
@@ -303,8 +303,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <HelpRef to="comments">Comments and bookmarks</HelpRef>.
         </p>
         <p>
-          On someone else’s shared article the margin shows only the link: bookmarks, chat and the{" "}
-          <strong>?</strong> belong to whoever added it.
+          On someone else’s shared article the margin can show their existing comments or bookmarks,
+          and always lets you copy the paragraph’s link. You cannot add a bookmark, start a chat or
+          use the <strong>?</strong>.
         </p>
       </>
     ),
@@ -375,8 +376,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
         </ul>
         <p>
-          None of these work while you are typing in a box, except <kbd>⌘ Enter</kbd> /{" "}
-          <kbd>Ctrl Enter</kbd>.
+          The command-bar and article-navigation shortcuts leave keys alone while you are typing in
+          a box. <kbd>⌘ Enter</kbd> / <kbd>Ctrl Enter</kbd> is instead left to the box to save or send,
+          and <kbd>Esc</kbd> can still close what is in front.
         </p>
       </>
     ),
@@ -505,8 +507,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
           <li>
             <strong>When you add an article</strong>, leaving{" "}
-            <strong>Generate the main modes as soon as it opens</strong> ticked prepares every mode
-            that is not experimental, in the background.
+            <strong>Generate the main modes as soon as it opens</strong> ticked prepares the modes
+            named beneath the tick-box, plus the links between passages, in the background.
           </li>
         </ul>
         <p>
@@ -515,8 +517,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           cannot start anything new.
         </p>
         <p>
-          <strong>None of this uses up your allowance</strong> — using an article is included, and
-          only adding one counts. For a difficult piece, <strong>High-powered AI</strong> on the
+          <strong>None of this uses up your allowance</strong> — opening, generating, chatting and
+          re-running are included. For a difficult piece, <strong>High-powered AI</strong> on the
           article’s Metadata page uses a stronger model (Claude Opus) for work done after you switch
           it on; use <strong>Run it again</strong> there to redo a mode with it. That switch is the
           one thing besides adding that counts — see <HelpRef to="plans">Plans</HelpRef>.
@@ -592,7 +594,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
 
   sharing: {
     title: "Sharing an article, and the public shelf",
-    keywords: "share public publish link send someone friend visitor private padlock globe shared articles unshare stop",
+    keywords:
+      "share public publish link send someone friend visitor see comments bookmarks chats profile private padlock globe shared articles unshare stop",
     body: (
       <>
         <p>
@@ -620,8 +623,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <strong>Your chats and your profile are not shared.</strong>
           </li>
           <li>
-            <strong>A shared article counts as half</strong> against your allowance — see{" "}
-            <HelpRef to="plans">Plans</HelpRef>.
+            <strong>An article added since 5 September 2026 counts as half while shared.</strong>{" "}
+            Older charged articles still count in full — see <HelpRef to="plans">Plans</HelpRef>.
           </li>
         </ul>
         <p>
@@ -761,8 +764,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             fresh one.
           </li>
           <li>
-            <strong>A shared article counts as half</strong>, so sharing stretches your allowance.
-            Making it private again uses that half back up.
+            <strong>An article added since 5 September 2026 counts as half while shared</strong>, so
+            sharing it stretches your allowance; making it private again uses that half back up. An
+            older charged article still counts in full, while one from before billing began already
+            costs nothing.
           </li>
           <li>
             <strong>High-powered AI</strong>, a switch on an article’s Metadata page that uses a
@@ -778,8 +783,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <strong>Archiving doesn’t give an article back</strong> to your allowance.
           </li>
           <li>
-            <strong>Reading is never limited.</strong> At your limit only adding stops, and
-            everything you have stays.
+            <strong>Reading is never limited.</strong> At your limit, adding and switching another
+            article to High-powered AI stop; everything you already have stays.
           </li>
         </ul>
         <p>
