@@ -141,7 +141,39 @@ export function withRun(
   wantedId: string | undefined,
   at: string,
   sourceHash?: string,
-): { runs: SearchRun[]; run: SearchRun; kind: "reset" | "minted" } {
+  options: { revises?: boolean } = {},
+): { runs: SearchRun[]; run: SearchRun; kind: "reset" | "revised" | "minted" } {
+  /* **A revision: one typing session's row, re-asked with the new words**
+     (plan 261002h). Search-as-you-type keeps one saved row per session, so
+     each pause asks the SAME row again rather than adding one per pause. Only
+     when the caller says so (`revises`), only a **quick** row asked as quick,
+     and in any status — the session's previous attempt may still be running,
+     and the attempt fence in `finish` is what stops its late answer landing on
+     the revised row.
+
+     Anything else named by `revises` — a meaning row, an unknown id — falls
+     through to the mint below, always under a NEW id: a held id is taken,
+     and an unknown one is a deleted row that must stay deleted. Meaning stays pressed and never revises: a
+     paid half-minute call is not something to overwrite on a pause. */
+  const revised =
+    options.revises && wantedId && searchKind === "quick"
+      ? runs.find((r) => r.id === wantedId && r.kind === "quick")
+      : undefined;
+  if (revised) {
+    // Rebuilt field by field for the retry's reasons, below.
+    const run: SearchRun = {
+      id: revised.id,
+      criterion,
+      kind: "quick",
+      createdAt: revised.createdAt,
+      status: "pending",
+      hits: [],
+      ...(revised.colour === undefined ? {} : { colour: revised.colour }),
+      ...(sourceHash === undefined ? {} : { sourceHash }),
+    };
+    return { runs: runs.map((r) => (r.id === run.id ? run : r)), run, kind: "revised" };
+  }
+
   /* A retry: the same id, the same criterion, **and a row that actually
      failed**. All three, and the third is the one that took two goes to get
      right.
@@ -165,7 +197,7 @@ export function withRun(
      run labelled *quick* could end up holding Sonnet's quotes. The same words
      asked the other way are a different search, and get a new id like any
      other collision. */
-  const existing = wantedId
+  const existing = wantedId && !options.revises
     ? runs.find(
         (r) =>
           r.id === wantedId &&
@@ -210,9 +242,15 @@ export function withRun(
   }
 
   const taken = new Set(runs.map((r) => r.id));
+  /* **A revision never mints under the id it named** (Sol's C7, code review 1
+     of plan 261002h). A session's first ask goes without `revises`, so a
+     revision naming an absent id means the row was there and has gone —
+     deleted in another tab. Minting under that id would resurrect it; a fresh
+     id lets the stale tab carry on as a new row (the client follows a `begin`
+     that answers under another id) and leaves the delete standing. */
   const run: SearchRun = {
     id:
-      wantedId && isSpideryarnId(wantedId) && !taken.has(wantedId)
+      wantedId && !options.revises && isSpideryarnId(wantedId) && !taken.has(wantedId)
         ? wantedId
         : mintUniqueId(taken),
     criterion,

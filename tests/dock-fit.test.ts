@@ -71,8 +71,12 @@ import { chooseDockFit, DOCK_FIT_CLASSES } from "../src/web/dock-fit.js";
  * words first (dock-fit.ts § the rungs). These are illustrative, as the note
  * above says — what matters is that they descend, which is what makes walking
  * the ladder top-down and stopping at the first fit correct.
+ *
+ * **Five since 2026-10-02**: rung 4 went in below the old last rung so the
+ * bar's quick-search box outlives the labels (plan 261002h) — rung 3 keeps a
+ * compact box, and only rung 4 turns it into the ⚡.
  */
-const NEED = [1425, 1330, 814, 557];
+const NEED = [1425, 1330, 814, 600, 557];
 
 /**
  * A `.dock` whose width you set and whose overflow follows the rung it is
@@ -147,6 +151,14 @@ describe("the bar chooses the widest rung that fits", () => {
     dock.setWidth(700);
     expect(chooseDockFit(dock.el, 0)).toBe(3);
     expect(wearing(dock.el)).toBe(3);
+  });
+
+  /* Rung 4, 2026-10-02 (plan 261002h): the search box is the last thing to
+     go — after every label — so a laptop still has a box to type in. */
+  it("turns the search box into the ⚡ only once every label has gone", () => {
+    dock.setWidth(580);
+    expect(chooseDockFit(dock.el, 0)).toBe(4);
+    expect(wearing(dock.el)).toBe(4);
   });
 
   it("stops at the last rung and lets the row overflow — the scroll is the floor", () => {
@@ -263,7 +275,7 @@ describe("the stylesheet backs the ladder", () => {
         CSS_NO_COMMENTS,
       );
     const rung3 =
-      /\.dock\.dock-fit-3 \.dock-btn,\s*\.dock\.dock-fit-3 \.dock-home\s*\{[^}]*padding-inline:\s*([\d.]+)rem/.exec(
+      /\.dock\.dock-fit-3 \.dock-btn,\s*\.dock\.dock-fit-3 \.dock-home[^{]*\{[^}]*padding-inline:\s*([\d.]+)rem/.exec(
         CSS_NO_COMMENTS,
       );
     /* Rung 2 stays at 0.6: widening it cost 1280 its labels (dock-fit.css). */
@@ -281,6 +293,34 @@ describe("the stylesheet backs the ladder", () => {
       if (!cls) continue;
       expect(CSS, `no rule for ${cls}`).toContain(`.dock.${cls} `);
     }
+  });
+
+  /**
+   * **Rung 4 is rung 3 and then some** (2026-10-02, plan 261002h). It went in
+   * at the bottom so that the quick-search box could outlive the labels: rung
+   * 3 drops every label and keeps a compact box, rung 4 does all of that and
+   * turns the box into the ⚡. A rung-3 rule missing its rung-4 twin would put
+   * a label (or the wide padding) *back* on a narrower bar, so every
+   * `.dock-fit-3` selector must be in the same selector list as its
+   * `.dock-fit-4` twin — and the check is fed the broken shape to prove it
+   * can fail.
+   */
+  it("every rung-3 rule also applies at rung 4", () => {
+    const missing = (css: string): string[] => {
+      const out: string[] = [];
+      for (const m of css.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+        const list = (m[1] ?? "").split(",").map((x) => x.trim());
+        for (const sel of list) {
+          if (!sel.includes("dock-fit-3")) continue;
+          const twin = sel.replaceAll("dock-fit-3", "dock-fit-4");
+          if (!list.includes(twin)) out.push(sel);
+        }
+      }
+      return out;
+    };
+    expect(CSS_NO_COMMENTS).toContain(".dock.dock-fit-3 ");
+    expect(missing(CSS_NO_COMMENTS)).toEqual([]);
+    expect(missing(".dock.dock-fit-3 .dock-btn-label { display: none; }")).toHaveLength(1);
   });
 
   /**
@@ -312,7 +352,7 @@ describe("the stylesheet backs the ladder", () => {
    */
   it("the app cluster's words go at rung 1 and never come back", () => {
     const hiders = labelHiders(CSS);
-    for (const rung of ["dock-fit-1", "dock-fit-2", "dock-fit-3"]) {
+    for (const rung of ["dock-fit-1", "dock-fit-2", "dock-fit-3", "dock-fit-4"]) {
       const here = hiders.filter((x) => x.includes(rung));
       expect(
         here.some((x) => x.includes(".dock-home")),
@@ -398,8 +438,10 @@ describe("the stylesheet backs the ladder", () => {
       .filter((sel) => sel.includes(".dock-btn.on") && sel.includes(".dock-btn-label"));
     expect(shows.length, "no rule keeps the active mode's label").toBeGreaterThan(0);
     expect(shows.some((sel) => sel.includes("dock-fit-2"))).toBe(true);
+    /* Rung 4 (2026-10-02) is rung 3 plus the search box gone to the ⚡, so it
+       is "the rung below" too. */
     expect(
-      shows.some((sel) => sel.includes("dock-fit-3")),
+      shows.some((sel) => sel.includes("dock-fit-3") || sel.includes("dock-fit-4")),
       "the last rung was measured and rejected — see this test's comment",
     ).toBe(false);
   });

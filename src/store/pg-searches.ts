@@ -143,6 +143,7 @@ const rawPgSearchStore: SearchStore = {
     searchKind: SearchKind,
     wantedId?: string,
     now: () => string = () => new Date().toISOString(),
+    options: { revises?: boolean } = {},
   ): Promise<{ run: SearchRun; attempt: string | undefined }> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
@@ -182,7 +183,46 @@ const rawPgSearchStore: SearchStore = {
         wantedId,
         at,
         sourceHash,
+        options,
       );
+
+      if (kind === "revised") {
+        /* **Its own UPDATE, not the retry's** (plan 261002h, Sol F3): the retry
+           matches on the old criterion and on `error`, and a revision changes
+           the criterion and may land on a row that is `pending` or `done`. The
+           predicate `withRun` decided on — this id, this article, a quick row —
+           is repeated in SQL for the reason the retry's is, below.
+
+           A new attempt token is the fence: the superseded attempt's `finish`
+           names the old token and updates nothing. `created_at` and `colour`
+           are not named, so they are kept — the same search, re-asked. */
+        const revised = await tx
+          .update(searchRuns)
+          .set({
+            criterion,
+            status: "pending",
+            hits: [],
+            model: null,
+            error: null,
+            sourceHash: decided.sourceHash ?? null,
+            attemptId: attempt,
+            attemptStartedAt: DB_NOW,
+          })
+          .where(
+            and(
+              eq(searchRuns.articleId, articleId),
+              eq(searchRuns.id, decided.id),
+              eq(searchRuns.kind, "quick"),
+            ),
+          )
+          .returning();
+        if (!revised[0]) {
+          throw new Error(
+            `Search run "${decided.id}" was not revisable after all — it changed under the article lock.`,
+          );
+        }
+        return toRun(revised[0]);
+      }
 
       if (kind === "reset") {
         /* **The predicate is repeated in the UPDATE on purpose.**

@@ -38,6 +38,7 @@ import { pgFetchAllowanceStore } from "../src/store/pg-rate-limit.js";
 import type { RatePolicy } from "../src/store/contracts.js";
 import { PREVIEW_RATE_POLICY } from "../src/link-previews.js";
 import { SUMMARY_RATE_POLICY } from "../src/link-summary.js";
+import { FEEDBACK_NOTICE_POLICY } from "../src/feedback-notice.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -244,6 +245,34 @@ describe("a bucket with a day and a fuse", () => {
     await fill(ALICE, LOOSE);
     await fill(BOB, LOOSE);
     expect((await take(ALICE, LOOSE)).kind).toBe("allowed");
+  });
+});
+
+describe("the feedback notice's bucket", () => {
+  /**
+   * Plan 261002j. Against the real table, so a bucket the CHECK does not know —
+   * a migration that never ran — goes red here. In production that refusal is
+   * a throw, which `noticeFeedback` reads as "allowance unreadable" and sends
+   * anyway, uncapped; nothing there would say so.
+   *
+   * **The day, not the hour**: the five are aged two hours before the sixth is
+   * asked, so the hourly window is empty and only `daily.fills` can refuse it.
+   * Asked within the hour, the hourly cap of five would refuse it too, and the
+   * test would pass with `daily` deleted (Sol's code review).
+   */
+  it("gives one reader five mails a day and refuses the sixth, hours later", async () => {
+    const ask = () =>
+      runAsOwner(ALICE, () => pgFetchAllowanceStore.take("feedback-notice", FEEDBACK_NOTICE_POLICY));
+    for (let i = 0; i < 5; i++) {
+      const taken = await ask();
+      if (taken.kind !== "allowed") throw new Error(`fill ${i}: expected allowance, got ${taken.kind}`);
+      await runAsOwner(ALICE, () => pgFetchAllowanceStore.finish(taken.id));
+    }
+    await getDb()
+      .update(rateLimitEvents)
+      .set({ startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+      .where(and(eq(rateLimitEvents.ownerId, ALICE), eq(rateLimitEvents.bucket, "feedback-notice")));
+    expect((await ask()).kind).toBe("rate");
   });
 });
 
