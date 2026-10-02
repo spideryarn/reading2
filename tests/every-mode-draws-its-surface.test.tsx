@@ -682,6 +682,17 @@ const REMEMBER_THREAD: Seeded = {
 type Fixtures = "missing" | "populated";
 let fixtures: Fixtures;
 /**
+ * **Whether the populated artefacts were written for a profile** — off
+ * everywhere but the corner-badge sweep below, which turns it on to make the
+ * owner's *written for you* badge draw (every hook reads `profileHash != null`).
+ * Plan 261002e.
+ */
+let profiled = false;
+/** The fixture as served: its own `profileHash`, or one, when `profiled`. */
+function stamped<T extends object>(artefact: T): T {
+  return profiled ? { ...artefact, profileHash: "test-profile" } : artefact;
+}
+/**
  * **The Sketch, served even in the `missing` state.** Set only by the
  * Illustrated press: the plates are painted from the Sketch, so with no Sketch
  * drawn there is nothing for that press to arm and `useAutoRun` retires it
@@ -779,11 +790,11 @@ const GONE = () => new Response(null, { status: 404 });
 function artefact(url: string): Response | null {
   const has = fixtures === "populated";
   if (url.startsWith("/api/glossary/"))
-    return has ? json({ glossary: GLOSSARY, stale: false, outdated: false, profileChanged: false }) : GONE();
+    return has ? json({ glossary: stamped(GLOSSARY), stale: false, outdated: false, profileChanged: false }) : GONE();
   if (url.startsWith("/api/ideas/"))
-    return has ? json({ ideas: IDEAS, stale: false, outdated: false, profileChanged: false }) : GONE();
+    return has ? json({ ideas: stamped(IDEAS), stale: false, outdated: false, profileChanged: false }) : GONE();
   if (url.startsWith("/api/quotes/"))
-    return has ? json({ quotes: QUOTES, stale: false, outdated: false, profileChanged: false }) : GONE();
+    return has ? json({ quotes: stamped(QUOTES), stale: false, outdated: false, profileChanged: false }) : GONE();
   if (url.startsWith("/api/timeline/"))
     return has ? json({ timeline: TIMELINE, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/debate/"))
@@ -793,7 +804,7 @@ function artefact(url: string): Response | null {
   if (url.startsWith("/api/faq/"))
     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/tweets/"))
-    return has ? json({ thread: THREAD, stale: false, profileChanged: false }) : GONE();
+    return has ? json({ thread: stamped(THREAD), stale: false, profileChanged: false }) : GONE();
   if (url.startsWith("/api/skim/"))
     return has
       ? json({ skim: SKIM, stale: false, outdated: false, profileChanged: false, notOnRoute: 0 })
@@ -804,7 +815,7 @@ function artefact(url: string): Response | null {
       : GONE();
   if (url.startsWith("/api/illustrated/")) return GONE();
   if (url.startsWith("/api/simple/"))
-    return has ? json({ simpleSummary: SIMPLE, stale: false, outdated: false, profileChanged: false }) : GONE();
+    return has ? json({ simpleSummary: stamped(SIMPLE), stale: false, outdated: false, profileChanged: false }) : GONE();
   return null;
 }
 
@@ -869,6 +880,7 @@ beforeEach(() => {
   posts.length = 0;
   mutations.length = 0;
   fixtures = "missing";
+  profiled = false;
   sketchDrawn = false;
   resetActivations();
   jobEngine.reset();
@@ -1557,6 +1569,10 @@ describe("phase B — what each mode's real controller drew", () => {
         expect(corner.length, `${mode}: no (i) in the band's corner`).toBe(1);
         expect(corner[0], `${mode}: the (i) is not the band's first child`).toBe((band as Element).firstElementChild);
         expect((band as Element).querySelectorAll(".band-about").length, `${mode}: a second (i)`).toBe(1);
+        /* Nothing here was written for a profile, so no badge — and with none,
+           the corner keeps no room for one (mode-band.css asks `:has()`). The
+           profiled half is the sweep below. */
+        expect((band as Element).querySelectorAll(".prof-badge").length, `${mode}: a badge on an unprofiled band`).toBe(0);
         await act(async () => (corner[0] as HTMLButtonElement).click());
         const card = document.querySelector(".band-about-card");
         expect(card?.textContent?.trim() ?? "", `${mode}: the (i) opened an empty card`).not.toBe("");
@@ -1565,6 +1581,45 @@ describe("phase B — what each mode's real controller drew", () => {
     );
   }
 
+});
+
+/* ================================================= the badge in the corner ==
+   **The owner's *written for you* badge sits beside the (i), in every mode
+   that draws one** — `ModeSurface`'s `profile`, since 2026-10-02. Greg
+   (spya-hf4svm): *"their position/sizing/alignment looks a bit off … make this
+   reusable/template as part of creating new modes"*. Each mode used to put it
+   in its own row, in five different places.
+
+   `PROFILED` is written from the product, not derived from the code: the modes
+   whose artefact can be written for the reader's profile and that show it in
+   the band. Sketch is the named exception — its badge is in its picture's own
+   toolbar, plan 261002e § Deferred. */
+const PROFILED = ["summary", "glossary", "ideas", "quotes", "tweets"] as const satisfies readonly Mode[];
+
+describe("the written-for-you badge sits in the band's corner", () => {
+  for (const mode of PROFILED) {
+    it(
+      `${mode}: one badge, a direct child of the band, right after the (i)`,
+      async () => {
+        fixtures = "populated";
+        profiled = true;
+        await open(`?mode=${mode}`);
+        const row = DRAWS[mode];
+        if (row.kind !== "band") throw new Error(`${mode} draws no band`);
+        const band = host.querySelector(row.where);
+        expect(band, `${mode}: no ${row.where} on the page`).not.toBeNull();
+        expect(readable(band as Element), `${mode}: the band drew no body`).toContain(row.says);
+        const badges = (band as Element).querySelectorAll(".prof-badge");
+        expect(badges.length, `${mode}: not exactly one badge in the band`).toBe(1);
+        expect(badges[0]?.parentElement, `${mode}: the badge is inside a row, not the corner`).toBe(band);
+        expect(
+          badges[0]?.previousElementSibling?.classList.contains("band-about"),
+          `${mode}: the badge does not follow the (i)`,
+        ).toBe(true);
+      },
+      PHASE_MS,
+    );
+  }
 });
 
 /* The two modes that draw no band used to be checked here, in tests written by

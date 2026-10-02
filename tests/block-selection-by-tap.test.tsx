@@ -150,6 +150,7 @@ function propsFor(
     onOpenComment: vi.fn(),
     chats: [],
     chatCounts: new Map<string, number>(),
+    notesBy: "you" as const,
     openChat: null,
     onOpenChat: vi.fn(),
     onChatAbout: vi.fn(),

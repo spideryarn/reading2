@@ -428,6 +428,7 @@ function propsFor(
     openComment: null,
     chats: [],
     chatCounts: new Map<string, number>(),
+    notesBy: "you" as const,
     openChat: null,
     ...over,
   };

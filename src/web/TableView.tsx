@@ -515,6 +515,12 @@ interface Props {
   chats: AnchoredThread[];
   /** How many conversations each block has, marked or not. Drives the gutter button. */
   chatCounts: Map<string, number>;
+  /**
+   * Whose the notes in `comments` are — the reader's own, or the owner's on a
+   * shared article. Only the gutter's mark reads it; BlockGutter.tsx §
+   * `notesBy` says why it is required.
+   */
+  notesBy: "you" | "owner";
   /** The conversation the floating panel is open on, so its mark can say so. */
   openChat: string | null;
   /** A chat mark was clicked. */
@@ -729,6 +735,7 @@ function TableViewInner({
   onOpenComment,
   chats,
   chatCounts,
+  notesBy,
   openChat,
   onOpenChat,
   onChatAbout,
@@ -1569,6 +1576,7 @@ function TableViewInner({
                   linkBase={linkBase}
                   comments={cmtsByBlock.get(block.id)}
                   chatCount={chatCounts.get(block.id) ?? 0}
+                  notesBy={notesBy}
                   onOpenComment={onOpenComment}
                   onChatAbout={onChatAbout}
                   onHelp={onHelp}

@@ -184,38 +184,40 @@ export function IdeasPanel({
       feature="gloss ideas"
       mode="ideas"
       about={about}
-      /* **A fragment, so the row survives an absent artefact.** Both children
-          are gated on `ideas`, so the header is empty while the list is coming
-          — and `head={ideas && …}` would hand the surface `null`, which draws
-          no `.band-head` at all and takes a row off the screen. */
-      head={
-        <>
-          {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
-              docs/plans/260905d-declutter-the-reading-view-top-bars.md), and
-              the count on 2026-10-01, to the band's (i) (plan 261001m). The
-              row stays for the profile label below, and as the row the (i)
-              sits in. */}
-          {/* A label rather than a control, and on the head line rather than in
-              a banner: it is provenance, not a warning. It matters more here
-              than anywhere else it appears — a changed profile does not merely
-              re-pitch these, it changes what "assumed" means. */}
-          {/* Provenance about the owner's own run: `profileHash` never leaves
-              the server, so a visitor sees none of it. src/public-types.ts. */}
-          {ideas && owner && (
-            <WrittenForYou
-              written={owner.profiled}
-              changed={owner.profileChanged}
-              slug={owner.slug}
-              /* The forced run replaces the list (plan 261002b). */
-              regenerate={{
-                run: () => void owner.regenerate(),
-                busy: owner.job !== null || owner.starting,
-                refresh: () => owner.refresh(),
-              }}
-            />
-          )}
-        </>
+      /* **The badge is in the band's corner**, beside the (i), since
+          2026-10-02 (`ModeSurface`'s `profile`, plan 261002e). It is the
+          same icon as in every other mode now, where until then this was the
+          one band that said *"written for you"* in words, on the argument
+          that a changed profile changes what "assumed" means here. Greg asked
+          for the corner to be standardised (spya-hf4svm); the panel the icon
+          opens says the same fact in words at its top. A label rather than a
+          control, and provenance about the owner's own run: `profileHash`
+          never leaves the server, so a visitor sees none of it
+          (src/public-types.ts). */
+      profile={
+        ideas && owner ? (
+          <WrittenForYou
+            written={owner.profiled}
+            changed={owner.profileChanged}
+            slug={owner.slug}
+            compact
+            /* The forced run replaces the list (plan 261002b). */
+            regenerate={{
+              run: () => void owner.regenerate(),
+              busy: owner.job !== null || owner.starting,
+              refresh: () => owner.refresh(),
+            }}
+          />
+        ) : null
       }
+      /* **An empty head, kept as the row the corner sits in.** The mode's
+          name went on 2026-09-05 — the Dock says it (§ Stage 5 of
+          docs/plans/260905d-declutter-the-reading-view-top-bars.md) — the
+          count on 2026-10-01, to the band's (i) (plan 261001m), and the badge
+          on 2026-10-02, to the corner. Without the row the corner would sit on
+          the first group's heading and its count; mode-band.css floors a head
+          at the corner's height. */
+      head={<></>}
       /* No standing redo button under the list any more. Greg, 2026-09-29
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
           have a "redo this processing" button - let's just rely on the

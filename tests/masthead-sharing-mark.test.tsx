@@ -37,12 +37,16 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  SHARING_MARK_PRESS_PRIVATE,
+  SHARING_MARK_PRESS_PUBLIC,
   SHARING_MARK_NAME_PRIVATE,
   SHARING_MARK_NAME_PUBLIC,
-  SHARING_MARK_PRIVATE,
-  SHARING_MARK_PUBLIC,
+  SHARING_MARK_ON_ARCHIVED,
+  SHARING_OFF,
+  SHARING_ON,
 } from "../src/messages.js";
 import type { Article, Visibility } from "../src/types.js";
+import type { ArchiveControl } from "../src/web/useArchive.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -120,16 +124,42 @@ afterEach(async () => {
 });
 
 /** The masthead, as the owner sees it (`onRenamed`) or as a visitor does. */
-async function mount(visibility: Visibility | undefined, owner: boolean) {
+async function mount(
+  visibility: Visibility | undefined,
+  owner: boolean,
+  archivedAt: string | null | "unknown" = null,
+) {
+  /* A still controller rather than `useArchive`: this file reads cards, and
+     tests/masthead-archive-mark.test.tsx owns the presses. */
+  const archive: ArchiveControl = {
+    at: archivedAt === "unknown" ? undefined : archivedAt,
+    lost: false,
+    busy: false,
+    error: null,
+    set: async () => {},
+  };
   await act(async () => {
     root.render(
       createElement(Masthead, {
         article: article(visibility),
         slug: SLUG,
-        ...(owner ? { onRenamed: () => {} } : {}),
+        ...(owner ? { onRenamed: () => {}, archive } : {}),
       }),
     );
   });
+}
+
+/** Open a masthead control's card by its trigger and return the one card. */
+async function cardOf(trigger: Element): Promise<HTMLElement> {
+  /* A native `mouseenter` opens it — tooltips.md § Three things about testing
+     a card in jsdom. The card is portalled to `<body>`, not into `host`. */
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent("mouseenter"));
+    await new Promise((r) => setTimeout(r, 400));
+  });
+  const cards = document.querySelectorAll(".tip-soon");
+  expect(cards).toHaveLength(1);
+  return cards[0] as HTMLElement;
 }
 
 const hrefs = () => [...host.querySelectorAll("a[href]")].map((a) => a.getAttribute("href"));
@@ -149,16 +179,18 @@ const names = () =>
 function marked(name: string, tip: string): void {
   expect(names()).toContain(name);
   expect(names()).not.toContain(tip);
-  /* Shorter, as a name should be — and the check is not decoration: the failure
-     it guards is somebody passing the sentence as both. */
-  expect(name.length).toBeLessThan(tip.length);
+  /* The failure this guards is somebody passing the sentence as both. It was a
+     length check — *shorter, as a name should be* — until 2026-10-02, when the
+     state sentence lost its appended action and became shorter than the name
+     (*"Only you can read this."*), so the length no longer says anything. */
+  expect(name).not.toBe(tip);
 }
 
 describe("the sharing mark beside the title", () => {
   it("says an article is out in the world, and links to the switch", async () => {
     await mount("public", true);
 
-    marked(SHARING_MARK_NAME_PUBLIC, SHARING_MARK_PUBLIC);
+    marked(SHARING_MARK_NAME_PUBLIC, SHARING_ON);
     expect(names()).not.toContain(SHARING_MARK_NAME_PRIVATE);
     expect(hrefs()).toContain(METADATA);
   });
@@ -171,7 +203,7 @@ describe("the sharing mark beside the title", () => {
        here the question — *would the link I am about to paste work?* — is asked
        exactly as often about a private article, and answering it by absence is
        indistinguishable from a mark that has not loaded. */
-    marked(SHARING_MARK_NAME_PRIVATE, SHARING_MARK_PRIVATE);
+    marked(SHARING_MARK_NAME_PRIVATE, SHARING_OFF);
     expect(hrefs()).toContain(METADATA);
   });
 
@@ -212,5 +244,74 @@ describe("the sharing mark beside the title", () => {
     await mount("private", true);
 
     expect(hrefs()).toContain(`${METADATA}?at=spya-aaaaaa&cols=0,1`);
+  });
+
+  /**
+   * **The state is a statement, and the press is its own line.** Greg,
+   * 2026-10-02 (spya-d886ah), of *"Only you can read this. Share it with
+   * anyone."*: *"One sentence is a statement of the current state. The other is
+   * a potential action … [with no] UI differentiation between these two kinds
+   * of sentence."* So the `what` is the shared state sentence and nothing else,
+   * and where pressing goes is `ControlTip`'s `press` line.
+   * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
+   */
+  it.each([
+    ["private", "Private", SHARING_OFF, SHARING_MARK_PRESS_PRIVATE],
+    ["public", "Shared", SHARING_ON, SHARING_MARK_PRESS_PUBLIC],
+  ] as const)("keeps the %s state and the press apart in its card", async (visibility, head, what, press) => {
+    await mount(visibility, true);
+    const link = host.querySelector<HTMLAnchorElement>(`a[href^="${METADATA}"]`);
+    if (!link) throw new Error("no sharing mark");
+    const card = await cardOf(link);
+    expect(card.querySelector(".tip-soon-head")?.textContent).toBe(head);
+    expect(card.querySelector(".tip-soon-what")?.textContent).toBe(what);
+    expect(card.querySelector(".tip-soon-press")?.textContent).toBe(press);
+    expect(card.querySelector(".tip-soon-what")?.textContent).not.toMatch(/\bpress\b/i);
+    expect(card.querySelector(".tip-soon-press")?.textContent).toMatch(/^Press\b/);
+    if (visibility === "private") {
+      expect(card.querySelector(".tip-soon-how")?.textContent).toMatch(
+        /public page.*without signing in.*listed publicly.*most of what the AI made.*comments.*full list.*confirmed/i,
+      );
+      expect(card.querySelector(".tip-soon-press")?.textContent).toMatch(/Metadata page.*Share… starts it/);
+    } else {
+      expect(card.querySelector(".tip-soon-how")?.textContent).toMatch(
+        /Stopping sharing refuses the next request.*takes it off the public list.*already read or copied stays/i,
+      );
+      expect(card.querySelector(".tip-soon-press")?.textContent).toMatch(
+        /Metadata page.*stop sharing/,
+      );
+    }
+  });
+
+  /**
+   * **Shared and archived is not "listed publicly".** Archiving takes a public
+   * article off the public list while its link keeps working
+   * (src/store/public-library.ts § the `archivedAt` clause), so both marks have
+   * to say so. GPT Sol, plan review of 261002e, finding 1.
+   */
+  it("does not promise a public listing for a shared article that is archived", async () => {
+    await mount("public", true, "2026-09-30T10:00:00Z");
+    const link = host.querySelector<HTMLAnchorElement>(`a[href^="${METADATA}"]`);
+    if (!link) throw new Error("no sharing mark");
+    const sharing = await cardOf(link);
+    expect(sharing.querySelector(".tip-soon-what")?.textContent).toBe(SHARING_MARK_ON_ARCHIVED);
+    expect(sharing.textContent).not.toContain("it's listed publicly");
+  });
+
+  it("does not promise a public listing when the archive state is unknown", async () => {
+    await mount("public", true, "unknown");
+    const link = host.querySelector<HTMLAnchorElement>(`a[href^="${METADATA}"]`);
+    if (!link) throw new Error("no sharing mark");
+    const sharing = await cardOf(link);
+    expect(sharing.querySelector(".tip-soon-what")?.textContent).toMatch(/couldn't be confirmed/i);
+    expect(sharing.querySelector(".tip-soon-what")?.textContent).not.toBe(SHARING_ON);
+  });
+
+  it("says archiving a shared article takes it off the public list", async () => {
+    await mount("public", true);
+    const button = host.querySelector('[data-testid="masthead-archive"]');
+    if (!button) throw new Error("no archive mark");
+    const card = await cardOf(button);
+    expect(card.querySelector(".tip-soon-how")?.textContent).toMatch(/off the public list/);
   });
 });

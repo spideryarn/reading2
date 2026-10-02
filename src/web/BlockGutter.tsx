@@ -180,6 +180,18 @@ interface Props {
   comments?: readonly Comment[] | undefined;
   /** Conversations anchored anywhere in this block, whole-block or selection. */
   chatCount: number;
+  /**
+   * **Whose the notes in `comments` are**, so the mark can say so from the
+   * viewer's side: `"you"` for the owner, `"owner"` for a visitor to a shared
+   * article, who is handed the owner's notes (messages.ts § `ALWAYS_SHARED`).
+   *
+   * A word rather than inferred from the callbacks, unlike the three below:
+   * those are capabilities, and this is a fact about the notes. And required,
+   * because the default anyone would reach for is the owner's *"Your note"* —
+   * which is exactly what a stranger was told until 2026-10-02. GPT Sol, C7 in
+   * docs/plans/261002b-help-page-code-review-sol.md.
+   */
+  notesBy: "you" | "owner";
   onOpenComment(id: string): void;
   /**
    * Open a conversation about this whole block — **and its absence is what
@@ -259,6 +271,7 @@ export function BlockGutter({
   linkBase,
   comments,
   chatCount,
+  notesBy,
   onOpenComment,
   onChatAbout,
   onHelp,
@@ -586,16 +599,8 @@ export function BlockGutter({
             setOpen(false);
             onOpenComment(first.id);
           }}
-          title={
-            comments && comments.length > 1
-              ? `Your notes on this paragraph (${comments.length})`
-              : "Your note on this paragraph"
-          }
-          aria-label={
-            comments && comments.length > 1
-              ? `Open your notes on this paragraph, ${comments.length} of them`
-              : "Open your note on this paragraph"
-          }
+          data-tip={markTitle(notesBy, comments?.length ?? 1)}
+          aria-label={markName(notesBy, comments?.length ?? 1)}
         >
           <Bookmark size={GLYPH} aria-hidden="true" />
           {comments && comments.length > 1 && (
@@ -618,22 +623,24 @@ export function BlockGutter({
       <a
         className={`blk-permalink${copy === "failed" ? " failed" : ""}`}
         href={blockHref(id, linkBase)}
-        /* The tooltip Greg asked for, carrying the full id. `title` rather than
-           the Tooltip component on purpose: that is a Floating UI instance per
-           trigger, and this is one trigger per block on an article that can run
-           to several hundred. It is also what `.block-chat` beside it has
-           always used. */
-        title={
+        /* The tooltip Greg asked for, carrying the full id. **`data-tip`, read
+           by the reading view's one delegated card** (BlockLinkCard.tsx §
+           `GUTTER_CONTROL`), since 2026-10-02: not the Tooltip component,
+           which is a Floating UI instance per trigger on an article that can
+           run to several hundred blocks, and no longer a native `title`, which
+           shows after a second in the browser's own style and read as no
+           tooltip at all (spya-jc0vm6, *"Make sure they all have tooltips"*).
+           Every control in this column does the same. */
+        data-tip={
           copy === "copied"
             ? `Copied — ${id}`
             : copy === "failed"
               ? `Couldn't copy. Use the link's own menu — ${id}`
               : `${id} — click to copy a link to this paragraph`
         }
-        /* Names it as the link it is, and carries the full id — which is the
-           condition on using `title` for the hint at all, since a native title
-           is delayed, is not reliably exposed on keyboard focus, and does not
-           exist on touch. */
+        /* Names it as the link it is, and carries the full id — the card is
+           not hung on it as a description (it would be read twice), and it
+           does not open for a finger, so the name has to carry the id. */
         aria-label={`Link to this paragraph, ${id}`}
         onClick={onCopy}
       >
@@ -672,14 +679,14 @@ export function BlockGutter({
              conversation", and *"(3 total)"* says the count is the set rather
              than promising the reader all of it.
 
-             **`title` and `aria-label` are one string here**, unlike the
+             **`data-tip` and `aria-label` are one string here**, unlike the
              permalink and the "?" beside it, and the divergence is what was
              wrong rather than what was right: the accessible name was the bare
              singular, so the count on screen was the one thing a screen reader
              could not hear. Nothing about the count is decoration.
 
              With no conversation on the block, both are unchanged. */
-          title={
+          data-tip={
             chatCount
               ? `Open a conversation about this paragraph (${chatCount} total)`
               : "Chat about this paragraph"
@@ -715,7 +722,7 @@ export function BlockGutter({
           could not change behind the behaviour. GPT Sol's condition on stage 2
           being coherent on its own.
 
-          **`title` and `aria-label` diverge here, as they do for the permalink
+          **`data-tip` and `aria-label` diverge here, as they do for the permalink
           above.** The tooltip has room to name the cost; the accessible name is
           read out on focus, in a gutter where four of them go past in a row, so
           it stays to the verb.
@@ -761,7 +768,7 @@ export function BlockGutter({
               announce(stored ? "Bookmarked this paragraph." : "Bookmark not confirmed.");
             });
           }}
-          title="Bookmark this paragraph"
+          data-tip="Bookmark this paragraph"
           aria-label="Bookmark this paragraph"
         >
           <Bookmark size={GLYPH} aria-hidden="true" />
@@ -777,7 +784,7 @@ export function BlockGutter({
             setOpen(false);
             onHelp(id);
           }}
-          title="Ask the AI for help with this paragraph"
+          data-tip="Ask the AI for help with this paragraph"
           aria-label="Ask the AI for help"
         >
           <CircleHelp size={GLYPH} aria-hidden="true" />
@@ -839,7 +846,7 @@ export function BlockGutter({
             if (e.detail === 0) goTo.current = open ? "more" : "head";
             setOpen((was) => !was);
           }}
-          title={open ? "Close paragraph controls" : "More for this paragraph"}
+          data-tip={open ? "Close paragraph controls" : "More for this paragraph"}
           aria-label={open ? "Close paragraph controls" : "More for this paragraph"}
         >
           {open ? <X size={GLYPH} aria-hidden="true" /> : <Ellipsis size={GLYPH} aria-hidden="true" />}
@@ -874,4 +881,26 @@ export function BlockGutter({
       <span className="blk-read" aria-hidden="true" />
     </div>
   );
+}
+
+/**
+ * The mark's tooltip and its name, **from the viewer's side** — `Props.notesBy`
+ * says why there are two voices. The visitor's phrase is the drawer's own,
+ * *"whoever added this article"* (Dock.tsx § `NOT_A_MODE`), so a stranger meets
+ * one name for the owner on every surface.
+ */
+function markTitle(notesBy: "you" | "owner", n: number): string {
+  if (notesBy === "you") return n > 1 ? `Your notes on this paragraph (${n})` : "Your note on this paragraph";
+  return n > 1
+    ? `Notes on this paragraph from whoever added this article (${n})`
+    : "A note on this paragraph from whoever added this article";
+}
+
+/** @see markTitle */
+function markName(notesBy: "you" | "owner", n: number): string {
+  if (notesBy === "you")
+    return n > 1 ? `Open your notes on this paragraph, ${n} of them` : "Open your note on this paragraph";
+  return n > 1
+    ? `Open the notes on this paragraph from whoever added this article, ${n} of them`
+    : "Open the note on this paragraph from whoever added this article";
 }

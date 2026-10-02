@@ -85,8 +85,6 @@
   .summ-slider-end { transition: none; }
 }
 
-/* The *written for you* badge, pushed to the row's far end. */
-.summ-badge { margin-left: auto; display: inline-flex; align-items: center; }
 
 /* ---- the paragraphs' scroller ---- */
 /* The reader's own scroller (SimplePanel.tsx). `overscroll-behavior: contain`
