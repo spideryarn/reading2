@@ -157,3 +157,27 @@ is folded in above.
   real run is the Overseer's next deploy, as 261001q's was. A dry run is not available; its new code
   is the deletion of a loop and a fast-forward.
 - GPT Sol on this plan (read-only), then on the code (workspace-write).
+
+## Results
+
+Built 2026-10-02. What was checked, and how:
+
+- **Every new check watched red**, by mutation and restore: the loosened gate (old code refused a
+  late commit after present notes), the null-pending refusal (both the pure function and `notesAt`
+  on a temp repo), `promote` stopping the line at the notes so the next range holds the late commit,
+  `deployed_sha` written by `promote` and refused on a pending release, the fleet watermark measured
+  from `deployed_sha`, the page's sentence, and `fastForwardTo` refusing an ahead and a diverged
+  HEAD (with an unrelated edit kept, and an overlapping one refused and kept).
+- **Against the real repo**: `notesAt` on `origin/dev` (af6035af) refuses — the pending file had
+  just been promoted to `null` and 80 release commits sat after it, which is exactly the
+  "prepare has not run" case the gate still catches. On `origin/main` it passes with nothing late.
+- **GPT Sol, twice.** The plan, read-only: approve with changes, five findings, all taken (above).
+  The code, workspace-write: approve with changes made — `fastForwardTo` hardened against
+  `merge.autoStash` and overwritten ignored files; the post-model sync made to stop on a failed fetch
+  and to check HEAD even when `dev` did not move; `promote` made to refuse a rollback that sits ahead
+  of a coverage watermark that stopped short, and to match a redeploy on the build as well as the
+  notes; the live pending release given its build as `deployed_sha` so the page keeps its coverage
+  sha; the fleet count relabelled. I re-ran one of its mutations (the rollback check) and saw it red.
+- **Not exercised end to end**: `release-notes.ts prepare` itself, which commits and pushes to `dev`
+  from the primary and runs a model job; there is no dry-run mode. Its first real run is the
+  Overseer's next deploy after this lands, as 261001q's was.
