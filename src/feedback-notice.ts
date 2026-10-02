@@ -70,14 +70,16 @@ export const FEEDBACK_NOTICE_POLICY = {
 } as const satisfies RatePolicy;
 
 /**
- * **Bidirectional formatting controls**: the marks (U+200E, U+200F), the
- * embeddings and overrides (U+202A to U+202E) and the isolates (U+2066 to
- * U+2069). Not control characters by Unicode's category, so `noteText` and
- * `oneLine` keep them, and a right-to-left override can make text display in
- * an order other than the one it is stored in. Removed, not replaced: they
- * draw nothing. Written as escapes, never as the characters themselves.
+ * **Bidirectional formatting controls** — Unicode's own `Bidi_Control`
+ * property, so the list is the standard's rather than ours: the marks
+ * (U+061C, U+200E, U+200F), the embeddings and overrides (U+202A to U+202E)
+ * and the isolates (U+2066 to U+2069). The first hand-written list missed
+ * U+061C (Sol's code review). Not control characters by Unicode's category,
+ * so `noteText` and `oneLine` keep them, and a right-to-left override can make
+ * text display in an order other than the one it is stored in. Removed, not
+ * replaced: they draw nothing.
  */
-const BIDI_CONTROLS = /[\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu;
+const BIDI_CONTROLS = /\p{Bidi_Control}/gu;
 
 /**
  * **Best-effort text a mail client will not turn into a link.** `scheme://`
@@ -221,9 +223,14 @@ export async function noticeFeedback(
   } finally {
     if (lease !== null) {
       /* Only the lease is cleared; the row goes on counting against the day. */
-      await deps.allowance.finish(lease).catch((err: unknown) => {
+      /* `try` around the `await`, not `.catch` on the call: a `finish` that
+         throws before it returns a promise would escape a `.catch` (Sol's code
+         review). */
+      try {
+        await deps.allowance.finish(lease);
+      } catch (err) {
         logger.warn({ ...errorFields(err) }, "feedback notice: lease not released");
-      });
+      }
     }
   }
 }

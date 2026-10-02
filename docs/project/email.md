@@ -128,14 +128,14 @@ The three notices, and why each fires when it does:
   every newly created report whose owner is not an admin, after the reader's `POST /api/feedback`
   has been answered — [`src/feedback-notice.ts`](../../src/feedback-notice.ts). It is the first
   admin notice to carry **a reader's own prose**, so the words are quoted line by line (so they
-  cannot pass for our lines), defanged (`https[:]//`, `www[.]`, so a mail client draws no link),
+  cannot pass for our lines), defanged (`https[:]//`, `www[.]` — best effort: a bare domain or an address may still be linked by some client),
   and kept out of the subject; the page address stays live only on our own origin. **It has its
   own cap, because this is the one notice a reader can trigger at will:** at most 20 in any 24 hours
   across every reader and 5 from any one, taken from the `feedback-notice` bucket of the shared
   rate-limit table (`FEEDBACK_NOTICE_POLICY`, [pg-rate-limit.ts](../../src/store/pg-rate-limit.ts)),
   which counts mails attempted, atomically, rather than reports filed. Resend's 100 a day is shared
   with auth mail, and one reader at the feedback hourly cap of 30 would otherwise spend it in under
-  four hours. Every mail says the cap exists; `/admin/feedback` is the full record.
+  four hours. Every mail says the cap exists; `/admin/feedback` is the full record. **The cap fails open**: if the allowance cannot be read — the database down, or the bucket's migration not yet run, whose CHECK then refuses the row — the mail is sent uncapped and a warning logged, because missing a report is the worse mistake at this volume.
 
 **All three are best-effort.** A crash between the commit and the send loses that notice for good; it is
 logged, and `/admin` is the record. A sign-up whose send fails (or finds no key in production) gives

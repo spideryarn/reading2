@@ -26,6 +26,7 @@ const READER = "7d1c3f0e-5b4a-4e8b-9c2d-0a1b2c3d4e5f";
 const LINE_SEPARATOR = String.fromCodePoint(0x2028);
 const RLO = String.fromCodePoint(0x202e);
 const ISOLATE = String.fromCodePoint(0x2067);
+const ARABIC_LETTER_MARK = String.fromCodePoint(0x061c);
 
 function report(over: Partial<FeedbackReport> = {}): FeedbackReport {
   return {
@@ -148,11 +149,12 @@ describe("feedbackNoticeMessage", () => {
 
   it("removes bidirectional controls from the words and the address", () => {
     const { text } = feedbackNoticeMessage(
-      report({ body: `abc${RLO}def${ISOLATE}`, reporterEmail: `a${RLO}@b.c` }),
+      report({ body: `abc${RLO}def${ISOLATE}${ARABIC_LETTER_MARK}`, reporterEmail: `a${RLO}@b.c` }),
       READER,
     );
     expect(text).not.toContain(RLO);
     expect(text).not.toContain(ISOLATE);
+    expect(text).not.toContain(ARABIC_LETTER_MARK);
     expect(quoted(text)).toEqual(["abcdef"]);
     expect(text).toContain("Email: a@b.c");
   });
@@ -233,5 +235,19 @@ describe("noticeFeedback", () => {
     });
     expect(outcome.kind).toBe("failed");
     expect(h.finished).toEqual(["lease-2"]);
+  });
+
+  it("does not throw when freeing the slot throws before returning a promise", async () => {
+    const h = harness({ kind: "allowed", id: "lease-3" });
+    const outcome = await noticeFeedback(report(), READER, {
+      ...h.deps,
+      allowance: {
+        take: h.deps.allowance.take,
+        finish: (() => {
+          throw new Error("sync");
+        }) as unknown as (id: string) => Promise<void>,
+      },
+    });
+    expect(outcome.kind).toBe("sent");
   });
 });

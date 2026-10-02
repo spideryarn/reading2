@@ -540,7 +540,8 @@ export function PrivacyPage() {
           The Feedback button sends us what you write, your email address, the build you were
           running and the address of the page you were on — the whole address, including anything
           after the <code>?</code>, so if you were searching for something, that search text comes
-          with it. It goes to our database and to Sentry, and the point of saying so here is that
+          with it. It goes to our database, to Sentry and, as an email, to our own inbox, and the
+          point of saying so here is that
           you can leave the box until you are on a page you don’t mind us seeing.
         </p>
         <p>

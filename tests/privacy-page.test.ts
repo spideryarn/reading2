@@ -178,6 +178,8 @@ describe("the privacy page", () => {
     expect(prose).toContain(
       "When you send us feedback, we also email ourselves a copy — what you wrote, the address of the page you were on, and your email address — the same way",
     );
+    /* And the bug-report section, which lists where a report goes. */
+    expect(prose).toContain("It goes to our database, to Sentry and, as an email, to our own inbox");
   });
 
   it("gives the one contact address rather than spelling one of its own", () => {
