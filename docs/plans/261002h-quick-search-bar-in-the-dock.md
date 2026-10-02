@@ -75,7 +75,7 @@ band is mounted before the first ask is due.
 Typing in the bar box when Search mode is closed:
 
 1. The first keystroke changes nothing visible but the box.
-2. The first debounced pause (450 ms, at least 3 characters) opens Search mode with
+2. The first debounced pause (600 ms, at least 3 characters) opens Search mode with
    `?match=quick` — a URL change through the existing `useActivateMode`, pushed once — and the band
    asks. Focus stays in the bar box; the article does not scroll.
 3. Later pauses revise the same row (part 3).
@@ -141,7 +141,7 @@ passes no signal, so a superseded Jev call runs to completion. The plan adds:
 ## Cost per typing session
 
 A quick search is about **$0.0004** on a typical article and $0.003 on a 540-paragraph one. With a
-450 ms pause and a 3-character floor, a typed question of four or five words produces roughly 3–6
+600 ms pause and a 3-character floor, a typed question of four or five words produces roughly 3–6
 asks, some cancelled mid-flight (a cancelled request may still be billed). So **about $0.001–0.003
 per session on a typical article, and up to about $0.02 on a very long one.** It is metered like
 every quick search (`search-quick` in `ai_calls`), so the real number will be visible within a
@@ -193,3 +193,78 @@ Sol reviews this plan before stage 1, and the code at the end.
 - No quick search with Search mode closed (results nobody can see).
 - No search-as-you-type for *meaning*.
 - No new keyboard chord beyond `/`.
+
+## Plan review (GPT Sol and Opus, 2026-10-02) and what changed
+
+Sol: [261002h-quick-search-bar-in-the-dock-plan-review-sol.md](261002h-quick-search-bar-in-the-dock-plan-review-sol.md),
+*proceed with changes*. Opus (a subagent, asked to arbitrate the product questions) agreed with
+the shape and added the touch and flicker points. **Both independently said the same simpler thing
+first: build search-as-you-type in the panel, then put the bar control on top of it.** That is now
+the stage order; the bar box stays, because Greg asked for a box in the bar.
+
+What changed, finding by finding:
+
+- **Sol F1** — the first ask waits for the saved list's GET (`loaded`), or the GET's arrival would
+  replace the list under the pending row. The latest intent is carried until then; Enter skips the
+  pause, not this gate.
+- **Sol F2** — the panel's box no longer autofocuses when Search mode was opened from the bar box
+  (it does for the ⚡ button, `/` on a narrow window, and the ordinary Search button).
+- **Sol F3** — the attempt fence orders *finishes*, not *begins*. So a session sends **one request
+  at a time**: a revision waits for the previous request's `begin` frame, edits made meanwhile
+  coalesce to the latest words, and only then is the old fetch aborted and the revision sent. The
+  revise branch is its own UPDATE (it sets `criterion`; the retry UPDATE matches on the old one and
+  on `error`).
+- **Sol F4** — the client fences too: each send has a generation, and a superseded send's frames,
+  renames and errors are dropped before they touch the row or `?runs=`. A deleted session row is
+  never resurrected by a revision.
+- **Sol F5 / Opus** — the session rules, precisely (they are a pure reducer in
+  `src/web/quick-session.ts`, so they are tested on their own):
+  - a session **starts** at the first edit of the box with *quick* chosen, and acquires its row on
+    its first ask;
+  - each later pause **revises** that row; unchanged words ask nothing;
+  - it **ends** on Enter or *find* (after flushing changed words into the row), the box emptied, a
+    matcher switch, ↺ or ✕ or *flesh out* on its row, leaving Search mode or the article, and —
+    Opus — **the box blurred for longer than a pause**, so somebody who searches, reads for five
+    minutes and types again starts a new row rather than overwriting a search they may want;
+  - revisions do not re-tick a row the reader unticked, and add nothing new to `?runs=`;
+  - words left in the box after a session ends are inert: remounting never asks.
+- **Opus** — a revision keeps the previous answer's marks on screen until the new one arrives,
+  rather than wiping every highlight on every pause.
+- **Opus** — the pause is **600 ms**, and needs at least 3 characters; whether a word boundary
+  should also be required is measured in the browser check rather than argued.
+- **Sol F6** — the shared draft is one way: the bar box writes the draft only while it has focus;
+  the panel's quick/meaning box reads and writes it; *words* keeps `?find=` and never launches a
+  quick call. Fetches never write the draft.
+- **Sol F7** — the server cancels through the existing `sse(res).gone` seam, not a new listener,
+  **for quick only**: a cancelled quick attempt finishes as an error through the fence (so a
+  superseded one changes nothing and an abandoned one does not sit `pending`). The `searching` key
+  becomes attempt-aware, so an old attempt's `finally` cannot release a newer one's. *Meaning* keeps
+  running when the tab closes, as today — changing that is a product call this job does not need.
+- **Sol F8** — the bar control and `/` exist only where the band can answer: an owner's reading
+  view (visitors get the read-only band and no control).
+- **Sol F9 / Opus** — **touch devices (`pointer: coarse`) always get the ⚡ button**, at any width:
+  an input in a fixed bar at the foot of an iPad is where the on-screen keyboard misbehaves. On a
+  mouse, the box at the wide rungs and the ⚡ at the narrowest, sized by the fit ladder's classes
+  (no React swap during measurement). Opus: iOS only raises the keyboard for a focus inside the tap
+  itself, so the ⚡ focuses synchronously where it can; if the band's box mounts too late for
+  that, a second tap is the accepted cost and is written down — the Playwright check cannot show
+  it, so say so rather than claim it.
+- **Opus** — while Search mode is open and the bar box does not have focus, it shows as the ⚡, so
+  there is only one box to edit.
+- **Sol F10** — `/` is Firefox's Quick Find. Kept anyway, like GitHub: it overrides a niche
+  duplicate of ⌘F/Ctrl-F, not the browser's main find, and keyboard.md says so. Shift is not
+  rejected (some layouts need it for `/`); IME, editable and dialog guards are.
+
+Not taken: Opus's suggestion to make *quick* the default matcher. It is a product call and the bar
+control sets `?match=quick` itself, so this job does not need it — offered to Greg instead.
+
+### Stages, revised
+
+1. **Server**: the revise UPDATE in `withRun`/`begin`, the attempt-aware `searching` key, `gone`
+   for quick, a cancelled quick attempt finishing as an error. Tests first.
+2. **Panel search-as-you-type**: `quick-session.ts` (pure, tested), the one-at-a-time send with a
+   generation fence and an `AbortController` in `useSearch`, marks kept across a revision, the
+   `loaded` gate.
+3. **Bar control**: `search-draft.ts`, `DockQuickSearch.tsx` (box, ⚡, the owner gate, coarse
+   pointer), `/`, no autofocus steal.
+4. **Docs and browser check** at 1440, 1024 (landscape iPad), 768 (portrait) and 390.
