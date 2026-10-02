@@ -45,8 +45,16 @@ import { readModeRows } from "./run.js";
 const JUDGED_MODES = [...MODES, "hierarchy"] as const;
 type JudgedMode = (typeof JUDGED_MODES)[number];
 
-/** The Hierarchy harness's four, in its own arm names. */
-export const HIERARCHY_ARMS = ["incumbent", "incumbent-repeat", "smart-off", "smart-off-repeat"] as const;
+/** The two repeats of toc/10 and toc/11, named in the shape tally.ts already understands. */
+export const HIERARCHY_ARMS = ["base-a", "base-b", "toc11-a", "toc11-b"] as const;
+
+export const hierarchyTreeFile = (arm: string, slug: string): string => {
+  const match = /^(base|toc11)-([ab])$/.exec(arm);
+  if (!match) throw new Error(`unknown hierarchy judging arm ${arm}`);
+  const source = match[1] === "base" ? "toc10-frozen" : "incumbent";
+  const repeat = match[2] === "a" ? 1 : 2;
+  return `${source}.${slug}.r${repeat}.json`;
+};
 
 /** W, X, Y, Z for four; onward from A when there are more than four. */
 export function labelsFor(n: number): string[] {
@@ -156,7 +164,7 @@ async function render(
       return [head, "", "```json", JSON.stringify(brief, null, 2), "```"].join("\n");
     }
     case "hierarchy": {
-      const file = path.join(opts.hierarchyRun as string, "trees", `${arm}.${slug}.json`);
+      const file = path.join(opts.hierarchyRun as string, "trees", hierarchyTreeFile(arm, slug));
       if (!existsSync(file)) return missing;
       /* blind.ts's own heading, renamed to this lineup's. */
       return renderForJudging(

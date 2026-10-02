@@ -39,7 +39,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { declaredFetch, withDeclaredExternalCall } from "../declared-spend.js";
-import { MESSAGES_PROVIDER, wasRefused } from "../../src/messages-stream.js";
+import { MESSAGES_PROVIDER, wasRefused, type MessagesBody } from "../../src/messages-stream.js";
 import { stripFence } from "../../src/parse-json.js";
 import { appendSupplement, splitBlocks } from "../../src/supplement.js";
 import { buildTree, parseStructureAnswer, structureRequest, type BuildReport, type ModelNode } from "../../src/hierarchy.js";
@@ -47,6 +47,7 @@ import { assertTreeSound } from "../../src/tree-invariants.js";
 import type { Block, Tree } from "../../src/types.js";
 import type { ArmSpec, CallSpec } from "./arms.js";
 import { buildHeadingTree } from "../../src/heading-tree.js";
+import { parseToc10StructureAnswer, toc10FrozenRequest } from "./toc10-frozen.js";
 
 /** How long any one structure call may take before it counts as a failure. */
 export const CALL_TIMEOUT_MS = 10 * 60_000;
@@ -290,6 +291,7 @@ export type MessagesSend = (req: {
   system: string;
   user: string;
   maxTokens: number;
+  format?: NonNullable<MessagesBody["output_config"]>["format"];
   /** `Date.now()` at the moment the arm itself started — see `CallStats.startedOffsetMs`. */
   armStartedAt: number;
   /** Which round of calls this one belongs to — see `CallStats.wave`. */
@@ -328,14 +330,21 @@ export function messagesBody(req: {
   system: string;
   user: string;
   maxTokens: number;
+  format?: NonNullable<MessagesBody["output_config"]>["format"];
 }): Record<string, unknown> {
-  const { call, system, user, maxTokens } = req;
+  const { call, system, user, maxTokens, format } = req;
   return {
     model: call.model,
     max_tokens: maxTokens,
     ...(call.thinking === "off"
       ? { thinking: { type: "disabled" } }
-      : { thinking: { type: "adaptive" }, output_config: { effort: call.effort } }),
+      : {
+          thinking: { type: "adaptive" },
+          output_config: {
+            effort: call.effort,
+            ...(format !== undefined ? { format } : {}),
+          },
+        }),
     system,
     messages: [{ role: "user", content: user }],
     provider: MESSAGES_PROVIDER,
@@ -369,7 +378,7 @@ export function thinkingOffFailure(a: {
  * (`MESSAGES_PROVIDER`, src/messages-stream.ts), with only model and effort
  * varying per arm. Non-streaming, because nobody watches an eval.
  */
-export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens, armStartedAt, wave }) => {
+export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens, format, armStartedAt, wave }) => {
   const client = new Anthropic({
     baseURL: "https://openrouter.ai/api",
     apiKey: apiKey(),
@@ -392,7 +401,7 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
     /* Off the raw `message_delta` too, as meterStream reads it, rather than
        trusting the merged message alone to have kept the field. */
     let streamThinkingTokens: number | null = null;
-    const body = messagesBody({ call, system, user, maxTokens });
+    const body = messagesBody({ call, system, user, maxTokens, ...(format !== undefined ? { format } : {}) });
     const stream = client.messages.stream(body as unknown as Anthropic.MessageStreamParams);
     stream.on("streamEvent", (event) => {
       const raw = event as unknown as {
@@ -723,27 +732,33 @@ export function renderHeadingList(blocks: Block[]): string {
 
 /**
  * The heading tree, rendered as the proposal the `headings-seeded` arm hands
- * the model. Nested JSON in the same shape the model is asked to emit, so
+ * the model. Nested starts-only JSON in the same shape the model is asked to emit, so
  * "modify or replace" needs no second format — the model can echo it, edit it,
  * or ignore it.
  */
 export function renderSeedProposal(blocks: Block[], slug: string): string {
   const built = buildHeadingTree(blocks, slug);
   const tree = built.tree;
-  const toModelNode = (id: string): ModelNode | null => {
+  interface SeedNode {
+    title: string;
+    start?: string;
+    sourceHeading?: string;
+    children?: SeedNode[];
+  }
+  const toSeedNode = (id: string, root = false): SeedNode | null => {
     const node = tree.nodes[id];
     if (!node || node.children.length === 0 || node.treatment === "supplement") return null;
     const children = node.children
-      .map(toModelNode)
-      .filter((c): c is ModelNode => c !== null);
+      .map((childId) => toSeedNode(childId))
+      .filter((child): child is SeedNode => child !== null);
     return {
       title: node.title,
-      range: node.range,
+      ...(!root ? { start: node.range[0] } : {}),
       ...(node.sourceHeading ? { sourceHeading: node.sourceHeading } : {}),
       ...(children.length > 0 ? { children } : {}),
     };
   };
-  const root = toModelNode(tree.rootId);
+  const root = toSeedNode(tree.rootId, true);
   return [
     "A deterministic pass over the article's own headings produced this proposed",
     "structure. Treat it as a starting point: keep it, adjust its boundaries, add",
@@ -804,8 +819,12 @@ export function parseStructureResponse(
   blocks: Block[],
   slug: string,
   report?: BuildReport,
+  answerVersion: "toc10" | "toc11" = "toc11",
 ): Tree {
-  const { root } = parseStructureAnswer(raw);
+  const { body } = splitBlocks(blocks);
+  const { root } = answerVersion === "toc10"
+    ? parseToc10StructureAnswer(raw)
+    : parseStructureAnswer(raw, body, report);
   return assembleTree(root, blocks, slug, report);
 }
 
@@ -842,8 +861,11 @@ the authority.`;
 const senderFor = (model: string): MessagesSend =>
   model.startsWith("anthropic/") ? sendMessages : sendChat;
 
-function parseWave(raw: string): ModelNode {
-  const { root } = parseStructureAnswer(raw);
+const formatOf = (params: MessagesBody): NonNullable<MessagesBody["output_config"]>["format"] | undefined =>
+  params.output_config?.format;
+
+function parseWave(raw: string, blocks: Block[], report: BuildReport): ModelNode {
+  const { root } = parseStructureAnswer(raw, blocks, report);
   return root;
 }
 
@@ -890,11 +912,12 @@ async function runWaves(
     system: base.system + WAVE_L1_ADDENDUM,
     user: base.user,
     maxTokens: base.maxTokens,
+    ...(formatOf(base.params) !== undefined ? { format: formatOf(base.params) } : {}),
     armStartedAt,
     wave: 1,
   });
   calls.push(l1.stats);
-  const root = parseWave(l1.raw);
+  const root = parseWave(l1.raw, body, built);
   if (!root.children?.length) throw new Error("wave 1 proposed no chapters at all");
   if (root.children.some((c) => c.children?.length)) {
     /* The wave discipline is part of what the arm tests; silently stripping
@@ -927,11 +950,12 @@ async function runWaves(
             system: req.system + WAVE_SUB_ADDENDUM,
             user: context + req.user,
             maxTokens: req.maxTokens,
+            ...(formatOf(req.params) !== undefined ? { format: formatOf(req.params) } : {}),
             armStartedAt,
             wave,
           });
           calls.push(answer.stats);
-          const sub = parseWave(answer.raw);
+          const sub = parseWave(answer.raw, part, built);
           if (sub.range[0] !== child.range[0] || sub.range[1] !== child.range[1]) {
             throw new Error(
               "a later wave answered about a different range than the part it was given",
@@ -978,6 +1002,7 @@ async function runRevise(
       system: base.system,
       user: base.user,
       maxTokens: base.maxTokens,
+      ...(formatOf(base.params) !== undefined ? { format: formatOf(base.params) } : {}),
       armStartedAt,
       wave: 1,
     });
@@ -990,6 +1015,7 @@ async function runRevise(
       system: base.system + REVISE_ADDENDUM,
       user: `${base.user}\n\nDRAFT:\n${stripFence(proposal.raw)}`,
       maxTokens: base.maxTokens,
+      ...(formatOf(base.params) !== undefined ? { format: formatOf(base.params) } : {}),
       armStartedAt,
       wave: 2,
     });
@@ -1012,7 +1038,13 @@ export async function runModelArm(
   const { body } = splitBlocks(blocks);
   switch (arm.kind) {
     case "one-call": {
-      const { system, user, maxTokens } = structureRequest(body);
+      const base = arm.prompt === "toc10-frozen"
+        ? toc10FrozenRequest(body)
+        : structureRequest(body);
+      const system = arm.prompt === "toc11-think-first"
+        ? `${base.system}\n\nThink the problem through before you answer.`
+        : base.system;
+      const { user, maxTokens } = base;
       const seed =
         arm.seed === "heading-tree"
           ? `\n\n${renderSeedProposal(blocks, slug)}`
@@ -1027,12 +1059,23 @@ export async function runModelArm(
         system,
         user: `${user}${seed}`,
         maxTokens,
+        ...(formatOf(base.params) !== undefined ? { format: formatOf(base.params) } : {}),
         armStartedAt: Date.now(),
         wave: 1,
       });
       const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
       try {
-        return { tree: parseStructureResponse(raw, blocks, slug, built), calls: [stats], built };
+        return {
+          tree: parseStructureResponse(
+            raw,
+            blocks,
+            slug,
+            built,
+            arm.prompt === "toc10-frozen" ? "toc10" : "toc11",
+          ),
+          calls: [stats],
+          built,
+        };
       } catch (err) {
         /* The call succeeded and the answer failed the pipeline's rules — a
            tiling gap, an invented id. The money is spent and the outcome is

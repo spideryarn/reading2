@@ -130,12 +130,46 @@ async function keyFor(dir: string, slug: string): Promise<Key> {
   return readJson<Key>(path.join(dir, "keys", `key-${slug}.json`));
 }
 
+async function hierarchyRows(runDir: string): Promise<Row[]> {
+  const run = await readJson<{
+    results: {
+      arm: string;
+      slug: string;
+      run: number;
+      outcome: "ok" | "threw";
+      elapsedMs?: number;
+      calls?: { outputTokens: number | null; reasoningTokens: number | null; costUsd: number | null }[];
+      repaired?: { droppedChildren?: string[] };
+    }[];
+  }>(path.join(runDir, "run.json"));
+  const sum = (values: (number | null)[]): number | null =>
+    values.some((value) => value === null) || values.length === 0
+      ? null
+      : (values as number[]).reduce((total, value) => total + value, 0);
+  return run.results.flatMap((result): Row[] => {
+    const prefix = result.arm === "toc10-frozen" ? "base" : result.arm === "incumbent" ? "toc11" : null;
+    if (prefix === null || (result.run !== 1 && result.run !== 2)) return [];
+    const calls = result.calls ?? [];
+    return [{
+      mode: "hierarchy",
+      arm: `${prefix}-${result.run === 1 ? "a" : "b"}`,
+      slug: result.slug,
+      chars: 0,
+      valid: result.outcome === "ok" && (result.repaired?.droppedChildren?.length ?? 0) === 0,
+      thinkingTokens: sum(calls.map((call) => call.reasoningTokens)),
+      outputTokens: sum(calls.map((call) => call.outputTokens)),
+      costUsd: sum(calls.map((call) => call.costUsd)),
+      latencyMs: result.elapsedMs ?? 0,
+    }];
+  });
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const results = argv[argv.indexOf("--results") + 1];
   const mode = argv[argv.indexOf("--mode") + 1];
   if (!results || !mode || argv.indexOf("--results") < 0 || argv.indexOf("--mode") < 0) {
-    throw new Error("usage: tally.ts --results <dir> --mode <mode> [--judging <subdir>]");
+    throw new Error("usage: tally.ts --results <dir> --mode <mode> [--judging <subdir>] [--hierarchy-run <dir>]");
   }
   /* `--judging <subdir>` for a second round kept beside the first, e.g.
      `judging/illustrated-low/` next to the medium round's `judging/illustrated/`. */
@@ -211,12 +245,16 @@ async function main(): Promise<void> {
   lines.push(`**Combined (worse of the two)**: ${combined}`, "");
 
   // Savings and validity.
-  const rowsFile = path.join(results, `runs.${mode}.jsonl`);
-  const rows = (await readFile(rowsFile, "utf-8"))
-    .split("\n")
-    .filter((l) => l.trim())
-    .map((l) => JSON.parse(l) as Row)
-    .filter((r) => r.mode === mode);
+  const hierarchyRun = argv[argv.indexOf("--hierarchy-run") + 1];
+  const rows = mode === "hierarchy"
+    ? hierarchyRun && argv.indexOf("--hierarchy-run") >= 0
+      ? await hierarchyRows(hierarchyRun)
+      : (() => { throw new Error("--mode hierarchy needs --hierarchy-run <dir>"); })()
+    : (await readFile(path.join(results, `runs.${mode}.jsonl`), "utf-8"))
+        .split("\n")
+        .filter((line) => line.trim())
+        .map((line) => JSON.parse(line) as Row)
+        .filter((row) => row.mode === mode);
   /* The candidate level is whatever the judged lineups held — read off their
      keys, never guessed from which rows exist: the JSONL keeps every round, so
      "any low rows → low" reported low's cost under the medium round's verdict
@@ -263,14 +301,17 @@ async function main(): Promise<void> {
         ? (typical[(typical.length - 1) / 2] as number)
         : ((typical[typical.length / 2 - 1] as number) + (typical[typical.length / 2] as number)) / 2;
   out.savings = { perArticle, medianTypicalThinkingReduction: median, invalid };
-  lines.push(
-    "",
-    `**Median thinking reduction, articles under ${TYPICAL_MAX_CHARS / 1000}k characters**: ${
-      median == null ? "missing → gate fails" : `${(median * 100).toFixed(0)}%`
-    } (gate: ≥ ${(MIN_SAVING * 100).toFixed(0)}%)`,
-    `**Invalid draws**: ${invalid.length ? invalid.join("; ") : "none"}`,
-    "",
-  );
+  lines.push("");
+  if (mode === "hierarchy") {
+    lines.push("**Thinking reduction**: not a gate — toc/10 and toc/11 both run at production `low` effort.");
+  } else {
+    lines.push(
+      `**Median thinking reduction, articles under ${TYPICAL_MAX_CHARS / 1000}k characters**: ${
+        median == null ? "missing → gate fails" : `${(median * 100).toFixed(0)}%`
+      } (gate: ≥ ${(MIN_SAVING * 100).toFixed(0)}%)`,
+    );
+  }
+  lines.push(`**Invalid draws**: ${invalid.length ? invalid.join("; ") : "none"}`, "");
   /* Validity, two ways. The plan's first wording ("every candidate draw
      validated") turned out to fail production's own effort too, which the run
      found before any judging; the plan's mid-run note (19:47) fixed the reading
@@ -278,7 +319,7 @@ async function main(): Promise<void> {
      the literal one is never quietly dropped. */
   const invalidCand = invalid.filter((x) => !x.includes(" base-")).length;
   const invalidBase = invalid.length - invalidCand;
-  const saving = median != null && median >= MIN_SAVING;
+  const saving = mode === "hierarchy" || (median != null && median >= MIN_SAVING);
   const literal = saving && invalidCand === 0;
   const compared = saving && invalidCand <= invalidBase;
   out.gatesPass = { literal, compared, invalidCandidate: invalidCand, invalidBase };

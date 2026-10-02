@@ -9,7 +9,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ARM_NAMES, DEFAULT_ARMS, levelOf, seededShuffle } from "../evals/thinking-effort/arms.js";
 import { renderForJudging } from "../evals/hierarchy-structure/blind.js";
-import { ideasForJudging, labelsFor, stripProvenance } from "../evals/thinking-effort/lineup.js";
+import { hierarchyTreeFile, ideasForJudging, labelsFor, stripProvenance } from "../evals/thinking-effort/lineup.js";
 import { qualityFromRanking, uStatistic, verdictOf } from "../evals/thinking-effort/tally.js";
 import {
   accountingFaults,
@@ -162,6 +162,20 @@ describe("the lineup", () => {
   it("labels four candidates W to Z", () => {
     expect(labelsFor(4)).toEqual(["W", "X", "Y", "Z"]);
     expect(labelsFor(5)).toEqual(["A", "B", "C", "D", "E"]);
+  });
+
+  it("maps the blind hierarchy aliases onto both repeats of both measured arms", () => {
+    expect([
+      hierarchyTreeFile("base-a", "article"),
+      hierarchyTreeFile("base-b", "article"),
+      hierarchyTreeFile("toc11-a", "article"),
+      hierarchyTreeFile("toc11-b", "article"),
+    ]).toEqual([
+      "toc10-frozen.article.r1.json",
+      "toc10-frozen.article.r2.json",
+      "incumbent.article.r1.json",
+      "incumbent.article.r2.json",
+    ]);
   });
 
   it("strips what a judge could read an arm off", () => {

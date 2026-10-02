@@ -46,6 +46,23 @@ import type { HierarchyRun } from "../src/hierarchy.js";
 /** The tree the structure model "returns", set per test before the call. */
 let modelTree: unknown = null;
 
+/** Adapt this file's deliberately ranged builder fixtures to toc/11's wire DTO. */
+function startsOnlyAnswer(answer: unknown): unknown {
+  if (typeof answer !== "object" || answer === null || !("root" in answer)) return answer;
+  const convert = (value: unknown, root: boolean): unknown => {
+    if (typeof value !== "object" || value === null) return value;
+    const node = value as Record<string, unknown>;
+    const { range, children, ...fields } = node;
+    const start = Array.isArray(range) && typeof range[0] === "string" ? range[0] : undefined;
+    return {
+      ...fields,
+      ...(!root && start !== undefined ? { start } : {}),
+      ...(Array.isArray(children) ? { children: children.map((child) => convert(child, false)) } : {}),
+    };
+  };
+  return { root: convert((answer as { root: unknown }).root, true) };
+}
+
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
   return {
@@ -53,7 +70,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
     streamMessage: (_task: string, _body: unknown) => ({
       onText: () => {},
       finalMessage: async () => ({
-        content: [{ type: "text", text: JSON.stringify(modelTree) }],
+        content: [{ type: "text", text: JSON.stringify(startsOnlyAnswer(modelTree)) }],
         stop_reason: "end_turn",
         usage: { input_tokens: 1, output_tokens: 1 },
       }),
@@ -309,8 +326,8 @@ describe("generateHierarchy refuses to hand back an invalid tree", () => {
         gist: "Two parts, and an invented block id inside the second one.",
         range: [blocks[0]!.id, blocks[last]!.id],
         children: [
-          section("First", 0, 0),
-          // Skips block 1 — the slip that gets mended before anything descends.
+          // Starts one block late — the slip that gets mended before anything descends.
+          section("First", 1, 1),
           {
             ...section("Second", 2, last),
             children: [

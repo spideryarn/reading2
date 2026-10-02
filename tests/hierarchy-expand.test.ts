@@ -362,8 +362,8 @@ describe("the constants a scoped call is made with", () => {
    * checkpoint miss: `canonicalExpansionRequest` hashes the whole wire request,
    * `EXPAND_SYSTEM` included, so a changed prompt already misses.
    */
-  it("stamps toc/10+expand/7, both halves named", () => {
-    expect(EXPANSION_PROMPT_STAMP).toBe("toc/10+expand/7");
+  it("stamps toc/11+expand/7, both halves named", () => {
+    expect(EXPANSION_PROMPT_STAMP).toBe("toc/11+expand/7");
   });
 
   /**
