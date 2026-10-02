@@ -54,6 +54,8 @@ const FIXTURE_IDS = [
   "spya-runcc2",
   "spya-aaa002",
   "spya-zzz002",
+  "spya-runqq2",
+  "spya-runmm2",
 ] as const;
 
 await pgReady({
@@ -163,6 +165,73 @@ describe("the Postgres searches store", () => {
     const stored = (await pgSearchStore.load(SLUG)).find((r) => r.id === run.id);
     expect(stored?.kind).toBe("quick");
     expect(stored?.status).toBe("error");
+  });
+
+  describe("revising a quick search in place (plan 261002h)", () => {
+    it("re-asks the same row with the new words, and fences the superseded attempt", async () => {
+      const first = await pgSearchStore.begin(SLUG, "why replic", "quick", "spya-runqq2");
+      await pgSearchStore.recolour(SLUG, first.run.id, 5);
+
+      const revised = await pgSearchStore.begin(
+        SLUG,
+        "why replication fails",
+        "quick",
+        first.run.id,
+        undefined,
+        { revises: true },
+      );
+      expect(revised.run.id).toBe(first.run.id);
+      expect(revised.attempt).not.toBe(first.attempt);
+      expect(revised.run.criterion).toBe("why replication fails");
+      expect(revised.run.createdAt).toBe(first.run.createdAt);
+      expect(revised.run.colour).toBe(5);
+
+      const stored = await pgSearchStore.load(SLUG);
+      expect(stored).toHaveLength(1);
+      expect(stored[0]?.criterion).toBe("why replication fails");
+
+      // The first attempt's late answer cannot land on the revised row …
+      const late = await pgSearchStore.finish(
+        SLUG,
+        first.run.id,
+        { status: "done", hits: [], model: "stale" },
+        first.attempt,
+      );
+      expect(late).toBeUndefined();
+      // … and the live one does.
+      const good = await pgSearchStore.finish(
+        SLUG,
+        first.run.id,
+        { status: "done", hits: [], model: "live" },
+        revised.attempt,
+      );
+      expect(good?.model).toBe("live");
+      expect(good?.criterion).toBe("why replication fails");
+    });
+
+    it("revises a finished row too, clearing its answer", async () => {
+      const { run, attempt } = await pgSearchStore.begin(SLUG, "why replic", "quick", "spya-runqq2");
+      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [], model: "jev" }, attempt);
+      const revised = await pgSearchStore.begin(SLUG, "why replicas", "quick", run.id, undefined, {
+        revises: true,
+      });
+      expect(revised.run.id).toBe(run.id);
+      expect(revised.run.status).toBe("pending");
+      expect("model" in revised.run).toBe(false);
+      expect((await pgSearchStore.load(SLUG))[0]?.status).toBe("pending");
+    });
+
+    it("does not revise a meaning row: the meaning row stands and a new one is minted", async () => {
+      const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning", "spya-runmm2");
+      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
+      const other = await pgSearchStore.begin(SLUG, "about space", "quick", run.id, undefined, {
+        revises: true,
+      });
+      expect(other.run.id).not.toBe(run.id);
+      const stored = (await pgSearchStore.load(SLUG)).find((r) => r.id === run.id);
+      expect(stored?.criterion).toBe("about time");
+      expect(stored?.status).toBe("done");
+    });
   });
 
   it("refuses a kind the database does not know, rather than storing it", async () => {

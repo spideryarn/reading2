@@ -141,7 +141,39 @@ export function withRun(
   wantedId: string | undefined,
   at: string,
   sourceHash?: string,
-): { runs: SearchRun[]; run: SearchRun; kind: "reset" | "minted" } {
+  options: { revises?: boolean } = {},
+): { runs: SearchRun[]; run: SearchRun; kind: "reset" | "revised" | "minted" } {
+  /* **A revision: one typing session's row, re-asked with the new words**
+     (plan 261002h). Search-as-you-type keeps one saved row per session, so
+     each pause asks the SAME row again rather than adding one per pause. Only
+     when the caller says so (`revises`), only a **quick** row asked as quick,
+     and in any status — the session's previous attempt may still be running,
+     and the attempt fence in `finish` is what stops its late answer landing on
+     the revised row.
+
+     Anything else named by `revises` — a meaning row, an unknown id — falls
+     through to the ordinary rules below: an unknown id mints under that id,
+     a held one mints a new id. Meaning stays pressed and never revises: a
+     paid half-minute call is not something to overwrite on a pause. */
+  const revised =
+    options.revises && wantedId && searchKind === "quick"
+      ? runs.find((r) => r.id === wantedId && r.kind === "quick")
+      : undefined;
+  if (revised) {
+    // Rebuilt field by field for the retry's reasons, below.
+    const run: SearchRun = {
+      id: revised.id,
+      criterion,
+      kind: "quick",
+      createdAt: revised.createdAt,
+      status: "pending",
+      hits: [],
+      ...(revised.colour === undefined ? {} : { colour: revised.colour }),
+      ...(sourceHash === undefined ? {} : { sourceHash }),
+    };
+    return { runs: runs.map((r) => (r.id === run.id ? run : r)), run, kind: "revised" };
+  }
+
   /* A retry: the same id, the same criterion, **and a row that actually
      failed**. All three, and the third is the one that took two goes to get
      right.

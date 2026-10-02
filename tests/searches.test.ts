@@ -267,6 +267,125 @@ describe("withRun — which run a begin produces", () => {
   });
 });
 
+describe("withRun — revising a quick search in place (plan 261002h)", () => {
+  /* Search-as-you-type keeps one row per typing session: each pause re-asks
+     the SAME row with the new words. `revises` is what says so, and it is a
+     separate branch from the retry above because it changes the criterion,
+     which the retry branch exists to refuse. */
+  const at = "2026-10-02T00:00:00.000Z";
+  const later = "2026-10-02T00:01:00.000Z";
+  const quick = (over: Partial<SearchRun> = {}): SearchRun => ({
+    id: "spya-k3m9qt",
+    criterion: "why replic",
+    kind: "quick",
+    createdAt: at,
+    status: "done",
+    hits: [],
+    model: "jev",
+    colour: 3,
+    sourceHash: "old-hash",
+    ...over,
+  });
+
+  it("resets a quick row in place with the new words, keeping id, createdAt and colour", () => {
+    const other = quick({ id: "spya-ther22", criterion: "something else" });
+    const { runs, run, kind } = withRun(
+      [quick(), other],
+      "why replication fails",
+      "quick",
+      "spya-k3m9qt",
+      later,
+      "new-hash",
+      { revises: true },
+    );
+    expect(kind).toBe("revised");
+    // Field by field, as the retry is: no old `model`, `error` or hash survives.
+    expect(run).toEqual({
+      id: "spya-k3m9qt",
+      criterion: "why replication fails",
+      kind: "quick",
+      createdAt: at,
+      status: "pending",
+      hits: [],
+      colour: 3,
+      sourceHash: "new-hash",
+    });
+    expect(runs).toHaveLength(2);
+    expect(runs[0]).toEqual(run);
+    expect(runs[1]).toEqual(other);
+  });
+
+  it("revises a row whatever its status — pending, done or failed", () => {
+    for (const status of ["pending", "done", "error"] as const) {
+      const { kind, run } = withRun(
+        [quick({ status, error: "old" })],
+        "new words",
+        "quick",
+        "spya-k3m9qt",
+        later,
+        undefined,
+        { revises: true },
+      );
+      expect(kind, status).toBe("revised");
+      expect(run.status).toBe("pending");
+      expect("error" in run).toBe(false);
+      expect("sourceHash" in run).toBe(false);
+    }
+  });
+
+  it("does not revise a meaning row: it mints, as a held id with new words always has", () => {
+    const meaning = quick({ kind: "meaning" });
+    const { runs, run, kind } = withRun(
+      [meaning],
+      "new words",
+      "meaning",
+      "spya-k3m9qt",
+      later,
+      undefined,
+      { revises: true },
+    );
+    expect(kind).toBe("minted");
+    expect(run.id).not.toBe("spya-k3m9qt");
+    expect(runs.find((r) => r.id === "spya-k3m9qt")).toEqual(meaning);
+  });
+
+  it("does not revise a quick row into a meaning search", () => {
+    const { kind, run } = withRun(
+      [quick()],
+      "new words",
+      "meaning",
+      "spya-k3m9qt",
+      later,
+      undefined,
+      { revises: true },
+    );
+    expect(kind).toBe("minted");
+    expect(run.id).not.toBe("spya-k3m9qt");
+  });
+
+  it("mints under the wanted id when no row has it, as a first ask does", () => {
+    /* The session's row was deleted in another tab, or never existed: the
+       revision falls back to the ordinary rule rather than failing. */
+    const { kind, run } = withRun(
+      [],
+      "new words",
+      "quick",
+      "spya-k3m9qt",
+      later,
+      undefined,
+      { revises: true },
+    );
+    expect(kind).toBe("minted");
+    expect(run.id).toBe("spya-k3m9qt");
+    expect(run.createdAt).toBe(later);
+  });
+
+  it("without revises, new words under a held quick id still mint", () => {
+    const { kind } = withRun([quick()], "new words", "quick", "spya-k3m9qt", later);
+    expect(kind).toBe("minted");
+  });
+});
+
 /**
  * A saved search is an answer about the article **as it was**.
  *

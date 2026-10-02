@@ -268,3 +268,18 @@ control sets `?match=quick` itself, so this job does not need it — offered to 
 3. **Bar control**: `search-draft.ts`, `DockQuickSearch.tsx` (box, ⚡, the owner gate, coarse
    pointer), `/`, no autofocus steal.
 4. **Docs and browser check** at 1440, 1024 (landscape iPad), 768 (portrait) and 390.
+
+## Stage notes
+
+**Stage 1 (server), landed.** `withRun` has a third result, `"revised"`, taken only with
+`revises: true`, a `wantedId` naming a **quick** row and a quick request — in any status, since the
+previous attempt may still be running. Anything else named by `revises` (a meaning row, a quick row
+asked as meaning, an unknown id) falls through to the old rules: an unknown id mints under that id,
+a held one mints a new id. `pgSearchStore.begin` takes `options: { revises }` as a sixth argument
+and runs its own UPDATE (sets `criterion`, clears `hits`/`model`/`error`, fresh `sourceHash` and
+attempt; `created_at` and `colour` untouched; predicate id + article + `kind = 'quick'` repeated in
+SQL). The route validates `revises` as a boolean (400 otherwise), passes `sse(res).gone` to
+`quickPassagesStream` only, skips `captureFailure` when `gone` has fired, and still finishes the
+attempt as an error through the fence. `searching` is now a `Map` from key to a per-request symbol,
+and a request releases the key only if it still holds it; `liveRuns` is exported for the test that
+proves it (watched red with the old unconditional delete).
