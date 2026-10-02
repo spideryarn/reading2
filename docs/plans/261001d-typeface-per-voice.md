@@ -53,7 +53,7 @@ The v1 is on only for readers with [Experimental features](../project/experiment
 on — Greg is one, most readers are not. Greg asked to *try* it and *see how he feels*; a Courier
 summary for every paying reader is a lot to ship as an experiment, and the switch exists exactly for
 that. Mechanism: `Reader` already calls `useExperimental()`; a hook,
-[`useVoiceFaces`](../../src/web/useVoiceFaces.ts), sets `data-voices` on `<html>` while it is on and
+`useVoiceFaces` (deleted 2026-10-02, when the faces came out of the switch — [261002f](261002f-the-three-faces-for-everyone-and-every-surface-voiced.md)), sets `data-voices` on `<html>` while it is on and
 takes it off when the last enabled reading view unmounts, and every rule in a new
 `src/web/styles/voices.css` is
 scoped under `:root[data-voices]`. **`Reader`, not `App`**: `App` deliberately does not subscribe to

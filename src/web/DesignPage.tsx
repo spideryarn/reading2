@@ -379,7 +379,7 @@ const SCALES: { name: string; tokens: string[]; note: string; dense?: boolean }[
 
 /** The type stacks, and what each is allowed to be used for. */
 const FACES: { token: string; used: string }[] = [
-  { token: "--font-reading", used: "the article, and the reader's own words in a comment" },
+  { token: "--font-reading", used: "the default reading stack before a voice-specific override" },
   /* The table's column headers wore this until 2026-09-05, when that row lost
      its height and its labels became `.sr-only` spans. The gist columns those
      headers named went on 2026-09-29; one `.sr-only` header is left, for a
@@ -389,11 +389,11 @@ const FACES: { token: string; used: string }[] = [
   { token: "--font-mono", used: "counts and anything that wants to line up" },
   { token: "--font-id", used: "block ids, and only block ids" },
   { token: "--font-brand", used: "the wordmark, and only the wordmark" },
-  /* The per-voice faces, read only by styles/voices.css and only with the
-     Experimental switch on. docs/plans/261001d-typeface-per-voice.md. */
-  { token: "--font-author", used: "experimental: the article, and verbatim quotes of it" },
-  { token: "--font-ai", used: "experimental: model-generated prose" },
-  { token: "--font-reader", used: "experimental: anything the reader typed" },
+  /* The per-voice faces, read only by styles/voices.css, for everyone since
+     2026-10-02. docs/project/fonts.md. */
+  { token: "--font-author", used: "the article, and verbatim quotes of it" },
+  { token: "--font-ai", used: "model-generated prose" },
+  { token: "--font-reader", used: "anything the reader typed" },
 ];
 
 /**
@@ -534,9 +534,10 @@ export function DesignPage() {
       <section>
         <h2>The reading column</h2>
         <p className="design-note">
-          One face for the article and the chrome alike — Geist, self-hosted. Hierarchy is size and
-          weight only. If the heading below is not visibly the same face as the paragraph, the
-          woff2 failed to load and everything has fallen through to the system stack.
+          The article in its author's face, Source Serif 4, and the chrome in Geist, both
+          self-hosted (docs/project/fonts.md). Hierarchy is size and weight only. If the heading
+          below is not visibly the same face as the paragraph, the woff2 failed to load and
+          everything has fallen through to the system stack.
         </p>
         <div className="design-panel">
           {/* `design-sample` restates the row padding the reading view gets from

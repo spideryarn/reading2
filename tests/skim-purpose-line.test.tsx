@@ -108,7 +108,7 @@ const VIEW: SkimView = {
     {
       quoteId: "spya-tq2abc",
       n: 1,
-      place: "Results",
+      place: [{ title: "Results", voice: "ai" }],
       cue: "Look for the headline.",
       current: true,
       missing: false,

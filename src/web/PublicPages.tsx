@@ -37,6 +37,7 @@ import { SharedNotice } from "./PublicChrome.js";
 import { GuessedSourceLink } from "./Masthead.js";
 import { markedModes, NOUN } from "./visitor.js";
 import { useExperimental } from "./useExperimental.js";
+import { articleTitleVoice, withVoice } from "./voice.js";
 
 /**
  * The link out to the publisher, the source page found for an upload, or
@@ -126,7 +127,9 @@ export function PublicMetadataPage({
     <>
       <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 ${TOP_CLEARANCE} tw:font-sans ${DOCK_CLEARANCE}`}>
         <BackToArticle slug={slug} />
-        <h1 className="tw:m-0 tw:mb-2 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
+        <h1
+          className={withVoice("tw:m-0 tw:mb-2 tw:text-2xl tw:leading-snug tw:text-foreground", articleTitleVoice(false))}
+        >
           {meta.title}
         </h1>
         {facts.length > 0 && (

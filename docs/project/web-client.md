@@ -113,6 +113,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   private copy with neither the switch to a date nor the clock.
 - **`src/web/Tooltip.tsx` § `Tooltip`, `ControlTip`, `TipNote`** — any tip or card on a control
   ([tooltips.md](tooltips.md)); `src/web/useHoverCard.ts` for a card on the prose.
+- **`src/web/voice.ts` § `voiceClass`, `withVoice`** — text whose voice depends on the data (the
+  author's, a model's or the reader's) in its face; `src/web/tree.ts` § `nodeLabel` for a tree
+  row's words and voice together ([fonts.md](fonts.md)).
 - **`src/web/IconButton.tsx` § `IconButton`** — an icon-only button that a `Tooltip` can wrap.
   `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
   passing confirmation.

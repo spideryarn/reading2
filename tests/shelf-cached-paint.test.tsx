@@ -649,6 +649,18 @@ describe("a body saved by an older deployment", () => {
     expect(shelfFromCachedBody({ articles: [good] })).toEqual([good]);
   });
 
+  /* `gistVoice` arrived on 2026-10-02 (voice.ts § `gistVoice`). A body saved
+     before it must still paint — the blurb is drawn in the app's face — and a
+     voice that is neither of the two is a body we did not write. */
+  it("paints a body saved before the blurb had a voice, and refuses a voice it does not know", () => {
+    const before = entry({ slug: "a-piece", gist: "One sentence." });
+    expect(shelfFromCachedBody({ articles: [before] })).toEqual([before]);
+    const after = entry({ slug: "a-piece", gist: "One sentence.", gistVoice: "author" });
+    expect(shelfFromCachedBody({ articles: [after] })).toEqual([after]);
+    const odd = { ...after, gistVoice: "reader" };
+    expect(shelfFromCachedBody({ articles: [odd] })).toBeNull();
+  });
+
   /* The envelope, and the shape the offline filter spent a fortnight testing
      for instead — docs/postmortems/260903e-offline-shelf-filter-never-ran.md. */
   it("is discarded when it is not the envelope at all", () => {

@@ -213,9 +213,9 @@
     --header-height: 4rem;
 
     /* ---- type -------------------------------------------------------- */
-    /* ONE SANS FOR EVERYTHING the reader looks at — article and chrome alike. Geist, self-hosted
-       from @fontsource-variable/geist (imported in src/web/tailwind.css), with the system stack
-       behind it so nothing shifts if the woff2 is slow or blocked.
+    /* GEIST IS THE BASE FACE AND THE CHROME. It is self-hosted from
+       @fontsource-variable/geist (imported in src/web/tailwind.css), with the
+       system stack behind it so nothing shifts if the woff2 is slow or blocked.
 
        This is the original app's stack, and following it was Greg's call, 2026-08-25: "Follow how
        we were doing fonts in the previous version." What the previous version ACTUALLY did is not
@@ -229,19 +229,19 @@
        So the two things that did ship — the 65ch measure and heading-space-above > below — are
        kept below and in styles.css, and the serif that never shipped is gone.
 
-       The cost, stated plainly: the article column no longer looks different from our own chrome.
-       A gist in the column beside it is now the same face as the prose. If that turns out to be
-       the wrong trade, --font-reading is the ONE line to change, which is why it is still a
-       separate token from --font-ui rather than both being spelled --font-sans at the call site. */
+       That decision still supplies the fallback. Since 2026-10-02, visible
+       author, model and reader words override it through styles/voices.css;
+       docs/project/fonts.md owns that rule. `--font-reading` stays separate
+       from `--font-ui` so the base reading stack remains one decision. */
     --font-sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
-    --font-reading: var(--font-sans);   /* the article itself, and the reader's own words */
+    --font-reading: var(--font-sans);   /* the base reading stack before a voice override */
     --font-ui: var(--font-sans);        /* chrome: controls, masthead facts, column headers */
     --font-brand: var(--font-sans);     /* the wordmark, and only the wordmark */
     --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
     --font-id: 'Courier New', Courier, var(--font-mono);   /* block ids, and only block ids */
 
     /* One face per voice — the author's, the model's, the reader's — read ONLY by
-       src/web/styles/voices.css, and only while the Experimental switch is on. Greg, 2026-10-01:
+       src/web/styles/voices.css, for every reader since 2026-10-02. Greg, 2026-10-01:
        Courier for AI, a serif for the author, Arial for the reader. Geist stays the chrome, so it
        becomes the fourth voice by being left alone. Courier became IBM Plex Mono on 2026-10-02 —
        "Courier is really ugly" — still monospaced, so still machine-made. docs/project/fonts.md. */

@@ -185,6 +185,22 @@ describe("buildSections", () => {
     const last = sections[sections.length - 1]!;
     expect(last.row).toBeLessThan(blocks.length);
   });
+
+  it("carries whose words each title is: a kept heading the author's, a written one the model's", () => {
+    const [first, second] = sections;
+    if (!first || !second) throw new Error("the fixture needs two sections");
+    const node = (id: string) => tree.nodes[id as keyof typeof tree.nodes]!;
+    const voiced: Tree = {
+      ...tree,
+      nodes: {
+        ...tree.nodes,
+        [first.nodeId]: { ...node(first.nodeId), sourceHeading: first.title },
+        [second.nodeId]: { ...node(second.nodeId), sourceHeading: `${second.title} (the author's)` },
+      },
+    };
+    const again = buildSections(buildGeometry(voiced, blocks), blocks);
+    expect(again.slice(0, 2).map((s) => s.titleVoice)).toEqual(["author", "ai"]);
+  });
 });
 
 /**

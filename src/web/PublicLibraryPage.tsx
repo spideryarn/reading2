@@ -110,6 +110,7 @@ import { PUBLIC_SHARING_HREF, readHref } from "./router.js";
 import { SHELL, SiteNav } from "./SiteBits.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
+import { articleTitleVoice, withVoice } from "./voice.js";
 
 export function PublicLibraryPage({
   signedIn,
@@ -315,7 +316,7 @@ export function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
 
   return (
     <article className="tw:relative tw:h-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
-      <h2 className="tw:m-0 tw:font-prose tw:text-xl tw:leading-snug">
+      <h2 className={withVoice("tw:m-0 tw:text-xl tw:leading-snug", articleTitleVoice(false))}>
         {/* The stretched link: a real `<a href>` whose ::after covers the card,
             so the whole card is a click target and ⌘-click still opens a tab.
             `readHref`, so this page and the owner's shelf cannot come to

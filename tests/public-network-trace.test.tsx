@@ -2363,15 +2363,22 @@ describe("a signed-out browser on a shared document", () => {
    * docs/plans/261002b-help-page-code-review-sol.md, and the plan review of
    * docs/plans/261002e-sharing-mark-tooltip-separates-state-from-action.md.
    */
+  /* The tooltip's words are `data-tip`, not `title`, since 220d1723a moved every
+     gutter control to the house card (BlockLinkCard.tsx § `GUTTER_CONTROL`).
+     This test was written against `title` the same afternoon, and the two met
+     at a merge; reading `title` here asked a question nothing answers any more,
+     and a native `title` coming back would be a second tooltip. */
   it("labels the owner's note in the gutter from the visitor's side", async () => {
     await open("");
 
     const marks = [...host.querySelectorAll(".blk-cmt")];
     expect(marks.length, "the owner's note is marked in the gutter").toBeGreaterThan(0);
     for (const mark of marks) {
-      expect(mark.getAttribute("title")).toMatch(/whoever added this article/);
-      expect(mark.getAttribute("title")).not.toMatch(/\byour\b/i);
+      expect(mark.getAttribute("data-tip")).toMatch(/whoever added this article/);
+      expect(mark.getAttribute("data-tip")).not.toMatch(/\byour\b/i);
+      expect(mark.getAttribute("aria-label")).toMatch(/whoever added this article/);
       expect(mark.getAttribute("aria-label")).not.toMatch(/\byour\b/i);
+      expect(mark.hasAttribute("title"), "a native tooltip beside the house one").toBe(false);
     }
   });
 

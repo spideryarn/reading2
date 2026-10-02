@@ -31,7 +31,8 @@ import type {
   PublicTimeline,
   PublicSkim,
 } from "../../../public-types.js";
-import { blockIndex, sectionPathOf } from "../../../section-path.js";
+import { blockIndex, sectionNodesOf } from "../../../section-path.js";
+import { titleVoice } from "../../tree.js";
 import { depthParam, stopParam } from "../../params.js";
 import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
@@ -641,11 +642,13 @@ function useSkimMode({
     () =>
       route.map((stop, i) => {
         const block = blockOf(stop.quoteId);
-        const path = block ? sectionPathOf(block, index, tree) : [];
+        /* The nodes, not `sectionPathOf`'s strings: whose words each title is
+           is read off the node, and a string has already forgotten. */
+        const path = block ? sectionNodesOf(block, index, tree) : [];
         return {
           quoteId: stop.quoteId,
           n: i + 1,
-          place: path.length > 0 ? path.join(" › ") : null,
+          place: path.length > 0 ? path.map((node) => ({ title: node.title, voice: titleVoice(node) })) : null,
           cue: cueOf(stop),
           current: stop.quoteId === current?.quoteId,
           /* A stop whose quote is no longer in the Quotes: a row with nowhere

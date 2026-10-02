@@ -49,8 +49,8 @@ const BLOCKS: Block[] = [
   block("eeeeee", "Under an untitled section."),
 ];
 const SECTIONS: Section[] = [
-  { row: 1, blockId: id("bbbbbb"), nodeId: "n1" as NodeId, title: "Why it rises" },
-  { row: 4, blockId: id("eeeeee"), nodeId: "n2" as NodeId, title: "   " },
+  { row: 1, blockId: id("bbbbbb"), nodeId: "n1" as NodeId, title: "Why it rises", titleVoice: "ai" },
+  { row: 4, blockId: id("eeeeee"), nodeId: "n2" as NodeId, title: "   ", titleVoice: "ai" },
 ];
 const INDEX = buildBlockLinkIndex(BLOCKS, SECTIONS);
 

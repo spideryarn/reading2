@@ -301,6 +301,7 @@ import { ResetArticle } from "./ResetArticle.js";
 import { RERUN_COST_NOTE, RERUN_LABEL } from "./rerun-commands.js";
 import { useOrderedRead, type ArtefactRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
+import { articleTitleVoice, voiceClass, withVoice } from "./voice.js";
 
 /**
  * Clear of the fixed bottom bar, in terms of `--dock-space` rather than a number.
@@ -840,9 +841,14 @@ export function Metadata({
              answer is in, which is the same standard Archive holds itself to a
              few sections down. GPT Sol, 2026-08-27. */
           offer={hasShelfRow}
-          inputClassName="tw:font-prose tw:text-2xl tw:leading-snug"
+          inputClassName="tw:text-2xl tw:leading-snug"
         >
-          <h1 className="tw:m-0 tw:min-w-0 tw:flex-1 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
+          <h1
+            className={withVoice(
+              "tw:m-0 tw:min-w-0 tw:flex-1 tw:text-2xl tw:leading-snug tw:text-foreground",
+              articleTitleVoice(rename.overridden),
+            )}
+          >
             {meta.title}
           </h1>
         </EditableTitle>
@@ -913,12 +919,19 @@ export function Metadata({
           <Section label="In one sentence" keywords="takeaway gist summary short brief one line what is it about">
             <div className={`${CARD} tw:p-5`}>
               {root?.gist && (
-                <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground">
+                <p
+                  className={withVoice("tw:m-0 tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground", "ai")}
+                >
                   {root.gist}
                 </p>
               )}
               {root?.summary && (
-                <p className="tw:mt-3 tw:mb-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
+                <p
+                  className={withVoice(
+                    "tw:mt-3 tw:mb-0 tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint",
+                    "ai",
+                  )}
+                >
                   {root.summary}
                 </p>
               )}
@@ -1144,7 +1157,7 @@ export function Metadata({
             </Row>
             <Row icon={Target} label="Where you left off">
               {lastRead ? (
-                <Link href={backHref} className="tw:text-highlight">
+                <Link href={backHref} className={withVoice("tw:text-highlight", "author")}>
                   “{snippet(lastRead.text)}”
                 </Link>
               ) : (
@@ -1985,9 +1998,9 @@ function ExportSection({
 
 function AboutYou({ profile, failed }: { profile: string | null; failed: boolean }) {
   return (
-    <p className="tw:mt-1 tw:mb-0 tw:font-prose tw:text-sm tw:text-muted-foreground">
+    <p className="tw:mt-1 tw:mb-0 tw:text-sm tw:text-muted-foreground">
       {profile ? (
-        profile
+        <span className={voiceClass("reader")}>{profile}</span>
       ) : failed ? (
         <span className="tw:text-ink-faint">We couldn't read your profile just now.</span>
       ) : (

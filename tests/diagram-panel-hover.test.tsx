@@ -314,6 +314,31 @@ describe("the other ways there is no picture", () => {
     expect(wait?.querySelector(".cmt-spinner")).toBeNull();
   });
 
+  it("draws a scatter card's paragraph excerpt in the author's face", async () => {
+    answering(
+      () =>
+        new Response(
+          JSON.stringify({
+            model: "m",
+            blocks: 1,
+            k: 1,
+            variance: [1, 0],
+            skipped: { tooShort: 0, nonProse: 0, capped: 0 },
+            points: [{ id: "spya-b0", x: 0, y: 0, c: 0 }],
+          }),
+          { status: 200 },
+        ),
+    );
+    mount("drift");
+    await settle();
+    const gist = host.querySelector<HTMLElement>(".diag-card-gist");
+    expect(gist, "the ready scatter did not draw its footer card").not.toBeNull();
+    expect(gist?.textContent).toContain("falconry");
+    expect(gist?.classList.contains("voice-author"), "the author's excerpt wore the AI face").toBe(
+      true,
+    );
+  });
+
   it("explains an article with no sections rather than drawing an empty picture", () => {
     /* `layoutForce` draws only `depth > 0`, so a root-only tree lays out to a
        real layout holding no nodes — which took the SVG branch and painted a

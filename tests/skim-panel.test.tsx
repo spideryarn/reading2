@@ -374,9 +374,9 @@ function view(over: Partial<SkimView> = {}): SkimView {
       { depth: 3, label: "Most", count: 4 },
     ],
     rows: [
-      { quoteId: Q[2]!, n: 1, place: "Methods", cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [] },
-      { quoteId: Q[0]!, n: 2, place: "Results", cue: "The headline result", current: true, missing: false, position: null, words: null, where: [] },
-      { quoteId: Q[3]!, n: 3, place: "Methods", cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [] },
+      { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [] },
+      { quoteId: Q[0]!, n: 2, place: [{ title: "Results", voice: "ai" }], cue: "The headline result", current: true, missing: false, position: null, words: null, where: [] },
+      { quoteId: Q[3]!, n: 3, place: [{ title: "Methods", voice: "ai" }], cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [] },
     ],
     position: 2,
     card: null,
@@ -455,7 +455,7 @@ describe("the panel", () => {
       owner(),
       view({
         rows: [
-          { quoteId: Q[0]!, n: 1, place: "Results", cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [] },
+          { quoteId: Q[0]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [] },
         ],
       }),
     );
@@ -469,8 +469,8 @@ describe("the panel", () => {
   it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
     const repeated = view({
       rows: [
-        { quoteId: Q[2]!, n: 1, place: "Methods", cue: null, current: false, missing: false, position: null, words: "First.", where: [] },
-        { quoteId: Q[3]!, n: 2, place: "Methods", cue: null, current: false, missing: false, position: null, words: "Second.", where: [] },
+        { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "First.", where: [] },
+        { quoteId: Q[3]!, n: 2, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [] },
       ],
       position: 1,
     });
@@ -482,6 +482,40 @@ describe("the panel", () => {
     expect(rows[1]?.querySelector(".sr-only")?.textContent).toBe("Methods");
     /* The report: a column of `〃` read as a column of quotation marks. */
     expect(host.textContent).not.toContain("〃");
+  });
+
+  it("draws each title on the path in its own voice, and the › between them in ours (fonts.md)", async () => {
+    const mixed = view({
+      rows: [
+        {
+          quoteId: Q[2]!,
+          n: 1,
+          place: [
+            { title: "Results", voice: "author" },
+            { title: "Why it holds", voice: "ai" },
+          ],
+          cue: null,
+          current: false,
+          missing: false,
+          position: null,
+          words: "First.",
+          where: [],
+        },
+        // The same text in other voices is still the same place: said, not drawn.
+        { quoteId: Q[3]!, n: 2, place: [{ title: "Results", voice: "ai" }, { title: "Why it holds", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [] },
+      ],
+      position: 1,
+    });
+    await draw(owner(), mixed);
+
+    const rows = [...host.querySelectorAll<HTMLElement>(".skim-row")];
+    const place = rows[0]?.querySelector(".skim-place");
+    expect(place?.textContent).toBe("Results › Why it holds");
+    expect([...(place?.children ?? [])].map((c) => [c.textContent, c.className])).toEqual([
+      ["Results", "voice-author"],
+      ["Why it holds", "voice-ai"],
+    ]);
+    expect(rows[1]?.querySelector(".sr-only")?.textContent).toBe("Results › Why it holds");
   });
 
   describe("the quote's words on each row (260928e)", () => {
@@ -667,7 +701,7 @@ describe("the panel", () => {
       depth: 3,
       /* Most walks only its own stop (260929e), so the count must come from the
          whole route, not from the rows drawn. */
-      rows: [{ quoteId: Q[1]!, n: 1, place: "Results", cue: null, current: true, missing: false, position: null, words: null, where: [] }],
+      rows: [{ quoteId: Q[1]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: null, current: true, missing: false, position: null, words: null, where: [] }],
     });
     /* The live Quotes list may include two abstract quotes; the route records
        the four it was actually offered, which is the honest denominator. */
@@ -756,8 +790,8 @@ describe("the panel", () => {
 
   it("gives each row's position mark a where-am-I card, as its own button beside the row (5C)", async () => {
     const where = [
-      { kind: "node" as const, key: "a", title: "Methods", depth: 0, onPath: false, here: false },
-      { kind: "node" as const, key: "b", title: "Results", depth: 0, onPath: true, here: true },
+      { kind: "node" as const, key: "a", title: "Methods", voice: "ai" as const, depth: 0, onPath: false, here: false },
+      { kind: "node" as const, key: "b", title: "Results", voice: "ai" as const, depth: 0, onPath: true, here: true },
     ];
     const v = view();
     await draw(owner(), { ...v, rows: v.rows.map((r) => ({ ...r, position: 0.5, where })) });
@@ -770,10 +804,18 @@ describe("the panel", () => {
     const card = document.querySelector(".where-card");
     expect(card?.textContent).toBe("MethodsResults");
     expect(card?.querySelector('[aria-current="location"]')?.textContent).toBe("Results");
+    const titles = [...(card?.querySelectorAll<HTMLElement>(".where-node") ?? [])];
+    expect(
+      titles.map((row) => [...row.classList].filter((name) => name.startsWith("voice-"))),
+      "the title's face reached the app's ▸ marker",
+    ).toEqual([[], []]);
+    expect(
+      titles.map((row) => row.querySelector<HTMLElement>("[class^='voice-']")?.className),
+    ).toEqual(["voice-ai", "voice-ai"]);
   });
 
   it("forgets an open where-card when its row leaves the pass", async () => {
-    const where = [{ kind: "node" as const, key: "a", title: "Methods", depth: 0, onPath: true, here: true }];
+    const where = [{ kind: "node" as const, key: "a", title: "Methods", voice: "ai" as const, depth: 0, onPath: true, here: true }];
     const v = view();
     const full = { ...v, rows: v.rows.map((row) => ({ ...row, position: 0.5, where })) };
     await draw(owner(), full);

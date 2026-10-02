@@ -25,6 +25,7 @@ import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { NodeId, TreeNode } from "../types.js";
 import { onFontsChanged } from "./fonts.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { withVoice } from "./voice.js";
 
 interface Props {
   /** The tree, nested and numbered. Null if it is unusable. */
@@ -571,7 +572,7 @@ function Row({
       content={
         <div className="outln-card">
           <div className="outln-card-crumb">{row.number}</div>
-          <div className="outln-card-title">{row.text}</div>
+          <div className={withVoice("outln-card-title", row.voice)}>{row.text}</div>
           {row.node.gist ? <p className="outln-card-gist">{row.node.gist}</p> : null}
         </div>
       }
@@ -626,7 +627,7 @@ function RowBody({ row }: { row: OutlineRow }) {
   return (
     <>
       <span className="outln-num">{row.number}</span>
-      <span className="outln-text">{row.text}</span>
+      <span className={withVoice("outln-text", row.voice)}>{row.text}</span>
       {row.arc ? <p className="outln-arc">{row.arc}</p> : null}
       {row.sentence ? <p className="outln-gist">{row.sentence}</p> : null}
     </>

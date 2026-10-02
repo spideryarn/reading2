@@ -211,12 +211,6 @@ here, not consent; `/privacy` says we keep it. Fable argued for recording for ev
 time cannot be backfilled —
 [260916c § Who, and behind what](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what).
 
-**Nor is the reading view's type: a face for each voice**, since 2026-10-01 — the article in a serif,
-model-generated prose in a monospace (Courier, then IBM Plex Mono from 2026-10-02), anything the
-reader typed in Arial. Text a model only copied or transcribed keeps its writer's voice. Greg asked
-for a v1 *to try*, and monospaced summaries are a lot to hand every paying reader as an experiment.
-[fonts.md](fonts.md).
-
 **And one control on the Metadata page: *Start this article again*** — a block inside *AI
 processing* rather than a section of its own: a reset, and optionally the modes made again. The
 control has been behind the switch since 2026-09-28 and joined this section — then called *Re-run
@@ -283,6 +277,19 @@ for it in the table; `?mode=hierarchy` opens Structure. The tree is untouched
 The half of the old paragraph that survives is the arithmetic: because nothing here or in the tests
 counts the modes, adding a third structural mode and then retiring one needed no number changed
 anywhere.
+
+**A face for each voice was behind it for a day, 2026-10-01 to 2026-10-02** — the article in a
+serif, model-generated prose in a monospace, anything the reader typed in Arial. Greg had asked for a
+v1 *to try*. Asked whether it should come out:
+
+> Yes they should now be used throughout and always going forwards.
+>
+> — Greg, 2026-10-02
+
+It came out whole: the attribute the switch set and the hook that set it were deleted rather than
+left on, so there is no path back short of a commit. Nothing else the switch gates moved.
+[fonts.md](fonts.md);
+[261002f](../plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md).
 
 **Quotes left the table on 2026-09-06.** Greg:
 
