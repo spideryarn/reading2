@@ -117,6 +117,7 @@ export function ModeSurface({
   foot,
   mode,
   about,
+  profile,
   ref,
   ...rest
 }: {
@@ -209,6 +210,22 @@ export function ModeSurface({
    * either, there is no (i).
    */
   about?: ReactNode;
+  /**
+   * **The owner's *written for you* badge**, already rendered (`WrittenForYou`),
+   * which this puts in the corner beside the (i) — the same place and the same
+   * size in every mode. Greg, 2026-10-02 (spya-hf4svm): *"We've added (i) and
+   * profile icons to every mode. Great. But their position/sizing/alignment
+   * looks a bit off, especially on a phone … make this reusable/template as part
+   * of creating new modes"*. Each mode used to put it in its own top row.
+   *
+   * Second in the DOM, after the (i), so the (i) stays first in tab order.
+   * Out of flow like the (i), and the room the top row keeps clear grows only
+   * when a badge actually rendered — `WrittenForYou` returns `null` for an
+   * artefact written without a profile, so mode-band.css asks
+   * `:has(> .prof-badge)` rather than this component guessing from the prop.
+   * docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
+   */
+  profile?: ReactNode;
   /** For `OutlinePanel`, which measures the band to choose a rung. */
   ref?: Ref<HTMLElement>;
 } & PassThrough) {
@@ -225,6 +242,7 @@ export function ModeSurface({
           {extra && about}
         </BandAbout>
       )}
+      {hasAbout && profile}
       {/* **The three values React renders as nothing, and a boolean is two of
           them.** `head` is written by a caller as `cond && <X/>` or
           `cond ? <X/> : null` at least as often as it is omitted, and those hand

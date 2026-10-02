@@ -1092,22 +1092,70 @@
    controls is `--band-about-room`: `has-about` sets it, and a band's top row
    adds it to its right padding. `.band-head` does so below; a mode whose top
    row is its own does so in its own stylesheet. */
-.mode-band.has-about { --band-about-room: 1.9rem; }
-.mode-band > .band-about {
+/* **The corner holds one or two buttons of one size**: the (i), and, left of
+   it, the owner's *written for you* badge when `ModeSurface`'s `profile` drew
+   one. Greg, 2026-10-02 (spya-hf4svm): *"their position/sizing/alignment looks
+   a bit off, especially on a phone"* — the badge was a 40px ringed circle on a
+   phone beside a 24px (i), on another centre line, and in a different place in
+   every mode. Plan 261002e.
+
+   `--band-corner-btn` is both buttons' box, and narrow-window.css § a coarse
+   pointer raises it for a finger. `--band-about-room` is what a top row keeps
+   clear: one button and the inset, or two and the gap when a badge is there.
+   **Asked of the DOM with `:has()`**, because `WrittenForYou` renders nothing
+   for an artefact written without a profile and the prop cannot know that. */
+.mode-band.has-about {
+  --band-corner-btn: 1.5rem;
+  --band-corner-top: 0.45rem;
+  --band-corner-right: 0.4rem;
+  --band-corner-gap: 0.2rem;
+  --band-about-room: calc(var(--band-corner-btn) + var(--band-corner-right));
+}
+.mode-band.has-about:has(> .prof-badge) {
+  --band-about-room: calc(
+    var(--band-corner-btn) * 2 + var(--band-corner-gap) + var(--band-corner-right)
+  );
+}
+.mode-band > .band-about,
+.mode-band.has-about > .prof-badge {
   position: absolute;
-  top: 0.45rem;
-  right: 0.4rem;
+  top: var(--band-corner-top);
+  right: var(--band-corner-right);
   /* Above any sticky row inside the band (Ideas' group headings are 1), which
      come later in the DOM and would otherwise paint over it. */
   z-index: 3;
 }
-.mode-band.has-about > .band-head { padding-right: calc(0.7rem + var(--band-about-room)); }
+/* The badge, the corner's way: the (i)'s box and the (i)'s quiet — no ring,
+   no padding of its own — so the two read as a pair. Its colour still carries
+   *changed* (profile.css § `.prof-badge.changed`), and the panel it opens says
+   so in words. Outside a band's corner (Sketch's bar) it keeps its pill. */
+.mode-band.has-about > .prof-badge {
+  right: calc(var(--band-corner-right) + var(--band-corner-btn) + var(--band-corner-gap));
+  width: var(--band-corner-btn);
+  height: var(--band-corner-btn);
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.4rem;
+}
+.mode-band.has-about > .prof-badge:hover,
+.mode-band.has-about > .prof-badge.open { background: var(--surface-raised); }
+/* **A head row always holds the corner.** Glossary, Quotes and Ideas keep a
+   head with nothing in it but the place the corner sits (their fragments), and
+   without this floor that row is only its padding, so the corner hangs into
+   the list below. */
+.mode-band.has-about > .band-head {
+  padding-right: calc(0.7rem + var(--band-about-room));
+  min-height: calc(var(--band-corner-btn) + var(--band-corner-top) * 2);
+}
 .band-about {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: var(--band-corner-btn, 1.5rem);
+  height: var(--band-corner-btn, 1.5rem);
   padding: 0;
   border: 0;
   border-radius: 0.4rem;

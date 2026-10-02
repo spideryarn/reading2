@@ -56,15 +56,6 @@
   gap: 0.25rem;
   min-width: 0;
 }
-/* The trailing detail at the far end of a sort row: the Glossary's count and
-   profile badge, and the FAQ's (i). `margin-left: auto` pushes it right, and
-   multiple contents wrap as one piece. */
-.gloss-sort-trail {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-left: auto;
-}
 .gloss-sort-btn {
   padding: 0.1rem 0.4rem;
   border: 1px solid transparent;
@@ -129,8 +120,7 @@
     margin: -3px;
   }
   .gloss-sort-group::-webkit-scrollbar { display: none; }
-  .gloss-sort-group > *,
-  .gloss-sort-trail { flex-shrink: 0; }
+  .gloss-sort-group > * { flex-shrink: 0; }
 }
 
 /* The threshold slider — the one control in this panel that sets a number

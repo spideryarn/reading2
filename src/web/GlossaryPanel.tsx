@@ -68,7 +68,7 @@
  * The four designs this was chosen from, and the two things it is a bet on, are
  * in docs/plans/260826b-glossary-prioritised-order.md.
  */
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import {
   ExternalLink,
   Globe,
@@ -257,9 +257,9 @@ export function GlossaryPanel({
      glossary already made this exact choice once — "a label instead of a
      warning triangle" — and the reason holds. src/web/WrittenForYou.tsx.
      Provenance about the owner's own run, so a visitor sees none of it:
-     `profileHash` never leaves the server (src/public-types.ts). `null` rather
-     than a component that renders nothing, so the sort row's trailing slot
-     is empty when there is nothing to put in it. */
+     `profileHash` never leaves the server (src/public-types.ts). It sits in
+     the band's corner beside the (i) since 2026-10-02 (`ModeSurface`'s
+     `profile`, plan 261002e). */
   /* **Its Regenerate is `more`, the forced run** — the glossary has no
      replace verb. Forcing appends only when the list's profile hash matches
      (src/glossary.ts § existingFor), and the panel offers Regenerate only when
@@ -311,6 +311,7 @@ export function GlossaryPanel({
       feature="gloss"
       mode="glossary"
       about={about}
+      profile={badge}
       /* **No head row at all while the sort row is drawn**, since 2026-09-29.
           Greg, on a phone: *"The Glossary stuff at the top takes up too much
           space … maybe move the "N words" onto the `order` row somehow -
@@ -330,10 +331,12 @@ export function GlossaryPanel({
           docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
 
           **The count has gone to the band's (i)** since 2026-10-01 (plan
-          261001m), so this row holds only the badge now. It is still a
-          fragment rather than `null`, for the reason above: the row holds
-          its place while the list is coming, and the (i) sits in it. */
-      head={sorts.length > 0 ? null : <>{badge}</>}
+          261001m), and the badge to the band's corner beside it since
+          2026-10-02 (plan 261002e), so this row holds nothing of its own. It
+          is still a fragment rather than `null`, for the reason above: the row
+          holds its place while the list is coming, and the corner sits in it
+          (mode-band.css floors a head at the corner's height). */
+      head={sorts.length > 0 ? null : <></>}
       /* Pinned under the scroller rather than at the end of it, which is what
           `foot` is for. The guard is the one it had as a trailing child: the
           run row belongs to an owner whose glossary has arrived. */
@@ -387,7 +390,6 @@ export function GlossaryPanel({
           options={sorts}
           sort={order}
           onSort={onSort}
-          trailing={badge}
         />
       )}
 
@@ -995,7 +997,7 @@ interface SortOption {
 /**
  * Which sorts this particular glossary can actually offer. **Fewer than two is
  * no bar at all**, and the panel asks this before drawing, because whether the
- * bar is there decides where the profile badge goes (`GlossaryPanel`).
+ * bar is there decides whether the band keeps its empty head row (`GlossaryPanel`).
  */
 function sortOptions(entries: GlossaryEntry[]): SortOption[] {
   const options: SortOption[] = [
@@ -1044,24 +1046,20 @@ function sortOptions(entries: GlossaryEntry[]): SortOption[] {
 }
 
 /**
- * The sort buttons, and — at the right-hand end — whatever the panel hands
- * `trailing`: the count and the profile badge, which came here from a head row
- * of their own on 2026-09-29, so that row could go (`GlossaryPanel`).
- *
- * **The trailing slot is beside the group, not in it.** The group is what a
- * screen reader announces as "Order the terms by", and a profile button inside
- * it would be announced as one of the orders. GPT Sol's review of the plan.
+ * The sort buttons. Their row's right-hand end held the count and the profile
+ * badge from 2026-09-29, so the head row could go; the count went to the band's
+ * (i) on 2026-10-01 (plan 261001m) and the badge to the band's corner on
+ * 2026-10-02 (plan 261002e), and the row's right padding keeps that corner
+ * clear (`.gloss-sort`, `--band-about-room`).
  */
 function SortBar({
   options,
   sort,
   onSort,
-  trailing,
 }: {
   options: SortOption[];
   sort: TermSort;
   onSort(sort: TermSort): void;
-  trailing: ReactNode;
 }) {
   return (
     <div className="gloss-sort">
@@ -1081,7 +1079,6 @@ function SortBar({
           </button>
         ))}
       </OrderGroup>
-      {trailing && <span className="gloss-sort-trail">{trailing}</span>}
     </div>
   );
 }
