@@ -24,6 +24,10 @@ long, so the gate and the trunk gate together are a treadmill: each lap is a mod
 gives the next push another window to land in. Step 4 of the Overseer's deploy (bring `/help` up to
 date) feeds it too: a Help commit is a release commit, so it means preparing again.
 
+Greg, approving the trade-off, 2026-10-02 ~20:45 (relayed by the Overseer):
+
+> Yep. If commits arrive late, then it's okay for them to be described in the next releases notes.
+
 ## What 261001q wanted, and what this keeps
 
 1. **The notes ship in the deploy they describe.** Kept: `prepare` still runs before the deploy and

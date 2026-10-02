@@ -166,6 +166,12 @@ the deploy names them; `promote` stops that deploy's line at what was described,
 > simpler approach that would get us almost all of the value … not if it's going to involve a huge
 > trade-off, but a small trade-off is fine.
 
+And on the trade-off itself, the same evening:
+
+> Yep. If commits arrive late, then it's okay for them to be described in the next releases notes.
+>
+> — Greg, 2026-10-02 ~20:45
+
 **The trade-off:** a release's entry can miss a few late commits, which appear under the next release
 instead, and the page says so under a release whose notes stopped short of its build. A revert that
 lands after the notes is the sharp case, and the reason the gate was strict until then: the page
