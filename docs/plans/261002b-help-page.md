@@ -233,3 +233,21 @@ findings accepted; each was checked against the code.
 - **Browser check** (Playwright, signed out, 1440 and 390): layout, sticky contents, phone width with
   no sideways scroll, the table, search and Enter, the `#` links all pass. One bug: on a cold first
   visit `/help#mode-skim` overshot by ~800px — fixed in the next commit.
+- **Fix** `9b60c6141` — the overshoot: the scroll was aimed while Geist was loading, the text above
+  reflowed, and smooth scroll kept its old destination. `scrollToAndFlash` now re-aims for two seconds
+  on font loads and resizes, and stops at the reader's first input. 20/20 cold runs land. Postmortem
+  [261002b](../postmortems/261002b-a-scroll-aimed-before-the-fonts-arrive-lands-where-the-text-was.md).
+- **Round 2** — GPT Sol on the two fixes no second pass had seen (round 1's own C1, and the overshoot
+  fix): no findings ([261002b-help-page-code-review-2-sol.md](261002b-help-page-code-review-2-sol.md)).
+- **Second browser check** (signed in, an owned article; and a visitor): the Help link sits after
+  Experimental and costs no mode labels at 1440 or 1280; at 390 the bar scrolls and Help is reachable;
+  from Glossary it lands on and flashes `#mode-glossary`, Back restores the mode and query string;
+  Plain goes to `#the-reading-view`; the command bar ranks Help above Feedback for "help"; nothing
+  rewrites the address after arriving; a visitor has the link; three cold loads of `#mode-skim` land.
+
+### Deferred
+
+- **An (i) whose card links on into Help** — waits on open-questions.md Q10 (interactive cards).
+- **Searching body text**, and landing on the matching line rather than the section heading.
+- **C7**, the margin's *"Your note"* tooltip shown to a visitor over the owner's public note — a
+  separate fix, outside this change.
