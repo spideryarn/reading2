@@ -379,7 +379,10 @@ export async function resolveAccess(
     found.kind === "owned"
       ? found.article
       : /* Nor whether the owner switched High-powered AI on — that is the
-           owner's spend, not the visitor's business (plan 260930f). */
+           owner's spend, not the visitor's business (plan 260930f). Whether
+           they archived it is not here to strip: `PublicArticle` is an
+           allowlist without `archivedAt`, so the masthead draws no Archive
+           button for a visitor (plan 261002a). */
         { ...found.article, sourceGuess: undefined, highPowerSince: null };
   const presentable = await renderArticleMaths(sanitizeArticle(drawn), {
     signal: load.signal,

@@ -2730,6 +2730,8 @@ const rawPgArticleReader: ArticleReader = {
          drizzle/0024) is a two-member union TypeScript cannot see the
          guarantee for. */
       visibility: found.article.visibility as Visibility,
+      /* Off the same row, for the masthead's Archive button (plan 261002a). */
+      archivedAt: found.article.archivedAt?.toISOString() ?? null,
       /* Named, for `assets`' reason: required on `Article`, so a projection
          that forgot it is a type error (src/types.ts § `sourceGuess`). */
       sourceGuess,

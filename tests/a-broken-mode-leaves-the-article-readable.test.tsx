@@ -1639,10 +1639,12 @@ describe("a throw inside any band leaves the article", () => {
   });
 
   /**
-   * **Each mode gets a boundary of its own.** Summary arms nothing, so a press
-   * on it cannot reset a broken boundary the way a fresh token does — only
-   * `key={mode}` at the call site stands between a broken Quotes and a Summary
-   * band that says "Summary is not working" when nothing in Summary threw.
+   * **Each mode gets a boundary of its own.** Structure arms nothing, so a
+   * press on it cannot reset a broken boundary the way a fresh token does —
+   * only `key={mode}` at the call site stands between a broken Quotes and a
+   * Structure band that says "Structure is not working" when nothing in it
+   * threw. (It was Summary until 2026-10-02, when Summary's press began arming
+   * its run — docs/plans/261002a-summary-generates-on-open.md.)
    */
   it("does not follow the reader into another mode", async () => {
     who.set(OWNER_A);
@@ -1650,10 +1652,10 @@ describe("a throw inside any band leaves the article", () => {
     await open("?mode=quotes");
     containedInside("quotes");
 
-    await press(MODE_LABEL.summary);
-    expect(modeInUrl()).toBe("summary");
+    await press(MODE_LABEL.structure);
+    expect(modeInUrl()).toBe("structure");
     expect(text(), "the broken band followed the reader").not.toContain("[mode-render]");
-    expect(host.querySelector('.mode-band[aria-label="Summary"]'), "no Summary band").not.toBeNull();
+    expect(host.querySelector('.mode-band[aria-label="Structure"]'), "no Structure band").not.toBeNull();
   });
 
   it("does not reset a visitor's broken Sketch for a diagram parameter it ignores", async () => {
@@ -1783,6 +1785,24 @@ describe("a press that met any broken band is retired", () => {
 
     containedInside("remember");
     expect(activation.pendingActivation(SLUG, "quiz"), "the Quiz press survived").toBeNull();
+    expect(jobPosts()).toEqual([]);
+  });
+
+  /* The top-level Summary press began arming `simple` on 2026-10-02. This is
+     deliberately separate from the slider case below: removing Summary's old
+     `bandTarget` special case is safe only if the new fixed MODE_TARGET row is
+     also the boundary's answer for the bar press. */
+  it("summary: the bar's press, when the plain-words view throws under the real useSimple", async () => {
+    who.set(OWNER_A);
+    notBuilt = "/api/simple/";
+    await open();
+    trace.length = 0;
+
+    probe.throwAt = "OwnerSimple";
+    await press(MODE_LABEL.summary);
+
+    containedInside("summary");
+    expect(activation.pendingActivation(SLUG, "simple"), "the Summary press survived").toBeNull();
     expect(jobPosts()).toEqual([]);
   });
 

@@ -163,6 +163,17 @@
   z-index: 39;
 }
 
+/* **The scrollbar's room is kept whether or not the page scrolls**, since
+   2026-10-02. The reading view lays out for the root's width
+   (reader/measure.ts § `pageWidth`), and beside a classic scrollbar that width
+   used to depend on whether the page was tall enough to scroll — which the
+   layout itself decides. Structure's band jumps from 619px to 400 at a window
+   near 1175px, and a narrower page can be a shorter one, so the scrollbar
+   could come and go and take the layout with it (GPT Sol, plan 261002a).
+   Reserved, the width is fixed and nothing can flip. On overlay scrollbars —
+   phones, trackpad Macs — it reserves nothing. */
+html { scrollbar-gutter: stable; }
+
 body {
   margin: 0;
   background: var(--page);
@@ -193,11 +204,19 @@ body {
 .masthead {
   position: sticky;
   /* Shifted clear of the mode band, along with the controls bar below it.
-     Both are `100vw`-wide sticky bars, so without the `--mode-w` term the band
+     Both are page-wide sticky bars, so without the `--mode-w` term the band
      would paint over their left end — and what it would cover is the article's
-     own title, which is the one thing on this page you would notice missing. */
+     own title, which is the one thing on this page you would notice missing.
+
+     **`--page-w`, not `100vw`, since 2026-10-02.** `100vw` counts a classic
+     scrollbar the page does not have, so on a Mac with a mouse plugged in
+     these two bars were 15px wider than the page and it scrolled sideways
+     (Greg, spya-y3747g). `--page-w` is the width `fitView` laid the page out
+     for, written on `.reader` by Reader.tsx, with the notch already taken out
+     — so the `--safe-*` terms are not subtracted again here.
+     docs/postmortems/261002a-the-reading-view-laid-out-for-the-width-under-the-scrollbar.md. */
   left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
-  width: calc(100vw - var(--spine-w) - var(--mode-w) - var(--safe-left) - var(--safe-right));
+  width: calc(var(--page-w) - var(--spine-w) - var(--mode-w));
   background: var(--page);
   /* `--safe-top` because this is what sits at y=0 before you scroll, and in the
      installed app y=0 is under the clock. It is added to the padding rather
@@ -488,7 +507,8 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   top: var(--safe-top);
   transform: translateY(var(--bar-hide));
   left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
-  width: calc(100vw - var(--spine-w) - var(--mode-w) - var(--safe-left) - var(--safe-right));
+  /* `--page-w`, the masthead's reason (§ shell, above). */
+  width: calc(var(--page-w) - var(--spine-w) - var(--mode-w));
   z-index: 40;
   height: var(--bar-h);
   display: flex;

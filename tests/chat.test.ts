@@ -206,13 +206,16 @@ describe("fitView in a mode — the band beside the prose", () => {
   const band = (windowWidth: number) =>
     fitView({ modeBand: true, windowWidth });
 
-  it("1600px: the band at its ideal width, the rest to the prose", () => {
-    const f = band(1600);
+  /* 1100 rather than 1600 since 2026-10-02: past about 1220 the band grows
+     again into what the prose cannot use (layout.test.ts § a band past the
+     prose's measure, plan 261002a), so 1600 no longer shows the ideal. */
+  it("1100px: the band at its ideal width, the rest to the prose", () => {
+    const f = band(1100);
     expect(f.modeW).toBe(MODE_IDEAL);
-    // 1600 - 12 of spine - 400 of band.
-    expect(f.widths).toEqual([1188]);
+    // 1100 - 12 of spine - 400 of band.
+    expect(f.widths).toEqual([688]);
     expect(f.overflowing).toBe(false);
-    expect(f.minWidth).toBe(1600);
+    expect(f.minWidth).toBe(1100);
   });
 
   it("the band gives way to the prose before the prose gives way to it", () => {
@@ -363,14 +366,14 @@ describe("fitView in a mode — the band beside the prose", () => {
   it("hides the rail in a mode too, when the reader has hidden it", () => {
     const f = fitView({
       modeBand: true,
-      windowWidth: 1600,
+      windowWidth: 1100,
       showSpine: false,
     });
     expect(f.spine).toBe("off");
     // The rail's 12px goes to the prose; the band keeps its ideal width.
     expect(f.modeW).toBe(MODE_IDEAL);
-    expect(f.widths).toEqual([1200]);
-    expect(f.minWidth).toBe(1600);
+    expect(f.widths).toEqual([700]);
+    expect(f.minWidth).toBe(1100);
   });
 
   it("takes no room for a band when there is none", () => {

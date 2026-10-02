@@ -840,13 +840,15 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
     const { min, ideal } = structureColumnsBand(rootFontPx);
     if (avail - PROSE_MIN >= min) return Math.min(avail - PROSE_MIN, ideal);
   }
+  const spare = spareBeyondTheMeasure(avail, rootFontPx);
   /* Floored at `MODE_IDEAL`, as the wide band's cap is: 28rem at a 12px root
      is 336, and a roomy band must never be the narrower one. */
   if (bandShape === "roomy") {
     const ideal = Math.max(MODE_IDEAL, Math.round(ROOMY_IDEAL_REM * rootFontPx));
-    return clamp(avail - PROSE_MIN, MODE_MIN, ideal);
+    return Math.max(clamp(avail - PROSE_MIN, MODE_MIN, ideal), spare);
   }
   const standard = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
+  if (bandShape === "standard") return Math.max(standard, spare);
   /* Grows smoothly rather than jumping: the posts reflow at any width, unlike
      Structure's two columns. A share of the room (`WIDE_SHARE`), never
      narrower than the standard band, never wider than its root-relative cap
@@ -856,5 +858,33 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
     const cap = Math.min(Math.max(MODE_IDEAL, wideIdeal(rootFontPx)), avail - MODE_PROSE_FLOOR);
     return clamp(Math.round(avail * WIDE_SHARE), standard, cap);
   }
+  /* Structure whose columns do not fit: the ordinary band, and deliberately
+     not `spare` — its list face in a band past `MODE_IDEAL` is a look Greg has
+     not seen (260928a). In practice the columns fit first at every root. */
   return standard;
+}
+
+/**
+ * **What the prose cell has beyond the width the prose can use**, offered to a
+ * standard or roomy band, up to a reading measure. Greg, 2026-10-01
+ * (spya-xebdgz): *"if the window is really wide and there's space, the
+ * left-hand column should expand up to that sort of width"* — the measure the
+ * text is set at — *"I think the way it works right now for slightly narrow
+ * windows is pretty good, so we don't want to screw that up … let's not
+ * introduce too much complexity."*
+ *
+ * **No new number.** The prose stops reading wider at `proseAloneMaxPx` — the
+ * measure, its pad and the gutter, the cap it already has alone — so anything
+ * the cell holds past that is page on either side of a centred column. The
+ * band takes it, and stops at `wideIdeal`, which is already this file's name
+ * for a prose column's measure and Tweets' ceiling.
+ *
+ * **Narrow windows are untouched by construction**: this is negative until the
+ * cell is wider than the prose can use, which at a 16px root is a 1220px
+ * window for a standard band (1268 for Summary's roomy one), and below that the
+ * band is exactly what it was. It reaches 34rem at 1364 and stops.
+ * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
+ */
+function spareBeyondTheMeasure(avail: number, rootFontPx: number): number {
+  return Math.min(avail - proseAloneMaxPx(rootFontPx), wideIdeal(rootFontPx));
 }

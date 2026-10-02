@@ -49,7 +49,7 @@
  * stays with you as you read is the spine and the arc column, not this.
  */
 import { useMemo, type ReactNode } from "react";
-import { ExternalLink, FileQuestion, Globe, Lock, Upload } from "lucide-react";
+import { Archive, ExternalLink, FileQuestion, Globe, Lock, Undo2, Upload } from "lucide-react";
 import {
   SHARING_BADGE,
   SHARING_MARK_HOW_PRIVATE,
@@ -73,6 +73,7 @@ import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { AuthorNames } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import type { ArchiveControl } from "./useArchive.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 
 interface Props {
@@ -107,9 +108,11 @@ interface Props {
    * the same rule Delete follows on the metadata page. 2026-08-28.
    */
   onRenamed?: ((slug: string, title: string) => void) | undefined;
+  /** The owner's one archive controller, kept above the article/metadata view switch. */
+  archive?: ArchiveControl | undefined;
 }
 
-export function Masthead({ article, slug, onRenamed }: Props) {
+export function Masthead({ article, slug, onRenamed, archive }: Props) {
   const { meta, tree } = article;
   /* The same rename the shelf offers, from the page you are actually reading —
      Greg, 2026-08-27. See TitleEditor.tsx for why the request lives in a hook
@@ -183,6 +186,9 @@ export function Masthead({ article, slug, onRenamed }: Props) {
         slug={slug}
         visibility={onRenamed === undefined ? undefined : article.visibility}
       />
+      {/* Owner-only: the controller is mounted by OwnedArticle and is absent
+          from the visitor arm altogether. */}
+      {onRenamed !== undefined && archive !== undefined ? <ArchiveMark archive={archive} /> : null}
     </>
   );
 
@@ -828,6 +834,60 @@ function SharingMark({
       >
         {shared ? <Globe size={14} strokeWidth={1.75} /> : <Lock size={14} strokeWidth={1.75} />}
       </Link>
+    </Tooltip>
+  );
+}
+
+/**
+ * **Archive, beside the sharing mark.** Greg, 2026-10-01 (spya-br27ef): *"Add a
+ * button at the top of the reading view to archive the article, next to the
+ * button to share it publicly."*
+ *
+ * The same act as the Metadata page's two Archive buttons, off the same hook —
+ * `useArchive`, which owns the rules: the server's answer rather than the
+ * boolean we sent, a fresh read after a failure, and no button while we do not
+ * know which way round the article is. The controller starts from
+ * `Article.archivedAt` and lives above both article views, so it also outlives
+ * this masthead.
+ *
+ * **Nothing navigates**, the Metadata buttons' rule: an archived article stays
+ * readable by its link, so the honest thing for this page to show afterwards is
+ * the state it is now in and the way back, with no clock. The icon flips to
+ * Put back, and the tooltip says which state it is in.
+ *
+ * The 28px box and the colours are `SharingMark`'s, so the two read as a pair;
+ * `IconButton` is not used because the tooltip here is a `ControlTip` card,
+ * which is what `SharingMark` beside it shows.
+ * docs/plans/261002a-horizontal-scrollbar-wider-band-on-wide-windows-archive-button-on-the-masthead.md.
+ */
+function ArchiveMark({ archive }: { archive: ArchiveControl }) {
+  const { at, busy, error, set } = archive;
+  /* `at` turns `undefined` only when a failed press could not be re-read —
+     we no longer know, so the button goes, as it does on the Metadata page. */
+  if (at === undefined) return null;
+  const archived = at !== null;
+  const head = error ? "Couldn't confirm that" : archived ? "Archived" : "On your shelf";
+  const what = error
+    ? `${error} This shows the article as it is now.`
+    : archived
+      ? "Off your shelf. Press to put it back."
+      : "Press to archive it: off your shelf, and reversible.";
+  const how = "Nothing else changes — you stay here and can carry on reading.";
+  return (
+    <Tooltip content={<ControlTip head={head} what={what} how={how} />} placement="bottom" keepSide>
+      <button
+        type="button"
+        data-testid="masthead-archive"
+        data-archived={archived ? "true" : "false"}
+        onClick={() => void set(!archived)}
+        disabled={busy}
+        aria-label={archived ? "Archived — put back on the shelf" : "Archive this article"}
+        className={`tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border-0 tw:bg-transparent tw:p-0 tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:disabled:opacity-50 ${
+          error ? "tw:text-destructive" : archived ? "tw:text-highlight" : "tw:text-ink-faint"
+        }`}
+      >
+        {archived ? <Undo2 size={14} strokeWidth={1.75} /> : <Archive size={14} strokeWidth={1.75} />}
+      </button>
     </Tooltip>
   );
 }
