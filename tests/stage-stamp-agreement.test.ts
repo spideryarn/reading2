@@ -430,9 +430,9 @@ function scriptFor(stage: Stage, article: Article): string[] {
       if (!second) throw new Error("the fixture has no second body block");
       const answer = JSON.stringify({
         paragraphs: [
-          { text: "This piece is about something.", ids: [block.id] },
-          { text: "It matters for a reason it gives.", ids: [second.id] },
-          { text: "Its key idea is one it states.", ids: [block.id] },
+          { ids: [block.id], sentences: [{ text: "This piece is about something.", id: null }] },
+          { ids: [second.id], sentences: [{ text: "It matters for a reason it gives.", id: null }] },
+          { ids: [block.id], sentences: [{ text: "Its key idea is one it states.", id: null }] },
         ],
       });
       return SIMPLE_LEVELS.map(() => answer);

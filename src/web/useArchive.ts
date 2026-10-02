@@ -68,8 +68,29 @@ export type ArchiveControl = {
   lost: boolean;
   busy: boolean;
   error: string | null;
-  set: (archived: boolean) => Promise<void>;
+  /**
+   * Archive (`true`) or put back (`false`), and **say how it went** — since
+   * 2026-10-02, when the command bar's *Archive this article* row arrived
+   * (plan 261002c, stage B). The buttons on the page read `busy` and `error`
+   * after the fact, from state; the bar has to decide at once whether to shut
+   * or to stay open with a sentence, and state set inside this function is not
+   * readable by its caller until the next render. So the answer is returned
+   * as well as stored. Callers that draw from state go on ignoring it.
+   */
+  set: (archived: boolean) => Promise<ArchiveResult>;
 };
+
+/**
+ * **What one press came to.** `busy` is the press refused because another was
+ * already out — from any of the doors, since they share this controller — and
+ * nothing was sent. `failed` carries the sentence `error` now holds; it does
+ * not mean nothing was written (the catch in `set` says why), which is why the
+ * bar says *couldn't confirm* rather than *couldn't*.
+ */
+export type ArchiveResult =
+  | { readonly kind: "done" }
+  | { readonly kind: "busy" }
+  | { readonly kind: "failed"; readonly message: string };
 
 /** A real answer to the archive question, or `undefined` when the wire did not say. */
 export function archiveAt(value: unknown): string | null | undefined {
@@ -139,8 +160,8 @@ export function useArchive(
      boolean in it — exactly as `useShelf.undo` and `useShelf.restore` are
      deliberately the same request on the shelf side. Two functions here would
      be two places to get the field name wrong. */
-  async function set(archived: boolean): Promise<void> {
-    if (inFlight.current) return;
+  async function set(archived: boolean): Promise<ArchiveResult> {
+    if (inFlight.current) return { kind: "busy" };
     inFlight.current = true;
     setBusy(true);
     setError(null);
@@ -161,6 +182,7 @@ export function useArchive(
         throw new Error("The server's answer did not say whether this article is archived.");
       }
       setActed({ at: stored });
+      return { kind: "done" };
     } catch (e) {
       /* **A failed request is not proof that nothing was written**, and saying
          so was this control's one dishonest sentence until a cross-model review
@@ -175,7 +197,8 @@ export function useArchive(
          So: ask. The answer to "did that work" is a fresh read, not the
          request's own exit code. If even the re-read fails we are honestly
          lost, and `at: undefined` says so by taking the button away. */
-      setError((e as Error).message);
+      const message = (e as Error).message;
+      setError(message);
       try {
         const m = await readJson<ArticleMetadata>(
           await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`),
@@ -184,6 +207,7 @@ export function useArchive(
       } catch {
         setActed({ at: undefined });
       }
+      return { kind: "failed", message };
     } finally {
       inFlight.current = false;
       setBusy(false);

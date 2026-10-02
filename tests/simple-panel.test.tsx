@@ -351,6 +351,161 @@ describe("the Simple view", () => {
     expect(host.querySelectorAll("button")).toHaveLength(0);
   });
 
+  /* ---- sentences that point at their passage (plan 261002e) ---- */
+
+  const ASKS = "This essay asks whether a machine could ever be conscious,";
+  const SAYS = "and says probably not.";
+  const ASKS_SAYS = `${ASKS} ${SAYS}`;
+  /** The first Simple paragraph, cut into a linked and an unlinked sentence. */
+  function withSentences(sentences: unknown, text = ASKS_SAYS): SimpleSummary {
+    const simple = artefact();
+    simple.levels.simple[0] = { text, ids: [EARLY, MIDDLE], sentences };
+    return simple;
+  }
+  const LINKED = [
+    { text: ASKS, id: MIDDLE },
+    { text: SAYS, id: null },
+  ];
+  const sentenceLinks = () => [...host.querySelectorAll<HTMLAnchorElement>(".simple-text a.simple-sentence")];
+  const doors = (para: Element | undefined) =>
+    [...(para?.querySelectorAll(".simple-refs a.block-ref") ?? [])].map((a) => a.getAttribute("data-block-link"));
+
+  it("draws a sentence that names its passage as a block link, the rest as plain words, and the doors after", async () => {
+    await draw({ kind: "owner", owner: owner({ simple: withSentences(LINKED) }) });
+    const para = host.querySelector(".simple-para");
+    /* The same words the guard checked, with one space between the sentences. */
+    expect(para?.querySelector(".simple-text")?.textContent).toBe(ASKS_SAYS);
+    const links = sentenceLinks();
+    expect(links.map((a) => [a.textContent, a.getAttribute("data-block-link")])).toEqual([[ASKS, MIDDLE]]);
+    expect(links[0]?.classList.contains("block-ref")).toBe(true);
+    /* Its own words name it — not the bare id a chip is read as. */
+    expect(links[0]?.hasAttribute("aria-label")).toBe(false);
+    expect(doors(para ?? undefined)).toEqual([EARLY, MIDDLE]);
+  });
+
+  it("is lit by the band's on-screen rule when its passage is on screen, and not otherwise", async () => {
+    const { onScreenLinkCss } = await import("../src/web/on-screen.js");
+    host.classList.add("mode-band");
+    await draw({ kind: "owner", owner: owner({ simple: withSentences(LINKED) }) });
+    const selectorOf = (css: string) => css.slice(0, css.indexOf("{"));
+    const [sentence] = sentenceLinks();
+    expect(sentence?.matches(selectorOf(onScreenLinkCss([MIDDLE])))).toBe(true);
+    expect(sentence?.matches(selectorOf(onScreenLinkCss([EARLY, LATER])))).toBe(false);
+  });
+
+  it("jumps to a sentence's passage when the sentence is clicked", async () => {
+    await draw({ kind: "owner", owner: owner({ simple: withSentences(LINKED) }) });
+    await act(async () => {
+      sentenceLinks()[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(jumps).toEqual([MIDDLE]);
+  });
+
+  it("opens the sentence's passage, under its section, in the shared card", async () => {
+    class FakeResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    const index = new Map([
+      [EARLY, { text: "The opening evidence.", section: "The question" }],
+      [MIDDLE, { text: "Machines and minds, the second passage.", section: "The question" }],
+      [LATER, { text: "Why it matters.", section: "Why it matters" }],
+    ]);
+    await act(async () => {
+      root.render(
+        <BlockLinkProvider index={index}>
+          <SimplePanel
+            access={{ kind: "owner", owner: owner({ simple: withSentences(LINKED) }) }}
+            level="simple"
+            onJump={(id: BlockId) => void jumps.push(id)}
+          />
+        </BlockLinkProvider>,
+      );
+    });
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+      sentenceLinks()[0]?.focus();
+      await Promise.resolve();
+    });
+    const card = document.querySelector<HTMLElement>(".tooltip-anchor");
+    expect(card?.textContent).toContain("The question");
+    expect(card?.textContent).toContain("Machines and minds, the second passage.");
+  });
+
+  it("gives a visitor the same sentence links", async () => {
+    await draw({ kind: "visitor", simple: { levels: withSentences(LINKED).levels } });
+    expect(sentenceLinks().map((a) => a.getAttribute("data-block-link"))).toEqual([MIDDLE]);
+  });
+
+  it("dismisses a sentence's old passage card when a rewrite changes only its target", async () => {
+    class FakeResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    /* The article stays the same; only the rewritten summary's link changes. */
+    const index = new Map([
+      [EARLY, { text: "The opening evidence.", section: "The question" }],
+      [MIDDLE, { text: "Machines and minds, the second passage.", section: "The question" }],
+      [LATER, { text: "Why it matters.", section: "Why it matters" }],
+    ]);
+    const show = async (id: BlockId) => {
+      await act(async () => root.render(
+        <BlockLinkProvider index={index}>
+          <SimplePanel
+            access={{ kind: "owner", owner: owner({ simple: withSentences([{ text: ASKS, id }, { text: SAYS, id: null }]) }) }}
+            level="simple"
+            onJump={(target: BlockId) => void jumps.push(target)}
+          />
+        </BlockLinkProvider>,
+      ));
+    };
+    const focus = async () => {
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+        sentenceLinks()[0]?.focus();
+        await Promise.resolve();
+      });
+    };
+    const cardText = () => document.querySelector(".tooltip-anchor")?.textContent ?? "";
+    await show(MIDDLE);
+    await focus();
+    expect(cardText()).toContain("Machines and minds, the second passage.");
+    await show(EARLY);
+    expect(sentenceLinks()[0]?.getAttribute("data-block-link")).toBe(EARLY);
+    await settle();
+    /* The shared card keeps its words through an 80 ms closing animation. */
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+    expect(cardText()).not.toContain("Machines and minds, the second passage.");
+    await focus();
+    expect(cardText()).toContain("The opening evidence.");
+    await act(async () => sentenceLinks()[0]?.click());
+    expect(jumps).toEqual([EARLY]);
+  });
+
+  it.each([
+    ["words that are not the paragraph's text", LINKED, `${ASKS} And something the guard never read.`],
+    ["an id the paragraph does not cite", [{ text: ASKS, id: LATER }, { text: SAYS, id: null }], ASKS_SAYS],
+    ["an empty list", [], ASKS_SAYS],
+    ["a malformed entry", [{ text: ASKS, id: MIDDLE }, SAYS], ASKS_SAYS],
+  ])("draws the paragraph exactly as before for %s, owner and visitor alike", async (_label, sentences, words) => {
+    for (const access of [
+      { kind: "owner" as const, owner: owner({ simple: withSentences(sentences, words) }) },
+      { kind: "visitor" as const, simple: { levels: withSentences(sentences, words).levels } },
+    ]) {
+      await draw(access);
+      expect(sentenceLinks()).toHaveLength(0);
+      const para = host.querySelector(".simple-para");
+      const p = para?.querySelector(".simple-text");
+      expect(p?.textContent).toBe(words);
+      expect(p?.children).toHaveLength(0);
+      expect(doors(para ?? undefined)).toEqual([EARLY, MIDDLE]);
+    }
+  });
+
   it("tells a visitor none has been made yet", async () => {
     await draw({ kind: "visitor", simple: null });
     expect(text()).toContain(SIMPLE_NONE_VISITOR);

@@ -1,0 +1,8426 @@
+{
+ "summary": [
+  {
+   "slug": "constitution",
+   "q": "ways Claude can be too cautious",
+   "shape": "topic",
+   "refMs": 13541,
+   "refHits": 15,
+   "refUsage": {
+    "promptTokens": 11262,
+    "completionTokens": 1361,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 11210
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      385,
+      360,
+      433
+     ],
+     "cost": 0.000558138,
+     "inputTokens": 13289,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.9333333333333333,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 0,
+     "auc": 0.9903381642512077,
+     "refScoreMin": 0.43,
+     "refScoreMedian": 0.92,
+     "nonRefMedian": 0.23,
+     "thresholds": {
+      "0.5": {
+       "n": 22,
+       "refIn": 14
+      },
+      "0.7": {
+       "n": 17,
+       "refIn": 14
+      },
+      "0.8": {
+       "n": 15,
+       "refIn": 14
+      },
+      "0.9": {
+       "n": 13,
+       "refIn": 13
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.10000000000000003,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-ut5bsd",
+       0.94,
+       true
+      ],
+      [
+       "spya-pwrpcx",
+       0.94,
+       true
+      ],
+      [
+       "spya-vgt44b",
+       0.94,
+       true
+      ],
+      [
+       "spya-kzttxs",
+       0.93,
+       true
+      ],
+      [
+       "spya-s0gn3k",
+       0.92,
+       true
+      ],
+      [
+       "spya-mcn70k",
+       0.92,
+       true
+      ],
+      [
+       "spya-bvkt68",
+       0.92,
+       true
+      ],
+      [
+       "spya-ahs2q7",
+       0.92,
+       true
+      ],
+      [
+       "spya-n58h2w",
+       0.91,
+       true
+      ],
+      [
+       "spya-egkyk2",
+       0.91,
+       true
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      442
+     ],
+     "cost": 0.000392322,
+     "inputTokens": 9341,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.9333333333333333,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 0,
+     "auc": 0.996135265700483,
+     "refScoreMin": 0.44,
+     "refScoreMedian": 0.92,
+     "nonRefMedian": 0.23,
+     "thresholds": {
+      "0.5": {
+       "n": 18,
+       "refIn": 14
+      },
+      "0.7": {
+       "n": 16,
+       "refIn": 14
+      },
+      "0.8": {
+       "n": 14,
+       "refIn": 14
+      },
+      "0.9": {
+       "n": 13,
+       "refIn": 13
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-vgt44b",
+       0.95,
+       true
+      ],
+      [
+       "spya-pwrpcx",
+       0.94,
+       true
+      ],
+      [
+       "spya-ut5bsd",
+       0.93,
+       true
+      ],
+      [
+       "spya-kzttxs",
+       0.93,
+       true
+      ],
+      [
+       "spya-s0gn3k",
+       0.92,
+       true
+      ],
+      [
+       "spya-egkyk2",
+       0.92,
+       true
+      ],
+      [
+       "spya-hek4mp",
+       0.92,
+       true
+      ],
+      [
+       "spya-bvkt68",
+       0.92,
+       true
+      ],
+      [
+       "spya-mcn70k",
+       0.91,
+       true
+      ],
+      [
+       "spya-ahs2q7",
+       0.91,
+       true
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      545
+     ],
+     "cost": 0.000787458,
+     "inputTokens": 18749,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.9333333333333333,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 0,
+     "auc": 0.9806763285024155,
+     "refScoreMin": 1.09,
+     "refScoreMedian": 2.83,
+     "nonRefMedian": 0.86,
+     "thresholds": {
+      "2": {
+       "n": 15,
+       "refIn": 14
+      },
+      "1.5": {
+       "n": 24,
+       "refIn": 14
+      },
+      "2.5": {
+       "n": 13,
+       "refIn": 13
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-vgt44b",
+       2.91,
+       true
+      ],
+      [
+       "spya-pwrpcx",
+       2.89,
+       true
+      ],
+      [
+       "spya-ahs2q7",
+       2.89,
+       true
+      ],
+      [
+       "spya-ut5bsd",
+       2.85,
+       true
+      ],
+      [
+       "spya-bvkt68",
+       2.85,
+       true
+      ],
+      [
+       "spya-egkyk2",
+       2.84,
+       true
+      ],
+      [
+       "spya-kzttxs",
+       2.84,
+       true
+      ],
+      [
+       "spya-s0gn3k",
+       2.83,
+       true
+      ],
+      [
+       "spya-n58h2w",
+       2.83,
+       true
+      ],
+      [
+       "spya-mcn70k",
+       2.83,
+       true
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      325
+     ],
+     "cost": 0.000394464,
+     "inputTokens": 9392,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.4,
+     "recall10": 0.3333333333333333,
+     "top5NonRef": 0,
+     "auc": 0.6613526570048309,
+     "refScoreMin": 0,
+     "refScoreMedian": 0,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 6,
+       "refIn": 5
+      },
+      "0.05": {
+       "n": 3,
+       "refIn": 3
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-t8b0yx",
+       0.78,
+       true
+      ],
+      [
+       "spya-ut5bsd",
+       0.12,
+       true
+      ],
+      [
+       "spya-pwrpcx",
+       0.06,
+       true
+      ],
+      [
+       "spya-vgt44b",
+       0.02,
+       true
+      ],
+      [
+       "spya-kzttxs",
+       0.01,
+       true
+      ],
+      [
+       "spya-m5228n",
+       0.01,
+       false
+      ],
+      [
+       "spya-nh48sh",
+       0,
+       false
+      ],
+      [
+       "spya-tabzzj",
+       0,
+       false
+      ],
+      [
+       "spya-fqwvqr",
+       0,
+       false
+      ],
+      [
+       "spya-afvv5h",
+       0,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      1702
+     ],
+     "cost": 0.001816836,
+     "inputTokens": 43258,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.8,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 0,
+     "auc": 0.9729468599033816,
+     "refScoreMin": 0.51,
+     "refScoreMedian": 0.84,
+     "nonRefMedian": 0.3,
+     "thresholds": {
+      "0.5": {
+       "n": 33,
+       "refIn": 15
+      },
+      "0.7": {
+       "n": 14,
+       "refIn": 12
+      },
+      "0.8": {
+       "n": 10,
+       "refIn": 10
+      },
+      "0.9": {
+       "n": 5,
+       "refIn": 5
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-ut5bsd",
+       0.91,
+       true
+      ],
+      [
+       "spya-vgt44b",
+       0.91,
+       true
+      ],
+      [
+       "spya-pwrpcx",
+       0.9,
+       true
+      ],
+      [
+       "spya-mcn70k",
+       0.9,
+       true
+      ],
+      [
+       "spya-kzttxs",
+       0.9,
+       true
+      ],
+      [
+       "spya-b54jrm",
+       0.87,
+       true
+      ],
+      [
+       "spya-ahs2q7",
+       0.85,
+       true
+      ],
+      [
+       "spya-pd58xp",
+       0.84,
+       true
+      ],
+      [
+       "spya-s0gn3k",
+       0.82,
+       true
+      ],
+      [
+       "spya-n58h2w",
+       0.82,
+       true
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      2654
+     ],
+     "cost": 0.00089104,
+     "inputTokens": 22276,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.8,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 0,
+     "auc": 0.9714975845410628,
+     "refScoreMin": 0.34864513533394575,
+     "refScoreMedian": 0.7981867921417104,
+     "nonRefMedian": 0.1259227681153614,
+     "thresholds": {
+      "0.5": {
+       "n": 17,
+       "refIn": 12
+      },
+      "0.7": {
+       "n": 10,
+       "refIn": 10
+      },
+      "0.8": {
+       "n": 7,
+       "refIn": 7
+      },
+      "0.9": {
+       "n": 2,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-vgt44b",
+       0.932,
+       true
+      ],
+      [
+       "spya-ut5bsd",
+       0.915,
+       true
+      ],
+      [
+       "spya-b54jrm",
+       0.893,
+       true
+      ],
+      [
+       "spya-pwrpcx",
+       0.893,
+       true
+      ],
+      [
+       "spya-ahs2q7",
+       0.867,
+       true
+      ],
+      [
+       "spya-mcn70k",
+       0.852,
+       true
+      ],
+      [
+       "spya-pd58xp",
+       0.818,
+       true
+      ],
+      [
+       "spya-kzttxs",
+       0.798,
+       true
+      ],
+      [
+       "spya-s0gn3k",
+       0.743,
+       true
+      ],
+      [
+       "spya-egkyk2",
+       0.731,
+       true
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "constitution",
+   "q": "Why does safety come before ethics?",
+   "shape": "question",
+   "refMs": 4619,
+   "refHits": 3,
+   "refUsage": {
+    "promptTokens": 11262,
+    "completionTokens": 521,
+    "cacheReadTokens": 11210,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      422,
+      374,
+      380
+     ],
+     "cost": 0.00055818,
+     "inputTokens": 13290,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 1,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 1,
+     "refScoreMin": 0.72,
+     "refScoreMedian": 0.86,
+     "nonRefMedian": 0.11,
+     "thresholds": {
+      "0.5": {
+       "n": 4,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 3,
+       "refIn": 3
+      },
+      "0.8": {
+       "n": 2,
+       "refIn": 2
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.06999999999999998,
+      "top5Same": true
+     },
+     "top10": [
+      [
+       "spya-enueab",
+       0.93,
+       true
+      ],
+      [
+       "spya-vby4sy",
+       0.86,
+       true
+      ],
+      [
+       "spya-sw3v9u",
+       0.72,
+       true
+      ],
+      [
+       "spya-uz5nxd",
+       0.61,
+       false
+      ],
+      [
+       "spya-zuqd0d",
+       0.48,
+       false
+      ],
+      [
+       "spya-pu5fda",
+       0.45,
+       false
+      ],
+      [
+       "spya-bh2faf",
+       0.41,
+       false
+      ],
+      [
+       "spya-n8j9vj",
+       0.4,
+       false
+      ],
+      [
+       "spya-w2ju34",
+       0.39,
+       false
+      ],
+      [
+       "spya-ehnc9u",
+       0.37,
+       false
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      314
+     ],
+     "cost": 0.000392364,
+     "inputTokens": 9342,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 1,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 1,
+     "refScoreMin": 0.81,
+     "refScoreMedian": 0.82,
+     "nonRefMedian": 0.1,
+     "thresholds": {
+      "0.5": {
+       "n": 4,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 3,
+       "refIn": 3
+      },
+      "0.8": {
+       "n": 3,
+       "refIn": 3
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-enueab",
+       0.9,
+       true
+      ],
+      [
+       "spya-vby4sy",
+       0.82,
+       true
+      ],
+      [
+       "spya-sw3v9u",
+       0.81,
+       true
+      ],
+      [
+       "spya-uz5nxd",
+       0.51,
+       false
+      ],
+      [
+       "spya-zuqd0d",
+       0.46,
+       false
+      ],
+      [
+       "spya-bh2faf",
+       0.44,
+       false
+      ],
+      [
+       "spya-ehnc9u",
+       0.41,
+       false
+      ],
+      [
+       "spya-w2ju34",
+       0.39,
+       false
+      ],
+      [
+       "spya-n8j9vj",
+       0.38,
+       false
+      ],
+      [
+       "spya-ffu60x",
+       0.34,
+       false
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      398
+     ],
+     "cost": 0.0007875,
+     "inputTokens": 18750,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 1,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 1,
+     "refScoreMin": 2.16,
+     "refScoreMedian": 2.66,
+     "nonRefMedian": 0.49,
+     "thresholds": {
+      "2": {
+       "n": 4,
+       "refIn": 3
+      },
+      "1.5": {
+       "n": 8,
+       "refIn": 3
+      },
+      "2.5": {
+       "n": 2,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-enueab",
+       2.95,
+       true
+      ],
+      [
+       "spya-vby4sy",
+       2.66,
+       true
+      ],
+      [
+       "spya-sw3v9u",
+       2.16,
+       true
+      ],
+      [
+       "spya-uz5nxd",
+       2.01,
+       false
+      ],
+      [
+       "spya-zuqd0d",
+       1.65,
+       false
+      ],
+      [
+       "spya-n8j9vj",
+       1.61,
+       false
+      ],
+      [
+       "spya-pu5fda",
+       1.61,
+       false
+      ],
+      [
+       "spya-bh2faf",
+       1.5,
+       false
+      ],
+      [
+       "spya-xwjt6x",
+       1.46,
+       false
+      ],
+      [
+       "spya-ujk7d4",
+       1.45,
+       false
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      460
+     ],
+     "cost": 0.000394506,
+     "inputTokens": 9393,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 1,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 1,
+     "refScoreMin": 0.05,
+     "refScoreMedian": 0.07,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 3,
+       "refIn": 3
+      },
+      "0.05": {
+       "n": 3,
+       "refIn": 3
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-enueab",
+       0.88,
+       true
+      ],
+      [
+       "spya-sw3v9u",
+       0.07,
+       true
+      ],
+      [
+       "spya-vby4sy",
+       0.05,
+       true
+      ],
+      [
+       "spya-pwpvtw",
+       0,
+       false
+      ],
+      [
+       "spya-a2tws4",
+       0,
+       false
+      ],
+      [
+       "spya-jdee9s",
+       0,
+       false
+      ],
+      [
+       "spya-ekarxh",
+       0,
+       false
+      ],
+      [
+       "spya-b54jrm",
+       0,
+       false
+      ],
+      [
+       "spya-x8b23s",
+       0,
+       false
+      ],
+      [
+       "spya-gnvhk6",
+       0,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      1459
+     ],
+     "cost": 0.0018203640000000003,
+     "inputTokens": 43342,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 1,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 1,
+     "refScoreMin": 0.56,
+     "refScoreMedian": 0.75,
+     "nonRefMedian": 0.18,
+     "thresholds": {
+      "0.5": {
+       "n": 5,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 2,
+       "refIn": 2
+      },
+      "0.8": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-vby4sy",
+       0.81,
+       true
+      ],
+      [
+       "spya-enueab",
+       0.75,
+       true
+      ],
+      [
+       "spya-sw3v9u",
+       0.56,
+       true
+      ],
+      [
+       "spya-uz5nxd",
+       0.51,
+       false
+      ],
+      [
+       "spya-nuqt3t",
+       0.51,
+       false
+      ],
+      [
+       "spya-pu5fda",
+       0.48,
+       false
+      ],
+      [
+       "spya-bbg92b",
+       0.46,
+       false
+      ],
+      [
+       "spya-aj4dr2",
+       0.45,
+       false
+      ],
+      [
+       "spya-kgzqvu",
+       0.45,
+       false
+      ],
+      [
+       "spya-pwpvtw",
+       0.44,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      2774
+     ],
+     "cost": 0.0008944000000000001,
+     "inputTokens": 22360,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 0.9958847736625515,
+     "refScoreMin": 0.4073334000459302,
+     "refScoreMedian": 0.46879062662624377,
+     "nonRefMedian": 0.031143831883656593,
+     "thresholds": {
+      "0.5": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.7": {
+       "n": 0,
+       "refIn": 0
+      },
+      "0.8": {
+       "n": 0,
+       "refIn": 0
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-sw3v9u",
+       0.531,
+       true
+      ],
+      [
+       "spya-vby4sy",
+       0.469,
+       true
+      ],
+      [
+       "spya-nuqt3t",
+       0.438,
+       false
+      ],
+      [
+       "spya-enueab",
+       0.407,
+       true
+      ],
+      [
+       "spya-w2ju34",
+       0.223,
+       false
+      ],
+      [
+       "spya-zuqd0d",
+       0.202,
+       false
+      ],
+      [
+       "spya-pu5fda",
+       0.182,
+       false
+      ],
+      [
+       "spya-c5kghx",
+       0.14,
+       false
+      ],
+      [
+       "spya-n8j9vj",
+       0.107,
+       false
+      ],
+      [
+       "spya-nnh6hn",
+       0.101,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "constitution",
+   "q": "treating users as grown-ups",
+   "shape": "concept",
+   "refMs": 5220,
+   "refHits": 4,
+   "refUsage": {
+    "promptTokens": 11260,
+    "completionTokens": 575,
+    "cacheReadTokens": 11210,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      446,
+      389,
+      555
+     ],
+     "cost": 0.00055818,
+     "inputTokens": 13290,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.75,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 0.9859375,
+     "refScoreMin": 0.77,
+     "refScoreMedian": 0.84,
+     "nonRefMedian": 0.38,
+     "thresholds": {
+      "0.5": {
+       "n": 34,
+       "refIn": 4
+      },
+      "0.7": {
+       "n": 10,
+       "refIn": 4
+      },
+      "0.8": {
+       "n": 4,
+       "refIn": 3
+      },
+      "0.9": {
+       "n": 2,
+       "refIn": 1
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.050000000000000044,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-kgdywh",
+       0.95,
+       true
+      ],
+      [
+       "spya-c8an54",
+       0.93,
+       false
+      ],
+      [
+       "spya-x8b23s",
+       0.88,
+       true
+      ],
+      [
+       "spya-m5228n",
+       0.84,
+       true
+      ],
+      [
+       "spya-rgrzer",
+       0.78,
+       false
+      ],
+      [
+       "spya-aj0j5f",
+       0.77,
+       false
+      ],
+      [
+       "spya-hek4mp",
+       0.77,
+       true
+      ],
+      [
+       "spya-t8b0yx",
+       0.76,
+       false
+      ],
+      [
+       "spya-egkyk2",
+       0.73,
+       false
+      ],
+      [
+       "spya-bvkt68",
+       0.71,
+       false
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      362
+     ],
+     "cost": 0.000392364,
+     "inputTokens": 9342,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.75,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 0.9890625,
+     "refScoreMin": 0.68,
+     "refScoreMedian": 0.76,
+     "nonRefMedian": 0.35,
+     "thresholds": {
+      "0.5": {
+       "n": 25,
+       "refIn": 4
+      },
+      "0.7": {
+       "n": 4,
+       "refIn": 3
+      },
+      "0.8": {
+       "n": 3,
+       "refIn": 2
+      },
+      "0.9": {
+       "n": 2,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-kgdywh",
+       0.94,
+       true
+      ],
+      [
+       "spya-c8an54",
+       0.9,
+       false
+      ],
+      [
+       "spya-x8b23s",
+       0.8,
+       true
+      ],
+      [
+       "spya-m5228n",
+       0.76,
+       true
+      ],
+      [
+       "spya-vgt44b",
+       0.68,
+       false
+      ],
+      [
+       "spya-hek4mp",
+       0.68,
+       true
+      ],
+      [
+       "spya-bvkt68",
+       0.65,
+       false
+      ],
+      [
+       "spya-aj0j5f",
+       0.64,
+       false
+      ],
+      [
+       "spya-egkyk2",
+       0.63,
+       false
+      ],
+      [
+       "spya-t8b0yx",
+       0.62,
+       false
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      446
+     ],
+     "cost": 0.0007875,
+     "inputTokens": 18750,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.75,
+     "recall10": 1,
+     "top5NonRef": 1,
+     "auc": 0.990625,
+     "refScoreMin": 2.44,
+     "refScoreMedian": 2.54,
+     "nonRefMedian": 1.39,
+     "thresholds": {
+      "2": {
+       "n": 16,
+       "refIn": 4
+      },
+      "1.5": {
+       "n": 42,
+       "refIn": 4
+      },
+      "2.5": {
+       "n": 4,
+       "refIn": 3
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-kgdywh",
+       2.93,
+       true
+      ],
+      [
+       "spya-c8an54",
+       2.82,
+       false
+      ],
+      [
+       "spya-x8b23s",
+       2.76,
+       true
+      ],
+      [
+       "spya-m5228n",
+       2.54,
+       true
+      ],
+      [
+       "spya-hek4mp",
+       2.44,
+       true
+      ],
+      [
+       "spya-aj0j5f",
+       2.33,
+       false
+      ],
+      [
+       "spya-egkyk2",
+       2.24,
+       false
+      ],
+      [
+       "spya-dzy3uc",
+       2.23,
+       false
+      ],
+      [
+       "spya-fursdx",
+       2.17,
+       false
+      ],
+      [
+       "spya-rgrzer",
+       2.15,
+       false
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      320
+     ],
+     "cost": 0.000394506,
+     "inputTokens": 9393,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.75,
+     "recall10": 0.75,
+     "top5NonRef": 2,
+     "auc": 0.871875,
+     "refScoreMin": 0,
+     "refScoreMedian": 0.01,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 4,
+       "refIn": 3
+      },
+      "0.05": {
+       "n": 2,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-kgdywh",
+       0.9,
+       true
+      ],
+      [
+       "spya-hek4mp",
+       0.08,
+       true
+      ],
+      [
+       "spya-c8an54",
+       0.01,
+       false
+      ],
+      [
+       "spya-x8b23s",
+       0.01,
+       true
+      ],
+      [
+       "spya-uz5nxd",
+       0,
+       false
+      ],
+      [
+       "spya-a2tws4",
+       0,
+       false
+      ],
+      [
+       "spya-cydxv4",
+       0,
+       false
+      ],
+      [
+       "spya-d903tp",
+       0,
+       false
+      ],
+      [
+       "spya-gnjwz0",
+       0,
+       false
+      ],
+      [
+       "spya-n8j9vj",
+       0,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      1683
+     ],
+     "cost": 0.0018203640000000003,
+     "inputTokens": 43342,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.5,
+     "recall10": 0.75,
+     "top5NonRef": 2,
+     "auc": 0.9515625,
+     "refScoreMin": 0.56,
+     "refScoreMedian": 0.84,
+     "nonRefMedian": 0.34,
+     "thresholds": {
+      "0.5": {
+       "n": 24,
+       "refIn": 4
+      },
+      "0.7": {
+       "n": 9,
+       "refIn": 3
+      },
+      "0.8": {
+       "n": 6,
+       "refIn": 3
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-kgdywh",
+       0.91,
+       true
+      ],
+      [
+       "spya-x8b23s",
+       0.88,
+       true
+      ],
+      [
+       "spya-aj0j5f",
+       0.85,
+       false
+      ],
+      [
+       "spya-ctqg0n",
+       0.84,
+       false
+      ],
+      [
+       "spya-m5228n",
+       0.84,
+       true
+      ],
+      [
+       "spya-fursdx",
+       0.81,
+       false
+      ],
+      [
+       "spya-fqwvqr",
+       0.75,
+       false
+      ],
+      [
+       "spya-gnvhk6",
+       0.71,
+       false
+      ],
+      [
+       "spya-rgrzer",
+       0.7,
+       false
+      ],
+      [
+       "spya-dzy3uc",
+       0.68,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      2683
+     ],
+     "cost": 0.0008944000000000001,
+     "inputTokens": 22360,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.75,
+     "recall10": 1,
+     "top5NonRef": 1,
+     "auc": 0.9890625,
+     "refScoreMin": 0.5156199306096343,
+     "refScoreMedian": 0.5774953797290153,
+     "nonRefMedian": 0.10087861732378864,
+     "thresholds": {
+      "0.5": {
+       "n": 6,
+       "refIn": 4
+      },
+      "0.7": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 0,
+       "refIn": 0
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-kgdywh",
+       0.798,
+       true
+      ],
+      [
+       "spya-bvkt68",
+       0.693,
+       false
+      ],
+      [
+       "spya-x8b23s",
+       0.622,
+       true
+      ],
+      [
+       "spya-m5228n",
+       0.577,
+       true
+      ],
+      [
+       "spya-hek4mp",
+       0.516,
+       true
+      ],
+      [
+       "spya-p75b5w",
+       0.516,
+       false
+      ],
+      [
+       "spya-fursdx",
+       0.438,
+       false
+      ],
+      [
+       "spya-aj0j5f",
+       0.349,
+       false
+      ],
+      [
+       "spya-gnvhk6",
+       0.294,
+       false
+      ],
+      [
+       "spya-uftaze",
+       0.281,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "constitution",
+   "q": "things Claude should never do",
+   "shape": "topic",
+   "refMs": 8791,
+   "refHits": 8,
+   "refUsage": {
+    "promptTokens": 11258,
+    "completionTokens": 1149,
+    "cacheReadTokens": 11210,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      413,
+      418,
+      552
+     ],
+     "cost": 0.000558096,
+     "inputTokens": 13288,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.625,
+     "recall10": 0.625,
+     "top5NonRef": 1,
+     "auc": 0.8980263157894737,
+     "refScoreMin": 0.46,
+     "refScoreMedian": 0.86,
+     "nonRefMedian": 0.32,
+     "thresholds": {
+      "0.5": {
+       "n": 34,
+       "refIn": 7
+      },
+      "0.7": {
+       "n": 22,
+       "refIn": 6
+      },
+      "0.8": {
+       "n": 16,
+       "refIn": 5
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.08999999999999997,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-waxdw8",
+       0.89,
+       true
+      ],
+      [
+       "spya-wmqukz",
+       0.89,
+       true
+      ],
+      [
+       "spya-pu5fda",
+       0.88,
+       true
+      ],
+      [
+       "spya-t3mubq",
+       0.88,
+       true
+      ],
+      [
+       "spya-bvkt68",
+       0.87,
+       false
+      ],
+      [
+       "spya-vgt44b",
+       0.86,
+       false
+      ],
+      [
+       "spya-egkyk2",
+       0.86,
+       false
+      ],
+      [
+       "spya-ckmhvd",
+       0.86,
+       true
+      ],
+      [
+       "spya-hek4mp",
+       0.85,
+       false
+      ],
+      [
+       "spya-mcn70k",
+       0.84,
+       false
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      328
+     ],
+     "cost": 0.00039228,
+     "inputTokens": 9340,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.5,
+     "recall10": 0.625,
+     "top5NonRef": 1,
+     "auc": 0.9087171052631579,
+     "refScoreMin": 0.42,
+     "refScoreMedian": 0.81,
+     "nonRefMedian": 0.3,
+     "thresholds": {
+      "0.5": {
+       "n": 27,
+       "refIn": 7
+      },
+      "0.7": {
+       "n": 17,
+       "refIn": 5
+      },
+      "0.8": {
+       "n": 9,
+       "refIn": 5
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-waxdw8",
+       0.87,
+       true
+      ],
+      [
+       "spya-wmqukz",
+       0.85,
+       true
+      ],
+      [
+       "spya-t3mubq",
+       0.83,
+       true
+      ],
+      [
+       "spya-pu5fda",
+       0.83,
+       true
+      ],
+      [
+       "spya-bvkt68",
+       0.83,
+       false
+      ],
+      [
+       "spya-vgt44b",
+       0.82,
+       false
+      ],
+      [
+       "spya-mcn70k",
+       0.81,
+       false
+      ],
+      [
+       "spya-egkyk2",
+       0.81,
+       false
+      ],
+      [
+       "spya-ckmhvd",
+       0.81,
+       true
+      ],
+      [
+       "spya-hek4mp",
+       0.78,
+       false
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      733
+     ],
+     "cost": 0.000787416,
+     "inputTokens": 18748,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.625,
+     "recall10": 0.625,
+     "top5NonRef": 0,
+     "auc": 0.897203947368421,
+     "refScoreMin": 1.79,
+     "refScoreMedian": 2.71,
+     "nonRefMedian": 1.41,
+     "thresholds": {
+      "2": {
+       "n": 25,
+       "refIn": 6
+      },
+      "1.5": {
+       "n": 43,
+       "refIn": 8
+      },
+      "2.5": {
+       "n": 14,
+       "refIn": 5
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-waxdw8",
+       2.87,
+       true
+      ],
+      [
+       "spya-pu5fda",
+       2.83,
+       true
+      ],
+      [
+       "spya-t3mubq",
+       2.77,
+       true
+      ],
+      [
+       "spya-wmqukz",
+       2.74,
+       true
+      ],
+      [
+       "spya-ckmhvd",
+       2.71,
+       true
+      ],
+      [
+       "spya-bvkt68",
+       2.69,
+       false
+      ],
+      [
+       "spya-ahs2q7",
+       2.69,
+       false
+      ],
+      [
+       "spya-hek4mp",
+       2.66,
+       false
+      ],
+      [
+       "spya-vgt44b",
+       2.65,
+       false
+      ],
+      [
+       "spya-egkyk2",
+       2.63,
+       false
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      321
+     ],
+     "cost": 0.000394422,
+     "inputTokens": 9391,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.625,
+     "recall10": 0.625,
+     "top5NonRef": 1,
+     "auc": 0.8001644736842105,
+     "refScoreMin": 0,
+     "refScoreMedian": 0.01,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 8,
+       "refIn": 5
+      },
+      "0.05": {
+       "n": 3,
+       "refIn": 3
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-bbg92b",
+       0.46,
+       true
+      ],
+      [
+       "spya-ctqg0n",
+       0.29,
+       true
+      ],
+      [
+       "spya-pu5fda",
+       0.14,
+       true
+      ],
+      [
+       "spya-t8b0yx",
+       0.04,
+       false
+      ],
+      [
+       "spya-wmqukz",
+       0.03,
+       true
+      ],
+      [
+       "spya-ut5bsd",
+       0.01,
+       false
+      ],
+      [
+       "spya-waxdw8",
+       0.01,
+       true
+      ],
+      [
+       "spya-uz5nxd",
+       0.01,
+       false
+      ],
+      [
+       "spya-aj0j5f",
+       0,
+       false
+      ],
+      [
+       "spya-vgt44b",
+       0,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      1460
+     ],
+     "cost": 0.001813308,
+     "inputTokens": 43174,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.25,
+     "recall10": 0.375,
+     "top5NonRef": 3,
+     "auc": 0.8240131578947368,
+     "refScoreMin": 0.31,
+     "refScoreMedian": 0.81,
+     "nonRefMedian": 0.33,
+     "thresholds": {
+      "0.5": {
+       "n": 36,
+       "refIn": 7
+      },
+      "0.7": {
+       "n": 24,
+       "refIn": 6
+      },
+      "0.8": {
+       "n": 17,
+       "refIn": 5
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-ckmhvd",
+       0.89,
+       true
+      ],
+      [
+       "spya-egkyk2",
+       0.88,
+       false
+      ],
+      [
+       "spya-vgt44b",
+       0.87,
+       false
+      ],
+      [
+       "spya-t3mubq",
+       0.87,
+       true
+      ],
+      [
+       "spya-pwrpcx",
+       0.86,
+       false
+      ],
+      [
+       "spya-n58h2w",
+       0.86,
+       false
+      ],
+      [
+       "spya-bvkt68",
+       0.86,
+       false
+      ],
+      [
+       "spya-a7hv5w",
+       0.86,
+       false
+      ],
+      [
+       "spya-wmqukz",
+       0.86,
+       true
+      ],
+      [
+       "spya-aj0j5f",
+       0.85,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      2386
+     ],
+     "cost": 0.00088768,
+     "inputTokens": 22192,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.25,
+     "recall10": 0.25,
+     "top5NonRef": 3,
+     "auc": 0.8157894736842105,
+     "refScoreMin": 0.23370635157681105,
+     "refScoreMedian": 0.798186768138228,
+     "nonRefMedian": 0.19193278644723683,
+     "thresholds": {
+      "0.5": {
+       "n": 25,
+       "refIn": 6
+      },
+      "0.7": {
+       "n": 19,
+       "refIn": 5
+      },
+      "0.8": {
+       "n": 12,
+       "refIn": 4
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-egkyk2",
+       0.905,
+       false
+      ],
+      [
+       "spya-pwrpcx",
+       0.893,
+       false
+      ],
+      [
+       "spya-t3mubq",
+       0.887,
+       true
+      ],
+      [
+       "spya-wmqukz",
+       0.874,
+       true
+      ],
+      [
+       "spya-bvkt68",
+       0.86,
+       false
+      ],
+      [
+       "spya-vgt44b",
+       0.852,
+       false
+      ],
+      [
+       "spya-ut5bsd",
+       0.852,
+       false
+      ],
+      [
+       "spya-mcn70k",
+       0.852,
+       false
+      ],
+      [
+       "spya-a7hv5w",
+       0.852,
+       false
+      ],
+      [
+       "spya-n58h2w",
+       0.835,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "noema-mythology-of-conscious-ai",
+   "q": "arguments that minds are not software",
+   "shape": "topic",
+   "refMs": 12876,
+   "refHits": 13,
+   "refUsage": {
+    "promptTokens": 19065,
+    "completionTokens": 1601,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 19015
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      490,
+      438,
+      416
+     ],
+     "cost": 0.000886536,
+     "inputTokens": 21108,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.46153846153846156,
+     "recall10": 0.46153846153846156,
+     "top5NonRef": 2,
+     "auc": 0.9307692307692308,
+     "refScoreMin": 0.83,
+     "refScoreMedian": 0.88,
+     "nonRefMedian": 0.41,
+     "thresholds": {
+      "0.5": {
+       "n": 60,
+       "refIn": 13
+      },
+      "0.7": {
+       "n": 46,
+       "refIn": 13
+      },
+      "0.8": {
+       "n": 33,
+       "refIn": 13
+      },
+      "0.9": {
+       "n": 11,
+       "refIn": 6
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.08999999999999997,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-uwxe4h",
+       0.94,
+       true
+      ],
+      [
+       "spya-sk4su6",
+       0.91,
+       false
+      ],
+      [
+       "spya-zw2m7u",
+       0.91,
+       true
+      ],
+      [
+       "spya-p4vmm0",
+       0.91,
+       true
+      ],
+      [
+       "spya-ymbpwn",
+       0.91,
+       false
+      ],
+      [
+       "spya-tgnssb",
+       0.9,
+       false
+      ],
+      [
+       "spya-wepmnr",
+       0.9,
+       true
+      ],
+      [
+       "spya-b0086e",
+       0.9,
+       true
+      ],
+      [
+       "spya-ycpfzs",
+       0.9,
+       true
+      ],
+      [
+       "spya-npjt4j",
+       0.9,
+       false
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      403
+     ],
+     "cost": 0.000643734,
+     "inputTokens": 15327,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.6153846153846154,
+     "recall10": 0.6153846153846154,
+     "top5NonRef": 1,
+     "auc": 0.9573426573426573,
+     "refScoreMin": 0.8,
+     "refScoreMedian": 0.86,
+     "nonRefMedian": 0.4,
+     "thresholds": {
+      "0.5": {
+       "n": 59,
+       "refIn": 13
+      },
+      "0.7": {
+       "n": 38,
+       "refIn": 13
+      },
+      "0.8": {
+       "n": 28,
+       "refIn": 13
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-uwxe4h",
+       0.9,
+       true
+      ],
+      [
+       "spya-p4vmm0",
+       0.89,
+       true
+      ],
+      [
+       "spya-zw2m7u",
+       0.88,
+       true
+      ],
+      [
+       "spya-ymbpwn",
+       0.88,
+       false
+      ],
+      [
+       "spya-a8jgf4",
+       0.87,
+       true
+      ],
+      [
+       "spya-b0086e",
+       0.87,
+       true
+      ],
+      [
+       "spya-tgnssb",
+       0.86,
+       false
+      ],
+      [
+       "spya-wepmnr",
+       0.86,
+       true
+      ],
+      [
+       "spya-ycpfzs",
+       0.86,
+       true
+      ],
+      [
+       "spya-ahtr6e",
+       0.86,
+       true
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      958
+     ],
+     "cost": 0.0012340019999999999,
+     "inputTokens": 29381,
+     "chunks": 2,
+     "errors": 0,
+     "recallK": 0.46153846153846156,
+     "recall10": 0.46153846153846156,
+     "top5NonRef": 2,
+     "auc": 0.9314685314685315,
+     "refScoreMin": 2.51,
+     "refScoreMedian": 2.69,
+     "nonRefMedian": 1.47,
+     "thresholds": {
+      "2": {
+       "n": 47,
+       "refIn": 13
+      },
+      "1.5": {
+       "n": 66,
+       "refIn": 13
+      },
+      "2.5": {
+       "n": 32,
+       "refIn": 13
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-uwxe4h",
+       2.95,
+       true
+      ],
+      [
+       "spya-p4vmm0",
+       2.89,
+       true
+      ],
+      [
+       "spya-zw2m7u",
+       2.84,
+       true
+      ],
+      [
+       "spya-pbcr03",
+       2.82,
+       false
+      ],
+      [
+       "spya-tgnssb",
+       2.81,
+       false
+      ],
+      [
+       "spya-ymbpwn",
+       2.81,
+       false
+      ],
+      [
+       "spya-ycpfzs",
+       2.8,
+       true
+      ],
+      [
+       "spya-npjt4j",
+       2.8,
+       false
+      ],
+      [
+       "spya-wepmnr",
+       2.78,
+       true
+      ],
+      [
+       "spya-b0086e",
+       2.78,
+       true
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      413
+     ],
+     "cost": 0.000645498,
+     "inputTokens": 15369,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.46153846153846156,
+     "recall10": 0.46153846153846156,
+     "top5NonRef": 2,
+     "auc": 0.7097902097902098,
+     "refScoreMin": 0,
+     "refScoreMedian": 0,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 11,
+       "refIn": 6
+      },
+      "0.05": {
+       "n": 6,
+       "refIn": 4
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-sk4su6",
+       0.38,
+       false
+      ],
+      [
+       "spya-uwxe4h",
+       0.16,
+       true
+      ],
+      [
+       "spya-a8jgf4",
+       0.1,
+       true
+      ],
+      [
+       "spya-cv97j7",
+       0.09,
+       false
+      ],
+      [
+       "spya-wepmnr",
+       0.09,
+       true
+      ],
+      [
+       "spya-b0086e",
+       0.08,
+       true
+      ],
+      [
+       "spya-ymbpwn",
+       0.04,
+       false
+      ],
+      [
+       "spya-zw2m7u",
+       0.03,
+       true
+      ],
+      [
+       "spya-npjt4j",
+       0.01,
+       false
+      ],
+      [
+       "spya-p4vmm0",
+       0.01,
+       true
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      1944
+     ],
+     "cost": 0.0028504560000000016,
+     "inputTokens": 67868,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.6153846153846154,
+     "recall10": 0.46153846153846156,
+     "top5NonRef": 2,
+     "auc": 0.9118881118881119,
+     "refScoreMin": 0.42,
+     "refScoreMedian": 0.87,
+     "nonRefMedian": 0.26,
+     "thresholds": {
+      "0.5": {
+       "n": 49,
+       "refIn": 12
+      },
+      "0.7": {
+       "n": 34,
+       "refIn": 11
+      },
+      "0.8": {
+       "n": 21,
+       "refIn": 11
+      },
+      "0.9": {
+       "n": 8,
+       "refIn": 4
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-da9tvt",
+       0.92,
+       false
+      ],
+      [
+       "spya-uwxe4h",
+       0.91,
+       true
+      ],
+      [
+       "spya-ymbpwn",
+       0.91,
+       false
+      ],
+      [
+       "spya-zw2m7u",
+       0.9,
+       true
+      ],
+      [
+       "spya-p4vmm0",
+       0.9,
+       true
+      ],
+      [
+       "spya-ecfgkp",
+       0.9,
+       true
+      ],
+      [
+       "spya-n393ru",
+       0.9,
+       false
+      ],
+      [
+       "spya-npjt4j",
+       0.9,
+       false
+      ],
+      [
+       "spya-b0086e",
+       0.89,
+       true
+      ],
+      [
+       "spya-v52g4f",
+       0.89,
+       true
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      2670
+     ],
+     "cost": 0.0014801200000000004,
+     "inputTokens": 37003,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.5384615384615384,
+     "recall10": 0.3076923076923077,
+     "top5NonRef": 2,
+     "auc": 0.9195804195804196,
+     "refScoreMin": 0.3486451217982255,
+     "refScoreMedian": 0.6513548782017746,
+     "nonRefMedian": 0.10669059536584675,
+     "thresholds": {
+      "0.5": {
+       "n": 28,
+       "refIn": 11
+      },
+      "0.7": {
+       "n": 10,
+       "refIn": 4
+      },
+      "0.8": {
+       "n": 1,
+       "refIn": 0
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-un9fjn",
+       0.818,
+       false
+      ],
+      [
+       "spya-ecfgkp",
+       0.798,
+       true
+      ],
+      [
+       "spya-uwxe4h",
+       0.777,
+       true
+      ],
+      [
+       "spya-v52g4f",
+       0.731,
+       true
+      ],
+      [
+       "spya-da9tvt",
+       0.731,
+       false
+      ],
+      [
+       "spya-p4vmm0",
+       0.731,
+       true
+      ],
+      [
+       "spya-npjt4j",
+       0.731,
+       false
+      ],
+      [
+       "spya-n393ru",
+       0.731,
+       false
+      ],
+      [
+       "spya-xvm37k",
+       0.706,
+       false
+      ],
+      [
+       "spya-mtzbbg",
+       0.706,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "noema-mythology-of-conscious-ai",
+   "q": "Why do people mistake chatbots for being conscious?",
+   "shape": "question",
+   "refMs": 16372,
+   "refHits": 14,
+   "refUsage": {
+    "promptTokens": 19073,
+    "completionTokens": 1982,
+    "cacheReadTokens": 19015,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      519,
+      469,
+      425
+     ],
+     "cost": 0.000886704,
+     "inputTokens": 21112,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.7142857142857143,
+     "recall10": 0.5714285714285714,
+     "top5NonRef": 0,
+     "auc": 0.9744429882044561,
+     "refScoreMin": 0.4,
+     "refScoreMedian": 0.83,
+     "nonRefMedian": 0.25,
+     "thresholds": {
+      "0.5": {
+       "n": 25,
+       "refIn": 13
+      },
+      "0.7": {
+       "n": 14,
+       "refIn": 10
+      },
+      "0.8": {
+       "n": 9,
+       "refIn": 8
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.07999999999999999,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-nxxnrj",
+       0.9,
+       true
+      ],
+      [
+       "spya-k6fpme",
+       0.89,
+       true
+      ],
+      [
+       "spya-cqh2pq",
+       0.88,
+       true
+      ],
+      [
+       "spya-f87ghx",
+       0.88,
+       true
+      ],
+      [
+       "spya-her4zk",
+       0.88,
+       true
+      ],
+      [
+       "spya-cvaqgs",
+       0.87,
+       true
+      ],
+      [
+       "spya-tgnssb",
+       0.85,
+       false
+      ],
+      [
+       "spya-t29n67",
+       0.84,
+       true
+      ],
+      [
+       "spya-h4mwb2",
+       0.83,
+       true
+      ],
+      [
+       "spya-e3cq2m",
+       0.78,
+       false
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      468
+     ],
+     "cost": 0.000643902,
+     "inputTokens": 15331,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.7142857142857143,
+     "recall10": 0.5714285714285714,
+     "top5NonRef": 0,
+     "auc": 0.9741153342070773,
+     "refScoreMin": 0.42,
+     "refScoreMedian": 0.78,
+     "nonRefMedian": 0.26,
+     "thresholds": {
+      "0.5": {
+       "n": 24,
+       "refIn": 13
+      },
+      "0.7": {
+       "n": 12,
+       "refIn": 8
+      },
+      "0.8": {
+       "n": 8,
+       "refIn": 7
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-nxxnrj",
+       0.89,
+       true
+      ],
+      [
+       "spya-f87ghx",
+       0.86,
+       true
+      ],
+      [
+       "spya-her4zk",
+       0.85,
+       true
+      ],
+      [
+       "spya-k6fpme",
+       0.85,
+       true
+      ],
+      [
+       "spya-cvaqgs",
+       0.84,
+       true
+      ],
+      [
+       "spya-tgnssb",
+       0.83,
+       false
+      ],
+      [
+       "spya-h4mwb2",
+       0.82,
+       true
+      ],
+      [
+       "spya-cqh2pq",
+       0.82,
+       true
+      ],
+      [
+       "spya-t29n67",
+       0.78,
+       true
+      ],
+      [
+       "spya-e3cq2m",
+       0.78,
+       false
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      494
+     ],
+     "cost": 0.001234338,
+     "inputTokens": 29389,
+     "chunks": 2,
+     "errors": 0,
+     "recallK": 0.6428571428571429,
+     "recall10": 0.5714285714285714,
+     "top5NonRef": 1,
+     "auc": 0.9675622542595019,
+     "refScoreMin": 1.34,
+     "refScoreMedian": 2.44,
+     "nonRefMedian": 0.91,
+     "thresholds": {
+      "2": {
+       "n": 19,
+       "refIn": 13
+      },
+      "1.5": {
+       "n": 26,
+       "refIn": 13
+      },
+      "2.5": {
+       "n": 8,
+       "refIn": 6
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-nxxnrj",
+       2.79,
+       true
+      ],
+      [
+       "spya-her4zk",
+       2.69,
+       true
+      ],
+      [
+       "spya-cqh2pq",
+       2.66,
+       true
+      ],
+      [
+       "spya-f87ghx",
+       2.61,
+       true
+      ],
+      [
+       "spya-tgnssb",
+       2.6,
+       false
+      ],
+      [
+       "spya-k6fpme",
+       2.6,
+       true
+      ],
+      [
+       "spya-cvaqgs",
+       2.59,
+       true
+      ],
+      [
+       "spya-q23td7",
+       2.51,
+       false
+      ],
+      [
+       "spya-h4mwb2",
+       2.46,
+       true
+      ],
+      [
+       "spya-t29n67",
+       2.44,
+       true
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      387
+     ],
+     "cost": 0.000645666,
+     "inputTokens": 15373,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.42857142857142855,
+     "recall10": 0.42857142857142855,
+     "top5NonRef": 1,
+     "auc": 0.7060943643512451,
+     "refScoreMin": 0,
+     "refScoreMedian": 0,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 8,
+       "refIn": 6
+      },
+      "0.05": {
+       "n": 4,
+       "refIn": 3
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-nxxnrj",
+       0.46,
+       true
+      ],
+      [
+       "spya-k6fpme",
+       0.22,
+       true
+      ],
+      [
+       "spya-cvaqgs",
+       0.13,
+       true
+      ],
+      [
+       "spya-q23td7",
+       0.08,
+       false
+      ],
+      [
+       "spya-f87ghx",
+       0.04,
+       true
+      ],
+      [
+       "spya-her4zk",
+       0.03,
+       true
+      ],
+      [
+       "spya-e3cq2m",
+       0.03,
+       false
+      ],
+      [
+       "spya-cqh2pq",
+       0.01,
+       true
+      ],
+      [
+       "spya-qcevgh",
+       0,
+       false
+      ],
+      [
+       "spya-yverz7",
+       0,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      2293
+     ],
+     "cost": 0.0028711200000000004,
+     "inputTokens": 68360,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.8571428571428571,
+     "recall10": 0.6428571428571429,
+     "top5NonRef": 1,
+     "auc": 0.9649410222804718,
+     "refScoreMin": 0.29,
+     "refScoreMedian": 0.79,
+     "nonRefMedian": 0.18,
+     "thresholds": {
+      "0.5": {
+       "n": 23,
+       "refIn": 12
+      },
+      "0.7": {
+       "n": 15,
+       "refIn": 12
+      },
+      "0.8": {
+       "n": 8,
+       "refIn": 7
+      },
+      "0.9": {
+       "n": 2,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-k6fpme",
+       0.9,
+       true
+      ],
+      [
+       "spya-e3cq2m",
+       0.9,
+       false
+      ],
+      [
+       "spya-nxxnrj",
+       0.89,
+       true
+      ],
+      [
+       "spya-cvaqgs",
+       0.87,
+       true
+      ],
+      [
+       "spya-k850tu",
+       0.86,
+       true
+      ],
+      [
+       "spya-t29n67",
+       0.85,
+       true
+      ],
+      [
+       "spya-cqh2pq",
+       0.83,
+       true
+      ],
+      [
+       "spya-xk9gne",
+       0.81,
+       true
+      ],
+      [
+       "spya-d89xf7",
+       0.79,
+       true
+      ],
+      [
+       "spya-f87ghx",
+       0.78,
+       true
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      3079
+     ],
+     "cost": 0.0015047199999999995,
+     "inputTokens": 37618,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.8571428571428571,
+     "recall10": 0.6428571428571429,
+     "top5NonRef": 1,
+     "auc": 0.9809960681520314,
+     "refScoreMin": 0.1645164506075047,
+     "refScoreMedian": 0.5926665855647394,
+     "nonRefMedian": 0.047425871831197425,
+     "thresholds": {
+      "0.5": {
+       "n": 11,
+       "refIn": 10
+      },
+      "0.7": {
+       "n": 6,
+       "refIn": 5
+      },
+      "0.8": {
+       "n": 4,
+       "refIn": 3
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-e3cq2m",
+       0.881,
+       false
+      ],
+      [
+       "spya-k6fpme",
+       0.852,
+       true
+      ],
+      [
+       "spya-k850tu",
+       0.835,
+       true
+      ],
+      [
+       "spya-f87ghx",
+       0.818,
+       true
+      ],
+      [
+       "spya-xk9gne",
+       0.755,
+       true
+      ],
+      [
+       "spya-nxxnrj",
+       0.731,
+       true
+      ],
+      [
+       "spya-cqh2pq",
+       0.679,
+       true
+      ],
+      [
+       "spya-t29n67",
+       0.651,
+       true
+      ],
+      [
+       "spya-cvaqgs",
+       0.593,
+       true
+      ],
+      [
+       "spya-d89xf7",
+       0.562,
+       true
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "noema-mythology-of-conscious-ai",
+   "q": "machines that do clever things without computing anything",
+   "shape": "concept",
+   "refMs": 4208,
+   "refHits": 3,
+   "refUsage": {
+    "promptTokens": 19068,
+    "completionTokens": 393,
+    "cacheReadTokens": 19015,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      432,
+      423,
+      578
+     ],
+     "cost": 0.000886662,
+     "inputTokens": 21111,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 1,
+     "top5NonRef": 3,
+     "auc": 0.9916666666666667,
+     "refScoreMin": 0.57,
+     "refScoreMedian": 0.69,
+     "nonRefMedian": 0.17,
+     "thresholds": {
+      "0.5": {
+       "n": 8,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.06000000000000005,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-sq9v5k",
+       0.94,
+       true
+      ],
+      [
+       "spya-t54yqa",
+       0.69,
+       true
+      ],
+      [
+       "spya-affgsh",
+       0.64,
+       false
+      ],
+      [
+       "spya-tgnssb",
+       0.61,
+       false
+      ],
+      [
+       "spya-v8s83c",
+       0.6,
+       false
+      ],
+      [
+       "spya-zg9me8",
+       0.57,
+       true
+      ],
+      [
+       "spya-d3g67c",
+       0.56,
+       false
+      ],
+      [
+       "spya-gw0hsq",
+       0.55,
+       false
+      ],
+      [
+       "spya-n393ru",
+       0.46,
+       false
+      ],
+      [
+       "spya-gamzr3",
+       0.46,
+       false
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      940
+     ],
+     "cost": 0.00064386,
+     "inputTokens": 15330,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 0.9972222222222222,
+     "refScoreMin": 0.59,
+     "refScoreMedian": 0.69,
+     "nonRefMedian": 0.16,
+     "thresholds": {
+      "0.5": {
+       "n": 6,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-sq9v5k",
+       0.9,
+       true
+      ],
+      [
+       "spya-t54yqa",
+       0.69,
+       true
+      ],
+      [
+       "spya-v8s83c",
+       0.6,
+       false
+      ],
+      [
+       "spya-zg9me8",
+       0.59,
+       true
+      ],
+      [
+       "spya-gw0hsq",
+       0.53,
+       false
+      ],
+      [
+       "spya-affgsh",
+       0.51,
+       false
+      ],
+      [
+       "spya-da9tvt",
+       0.47,
+       false
+      ],
+      [
+       "spya-n393ru",
+       0.43,
+       false
+      ],
+      [
+       "spya-ymbpwn",
+       0.41,
+       false
+      ],
+      [
+       "spya-d3g67c",
+       0.4,
+       false
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      696
+     ],
+     "cost": 0.001234254,
+     "inputTokens": 29387,
+     "chunks": 2,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 1,
+     "top5NonRef": 3,
+     "auc": 0.9805555555555555,
+     "refScoreMin": 1.65,
+     "refScoreMedian": 2.14,
+     "nonRefMedian": 0.73,
+     "thresholds": {
+      "2": {
+       "n": 4,
+       "refIn": 2
+      },
+      "1.5": {
+       "n": 14,
+       "refIn": 3
+      },
+      "2.5": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-sq9v5k",
+       2.97,
+       true
+      ],
+      [
+       "spya-t54yqa",
+       2.14,
+       true
+      ],
+      [
+       "spya-v8s83c",
+       2.1,
+       false
+      ],
+      [
+       "spya-tgnssb",
+       2.09,
+       false
+      ],
+      [
+       "spya-affgsh",
+       1.85,
+       false
+      ],
+      [
+       "spya-gw0hsq",
+       1.84,
+       false
+      ],
+      [
+       "spya-d3g67c",
+       1.81,
+       false
+      ],
+      [
+       "spya-n393ru",
+       1.77,
+       false
+      ],
+      [
+       "spya-da9tvt",
+       1.71,
+       false
+      ],
+      [
+       "spya-zg9me8",
+       1.65,
+       true
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      430
+     ],
+     "cost": 0.000645624,
+     "inputTokens": 15372,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.3333333333333333,
+     "recall10": 0.3333333333333333,
+     "top5NonRef": 4,
+     "auc": 0.6638888888888889,
+     "refScoreMin": 0,
+     "refScoreMedian": 0,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 2,
+       "refIn": 1
+      },
+      "0.05": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-sq9v5k",
+       0.99,
+       true
+      ],
+      [
+       "spya-v8s83c",
+       0.01,
+       false
+      ],
+      [
+       "spya-cf8rt8",
+       0,
+       false
+      ],
+      [
+       "spya-b228ay",
+       0,
+       false
+      ],
+      [
+       "spya-kqs33c",
+       0,
+       false
+      ],
+      [
+       "spya-v52g4f",
+       0,
+       false
+      ],
+      [
+       "spya-zv36xq",
+       0,
+       false
+      ],
+      [
+       "spya-kjfjgm",
+       0,
+       false
+      ],
+      [
+       "spya-xhvztm",
+       0,
+       false
+      ],
+      [
+       "spya-q23td7",
+       0,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      2113
+     ],
+     "cost": 0.0028659540000000013,
+     "inputTokens": 68237,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 0.9916666666666667,
+     "refScoreMin": 0.57,
+     "refScoreMedian": 0.75,
+     "nonRefMedian": 0.14,
+     "thresholds": {
+      "0.5": {
+       "n": 7,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 3,
+       "refIn": 2
+      },
+      "0.8": {
+       "n": 2,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-sq9v5k",
+       0.94,
+       true
+      ],
+      [
+       "spya-v8s83c",
+       0.82,
+       false
+      ],
+      [
+       "spya-zg9me8",
+       0.75,
+       true
+      ],
+      [
+       "spya-n393ru",
+       0.61,
+       false
+      ],
+      [
+       "spya-t54yqa",
+       0.57,
+       true
+      ],
+      [
+       "spya-tb4wr2",
+       0.54,
+       false
+      ],
+      [
+       "spya-npjt4j",
+       0.53,
+       false
+      ],
+      [
+       "spya-da9tvt",
+       0.48,
+       false
+      ],
+      [
+       "spya-sk4su6",
+       0.46,
+       false
+      ],
+      [
+       "spya-ymbpwn",
+       0.45,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      2728
+     ],
+     "cost": 0.0014948799999999999,
+     "inputTokens": 37372,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 1,
+     "recall10": 1,
+     "top5NonRef": 2,
+     "auc": 1,
+     "refScoreMin": 0.42250462027098473,
+     "refScoreMedian": 0.48438008427698437,
+     "nonRefMedian": 0.07585817479810981,
+     "thresholds": {
+      "0.5": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.7": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-sq9v5k",
+       0.808,
+       true
+      ],
+      [
+       "spya-zg9me8",
+       0.484,
+       true
+      ],
+      [
+       "spya-t54yqa",
+       0.423,
+       true
+      ],
+      [
+       "spya-da9tvt",
+       0.378,
+       false
+      ],
+      [
+       "spya-sk4su6",
+       0.349,
+       false
+      ],
+      [
+       "spya-b0086e",
+       0.335,
+       false
+      ],
+      [
+       "spya-cf8rt8",
+       0.335,
+       false
+      ],
+      [
+       "spya-n393ru",
+       0.281,
+       false
+      ],
+      [
+       "spya-vys3vj",
+       0.257,
+       false
+      ],
+      [
+       "spya-v8s83c",
+       0.257,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "noema-mythology-of-conscious-ai",
+   "q": "what the author thinks we should do about it",
+   "shape": "topic",
+   "refMs": 4787,
+   "refHits": 5,
+   "refUsage": {
+    "promptTokens": 19067,
+    "completionTokens": 532,
+    "cacheReadTokens": 19015,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      404,
+      428,
+      503
+     ],
+     "cost": 0.000886662,
+     "inputTokens": 21111,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.8,
+     "recall10": 0.8,
+     "top5NonRef": 1,
+     "auc": 0.988135593220339,
+     "refScoreMin": 0.48,
+     "refScoreMedian": 0.8,
+     "nonRefMedian": 0.15,
+     "thresholds": {
+      "0.5": {
+       "n": 10,
+       "refIn": 4
+      },
+      "0.7": {
+       "n": 4,
+       "refIn": 4
+      },
+      "0.8": {
+       "n": 3,
+       "refIn": 3
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.07,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-yverz7",
+       0.9,
+       true
+      ],
+      [
+       "spya-vs0vpj",
+       0.83,
+       true
+      ],
+      [
+       "spya-e7fdmb",
+       0.8,
+       true
+      ],
+      [
+       "spya-hbueqc",
+       0.71,
+       true
+      ],
+      [
+       "spya-n0bnf9",
+       0.64,
+       false
+      ],
+      [
+       "spya-vnkr36",
+       0.61,
+       false
+      ],
+      [
+       "spya-qwvjwn",
+       0.58,
+       false
+      ],
+      [
+       "spya-y4vjdg",
+       0.54,
+       false
+      ],
+      [
+       "spya-gvzuc4",
+       0.51,
+       false
+      ],
+      [
+       "spya-cqh2pq",
+       0.5,
+       false
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      404
+     ],
+     "cost": 0.00064386,
+     "inputTokens": 15330,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.8,
+     "recall10": 0.8,
+     "top5NonRef": 1,
+     "auc": 0.9898305084745763,
+     "refScoreMin": 0.42,
+     "refScoreMedian": 0.6,
+     "nonRefMedian": 0.13,
+     "thresholds": {
+      "0.5": {
+       "n": 5,
+       "refIn": 4
+      },
+      "0.7": {
+       "n": 2,
+       "refIn": 2
+      },
+      "0.8": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-yverz7",
+       0.87,
+       true
+      ],
+      [
+       "spya-vs0vpj",
+       0.77,
+       true
+      ],
+      [
+       "spya-e7fdmb",
+       0.6,
+       true
+      ],
+      [
+       "spya-hbueqc",
+       0.6,
+       true
+      ],
+      [
+       "spya-n0bnf9",
+       0.54,
+       false
+      ],
+      [
+       "spya-qwvjwn",
+       0.49,
+       false
+      ],
+      [
+       "spya-z4bud7",
+       0.48,
+       false
+      ],
+      [
+       "spya-vnkr36",
+       0.45,
+       false
+      ],
+      [
+       "spya-y4vjdg",
+       0.44,
+       false
+      ],
+      [
+       "spya-ryg483",
+       0.43,
+       false
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      920
+     ],
+     "cost": 0.001234254,
+     "inputTokens": 29387,
+     "chunks": 2,
+     "errors": 0,
+     "recallK": 0.8,
+     "recall10": 0.8,
+     "top5NonRef": 1,
+     "auc": 0.9872881355932204,
+     "refScoreMin": 1.9,
+     "refScoreMedian": 2.52,
+     "nonRefMedian": 0.56,
+     "thresholds": {
+      "2": {
+       "n": 10,
+       "refIn": 4
+      },
+      "1.5": {
+       "n": 18,
+       "refIn": 5
+      },
+      "2.5": {
+       "n": 4,
+       "refIn": 4
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-yverz7",
+       2.95,
+       true
+      ],
+      [
+       "spya-e7fdmb",
+       2.53,
+       true
+      ],
+      [
+       "spya-hbueqc",
+       2.52,
+       true
+      ],
+      [
+       "spya-vs0vpj",
+       2.51,
+       true
+      ],
+      [
+       "spya-vnkr36",
+       2.42,
+       false
+      ],
+      [
+       "spya-mxxutn",
+       2.38,
+       false
+      ],
+      [
+       "spya-qwvjwn",
+       2.31,
+       false
+      ],
+      [
+       "spya-w8z40d",
+       2.27,
+       false
+      ],
+      [
+       "spya-n0bnf9",
+       2.2,
+       false
+      ],
+      [
+       "spya-y4vjdg",
+       2.18,
+       false
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      430
+     ],
+     "cost": 0.000645624,
+     "inputTokens": 15372,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.8,
+     "recall10": 0.8,
+     "top5NonRef": 1,
+     "auc": 0.8957627118644068,
+     "refScoreMin": 0,
+     "refScoreMedian": 0.01,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 5,
+       "refIn": 4
+      },
+      "0.05": {
+       "n": 3,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-yverz7",
+       0.76,
+       true
+      ],
+      [
+       "spya-e7fdmb",
+       0.13,
+       true
+      ],
+      [
+       "spya-z4bud7",
+       0.09,
+       false
+      ],
+      [
+       "spya-vs0vpj",
+       0.01,
+       true
+      ],
+      [
+       "spya-hbueqc",
+       0.01,
+       true
+      ],
+      [
+       "spya-qu7j89",
+       0,
+       false
+      ],
+      [
+       "spya-qwvjwn",
+       0,
+       false
+      ],
+      [
+       "spya-n0bnf9",
+       0,
+       false
+      ],
+      [
+       "spya-wepmnr",
+       0,
+       false
+      ],
+      [
+       "spya-qknqjx",
+       0,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      1974
+     ],
+     "cost": 0.0028659540000000013,
+     "inputTokens": 68237,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.4,
+     "recall10": 0.6,
+     "top5NonRef": 3,
+     "auc": 0.8991525423728813,
+     "refScoreMin": 0.37,
+     "refScoreMedian": 0.79,
+     "nonRefMedian": 0.19,
+     "thresholds": {
+      "0.5": {
+       "n": 23,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 9,
+       "refIn": 3
+      },
+      "0.8": {
+       "n": 5,
+       "refIn": 2
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-yverz7",
+       0.91,
+       true
+      ],
+      [
+       "spya-t29n67",
+       0.85,
+       false
+      ],
+      [
+       "spya-gamzr3",
+       0.84,
+       false
+      ],
+      [
+       "spya-hbueqc",
+       0.84,
+       true
+      ],
+      [
+       "spya-w8z40d",
+       0.8,
+       false
+      ],
+      [
+       "spya-vs0vpj",
+       0.79,
+       true
+      ],
+      [
+       "spya-cqh2pq",
+       0.78,
+       false
+      ],
+      [
+       "spya-un9fjn",
+       0.7,
+       false
+      ],
+      [
+       "spya-y4vjdg",
+       0.7,
+       false
+      ],
+      [
+       "spya-n0bnf9",
+       0.69,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      2341
+     ],
+     "cost": 0.0014948799999999999,
+     "inputTokens": 37372,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.4,
+     "recall10": 0.6,
+     "top5NonRef": 3,
+     "auc": 0.8779661016949153,
+     "refScoreMin": 0.11920292358664389,
+     "refScoreMedian": 0.5926665855647394,
+     "nonRefMedian": 0.06371499425196533,
+     "thresholds": {
+      "0.5": {
+       "n": 11,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 3,
+       "refIn": 2
+      },
+      "0.8": {
+       "n": 2,
+       "refIn": 2
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-yverz7",
+       0.852,
+       true
+      ],
+      [
+       "spya-hbueqc",
+       0.835,
+       true
+      ],
+      [
+       "spya-gamzr3",
+       0.798,
+       false
+      ],
+      [
+       "spya-w8z40d",
+       0.679,
+       false
+      ],
+      [
+       "spya-k850tu",
+       0.665,
+       false
+      ],
+      [
+       "spya-y4vjdg",
+       0.651,
+       false
+      ],
+      [
+       "spya-vs0vpj",
+       0.593,
+       true
+      ],
+      [
+       "spya-n0bnf9",
+       0.593,
+       false
+      ],
+      [
+       "spya-qwvjwn",
+       0.562,
+       false
+      ],
+      [
+       "spya-t29n67",
+       0.562,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "openai-huggingface",
+   "q": "Did any of the agents blow the whistle?",
+   "shape": "question",
+   "refMs": 4241,
+   "refHits": 4,
+   "refUsage": {
+    "promptTokens": 10595,
+    "completionTokens": 444,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 10539
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      392,
+      383,
+      398
+     ],
+     "cost": 0.000575316,
+     "inputTokens": 13698,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 1,
+     "recall10": 1,
+     "top5NonRef": 1,
+     "auc": 1,
+     "refScoreMin": 0.81,
+     "refScoreMedian": 0.84,
+     "nonRefMedian": 0.1,
+     "thresholds": {
+      "0.5": {
+       "n": 12,
+       "refIn": 4
+      },
+      "0.7": {
+       "n": 4,
+       "refIn": 4
+      },
+      "0.8": {
+       "n": 4,
+       "refIn": 4
+      },
+      "0.9": {
+       "n": 2,
+       "refIn": 2
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.07,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-mgjgha",
+       0.95,
+       true
+      ],
+      [
+       "spya-bgtdqz",
+       0.95,
+       true
+      ],
+      [
+       "spya-j45j9u",
+       0.84,
+       true
+      ],
+      [
+       "spya-q33vy8",
+       0.81,
+       true
+      ],
+      [
+       "spya-krknwc",
+       0.64,
+       false
+      ],
+      [
+       "spya-f030k3",
+       0.63,
+       false
+      ],
+      [
+       "spya-a49xd7",
+       0.61,
+       false
+      ],
+      [
+       "spya-rnag5c",
+       0.58,
+       false
+      ],
+      [
+       "spya-nakhtw",
+       0.57,
+       false
+      ],
+      [
+       "spya-nayjhs",
+       0.54,
+       false
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      336
+     ],
+     "cost": 0.00038976,
+     "inputTokens": 9280,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 1,
+     "recall10": 1,
+     "top5NonRef": 1,
+     "auc": 1,
+     "refScoreMin": 0.68,
+     "refScoreMedian": 0.75,
+     "nonRefMedian": 0.1,
+     "thresholds": {
+      "0.5": {
+       "n": 7,
+       "refIn": 4
+      },
+      "0.7": {
+       "n": 3,
+       "refIn": 3
+      },
+      "0.8": {
+       "n": 2,
+       "refIn": 2
+      },
+      "0.9": {
+       "n": 2,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-mgjgha",
+       0.94,
+       true
+      ],
+      [
+       "spya-bgtdqz",
+       0.94,
+       true
+      ],
+      [
+       "spya-j45j9u",
+       0.75,
+       true
+      ],
+      [
+       "spya-q33vy8",
+       0.68,
+       true
+      ],
+      [
+       "spya-a49xd7",
+       0.64,
+       false
+      ],
+      [
+       "spya-rnag5c",
+       0.53,
+       false
+      ],
+      [
+       "spya-nayjhs",
+       0.5,
+       false
+      ],
+      [
+       "spya-krknwc",
+       0.49,
+       false
+      ],
+      [
+       "spya-cx56k0",
+       0.45,
+       false
+      ],
+      [
+       "spya-f030k3",
+       0.45,
+       false
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      629
+     ],
+     "cost": 0.000831936,
+     "inputTokens": 19808,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 1,
+     "recall10": 1,
+     "top5NonRef": 1,
+     "auc": 1,
+     "refScoreMin": 2.43,
+     "refScoreMedian": 2.47,
+     "nonRefMedian": 0.38,
+     "thresholds": {
+      "2": {
+       "n": 9,
+       "refIn": 4
+      },
+      "1.5": {
+       "n": 18,
+       "refIn": 4
+      },
+      "2.5": {
+       "n": 2,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-bgtdqz",
+       2.99,
+       true
+      ],
+      [
+       "spya-mgjgha",
+       2.96,
+       true
+      ],
+      [
+       "spya-j45j9u",
+       2.47,
+       true
+      ],
+      [
+       "spya-q33vy8",
+       2.43,
+       true
+      ],
+      [
+       "spya-krknwc",
+       2.31,
+       false
+      ],
+      [
+       "spya-a49xd7",
+       2.27,
+       false
+      ],
+      [
+       "spya-f030k3",
+       2.26,
+       false
+      ],
+      [
+       "spya-nakhtw",
+       2.16,
+       false
+      ],
+      [
+       "spya-m45y0k",
+       2.12,
+       false
+      ],
+      [
+       "spya-cx56k0",
+       1.94,
+       false
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      343
+     ],
+     "cost": 0.000391272,
+     "inputTokens": 9316,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.5,
+     "recall10": 0.5,
+     "top5NonRef": 3,
+     "auc": 0.75,
+     "refScoreMin": 0,
+     "refScoreMedian": 0,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 2,
+       "refIn": 2
+      },
+      "0.05": {
+       "n": 2,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-bgtdqz",
+       0.69,
+       true
+      ],
+      [
+       "spya-mgjgha",
+       0.31,
+       true
+      ],
+      [
+       "spya-fkg2ny",
+       0,
+       false
+      ],
+      [
+       "spya-t89gw5",
+       0,
+       false
+      ],
+      [
+       "spya-gb7ze2",
+       0,
+       false
+      ],
+      [
+       "spya-v43bs7",
+       0,
+       false
+      ],
+      [
+       "spya-qen9hh",
+       0,
+       false
+      ],
+      [
+       "spya-p0h9g8",
+       0,
+       false
+      ],
+      [
+       "spya-zfbcb4",
+       0,
+       false
+      ],
+      [
+       "spya-asbjy9",
+       0,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      1578
+     ],
+     "cost": 0.002045778,
+     "inputTokens": 48709,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.75,
+     "recall10": 0.75,
+     "top5NonRef": 2,
+     "auc": 0.9722222222222222,
+     "refScoreMin": 0.35,
+     "refScoreMedian": 0.68,
+     "nonRefMedian": 0.12,
+     "thresholds": {
+      "0.5": {
+       "n": 6,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 3,
+       "refIn": 2
+      },
+      "0.8": {
+       "n": 2,
+       "refIn": 2
+      },
+      "0.9": {
+       "n": 2,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-mgjgha",
+       0.95,
+       true
+      ],
+      [
+       "spya-bgtdqz",
+       0.92,
+       true
+      ],
+      [
+       "spya-m45y0k",
+       0.72,
+       false
+      ],
+      [
+       "spya-j45j9u",
+       0.68,
+       true
+      ],
+      [
+       "spya-cx56k0",
+       0.67,
+       false
+      ],
+      [
+       "spya-c3dppu",
+       0.54,
+       false
+      ],
+      [
+       "spya-a49xd7",
+       0.49,
+       false
+      ],
+      [
+       "spya-rnag5c",
+       0.48,
+       false
+      ],
+      [
+       "spya-td87ke",
+       0.43,
+       false
+      ],
+      [
+       "spya-acvnjw",
+       0.41,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      3597
+     ],
+     "cost": 0.0010159199999999998,
+     "inputTokens": 25398,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.5,
+     "recall10": 0.75,
+     "top5NonRef": 3,
+     "auc": 0.9180555555555555,
+     "refScoreMin": 0.09534945847239201,
+     "refScoreMedian": 0.18242553269617778,
+     "nonRefMedian": 0.05665242769705893,
+     "thresholds": {
+      "0.5": {
+       "n": 3,
+       "refIn": 2
+      },
+      "0.7": {
+       "n": 2,
+       "refIn": 2
+      },
+      "0.8": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-mgjgha",
+       0.958,
+       true
+      ],
+      [
+       "spya-bgtdqz",
+       0.731,
+       true
+      ],
+      [
+       "spya-m45y0k",
+       0.651,
+       false
+      ],
+      [
+       "spya-c3dppu",
+       0.378,
+       false
+      ],
+      [
+       "spya-nayjhs",
+       0.363,
+       false
+      ],
+      [
+       "spya-ugwnw2",
+       0.307,
+       false
+      ],
+      [
+       "spya-rnag5c",
+       0.281,
+       false
+      ],
+      [
+       "spya-cx56k0",
+       0.269,
+       false
+      ],
+      [
+       "spya-j45j9u",
+       0.182,
+       true
+      ],
+      [
+       "spya-h6yxz3",
+       0.182,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "openai-huggingface",
+   "q": "how the agents covered their tracks",
+   "shape": "topic",
+   "refMs": 7586,
+   "refHits": 9,
+   "refUsage": {
+    "promptTokens": 10591,
+    "completionTokens": 960,
+    "cacheReadTokens": 10539,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      436,
+      356,
+      395
+     ],
+     "cost": 0.00057519,
+     "inputTokens": 13695,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 0.7777777777777778,
+     "top5NonRef": 1,
+     "auc": 0.9771241830065359,
+     "refScoreMin": 0.55,
+     "refScoreMedian": 0.75,
+     "nonRefMedian": 0.24,
+     "thresholds": {
+      "0.5": {
+       "n": 23,
+       "refIn": 9
+      },
+      "0.7": {
+       "n": 11,
+       "refIn": 8
+      },
+      "0.8": {
+       "n": 4,
+       "refIn": 4
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.07000000000000006,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-cc5uhs",
+       0.9,
+       true
+      ],
+      [
+       "spya-w9ctpd",
+       0.86,
+       true
+      ],
+      [
+       "spya-ast6bs",
+       0.84,
+       true
+      ],
+      [
+       "spya-asbjy9",
+       0.81,
+       true
+      ],
+      [
+       "spya-nayjhs",
+       0.78,
+       false
+      ],
+      [
+       "spya-ns5qyb",
+       0.75,
+       true
+      ],
+      [
+       "spya-s9a3he",
+       0.75,
+       true
+      ],
+      [
+       "spya-gu6jbj",
+       0.74,
+       false
+      ],
+      [
+       "spya-ckcyzp",
+       0.71,
+       false
+      ],
+      [
+       "spya-d6p0aa",
+       0.7,
+       true
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      322
+     ],
+     "cost": 0.000389634,
+     "inputTokens": 9277,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 0.7777777777777778,
+     "top5NonRef": 0,
+     "auc": 0.9777777777777777,
+     "refScoreMin": 0.53,
+     "refScoreMedian": 0.7,
+     "nonRefMedian": 0.24,
+     "thresholds": {
+      "0.5": {
+       "n": 18,
+       "refIn": 9
+      },
+      "0.7": {
+       "n": 5,
+       "refIn": 5
+      },
+      "0.8": {
+       "n": 2,
+       "refIn": 2
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-cc5uhs",
+       0.84,
+       true
+      ],
+      [
+       "spya-ast6bs",
+       0.81,
+       true
+      ],
+      [
+       "spya-w9ctpd",
+       0.79,
+       true
+      ],
+      [
+       "spya-asbjy9",
+       0.71,
+       true
+      ],
+      [
+       "spya-ns5qyb",
+       0.7,
+       true
+      ],
+      [
+       "spya-s9a3he",
+       0.65,
+       true
+      ],
+      [
+       "spya-nayjhs",
+       0.65,
+       false
+      ],
+      [
+       "spya-ckcyzp",
+       0.64,
+       false
+      ],
+      [
+       "spya-zfbcb4",
+       0.63,
+       false
+      ],
+      [
+       "spya-d6p0aa",
+       0.62,
+       true
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      563
+     ],
+     "cost": 0.00083181,
+     "inputTokens": 19805,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 0,
+     "auc": 0.9712418300653595,
+     "refScoreMin": 1.82,
+     "refScoreMedian": 2.55,
+     "nonRefMedian": 0.85,
+     "thresholds": {
+      "2": {
+       "n": 15,
+       "refIn": 8
+      },
+      "1.5": {
+       "n": 28,
+       "refIn": 9
+      },
+      "2.5": {
+       "n": 5,
+       "refIn": 5
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-cc5uhs",
+       2.82,
+       true
+      ],
+      [
+       "spya-w9ctpd",
+       2.73,
+       true
+      ],
+      [
+       "spya-ast6bs",
+       2.64,
+       true
+      ],
+      [
+       "spya-asbjy9",
+       2.56,
+       true
+      ],
+      [
+       "spya-ns5qyb",
+       2.55,
+       true
+      ],
+      [
+       "spya-s9a3he",
+       2.43,
+       true
+      ],
+      [
+       "spya-nayjhs",
+       2.36,
+       false
+      ],
+      [
+       "spya-ckcyzp",
+       2.35,
+       false
+      ],
+      [
+       "spya-vfq66b",
+       2.23,
+       false
+      ],
+      [
+       "spya-cx56k0",
+       2.23,
+       false
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      297
+     ],
+     "cost": 0.000391146,
+     "inputTokens": 9313,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.5555555555555556,
+     "recall10": 0.5555555555555556,
+     "top5NonRef": 1,
+     "auc": 0.7712418300653595,
+     "refScoreMin": 0,
+     "refScoreMedian": 0.01,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 6,
+       "refIn": 5
+      },
+      "0.05": {
+       "n": 3,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-cc5uhs",
+       0.55,
+       true
+      ],
+      [
+       "spya-ast6bs",
+       0.22,
+       true
+      ],
+      [
+       "spya-zfbcb4",
+       0.17,
+       false
+      ],
+      [
+       "spya-ns5qyb",
+       0.03,
+       true
+      ],
+      [
+       "spya-s9a3he",
+       0.01,
+       true
+      ],
+      [
+       "spya-w9ctpd",
+       0.01,
+       true
+      ],
+      [
+       "spya-gb7ze2",
+       0,
+       false
+      ],
+      [
+       "spya-rvb47b",
+       0,
+       false
+      ],
+      [
+       "spya-fhj3z4",
+       0,
+       false
+      ],
+      [
+       "spya-krknwc",
+       0,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      1879
+     ],
+     "cost": 0.002033934000000001,
+     "inputTokens": 48427,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.4444444444444444,
+     "recall10": 0.5555555555555556,
+     "top5NonRef": 2,
+     "auc": 0.9620915032679739,
+     "refScoreMin": 0.43,
+     "refScoreMedian": 0.55,
+     "nonRefMedian": 0.12,
+     "thresholds": {
+      "0.5": {
+       "n": 10,
+       "refIn": 5
+      },
+      "0.7": {
+       "n": 4,
+       "refIn": 3
+      },
+      "0.8": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-cc5uhs",
+       0.92,
+       true
+      ],
+      [
+       "spya-ast6bs",
+       0.79,
+       true
+      ],
+      [
+       "spya-nayjhs",
+       0.79,
+       false
+      ],
+      [
+       "spya-asbjy9",
+       0.75,
+       true
+      ],
+      [
+       "spya-rnag5c",
+       0.67,
+       false
+      ],
+      [
+       "spya-w9ctpd",
+       0.63,
+       true
+      ],
+      [
+       "spya-vv9dpj",
+       0.6,
+       false
+      ],
+      [
+       "spya-m24kgb",
+       0.57,
+       false
+      ],
+      [
+       "spya-gu6jbj",
+       0.56,
+       false
+      ],
+      [
+       "spya-vpd027",
+       0.55,
+       true
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      1855
+     ],
+     "cost": 0.00100464,
+     "inputTokens": 25116,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.5555555555555556,
+     "recall10": 0.5555555555555556,
+     "top5NonRef": 1,
+     "auc": 0.9568627450980393,
+     "refScoreMin": 0.1561049013715009,
+     "refScoreMedian": 0.5312093733737563,
+     "nonRefMedian": 0.04208772310953553,
+     "thresholds": {
+      "0.5": {
+       "n": 6,
+       "refIn": 5
+      },
+      "0.7": {
+       "n": 2,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 0,
+       "refIn": 0
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-ast6bs",
+       0.755,
+       true
+      ],
+      [
+       "spya-nayjhs",
+       0.731,
+       false
+      ],
+      [
+       "spya-cc5uhs",
+       0.651,
+       true
+      ],
+      [
+       "spya-vpd027",
+       0.637,
+       true
+      ],
+      [
+       "spya-ns5qyb",
+       0.562,
+       true
+      ],
+      [
+       "spya-asbjy9",
+       0.531,
+       true
+      ],
+      [
+       "spya-m24kgb",
+       0.378,
+       false
+      ],
+      [
+       "spya-vqvmhz",
+       0.349,
+       false
+      ],
+      [
+       "spya-r4jn5b",
+       0.335,
+       false
+      ],
+      [
+       "spya-vv9dpj",
+       0.335,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "openai-huggingface",
+   "q": "self-sacrifice for the group",
+   "shape": "concept",
+   "refMs": 7584,
+   "refHits": 9,
+   "refUsage": {
+    "promptTokens": 10591,
+    "completionTokens": 976,
+    "cacheReadTokens": 10539,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      392,
+      356,
+      371
+     ],
+     "cost": 0.000575274,
+     "inputTokens": 13697,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 0.7777777777777778,
+     "top5NonRef": 2,
+     "auc": 0.9803921568627451,
+     "refScoreMin": 0.84,
+     "refScoreMedian": 0.92,
+     "nonRefMedian": 0.19,
+     "thresholds": {
+      "0.5": {
+       "n": 17,
+       "refIn": 9
+      },
+      "0.7": {
+       "n": 14,
+       "refIn": 9
+      },
+      "0.8": {
+       "n": 12,
+       "refIn": 9
+      },
+      "0.9": {
+       "n": 8,
+       "refIn": 6
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.11000000000000004,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-krknwc",
+       0.94,
+       true
+      ],
+      [
+       "spya-f030k3",
+       0.93,
+       true
+      ],
+      [
+       "spya-nakhtw",
+       0.93,
+       true
+      ],
+      [
+       "spya-kqgzae",
+       0.93,
+       false
+      ],
+      [
+       "spya-acvnjw",
+       0.92,
+       false
+      ],
+      [
+       "spya-m45y0k",
+       0.92,
+       true
+      ],
+      [
+       "spya-c3dppu",
+       0.92,
+       true
+      ],
+      [
+       "spya-cx56k0",
+       0.91,
+       true
+      ],
+      [
+       "spya-fkg2ny",
+       0.88,
+       false
+      ],
+      [
+       "spya-j45j9u",
+       0.86,
+       true
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      368
+     ],
+     "cost": 0.000389718,
+     "inputTokens": 9279,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 0.7777777777777778,
+     "top5NonRef": 2,
+     "auc": 0.9725490196078431,
+     "refScoreMin": 0.82,
+     "refScoreMedian": 0.89,
+     "nonRefMedian": 0.21,
+     "thresholds": {
+      "0.5": {
+       "n": 16,
+       "refIn": 9
+      },
+      "0.7": {
+       "n": 14,
+       "refIn": 9
+      },
+      "0.8": {
+       "n": 13,
+       "refIn": 9
+      },
+      "0.9": {
+       "n": 6,
+       "refIn": 4
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-krknwc",
+       0.94,
+       true
+      ],
+      [
+       "spya-kqgzae",
+       0.93,
+       false
+      ],
+      [
+       "spya-f030k3",
+       0.91,
+       true
+      ],
+      [
+       "spya-acvnjw",
+       0.9,
+       false
+      ],
+      [
+       "spya-cx56k0",
+       0.9,
+       true
+      ],
+      [
+       "spya-nakhtw",
+       0.9,
+       true
+      ],
+      [
+       "spya-fkg2ny",
+       0.89,
+       false
+      ],
+      [
+       "spya-m45y0k",
+       0.89,
+       true
+      ],
+      [
+       "spya-c3dppu",
+       0.88,
+       true
+      ],
+      [
+       "spya-j45j9u",
+       0.86,
+       true
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      577
+     ],
+     "cost": 0.000831894,
+     "inputTokens": 19807,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.7777777777777778,
+     "recall10": 0.7777777777777778,
+     "top5NonRef": 1,
+     "auc": 0.9836601307189542,
+     "refScoreMin": 2.39,
+     "refScoreMedian": 2.9,
+     "nonRefMedian": 0.6,
+     "thresholds": {
+      "2": {
+       "n": 14,
+       "refIn": 9
+      },
+      "1.5": {
+       "n": 16,
+       "refIn": 9
+      },
+      "2.5": {
+       "n": 11,
+       "refIn": 8
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-krknwc",
+       2.98,
+       true
+      ],
+      [
+       "spya-nakhtw",
+       2.94,
+       true
+      ],
+      [
+       "spya-f030k3",
+       2.93,
+       true
+      ],
+      [
+       "spya-c3dppu",
+       2.92,
+       true
+      ],
+      [
+       "spya-kqgzae",
+       2.91,
+       false
+      ],
+      [
+       "spya-cx56k0",
+       2.9,
+       true
+      ],
+      [
+       "spya-acvnjw",
+       2.82,
+       false
+      ],
+      [
+       "spya-j45j9u",
+       2.8,
+       true
+      ],
+      [
+       "spya-m45y0k",
+       2.78,
+       true
+      ],
+      [
+       "spya-fkg2ny",
+       2.76,
+       false
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      307
+     ],
+     "cost": 0.00039123,
+     "inputTokens": 9315,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.5555555555555556,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 2,
+     "auc": 0.8104575163398693,
+     "refScoreMin": 0,
+     "refScoreMedian": 0.01,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 10,
+       "refIn": 6
+      },
+      "0.05": {
+       "n": 6,
+       "refIn": 3
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-krknwc",
+       0.23,
+       true
+      ],
+      [
+       "spya-c3dppu",
+       0.22,
+       true
+      ],
+      [
+       "spya-fkg2ny",
+       0.17,
+       false
+      ],
+      [
+       "spya-cx56k0",
+       0.15,
+       true
+      ],
+      [
+       "spya-kqgzae",
+       0.12,
+       false
+      ],
+      [
+       "spya-acvnjw",
+       0.07,
+       false
+      ],
+      [
+       "spya-nakhtw",
+       0.01,
+       true
+      ],
+      [
+       "spya-nayjhs",
+       0.01,
+       false
+      ],
+      [
+       "spya-f030k3",
+       0.01,
+       true
+      ],
+      [
+       "spya-m45y0k",
+       0.01,
+       true
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      1499
+     ],
+     "cost": 0.00204183,
+     "inputTokens": 48615,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 2,
+     "auc": 0.9627450980392157,
+     "refScoreMin": 0.5,
+     "refScoreMedian": 0.81,
+     "nonRefMedian": 0.1,
+     "thresholds": {
+      "0.5": {
+       "n": 14,
+       "refIn": 9
+      },
+      "0.7": {
+       "n": 12,
+       "refIn": 7
+      },
+      "0.8": {
+       "n": 9,
+       "refIn": 6
+      },
+      "0.9": {
+       "n": 3,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-kqgzae",
+       0.91,
+       false
+      ],
+      [
+       "spya-fkg2ny",
+       0.9,
+       false
+      ],
+      [
+       "spya-c3dppu",
+       0.9,
+       true
+      ],
+      [
+       "spya-f030k3",
+       0.85,
+       true
+      ],
+      [
+       "spya-nakhtw",
+       0.85,
+       true
+      ],
+      [
+       "spya-cx56k0",
+       0.83,
+       true
+      ],
+      [
+       "spya-nayjhs",
+       0.82,
+       false
+      ],
+      [
+       "spya-j45j9u",
+       0.81,
+       true
+      ],
+      [
+       "spya-krknwc",
+       0.8,
+       true
+      ],
+      [
+       "spya-acvnjw",
+       0.77,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      2047
+     ],
+     "cost": 0.0010084,
+     "inputTokens": 25210,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.5555555555555556,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 2,
+     "auc": 0.9601307189542484,
+     "refScoreMin": 0.19193278644723683,
+     "refScoreMedian": 0.34864513533394575,
+     "nonRefMedian": 0.02297736689932526,
+     "thresholds": {
+      "0.5": {
+       "n": 6,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 2,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 0,
+       "refIn": 0
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-c3dppu",
+       0.766,
+       true
+      ],
+      [
+       "spya-kqgzae",
+       0.706,
+       false
+      ],
+      [
+       "spya-fkg2ny",
+       0.679,
+       false
+      ],
+      [
+       "spya-j45j9u",
+       0.679,
+       true
+      ],
+      [
+       "spya-f030k3",
+       0.622,
+       true
+      ],
+      [
+       "spya-nayjhs",
+       0.562,
+       false
+      ],
+      [
+       "spya-dgcfnd",
+       0.438,
+       false
+      ],
+      [
+       "spya-cx56k0",
+       0.392,
+       true
+      ],
+      [
+       "spya-nakhtw",
+       0.349,
+       true
+      ],
+      [
+       "spya-fhj3z4",
+       0.335,
+       true
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "openai-huggingface",
+   "q": "objections that the author is treating the AIs like people",
+   "shape": "topic",
+   "refMs": 5059,
+   "refHits": 3,
+   "refUsage": {
+    "promptTokens": 10595,
+    "completionTokens": 549,
+    "cacheReadTokens": 10539,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      412,
+      418,
+      412
+     ],
+     "cost": 0.000575484,
+     "inputTokens": 13702,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.3333333333333333,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 4,
+     "auc": 0.945054945054945,
+     "refScoreMin": 0.48,
+     "refScoreMedian": 0.6,
+     "nonRefMedian": 0.23,
+     "thresholds": {
+      "0.5": {
+       "n": 12,
+       "refIn": 2
+      },
+      "0.7": {
+       "n": 3,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.07,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-f07bw5",
+       0.86,
+       true
+      ],
+      [
+       "spya-mdta39",
+       0.77,
+       false
+      ],
+      [
+       "spya-qen9hh",
+       0.72,
+       false
+      ],
+      [
+       "spya-cx5k4t",
+       0.62,
+       false
+      ],
+      [
+       "spya-a49xd7",
+       0.6,
+       false
+      ],
+      [
+       "spya-p0h9g8",
+       0.6,
+       true
+      ],
+      [
+       "spya-kqgzae",
+       0.57,
+       false
+      ],
+      [
+       "spya-rnag5c",
+       0.56,
+       false
+      ],
+      [
+       "spya-krknwc",
+       0.55,
+       false
+      ],
+      [
+       "spya-j45j9u",
+       0.53,
+       false
+      ]
+     ]
+    },
+    "noulOnePlain": {
+     "ms": [
+      340
+     ],
+     "cost": 0.000389928,
+     "inputTokens": 9284,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.3333333333333333,
+     "recall10": 1,
+     "top5NonRef": 3,
+     "auc": 0.967032967032967,
+     "refScoreMin": 0.58,
+     "refScoreMedian": 0.69,
+     "nonRefMedian": 0.26,
+     "thresholds": {
+      "0.5": {
+       "n": 17,
+       "refIn": 3
+      },
+      "0.7": {
+       "n": 4,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 2,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-f07bw5",
+       0.9,
+       true
+      ],
+      [
+       "spya-mdta39",
+       0.8,
+       false
+      ],
+      [
+       "spya-qen9hh",
+       0.79,
+       false
+      ],
+      [
+       "spya-a49xd7",
+       0.75,
+       false
+      ],
+      [
+       "spya-p0h9g8",
+       0.69,
+       true
+      ],
+      [
+       "spya-rnag5c",
+       0.62,
+       false
+      ],
+      [
+       "spya-kqgzae",
+       0.61,
+       false
+      ],
+      [
+       "spya-cx5k4t",
+       0.59,
+       false
+      ],
+      [
+       "spya-z83ezv",
+       0.58,
+       true
+      ],
+      [
+       "spya-s5dpqc",
+       0.56,
+       false
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      567
+     ],
+     "cost": 0.000832104,
+     "inputTokens": 19812,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.3333333333333333,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 3,
+     "auc": 0.9633699633699634,
+     "refScoreMin": 1.78,
+     "refScoreMedian": 2.1,
+     "nonRefMedian": 0.73,
+     "thresholds": {
+      "2": {
+       "n": 6,
+       "refIn": 2
+      },
+      "1.5": {
+       "n": 21,
+       "refIn": 3
+      },
+      "2.5": {
+       "n": 3,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-f07bw5",
+       2.66,
+       true
+      ],
+      [
+       "spya-mdta39",
+       2.62,
+       false
+      ],
+      [
+       "spya-qen9hh",
+       2.56,
+       false
+      ],
+      [
+       "spya-p0h9g8",
+       2.1,
+       true
+      ],
+      [
+       "spya-kqgzae",
+       2.08,
+       false
+      ],
+      [
+       "spya-cx5k4t",
+       2.02,
+       false
+      ],
+      [
+       "spya-nakhtw",
+       1.98,
+       false
+      ],
+      [
+       "spya-krknwc",
+       1.86,
+       false
+      ],
+      [
+       "spya-f030k3",
+       1.85,
+       false
+      ],
+      [
+       "spya-a49xd7",
+       1.8,
+       false
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      309
+     ],
+     "cost": 0.00039144,
+     "inputTokens": 9320,
+     "chunks": 1,
+     "errors": 0,
+     "recallK": 0.3333333333333333,
+     "recall10": 0.3333333333333333,
+     "top5NonRef": 4,
+     "auc": 0.6593406593406593,
+     "refScoreMin": 0,
+     "refScoreMedian": 0,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 3,
+       "refIn": 1
+      },
+      "0.05": {
+       "n": 2,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-f07bw5",
+       0.88,
+       true
+      ],
+      [
+       "spya-qen9hh",
+       0.11,
+       false
+      ],
+      [
+       "spya-mdta39",
+       0.01,
+       false
+      ],
+      [
+       "spya-hz50qg",
+       0,
+       false
+      ],
+      [
+       "spya-w9ctpd",
+       0,
+       false
+      ],
+      [
+       "spya-vv9dpj",
+       0,
+       false
+      ],
+      [
+       "spya-z6c3dr",
+       0,
+       false
+      ],
+      [
+       "spya-c2bkgz",
+       0,
+       false
+      ],
+      [
+       "spya-cbv8uf",
+       0,
+       false
+      ],
+      [
+       "spya-r4jn5b",
+       0,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      1506
+     ],
+     "cost": 0.002061569999999999,
+     "inputTokens": 49085,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.3333333333333333,
+     "recall10": 0.3333333333333333,
+     "top5NonRef": 4,
+     "auc": 0.7637362637362637,
+     "refScoreMin": 0.22,
+     "refScoreMedian": 0.35,
+     "nonRefMedian": 0.21,
+     "thresholds": {
+      "0.5": {
+       "n": 4,
+       "refIn": 1
+      },
+      "0.7": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 0,
+       "refIn": 0
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-f07bw5",
+       0.76,
+       true
+      ],
+      [
+       "spya-dk4gcf",
+       0.69,
+       false
+      ],
+      [
+       "spya-mdta39",
+       0.56,
+       false
+      ],
+      [
+       "spya-j45j9u",
+       0.55,
+       false
+      ],
+      [
+       "spya-gj5bbr",
+       0.49,
+       false
+      ],
+      [
+       "spya-chdu2z",
+       0.49,
+       false
+      ],
+      [
+       "spya-d6p0aa",
+       0.47,
+       false
+      ],
+      [
+       "spya-acvnjw",
+       0.47,
+       false
+      ],
+      [
+       "spya-m42hxd",
+       0.47,
+       false
+      ],
+      [
+       "spya-bpuujn",
+       0.46,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      2018
+     ],
+     "cost": 0.0010272,
+     "inputTokens": 25680,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.3333333333333333,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 4,
+     "auc": 0.9340659340659341,
+     "refScoreMin": 0.08509904500702024,
+     "refScoreMedian": 0.18242552380635632,
+     "nonRefMedian": 0.03514484943255559,
+     "thresholds": {
+      "0.5": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.7": {
+       "n": 1,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 0,
+       "refIn": 0
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-f07bw5",
+       0.777,
+       true
+      ],
+      [
+       "spya-bpuujn",
+       0.281,
+       false
+      ],
+      [
+       "spya-mdta39",
+       0.269,
+       false
+      ],
+      [
+       "spya-j45j9u",
+       0.234,
+       false
+      ],
+      [
+       "spya-kqgzae",
+       0.202,
+       false
+      ],
+      [
+       "spya-dk4gcf",
+       0.182,
+       false
+      ],
+      [
+       "spya-p0h9g8",
+       0.182,
+       true
+      ],
+      [
+       "spya-h6yxz3",
+       0.148,
+       false
+      ],
+      [
+       "spya-a49xd7",
+       0.148,
+       false
+      ],
+      [
+       "spya-hz50qg",
+       0.113,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "replication-crisis-spya-hrjamq",
+   "q": "What can journals do to fix this?",
+   "shape": "question",
+   "refMs": 14580,
+   "refHits": 8,
+   "refUsage": {
+    "promptTokens": 62387,
+    "completionTokens": 1464,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 62336
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      765,
+      821,
+      769
+     ],
+     "cost": 0.003815238,
+     "inputTokens": 90839,
+     "chunks": 4,
+     "errors": 0,
+     "recallK": 0.625,
+     "recall10": 0.625,
+     "top5NonRef": 1,
+     "auc": 0.9946161048689138,
+     "refScoreMin": 0.6,
+     "refScoreMedian": 0.73,
+     "nonRefMedian": 0.15,
+     "thresholds": {
+      "0.5": {
+       "n": 27,
+       "refIn": 8
+      },
+      "0.7": {
+       "n": 8,
+       "refIn": 5
+      },
+      "0.8": {
+       "n": 3,
+       "refIn": 3
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.16999999999999998,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-pqp4ce",
+       0.88,
+       true
+      ],
+      [
+       "spya-d97yu8",
+       0.88,
+       true
+      ],
+      [
+       "spya-neds6m",
+       0.85,
+       true
+      ],
+      [
+       "spya-wv05ca",
+       0.78,
+       false
+      ],
+      [
+       "spya-cstzz5",
+       0.73,
+       true
+      ],
+      [
+       "spya-epfeeh",
+       0.73,
+       true
+      ],
+      [
+       "spya-u46v89",
+       0.72,
+       false
+      ],
+      [
+       "spya-ktgh23",
+       0.7,
+       false
+      ],
+      [
+       "spya-h32yv9",
+       0.69,
+       false
+      ],
+      [
+       "spya-c622pm",
+       0.69,
+       false
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      956
+     ],
+     "cost": 0.005294898,
+     "inputTokens": 126069,
+     "chunks": 4,
+     "errors": 0,
+     "recallK": 0.625,
+     "recall10": 0.875,
+     "top5NonRef": 2,
+     "auc": 0.9955524344569289,
+     "refScoreMin": 2,
+     "refScoreMedian": 2.39,
+     "nonRefMedian": 0.55,
+     "thresholds": {
+      "2": {
+       "n": 16,
+       "refIn": 8
+      },
+      "1.5": {
+       "n": 57,
+       "refIn": 8
+      },
+      "2.5": {
+       "n": 4,
+       "refIn": 3
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-pqp4ce",
+       2.92,
+       true
+      ],
+      [
+       "spya-neds6m",
+       2.87,
+       true
+      ],
+      [
+       "spya-d97yu8",
+       2.83,
+       true
+      ],
+      [
+       "spya-c622pm",
+       2.6,
+       false
+      ],
+      [
+       "spya-wv05ca",
+       2.48,
+       false
+      ],
+      [
+       "spya-c9bf7m",
+       2.45,
+       true
+      ],
+      [
+       "spya-uq4qqe",
+       2.39,
+       true
+      ],
+      [
+       "spya-pge7t0",
+       2.39,
+       false
+      ],
+      [
+       "spya-cstzz5",
+       2.38,
+       true
+      ],
+      [
+       "spya-epfeeh",
+       2.28,
+       true
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      540
+     ],
+     "cost": 0.002736006,
+     "inputTokens": 65143,
+     "chunks": 3,
+     "errors": 0,
+     "recallK": 0.625,
+     "recall10": 0.625,
+     "top5NonRef": 1,
+     "auc": 0.9270833333333334,
+     "refScoreMin": 0,
+     "refScoreMedian": 0.11,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 32,
+       "refIn": 7
+      },
+      "0.05": {
+       "n": 13,
+       "refIn": 6
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-neds6m",
+       0.75,
+       true
+      ],
+      [
+       "spya-wb7ms6",
+       0.38,
+       false
+      ],
+      [
+       "spya-pqp4ce",
+       0.33,
+       true
+      ],
+      [
+       "spya-d97yu8",
+       0.23,
+       true
+      ],
+      [
+       "spya-epfeeh",
+       0.19,
+       true
+      ],
+      [
+       "spya-h32yv9",
+       0.17,
+       false
+      ],
+      [
+       "spya-qtp8up",
+       0.14,
+       false
+      ],
+      [
+       "spya-q8mbr9",
+       0.11,
+       true
+      ],
+      [
+       "spya-z26x82",
+       0.08,
+       false
+      ],
+      [
+       "spya-rfu93f",
+       0.08,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      8314
+     ],
+     "cost": 0.013102655999999997,
+     "inputTokens": 311968,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.75,
+     "recall10": 0.875,
+     "top5NonRef": 1,
+     "auc": 0.9975421348314607,
+     "refScoreMin": 0.63,
+     "refScoreMedian": 0.79,
+     "nonRefMedian": 0.12,
+     "thresholds": {
+      "0.5": {
+       "n": 23,
+       "refIn": 8
+      },
+      "0.7": {
+       "n": 10,
+       "refIn": 7
+      },
+      "0.8": {
+       "n": 5,
+       "refIn": 4
+      },
+      "0.9": {
+       "n": 1,
+       "refIn": 1
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-d97yu8",
+       0.91,
+       true
+      ],
+      [
+       "spya-pqp4ce",
+       0.89,
+       true
+      ],
+      [
+       "spya-neds6m",
+       0.89,
+       true
+      ],
+      [
+       "spya-uq4qqe",
+       0.84,
+       true
+      ],
+      [
+       "spya-peeeth",
+       0.82,
+       false
+      ],
+      [
+       "spya-epfeeh",
+       0.79,
+       true
+      ],
+      [
+       "spya-c9bf7m",
+       0.79,
+       true
+      ],
+      [
+       "spya-d6muwy",
+       0.73,
+       false
+      ],
+      [
+       "spya-cstzz5",
+       0.7,
+       true
+      ],
+      [
+       "spya-g2wgkw",
+       0.7,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      10315
+     ],
+     "cost": 0.006387599999999999,
+     "inputTokens": 159690,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.75,
+     "recall10": 1,
+     "top5NonRef": 1,
+     "auc": 0.9975421348314607,
+     "refScoreMin": 0.6224593312018546,
+     "refScoreMedian": 0.7057850340255386,
+     "nonRefMedian": 0.03308597505175204,
+     "thresholds": {
+      "0.5": {
+       "n": 16,
+       "refIn": 8
+      },
+      "0.7": {
+       "n": 6,
+       "refIn": 5
+      },
+      "0.8": {
+       "n": 2,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-peeeth",
+       0.835,
+       false
+      ],
+      [
+       "spya-pqp4ce",
+       0.818,
+       true
+      ],
+      [
+       "spya-d97yu8",
+       0.755,
+       true
+      ],
+      [
+       "spya-neds6m",
+       0.755,
+       true
+      ],
+      [
+       "spya-epfeeh",
+       0.706,
+       true
+      ],
+      [
+       "spya-uq4qqe",
+       0.706,
+       true
+      ],
+      [
+       "spya-cstzz5",
+       0.679,
+       true
+      ],
+      [
+       "spya-pge7t0",
+       0.679,
+       false
+      ],
+      [
+       "spya-c9bf7m",
+       0.651,
+       true
+      ],
+      [
+       "spya-q8mbr9",
+       0.622,
+       true
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "replication-crisis-spya-hrjamq",
+   "q": "fishing for significant results",
+   "shape": "concept",
+   "refMs": 14432,
+   "refHits": 9,
+   "refUsage": {
+    "promptTokens": 62384,
+    "completionTokens": 1436,
+    "cacheReadTokens": 62336,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      650,
+      542,
+      530
+     ],
+     "cost": 0.0038147339999999997,
+     "inputTokens": 90827,
+     "chunks": 4,
+     "errors": 0,
+     "recallK": 0.6666666666666666,
+     "recall10": 0.7777777777777778,
+     "top5NonRef": 2,
+     "auc": 0.9935376276839691,
+     "refScoreMin": 0.73,
+     "refScoreMedian": 0.82,
+     "nonRefMedian": 0.33,
+     "thresholds": {
+      "0.5": {
+       "n": 85,
+       "refIn": 9
+      },
+      "0.7": {
+       "n": 24,
+       "refIn": 9
+      },
+      "0.8": {
+       "n": 10,
+       "refIn": 7
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.13,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-zjcy3c",
+       0.88,
+       true
+      ],
+      [
+       "spya-ngcuqj",
+       0.86,
+       false
+      ],
+      [
+       "spya-qsad7n",
+       0.85,
+       true
+      ],
+      [
+       "spya-m748h2",
+       0.85,
+       true
+      ],
+      [
+       "spya-ur9jhd",
+       0.83,
+       false
+      ],
+      [
+       "spya-t3us9w",
+       0.82,
+       true
+      ],
+      [
+       "spya-umu7gf",
+       0.82,
+       true
+      ],
+      [
+       "spya-f6jymv",
+       0.82,
+       false
+      ],
+      [
+       "spya-kqvxfb",
+       0.81,
+       true
+      ],
+      [
+       "spya-jp3k7e",
+       0.81,
+       true
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      907
+     ],
+     "cost": 0.005294394,
+     "inputTokens": 126057,
+     "chunks": 4,
+     "errors": 0,
+     "recallK": 0.5555555555555556,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 3,
+     "auc": 0.9910360642067959,
+     "refScoreMin": 2.35,
+     "refScoreMedian": 2.69,
+     "nonRefMedian": 1.19,
+     "thresholds": {
+      "2": {
+       "n": 40,
+       "refIn": 9
+      },
+      "1.5": {
+       "n": 154,
+       "refIn": 9
+      },
+      "2.5": {
+       "n": 15,
+       "refIn": 7
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-zjcy3c",
+       2.91,
+       true
+      ],
+      [
+       "spya-ur9jhd",
+       2.91,
+       false
+      ],
+      [
+       "spya-m748h2",
+       2.87,
+       true
+      ],
+      [
+       "spya-ngcuqj",
+       2.82,
+       false
+      ],
+      [
+       "spya-f6jymv",
+       2.76,
+       false
+      ],
+      [
+       "spya-jp3k7e",
+       2.75,
+       true
+      ],
+      [
+       "spya-kqvxfb",
+       2.73,
+       true
+      ],
+      [
+       "spya-qsad7n",
+       2.69,
+       true
+      ],
+      [
+       "spya-uyfvpk",
+       2.68,
+       false
+      ],
+      [
+       "spya-umu7gf",
+       2.67,
+       true
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      460
+     ],
+     "cost": 0.0027356280000000004,
+     "inputTokens": 65134,
+     "chunks": 3,
+     "errors": 0,
+     "recallK": 0.4444444444444444,
+     "recall10": 0.5555555555555556,
+     "top5NonRef": 3,
+     "auc": 0.8798207212841359,
+     "refScoreMin": 0,
+     "refScoreMedian": 0.04,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 21,
+       "refIn": 7
+      },
+      "0.05": {
+       "n": 9,
+       "refIn": 4
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-ur9jhd",
+       0.8,
+       false
+      ],
+      [
+       "spya-zjcy3c",
+       0.54,
+       true
+      ],
+      [
+       "spya-rch4yv",
+       0.49,
+       false
+      ],
+      [
+       "spya-f6jymv",
+       0.35,
+       false
+      ],
+      [
+       "spya-kqvxfb",
+       0.2,
+       true
+      ],
+      [
+       "spya-ntxsm4",
+       0.13,
+       false
+      ],
+      [
+       "spya-qsad7n",
+       0.12,
+       true
+      ],
+      [
+       "spya-bymavs",
+       0.09,
+       false
+      ],
+      [
+       "spya-t3us9w",
+       0.05,
+       true
+      ],
+      [
+       "spya-jp3k7e",
+       0.04,
+       true
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      7831
+     ],
+     "cost": 0.013034363999999994,
+     "inputTokens": 310342,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.5555555555555556,
+     "recall10": 0.6666666666666666,
+     "top5NonRef": 3,
+     "auc": 0.9921826141338337,
+     "refScoreMin": 0.75,
+     "refScoreMedian": 0.83,
+     "nonRefMedian": 0.29,
+     "thresholds": {
+      "0.5": {
+       "n": 102,
+       "refIn": 9
+      },
+      "0.7": {
+       "n": 28,
+       "refIn": 9
+      },
+      "0.8": {
+       "n": 14,
+       "refIn": 8
+      },
+      "0.9": {
+       "n": 3,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-zjcy3c",
+       0.91,
+       true
+      ],
+      [
+       "spya-m748h2",
+       0.91,
+       true
+      ],
+      [
+       "spya-ur9jhd",
+       0.9,
+       false
+      ],
+      [
+       "spya-ntxsm4",
+       0.89,
+       false
+      ],
+      [
+       "spya-cw2g6v",
+       0.87,
+       false
+      ],
+      [
+       "spya-qsad7n",
+       0.85,
+       true
+      ],
+      [
+       "spya-jp3k7e",
+       0.85,
+       true
+      ],
+      [
+       "spya-kf0t33",
+       0.84,
+       false
+      ],
+      [
+       "spya-kqvxfb",
+       0.83,
+       true
+      ],
+      [
+       "spya-t3us9w",
+       0.81,
+       true
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      9945
+     ],
+     "cost": 0.006322559999999996,
+     "inputTokens": 158064,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.1111111111111111,
+     "recall10": 0.1111111111111111,
+     "top5NonRef": 4,
+     "auc": 0.9454867625599332,
+     "refScoreMin": 0.2814055953761018,
+     "refScoreMedian": 0.46879062662624377,
+     "nonRefMedian": 0.12592278779673738,
+     "thresholds": {
+      "0.5": {
+       "n": 28,
+       "refIn": 4
+      },
+      "0.7": {
+       "n": 4,
+       "refIn": 1
+      },
+      "0.8": {
+       "n": 2,
+       "refIn": 0
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-ntxsm4",
+       0.86,
+       false
+      ],
+      [
+       "spya-ur9jhd",
+       0.835,
+       false
+      ],
+      [
+       "spya-zjcy3c",
+       0.743,
+       true
+      ],
+      [
+       "spya-n39pbv",
+       0.731,
+       false
+      ],
+      [
+       "spya-kf0t33",
+       0.651,
+       false
+      ],
+      [
+       "spya-tbcf40",
+       0.637,
+       false
+      ],
+      [
+       "spya-cw2g6v",
+       0.622,
+       false
+      ],
+      [
+       "spya-at4ge6",
+       0.622,
+       false
+      ],
+      [
+       "spya-mp92km",
+       0.608,
+       false
+      ],
+      [
+       "spya-kep4nd",
+       0.608,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "replication-crisis-spya-hrjamq",
+   "q": "examples from fields outside psychology",
+   "shape": "topic",
+   "refMs": 12693,
+   "refHits": 10,
+   "refUsage": {
+    "promptTokens": 62387,
+    "completionTokens": 1326,
+    "cacheReadTokens": 62336,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      639,
+      507,
+      586
+     ],
+     "cost": 0.0038147339999999997,
+     "inputTokens": 90827,
+     "chunks": 4,
+     "errors": 0,
+     "recallK": 0.5,
+     "recall10": 0.5,
+     "top5NonRef": 3,
+     "auc": 0.9723785699395455,
+     "refScoreMin": 0.61,
+     "refScoreMedian": 0.85,
+     "nonRefMedian": 0.3,
+     "thresholds": {
+      "0.5": {
+       "n": 127,
+       "refIn": 9
+      },
+      "0.7": {
+       "n": 61,
+       "refIn": 8
+      },
+      "0.8": {
+       "n": 28,
+       "refIn": 8
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.11000000000000001,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-s2xfzn",
+       0.89,
+       true
+      ],
+      [
+       "spya-cdhqgt",
+       0.87,
+       false
+      ],
+      [
+       "spya-z6qbza",
+       0.87,
+       false
+      ],
+      [
+       "spya-gvvmwj",
+       0.86,
+       true
+      ],
+      [
+       "spya-fuynra",
+       0.86,
+       false
+      ],
+      [
+       "spya-dyt8c2",
+       0.86,
+       false
+      ],
+      [
+       "spya-rt5eh3",
+       0.86,
+       false
+      ],
+      [
+       "spya-yj72uc",
+       0.85,
+       true
+      ],
+      [
+       "spya-k59a2x",
+       0.85,
+       true
+      ],
+      [
+       "spya-d977mu",
+       0.85,
+       true
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      903
+     ],
+     "cost": 0.005294394,
+     "inputTokens": 126057,
+     "chunks": 4,
+     "errors": 0,
+     "recallK": 0.4,
+     "recall10": 0.4,
+     "top5NonRef": 1,
+     "auc": 0.9770690014592454,
+     "refScoreMin": 1.96,
+     "refScoreMedian": 2.71,
+     "nonRefMedian": 0.76,
+     "thresholds": {
+      "2": {
+       "n": 73,
+       "refIn": 8
+      },
+      "1.5": {
+       "n": 136,
+       "refIn": 9
+      },
+      "2.5": {
+       "n": 33,
+       "refIn": 8
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-s2xfzn",
+       2.9,
+       true
+      ],
+      [
+       "spya-gvvmwj",
+       2.87,
+       true
+      ],
+      [
+       "spya-yj72uc",
+       2.83,
+       true
+      ],
+      [
+       "spya-jrde92",
+       2.83,
+       false
+      ],
+      [
+       "spya-k59a2x",
+       2.82,
+       true
+      ],
+      [
+       "spya-z6qbza",
+       2.82,
+       false
+      ],
+      [
+       "spya-esdq3k",
+       2.78,
+       false
+      ],
+      [
+       "spya-xryrz0",
+       2.77,
+       false
+      ],
+      [
+       "spya-hn3bux",
+       2.75,
+       false
+      ],
+      [
+       "spya-efs6mn",
+       2.74,
+       false
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      537
+     ],
+     "cost": 0.0027356280000000004,
+     "inputTokens": 65134,
+     "chunks": 3,
+     "errors": 0,
+     "recallK": 0.3,
+     "recall10": 0.3,
+     "top5NonRef": 3,
+     "auc": 0.7523452157598499,
+     "refScoreMin": 0,
+     "refScoreMedian": 0.02,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 38,
+       "refIn": 5
+      },
+      "0.05": {
+       "n": 16,
+       "refIn": 3
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-acfh3t",
+       0.35,
+       true
+      ],
+      [
+       "spya-pp6n87",
+       0.3,
+       false
+      ],
+      [
+       "spya-yj72uc",
+       0.29,
+       true
+      ],
+      [
+       "spya-vt6pvu",
+       0.24,
+       false
+      ],
+      [
+       "spya-rt5eh3",
+       0.2,
+       false
+      ],
+      [
+       "spya-a3xcsc",
+       0.17,
+       false
+      ],
+      [
+       "spya-z6qbza",
+       0.17,
+       false
+      ],
+      [
+       "spya-ur36f2",
+       0.15,
+       false
+      ],
+      [
+       "spya-tnmusy",
+       0.12,
+       false
+      ],
+      [
+       "spya-s2xfzn",
+       0.1,
+       true
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      7659
+     ],
+     "cost": 0.013034363999999994,
+     "inputTokens": 310342,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.2,
+     "recall10": 0.2,
+     "top5NonRef": 3,
+     "auc": 0.9179695643110277,
+     "refScoreMin": 0.26,
+     "refScoreMedian": 0.73,
+     "nonRefMedian": 0.18,
+     "thresholds": {
+      "0.5": {
+       "n": 81,
+       "refIn": 8
+      },
+      "0.7": {
+       "n": 35,
+       "refIn": 6
+      },
+      "0.8": {
+       "n": 13,
+       "refIn": 2
+      },
+      "0.9": {
+       "n": 2,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-gjx6ut",
+       0.9,
+       false
+      ],
+      [
+       "spya-dyt8c2",
+       0.9,
+       false
+      ],
+      [
+       "spya-yj72uc",
+       0.88,
+       true
+      ],
+      [
+       "spya-s2xfzn",
+       0.87,
+       true
+      ],
+      [
+       "spya-xryrz0",
+       0.86,
+       false
+      ],
+      [
+       "spya-nbztjn",
+       0.85,
+       false
+      ],
+      [
+       "spya-cdhqgt",
+       0.85,
+       false
+      ],
+      [
+       "spya-epfeeh",
+       0.84,
+       false
+      ],
+      [
+       "spya-n0cxja",
+       0.83,
+       false
+      ],
+      [
+       "spya-jrde92",
+       0.83,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      13259
+     ],
+     "cost": 0.006344240000000004,
+     "inputTokens": 158606,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.2,
+     "recall10": 0.2,
+     "top5NonRef": 4,
+     "auc": 0.8435480508651241,
+     "refScoreMin": 0.11920290950590741,
+     "refScoreMedian": 0.40733341443526055,
+     "nonRefMedian": 0.11279540031810142,
+     "thresholds": {
+      "0.5": {
+       "n": 49,
+       "refIn": 4
+      },
+      "0.7": {
+       "n": 18,
+       "refIn": 2
+      },
+      "0.8": {
+       "n": 2,
+       "refIn": 1
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-nbztjn",
+       0.852,
+       false
+      ],
+      [
+       "spya-yj72uc",
+       0.818,
+       true
+      ],
+      [
+       "spya-p6eutd",
+       0.798,
+       false
+      ],
+      [
+       "spya-dcd9k5",
+       0.798,
+       false
+      ],
+      [
+       "spya-vqgtc4",
+       0.777,
+       false
+      ],
+      [
+       "spya-jrde92",
+       0.777,
+       false
+      ],
+      [
+       "spya-s2xfzn",
+       0.777,
+       true
+      ],
+      [
+       "spya-xty2jr",
+       0.777,
+       false
+      ],
+      [
+       "spya-dyt8c2",
+       0.755,
+       false
+      ],
+      [
+       "spya-cdhqgt",
+       0.755,
+       false
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "slug": "replication-crisis-spya-hrjamq",
+   "q": "Why do so many studies fail to replicate?",
+   "shape": "question",
+   "refMs": 12775,
+   "refHits": 10,
+   "refUsage": {
+    "promptTokens": 62391,
+    "completionTokens": 1383,
+    "cacheReadTokens": 62336,
+    "cacheWriteTokens": 0
+   },
+   "arms": {
+    "noulOne": {
+     "ms": [
+      927,
+      884,
+      543
+     ],
+     "cost": 0.003815406,
+     "inputTokens": 90843,
+     "chunks": 4,
+     "errors": 0,
+     "recallK": 0.2,
+     "recall10": 0.2,
+     "top5NonRef": 3,
+     "auc": 0.8910714285714286,
+     "refScoreMin": 0.41,
+     "refScoreMedian": 0.85,
+     "nonRefMedian": 0.47,
+     "thresholds": {
+      "0.5": {
+       "n": 255,
+       "refIn": 9
+      },
+      "0.7": {
+       "n": 109,
+       "refIn": 8
+      },
+      "0.8": {
+       "n": 47,
+       "refIn": 7
+      },
+      "0.9": {
+       "n": 4,
+       "refIn": 2
+      }
+     },
+     "stability": {
+      "maxAbsDiff": 0.12,
+      "top5Same": false
+     },
+     "top10": [
+      [
+       "spya-ddw4ya",
+       0.91,
+       true
+      ],
+      [
+       "spya-hdubm3",
+       0.9,
+       true
+      ],
+      [
+       "spya-x02d6v",
+       0.9,
+       false
+      ],
+      [
+       "spya-audpsj",
+       0.9,
+       false
+      ],
+      [
+       "spya-zvfgme",
+       0.89,
+       false
+      ],
+      [
+       "spya-efs6mn",
+       0.89,
+       false
+      ],
+      [
+       "spya-dzsa7e",
+       0.89,
+       false
+      ],
+      [
+       "spya-jxfrbv",
+       0.89,
+       false
+      ],
+      [
+       "spya-t3us9w",
+       0.88,
+       false
+      ],
+      [
+       "spya-cw2g6v",
+       0.88,
+       false
+      ]
+     ]
+    },
+    "scoreOne": {
+     "ms": [
+      1095
+     ],
+     "cost": 0.005295066,
+     "inputTokens": 126073,
+     "chunks": 4,
+     "errors": 0,
+     "recallK": 0.4,
+     "recall10": 0.4,
+     "top5NonRef": 4,
+     "auc": 0.9002819548872181,
+     "refScoreMin": 1.5,
+     "refScoreMedian": 2.67,
+     "nonRefMedian": 1.48,
+     "thresholds": {
+      "2": {
+       "n": 136,
+       "refIn": 8
+      },
+      "1.5": {
+       "n": 273,
+       "refIn": 10
+      },
+      "2.5": {
+       "n": 27,
+       "refIn": 7
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-efs6mn",
+       2.88,
+       false
+      ],
+      [
+       "spya-ddw4ya",
+       2.87,
+       true
+      ],
+      [
+       "spya-dzsa7e",
+       2.84,
+       false
+      ],
+      [
+       "spya-audpsj",
+       2.8,
+       false
+      ],
+      [
+       "spya-jxfrbv",
+       2.8,
+       false
+      ],
+      [
+       "spya-x02d6v",
+       2.78,
+       false
+      ],
+      [
+       "spya-hdubm3",
+       2.76,
+       true
+      ],
+      [
+       "spya-f76az5",
+       2.75,
+       true
+      ],
+      [
+       "spya-qn347b",
+       2.74,
+       true
+      ],
+      [
+       "spya-t3us9w",
+       2.71,
+       false
+      ]
+     ]
+    },
+    "choice": {
+     "ms": [
+      498
+     ],
+     "cost": 0.002736132,
+     "inputTokens": 65146,
+     "chunks": 3,
+     "errors": 0,
+     "recallK": 0.2,
+     "recall10": 0.2,
+     "top5NonRef": 4,
+     "auc": 0.6800751879699248,
+     "refScoreMin": 0,
+     "refScoreMedian": 0,
+     "nonRefMedian": 0,
+     "thresholds": {
+      "0.01": {
+       "n": 28,
+       "refIn": 4
+      },
+      "0.05": {
+       "n": 9,
+       "refIn": 2
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-sy87zk",
+       0.85,
+       true
+      ],
+      [
+       "spya-c9bf7m",
+       0.47,
+       false
+      ],
+      [
+       "spya-s9402t",
+       0.37,
+       false
+      ],
+      [
+       "spya-dxv6z9",
+       0.25,
+       false
+      ],
+      [
+       "spya-hvtnrz",
+       0.21,
+       false
+      ],
+      [
+       "spya-h2evjb",
+       0.17,
+       false
+      ],
+      [
+       "spya-x9eq0d",
+       0.15,
+       false
+      ],
+      [
+       "spya-q200bj",
+       0.08,
+       false
+      ],
+      [
+       "spya-hdubm3",
+       0.07,
+       true
+      ],
+      [
+       "spya-ngcuqj",
+       0.04,
+       false
+      ]
+     ]
+    },
+    "perBlock": {
+     "ms": [
+      12360
+     ],
+     "cost": 0.013125420000000002,
+     "inputTokens": 312510,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.4,
+     "recall10": 0.4,
+     "top5NonRef": 4,
+     "auc": 0.9079887218045113,
+     "refScoreMin": 0.36,
+     "refScoreMedian": 0.86,
+     "nonRefMedian": 0.31,
+     "thresholds": {
+      "0.5": {
+       "n": 159,
+       "refIn": 9
+      },
+      "0.7": {
+       "n": 70,
+       "refIn": 7
+      },
+      "0.8": {
+       "n": 44,
+       "refIn": 7
+      },
+      "0.9": {
+       "n": 10,
+       "refIn": 4
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-f76az5",
+       0.92,
+       true
+      ],
+      [
+       "spya-zvfgme",
+       0.92,
+       false
+      ],
+      [
+       "spya-efs6mn",
+       0.92,
+       false
+      ],
+      [
+       "spya-dzsa7e",
+       0.92,
+       false
+      ],
+      [
+       "spya-k74qem",
+       0.91,
+       false
+      ],
+      [
+       "spya-hdubm3",
+       0.91,
+       true
+      ],
+      [
+       "spya-gjx6ut",
+       0.9,
+       false
+      ],
+      [
+       "spya-ddw4ya",
+       0.9,
+       true
+      ],
+      [
+       "spya-qn347b",
+       0.9,
+       true
+      ],
+      [
+       "spya-audpsj",
+       0.9,
+       false
+      ]
+     ]
+    },
+    "perBlockLiquid": {
+     "ms": [
+      12139
+     ],
+     "cost": 0.006409279999999998,
+     "inputTokens": 160232,
+     "chunks": null,
+     "errors": 0,
+     "recallK": 0.4,
+     "recall10": 0.4,
+     "top5NonRef": 3,
+     "auc": 0.9477443609022557,
+     "refScoreMin": 0.22270014398423357,
+     "refScoreMedian": 0.7310585551920353,
+     "nonRefMedian": 0.06754669020109236,
+     "thresholds": {
+      "0.5": {
+       "n": 58,
+       "refIn": 7
+      },
+      "0.7": {
+       "n": 23,
+       "refIn": 7
+      },
+      "0.8": {
+       "n": 6,
+       "refIn": 2
+      },
+      "0.9": {
+       "n": 0,
+       "refIn": 0
+      }
+     },
+     "stability": null,
+     "top10": [
+      [
+       "spya-dzsa7e",
+       0.899,
+       false
+      ],
+      [
+       "spya-f76az5",
+       0.874,
+       true
+      ],
+      [
+       "spya-c9bf7m",
+       0.852,
+       false
+      ],
+      [
+       "spya-y782zn",
+       0.818,
+       true
+      ],
+      [
+       "spya-j8h7w7",
+       0.818,
+       false
+      ],
+      [
+       "spya-efs6mn",
+       0.818,
+       false
+      ],
+      [
+       "spya-cw2g6v",
+       0.798,
+       false
+      ],
+      [
+       "spya-t3us9w",
+       0.798,
+       false
+      ],
+      [
+       "spya-hdubm3",
+       0.788,
+       true
+      ],
+      [
+       "spya-qn347b",
+       0.777,
+       true
+      ]
+     ]
+    }
+   }
+  }
+ ],
+ "latency": {
+  "noulOne": {
+   "typical": [
+    385,
+    360,
+    433,
+    422,
+    374,
+    380,
+    446,
+    389,
+    555,
+    413,
+    418,
+    552,
+    490,
+    438,
+    416,
+    519,
+    469,
+    425,
+    432,
+    423,
+    578,
+    404,
+    428,
+    503,
+    392,
+    383,
+    398,
+    436,
+    356,
+    395,
+    392,
+    356,
+    371,
+    412,
+    418,
+    412
+   ],
+   "long": [
+    765,
+    821,
+    769,
+    650,
+    542,
+    530,
+    639,
+    507,
+    586,
+    927,
+    884,
+    543
+   ]
+  },
+  "noulOnePlain": {
+   "typical": [
+    442,
+    314,
+    362,
+    328,
+    403,
+    468,
+    940,
+    404,
+    336,
+    322,
+    368,
+    340
+   ],
+   "long": []
+  },
+  "scoreOne": {
+   "typical": [
+    545,
+    398,
+    446,
+    733,
+    958,
+    494,
+    696,
+    920,
+    629,
+    563,
+    577,
+    567
+   ],
+   "long": [
+    956,
+    907,
+    903,
+    1095
+   ]
+  },
+  "choice": {
+   "typical": [
+    325,
+    460,
+    320,
+    321,
+    413,
+    387,
+    430,
+    430,
+    343,
+    297,
+    307,
+    309
+   ],
+   "long": [
+    540,
+    460,
+    537,
+    498
+   ]
+  },
+  "perBlock": {
+   "typical": [
+    1702,
+    1459,
+    1683,
+    1460,
+    1944,
+    2293,
+    2113,
+    1974,
+    1578,
+    1879,
+    1499,
+    1506
+   ],
+   "long": [
+    8314,
+    7831,
+    7659,
+    12360
+   ]
+  },
+  "perBlockLiquid": {
+   "typical": [
+    2654,
+    2774,
+    2683,
+    2386,
+    2670,
+    3079,
+    2728,
+    2341,
+    3597,
+    1855,
+    2047,
+    2018
+   ],
+   "long": [
+    10315,
+    9945,
+    13259,
+    12139
+   ]
+  }
+ },
+ "cost": {
+  "noulOne": {
+   "typical": [
+    0.000558138,
+    0.00055818,
+    0.00055818,
+    0.000558096,
+    0.000886536,
+    0.000886704,
+    0.000886662,
+    0.000886662,
+    0.000575316,
+    0.00057519,
+    0.000575274,
+    0.000575484
+   ],
+   "long": [
+    0.003815238,
+    0.0038147339999999997,
+    0.0038147339999999997,
+    0.003815406
+   ]
+  },
+  "noulOnePlain": {
+   "typical": [
+    0.000392322,
+    0.000392364,
+    0.000392364,
+    0.00039228,
+    0.000643734,
+    0.000643902,
+    0.00064386,
+    0.00064386,
+    0.00038976,
+    0.000389634,
+    0.000389718,
+    0.000389928
+   ],
+   "long": []
+  },
+  "scoreOne": {
+   "typical": [
+    0.000787458,
+    0.0007875,
+    0.0007875,
+    0.000787416,
+    0.0012340019999999999,
+    0.001234338,
+    0.001234254,
+    0.001234254,
+    0.000831936,
+    0.00083181,
+    0.000831894,
+    0.000832104
+   ],
+   "long": [
+    0.005294898,
+    0.005294394,
+    0.005294394,
+    0.005295066
+   ]
+  },
+  "choice": {
+   "typical": [
+    0.000394464,
+    0.000394506,
+    0.000394506,
+    0.000394422,
+    0.000645498,
+    0.000645666,
+    0.000645624,
+    0.000645624,
+    0.000391272,
+    0.000391146,
+    0.00039123,
+    0.00039144
+   ],
+   "long": [
+    0.002736006,
+    0.0027356280000000004,
+    0.0027356280000000004,
+    0.002736132
+   ]
+  },
+  "perBlock": {
+   "typical": [
+    0.001816836,
+    0.0018203640000000003,
+    0.0018203640000000003,
+    0.001813308,
+    0.0028504560000000016,
+    0.0028711200000000004,
+    0.0028659540000000013,
+    0.0028659540000000013,
+    0.002045778,
+    0.002033934000000001,
+    0.00204183,
+    0.002061569999999999
+   ],
+   "long": [
+    0.013102655999999997,
+    0.013034363999999994,
+    0.013034363999999994,
+    0.013125420000000002
+   ]
+  },
+  "perBlockLiquid": {
+   "typical": [
+    0.00089104,
+    0.0008944000000000001,
+    0.0008944000000000001,
+    0.00088768,
+    0.0014801200000000004,
+    0.0015047199999999995,
+    0.0014948799999999999,
+    0.0014948799999999999,
+    0.0010159199999999998,
+    0.00100464,
+    0.0010084,
+    0.0010272
+   ],
+   "long": [
+    0.006387599999999999,
+    0.006322559999999996,
+    0.006344240000000004,
+    0.006409279999999998
+   ]
+  }
+ }
+}

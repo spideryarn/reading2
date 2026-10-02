@@ -1,0 +1,93 @@
+{
+ "billing_n1": {
+  "status": 200,
+  "ms": 634,
+  "inputTokens": 4339,
+  "cost": 0.000182238,
+  "usage": {
+   "input_tokens": 4339,
+   "output_tokens": 26,
+   "cost": 0.000182238
+  }
+ },
+ "billing_n10": {
+  "status": 200,
+  "ms": 305,
+  "inputTokens": 4573,
+  "cost": 0.000192066,
+  "usage": {
+   "input_tokens": 4573,
+   "output_tokens": 224,
+   "cost": 0.000192066
+  }
+ },
+ "billing_n40": {
+  "status": 200,
+  "ms": 302,
+  "inputTokens": 5343,
+  "cost": 0.000224406,
+  "usage": {
+   "input_tokens": 5343,
+   "output_tokens": 874,
+   "cost": 0.000224406
+  }
+ },
+ "cap_n50": {
+  "status": 200,
+  "ms": 271,
+  "inputTokens": 914,
+  "cost": 0.000038388,
+  "answers": 50
+ },
+ "cap_n150": {
+  "status": 200,
+  "ms": 328,
+  "inputTokens": 2264,
+  "cost": 0.000095088,
+  "answers": 150
+ },
+ "cap_n256": {
+  "status": 200,
+  "ms": 311,
+  "inputTokens": 3748,
+  "cost": 0.000157416,
+  "answers": 256
+ },
+ "cap_n300": {
+  "status": 200,
+  "ms": 420,
+  "inputTokens": 4364,
+  "cost": 0.000183288,
+  "answers": 300
+ },
+ "cap_n600": {
+  "status": 200,
+  "ms": 616,
+  "inputTokens": 8564,
+  "cost": 0.000359688,
+  "answers": 600
+ },
+ "choice_n255": {
+  "status": 200,
+  "ms": 309,
+  "inputTokens": 4923,
+  "cost": 0.000206766,
+  "answer": "o254"
+ },
+ "choice_n256": {
+  "status": 400,
+  "ms": 211,
+  "inputTokens": null,
+  "cost": null,
+  "error": "{\"error\":{\"message\":\"HTTP 400: {\\\"detail\\\":\\\"Too many choices. Must have at most 255 choices.\\\"}\",\"code\":400}}"
+ },
+ "overflow": {
+  "status": 400,
+  "ms": 431,
+  "inputTokens": null,
+  "error": "{\"error\":{\"message\":\"HTTP 400: {\\\"detail\\\":{\\\"error_type\\\":\\\"max_tokens_exceeded\\\"}}\",\"code\":400}}"
+ },
+ "bad": {
+  "status": 200
+ }
+}

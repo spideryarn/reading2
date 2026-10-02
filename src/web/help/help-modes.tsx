@@ -226,14 +226,22 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   search: {
-    keywords: "find look for passage words meaning phrase highlight mark colour where does it say semantic theme",
+    keywords: "find look for passage words meaning quick fast phrase highlight mark colour where does it say semantic theme",
     whenToUse: (
-      <p>
-        Use <strong>words</strong> when you remember a phrase. Use <strong>meaning</strong> to ask a
-        question of the whole piece — “where does he concede a weakness?”, “anywhere she gives
-        numbers” — or to follow a theme through a long article. Search opens on meaning, so switch to
-        words for a quick exact look-up. Your browser’s own Find works as usual.
-      </p>
+      <>
+        <p>
+          Use <strong>words</strong> when you remember a phrase. Use <strong>meaning</strong> to ask a
+          question of the whole piece — “where does he concede a weakness?”, “anywhere she gives
+          numbers” — or to follow a theme through a long article. Search opens on meaning, so switch
+          to words for an exact look-up. Your browser’s own Find works as usual.
+        </p>
+        <p>
+          <strong>quick</strong> asks the same kind of question and answers in about a second: a
+          fast model scores every paragraph, and the ones that match are marked whole, with no
+          reasons. Use it for a first look; <strong>flesh out</strong> on a quick search runs the
+          full meaning search on the same words.
+        </p>
+      </>
     ),
     reading: (
       <>

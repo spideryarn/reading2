@@ -1,0 +1,7 @@
+# Narrow check (read-only): 261002c, the `share` row rename after the browser check
+
+Candidate: commit `47e77cc3b` only — `git show 47e77cc3b -- src/web/article-commands.ts tests/`. Context: plan docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md § Progress (last bullet), and the sibling plan docs/plans/261002c-metadata-search-aliases-and-keeping-its-search-current.md item 3 (why `public` must stay the shared shelf's).
+
+The browser showed `share` ranked *Shared articles* (/read/public) first on an article page. The Access & sharing section row was renamed *Share this article* so `share` is a label-prefix tie that the article rows win on list order (src/web/command-match.ts rankCommands / TIERS; src/web/CommandBar.tsx besideTheModes order).
+
+Check only: (1) is the tie really won by order everywhere the bar is mounted (reading view AND the Metadata page), or can `Shared articles` still be first anywhere `share` is typed? (2) does any other common word now land on a worse first row because of the new label/aliases (`access`, `public`, `publish`, `private`, `shared`, `sharing`, `share this`)? (3) is the sibling's `public` decision intact? You may run `npx vitest run tests/command-bar.test.tsx tests/command-bar-metadata-rows.test.tsx tests/command-match-metadata-rows.test.ts`. Findings with IDs from F21, severity P0–P3 (P1 = user-visible wrong behaviour), file:line. Verdict in one line.

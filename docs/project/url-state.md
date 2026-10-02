@@ -65,7 +65,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `bar` | the bar the quotes' prioritised order hides under — `max(importance, striking)`, where the glossary's `gate` is a product. **Absent means nobody has touched it**, which the panel reads as `QUOTE_BAR_DEFAULT` ([`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx)) | **replace**, debounced | `?bar=0.55` |
 | `sort` | how the glossary list is ordered, absent for `prioritised` | push | `?sort=document` |
 | `gate` | the bar the glossary's prioritised order hides under — `difficulty × centrality` — **absent means nobody has touched it**, which the panel reads as `PRIORITY_GATE` ([`GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx)) | **replace**, debounced | `?gate=0.45` |
-| `match` | which matcher search mode is using: the letters you typed, or what they mean (default `meaning`) — [search.md](search.md) | push | `?match=words` |
+| `match` | which matcher search mode is using: the letters you typed (`words`), what they mean scored fast by Jev (`quick`, since 2026-10-02), or what they mean in full (`meaning`, the default) — [search.md](search.md) | push | `?match=words`, `?match=quick` |
 | `find` | the literal text being matched, in words mode | **replace**, debounced | `?find=wet+hardware` |
 | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
 | `runs` | which saved meaning-searches are switched on, as a comma list of ids (`none` for the empty set); a bad id drops only itself — [search.md](search.md). `?run=` alone is still read, for links from before 2026-08-26 ([`params.ts`](../../src/web/params.ts) § `runsParam`) | **replace** | `?runs=spya-p7w2dn,spya-k3m9qt` |
@@ -109,7 +109,13 @@ re-ingested. `dx` and `dhue` are safe for exactly the reason that one is not —
 they are stable words rather than ids, so no amount of re-ingesting can make
 them quietly wrong.
 
-Those are all `/read/<slug>`. The five below are `/`.
+Those are all `/read/<slug>`. One more is the Metadata page's own, `/read/<slug>/metadata`:
+
+| Param | Meaning | History | Example |
+|---|---|---|---|
+| `section` | which Metadata section to **open, scroll to and flash on arrival** — an instruction, not a place: the page carries it out and then takes it off the address (*replace*), and only once the section has actually been found, so a section still mounting is waited for rather than skipped. A closed list, `METADATA_SECTIONS` in [`params.ts`](../../src/web/params.ts) (`ai-processing` and `access-sharing` today); anything else does nothing. Written by the command bar's *Run again* rows, which land a run here rather than in the mode, and by its section rows (*High-powered AI*, *AI processing*, *Access & sharing*). In `last-view.ts`'s `NEVER_REMEMBERED` — [261002c](../plans/261002c-commands-do-more-and-an-interface-model-vision.md) | **replace** | `?section=ai-processing` |
+
+The five below are `/`.
 
 ### The library's own five
 
@@ -335,8 +341,9 @@ there for exactly the same reason, and it is the same reason a fourth time: a se
 passages that match, so a URL without it shows you a different page from the one you were sent.
 
 **Search mode has four parameters and every other mode has one or two**, which is worth explaining
-rather than treating as sprawl: it holds two matchers rather than one feature. `match` says which
-matcher, and then exactly one of `find` and `run` is the thing being matched. Its `?order=` is
+rather than treating as sprawl: it holds three matchers rather than one feature. `match` says which
+matcher, and then exactly one of `find` and `run` is the thing being matched (`find` for words,
+`run` for quick and meaning, which are both saved). Its `?order=` is
 deliberately not the glossary's `?sort=` — two modes' orderings have nothing in common but the word,
 and `sort=difficulty` arriving in search mode would be a value with no meaning that something would
 eventually have to guess at.

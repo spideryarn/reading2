@@ -77,7 +77,38 @@ interface CommandWords {
    * in CommandBar.tsx is where the two arms meet.
    */
   readonly generates: boolean;
+  /**
+   * **Offered only once something is typed** — absent from the list the bar
+   * opens on, and ranked like any other row the moment there is a query.
+   *
+   * Since 2026-10-02, for the fourteen *Run again* rows (rerun-commands.ts):
+   * listed always, they would more than double what a reader sees on opening,
+   * and every one of them spends. A reader who wants one names it.
+   *
+   * **Optional, and the difference from `generates` above is the direction of
+   * the mistake.** Forgetting `generates` was silent — a spending row with no
+   * marker, and no test that could see it. Forgetting this is loud: the row
+   * turns up in the empty list, in front of everybody who opens the bar. So
+   * the default can be the ordinary case without the hole `generates` closed.
+   */
+  readonly typedOnly?: true;
 }
+
+/**
+ * **What an action's Enter came to** — close the bar, or keep it open with a
+ * sentence for the reader.
+ *
+ * Since 2026-10-02. `run` returned `void` until then and the bar closed
+ * whatever happened, which was right while the only actions were opening a
+ * drawer and a dialog — neither can fail. A *Run again* row posts a job, and a
+ * refused post closed under the reader would be a press that silently did
+ * nothing (GPT Sol's F2 on plan 261002c). So the outcome is a value, and
+ * `stay` carries the words to show rather than a flag beside them, so nothing
+ * can say *stay* and forget to say why.
+ */
+export type ActionOutcome =
+  | { readonly kind: "close" }
+  | { readonly kind: "stay"; readonly message: string };
 
 /**
  * **A row the bar can offer**, and there are four kinds — the fourth,
@@ -138,8 +169,16 @@ export type Command =
        * says why that matters and why the kind is in the string.
        */
       readonly id: string;
-      /** What pressing Enter does. Takes no argument; see the type's docblock. */
-      readonly run: () => void;
+      /**
+       * What pressing Enter does. Takes no argument; see the type's docblock.
+       *
+       * **Synchronous or not, and the bar treats the two differently on
+       * purpose.** A plain `ActionOutcome` is acted on at once, so opening the
+       * drawer and shutting the bar stay one step; a promise puts the bar into
+       * its pending state, refuses a second press until it settles, and closes
+       * only on `close` (CommandBar.tsx § `activate`).
+       */
+      readonly run: () => ActionOutcome | Promise<ActionOutcome>;
     });
 
 /**
@@ -379,7 +418,8 @@ function tierFor(query: string, command: Command): number {
  */
 export function rankCommands(query: string, commands: readonly Command[]): readonly Command[] {
   const wanted = canonical(query);
-  if (wanted === "") return [...commands];
+  /* Everything but the rows that wait to be asked for — `typedOnly`. */
+  if (wanted === "") return commands.filter((command) => !isTypedOnly(command));
 
   /* The index is carried rather than relied on. `Array.prototype.sort` has been
      stable since ES2019 and this would work without it — but "ties fall back to
@@ -392,4 +432,58 @@ export function rankCommands(query: string, commands: readonly Command[]): reado
     .filter((row) => row.tier < TIERS.length)
     .sort((a, b) => a.tier - b.tier || a.index - b.index)
     .map((row) => row.command);
+}
+
+/** Whether a row waits for a query — `CommandWords.typedOnly`. Modes never do. */
+function isTypedOnly(command: Command): boolean {
+  return command.kind === "page" || command.kind === "action" ? command.typedOnly === true : false;
+}
+
+/**
+ * **The verbs that make a query a search of the article**, longest first so
+ * `search for X` is a search for X and not for `for X`. Greg's own example was
+ * *"do they talk about X?"* (SPIDERYARN-READING2-8D); the others are what the
+ * same request is usually typed as. Lower-case, compared against the query
+ * lower-cased.
+ */
+const FIND_VERBS = ["do they talk about", "does it mention", "search for", "search", "find"] as const;
+
+/**
+ * **The words a `find …` query asks for, or `null` when it is not one.**
+ *
+ * The bar's one row whose text comes from the query, so it is parsed here, out
+ * of React, where every edge can be stated (tests/command-match-rerun-and-find.test.ts).
+ * It is a parse and not a ranking: a query is a find **only** when it starts
+ * with one of the verbs and has words after it, so *No command matches.*
+ * stays the answer to a query that names nothing. That is Greg's call 3 on
+ * the bar (CommandBar.tsx § the four product calls) — an honest empty state
+ * over a guessed fallback search — and it still holds, because here the
+ * reader typed the verb.
+ *
+ * The verb is matched whatever its case and must be a whole word, so
+ * `findings` is not `find ings`. The words keep the reader's spelling, minus a
+ * trailing `?` and one pair of quotes round them (straight or curly), and with
+ * runs of space collapsed: what is left is matched in the article as one
+ * literal phrase (search-hits.ts § `findLiteral`), so a stray quote would be
+ * looked for too.
+ */
+export function parseFindQuery(query: string): string | null {
+  const text = query.trim().replace(/\s+/g, " ");
+  const lower = text.toLowerCase();
+  /* Half-way through typing the longer verb, `search for` is not a search for
+     *for*: a row flickering past with that in it is a row about nothing. */
+  if ((FIND_VERBS as readonly string[]).includes(lower)) return null;
+  const verb = FIND_VERBS.find((v) => lower.startsWith(`${v} `));
+  if (verb === undefined) return null;
+  const words = text
+    .slice(verb.length)
+    .trim()
+    .replace(/\?+$/, "")
+    .trim()
+    /* A function rather than the `"$1"` pattern, which
+       tests/no-ai-cost-for-readers.test.ts reads — rightly, from where it
+       stands — as a price in reader copy. */
+    .replace(/^["'“‘](.*)["'”’]$/, (_, inner: string) => inner)
+    .trim();
+  return words === "" ? null : words;
 }

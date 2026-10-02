@@ -1,0 +1,110 @@
+/**
+ * Floor re-measure (Sol F7), 2026-10-02 — SPENDS MONEY (Jev only, ~$0.05).
+ * The final production arm: plain noul wording, blocks = isSearchable(b) && kind !== "heading"
+ * && non-empty text; 3 repeats per query; reference hits reused from reference-*.json (no Sonnet).
+ * Writes evals/results/quick-search-spike-2026-10-02/floor-raw.json and floor-summary.json,
+ * and qs-floor-eyeball.txt in the scratchpad.
+ */
+import { readFileSync, writeFileSync } from "node:fs";
+import { decide, fixture, WT, type TB } from "./qs-lib.ts";
+
+const { isSearchable } = await import(`${WT}/src/block-policy.ts`);
+const OUT = `${WT}/evals/results/quick-search-spike-2026-10-02`;
+const JEV = "typesafe/jev-1.13";
+const FLOORS = [0.7, 0.75, 0.8, 0.85];
+const ARTICLES = [
+  { slug: "constitution" },
+  { slug: "noema-mythology-of-conscious-ai" },
+  { slug: "openai-huggingface" },
+  { slug: "replication-crisis-spya-hrjamq", owner: "397036d5-7104-4165-859e-7698bf6660b5" },
+];
+
+const est = (s: string) => Math.ceil(s.length / 3.2);
+function chunk(bs: TB[], budget = 26_000, perQ = 30): TB[][] {
+  const out: TB[][] = [];
+  let cur: TB[] = [];
+  let used = 200;
+  for (const b of bs) {
+    const t = est(b.text) + 12 + perQ;
+    if (cur.length && used + t > budget) {
+      out.push(cur);
+      cur = [];
+      used = 200;
+    }
+    cur.push(b);
+    used += t;
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
+async function scoreChunk(q: string, bs: TB[], calls: any[]): Promise<Record<string, number>> {
+  const r = await decide(
+    JEV,
+    { query: q, passages: Object.fromEntries(bs.map((b) => [b.id, b.text])) },
+    Object.fromEntries(bs.map((b) => [b.id, { type: "noul", instructions: `Does passage ${b.id} match what the reader is looking for (query)?` }])),
+  );
+  calls.push({ n: bs.length, status: r.status, ms: r.ms, inputTokens: r.inputTokens, cost: r.cost, error: r.error });
+  if (r.status === 400 && /max_tokens_exceeded/.test(r.error ?? "") && bs.length > 1) {
+    const h = Math.ceil(bs.length / 2);
+    const [a, b] = await Promise.all([scoreChunk(q, bs.slice(0, h), calls), scoreChunk(q, bs.slice(h), calls)]);
+    return { ...a, ...b };
+  }
+  if (r.status !== 200) throw new Error(`${r.status} ${r.error}`);
+  return Object.fromEntries(Object.entries(r.body.answers).map(([k, v]: any) => [k, v.noul]));
+}
+
+const raw: any[] = [];
+const summary: any[] = [];
+const eye: string[] = [];
+let spend = 0;
+for (const a of ARTICLES) {
+  let all: any[];
+  if (a.owner) {
+    const { loadArticle } = await import(`${WT}/src/store/index.ts`);
+    const { runAsOwner } = await import(`${WT}/src/owner.ts`);
+    all = ((await runAsOwner(a.owner as any, () => loadArticle(a.slug))) as any).blocks;
+  } else all = fixture(a.slug).blocks;
+  const blocks: TB[] = all
+    .filter((b) => isSearchable(b) && b.kind !== "heading" && typeof b.text === "string" && b.text.trim())
+    .map((b) => ({ id: b.id, text: b.text.trim(), kind: b.kind }));
+  const T = Object.fromEntries(blocks.map((b) => [b.id, b.text]));
+  const ref = JSON.parse(readFileSync(`${OUT}/reference-${a.slug}.json`, "utf8"));
+  const chunks = chunk(blocks);
+  console.log(`== ${a.slug}: ${blocks.length} blocks of ${all.length}, ${chunks.length} chunk(s)`);
+  for (const q of Object.keys(ref)) {
+    const refIds: string[] = (ref[q].hits ?? []).map((h: any) => h.blockId);
+    const R = new Set(refIds.filter((id) => T[id] !== undefined));
+    const reps: any[] = [];
+    for (let i = 0; i < 3; i++) {
+      const calls: any[] = [];
+      const t0 = performance.now();
+      const parts = await Promise.all(chunks.map((c) => scoreChunk(q, c, calls)));
+      const ms = Math.round(performance.now() - t0);
+      const scores: Record<string, number> = Object.assign({}, ...parts);
+      const cost = calls.reduce((s, c) => s + (c.cost ?? 0), 0);
+      spend += cost;
+      reps.push({ ms, cost, inputTokens: calls.reduce((s, c) => s + (c.inputTokens ?? 0), 0), calls, scores });
+    }
+    raw.push({ slug: a.slug, q, blocks: blocks.length, reps });
+    const floors: any = {};
+    for (const f of FLOORS) {
+      const kept = reps.map((r) => Object.entries(r.scores as Record<string, number>).filter(([, v]) => v >= f).map(([id]) => id));
+      const n = kept.map((k) => k.length);
+      const rec = kept.map((k) => (R.size ? k.filter((id) => R.has(id)).length / R.size : NaN));
+      floors[f] = { kept: n, keptMean: n.reduce((s, x) => s + x, 0) / 3, recall: rec, recallMean: rec.reduce((s, x) => s + x, 0) / 3 };
+    }
+    summary.push({ slug: a.slug, q, refHits: refIds.length, refHitsScorable: R.size, ms: reps.map((r) => r.ms), cost: reps[0].cost, floors });
+    console.log(`${q.slice(0, 45)} ref ${R.size}/${refIds.length} | ` + FLOORS.map((f) => `${f}: ${floors[f].kept.join("/")} r${floors[f].recallMean.toFixed(2)}`).join(" | ") + ` | ${reps.map((r) => r.ms).join("/")} ms`);
+    // eyeball: blocks between 0.7 and 0.8 in rep 0, and top-10
+    const s0 = Object.entries(reps[0].scores as Record<string, number>).sort((x, y) => y[1] - x[1]);
+    eye.push(`\n=== ${a.slug} | "${q}" ref ${R.size}`);
+    for (const [id, v] of s0.filter(([, v]) => v >= 0.65).slice(0, 30)) eye.push(`  ${R.has(id) ? "R" : "."} ${v.toFixed(2)} ${id} ${T[id]!.slice(0, 150).replace(/\n/g, " ")}`);
+    for (const id of R) if ((reps[0].scores[id] ?? 0) < 0.65) eye.push(`  MISSED-R ${reps[0].scores[id]?.toFixed(2)} ${id} ${T[id]!.slice(0, 150).replace(/\n/g, " ")}`);
+  }
+}
+writeFileSync(`${OUT}/floor-raw.json`, JSON.stringify(raw, null, 1));
+writeFileSync(`${OUT}/floor-summary.json`, JSON.stringify(summary, null, 1));
+writeFileSync(new URL("./qs-floor-eyeball.txt", import.meta.url), eye.join("\n"));
+console.log(`Jev spend $${spend.toFixed(4)}`);
+process.exit(0);

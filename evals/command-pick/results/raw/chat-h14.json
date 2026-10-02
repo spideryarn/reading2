@@ -1,0 +1,74 @@
+{
+ "id": "gen-1790944980-y2OWw7uXM2zWpdHUTqHz",
+ "object": "chat.completion",
+ "created": 1790944980,
+ "model": "anthropic/claude-sonnet-5",
+ "provider": "Claude Platform on AWS",
+ "system_fingerprint": null,
+ "service_tier": "default",
+ "choices": [
+  {
+   "index": 0,
+   "logprobs": null,
+   "finish_reason": "stop",
+   "native_finish_reason": "end_turn",
+   "message": {
+    "role": "assistant",
+    "content": "{\"id\": \"none\", \"argument\": null, \"confidence\": 0.95}",
+    "refusal": null,
+    "reasoning": "Text-to-speech isn't something any available command supports, so this request doesn't map to an existing mode.\n\n",
+    "reasoning_details": [
+     {
+      "type": "reasoning.text",
+      "text": "Text-to-speech isn't something any available command supports, so this request doesn't map to an existing mode.\n\n",
+      "format": "anthropic-claude-v1",
+      "index": 0,
+      "signature": "ErUDCsQBCBIYAipArmrap9NuOMIMcgO9Q2s4QDW8zAe+nubQVX5vx3LM203vwLwRrnxhK9eHfy67i3kVGCuV58tiB3icsxMjVYCV7TIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQ0YzBmMDQ2Zi0yNWZkLTQ1ZmItYmZiMy1hMDhhOGUyNDljYTd6HnVwcm9mXzAxMUNlUXVCMkhpSmFYMjZUQXppQ1lwb5oBEQoPY2xhdWRlLXNvbm5ldC01qAHYzf7VBhIMrPvbYjgALWtZZUTjGgwhIRDCFxQTiYUvLeYiMH957D1FSagcRMDMgLOpQApnnM6tG4Hbo96R7RUirxVj6gokNdBDvS1BsHKGbn5+CyqdAZ7n4K46o0pC0Re4zY9ktGhi7jo+h+POM0BC1rVDhwWh4Tpf29boa+tYQQZTqHQ8zOecVqN61tS7GM1BeRtpJP3SINE4IxvvXeXk4G/oQGEPiIsnKp6fLj6q2k70eMKWYZFVc4dQP3bAtZjTGUvontZ4GxBq0zln65L2hC+RRR2yaOZMoqgo0iIY7xO90anh28Na/V4Qem08orWkFGoYAQ==.eyJlbmRwb2ludF9zbHVnIjoiYW50aHJvcGljL2NsYXVkZS1zb25uZXQtNS0yMDI2MDYzMHxjbGF1ZGUtb24tYXdzIn0"
+     }
+    ]
+   }
+  }
+ ],
+ "usage": {
+  "prompt_tokens": 2815,
+  "completion_tokens": 70,
+  "total_tokens": 2885,
+  "cost": 0.00633,
+  "is_byok": false,
+  "prompt_tokens_details": {
+   "cached_tokens": 0,
+   "cache_write_tokens": 0,
+   "audio_tokens": 0,
+   "video_tokens": 0
+  },
+  "cost_details": {
+   "upstream_inference_cost": 0.00633,
+   "upstream_inference_prompt_cost": 0.00563,
+   "upstream_inference_completions_cost": 0.0007
+  },
+  "completion_tokens_details": {
+   "reasoning_tokens": 44,
+   "image_tokens": 0,
+   "audio_tokens": 0
+  }
+ },
+ "openrouter_metadata": {
+  "requested": "anthropic/claude-sonnet-5",
+  "strategy": "direct",
+  "region": "PRG",
+  "summary": "available=1, selected=Claude Platform on AWS",
+  "attempt": 1,
+  "is_byok": false,
+  "endpoints": {
+   "total": 10,
+   "available": [
+    {
+     "provider": "Claude Platform on AWS",
+     "model": "anthropic/claude-sonnet-5-20260630",
+     "selected": true
+    }
+   ]
+  },
+  "generation_time": 3369
+ }
+}

@@ -3660,10 +3660,33 @@ export interface SearchHit {
  * to disk *before* the model is called, so a crash mid-search leaves a visible
  * unfinished run rather than a criterion that silently evaporated.
  */
+/**
+ * **Which matcher answered a saved search** — `"meaning"` (the model reads the
+ * article and quotes what matches, src/search.ts) or `"quick"` (Jev scores every
+ * block, src/quick-search.ts). Plan 261002e.
+ */
+export type SearchKind = "quick" | "meaning";
+
+/** The two, as a value, for a route to narrow a request body against. */
+export const SEARCH_KINDS = ["quick", "meaning"] as const satisfies readonly SearchKind[];
+
+export function isSearchKind(x: unknown): x is SearchKind {
+  return (SEARCH_KINDS as readonly unknown[]).includes(x);
+}
+
 export interface SearchRun {
   id: string;
   /** What the reader typed, in their own words. Never logged — it is prose. */
   criterion: string;
+  /**
+   * **Which matcher this run is** — stated on the row, never inferred from
+   * `model`, because a pending or failed run has no model yet and the panel
+   * still has to label it. Part of a run's identity: a retry keeps it, and a
+   * retry that names the other kind is a new run (`withRun`, src/searches.ts).
+   * Every row written before 2026-10-02 is `"meaning"`, which is what the
+   * column's default says.
+   */
+  kind: SearchKind;
   createdAt: string;
   status: "pending" | "done" | "error";
   hits: SearchHit[];
@@ -4732,6 +4755,55 @@ export type FaqFound = FaqResponse;
 export interface SimpleParagraph {
   text: string;
   ids: BlockId[];
+  /**
+   * **The same words, cut into sentences, each naming at most one of this
+   * paragraph's own `ids`** (docs/plans/261002e-summary-sentences-point-at-their-passage.md).
+   * Absent on every paragraph written before `simple-prompt/4`.
+   *
+   * Typed `unknown` on purpose: `text` is what the fidelity guard checked, so
+   * the only sentences a reader may see are ones that *are* that text. Read it
+   * through `usableSentences` and nowhere else — the compiler refuses anything
+   * that skips it.
+   */
+  sentences?: unknown;
+}
+
+/** One sentence of a paragraph, and the one passage it rests on, or `null` for none in particular. */
+export interface SimpleSentence {
+  text: string;
+  id: BlockId | null;
+}
+
+/**
+ * **A paragraph's sentences, if they can be shown — one answer for the owner's
+ * panel and the visitor's payload alike** (Sol F2 on plan 261002e).
+ *
+ * Usable means: a non-empty array; every entry an object with a non-empty
+ * string `text` and an `id` that is `null` or one of this paragraph's own
+ * `ids`; and the trimmed texts, joined with one space, equal to `text`
+ * exactly. The join is the point: the guard read `text`, so a sentence list
+ * that says anything else is not shown. Anything short of that is `null` for
+ * this paragraph alone — its text and chips draw as they always have, and the
+ * rest of the summary is untouched. Never a reason to refuse the artefact.
+ *
+ * Returns fresh objects with trimmed text, so a caller can hand them on
+ * without carrying anything else the stored entries had.
+ */
+export function usableSentences(paragraph: SimpleParagraph): SimpleSentence[] | null {
+  const raw = paragraph.sentences;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const ids = new Set<string>(paragraph.ids);
+  const out: SimpleSentence[] = [];
+  for (const entry of raw as unknown[]) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return null;
+    const { text, id } = entry as { text?: unknown; id?: unknown };
+    if (typeof text !== "string") return null;
+    const trimmed = text.trim();
+    if (trimmed === "") return null;
+    if (id !== null && (typeof id !== "string" || !ids.has(id))) return null;
+    out.push({ text: trimmed, id: id as BlockId | null });
+  }
+  return out.map((s) => s.text).join(" ") === paragraph.text ? out : null;
 }
 
 /**

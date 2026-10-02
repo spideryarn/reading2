@@ -1,5 +1,5 @@
 {
-  "id": "54a4194a-a778-4a25-b29f-6587cfd22340",
+  "id": "d9590c70-de5b-4bb3-8d3c-d50f882d0c25",
   "prevId": "a4d79b60-92a7-4c0c-b45a-e9a1d88d64ff",
   "version": "7",
   "dialect": "postgresql",
@@ -3387,102 +3387,6 @@
       },
       "isRLSEnabled": false
     },
-    "spideryarn.feedback_shipped_emails": {
-      "name": "feedback_shipped_emails",
-      "schema": "spideryarn",
-      "columns": {
-        "owner_id": {
-          "name": "owner_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "detail": {
-          "name": "detail",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "feedback_shipped_emails_feedback_fk": {
-          "name": "feedback_shipped_emails_feedback_fk",
-          "tableFrom": "feedback_shipped_emails",
-          "tableTo": "feedback",
-          "schemaTo": "spideryarn",
-          "columnsFrom": [
-            "owner_id",
-            "report_id"
-          ],
-          "columnsTo": [
-            "owner_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "feedback_shipped_emails_owner_id_report_id_pk": {
-          "name": "feedback_shipped_emails_owner_id_report_id_pk",
-          "columns": [
-            "owner_id",
-            "report_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "feedback_shipped_emails_status": {
-          "name": "feedback_shipped_emails_status",
-          "value": "\"spideryarn\".\"feedback_shipped_emails\".\"status\" in ('sending', 'sent', 'failed')"
-        },
-        "feedback_shipped_emails_attempts": {
-          "name": "feedback_shipped_emails_attempts",
-          "value": "\"spideryarn\".\"feedback_shipped_emails\".\"attempts\" >= 1"
-        },
-        "feedback_shipped_emails_detail_length": {
-          "name": "feedback_shipped_emails_detail_length",
-          "value": "\"spideryarn\".\"feedback_shipped_emails\".\"detail\" is null or char_length(\"spideryarn\".\"feedback_shipped_emails\".\"detail\") <= 200"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "spideryarn.glossary_hidden_entries": {
       "name": "glossary_hidden_entries",
       "schema": "spideryarn",
@@ -5734,6 +5638,13 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'meaning'"
         }
       },
       "indexes": {},
@@ -5768,6 +5679,10 @@
         "search_runs_status": {
           "name": "search_runs_status",
           "value": "\"spideryarn\".\"search_runs\".\"status\" in ('pending','done','error')"
+        },
+        "search_runs_kind": {
+          "name": "search_runs_kind",
+          "value": "\"spideryarn\".\"search_runs\".\"kind\" in ('quick','meaning')"
         },
         "search_runs_id_format": {
           "name": "search_runs_id_format",

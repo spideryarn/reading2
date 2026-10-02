@@ -25,6 +25,7 @@
 import { useEffect, useState } from "react";
 import { activeSectionIndex, type Section } from "./position.js";
 import { rowsForBlockIds } from "./rows.js";
+import { isFolded } from "./fold.js";
 
 /** Where the reader's eye is assumed to be, as a fraction of the viewport. */
 const FOCUS_LINE = 0.4;
@@ -70,7 +71,16 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
       const tops = rows.map((el) =>
         el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
       );
-      const focusRow = sections[activeSectionIndex(tops, focusLine)]?.row ?? 0;
+      /* A folded section is never the one in focus (fold.ts). The table's
+         ResizeObserver below already hears a fold, since it changes the
+         table's height. */
+      const focusRow =
+        sections[
+          activeSectionIndex(tops, focusLine, (i) => {
+            const s = sections[i];
+            return s !== undefined && isFolded(s.blockId);
+          })
+        ]?.row ?? 0;
       if (focusRow === last) return;
       last = focusRow;
       setLive({ focusRow });
