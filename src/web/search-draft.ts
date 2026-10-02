@@ -44,7 +44,8 @@ import type { TypingControls } from "./SearchPanel.js";
  * - `enter`: Enter in the bar's box — ask the draft now, and seal it.
  * - `quick`: the ⚡ — nothing to ask, only be on *quick*.
  */
-export type Handoff = "pause" | "enter" | "quick";
+export type HandoffKind = "pause" | "enter" | "quick";
+export type Handoff = { type: "pause" | "quick" } | { type: "enter"; text: string };
 
 /** The band's session, as the bar drives it: the panel's controls and a pause on demand. */
 export interface BandTyping extends TypingControls {
@@ -57,8 +58,10 @@ export interface SearchDraft {
   text(): string;
   set(text: string): void;
   handoff(): Handoff | null;
-  handOff(h: Handoff): void;
-  /** Take the pending handoff, leaving none. */
+  handOff(h: HandoffKind): void;
+  /** Forget pending actions on departure; the retained words stay inert. */
+  clearHandoffs(): void;
+  /** Take the next pending action. */
   take(): Handoff | null;
   /** The band's session, while it is on *quick*; `null` otherwise. */
   band(): BandTyping | null;
@@ -74,7 +77,7 @@ export interface SearchDraft {
 
 export function createSearchDraft(): SearchDraft {
   let text = "";
-  let handoff: Handoff | null = null;
+  const handoffs: Handoff[] = [];
   let band: BandTyping | null = null;
   let box: (() => void) | null = null;
   let barFocused = false;
@@ -89,24 +92,34 @@ export function createSearchDraft(): SearchDraft {
       text = next;
       emit();
     },
-    handoff: () => handoff,
+    handoff: () => handoffs[0] ?? null,
     handOff(h) {
-      handoff = h;
+      // Enter seals its exact words. Later edits and Enters cannot replace it.
+      // An unconsumed automatic pause can coalesce into the next action.
+      if (h === "quick" && handoffs.length > 0) return;
+      if (handoffs.at(-1)?.type !== "enter") handoffs.pop();
+      handoffs.push(h === "enter" ? { type: h, text } : { type: h });
+      emit();
+    },
+    clearHandoffs() {
+      if (handoffs.length === 0) return;
+      handoffs.length = 0;
       emit();
     },
     take() {
-      const h = handoff;
-      if (h !== null) {
-        handoff = null;
-        emit();
-      }
+      const h = handoffs.shift() ?? null;
+      if (h !== null) emit();
       return h;
     },
     band: () => band,
     registerBand(next) {
       band = next;
+      emit();
       return () => {
-        if (band === next) band = null;
+        if (band === next) {
+          band = null;
+          emit();
+        }
       };
     },
     focusBox() {
@@ -156,4 +169,9 @@ export function useDraftText(draft: SearchDraft): string {
 /** The pending handoff, as React state. */
 export function useHandoff(draft: SearchDraft): Handoff | null {
   return useSyncExternalStore(draft.subscribe, draft.handoff, draft.handoff);
+}
+
+/** The band taking ownership also ends the bar's local debounce. */
+export function useBandTyping(draft: SearchDraft): BandTyping | null {
+  return useSyncExternalStore(draft.subscribe, draft.band, draft.band);
 }

@@ -197,7 +197,7 @@ export function withRun(
      run labelled *quick* could end up holding Sonnet's quotes. The same words
      asked the other way are a different search, and get a new id like any
      other collision. */
-  const existing = wantedId
+  const existing = wantedId && !options.revises
     ? runs.find(
         (r) =>
           r.id === wantedId &&

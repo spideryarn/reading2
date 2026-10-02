@@ -314,7 +314,7 @@ export function SearchPanel({
      is typing. Read once, at mount, which is the only moment it matters. */
   const [quietMount] = useState(() => store.barFocused());
   /* The ⚡ in the bar focuses this box inside its own tap, when it is here. */
-  useEffect(() => store.registerBox(() => box.current?.focus()), [store]);
+  useEffect(() => store.registerBox(() => box.current?.focus({ preventScroll: true })), [store]);
 
   /** Put a saved question back in the box, ready to be edited into the next one. */
   function reuse(criterion: string) {
@@ -552,7 +552,7 @@ const Box = forwardRef<
      rest of their question somewhere they are not looking. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: on mount only, as above — `quietMount` is read once.
   useEffect(() => {
-    if (!quietMount) box.current?.focus();
+    if (!quietMount) box.current?.focus({ preventScroll: true });
   }, []);
 
   const setDraft = onDraft;

@@ -15,7 +15,7 @@
  * fit ladder's CSS (styles/dock-quick-search.css) and the browser check's.
  * What is visible is the class that says which one Search mode wants.
  */
-import { act, createElement, useState } from "react";
+import { act, createElement, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -128,13 +128,13 @@ function server(): Posted[] {
 let opened = 0;
 
 /** The reading view, as far as this feature can see it: the bar, and the band when Search is open. */
-function Host({ startOpen }: { startOpen: boolean }) {
+function Host({ startOpen, deferBand = false }: { startOpen: boolean; deferBand?: boolean }) {
   const [open, setOpen] = useState(startOpen);
   return createElement(
     "div",
     null,
     createElement("input", { className: "elsewhere", "aria-label": "some other box" }),
-    open
+    open && !deferBand
       ? createElement(SearchBand, {
           slug: SLUG,
           blocks: BLOCKS,
@@ -159,10 +159,10 @@ function Host({ startOpen }: { startOpen: boolean }) {
   );
 }
 
-function mount({ startOpen = false, url = "" } = {}): void {
+function mount({ startOpen = false, url = "", deferBand = false, strict = false } = {}): void {
   history.replaceState(null, "", `/read/${SLUG}${url}`);
   act(() => {
-    root.render(createElement(NuqsAdapter, null, createElement(Host, { startOpen })));
+    root.render(createElement(strict ? StrictMode : "div", null, createElement(NuqsAdapter, null, createElement(Host, { startOpen, deferBand }))));
   });
 }
 
@@ -231,6 +231,22 @@ describe("typing in the bar's box", () => {
     expect(control().classList.contains("dock-qs--bolt")).toBe(false);
   });
 
+  it("only accepts bar edits while its input has focus", async () => {
+    const posted = server();
+    mount();
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter?.call(barBox(), "unfocused words");
+      barBox().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await pause();
+    expect(opened).toBe(0);
+    expect(posted).toHaveLength(0);
+    type(barBox(), "focused words");
+    await pause();
+    expect(posted.map((p) => p.criterion)).toEqual(["focused words"]);
+  });
+
   it("does not open on a pause of fewer than three characters", async () => {
     server();
     mount();
@@ -291,6 +307,146 @@ describe("typing in the bar's box", () => {
     await pause();
     expect(match()).toBe("quick");
     expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["why replication", "quick"]]);
+  });
+});
+
+describe("handoffs before the band mounts", () => {
+  it("carries Enter through StrictMode effect replay and delayed loading", async () => {
+    const posted = server();
+    const originalAnswer = answer;
+    let releaseGet = () => {};
+    answer = (url, init) => (init.method ?? "GET") === "GET"
+      ? new Promise((resolve) => { releaseGet = () => resolve(json({ runs: [] })); })
+      : originalAnswer(url, init);
+    mount({ url: "?match=quick", strict: true });
+    type(barBox(), "why");
+    key(barBox(), { key: "Enter" });
+    await flush();
+    expect(posted).toHaveLength(0);
+    releaseGet();
+    await flush();
+    expect(posted.map((p) => p.criterion)).toEqual(["why"]);
+    expect(document.activeElement).toBe(barBox());
+  });
+
+  it("seals each Enter with its words and preserves subsequent edits", async () => {
+    const posted = server();
+    mount({ deferBand: true });
+    type(barBox(), "why");
+    key(barBox(), { key: "Enter" });
+    type(barBox(), "how");
+    key(barBox(), { key: "Enter" });
+    type(barBox(), "why replication fails");
+    mount();
+    await flush();
+    expect(posted.map((p) => p.criterion)).toEqual(["why", "how"]);
+    await pause();
+    expect(posted.map((p) => p.criterion)).toEqual(["why", "how", "why replication fails"]);
+    expect(new Set(posted.map((p) => p.id)).size).toBe(3);
+  });
+
+  it("cancels the old bar timer when the band takes over", async () => {
+    const posted = server();
+    mount({ deferBand: true });
+    type(barBox(), "why");
+    key(barBox(), { key: "Enter" });
+    type(barBox(), "how replication");
+    mount();
+    await flush();
+    await act(async () => { await new Promise((r) => setTimeout(r, 300)); });
+    type(barBox(), "how replication fails");
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    await flush();
+    expect(posted.map((p) => p.criterion)).toEqual(["why"]);
+    expect(opened).toBe(1);
+    await pause();
+    expect(posted.map((p) => p.criterion)).toEqual(["why", "how replication fails"]);
+  });
+
+  it("drops an unconsumed handoff when leaving Search mode before its matcher switches", async () => {
+    const posted = server();
+    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    await flush();
+    type(barBox(), "why replication");
+    key(barBox(), { key: "Enter" });
+    mount({ deferBand: true });
+    await flush();
+    mount({ startOpen: true, url: "?mode=search&match=quick" });
+    await flush();
+    await pause();
+    expect(posted).toHaveLength(0);
+    expect(barBox().value).toBe("why replication");
+  });
+
+  it("drops an unconsumed handoff on article departure, retaining only the draft", async () => {
+    const posted = server();
+    mount({ deferBand: true });
+    type(barBox(), "why replication");
+    key(barBox(), { key: "Enter" });
+    act(() => root.render(null));
+    mount({ startOpen: true, url: "?mode=search&match=quick" });
+    await flush();
+    await pause();
+    expect(panelBox()?.value).toBe("why replication");
+    expect(posted).toHaveLength(0);
+    type(panelBox()!, "why replication fails");
+    await pause();
+    expect(posted.map((p) => p.criterion)).toEqual(["why replication fails"]);
+  });
+});
+
+describe("responsive focus", () => {
+  it("moves focus to the panel when the final CSS shape hides the focused bar field", async () => {
+    server();
+    mount();
+    act(() => barBox().focus());
+    const field = must<HTMLElement>(".dock-qs-field");
+    act(() => {
+      field.style.display = "none";
+      window.dispatchEvent(new Event("resize"));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 40)); });
+    await flush();
+    expect(opened).toBe(1);
+    expect(document.activeElement).toBe(panelBox());
+  });
+});
+
+describe("preserved boundaries", () => {
+  it("words keeps find in the URL without overwriting the shared draft or asking", async () => {
+    const posted = server();
+    mount({ startOpen: true, url: "?mode=search&match=words" });
+    await flush();
+    type(panelBox()!, "comparison group");
+    await pause();
+    expect(new URLSearchParams(location.search).get("find")).toBe("comparison group");
+    expect(barBox().value).toBe("");
+    expect(posted).toHaveLength(0);
+  });
+
+  it("meaning edits share the draft and ask only on Enter", async () => {
+    const posted = server();
+    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    await flush();
+    type(panelBox()!, "comparison group");
+    await pause();
+    expect(barBox().value).toBe("comparison group");
+    expect(posted).toHaveLength(0);
+    key(panelBox()!, { key: "Enter" });
+    await flush();
+    expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["comparison group", "meaning"]]);
+  });
+
+  it("unmount removes the shortcut and focus/band registrations", async () => {
+    server();
+    mount({ startOpen: true, url: "?mode=search&match=quick" });
+    await flush();
+    const { searchDraftFor } = await import("../src/web/search-draft.js");
+    expect(searchDraftFor(SLUG).band()).not.toBeNull();
+    act(() => root.render(null));
+    expect(key(document.body, { key: "/" }).defaultPrevented).toBe(false);
+    expect(searchDraftFor(SLUG).band()).toBeNull();
+    expect(searchDraftFor(SLUG).focusBox()).toBe(false);
   });
 });
 
@@ -420,6 +576,12 @@ describe("only where the band can answer (Sol F8)", () => {
     expect(host.querySelector(".dock-qs")).toBeNull();
     const e = key(document.body, { key: "/" });
     expect(e.defaultPrevented).toBe(false);
+  });
+
+  it("honours the visitor prop independently of the drawer arm", () => {
+    bar({ drawer, visitor: true });
+    expect(host.querySelector(".dock-qs")).toBeNull();
+    expect(key(document.body, { key: "/" }).defaultPrevented).toBe(false);
   });
 
   it("is not on the metadata page, which has no band", () => {

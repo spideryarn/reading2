@@ -222,26 +222,53 @@ function useBarHandoff(
 ): void {
   const [, setMatch] = useQueryState("match", matchParam);
   const handoff = useHandoff(draft);
+  const lifetime = useRef<{ draft: SearchDraft } | null>(null);
+  useEffect(() => {
+    const token = { draft };
+    lifetime.current = token;
+    return () => {
+      // Real departure drops pending actions; StrictMode's immediate setup
+      // creates a new token for the same draft and keeps them for consumption.
+      queueMicrotask(() => {
+        if (lifetime.current === token || lifetime.current?.draft !== draft) {
+          draft.clearHandoffs();
+        }
+      });
+    };
+  }, [draft]);
   useEffect(
     () => (matcher === "quick" ? draft.registerBand(typing) : undefined),
     [draft, matcher, typing],
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `clearOpenHit` is a fresh closure each render and only clears a selection.
+  // Defer consumption past StrictMode's setup/cleanup replay: its session
+  // cleanup must not erase an intent that was already removed from the store.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `clearOpenHit` only clears a selection.
   useEffect(() => {
-    if (handoff === null) return;
-    if (matcher !== "quick") {
-      void setMatch("quick", { history: "replace" });
-      clearOpenHit();
-      return;
-    }
-    const taken = draft.take();
-    const text = draft.text();
-    if (taken === "pause") {
-      typing.edit(text);
-      typing.pause();
-    } else if (taken === "enter" && text.trim() !== "") {
-      typing.flush(text);
-    }
+    let live = true;
+    queueMicrotask(() => {
+      if (!live || draft.handoff() === null) return;
+      if (matcher !== "quick") {
+        void setMatch("quick", { history: "replace" });
+        clearOpenHit();
+        return;
+      }
+      let taken = draft.take();
+      while (taken !== null) {
+        if (taken.type === "pause") {
+          typing.edit(draft.text());
+          typing.pause();
+        } else if (taken.type === "enter" && taken.text.trim() !== "") {
+          typing.flush(taken.text);
+        }
+        const next = draft.take();
+        // Words edited after the last sealed Enter belong to a fresh session.
+        if (next === null && taken.type === "enter" && draft.text() !== taken.text) {
+          typing.edit(draft.text());
+        }
+        taken = next;
+      }
+    });
+    return () => { live = false; };
   }, [handoff, matcher, draft, typing, setMatch]);
 }
 

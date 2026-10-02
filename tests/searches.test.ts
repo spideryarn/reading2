@@ -385,6 +385,16 @@ describe("withRun — revising a quick search in place (plan 261002h)", () => {
     expect(run.createdAt).toBe(later);
   });
 
+  it("an unapplied revision cannot fall through to retry a failed meaning row", () => {
+    const meaning = quick({ kind: "meaning", status: "error", error: "failed" });
+    const { runs, run, kind } = withRun(
+      [meaning], meaning.criterion, "meaning", meaning.id, later, undefined, { revises: true },
+    );
+    expect(kind).toBe("minted");
+    expect(run.id).not.toBe(meaning.id);
+    expect(runs.find((r) => r.id === meaning.id)).toEqual(meaning);
+  });
+
   it("without revises, new words under a held quick id still mint", () => {
     const { kind } = withRun([quick()], "new words", "quick", "spya-k3m9qt", later);
     expect(kind).toBe("minted");

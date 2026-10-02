@@ -56,7 +56,7 @@ import { Zap } from "lucide-react";
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from "react";
 import { isTyping } from "./key-chord.js";
 import { IDLE, PAUSE_MS, type QuickSession, stepQuickSession } from "./quick-session.js";
-import { type Handoff, searchDraftFor, useDraftText } from "./search-draft.js";
+import { type HandoffKind, searchDraftFor, useBandTyping, useDraftText } from "./search-draft.js";
 
 /** The key that jumps to quick search. */
 export const QUICK_SEARCH_KEY = "/";
@@ -86,6 +86,7 @@ export function DockQuickSearch({
 }) {
   const draft = searchDraftFor(slug);
   const text = useDraftText(draft);
+  const band = useBandTyping(draft);
   const [focused, setFocused] = useState(false);
   const field = useRef<HTMLSpanElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -99,14 +100,21 @@ export function DockQuickSearch({
     session.current = IDLE;
   };
 
+  // Once the band owns the session, no older bar pause may fire beside it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stopWaiting only reads refs.
+  useEffect(() => {
+    if (band) stopWaiting();
+  }, [band]);
+
   /** Ask the band to take over, and make sure there is a band to ask. */
-  const handOff = (h: Handoff) => {
+  const handOff = (h: HandoffKind) => {
     stopWaiting();
     draft.handOff(h);
     onOpen();
   };
   /** The ⚡: Search mode on quick, with the panel's box focused. */
   const bolt = () => {
+    input.current?.blur();
     handOff("quick");
     // Inside the tap, when the panel is already here; otherwise it focuses itself on mount.
     draft.focusBox();
@@ -131,21 +139,54 @@ export function DockQuickSearch({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /* Check the final CSS shape after layout, never a rung being probed by
+     chooseDockFit. A resize/coarse-pointer change or a final class change may
+     hide the focused input; continue in the panel instead of leaving focus
+     on an invisible box. */
+  useEffect(() => {
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      if (document.activeElement === input.current && field.current &&
+          getComputedStyle(field.current).display === "none") {
+        latest.current.bolt();
+      }
+    };
+    const soon = () => {
+      if (!frame) frame = requestAnimationFrame(check);
+    };
+    const dock = field.current?.closest(".dock");
+    const observer = new MutationObserver(soon);
+    if (dock) observer.observe(dock, { attributes: true, attributeFilter: ["class"] });
+    const coarse = typeof matchMedia === "undefined" ? null : matchMedia("(pointer: coarse)");
+    coarse?.addEventListener("change", soon);
+    window.addEventListener("resize", soon);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      coarse?.removeEventListener("change", soon);
+      window.removeEventListener("resize", soon);
+    };
+  }, []);
+
   /* Leaving (another article, or the bar going) lets go of everything this
      box was holding, so the panel's next mount is not told the bar has focus. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `draft` is per slug, and so is this cleanup.
   useEffect(
     () => () => {
-      clearTimeout(timer.current);
+      stopWaiting();
+      draft.clearHandoffs();
       draft.setBarFocused(false);
     },
     [slug],
   );
 
   const onChange = (value: string) => {
+    if (document.activeElement !== input.current) return;
     draft.set(value);
     const band = draft.band();
     if (band) {
+      stopWaiting();
       band.edit(value);
       return;
     }

@@ -1783,7 +1783,7 @@ export function Dock({
       toggle,
       feedback,
       margin,
-      hasQuickSearch(view, own, onMode),
+      hasQuickSearch(view, isVisitor ? null : own, onMode),
     ),
   );
 
@@ -2138,7 +2138,7 @@ export function Dock({
         {/* **Quick search, from anywhere** (plan 261002h): a box, or a ⚡ where
             a box does not fit or is not wanted — DockQuickSearch.tsx. In the
             bar's slack, between the modes and the article's other views. */}
-        {hasQuickSearch(view, own, onMode) && (
+        {hasQuickSearch(view, isVisitor ? null : own, onMode) && (
           <DockQuickSearch
             slug={slug}
             searching={mode === "search"}

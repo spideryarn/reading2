@@ -28,6 +28,17 @@ describe("the shared search draft", () => {
     expect(heard, "an unchanged write still announced itself").toBe(1);
   });
 
+  it("removes subscribers on cleanup", () => {
+    const d = createSearchDraft();
+    let heard = 0;
+    const off = d.subscribe(() => heard++);
+    d.set("first edit");
+    expect(heard).toBe(1);
+    off();
+    d.set("second edit");
+    expect(heard).toBe(1);
+  });
+
   it("is one store per article, the same one each time it is asked for", () => {
     expect(searchDraftFor("a-piece")).toBe(searchDraftFor("a-piece"));
     expect(searchDraftFor("a-piece")).not.toBe(searchDraftFor("another-piece"));
@@ -37,8 +48,8 @@ describe("the shared search draft", () => {
     const d = createSearchDraft();
     expect(d.take()).toBeNull();
     d.handOff("pause");
-    expect(d.handoff()).toBe("pause");
-    expect(d.take()).toBe("pause");
+    expect(d.handoff()).toEqual({ type: "pause" });
+    expect(d.take()).toEqual({ type: "pause" });
     expect(d.handoff()).toBeNull();
     expect(d.take()).toBeNull();
   });
