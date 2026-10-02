@@ -10,7 +10,7 @@
  * ([260906b](../docs/plans/260906b-opening-a-mode-starts-it-generating.md)):
  *
  *  - Referee's four sub-mode chips, two of which arm and two of which must not;
- *  - Remember's Recall | Quiz toggle;
+ *  - Remember's Recall | Tutorial | Quiz toggle;
  *  - and, as a negative since 2026-09-15, the bar's **Tweets** button, which
  *    armed a token from 2026-09-06 and now must not: the thread writes itself on
  *    arrival (tests/tweets-press-starts-it.test.tsx), and a press that armed as
@@ -193,7 +193,7 @@ describe("Referee's sub-mode chips", () => {
 
 /* ---------------------------------------------------- Remember's toggle -- */
 
-function mountRememberToggle(value: "recall" | "quiz"): void {
+function mountRememberToggle(value: "recall" | "tutorial" | "quiz"): void {
   act(() => {
     root.render(
       createElement(RememberSubModeToggle, { slug: SLUG, value, onChange: () => {} }),
@@ -208,7 +208,7 @@ function toggleButton(label: string): string {
   return `.remember-submode-btn:nth-of-type(${at + 1})`;
 }
 
-describe("Remember's Recall | Quiz toggle", () => {
+describe("Remember's Recall | Tutorial | Quiz toggle", () => {
   it("arms the quiz when Quiz is pressed", () => {
     mountRememberToggle("recall");
     expect(armed("quiz")).toBe(false);
@@ -227,11 +227,14 @@ describe("Remember's Recall | Quiz toggle", () => {
     expect(armed("quiz")).toBe(true);
   });
 
-  it("arms nothing for Recall, or for merely being in Quiz", () => {
+  it("arms nothing for Recall or Tutorial, or for merely being in Quiz", () => {
     mountRememberToggle("quiz");
     expect(armed("quiz")).toBe(false);
     mountRememberToggle("recall");
     click(toggleButton("Recall"));
+    expect(armed("quiz")).toBe(false);
+    mountRememberToggle("tutorial");
+    click(toggleButton("Tutorial"));
     expect(armed("quiz")).toBe(false);
   });
 });
