@@ -461,6 +461,8 @@ export interface UseGlossary {
    *   260913a.
    */
   more(useProfile?: boolean): Promise<void>;
+  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
+  refresh(): Promise<void>;
   cancel(id: string): void;
   /** Check one term on the web. Resolves when the answer is in `glossary`. */
   look(id: string): Promise<void>;
@@ -903,6 +905,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     starting: queue.starting,
     find,
     more,
+    refresh,
     cancel: queue.cancel,
     look,
     lookDraft,

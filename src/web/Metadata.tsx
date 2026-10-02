@@ -263,7 +263,7 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
 import { WPM } from "../reading-time.js";
 import { isWebUrl } from "../urls.js";
-import { savePurpose } from "./purpose.js";
+import { leavePurpose, savePurpose } from "./purpose.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
@@ -278,7 +278,7 @@ import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { type ArchiveControl, useArchive } from "./useArchive.js";
-import { apiFetch, failure, leavingFetch, readJson, statusOf } from "./lib/api.js";
+import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { isAdmin } from "../admin.js";
@@ -585,12 +585,7 @@ export function Metadata({
       void refresh();
       return stored;
     },
-    leave: (text) =>
-      leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ purpose: text === "" ? null : text }),
-      }),
+    leave: (text) => leavePurpose(slug, text),
   });
   const seedPurpose = purpose.seed;
   /**

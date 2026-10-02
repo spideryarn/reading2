@@ -107,6 +107,8 @@ export interface UseIdeas {
    * forcing — which is what makes that true rather than a hope.
    */
   regenerate(): Promise<void>;
+  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
+  refresh(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -252,6 +254,7 @@ export function useIdeas(slug: string): UseIdeas {
     starting: queue.starting,
     ensure,
     regenerate,
+    refresh,
     cancel: queue.cancel,
   };
 }

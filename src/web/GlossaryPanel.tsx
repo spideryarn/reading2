@@ -260,9 +260,24 @@ export function GlossaryPanel({
      `profileHash` never leaves the server (src/public-types.ts). `null` rather
      than a component that renders nothing, so the sort row's trailing slot
      is empty when there is nothing to put in it. */
+  /* **Its Regenerate is `more`, the forced run** — the glossary has no
+     replace verb. Forcing appends only when the list's profile hash matches
+     (src/glossary.ts § existingFor), and the panel offers Regenerate only when
+     the server says it does not, so this rewrites. `find` would be unforced
+     and could skip. Plan 261002b. */
   const badge =
     glossary && owner?.profiled ? (
-      <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} compact />
+      <WrittenForYou
+        written
+        changed={owner.profileChanged}
+        slug={owner.slug}
+        compact
+        regenerate={{
+          run: () => void owner.more(true),
+          busy: owner.job !== null || owner.starting,
+          refresh: () => void owner.refresh(),
+        }}
+      />
     ) : null;
   const sorts = glossary && glossary.entries.length > 1 ? sortOptions(all) : [];
   /* What the band's (i) adds after the mode's own words: how many terms, how

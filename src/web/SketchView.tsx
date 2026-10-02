@@ -86,6 +86,7 @@ import { laterClickOfMany, pressEnlarges } from "./enlargePress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SKETCH_WAIT } from "./sketch-cost.js";
 import { useSketch } from "./useSketch.js";
+import { WrittenForYou } from "./WrittenForYou.js";
 
 /** One drawing primitive as an element. Nothing here knows a colour. */
 function Shape({ p }: { p: Prim }) {
@@ -258,9 +259,9 @@ function OwnerSketch({
   if (!view.sketch) return null;
 
   /* The caveats, which are all facts about *this reader's* artefact against
-     *this reader's* article and profile. A visitor gets none of them: they
-     cannot regenerate, the profile is not theirs, and "drawn for a profile you
-     have since changed" is a sentence about somebody else. */
+     *this reader's* article. A visitor gets none of them, nor the badge below:
+     they cannot regenerate, the profile is not theirs, and "drawn for a profile
+     you have since changed" is a sentence about somebody else. */
   const notes: string[] = [];
   if (view.stale) {
     notes.push(
@@ -271,17 +272,38 @@ function OwnerSketch({
     const lost = view.faults.filter((f) => f.what.includes("not in this article")).length;
     if (lost > 0) notes.push(`${lost} of its boxes point at passages this article no longer has.`);
   }
-  if (view.profileChanged) notes.push("It was drawn for a reader profile you have since changed.");
+  /* A changed profile is no longer a caveat line here: since 2026-10-02 the
+     *written for you* badge in the bar says it, as it does in every other
+     personalised mode, and its panel carries the redraw (plan 261002b). Two
+     sentences for one fact would be one too many. */
+  const badge = view.profiled ? (
+    <WrittenForYou
+      written
+      changed={view.profileChanged}
+      slug={slug}
+      compact
+      regenerate={{
+        run: () => void view.regenerate(),
+        busy: view.job !== null || view.starting,
+        refresh: () => void view.refresh(),
+      }}
+    />
+  ) : null;
 
   /* **The two lines that are about a job rather than about a picture**, built
      here because this is where the job is. Both were inside the drawing until
      2026-09-04; a visitor has neither.
 
      Not `JobProgress`: that row carries a Stop button and, with no job, a Draw
-     button — and offering a paid redraw beside a picture that is already there
-     is a product decision this is not. Greg asked only that a redraw in flight
-     be visible: *"the diagram/sketch modes show loading spinners if they're
-     generating"*.
+     button — and a standing paid redraw beside a picture that is already there
+     is still not offered here. **The one redraw that is** sits in the profile
+     badge's panel, and only when the server says the picture was drawn for a
+     profile the reader has since changed — Greg asked for it by name, 2026-10-01:
+     *"if the profile has changed since the mode generated, then it should show a
+     handy "Regenerate" button in that mode's "This was written for your profile"
+     panel"* (docs/plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md).
+     This row's job is only that a redraw in flight be visible: *"the
+     diagram/sketch modes show loading spinners if they're generating"*.
 
      **And the spinner going away is not the same as the work succeeding.** A
      redraw that came back failed left the picture standing and said nothing,
@@ -306,6 +328,7 @@ function OwnerSketch({
       sketch={view.sketch}
       notes={notes}
       progress={progress}
+      badge={badge}
       blocks={blocks}
       atRow={atRow}
       onJump={onJump}
@@ -371,13 +394,19 @@ function SketchBody({
   sketch,
   notes,
   progress,
+  badge,
   blocks,
   atRow,
   onJump,
 }: {
   sketch: Sketch | PublicSketch;
-  /** Owner-only caveats — staleness, lost boxes, a changed profile. Empty for a visitor. */
+  /** Owner-only caveats — staleness, lost boxes. Empty for a visitor. */
   notes: readonly string[];
+  /**
+   * The owner's *written for you* badge, already rendered, or nothing — a node
+   * for the reason `progress` is one. It goes in the bar, before Enlarge.
+   */
+  badge?: ReactNode;
   /**
    * **What the owner's redraw is doing**, already rendered, or nothing.
    *
@@ -993,6 +1022,7 @@ function SketchBody({
             </span>
           </Tooltip>
         )}
+        {badge}
         <Tooltip
           placement="bottom"
           keepSide
@@ -1025,9 +1055,11 @@ function SketchBody({
           mode show loading spinners if they're generating."*
 
           Not `JobProgress`: that row carries a Stop button and, with no job, the
-          Draw button — and offering a paid redraw beside a picture that is
-          already there is a product decision this is not. This says what is
-          happening and nothing else. The step's own label, off the server, so
+          Draw button — and a standing paid redraw beside a picture that is
+          already there is still not offered; the one redraw there is lives in
+          the profile badge's panel, for a changed profile only, on Greg's
+          request of 2026-10-01 (`OwnerSketch` has his words; plan 261002b).
+          This says what is happening and nothing else. The step's own label, off the server, so
           the words are the words the shelf shows for the same run. */}
       {progress}
 

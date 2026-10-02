@@ -204,6 +204,26 @@ describe("leaving", () => {
     });
     expect(left).toEqual([]);
   });
+
+  /* **The box going away without the page going away.** Since 2026-10-02 the
+     profile panel edits in place (plan 261002b), and its popover lives inside a
+     mode band that the dock or an article change unmounts whatever the panel
+     thinks — an SPA navigation fires neither `visibilitychange` nor
+     `pagehide`. Without this, words typed in the last two seconds before
+     switching mode were dropped without a sound. GPT Sol's plan review, P1. */
+  it("fires the last-chance save when the box unmounts with words unsaved", () => {
+    act(() => get().setDraft("typed, then switched mode"));
+    act(() => root.render(null));
+    expect(left).toEqual(["typed, then switched mode"]);
+  });
+
+  /* The other half, and the one StrictMode leans on: it mounts, unmounts and
+     mounts again in development, and nothing is pending at mount, so the
+     cleanup must be a no-op rather than a PATCH per page load. */
+  it("sends nothing when it unmounts with nothing unsaved", () => {
+    act(() => root.render(null));
+    expect(left).toEqual([]);
+  });
 });
 
 /* Metadata's box moves to another article without remounting. */

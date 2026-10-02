@@ -41,7 +41,8 @@
  * because the ordinary save in flight is exactly the one the browser may kill.
  * That one can, in principle, be applied after it; the PATCH is idempotent and
  * the window is the page being torn down, which is the honest limit of doing
- * this at all.
+ * this at all. **Unmounting fires `leave` too** (2026-10-02): a box inside a
+ * popover can go while the page stays, and that sends neither event.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -200,21 +201,37 @@ export function useAutosavedText({
       });
   }, []);
 
+  /* The page, or the box, is going: send what the server does not have, with
+     nothing awaited first. */
+  const lastChance = useCallback(() => {
+    const { saved: stored, draft: text } = now.current;
+    if (stored !== null && text !== stored) io.current.leave(text);
+  }, []);
+
   useEffect(() => {
     const hidden = () => {
       if (document.visibilityState === "hidden") commit();
     };
-    const gone = () => {
-      const { saved: stored, draft: text } = now.current;
-      if (stored !== null && text !== stored) io.current.leave(text);
-    };
     document.addEventListener("visibilitychange", hidden);
-    window.addEventListener("pagehide", gone);
+    window.addEventListener("pagehide", lastChance);
     return () => {
       document.removeEventListener("visibilitychange", hidden);
-      window.removeEventListener("pagehide", gone);
+      window.removeEventListener("pagehide", lastChance);
     };
-  }, [commit]);
+  }, [commit, lastChance]);
+
+  /* **And when the box goes but the page does not.** Since 2026-10-02 these
+     boxes live inside the profile popover too, which sits in a mode band the
+     dock or an article change unmounts whatever the popover thinks — and an
+     SPA navigation fires neither `visibilitychange` nor `pagehide`. So the
+     unmount sends what `pagehide` would: the `keepalive` request, because an
+     ordinary save started by a component that no longer exists has nobody to
+     report to. The metadata page's box had the same gap. GPT Sol's review of
+     docs/plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md.
+
+     Safe under StrictMode's mount–unmount–mount: nothing is loaded at mount,
+     so the first cleanup finds `saved` null and sends nothing. */
+  useEffect(() => lastChance, [lastChance]);
 
   const state = saveStateOf({
     loaded: saved !== null,
