@@ -1,0 +1,1681 @@
+diff --git a/docs/investigations/261002p-arc-sentences-shorter-and-plainer.md b/docs/investigations/261002p-arc-sentences-shorter-and-plainer.md
+new file mode 100644
+index 000000000..3612f5be2
+--- /dev/null
++++ b/docs/investigations/261002p-arc-sentences-shorter-and-plainer.md
+@@ -0,0 +1,107 @@
++# Arc sentences, shorter and plainer (`arc/5` → `arc/6`)
++
++Up: [investigations.md](../project/investigations.md). For plan
++[261002g](../plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md) § 2.
++
++> And in Annotations mode, that rail at the top that shows where you are - the language is too
++> complex. Can you make it shorter and simpler.
++>
++> — Greg, 2026-10-01 (spya-g4yrew)
++
++**Result: `arc/6` ships.** Its sentences run a median 17 words against 31–36, a blind judge found them
++plainer in 33 of 35 parts, they are about as good as the old ones at saying where the argument stands
++(11 better, 13 worse, 11 even), and none misstated its part. Two of the criteria declared beforehand
++were **missed**: 25 of 35 fit whole in the head at its widest (target 80%, got 71%), and none does at
++its narrowest. The whole sentence is in the head's card.
++
++## What was wrong
++
++Read from production (read-only): the head's part and section titles are already short ("Cats Don't
++Talk › Scaling Up Brains"). The hard words are the arc's. Greg's article had:
++
++> At stake is whether scaling a brain past ours would simply drown its workings in the computational
++> irreducibility that concepts and language currently hold at bay, or whether the pockets of
++> reducibility brains already exploit would keep such a mind within reach of description.
++
++Across production's 41 arcs the median was 29–34 words at every prompt version; the shared plain-words
++rule (`arc/4`) did not shorten them. And the head clamped the arc at three lines, so nearly every one
++was also cut mid-sentence.
++
++## Method
++
++`evals/arc-length/run.ts`: production's `generateArc`, standard power, on five local articles (Greg's
++*What If We Had Bigger Brains?*, *The Mythology of Conscious AI*, Gwern's *Scaling Hypothesis*,
++*Antikythera mechanism*, *Cargo Cult Science*: 35 parts). The old prompt was run twice (`before`,
++`before-2`) as the control. Each arm records its prompt version and a hash of `src/arc.ts`. Results
++are in `evals/results/arc-length/`.
++
++- **Length**: words per sentence, and an estimate of the lines it takes in the head: a greedy wrap at
++  the head's text width in the AI face (13px IBM Plex Mono ≈ 7.8px a character; ≈33 characters a line
++  at the column's 288px, ≈22 at its 200px minimum). An estimate, not a render.
++- **Plainness, fidelity, usefulness**: an Opus subagent saw each part's old and new sentence as A/B in
++  random order, with the part's title and gist, and judged which is plainer at a glance, whether either
++  misstates the part, and which better says where the argument stands. It could not read the key.
++  **Length gives the new sentence away**, so the blinding protects the fidelity call more than the
++  plainness one.
++
++Criteria, written into the plan before the first new arm was read: median ≤ 20 words; whole in the
++head at 288px for ≥ 80% and at 200px for ≥ 50%; plainer in most parts; no more often wrong.
++
++## Results
++
++| arm | prompt | median words | p90 | over 20 | whole in 4 lines, 288px | in 3 lines, 288px | 200px |
++|---|---|---|---|---|---|---|---|
++| `before` | arc/5 | 31 | 41 | 31/35 | 5/35 | 1/35 | 0/35 |
++| `before-2` | arc/5 | 36 | 44 | 34/35 | 0/35 | 0/35 | 0/35 |
++| `after` | arc/6, first draft | 16 | 19 | 0/35 | 32/35 | 3/35 | 0/35 |
++| `after-2` | **arc/6, shipped** | 17 | 23 | 10/35 | 25/35 | 7/35 | 0/35 |
++
++Blind judgements, unblinded (each new arm against `before`):
++
++| | plainer: new / old / even | says where the argument stands: new / old / even | wrong: new / old |
++|---|---|---|---|
++| `after` | 25 / 7 / 3 | **3 / 26 / 6** | 1 / 0 |
++| `after-2` | 33 / 2 / 0 | 11 / 13 / 11 | 0 / 0 |
++
++**The first draft failed, and that is the finding worth keeping.** Told only to be short and plain, the
++model wrote short *gists*: what the part says rather than where the argument stands. The judge called
++the old sentence better at the arc's own job in 26 of 35 parts, and one new sentence overstated its
++part ("That lone bet now looks vindicated by hindsight…"). `after-2` added two rules: spend the words
++on the relation (two halves around a semicolon: what is settled, what is still open), with a
++bees example nowhere in the eval set, and never claim more than the article has shown so far. That
++recovered the arc's job and removed the overstatement. It made the sentences a little longer.
++
++**The second judge got one sharper instruction** ("judge the relational content, not the amount of
++detail"), because the first had tended to credit length as relational. So the two "where the argument
++stands" rows are not measured quite alike.
++
++**A failure the eval caught on the way:** the first run of `after-2` died when the model returned 10
++sentences for 9 parts. Most likely it split a two-halves sentence into two entries, and
++`buildArc` refuses rather than guess, which in production fails the step. The prompt now says the two
++halves are one string, the rerun had no refusal, and the eval records a refusal rather than crashing.
++One clean run is not a rate.
++
++Sample (*The Mythology of Conscious AI*, `after-2`):
++
++> Before asking if machines can feel, the pull to believe they do turns out to be mostly bias, not
++> evidence.
++
++> With real machine consciousness left uncertain and probably unlikely, the sharper danger turns out
++> to be machines that merely seem conscious.
++
++## What changed with it
++
++- **The head clamps the arc at four lines, not three.** The three-line clamp was set when the arc was in
++  Geist. Since 261002f it is in the monospace AI face, about a third wider, so even a 16-word sentence
++  is four lines at 288px.
++- **Existing arcs are rewritten on their owner's next open** (`useArc`, `isArcOutdated`). Without that,
++  none of the 41 production arcs, Greg's included, would ever see this prompt.
++
++## What is still open
++
++- At the column's narrowest (200px, a window about 900–1000px wide) no arc fits whole; four lines
++  hold about 13 words there.
++- The 20-word limit is prompt wording, not enforced: 10 of 35 went over, to a maximum of 25.
++  `buildArc` checks only the count.
++- Five articles, one run of each new arm: enough to see the first draft lose the arc's job and the
++  second recover it, not to rank two close prompts.
+diff --git a/docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md b/docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md
+new file mode 100644
+index 000000000..03229b83b
+--- /dev/null
++++ b/docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md
+@@ -0,0 +1,187 @@
++# Marginalia: cut off at the right, a plainer head, and every note says where it came from
++
++Three reports from Greg (admin, `feedback-reporter.ts` exit 0 on each), all filed 2026-10-01 about
++the right-hand column then called Annotations, now Marginalia ([marginalia.md](../project/marginalia.md)).
++Overseer queue item `qi-2cxmnb4d`.
++
++> Annotation mode gets cut off by the right margin
++>
++> Use Playwright screenshots to test.
++>
++> — Greg, 2026-10-01 (spya-hut48h)
++
++> And in Annotations mode, that rail at the top that shows where you are - the language is too
++> complex. Can you make it shorter and simpler.
++>
++> — Greg, 2026-10-01 (spya-g4yrew)
++
++> It has a "schema representations..." annotation, but I can't tell what that Annotation is from or
++> why or whether AI-generated (if so, it should be in the AI-generated font). Make sure all
++> annotations have rich tooltips (see tooltips.md) explaining their origin, and anything else that
++> might be helpful for the reader.
++>
++> — Greg, 2026-10-01 (spya-atv4nx)
++
++## Prior work
++
++- `git log origin/dev`, `docs/plans/`, `docs/user-feedback/`, `gjd-remote ls`, the Overseer queue.
++- **261001k** (`docs/user-feedback/261001_0915-…`) made the head's path wrap instead of ending in an
++  ellipsis, and made the notes swap in for a band on a narrow window. It did not touch the words.
++- **261002a** (aec8ff52f, deployed) laid the reading view out for the width *beside* a classic
++  scrollbar. Before it, a Mac with a mouse plugged in gave a 15px scrollbar and the whole page was
++  15px too wide, which is exactly "cut off by the right margin" for a column that sits at the right
++  edge. The likely fix for spya-hut48h; § 1 checks it.
++- **261002f** (9b4b7a933, on dev) put the three faces in front of everyone and voiced Marginalia's
++  head path, questions, idea names and arc. **Not voiced yet: the FAQ, Debate, Citations and
++  comment lines** that 261002b added. Queue item `qi-bm8fpvy4` (session `fb9a-…`, asleep, no commits)
++  asked for exactly the margin's voices; § 3 finishes it, so that item can close with this one.
++- The `fb9a` and `marginalia-live-refresh` sessions this item waited for have landed nothing on the
++  files below beyond 261002d (`useStepFinished` in the column), which this does not change.
++
++## 1. Cut off at the right — reproduce first
++
++A Sonnet browser agent runs Playwright with **classic scrollbars forced on**
++(`ignoreDefaultArgs: ["--hide-scrollbars"]`, the 261002a method) against two trees: `aec8ff52f^`
++(before) and dev (after), at 1920/1440/1280/1024/900, the column alone and beside a band, measuring
++every note's and the head's right edge against `clientWidth`, and sideways scroll.
++
++- If *before* is cut off and *after* is clean, spya-hut48h ends **Shipped, naming aec8ff52f**, with
++  the screenshots. Nothing to build.
++- If *after* is still cut off, the fix is in `layout.ts § fitMargin` / `marginalia.css` and gets a
++  failing test first.
++
++## 2. The head, in plain words
++
++What Greg saw, read from production (read-only): the path's titles are already short — *"Cats Don't
++Talk › Scaling Up Brains"*. The hard part is **the arc sentence** under them:
++
++> At stake is whether scaling a brain past ours would simply drown its workings in the computational
++> irreducibility that concepts and language currently hold at bay, or whether the pockets of
++> reducibility brains already exploit would keep such a mind within reach of description.
++
++Across production's 41 arcs the median sentence is 29–34 words for every prompt version; the shared
++plain-words rule (`arc/4`, 2026-09-28) did not shorten them (`arc/4` median 34, p90 51). The head
++clamps the arc at three lines of a 200–288px column, about 15–20 words, so a typical arc is also
++**cut mid-sentence** — the truncation 7M complained about, one line lower.
++
++**Change: `arc/6`, a shorter, simpler arc sentence.** The prompt keeps its job (relational, about the
++whole piece, never the article as subject) and gains a hard limit and a plainness rule:
++
++- **At most 20 words.** Its own worked example is 17. Fits the head's three lines.
++- One idea, or two joined by a semicolon; no stacked subordinate clauses; the reader's everyday words
++  over the field's terms where both say it (on top of `plainWords("explain")`).
++- The good/bad examples rewritten at that length, since examples drive length more than rules do.
++
++**Measured before it lands**, per [prompting-guide.md](../project/prompting-guide.md): the arc step
++run on ~5 local articles at `arc/5` and `arc/6`, word counts and the sentences side by side, written up
++under `docs/investigations/`.
++
++**Pass criteria, declared before the `after` arm was read** (evals/arc-length/run.ts; five local
++articles, the old prompt run twice as the control):
++
++| | `before` | `before-2` | `after` must reach |
++|---|---|---|---|
++| median words | 31 | 36 | ≤ 20 |
++| sentences whole in the head's 3 lines at 288px | 1/35 | 0/35 | ≥ 80% |
++| … at 200px | 0/35 | 0/35 | ≥ 50% |
++
++The line count is a greedy wrap at the head's width in the AI face (≈33 and ≈22 characters a line),
++an estimate rather than a render. Fidelity and plainness are judged blind: an Opus subagent sees each
++part's old and new sentence in random order, with the part's gist, and says which is plainer and
++whether either misstates the part. Pass if the new one is plainer in most parts and no more often
++wrong. The old prompt failing every row is the positive control.
++
++**Existing arcs** (revised after GPT Sol's plan review: keep drawing, never blank). An arc in the article payload is used as-is today (`useArc` § seeded from the
++payload), so a prompt bump would never reach Greg's two articles (`arc/2`, `arc/3`). Change, owner
++only: **when the payload's arc is from an older prompt, `useArc` keeps drawing it and starts the
++one unforced run it already knows how to start**; the run regenerates (the step's stamp compares the
++prompt version) and the completion's `refresh` swaps the new arc in. The first draft blanked the old
++arc instead, which would have taken it off Structure too for the length of a model call (Sol, F2).
++**Strictly older** (`isArcOutdated` in `src/arc-version.ts`, the rule Quotes already uses): a
++rolled-back build leaves a newer arc alone, and an unparseable version is not evidence (Sol, F1).
++Version only, not the full fingerprint: a constant compare, no hashing on every open, and exactly the
++case this change creates. `src/arc-version.ts` imports nothing, so the client can read it without
++pulling in the server's `arc.ts`.
++
++Cost: one capable-model call per owned article with an arc, the first time its owner opens it after
++deploy — ~41 articles today, most of them Greg's.
++
++**Simpler option passed over:** drop the arc from the head and show only the path. Greg said of the
++same head the same day: *"I really like the rail at the top … both in terms of the structure and the
++arc"* (spya-rczgjb). He wants it plainer, not gone.
++
++**Deferred, named:** a visitor's payload still carries whatever arc the owner last had written; it
++catches up when the owner next opens the article. The full-fingerprint staleness on open (a tree that
++changed under an arc) stays as it was.
++
++## 3. Every note says where it came from, in its voice
++
++**Cards.** Every note, and the head's path and arc, gets the house card
++([tooltips.md](../project/tooltips.md)), `ControlTip`'s shape: a head, what it is, then what you could
++not guess — **which mode it came from, who wrote it (AI, the author, you), and why it sits beside
++this passage**. The native `title`s go.
++
++The column can hold dozens of shut lines, so they do not each get a Floating UI instance: they carry
++`data-marg-tip="<kind>"` and the reading view's one delegated card (`BlockLinkCard.tsx`) draws them,
++as it draws the gutter's controls since 261002e — mouse hover and keyboard focus, not a finger (a tap
++opens the note, which shows the rest). **Questions are different** (Sol, F4): a question has nothing to
++press, so its card is the only thing a keyboard or a finger could reach, and the delegated card
++answers neither. It becomes a button with a controlled `Tooltip` of its own, like the idea stamp; one
++per part, so a few instances. The words live in one table in `src/web/marginalia/tips.ts`, keyed by
++kind, so the cards and their test read one copy. The idea stamp, the path and the arc already have
++their own `Tooltip` (they open on a tap too); each gains the origin line.
++
++| Kind | What it is | Where it came from |
++|---|---|---|
++| Question (whole article / a part) | the question the article / this part answers | written by AI with the article's structure; beside the opening / the part's first paragraph |
++| Idea stamp (assumes / introduces) | an idea the piece takes for granted / argues for | Ideas mode, written by AI; where the idea first appears |
++| FAQ | a question a careful reader might ask, answered here | FAQ mode; the question is AI's, the quote the article's own words; beside the earliest passage that answers it |
++| Debate | a page on the web that answers a claim made here | Debate mode: AI searched and judged how it bears; the quote is the page's |
++| Citation | a work the article cites, here for the first time | Citations mode; the title is the work's, the reason AI's |
++| Comment | a note on this passage | written by you (or by the article's owner, to a visitor); an AI answer under it if asked |
++| Path | where you are: part, then section | the article's structure — the author's heading, or a title AI wrote where there was none |
++| Arc | where the argument has got to | AI, one sentence per part |
++
++**Voices** (fonts.md's rule; classes added to `voices.css` and `VOICES_BY_MODE.marginalia`):
++
++- FAQ: the question **AI**, its "Answered here" quote **the author's**.
++- Debate: the quote is the page's — third party, left **UI** as fonts.md says; the headline too,
++  except when `rowWork` says the model read it off the page (`titleIsAI`), where it is **AI**, as
++  the band's `dbt-title-ai` (Sol, F5); its "applies" line **AI**.
++- Citation: title the work's (**UI**, as in the band); its why **AI**.
++- Comment: body **the reader's**; its answer **AI**.
++- The shut line's words take the voice of the one item it shows; a count ("3 works") is **UI**.
++
++## Tests
++
++- `tests/marginalia-tips.test.ts(x)`: every `MarginaliaNote` kind has a card (a `Record` over the
++  kind union, so a new kind is a type error); no card's second paragraph restates its first or its
++  head (the referee-tooltips check); the delegated card draws a `data-marg-tip` note.
++- `tests/voices-css.test.ts`: the new classes in `VOICES_BY_MODE.marginalia`.
++- `useArc`: a payload arc with an older version reads `/api/arc` and starts a run; a current one does
++  neither (red first).
++- Browser check (Sonnet, Playwright): cards on hover in the column, voices visible, screenshots.
++
++## Stages
++
++1. Reproduce § 1 (running). 2. § 3 cards and voices. 3. § 2 prompt + measurement + `useArc`.
++GPT Sol on this plan before building; on the code before pushing.
++
++## Results
++
++- **§ 1: Shipped already, by aec8ff52f** (261002a, deployed). A Sonnet browser agent ran Playwright
++  with classic 15px scrollbars against the tree before it and against dev. Before: every width
++  scrolled sideways, and from 1280px down (1440 with a band open) the column's text ran under the
++  scrollbar — "the clain" for "the claim". After: no sideways scroll and every note inside the page,
++  at all five widths, alone and beside a band. Shots in [261002g-shots/](261002g-shots/).
++- **§ 2: `arc/6` ships, after one failed draft.** The first draft wrote short gists and lost the arc's
++  job (a blind judge preferred the old sentence on "where the argument stands" in 26 of 35 parts); the
++  second recovered it (11 / 13 / 11), stayed plainer (33 of 35) and misstated nothing. **Missed**: the
++  head-fit criterion (71% whole at 288px against 80%; none at 200px). The head's arc clamp went from
++  three lines to four, because the AI face is a monospace. The numbers are in
++  [261002p](../investigations/261002p-arc-sentences-shorter-and-plainer.md).
++- **§ 3: built as revised after Sol's review.** Shut lines through the delegated card; questions a
++  button with their own card; the idea, path and arc cards gained an origin line; the shut notes'
++  words are in their voices.
++- **A red that was not ours**: `tests/public-network-trace.test.tsx` still read the gutter mark's
++  native `title`, which 261002e had replaced with `data-tip`; fixed in passing.
+diff --git a/docs/plans/261002g-plan-review-prompt.md b/docs/plans/261002g-plan-review-prompt.md
+new file mode 100644
+index 000000000..7ef87a98e
+--- /dev/null
++++ b/docs/plans/261002g-plan-review-prompt.md
+@@ -0,0 +1,18 @@
++Review the plan docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md
++in this repository (Spideryarn, a reading app; read CLAUDE.md for the house rules). Read-only review: do not edit files.
++
++Check the plan against the code, not just its prose. The relevant code:
++- src/web/marginalia/MarginaliaColumn.tsx, notes.ts, src/web/styles/marginalia.css
++- src/web/BlockLinkCard.tsx (the delegated card; GUTTER_CONTROL branch is the precedent), src/web/Tooltip.tsx (ControlTip)
++- src/web/useArc.ts (payload seeding), src/arc.ts (PROMPT_VERSION, isStale, the prompt), src/store/pg.ts (/api/arc staleness ~line 4128, loadArticle ~2681)
++- src/web/styles/voices.css, src/web/voice.ts, tests/voices-css.test.ts, docs/project/fonts.md, docs/project/tooltips.md
++- src/web/reader/Reader.tsx (liveArc, MarginaliaHead)
++
++Questions I most want answered:
++1. § 2 existing arcs: is "useArc ignores a payload arc whose version != current PROMPT_VERSION" correct and safe? Trace: does /api/arc then report stale (so status 'absent' and the unforced run starts)? Does the unforced run actually regenerate on a version mismatch (the step's freshness check)? Any loop risk (e.g. the run writes an arc whose version still mismatches, or a job that fails repeatedly re-arms on every open)? Does any other consumer read capability.arc / article.arc in a way that would now flicker or break? Is there a simpler/better seam?
++2. § 2 prompt: is a 20-word hard cap plus rewritten examples the right lever, and how should the measurement be designed so it can show the change failing?
++3. § 3: is adding a branch to BlockLinkCard's delegated card the right call versus a per-note Tooltip? Anything in BlockLinkCard (aria, focus, touch, pointer-events, SELECTOR scope, the 'reword' observer) that a marginalia branch would trip over? The shut note is a button that toggles a disclosure; the question note is a <p> (not focusable).
++4. § 3 voices: are the voice assignments right per fonts.md (e.g. Debate's headline might sometimes be AI-written — see rowWork / dbt-title-ai)?
++5. Anything the plan misses, any silent-success risk, and any simpler option for any part.
++
++Give findings as a numbered list with severity (P0/P1/P2), each with file:line evidence, and finish with a one-line verdict.
+diff --git a/docs/plans/261002g-plan-review-sol.md b/docs/plans/261002g-plan-review-sol.md
+new file mode 100644
+index 000000000..e8badd4de
+--- /dev/null
++++ b/docs/plans/261002g-plan-review-sol.md
+@@ -0,0 +1,23 @@
++No P0 findings.
++
++1. **P1 — Comparing `version !== PROMPT_VERSION` can downgrade a newer arc during a rollback.** The plan describes “older” arcs but proposes inequality ([plan:79](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md:79)). Arc freshness already treats every unequal version as stale ([arc.ts:252](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/arc.ts:252)), and the job stamp requires exact equality ([pipeline.ts:3245](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/pipeline.ts:3245)). Thus an `arc/5` rollback encountering `arc/6` can auto-run and overwrite it with `arc/5`. Quotes already documents and tests the correct rule: parse the numeric version and treat only a strictly smaller, parseable version as outdated ([quotes.ts:981](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/quotes.ts:981), [quotes-find-more.test.ts:101](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/tests/quotes-find-more.test.ts:101)). Put an `isArcOutdated` predicate in the import-free leaf and test older/current/newer/unparseable values.
++
++2. **P1 — The proposed seam needlessly blanks valid content, and `/api/arc`’s “stale” result is semantically conflated.** `ArcFound` says `stale` means the article moved and `outdated` means the prompt changed ([types.ts:948](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/types.ts:948)), but `loadArc` computes `stale` with `arc.isStale`, which also includes prompt and model changes, while separately returning `outdated` ([pg.ts:4124](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/store/pg.ts:4124), [arc.ts:258](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/arc.ts:258)). `useArc` then turns that into `arc = null` and `status = "absent"` ([useArc.ts:118](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/useArc.ts:118)). That removes the arc not only from Marginalia but also Structure’s list face ([Reader.tsx:499](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/reader/Reader.tsx:499), [Reader.tsx:2097](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/reader/Reader.tsx:2097), [Reader.tsx:2464](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/reader/Reader.tsx:2464)). A simpler seam is: keep drawing the payload arc, and when it is strictly older, start one unforced background run directly; the completion callback already refreshes it. That avoids the extra opening GET and the blank interval without worsening today’s payload-freshness behavior.
++
++   Mechanically, the rest of the state machine is sound: an unforced run does regenerate because `stepIsDone` compares the stored stamp with the current prompt stamp ([pipeline.ts:1153](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/pipeline.ts:1153)), and `buildArc` stamps the result with the current constant ([arc.ts:175](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/arc.ts:175)). There is no same-mount loop because `started` is set before the POST and keyed by slug ([useArc.ts:158](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/useArc.ts:158)). A persistent failure retries once per later page mount, not continuously.
++
++3. **P1 — The proposed measurement cannot establish either “plainer” or “fits in three lines.”** Five articles, one old run, one new run, word counts and side-by-side reading ([plan:75](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md:75)) omits the project’s required old-vs-old control, blinded pairing, fidelity judgment, and comparison against natural sampling variance ([prompting-guide.md:185](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/docs/project/prompting-guide.md:185)). Also, 20 words do not imply three lines: the column ranges from 200–288px ([layout.ts:518](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/layout.ts:518)), loses horizontal space to padding ([marginalia.css:191](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/styles/marginalia.css:191)), and is clamped by rendered lines rather than words ([marginalia.css:271](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/styles/marginalia.css:271)). The schema accepts arbitrary strings and `buildArc` validates only the number of entries, so “hard cap” is prompt wording, not enforcement ([arc.ts:175](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/arc.ts:175), [arc.ts:278](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/arc.ts:278)).
++
++   Treat 20 words plus rewritten examples as a candidate lever. Run old twice and new once on the same stratified articles; blind part-level pairs for plainness and fidelity; record prompt hashes; and automatically measure both word-limit compliance and actual rendered line count at 200px and 288px. Predeclare pass criteria and include a positive control showing the old prompt fails them.
++
++4. **P1 — The delegated-card design leaves question notes inaccessible by keyboard and touch.** The plan says delegated cards open on keyboard focus and that touch is unnecessary because tapping opens the note ([plan:105](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md:105)). But a question is a non-focusable `<p>` with no click behavior ([MarginaliaColumn.tsx:103](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/marginalia/MarginaliaColumn.tsx:103)), while the delegated card deliberately discards touch pointer events ([BlockLinkCard.tsx:447](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/BlockLinkCard.tsx:447)) and opens on focus only when the trigger can receive focus ([BlockLinkCard.tsx:463](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/BlockLinkCard.tsx:463)). The delegated branch is appropriate for the many disclosure buttons; use a controlled `Tooltip` on a button-like question trigger, or explicitly add focus and question-only touch behavior. Otherwise “every note” is false on phones and keyboards.
++
++5. **P1 — Debate headlines are not always third-party/UI, and the existing shared markup cannot express the proposed voices correctly.** `rowWork` deliberately substitutes an AI-derived `workTitle` when the search title is missing or cut short and reports that through `titleIsAI` ([DebatePanel.tsx:1777](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/DebatePanel.tsx:1777)); the Debate band applies `dbt-title-ai` in exactly that case ([DebatePanel.tsx:1923](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/DebatePanel.tsx:1923)). Marginalia must make the same data-dependent choice, not always UI as the plan says ([plan:126](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md:126)).
++
++   The implementation also needs explicit per-kind wrappers/modifiers: `.marg-shut-line` is shared by every kind ([MarginaliaColumn.tsx:164](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/marginalia/MarginaliaColumn.tsx:164)); `.marg-open-head` is used for FAQ questions, Debate headlines and citation titles; and `.marg-open-quote` is used for both the article-author FAQ quote and the third-party Debate quote ([MarginaliaColumn.tsx:198](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/marginalia/MarginaliaColumn.tsx:198), [MarginaliaColumn.tsx:229](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/marginalia/MarginaliaColumn.tsx:229), [MarginaliaColumn.tsx:254](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/marginalia/MarginaliaColumn.tsx:254)). Adding those shared classes wholesale to `voices.css` would misvoice another kind.
++
++6. **P2 — A Marginalia branch in `BlockLinkCard` is reasonable, but the plan omits a required styling discriminator.** Adding `[data-marg-tip]` to `SELECTOR` and a `contentFor` arm is not enough: the rendered wrapper chooses `tip-soon` versus `tip-cite` through `CONTROL_SHAPED` ([BlockLinkCard.tsx:163](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/BlockLinkCard.tsx:163), [BlockLinkCard.tsx:523](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/BlockLinkCard.tsx:523)). Marginalia must join `CONTROL_SHAPED` or its `ControlTip` content will be placed in the citation-card styling branch. The existing ARIA behavior is otherwise suitable: it adds `aria-describedby` to non-gutter triggers ([BlockLinkCard.tsx:327](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/web/BlockLinkCard.tsx:327)); pointer-events do not steal the disclosure click; and the `reword` observer is unnecessary while `data-marg-tip` is immutable. The global selector is safe against article forgery because unlisted article `data-*` attributes are stripped ([sanitize-policy.ts:27](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/src/sanitize-policy.ts:27)).
++
++7. **P2 — The proposed tests stop one layer too early for the two silent-success risks.** The hook test can prove that a POST was attempted without proving that the server ran rather than skipped the step, or that the resulting arc carries the current version. Add an integration test with an older stored arc showing: unforced `stepIsDone` returns false, the generated arc has the current version, and the completion refresh becomes ready. Also test newer and unparseable versions do not auto-run, StrictMode/rerenders issue one POST, and failure does not re-arm within the mount. Existing fixtures such as `arc-idle-poll` label a `"test"`-version payload as the current no-network path ([arc-idle-poll.test.ts:88](/home/greg/code/spideryarn2/.claude/worktrees/fbhut48h-marginalia-cutoff-path-origin/tests/arc-idle-poll.test.ts:88)); those must use the exported current constant or they will cease testing what their comments claim. For cards, test actual delayed hover, keyboard focus, `aria-describedby`, exactly one open card, absent native `title`, disclosure toggling, and the chosen touch behavior—not merely that a `data-marg-tip` node can produce markup.
++
++Verdict: **Revise before build—especially the rollback-safe version comparison, keep-old-arc regeneration seam, question accessibility, Debate provenance, and falsifiable prompt evaluation.**
+\ No newline at end of file
+diff --git a/docs/project/marginalia.md b/docs/project/marginalia.md
+index 618427bb6..9e49897dd 100644
+--- a/docs/project/marginalia.md
++++ b/docs/project/marginalia.md
+@@ -59,6 +59,30 @@ one would otherwise be missed; it would not be, so it is not
+   written against an older version of the article"). A list written before a block changed could
+   otherwise sit beside prose that no longer says what it quotes.
+ 
++## Every note says where it came from
++
++> I can't tell what that Annotation is from or why or whether AI-generated (if so, it should be in
++> the AI-generated font). Make sure all annotations have rich tooltips (see tooltips.md) explaining
++> their origin, and anything else that might be helpful for the reader.
++>
++> — Greg, 2026-10-01 (spya-atv4nx)
++
++**Every note, and the head's path and arc, has a house card**: what it is, then which mode made it,
++who wrote the words (AI, the author, the reader) and why it sits beside this passage. The words are
++one table, `src/web/marginalia/tips.ts`; **a new kind of note needs a row there**, and the `Record`
++over the keys makes a missing row a type error. The shut lines carry their key as `data-marg-tip` and
++the reading view's one delegated card draws it ([tooltips.md](tooltips.md)); a question is a button
++with a card of its own, because it has nothing to press and the delegated card answers neither a
++keyboard nor a finger. **And each note's words are in their writer's face** ([fonts.md](fonts.md)):
++the shut line takes the voice of the one item it shows, a count is ours. Tested in
++`tests/marginalia-note-cards.test.tsx`;
++[261002g](../plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md).
++
++**The arc in the head is at most 20 words** (`arc/6`), after Greg found the head's language *"too
++complex"* (spya-g4yrew): at 30-odd words it was hard going and cut mid-sentence by the three-line
++clamp, now four lines ([261002p](../investigations/261002p-arc-sentences-shorter-and-plainer.md)). An arc written by an older prompt stays on screen while the owner's open writes a new one
++(`useArc`, `isArcOutdated`).
++
+ ## Keep an eye out for new kinds
+ 
+ Greg, 2026-10-01: *"make a note … that we should keep an eye out for where new mode-items might be
+diff --git a/docs/project/tooltips.md b/docs/project/tooltips.md
+index 487076d39..09bce91c3 100644
+--- a/docs/project/tooltips.md
++++ b/docs/project/tooltips.md
+@@ -180,6 +180,13 @@ it; a finger does not, because a tap presses the control. It adds no `aria-descr
+ sentence is the control's own name, near enough, and would be read twice
+ ([261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
+ 
++**And Marginalia's shut lines, the same day** (`MARG_NOTE`): each carries a key in `data-marg-tip`,
++and the card draws a `ControlTip` from `src/web/marginalia/tips.ts` — what the note is, which mode
++made it and who wrote it. It keeps `aria-describedby`, because the card says what the line's own
++words do not. A note with nothing to press — a part's question — is not on this branch: the
++delegated card opens for neither a finger nor a non-focusable element, so it has a `Tooltip` of its
++own ([marginalia.md § Every note says where it came from](marginalia.md#every-note-says-where-it-came-from)).
++
+ ## `ControlTip`, which is what most of them are now
+ 
+ The spine's card is a *place* described. The other shape — and by count the commoner one — is a
+diff --git a/evals/arc-length/run.ts b/evals/arc-length/run.ts
+new file mode 100644
+index 000000000..652a674f5
+--- /dev/null
++++ b/evals/arc-length/run.ts
+@@ -0,0 +1,158 @@
++/**
++ * **Is the arc sentence short and plain enough for Marginalia's head?**
++ *
++ * Greg, 2026-10-01 (spya-g4yrew), on the rail at the top of the column: *"the
++ * language is too complex. Can you make it shorter and simpler."* The words in
++ * question are the arc's (src/arc.ts); production's median was 29–34 words a
++ * sentence at every prompt version, and the head shows three lines, about
++ * 15–20 words. docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
++ *
++ * ```
++ * npx tsx evals/arc-length/run.ts list                       # free: local articles with a tree
++ * npx tsx evals/arc-length/run.ts generate --arm before <slug>…   # paid: one capable call per slug
++ * npx tsx evals/arc-length/run.ts report                     # free: every arm, side by side
++ * ```
++ *
++ * Production's generator, called the way the plain-words eval calls it
++ * (`generateArc`, standard power, the reader's `loadArticle`), and the prompt
++ * is whatever src/arc.ts holds when the arm runs — `PROMPT_VERSION` and a hash
++ * of the file are recorded with each arm, so an arm cannot be mislabelled. Run
++ * `before` twice (`before`, `before-2`) for the control: the spread between two
++ * runs of one prompt is what a difference between prompts has to beat.
++ */
++import { createHash } from "node:crypto";
++import fs from "node:fs";
++import path from "node:path";
++import { loadEnvLocal } from "../../src/env.js";
++
++const OUT = path.join(import.meta.dirname, "..", "results", "arc-length");
++const ARC_SRC = path.join(import.meta.dirname, "..", "..", "src", "arc.ts");
++
++type ArmResult = {
++  arm: string;
++  promptVersion: string;
++  arcSha: string;
++  at: string;
++  articles: { slug: string; sentences: string[] }[];
++  /** Articles the generator refused (e.g. a sentence count that does not match the parts). */
++  failed?: { slug: string; error: string }[];
++};
++
++const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
++
++async function asOwner<T>(fn: () => Promise<T>): Promise<T> {
++  loadEnvLocal();
++  const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
++  return runAsOwner(environmentOwnerId(), fn);
++}
++
++async function list(): Promise<void> {
++  const { listArticles } = (await import("../../src/store/index.js")) as unknown as {
++    listArticles?: () => Promise<{ slug: string }[]>;
++  };
++  if (!listArticles) throw new Error("no listArticles in the store; pass slugs by hand");
++  const rows = await asOwner(() => listArticles());
++  for (const r of rows) console.log(r.slug);
++}
++
++async function generate(arm: string, slugs: string[]): Promise<void> {
++  if (slugs.length === 0) throw new Error("name at least one slug");
++  const { generateArc, PROMPT_VERSION } = await import("../../src/arc.js");
++  const { loadArticle } = await import("../../src/store/index.js");
++  const result: ArmResult = {
++    arm,
++    promptVersion: PROMPT_VERSION,
++    arcSha: createHash("sha256").update(fs.readFileSync(ARC_SRC)).digest("hex").slice(0, 12),
++    at: new Date().toISOString(),
++    articles: [],
++  };
++  await asOwner(async () => {
++    for (const slug of slugs) {
++      const found = await loadArticle(slug);
++      const article = { slug, blocks: found.blocks, tree: found.tree, meta: found.meta };
++      try {
++        const run = await generateArc({ power: "standard", article });
++        result.articles.push({ slug, sentences: run.arc.entries.map((e) => e.text) });
++        console.log(`${slug}: ${run.arc.entries.length} sentences`);
++      } catch (err) {
++        /* A refusal is a result, not a crash: a prompt that makes the model
++           split a sentence in two fails the step in production too. */
++        (result.failed ??= []).push({ slug, error: (err as Error).message });
++        console.log(`${slug}: FAILED ${(err as Error).message}`);
++      }
++    }
++  });
++  fs.mkdirSync(OUT, { recursive: true });
++  const file = path.join(OUT, `${arm}.json`);
++  fs.writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`);
++  console.log(`wrote ${file}`);
++}
++
++/**
++ * **Lines in the head, estimated**: a greedy word wrap at the head's text width
++ * in the AI face (13px IBM Plex Mono, 0.6em ≈ 7.8px a character). The column is
++ * 200–288px (layout.ts `MARG_MIN`/`MARG_IDEAL`) less 20px left and 8px right
++ * padding (marginalia.css § the head): about 22 and 33 characters a line. The
++ * head clamped the arc at three lines when this was written, four since (a
++ * sentence over the clamp is cut).
++ */
++const CHARS_AT = { narrow: Math.floor(172 / 7.8), wide: Math.floor(260 / 7.8) } as const;
++function linesAt(sentence: string, perLine: number): number {
++  let lines = 1;
++  let used = 0;
++  for (const w of sentence.split(/\s+/).filter(Boolean)) {
++    const need = used === 0 ? w.length : used + 1 + w.length;
++    if (need <= perLine) used = need;
++    else {
++      lines += Math.max(1, Math.ceil(w.length / perLine));
++      used = w.length % perLine || perLine;
++    }
++  }
++  return lines;
++}
++
++function stats(ns: number[]) {
++  const s = [...ns].sort((a, b) => a - b);
++  const at = (q: number) => s[Math.min(s.length - 1, Math.floor(q * s.length))] ?? 0;
++  return { n: s.length, median: at(0.5), p90: at(0.9), max: s.at(-1) ?? 0, over20: s.filter((x) => x > 20).length };
++}
++
++function report(): void {
++  const arms = fs
++    .readdirSync(OUT)
++    .filter((f) => f.endsWith(".json"))
++    .map((f) => JSON.parse(fs.readFileSync(path.join(OUT, f), "utf8")) as ArmResult);
++  for (const a of arms) {
++    const all = a.articles.flatMap((x) => x.sentences);
++    const st = stats(all.map(words));
++    const whole = (perLine: number, lines: number) => all.filter((s) => linesAt(s, perLine) <= lines).length;
++    console.log(
++      `${a.arm.padEnd(10)} ${a.promptVersion} ${a.arcSha}  refused ${a.failed?.length ?? 0}/${a.articles.length + (a.failed?.length ?? 0)}  sentences ${st.n}  words median ${st.median} p90 ${st.p90} max ${st.max}  over 20: ${st.over20}  ` +
++        `whole in 4 lines: ${whole(CHARS_AT.wide, 4)}/${st.n} at 288px, ${whole(CHARS_AT.narrow, 4)}/${st.n} at 200px (in 3: ${whole(CHARS_AT.wide, 3)}, ${whole(CHARS_AT.narrow, 3)})`,
++    );
++  }
++  const slugs = [...new Set(arms.flatMap((a) => a.articles.map((x) => x.slug)))];
++  for (const slug of slugs) {
++    console.log(`\n== ${slug}`);
++    for (const a of arms) {
++      const art = a.articles.find((x) => x.slug === slug);
++      if (!art) continue;
++      console.log(`  [${a.arm}]`);
++      for (const s of art.sentences) console.log(`    (${words(s)}) ${s}`);
++    }
++  }
++}
++
++const [cmd, ...rest] = process.argv.slice(2);
++if (cmd === "list") await list();
++else if (cmd === "generate") {
++  const i = rest.indexOf("--arm");
++  if (i < 0 || !rest[i + 1]) throw new Error("--arm <name> is required");
++  const arm = rest[i + 1]!;
++  await generate(
++    arm,
++    rest.filter((_, j) => j !== i && j !== i + 1),
++  );
++} else if (cmd === "report") report();
++else console.log("usage: list | generate --arm <name> <slug>… | report");
++process.exit(0);
+diff --git a/src/arc-version.ts b/src/arc-version.ts
+new file mode 100644
+index 000000000..a961e3988
+--- /dev/null
++++ b/src/arc-version.ts
+@@ -0,0 +1,28 @@
++/**
++ * **The arc prompt's version**, in a module that imports nothing, so the reader
++ * may read it without bundling src/arc.ts and everything that imports. The
++ * history of each bump is on `PROMPT_VERSION` in src/arc.ts.
++ *
++ * The reader compares a payload's arc against it (src/web/useArc.ts): an arc
++ * an older prompt wrote stays on screen while the owner's open writes a new
++ * one. docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
++ */
++export const ARC_PROMPT_VERSION = "arc/6";
++
++const numberOf = (version: string | undefined): number | null => {
++  const m = /^arc\/(\d+)$/.exec(version ?? "");
++  return m ? Number(m[1]) : null;
++};
++
++/**
++ * **Was this arc written by an older prompt than this build's?** Strictly
++ * older, and only a version that parses: a build rolled back past `arc/6` must
++ * not rewrite an `arc/6` arc with `arc/5`, and a version it cannot read is not
++ * evidence of anything. The same rule as Quotes' `isOutdated` (src/quotes.ts).
++ * GPT Sol, plan review of 261002g.
++ */
++export function isArcOutdated(version: string | undefined): boolean {
++  const theirs = numberOf(version);
++  const ours = numberOf(ARC_PROMPT_VERSION);
++  return theirs !== null && ours !== null && theirs < ours;
++}
+diff --git a/src/arc.ts b/src/arc.ts
+index 85fe29fa0..c9b97e9a4 100644
+--- a/src/arc.ts
++++ b/src/arc.ts
+@@ -58,6 +58,7 @@ import { partsOf } from "./tree-parts.js";
+ export { partsOf };
+ import { plainWords } from "./plain-words.js";
+ import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
++import { ARC_PROMPT_VERSION } from "./arc-version.js";
+ 
+ /**
+  * Exported since 2026-08-29 so that the pipeline's `stamp` can compare against it
+@@ -69,8 +70,18 @@ import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from
+  *
+  * `arc/5`, 2026-10-02: the request gained `ARC_OUTPUT_SCHEMA`; the prompt text
+  * is unchanged.
++ *
++ * `arc/6`, 2026-10-02: **at most 20 words, one idea, everyday words.** Greg, on
++ * the sentence heading Marginalia (spya-g4yrew): *"the language is too complex.
++ * Can you make it shorter and simpler."* Production's arcs ran a median 29–34
++ * words at every version, plain-words rule or not, and the head shows about
++ * 20. Measured in evals/arc-length/run.ts;
++ * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
++ *
++ * Lives in src/arc-version.ts, which imports nothing, so the reader can compare
++ * a payload's arc against it (useArc.ts) without bundling this file.
+  */
+-export const PROMPT_VERSION = "arc/5";
++export const PROMPT_VERSION = ARC_PROMPT_VERSION;
+ 
+ const SYSTEM = `You are writing the leftmost, coarsest column of a reading view for a long
+ article. The reader sees, side by side: your column, then a one-sentence gist
+@@ -86,14 +97,35 @@ far, and what it still owes the reader. It is a claim about the whole article,
+ made from a position inside it.
+ 
+   part gist (the next column): "Feeling is metabolic, not computational."
+-  arc  (yours):                "Intelligence has been cut loose from
+-                                consciousness; what remains is to say what
+-                                consciousness is made of."
++  arc  (yours):                "Intelligence is cut loose from consciousness;
++                                next, what consciousness is made of."
+ 
+ RULES
+ 
+ - Exactly ONE sentence per part. Same number of sentences as there are parts,
+   in the same order. No numbering, no part titles.
++- SHORT AND SIMPLE. At most 20 words; 12 to 16 is better. It sits in a narrow
++  margin and is read at a glance. The two halves below are ONE sentence and
++  ONE string in the array, joined by the semicolon — never two entries. No clause inside a clause, no list of
++  three, no "whether X or whether Y". Prefer the everyday word to the field's
++  term wherever both say the same thing; keep a term only when the article's
++  argument is about that term.
++- SPEND THE WORDS ON THE RELATION, NOT THE CONTENT. Short is where an arc
++  sentence most easily turns into a gist. Its usual shape is two halves around
++  a semicolon: what is now settled, then what is still open or what this part
++  sets out to show. Leave the part's own details to its gist.
++    gist, wrong: "Bees use a waggle dance to say where the food is."
++    arc, right:  "Bees do share where food is; whether the dance alone carries
++                  it is still open."
++- Never claim more than the article has shown by this point. "Still open",
++  "argued, not yet shown" and "next" are honest; "proved" and "vindicated"
++  need the article to have done it.
++    too long: "Prior work has shown only that some schema signal exists around
++               mPFC for simple pairings, without establishing that these
++               regions distinguish which schema is active, a gap the
++               restaurant-versus-airport contrast is set up to close."
++    better:   "Earlier studies found a schema signal in mPFC, but not whether it
++               tells one script from another."
+ - NEVER restate the part's own gist. That sentence is already on screen an inch
+   to the right, and two columns saying the same thing is why this column exists
+   at all. If your sentence would still make sense with the rest of the article
+@@ -106,12 +138,11 @@ RULES
+   clause saying that you are summarising something, which the reader can see.
+   Write the state of the argument directly, in the article's own terms.
+     bad:  "The piece opens by asking whether machines could be conscious."
+-    good: "Whether machines could be conscious is still open, and their moral
+-           status turns on the answer."
++    good: "Whether machines can be conscious is still open, and their moral
++           status turns on it."
+     bad:  "Having shown brains are not Turing machines, the argument turns to
+            the substrate."
+-    good: "Brains are not Turing machines; what is left is to say what the
+-           substrate must be."
++    good: "Brains are not Turing machines; so what must they be made of?"
+ - The first part's sentence says what is at stake and unsettled. The last
+   part's says what has been settled and what deliberately has not.
+ - No empty meta-narration: never "this section explores", "the author then
+diff --git a/src/web/BlockLinkCard.tsx b/src/web/BlockLinkCard.tsx
+index 33a35e60d..728a7bc5a 100644
+--- a/src/web/BlockLinkCard.tsx
++++ b/src/web/BlockLinkCard.tsx
+@@ -49,6 +49,13 @@
+  * `aria-describedby` there, because the sentence is the control's own name,
+  * near enough, and would be read twice.
+  * docs/plans/261002e-mode-corner-icons-and-gutter-icon-polish.md.
++ *
++ * **And Marginalia's notes** (`MARG_NOTE`, since 2026-10-02): each shut line
++ * and question carries `data-marg-tip`, a key into marginalia/tips.ts, and the
++ * card says what the note is and where it came from — Greg (spya-atv4nx):
++ * *"Make sure all annotations have rich tooltips … explaining their origin"*.
++ * A column of dozens of notes, so the same reason as the gutter.
++ * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
+  */
+ import {
+   FloatingArrow,
+@@ -64,6 +71,7 @@ import {
+ import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+ import type { Block, BlockId } from "../types.js";
+ import { snippet } from "./citations.js";
++import { MARG_TIPS, isMargTipKey } from "./marginalia/tips.js";
+ import type { Section } from "./position.js";
+ import { SAFE_ID, spentWords } from "./reading-time.js";
+ import { ControlTip, TipNote } from "./Tooltip.js";
+@@ -164,9 +172,11 @@ const DELAY = { open: 240, close: 90 } as const;
+ const READING_LINE = ".blk-gutter > span.blk-read";
+ /** A control in the gutter (BlockGutter.tsx), whose words are its `data-tip`. */
+ const GUTTER_CONTROL = ".blk-gutter > button[data-tip], .blk-gutter > a[data-tip]";
+-const SELECTOR = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}, ${GUTTER_CONTROL}`;
+-/** The two that are not links, and draw a control's card rather than a passage's preview. */
+-const CONTROL_SHAPED = `${READING_LINE}, ${GUTTER_CONTROL}`;
++/** A note in Marginalia's column (MarginaliaColumn.tsx), whose card is `MARG_TIPS[data-marg-tip]`. */
++const MARG_NOTE = ".marg-note [data-marg-tip]";
++const SELECTOR = `[data-block-link], ${XREF_SELECTOR}, ${READING_LINE}, ${GUTTER_CONTROL}, ${MARG_NOTE}`;
++/** The ones that are not links, and draw a control's card rather than a passage's preview. */
++const CONTROL_SHAPED = `${READING_LINE}, ${GUTTER_CONTROL}, ${MARG_NOTE}`;
+ 
+ /**
+  * **`ReadingCard` — what the reading-time line is, and how long you have spent
+@@ -242,6 +252,12 @@ function contentFor(
+     const tip = el.getAttribute("data-tip")?.trim() ?? "";
+     return tip === "" ? null : <TipNote>{tip}</TipNote>;
+   }
++  if (el.matches(MARG_NOTE)) {
++    const key = el.getAttribute("data-marg-tip");
++    if (!isMargTipKey(key)) return null;
++    const tip = MARG_TIPS[key];
++    return <ControlTip head={tip.head} what={tip.what} how={tip.how} />;
++  }
+   /* A cross-reference's target comes from the resolver and only from there —
+      never `data-block-link`, `data-block-missing` or `data-block-preview` off
+      the mark. Since 2026-10-01 the sanitiser drops all three from an
+diff --git a/src/web/marginalia/MarginaliaColumn.tsx b/src/web/marginalia/MarginaliaColumn.tsx
+index 0161c6c06..35978291c 100644
+--- a/src/web/marginalia/MarginaliaColumn.tsx
++++ b/src/web/marginalia/MarginaliaColumn.tsx
+@@ -33,9 +33,10 @@ import { rowWork } from "../DebatePanel.js";
+ import { nameOfThrown, recordLog } from "../log-buffer.js";
+ import { captureClientFailure } from "../monitoring.js";
+ import { useRenderCount } from "../perf.js";
+-import { Tooltip } from "../Tooltip.js";
++import { ControlTip, Tooltip } from "../Tooltip.js";
+ import { useIdeasRead } from "../useIdeas.js";
+ import { type HeadStep, type MarginClaim, type MarginComment, type MarginaliaNote, layoutNotes } from "./notes.js";
++import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN } from "./tips.js";
+ import { type Voice, voiceClass, withVoice } from "../voice.js";
+ 
+ /** The gap the collision pass keeps between two notes, in px. */
+@@ -54,10 +55,17 @@ const PROVENANCE_TIP = {
+  * instead and reports once: the reader loses a note, not the prose. GPT Sol,
+  * F3 on the plan.
+  */
+-export function MarginNotesSlot({ notes }: { notes: readonly MarginaliaNote[] }) {
++export function MarginNotesSlot({
++  notes,
++  viewer,
++}: {
++  notes: readonly MarginaliaNote[];
++  /** Whose comments these are, for their card: the reader's own, or the owner's to a visitor. */
++  viewer: "owner" | "visitor";
++}) {
+   return (
+     <NoteBoundary>
+-      <MarginNotes notes={notes} />
++      <MarginNotes notes={notes} viewer={viewer} />
+     </NoteBoundary>
+   );
+ }
+@@ -87,33 +95,47 @@ class NoteBoundary extends Component<{ children: ReactNode }, { broken: boolean
+  * **What a question note is, on hover** — its rule is a bare line beside some
+  * blocks and nothing else said so. Greg, 2026-10-01 (SPIDERYARN-READING2-84):
+  * *"What are they for? They should ideally have tooltips to explain
+- * themselves."* A native `title`, as the gutter's controls use; nothing on a
+- * tap yet. Depth 0 is the article's own question (notes.ts).
++ * themselves."* The house card since 261002g (tips.ts). **A button with a card
++ * of its own**, like the idea stamp, rather than the delegated card the shut
++ * lines use: a question has nothing to press, so the card is the only thing a
++ * keyboard or a finger could reach, and the delegated card answers neither
++ * (GPT Sol, plan review). One per part, so the instance each costs is a few.
++ * Depth 0 is the article's own question (notes.ts).
+  */
+-const QUESTION_TIP = (depth: number): string =>
+-  depth === 0
+-    ? "The question the whole article answers."
+-    : "The question this part of the article answers. Read on to find the answer.";
++function QuestionNote({ depth, text }: { depth: number; text: string }) {
++  const [open, setOpen] = useState(false);
++  const tip = MARG_TIPS[depth === 0 ? "question-article" : "question-part"];
++  return (
++    <Tooltip
++      placement="bottom"
++      keepSide
++      open={open}
++      onOpenChange={setOpen}
++      content={<ControlTip head={tip.head} what={tip.what} how={tip.how} />}
++    >
++      <button
++        type="button"
++        className="marg-question"
++        data-depth={depth}
++        aria-expanded={open}
++        onClick={() => setOpen((was) => !was)}
++      >
++        {text}
++      </button>
++    </Tooltip>
++  );
++}
+ 
+ /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
+     prose never carries them. */
+-function MarginNotes({ notes }: { notes: readonly MarginaliaNote[] }) {
++function MarginNotes({ notes, viewer }: { notes: readonly MarginaliaNote[]; viewer: "owner" | "visitor" }) {
+   useRenderCount("MarginNotes");
+   return (
+     <div className="marg-note" data-marg-note="">
+       {notes.map((note) => {
+         switch (note.kind) {
+           case "question":
+-            return (
+-              <p
+-                key={`q${note.depth}`}
+-                className="marg-question"
+-                data-depth={note.depth}
+-                title={QUESTION_TIP(note.depth)}
+-              >
+-                {note.text}
+-              </p>
+-            );
++            return <QuestionNote key={`q${note.depth}`} depth={note.depth} text={note.text} />;
+           case "idea":
+             return <IdeaStamp key={`i${note.ideaId}`} note={note} />;
+           case "faq":
+@@ -123,7 +145,7 @@ function MarginNotes({ notes }: { notes: readonly MarginaliaNote[] }) {
+           case "citation":
+             return <CitationNote key="citation" items={note.items} />;
+           case "comment":
+-            return <CommentNote key="comment" items={note.items} />;
++            return <CommentNote key="comment" items={note.items} viewer={viewer} />;
+           default: {
+             const never: never = note;
+             return never;
+@@ -149,13 +171,17 @@ function ShutNote({
+   stamp,
+   tip,
+   line,
++  lineVoice,
+   children,
+ }: {
+   kind: string;
+   stamp: string;
+-  /** What this kind of line is, on hover — every mark explains itself. */
+-  tip: string;
++  /** What this kind of line is and where it came from, on hover — every mark
++      explains itself. A key into tips.ts; the delegated card draws it. */
++  tip: MargTipKey;
+   line: string;
++  /** Whose words `line` is: the one item's, or ours for a count (fonts.md). */
++  lineVoice: Voice;
+   /** The open half; null when there is nothing more to show than the line. */
+   children: ReactNode | null;
+ }) {
+@@ -163,12 +189,13 @@ function ShutNote({
+   const panel = useId();
+   const label = (
+     <span className="marg-shut-label">
+-      <span className="marg-stamp">{stamp}</span> <span className="marg-shut-line">{line}</span>
++      <span className="marg-stamp">{stamp}</span>{" "}
++      <span className={withVoice("marg-shut-line", lineVoice)}>{line}</span>
+     </span>
+   );
+   if (children === null) {
+     return (
+-      <p className="marg-shut" data-kind={kind} title={tip}>
++      <p className="marg-shut" data-kind={kind} data-marg-tip={tip}>
+         {label}
+       </p>
+     );
+@@ -178,7 +205,7 @@ function ShutNote({
+       <button
+         type="button"
+         className="marg-shut-button"
+-        title={tip}
++        data-marg-tip={tip}
+         aria-expanded={open}
+         aria-controls={panel}
+         onClick={() => setOpen((was) => !was)}
+@@ -201,13 +228,17 @@ function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["i
+     <ShutNote
+       kind="faq"
+       stamp="FAQ"
+-      tip="A question a careful reader might ask, which this passage answers. From FAQ mode."
++      tip="faq"
+       line={only ? only.question.question : plural(items.length, "question", "questions")}
++      lineVoice={only ? "ai" : "ui"}
+     >
+       {items.map(({ question, quote, morePassages }) => (
+         <div key={question.id} className="marg-open-item">
+-          {!only && <p className="marg-open-head">{question.question}</p>}
+-          <p className="marg-open-quote">Answered here: “{quote}”</p>
++          {!only && <p className={withVoice("marg-open-head", "ai")}>{question.question}</p>}
++          {/* Our words, then the article's. */}
++          <p className="marg-open-quote">
++            Answered here: “<span className="marg-faq-quote">{quote}</span>”
++          </p>
+           {morePassages > 0 && (
+             <p className="marg-open-by">+{plural(morePassages, "more passage", "more passages")}</p>
+           )}
+@@ -226,25 +257,30 @@ const RELATION_WORD: Record<MarginClaim["relation"], string> = {
+   unclear: "discusses",
+ };
+ 
++/** A page's headline is its own, unless the model read one off it (`titleIsAI`,
++    as the band's `dbt-title-ai`); a page's own words are third party, so ours. */
++const headlineVoice = (row: MarginClaim): Voice => (rowWork(row).titleIsAI ? "ai" : "ui");
++
+ function DebateNote({ items }: { items: readonly MarginClaim[] }) {
+   const only = items.length === 1 ? items[0] : undefined;
+   return (
+     <ShutNote
+       kind="debate"
+       stamp={only ? RELATION_WORD[only.relation] : "Debate"}
+-      tip="A page elsewhere on the web that answers a claim made here, and how it bears on it. From Debate mode."
++      tip="debate"
+       line={only ? rowWork(only).headline : plural(items.length, "page on the web", "pages on the web")}
++      lineVoice={only ? headlineVoice(only) : "ui"}
+     >
+       {items.map((row) => (
+         <div key={row.id} className="marg-open-item">
+           <p className="marg-open-head">
+             {!only && <span className="marg-stamp">{RELATION_WORD[row.relation]}</span>}{" "}
+-            <a href={row.url} target="_blank" rel="noreferrer noopener">
++            <a href={row.url} target="_blank" rel="noreferrer noopener" className={voiceClass(headlineVoice(row))}>
+               {rowWork(row).headline}
+             </a>
+           </p>
+           <p className="marg-open-quote">“{row.sourceQuote}”</p>
+-          {row.applies && <p>{row.applies}</p>}
++          {row.applies && <p className="marg-debate-applies">{row.applies}</p>}
+         </div>
+       ))}
+     </ShutNote>
+@@ -257,8 +293,9 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
+     <ShutNote
+       kind="citation"
+       stamp="Cites"
+-      tip="A work the piece cites here for the first time, and why. From Citations mode."
++      tip="citation"
+       line={only ? only.title : plural(items.length, "work", "works")}
++      lineVoice="ui"
+     >
+       {items.map((work) => {
+         const by = byLineOf(work);
+@@ -266,7 +303,7 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
+           <div key={work.id} className="marg-open-item">
+             {!only && <p className="marg-open-head">{work.title}</p>}
+             {by && <p className="marg-open-by">{by}</p>}
+-            <p>{work.why}</p>
++            <p className="marg-cite-why">{work.why}</p>
+           </div>
+         );
+       })}
+@@ -276,18 +313,19 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
+ 
+ /** The reader's comments. Bare bookmarks never reach here: notes.ts leaves
+     them to the gutter's mark. */
+-function CommentNote({ items }: { items: readonly MarginComment[] }) {
++function CommentNote({ items, viewer }: { items: readonly MarginComment[]; viewer: "owner" | "visitor" }) {
+   const only = items.length === 1 ? items[0] : undefined;
+   return (
+     <ShutNote
+       kind="comment"
+       stamp="Note"
+-      tip="A comment on this passage. All of them are in the drawer at the foot of the window."
++      tip={viewer === "owner" ? "comment-own" : "comment-owner"}
+       line={only ? (only.body ?? "AI answer") : plural(items.length, "note", "notes")}
++      lineVoice={only?.body ? "reader" : "ui"}
+     >
+       {items.map((c) => (
+         <div key={c.id} className="marg-open-item">
+-          {c.body && <p>{c.body}</p>}
++          {c.body && <p className="marg-cmt-body">{c.body}</p>}
+           {c.answer && <p className="marg-open-answer">{c.answer}</p>}
+         </div>
+       ))}
+@@ -314,6 +352,7 @@ function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }
+           <div className="tip-soon-head marg-idea-tipname">{note.name}</div>
+           <p className="marg-idea-statement">{note.statement}</p>
+           <p className="tip-soon-how">{PROVENANCE_TIP[note.provenance]}</p>
++          <p className="tip-soon-how">{IDEA_ORIGIN}</p>
+         </>
+       }
+     >
+@@ -364,7 +403,7 @@ export function MarginaliaHead({
+     );
+   }
+   if (path.length === 0 && arc === null) return null;
+-  /* **Orientation, not a summary**: the arc cut at three, the whole of it in a
++  /* **Orientation, not a summary**: the arc cut at four (261002g), the whole of it in a
+      card on hover, focus or tap. A head that grew to the arc's full six or
+      seven lines dominated the margin it is meant to sit quietly at the top of
+      (GPT Astra's design pass, 2026-10-01).
+@@ -404,7 +443,12 @@ function PathStep({ title, voice, depth }: { title: string; voice: Voice; depth:
+       keepSide
+       open={open}
+       onOpenChange={setOpen}
+-      content={<p className={voiceClass(voice)}>{title}</p>}
++      content={
++        <>
++          <p className={voiceClass(voice)}>{title}</p>
++          <p className="tip-soon-how">{PATH_ORIGIN[voice]}</p>
++        </>
++      }
+     >
+       <button
+         type="button"
+@@ -427,7 +471,12 @@ function ArcLine({ arc }: { arc: string }) {
+       keepSide
+       open={open}
+       onOpenChange={setOpen}
+-      content={<p className="marg-arc-full">{arc}</p>}
++      content={
++        <>
++          <p className="marg-arc-full">{arc}</p>
++          <p className="tip-soon-how">{ARC_ORIGIN}</p>
++        </>
++      }
+     >
+       <button
+         type="button"
+diff --git a/src/web/marginalia/tips.ts b/src/web/marginalia/tips.ts
+new file mode 100644
+index 000000000..083138bf2
+--- /dev/null
++++ b/src/web/marginalia/tips.ts
+@@ -0,0 +1,86 @@
++/**
++ * **What each note in the margin is, and where it came from** — the words of
++ * every card in Marginalia, in one table.
++ *
++ * Greg, 2026-10-01 (spya-atv4nx): *"I can't tell what that Annotation is from
++ * or why or whether AI-generated … Make sure all annotations have rich
++ * tooltips (see tooltips.md) explaining their origin."* So each card is
++ * `ControlTip`'s shape: `what` is what a reader could guess from the note; `how`
++ * is what they could not — which mode made it, who wrote the words (AI, the
++ * author, the reader), and why it sits beside this passage.
++ *
++ * The shut lines and questions carry only their key, as `data-marg-tip`, and
++ * the reading view's one delegated card draws them (BlockLinkCard.tsx § MARG_NOTE)
++ * — a column of dozens of notes costs one Floating UI instance, not dozens. The
++ * idea stamp, the path and the arc have cards of their own and read their
++ * origin line from here. docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
++ */
++
++import type { Voice } from "../voice.js";
++
++export type MargTipKey =
++  | "question-article"
++  | "question-part"
++  | "faq"
++  | "debate"
++  | "citation"
++  | "comment-own"
++  | "comment-owner";
++
++export type MargTip = { head: string; what: string; how: string };
++
++export const MARG_TIPS: Record<MargTipKey, MargTip> = {
++  "question-article": {
++    head: "The article's question",
++    what: "The question the whole article sets out to answer.",
++    how: "Written by AI when the article's structure was built. It sits beside the opening so you can read with it in mind.",
++  },
++  "question-part": {
++    head: "This part's question",
++    what: "The question this part of the article answers. Read on to find the answer.",
++    how: "Written by AI when the article's structure was built. It sits beside the part's first paragraph.",
++  },
++  faq: {
++    head: "FAQ",
++    what: "A question a careful reader might ask, which this passage answers. Press it to see the words that answer it.",
++    how: "From FAQ mode. The question was written by AI; the answer is quoted from the article. It sits beside the first passage that answers it.",
++  },
++  debate: {
++    head: "Debate",
++    what: "A page elsewhere on the web that responds to a claim made in this passage, and whether it agrees, disputes, qualifies or extends it.",
++    how: "From Debate mode. AI searched the web and judged how the page bears on the claim; the quote is the page's own words.",
++  },
++  citation: {
++    head: "Cites",
++    what: "A work the article cites, at the first place it does. Press it to see who wrote it and why it is cited.",
++    how: "From Citations mode. The title is the work's own; the reason it is cited was written by AI from the article.",
++  },
++  "comment-own": {
++    head: "Your note",
++    what: "A comment you left on this passage.",
++    how: "Written by you, with the AI's answer under it if you asked for one. All your notes are in the drawer at the foot of the window.",
++  },
++  "comment-owner": {
++    head: "A note",
++    what: "A comment the article's owner left on this passage.",
++    how: "Written by the person who shared this article, with the AI's answer under it if they asked for one.",
++  },
++};
++
++export function isMargTipKey(key: string | null): key is MargTipKey {
++  return key !== null && Object.hasOwn(MARG_TIPS, key);
++}
++
++/** The idea stamp's origin line, under its statement and provenance. */
++export const IDEA_ORIGIN =
++  "From Ideas mode, written by AI. It sits where the idea first appears in the article.";
++
++/** The head's cards: what the path and the arc are, and who wrote them. */
++export const PATH_ORIGIN: Record<Voice, string> = {
++  author: "Where you are: the part, then the section. This is the author's own heading.",
++  ai: "Where you are: the part, then the section. AI wrote this title, from the article's structure.",
++  reader: "Where you are: the part, then the section. You gave it this title.",
++  ui: "Where you are: the part, then the section.",
++};
++export const ARC_ORIGIN =
++  "Where the argument has got to by this part: one sentence per part, written by AI from the whole article.";
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 367f47a48..cf76c63e5 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -1412,7 +1412,8 @@ export function Reader({
+       comments,
+     });
+     const out = new Map<BlockId, ReactElement>();
+-    for (const [blockId, notes] of byBlock) out.set(blockId, <MarginNotesSlot notes={notes} />);
++    for (const [blockId, notes] of byBlock)
++      out.set(blockId, <MarginNotesSlot notes={notes} viewer={capability.kind === "owner" ? "owner" : "visitor"} />);
+     return out;
+   }, [
+     marginRoom,
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index 78940580c..e391b8d0b 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -64,9 +64,26 @@
+    something: read on to answer it. Its rule hangs in the gap, so its words
+    start on the column's one edge. */
+ .marg-question {
++  /* A button since 261002g, so its card opens on a tap and on focus; drawn as
++     the paragraph it was (MarginaliaColumn.tsx § QuestionNote). */
++  appearance: none;
++  display: block;
++  box-sizing: border-box;
++  width: calc(100% + 0.5rem + 1px);
++  padding: 0 0 0 0.5rem;
++  border: 0;
+   border-left: 1px solid var(--rule-strong);
+-  margin-left: calc(-0.5rem - 1px);
+-  padding-left: 0.5rem;
++  margin: 0 0 0 calc(-0.5rem - 1px);
++  background: none;
++  color: inherit;
++  font: inherit;
++  line-height: inherit;
++  text-align: inherit;
++  cursor: help;
++}
++.marg-question:focus-visible {
++  outline: 2px solid var(--rule-strong);
++  outline-offset: 2px;
+ }
+ 
+ /* An idea, at its first occurrence: a stamp in small capitals, then the idea's
+@@ -186,7 +203,7 @@ p.marg-shut {
+    Pinned flush under the controls bar, across the whole column, with the page
+    behind it and a short fade below: notes scrolling up pass under one clean
+    edge rather than showing through a gap or stopping at a box. Orientation,
+-   not a summary — the path on one line, the arc cut at three, the whole of it
++   not a summary — the path on one line, the arc cut at four, the whole of it
+    in a card. */
+ .marg-head {
+   position: fixed;
+@@ -236,7 +253,7 @@ p.marg-shut {
+ /* The part above, small caps and faint; the section under it, in the head's
+    own voice. Each wraps rather than ending in an ellipsis — Greg, 7M: "the
+    text is truncated too much" (261001k). Two lines each, so the path is at most
+-   four and the head (with the arc's three) at most seven — the backstop for a
++   four and the head (with the arc's four) at most eight — the backstop for a
+    long title, not the ordinary case (GPT Sol on the plan). */
+ .marg-path {
+   display: grid;
+@@ -272,8 +289,12 @@ p.marg-shut {
+   all: unset;
+   display: -webkit-box;
+   -webkit-box-orient: vertical;
+-  -webkit-line-clamp: 3;
+-  line-clamp: 3;
++  /* Four, not three, since 261002g: the arc is now at most 20 words, which in
++     the AI face (a monospace, about a third wider than Geist) is four lines at
++     288px for 32 of 35 measured sentences, and three for 3
++     (evals/arc-length/run.ts). Three cut nearly every one mid-sentence. */
++  -webkit-line-clamp: 4;
++  line-clamp: 4;
+   overflow: hidden;
+   cursor: help;
+   color: var(--ink-soft);
+diff --git a/src/web/styles/voices.css b/src/web/styles/voices.css
+index 67865fe76..908d5e892 100644
+--- a/src/web/styles/voices.css
++++ b/src/web/styles/voices.css
+@@ -53,6 +53,8 @@
+     .note-preview,
+     .gloss-ask-found,
+     .faq-quote,
++    /* Marginalia: the words an FAQ line quotes as answering it */
++    .marg-faq-quote,
+     .ideas-quote:not(.ideas-quote-moved),
+     .tl-quote:not(.tl-quote-moved),
+     .tl-when-words,
+@@ -159,6 +161,11 @@
+     .marg-idea-statement,
+     .marg-arc,
+     .marg-arc-full,
++    /* Marginalia's shut notes, opened: Debate's reading of a page, a
++       citation's why, the AI's answer to a comment */
++    .marg-debate-applies,
++    .marg-cite-why,
++    .marg-open-answer,
+     /* Sketch: the card, the title bar, and the scene tooltips. NOT the SVG
+        labels, which are wrapped in TypeScript at Geist's width (CHAR_W in
+        src/sketch-scene.ts) and would spill out of their shapes. */
+@@ -224,6 +231,7 @@
+     .chat-rename,
+     textarea.cmt-note,
+     p.cmt-body,
++    .marg-cmt-body,
+     .cmt-followup input,
+     .annotate-dialog textarea,
+     .dock-question-state.own,
+diff --git a/src/web/useArc.ts b/src/web/useArc.ts
+index bf35cee09..e4251a10c 100644
+--- a/src/web/useArc.ts
++++ b/src/web/useArc.ts
+@@ -57,6 +57,7 @@
+  * See docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.2.
+  */
+ import { useCallback, useEffect, useRef, useState } from "react";
++import { isArcOutdated } from "../arc-version.js";
+ import type { Arc, ArcFound } from "../types.js";
+ import { useOrderedRead } from "./useOrderedRead.js";
+ import { useStepJob } from "./useStepJob.js";
+@@ -159,8 +160,18 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
+      being a boolean, so opening a second article in the same mount asks again
+      while a re-render or StrictMode's second pass does not. */
+   const started = useRef<string | null>(null);
++  /* **Or when the payload's arc is from an older prompt** — it stays on screen
++     while a new one is written, and the completion's `refresh` swaps it in.
++     The payload carries no staleness, so without this a prompt change never
++     reached an article that already had an arc: Greg's two were still on
++     arc/2 and arc/3 when he asked for a shorter, plainer one (spya-g4yrew). A
++     version compare only, no hashing on every open; strictly older only, so a
++     rolled-back build leaves a newer arc alone (`isArcOutdated`). Plan 261002g
++     § 2, after GPT Sol's review: blanking it instead would take the arc off
++     Structure too for the length of a model call. */
++  const outdated = fromPayload !== undefined && isArcOutdated(fromPayload.version);
+   useEffect(() => {
+-    if (status !== "absent") return;
++    if (status !== "absent" && !outdated) return;
+     if (started.current === slug) return;
+     started.current = slug;
+     /* Unforced. The step's own freshness check is the thing being trusted here,
+@@ -169,7 +180,7 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
+        unforced run regenerates. Forcing would also work and would cost a model
+        call on any race where another tab wrote one first. */
+     void queue.start();
+-  }, [status, slug, queue]);
++  }, [status, outdated, slug, queue]);
+ 
+   return {
+     status,
+diff --git a/tests/arc-idle-poll.test.ts b/tests/arc-idle-poll.test.ts
+index 7796925b5..f9db1526f 100644
+--- a/tests/arc-idle-poll.test.ts
++++ b/tests/arc-idle-poll.test.ts
+@@ -82,6 +82,7 @@ vi.mock("../src/web/lib/api.js", () => ({
+ const { useArc } = await import("../src/web/useArc.js");
+ const { useJobs } = await import("../src/web/useJobs.js");
+ const { jobEngine } = await import("../src/web/jobEngine.js");
++const { ARC_PROMPT_VERSION } = await import("../src/arc-version.js");
+ 
+ const SLUG = "an-arc-at-rest";
+ 
+@@ -285,3 +286,54 @@ describe("the arc's job subscription", () => {
+     expect(lastWorking, "and the arc knows its job is running").toBe(true);
+   });
+ });
++
++/**
++ * **An arc an older prompt wrote is rewritten when its owner opens it, and
++ * stays on screen meanwhile.** The payload carries no staleness, so before
++ * 261002g a prompt change never reached an article that already had an arc —
++ * Greg's two were on arc/2 and arc/3 when he asked for a plainer one
++ * (spya-g4yrew). Strictly older only: a rolled-back build must not rewrite a
++ * newer arc, and a version nobody can read is not evidence (GPT Sol, plan
++ * review). docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
++ */
++describe("an arc from another prompt version, in the payload", () => {
++
++  function probeFor(version: string) {
++    const arc: Arc = { ...ARC, version };
++    return () => {
++      const got = useArc(SLUG, arc);
++      lastArc = got.arc;
++      if (got.working) everWorking = true;
++      return null;
++    };
++  }
++
++  beforeEach(() => {
++    override = (url, method) => {
++      if (method === "POST" && url === "/api/jobs") {
++        queue = [arcJob("queued")];
++        return json(arcJob("queued"));
++      }
++      return null;
++    };
++  });
++
++  it("older: asks for one new arc, and keeps drawing the old one meanwhile", async () => {
++    await mount(probeFor("arc/1"));
++    await advance(2_000);
++    expect(calls.filter((c) => c === "POST /api/jobs"), "one job asked for").toHaveLength(1);
++    expect(lastArc?.version, "the old arc is still drawn").toBe("arc/1");
++    expect(calls.some((c) => c.startsWith("GET /api/arc/")), "no read: the payload is drawn").toBe(false);
++  });
++
++  it.each([
++    ["current", ARC_PROMPT_VERSION],
++    ["newer (a rolled-back build)", "arc/999"],
++    ["unparseable", "test"],
++  ])("%s: asks for nothing", async (_label, version) => {
++    await mount(probeFor(version));
++    await advance(2_000);
++    expect(calls.filter((c) => c.startsWith("POST")), "no job").toEqual([]);
++    expect(lastArc?.version).toBe(version);
++  });
++});
+diff --git a/tests/block-selection-by-tap.test.tsx b/tests/block-selection-by-tap.test.tsx
+index 46c26104e..ad74e807c 100644
+--- a/tests/block-selection-by-tap.test.tsx
++++ b/tests/block-selection-by-tap.test.tsx
+@@ -281,7 +281,7 @@ describe("a tap that already means something else does not select the block", ()
+       applies: "It bears on this claim.",
+     } as unknown as MarginClaim;
+     const margin = new Map<BlockId, ReactElement>([
+-      [block.id, createElement(MarginNotesSlot, { notes: [{ kind: "debate", items: [claim] }] })],
++      [block.id, createElement(MarginNotesSlot, { notes: [{ kind: "debate", items: [claim] }], viewer: "owner" })],
+     ]);
+     const props = propsFor(articleFrom(loaded), undefined, margin);
+     await draw(props);
+diff --git a/tests/marginalia-head-path.test.tsx b/tests/marginalia-head-path.test.tsx
+index 2e6b011df..8cbe71128 100644
+--- a/tests/marginalia-head-path.test.tsx
++++ b/tests/marginalia-head-path.test.tsx
+@@ -79,7 +79,10 @@ describe("the head's path", () => {
+ 
+     const describedBy = step?.getAttribute("aria-describedby");
+     expect(describedBy, "the title card did not open").toBeTruthy();
+-    expect(document.getElementById(describedBy ?? "")?.textContent).toBe(title);
++    const card = document.getElementById(describedBy ?? "")?.textContent ?? "";
++    expect(card).toContain(title);
++    /* And where it came from — spya-atv4nx, plan 261002g. */
++    expect(card).toContain("Where you are: the part, then the section.");
+   });
+ 
+   it("pins the two-line clamp declarations that jsdom cannot lay out", () => {
+diff --git a/tests/marginalia-note-cards.test.tsx b/tests/marginalia-note-cards.test.tsx
+new file mode 100644
+index 000000000..c4e640996
+--- /dev/null
++++ b/tests/marginalia-note-cards.test.tsx
+@@ -0,0 +1,162 @@
++// @vitest-environment jsdom
++/**
++ * **Every note in Marginalia says what it is and where it came from**, in the
++ * house card rather than a native `title`.
++ *
++ * Greg, 2026-10-01 (spya-atv4nx): *"I can't tell what that Annotation is from
++ * or why or whether AI-generated … Make sure all annotations have rich
++ * tooltips (see tooltips.md) explaining their origin."* Before him, on the
++ * question notes (SPIDERYARN-READING2-84): *"They should ideally have tooltips
++ * to explain themselves."*
++ *
++ * The shut lines and questions carry a key (`data-marg-tip`); the reading
++ * view's one delegated card (BlockLinkCard.tsx) draws `MARG_TIPS[key]`.
++ * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
++ */
++import { act } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { CitedWork, FaqQuestion } from "../src/types.js";
++import { BlockLinkProvider } from "../src/web/BlockLinkCard.js";
++import { MarginNotesSlot } from "../src/web/marginalia/MarginaliaColumn.js";
++import type { MarginClaim, MarginComment, MarginaliaNote } from "../src/web/marginalia/notes.js";
++import { MARG_TIPS, type MargTipKey } from "../src/web/marginalia/tips.js";
++
++class FakeResizeObserver {
++  observe() {}
++  unobserve() {}
++  disconnect() {}
++}
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++const AFTER_THE_DELAY = 500;
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
++  vi.useFakeTimers();
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++  vi.useRealTimers();
++  vi.unstubAllGlobals();
++});
++
++const question = { id: "q1", question: "Why does it matter?" } as unknown as FaqQuestion;
++const claim = {
++  id: "d1",
++  relation: "disputes",
++  url: "https://example.org/a",
++  title: "A reply",
++  sourceQuote: "The page's words.",
++  applies: "It bears on the claim.",
++} as unknown as MarginClaim;
++const work = { id: "w1", title: "A cited work", why: "Because." } as unknown as CitedWork;
++const comment = { id: "c1", body: "My thought", answer: null } as unknown as MarginComment;
++
++/** One note of each kind, with the key its card should be drawn from. */
++const EACH: readonly [MarginaliaNote, MargTipKey][] = [
++  [{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }, "faq"],
++  [{ kind: "debate", items: [claim] }, "debate"],
++  [{ kind: "citation", items: [work] }, "citation"],
++  [{ kind: "comment", items: [comment] }, "comment-own"],
++];
++
++function paint(notes: MarginaliaNote[], viewer: "owner" | "visitor" = "owner"): void {
++  act(() =>
++    root.render(
++      <BlockLinkProvider index={new Map()}>
++        <MarginNotesSlot notes={notes} viewer={viewer} />
++      </BlockLinkProvider>,
++    ),
++  );
++}
++
++const card = () => document.querySelector<HTMLElement>(".tooltip-anchor");
++const trigger = () => host.querySelector<HTMLElement>(".marg-note [data-marg-tip]")!;
++
++async function hover(el: HTMLElement): Promise<void> {
++  el.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
++  await act(async () => {
++    vi.advanceTimersByTime(AFTER_THE_DELAY);
++  });
++}
++
++describe("a note in the margin", () => {
++  it.each(EACH)("%o carries no native title, and draws its own card on hover", async (note, key) => {
++    paint([note]);
++    const el = trigger();
++    expect(el.getAttribute("data-marg-tip")).toBe(key);
++    expect(host.querySelector(".marg-note [title]"), "a native title is left").toBeNull();
++    await hover(el);
++    const text = card()?.textContent ?? "";
++    expect(text).toContain(MARG_TIPS[key].head);
++    expect(text).toContain(MARG_TIPS[key].how);
++  });
++
++  it("tells a visitor whose comment it is", async () => {
++    paint([{ kind: "comment", items: [comment] }], "visitor");
++    expect(trigger().getAttribute("data-marg-tip")).toBe("comment-owner");
++  });
++
++  it("does not open for a finger, which opens the note instead", async () => {
++    paint([{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }]);
++    trigger().dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "touch" }));
++    await act(async () => {
++      vi.advanceTimersByTime(AFTER_THE_DELAY);
++    });
++    expect(card()).toBeNull();
++  });
++});
++
++describe("a question note", () => {
++  /* A question has nothing to press, so its card is a Tooltip of its own on a
++     button: a tap or a keyboard reaches it, which the delegated card does not.
++     GPT Sol, plan review of 261002g. */
++  it.each([
++    [0, "question-article"],
++    [1, "question-part"],
++  ] as const)("at depth %i opens its card on a press, with no native title", async (depth, key) => {
++    paint([{ kind: "question", depth, text: "Why?" }]);
++    const button = host.querySelector<HTMLButtonElement>("button.marg-question");
++    expect(button, "the question is not a button").not.toBeNull();
++    expect(button?.hasAttribute("title")).toBe(false);
++    await act(async () => button?.click());
++    const text = document.body.textContent ?? "";
++    expect(text).toContain(MARG_TIPS[key].head);
++    expect(text).toContain(MARG_TIPS[key].how);
++  });
++});
++
++describe("the cards' words", () => {
++  /* tooltips.md § ControlTip: the second paragraph is what a reader could not
++     guess from the first; a card that restates itself is the failure. */
++  it.each(Object.entries(MARG_TIPS))("%s: says where it came from, and does not repeat itself", (_key, tip) => {
++    expect(tip.how).not.toBe(tip.what);
++    expect(tip.what).not.toContain(tip.head);
++    expect(tip.how).toMatch(/AI|you|person who shared/);
++  });
++});
++
++describe("whose words a shut line is (fonts.md)", () => {
++  it("an FAQ question is the AI's, and the passage it quotes the author's", () => {
++    paint([{ kind: "faq", items: [{ question, quote: "the words", morePassages: 0 }] }]);
++    expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-ai")).toBe(true);
++  });
++
++  it("a comment is the reader's", () => {
++    paint([{ kind: "comment", items: [comment] }]);
++    expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-reader")).toBe(true);
++  });
++
++  it("a count is ours", () => {
++    paint([{ kind: "citation", items: [work, { ...work, id: "w2" } as CitedWork] }]);
++    expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-ui")).toBe(true);
++  });
++});
+diff --git a/tests/marginalia-question-tooltip.test.tsx b/tests/marginalia-question-tooltip.test.tsx
+deleted file mode 100644
+index dd9c9f612..000000000
+--- a/tests/marginalia-question-tooltip.test.tsx
++++ /dev/null
+@@ -1,44 +0,0 @@
+-// @vitest-environment jsdom
+-/* Marginalia's question notes say what they are on hover. Greg, 2026-10-01
+-   (SPIDERYARN-READING2-84): "There are vertical lines now next to some blocks.
+-   What are they for? They should ideally have tooltips to explain themselves."
+-   A question note is drawn with a rule down its left edge, beside only the
+-   blocks that open a part. docs/plans/261001l-…. */
+-import { act } from "react";
+-import { createRoot, type Root } from "react-dom/client";
+-import { afterEach, describe, expect, it } from "vitest";
+-import { MarginNotesSlot } from "../src/web/marginalia/MarginaliaColumn.js";
+-
+-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+-
+-let host: HTMLDivElement | null = null;
+-let root: Root | null = null;
+-afterEach(async () => {
+-  await act(async () => root?.unmount());
+-  host?.remove();
+-  host = null;
+-  root = null;
+-});
+-
+-function question(depth: number): HTMLElement {
+-  host = document.createElement("div");
+-  document.body.append(host);
+-  const nextRoot = createRoot(host);
+-  root = nextRoot;
+-  act(() =>
+-    nextRoot.render(<MarginNotesSlot notes={[{ kind: "question", depth, text: "Why?" }]} />),
+-  );
+-  const el = host.querySelector<HTMLElement>(".marg-question");
+-  if (!el) throw new Error("no question note was drawn");
+-  return el;
+-}
+-
+-describe("a question note", () => {
+-  it("says, on hover, that it is the question a part answers", () => {
+-    expect(question(1).getAttribute("title")).toMatch(/question this part of the article answers/);
+-  });
+-
+-  it("says the whole piece, for the article's own question", () => {
+-    expect(question(0).getAttribute("title")).toMatch(/question the whole article answers/);
+-  });
+-});
+diff --git a/tests/marginalia-shut-notes.test.tsx b/tests/marginalia-shut-notes.test.tsx
+index dbaeb0db5..b8a6be945 100644
+--- a/tests/marginalia-shut-notes.test.tsx
++++ b/tests/marginalia-shut-notes.test.tsx
+@@ -31,7 +31,7 @@ function draw(notes: MarginaliaNote[]): HTMLDivElement {
+   document.body.append(el);
+   const nextRoot = createRoot(el);
+   root = nextRoot;
+-  act(() => nextRoot.render(<MarginNotesSlot notes={notes} />));
++  act(() => nextRoot.render(<MarginNotesSlot notes={notes} viewer="owner" />));
+   return el;
+ }
+ 
+@@ -73,9 +73,9 @@ describe("a shut line", () => {
+     expect(el.textContent).toContain("+2 more passages");
+   });
+ 
+-  it("explains itself on hover", () => {
++  it("explains itself on hover, through the house card (marginalia-note-cards.test.tsx)", () => {
+     const el = draw([{ kind: "debate", items: [row] }]);
+-    expect(el.querySelector(".marg-shut-button")?.getAttribute("title")).toMatch(/From Debate mode/);
++    expect(el.querySelector(".marg-shut-button")?.getAttribute("data-marg-tip")).toBe("debate");
+   });
+ 
+   it("puts a Debate row's link beside the button, never inside it", () => {
+@@ -161,8 +161,8 @@ function LayoutHarness() {
+   return (
+     <table className="zoom">
+       <tbody>
+-        <tr><td><MarginNotesSlot notes={[{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }]} /></td></tr>
+-        <tr><td><MarginNotesSlot notes={[{ kind: "question", depth: 1, text: "Below" }]} /></td></tr>
++        <tr><td><MarginNotesSlot viewer="owner" notes={[{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }]} /></td></tr>
++        <tr><td><MarginNotesSlot viewer="owner" notes={[{ kind: "question", depth: 1, text: "Below" }]} /></td></tr>
+       </tbody>
+     </table>
+   );
+diff --git a/tests/public-network-trace.test.tsx b/tests/public-network-trace.test.tsx
+index 71eeac8e0..0820406b0 100644
+--- a/tests/public-network-trace.test.tsx
++++ b/tests/public-network-trace.test.tsx
+@@ -2349,8 +2349,8 @@ describe("a signed-out browser on a shared document", () => {
+     const marks = [...host.querySelectorAll(".blk-cmt")];
+     expect(marks.length, "the owner's note is marked in the gutter").toBeGreaterThan(0);
+     for (const mark of marks) {
+-      expect(mark.getAttribute("title")).toMatch(/whoever added this article/);
+-      expect(mark.getAttribute("title")).not.toMatch(/\byour\b/i);
++      expect(mark.getAttribute("data-tip")).toMatch(/whoever added this article/);
++      expect(mark.getAttribute("data-tip")).not.toMatch(/\byour\b/i);
+       expect(mark.getAttribute("aria-label")).not.toMatch(/\byour\b/i);
+     }
+   });
+diff --git a/tests/voices-css.test.ts b/tests/voices-css.test.ts
+index e83d494e7..ba6883d48 100644
+--- a/tests/voices-css.test.ts
++++ b/tests/voices-css.test.ts
+@@ -194,7 +194,14 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }>
+   faq: [".faq-question"],
+   skim: [".skim-cue", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
+   tweets: [".tweets-text"],
+-  marginalia: [".marg-question", ".marg-idea-name", ".marg-arc"],
++  marginalia: [
++    ".marg-question",
++    ".marg-idea-name",
++    ".marg-arc",
++    ".marg-debate-applies",
++    ".marg-cite-why",
++    ".marg-open-answer",
++  ],
+ };
+ 
+ /**

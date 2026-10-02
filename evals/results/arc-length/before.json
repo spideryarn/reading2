@@ -1,0 +1,68 @@
+{
+  "arm": "before",
+  "promptVersion": "arc/5",
+  "arcSha": "406ebfb7f14f",
+  "at": "2026-10-02T17:36:53.176Z",
+  "articles": [
+    {
+      "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+      "sentences": [
+        "Before any specific mechanism is given, the wager is that scaling up a brain's neuron count would cross thresholds into genuinely new kinds of thought, not just more of the same, because minds work by exploiting the world's hidden shortcuts rather than grinding through its full complexity.",
+        "Having posited that bigger brains tap more shortcuts, the question becomes what structural features any such system—biological or artificial—must share to count as brain-like at all, rather than as mere raw computation.",
+        "Granting that single-stream, shortcut-exploiting structure as the shared constraint, language turns out to be its direct signature, so a bigger brain's gains would show up as richer, more precise language rather than as escape from that structure.",
+        "Turning from internal architecture to the world outside, the same shortcut-dependence reappears in what a brain can sense and act on, implying that size expands reach but never dissolves the underlying limits set by irreducibility.",
+        "Setting sensing and acting aside, the piece asks how far upward a brain could climb on its own terms, finding that abstraction is this very climbing and that bigger brains could ascend further without changing what kind of activity climbing is.",
+        "Having mapped abstraction's ladder in the abstract, a concrete instance—computational language—is offered to show both how high human-compatible abstraction can go and where even a bigger brain would hit the same wall of irreducibility.",
+        "Pulling back from any single brain, the account now shows that the one-thread limitation established earlier is exactly what forces multiple brains to coordinate through language, making society itself a scaled-up version of the same shortcut-exploiting logic.",
+        "Gathering every thread—architecture, language, sensing, abstraction, society—the piece closes by casting all of it as movement through a single underlying space of possible computation, leaving open just how alien a sufficiently bigger mind would become before we could no longer recognize it as mind-like at all."
+      ]
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "sentences": [
+        "Whether anything made of silicon could ever feel anything remains wide open, yet the answer already presses on questions of rights, suffering, and self-understanding.",
+        "Before any technical case is made, the pull toward believing machines feel comes from bias rather than evidence, so the stakes named at the outset need a sturdier foundation than intuition.",
+        "Stripped of the biases that inflate it, the case for machine consciousness now has to survive on its only remaining support—computation itself—and that support turns out to be far weaker than assumed.",
+        "With digital computation looking insufficient for consciousness but nothing ruling it out for good, the unresolved uncertainty becomes a practical problem: how to act toward machines that may or may not feel, and those that only seem to.",
+        "What stands settled is that consciousness is unlikely to arrive as a byproduct of computation alone, and what stands deliberately unresolved is any final verdict—leaving the task of relocating our own sense of self in something more alive than algorithmic."
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "sentences": [
+        "A single scaled-up but otherwise unmodified 2018-era model is the opening piece of evidence for a claim the rest of the piece must still earn: that scale alone, not new architectures, is the route to general intelligence.",
+        "GPT-3's unplanned abilities are now generalized into a pattern across vision, games, and robotics, but why bigger models keep getting qualitatively different rather than just quantitatively better remains to be explained.",
+        "The ensemble argument for why scale works is given a mechanism here—loss reduction as forced abandonment of shortcuts for genuine understanding—but this only sharpens the unanswered question of what a further halving of loss would actually buy.",
+        "With the scaling hypothesis now argued to be true in principle, the unresolved question shifts from whether scale works to who has the money, hardware, and above all conviction to keep pushing it, since OpenAI alone is shown betting its structure on an answer the rest of the field still won't commit to.",
+        "The repeated failure of expert forecasts, set against the hardware-overhang history just traced, is used to discredit the very caution that has kept rivals from matching OpenAI's bet.",
+        "Having established that scale reliably produces humanlike capabilities from mere text prediction, the argument turns to a consequence not yet confronted: that imitating human-generated data may be inseparable from learning to act like an agent.",
+        "Pushed to its most abstract limit—stripped even of human data, down to cellular automata and Turing machines—the case that agency cannot be reliably excluded from a sufficiently powerful learned system is left standing unresolved rather than refuted.",
+        "Nothing further is argued here; the case for scale, its mechanism, its contested adoption, and its unresolved agency risk stand as left in the preceding parts, with only reference material appended."
+      ]
+    },
+    {
+      "slug": "antikythera-mechanism-spya-zhxrzm",
+      "sentences": [
+        "A corroded lump pulled from the sea would take decades to be recognized as a machine at all, leaving even its birthplace and century unsettled.",
+        "Identifying what survives at all comes before any claim about what the whole device once did.",
+        "With the physical pieces catalogued, the puzzle shifts to reading what the front face was actually for.",
+        "Having settled roughly how the calendar ring worked, attention turns to what else the front face displayed and tracked.",
+        "Moving from the front face to the back, the mechanism's reach extends from daily lunar tracking to decades-long eclipse and games cycles.",
+        "Having accounted for every known gear train, the one gear that fits no known function reopens the question of what the front face was missing.",
+        "Knowing what functions the missing gears must have served still leaves open exactly how they were arranged, and no proposed answer has fully satisfied the evidence.",
+        "Granting that the device was not unique shifts the question from how it was built to where its tradition went afterward, and traces of it, simpler and scattered, surface for centuries after.",
+        "None of the scholarly reconstruction settles what the mechanism meant to people outside the lab, where its afterlife continues in replicas, screens, and stories only loosely bound to the evidence."
+      ]
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "sentences": [
+        "What separates real science from its hollow imitations is not yet named, only promised as the subject of what follows.",
+        "Having found belief after belief that fails the plainest test—does it work—the search still lacks a word for this pattern of failure.",
+        "That pattern now has a name, and the question shifts from spotting empty ritual to specifying the missing ingredient: a discipline of reporting against yourself.",
+        "The discipline just named is tested against real cases, where even careful scientists drift into fooling themselves and owe the same honesty to the public and to policy.",
+        "Across psychology, physics, and parapsychology the same lapse recurs—skipping the hard check—leaving integrity a matter of individual will rather than institutional guarantee."
+      ]
+    }
+  ]
+}

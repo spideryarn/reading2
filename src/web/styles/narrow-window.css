@@ -786,10 +786,13 @@
      end in silence. Growing has no such failure — there is nothing to clip when
      an element is bigger than its content.
 
-     `.dock-modes` grows as eight buttons against each loose button's one, so a
-     bar with room to spare spreads it in proportion to what is inside rather
-     than handing the segment the same share as a single icon. */
-  .dock-modes { flex: 8 0 auto; }
+     `.dock-modes` grows as as many buttons as it draws (`--dock-mode-count`,
+     set by `DockModes`; it was a fixed eight until 2026-10-02) against each
+     loose button's one, so a bar with room to spare spreads it in proportion
+     to what is inside rather than handing the segment the same share as a
+     single icon. Inside it each `.dock-frame` takes its own count
+     (dock-fit.css). */
+  .dock-modes { flex: var(--dock-mode-count, 8) 0 auto; }
   .dock > .dock-btn { flex: 1 0 auto; }
   .dock-modes .dock-btn { flex: 1 0 auto; }
   /* **And the wordmark grows with them**, which is a decision rather than a

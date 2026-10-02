@@ -203,6 +203,7 @@ const ARTICLE: PublicArticle = {
 
 const OWNED: Article = {
   highPowerSince: null,
+  titleOverridden: false,
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,
@@ -327,6 +328,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   /* jsdom's own answers: `innerWidth` 1024, `clientWidth` 0. */
   Object.defineProperty(window, "innerWidth", { value: 1024, configurable: true });
@@ -420,6 +422,25 @@ describe("a passage link in a band, on a phone", () => {
     expect(bandShowing(), "the pill did not bring the band back").toBe(true);
     expect(pill()).toBeNull();
     expect(param("at"), "bringing the band back is not a jump").toBe(BAND_TARGET);
+  });
+
+  it("the current mode button brings the band back without adding a history step", async () => {
+    await open(PHONE, "?mode=summary");
+    await pressBandLink();
+    const pushed = vi.spyOn(history, "pushState");
+    const dock = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
+      (button) => button.getAttribute("aria-label") === MODE_LABEL.summary,
+    );
+    expect(dock, "the bar must draw Summary").toBeDefined();
+
+    await act(async () => dock?.click());
+    await settle();
+
+    expect(bandShowing(), "the mode button did not bring its band back").toBe(true);
+    expect(
+      pushed,
+      "bringing the same mode back added an empty history step",
+    ).not.toHaveBeenCalled();
   });
 
   it("moves focus to the pill, and back to the link the reader pressed", async () => {

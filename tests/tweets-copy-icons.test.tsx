@@ -29,6 +29,7 @@ const ARTICLE: Article = {
   navLabelStatus: "ready",
   sourceGuess: undefined,
   highPowerSince: null,
+  titleOverridden: false,
   tree: { rootId: "spya-root", nodes: {} } as unknown as Article["tree"],
 };
 

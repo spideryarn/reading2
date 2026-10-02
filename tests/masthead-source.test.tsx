@@ -54,6 +54,7 @@ const SLUG = "a-scanned-piece";
 /** An article extracted from a PDF, which is the only kind with a source note. */
 const ARTICLE: Article = {
   highPowerSince: null,
+  titleOverridden: false,
   meta: {
     slug: SLUG,
     title: "A scanned piece",

@@ -53,6 +53,8 @@
     .note-preview,
     .gloss-ask-found,
     .faq-quote,
+    /* Marginalia: the words an FAQ line quotes as answering it */
+    .marg-faq-quote,
     .ideas-quote:not(.ideas-quote-moved),
     .tl-quote:not(.tl-quote-moved),
     .tl-when-words,
@@ -159,6 +161,11 @@
     .marg-idea-statement,
     .marg-arc,
     .marg-arc-full,
+    /* Marginalia's shut notes, opened: Debate's reading of a page, a
+       citation's why, the AI's answer to a comment */
+    .marg-debate-applies,
+    .marg-cite-why,
+    .marg-open-answer,
     /* Sketch: the card, the title bar, and the scene tooltips. NOT the SVG
        labels, which are wrapped in TypeScript at Geist's width (CHAR_W in
        src/sketch-scene.ts) and would spill out of their shapes. */
@@ -224,6 +231,7 @@
     .chat-rename,
     textarea.cmt-note,
     p.cmt-body,
+    .marg-cmt-body,
     .cmt-followup input,
     .annotate-dialog textarea,
     .dock-question-state.own,

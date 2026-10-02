@@ -312,11 +312,13 @@ this was.
 
 Three consequences worth knowing before changing anything here:
 
-- **The quotes reach the prose in every mode and the paragraph bar, the spine rail and the ring in
+- **The quotes reach the prose in every mode and the paragraph bar and the ring outside Quotes in
   none.** `proseFound` in [reader/passages.ts](../../src/web/reader/passages.ts) is the whole of that
   split and carries the argument: a quote's `confidence` is `null`, which `blockStrength` reads as
   certainty, and every quote's `slot` is `0`, which is the first saved search's colour. In quotes
-  mode the picked slot *is* the quotes, so nothing there changed.
+  mode the picked slot *is* the quotes, so nothing there changed. **The spine rail is the
+  exception since 2026-10-02**: the quotes have a strip of their own there, in every mode — §
+  [In the spine, on a card, and one at a time](#in-the-spine-on-a-card-and-one-at-a-time).
 - **The opening read moved up**, `useQuotesRead` in `OwnedReader`, exactly as the glossary's did in
   2026-08-27 and for the same reason. `useStepJob` and `useAutoRun` stayed in the band deliberately —
   a job subscriber up there holds the engine to its idle cadence for every reader of every article,
@@ -339,12 +341,16 @@ in the feedback report that asked for it (SPIDERYARN-READING2-1Z):
 
 > skim through it just reading the stuff that is marked
 
-**What is marked is what the panel lists**, and that is one function — `markedQuotes` in
+**Outside Skim, what is marked is what the panel lists**, and that is one function — `markedQuotes` in
 [`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx), called by the panel and, since 2026-09-08, by
 [`useQuoteMarks`](../../src/web/reader/useQuoteMarks.ts) rather than by the band — so the rows and
 the strokes cannot come apart, and the bar doubles as the highlight-density control. A row the bar
 has hidden with its stroke still on the paragraph is the precise failure
 [threshold.ts](../../src/web/threshold.ts) exists to prevent.
+
+**Skim deliberately adds its current stop after that rule.** Its stop remains outlined while the
+reader is standing on it even when Quotes' bar hides it; `proseFound` owns that exception. The spine
+strip and the quote card therefore read the merged prose marks, not only `markedQuotes`.
 
 **One row can legitimately have no mark**, and only one: a quote naming a block the article no
 longer has. `resolveQuotes` drops it; the row stays in the list, unmarked, above a `stale` banner
@@ -358,11 +364,60 @@ Two things had to move with it, and both are about there now being sixteen marks
   lane per run id in a ten-pixel gutter ([spine-marks.ts](../../src/web/spine-marks.ts)), so a run id
   per quote would have been a sixteen-lane smear of 1.5px marks ordered sideways by an arbitrary
   string. The individual quote's identity stays in `Found.key` — `quoteMarkKey`, one place.
+  (**No quote takes a lane at all since 2026-10-02** — they have their own strip, below — but one
+  run id is still what keeps Skim's stop and the panel's mark one passage.)
 - **The pressed quote gets the ring**, `mark.hit[data-hit-open]`, which search has always had and
   quotes did not need while there was one mark on the page. It came up in the same layout effect as
   the marks so that no paint could show the ring on one quote and the mark set of another; since
   2026-09-08 `useQuoteMarks` returns both out of **one render**, which has that property by
   construction and left the `derived` lifecycle shape with no caller.
+
+### In the spine, on a card, and one at a time
+
+Since 2026-10-02, [261002h](../plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md).
+Greg, in two feedback reports:
+
+> Perhaps show Quotes in the spine (use the same colour we use for their outline-border)
+>
+> — 2026-09-10 (spya-yd2c47)
+
+> For the highlighted-Quotes shown in the text (with an outline-border), tooltip to show our
+> quantitative scores and perhaps Previous/Next icon-buttons to jump to the next Quote, and a button
+> to open Quotes mode.
+>
+> And in Quotes mode, add fairly big Previous/Next icon-buttons to jump around, and use left/right to
+> navigate between quotes.
+>
+> — 2026-09-11 (spya-mtyquy)
+
+- **The spine: a green strip down its left 2px, in every mode** — `--quote-stroke-rgb`, faded by the
+  block's brightest quote exactly as the outline is. **Its own element, never a lane**
+  (spine-marks.ts § `quoteRailMarks`, the `.spine-from` precedent): the search gutter is the right
+  10px of the 12px rail, so the strip pushes no search sideways and is never counted as a "search
+  match" on a band's card. It is drawn from what the prose actually outlines (`proseMarked`), which
+  includes Skim's stop when the bar hides it from the band. And **the quotes left the search lanes
+  in every mode** (`railFound` in passages.ts): until then Quotes mode drew them as a lane in
+  `--cat-0`, the first saved search's colour, and Skim drew its stop the same way. Where seven or
+  more searches are on, the lanes' 1.5px floor reaches into the strip's 2px and paints over it —
+  accepted, since the strip is still there above and below. Reading-time runs sit under it.
+- **A card on a quote in the prose**, in `ProseHoverCard` beside the term, citation and link halves:
+  both raw scores, drawn and printed (this card is where the rows' numbers live — never the `max`
+  composite); the reason, in the model's face; ‹ › to the quote before or after it **down the
+  page**; and *open in Quotes*, which selects it and opens the band on its row. **Pointer only.** A
+  tap on a bare quote still selects its paragraph (TableView's `NOT_A_BLOCK_SELECTION`, the reason
+  above), and a quote is not a tab stop — a quote that is also a term, a citation or inside a link
+  gets the card through those, as before. **It waits 900ms rather than 320ms** before opening on a
+  quote and nothing else (`QUOTE_OPEN_MS`), because a quote is a passage the reader rests in while
+  reading, not a word they point at; still a guess to be felt in use.
+- **In Quotes mode, ‹ › under the list and ← / →** step the band's own list, in its order, through
+  one rule (`stepQuote`) — [keyboard.md](keyboard.md) § ← / → in Quotes. Both step only
+  over quotes the prose outlines (`useQuoteMarks`' `steppable`), so a row whose block is gone is
+  skipped rather than selected with nowhere to go. The selected row scrolls into view in the list
+  (its own `scrollTop`, never `scrollIntoView`).
+
+**Deferred, by name:** a tap opening the card (it would cost the paragraph tap above); stepping
+from where the reader is when nothing is selected (it goes to the first quote); and keeping the card
+open on the next quote after ‹ › (it closes, and the reader points at the next one).
 
 ### The stroke, which is how a quote says how much it matters
 
@@ -773,9 +828,9 @@ wrong — but worth knowing.
 - **No copy button.** Worth having; it needs a decision about whether it copies the quote, the quote
   and a citation, or a deep link. [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) already has a
   private `CopyButton`, with its card and its touch behaviour.
-- **No keyboard traversal of the list**, the same gap the glossary and ideas panels have, for the
-  same reason ([keyboard.md](keyboard.md) — ↑ / ↓ belong to the article). The rows and the ⓘ are
-  ordinary tab stops, so everything is *reachable*; what is missing is a fast way through.
+- **Keyboard traversal of the list is ← / → since 2026-10-02**, not ↑ / ↓, which still belong to the
+  article ([keyboard.md](keyboard.md) § ← / → in Quotes). The rows and the ⓘ are ordinary tab stops
+  as before.
 - **Nothing generates quotes for the `example/` fixture**, consistent with the glossary and equally
   unsatisfying.
 

@@ -116,6 +116,7 @@ function articleFrom(loaded: Loaded): Article {
   if (!loaded.meta) throw new Error(`${DIR} has no meta.json — the fixture is incomplete`);
   return {
     highPowerSince: null,
+    titleOverridden: false,
     meta: loaded.meta,
     blocks: loaded.blocks,
     tree: loaded.tree,
@@ -281,7 +282,7 @@ describe("a tap that already means something else does not select the block", ()
       applies: "It bears on this claim.",
     } as unknown as MarginClaim;
     const margin = new Map<BlockId, ReactElement>([
-      [block.id, createElement(MarginNotesSlot, { notes: [{ kind: "debate", items: [claim] }] })],
+      [block.id, createElement(MarginNotesSlot, { notes: [{ kind: "debate", items: [claim] }], viewer: "owner" })],
     ]);
     const props = propsFor(articleFrom(loaded), undefined, margin);
     await draw(props);

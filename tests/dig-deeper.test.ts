@@ -158,6 +158,7 @@ describe("the reader's library, best-effort", () => {
     const hit = (n: number) => ({
       slug: `other-${n}`,
       title: `Other ${n}`,
+      titleOverridden: false,
       blockId: "spya-aaaaaa",
       text: "y".repeat(2_000),
       rank: 1,
@@ -200,6 +201,7 @@ describe("the reader's library, best-effort", () => {
             {
               slug: "late",
               title: "Too late",
+              titleOverridden: false,
               blockId: "spya-aaaaaa",
               text: "This arrived after the search step's whole budget.",
               rank: 1,

@@ -1,0 +1,21 @@
+import fs from "node:fs";
+const key = new Map(
+  (JSON.parse(fs.readFileSync("data/hut-blind-key.json", "utf8")) as { id: string; A: string }[]).map((k) => [k.id, k.A]),
+);
+const verdicts = fs
+  .readFileSync("data/hut-blind-verdicts.jsonl", "utf8")
+  .split("\n")
+  .filter(Boolean)
+  .map((l) => JSON.parse(l));
+const tally = { plainer: { after: 0, before: 0, tie: 0 }, useful: { after: 0, before: 0, tie: 0 }, wrong: { after: 0, before: 0 } };
+const arm = (aIs: string, pick: string) => (pick === "tie" ? "tie" : pick === "A" ? aIs : aIs === "after" ? "before" : "after");
+for (const v of verdicts) {
+  const aIs = key.get(v.id);
+  if (!aIs) throw new Error(`no key for ${v.id}`);
+  tally.plainer[arm(aIs, v.plainer) as "after"]++;
+  tally.useful[arm(aIs, v.useful) as "after"]++;
+  if (v.A_wrong) tally.wrong[aIs as "after"]++;
+  if (v.B_wrong) tally.wrong[(aIs === "after" ? "before" : "after") as "after"]++;
+  if (v.A_wrong || v.B_wrong) console.log("wrong:", v.id, v.A_wrong ? `A=${aIs}` : `B`, v.why_wrong);
+}
+console.log(verdicts.length, "verdicts", JSON.stringify(tally));

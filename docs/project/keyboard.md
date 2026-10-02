@@ -1,10 +1,10 @@
-# Keyboard: ↑ / ↓ take the step; ← / → step Skim, Quiz and Structure
+# Keyboard: ↑ / ↓ take the step; ← / → step Skim, Quiz, Quotes and Structure
 
 > **Status, 2026-10-01.** **↑ / ↓ step one block everywhere except over the spine**, which still
 > steps by part; until that day anywhere off the prose and the spine (a mode's band, the masthead)
 > stepped a section, and a focused row in Structure's list stepped the list. **← / → step
-> Skim's stops, Quiz's questions, and Structure's lowest-level sections** (all three further
-> down), and are the browser's everywhere else. The stride belonged to the gist columns of Hierarchy
+> Skim's stops, Quiz's questions, Quotes' quotes (since 2026-10-02) and Structure's lowest-level
+> sections** (all four further down), and are the browser's everywhere else. The stride belonged to the gist columns of Hierarchy
 > mode, removed on 2026-09-29
 > ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)); everything here about
 > columns, the pointer's level, the aim and the `L1 / L2` buttons is history.
@@ -236,6 +236,30 @@ rather than to "a dialog is open", because the comment dialog is modeless and a 
 back into the page means the page (`tests/keynav-horizontal.test.ts`).
 `tests/quiz-panel.test.tsx` § "← and → step the path" pins all of it. The plan is
 [260930h](../plans/260930h-quiz-and-remember-controls-as-icons-arrow-keys-step-the-quiz.md).
+
+## ← / → in Quotes
+
+> And in Quotes mode, add fairly big Previous/Next icon-buttons to jump around, and use left/right
+> to navigate between quotes.
+>
+> — Greg, 2026-09-11 (spya-mtyquy)
+
+**While Quotes is the mode, ← / → step its quotes, in the band's own order** — whatever the
+reader chose: as the article says them by default, by importance under *most important*. Skim's and
+Quiz's seam: `Reader` hands `useArrowNav` a handler only in that mode, so every guard above applies
+and the key goes back to the browser when the handler takes nothing. The rule is `stepQuote`
+(QuotesPanel.tsx), the band's ‹ › rule too: nothing selected goes to the first quote, ← on the
+first goes to the first again (Skim's rule), → on the last takes nothing, no wrap. It steps only
+over quotes the prose actually outlines (`useQuoteMarks`' `steppable`), so a row whose block a
+re-extraction took away is skipped rather than selected with nowhere to go (GPT Sol's plan review).
+A step selects the quote (`?quote=`, the ring), jumps to it, scrolls its row into view in the band,
+and on a narrow window steps the band aside. The ‹ › name their key on their cards.
+
+The card on a quote in the prose has ‹ › too, but **in document order** — down the page — and it is
+pointer-only: a quote mark is not a tab stop, and making forty of them into tab stops would be
+worse than the gap. Quotes mode is the keyboard's way through.
+`tests/the-marks-in-the-prose-belong-to-the-mode-showing.test.tsx` (the Quotes arm) pins the wiring;
+the plan is [261002h](../plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md).
 
 ## ← / → in Structure
 

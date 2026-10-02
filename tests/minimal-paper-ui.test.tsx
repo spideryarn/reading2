@@ -256,6 +256,7 @@ describe("the shelf card of a paper not read through yet", () => {
 const PAPER: UnreadPaper = {
   slug: "a-paper",
   title: "On the Reading of Papers",
+  titleOverridden: false,
   authors: ["Ada Lovelace", "Charles Babbage", "Mary Somerville"],
   abstract: "We read papers, and say how.",
   doi: "10.1234/abcd.5678",
@@ -301,6 +302,8 @@ describe("the reading address of a paper not read through yet", () => {
   it("draws the title, the authors, the abstract, the DOI and the PDF, and does not start the import", () => {
     render(createElement(UnreadPaperPage, { paper: PAPER, onRead: () => {} }));
     expect(container.querySelector("h1")?.textContent).toBe(PAPER.title);
+    /* The paper's own title, in the author's face; a rename would be the reader's. */
+    expect(container.querySelector("h1")?.classList.contains("voice-author")).toBe(true);
     expect(container.textContent).toContain("Ada Lovelace, Charles Babbage and Mary Somerville");
     expect(container.textContent).toContain("We read papers, and say how.");
     expect(container.textContent).toContain("Not AI-processed yet");
@@ -310,6 +313,16 @@ describe("the reading address of a paper not read through yet", () => {
     expect(buttonNamed(/^Read this$/)).toBeDefined();
     expect(container.textContent).toContain("Uses 0.99 of an article from your allowance.");
     expect(calls, "opening the paper started something").toEqual([]);
+  });
+
+  it("draws a renamed unread paper's title in the reader's face", () => {
+    render(
+      createElement(UnreadPaperPage, {
+        paper: { ...PAPER, title: "What I call this paper", titleOverridden: true },
+        onRead: () => {},
+      }),
+    );
+    expect(container.querySelector("h1")?.classList.contains("voice-reader")).toBe(true);
   });
 
   it("links a DOI only when it is one, and offers no file for a web page", () => {

@@ -153,6 +153,13 @@ tap commits, which is `bandPress`'s rule reached by a different route
 tooltips get there through `Tooltip.tsx`'s `mouseOnly`; this one owns its own listeners, so the whole
 gesture lives in `useHoverCard.ts`.
 
+**A quote's outline joined it on 2026-10-02** (`mark.hit[data-quote]`), as a fourth half of the
+same card — scores, reason, ‹ › and *open in Quotes* ([quotes.md](quotes.md) § In the spine, on a
+card, and one at a time). Pointer only, and not in `tapSelector`, because a tap on a bare quote
+selects its paragraph. It brought the hook one option, **`openDelay`**: a per-hit rest before a cold
+open, so a quote — a passage the reader rests in while reading — waits 900ms where a word waits
+320ms. A warm swap and a tap are unchanged.
+
 It was also the first tooltip here to **take pointer events**, because its card carries a link out
 and a button in; a `Tooltip` does so only when it is `interactive`
 ([§ A card the pointer can enter](#a-card-the-pointer-can-enter)), and every other one is
@@ -185,6 +192,13 @@ it changes (the permalink's *Copied*, the "…" turning into ✕). Mouse hover a
 it; a finger does not, because a tap presses the control. It adds no `aria-describedby` there: the
 sentence is the control's own name, near enough, and would be read twice
 ([261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
+
+**And Marginalia's shut lines, the same day** (`MARG_NOTE`): each carries a key in `data-marg-tip`,
+and the card draws a `ControlTip` from `src/web/marginalia/tips.ts` — what the note is, which mode
+made it and who wrote it. It keeps `aria-describedby`, because the card says what the line's own
+words do not. A note with nothing to press — a part's question — is not on this branch: the
+delegated card opens for neither a finger nor a non-focusable element, so it has a `Tooltip` of its
+own ([marginalia.md § Every note says where it came from](marginalia.md#every-note-says-where-it-came-from)).
 
 ## `ControlTip`, which is what most of them are now
 
