@@ -20,7 +20,7 @@ I read the committed `a5305a5` implementation, all 21 scorer tests, the producti
    | Gist coverage | Non-empty strings | Fill every node with fluent rubbish |
    | Opening bigram | First-two-word variety | Rotate openings while repeating the same template afterwards |
 
-   Retention is one-sided—output words found anywhere in the range—not completeness, fidelity, or distinctiveness ([score.ts:48–53](score.ts:48)). Title compliance also scores copied author headings against 2–6 words, even though the production prompt says to preserve them unchanged ([hierarchy.ts:99–105](../../src/hierarchy.ts:99)).
+   Retention is one-sided—output words found anywhere in the range—not completeness, fidelity, or distinctiveness ([score.ts:48–53](score.ts:48)). Title compliance also scores copied author headings against 2–6 words, even though the production prompt says to preserve them unchanged ([structure.ts:99–105](../../src/structure.ts:99)).
 
    **Change:** Keep these as diagnostics and hard guards. Add a blinded human primary outcome over sampled trees: boundary usefulness, missed/spurious cuts, hierarchy coherence, navigational title quality, and gist faithfulness. The result may say an arm wins only when that judgment and the mechanical guards agree.
 
@@ -42,7 +42,7 @@ I read the committed `a5305a5` implementation, all 21 scorer tests, the producti
    **Change:** Make validity interpretation arm-aware. Missing gists are expected only for `headings`; they invalidate every paid arm. Prefer typed `checkTree` issue codes over classifying errors by substring ([score.ts:213](score.ts:213)).
 
 4. **The heading rule is fitted to this corpus—especially the 20-word threshold.**  
-   **Code-read:** The comment says 20 was selected because it lies between this corpus’s largest observed stub and smallest observed real section ([heading-tree.ts:79–85](heading-tree.ts:79)). Its motivating examples are the constitution and `scaling-hypothesis`, and the tests encode those same cases ([heading-tree.ts:36–49](heading-tree.ts:36), [test:417](../../tests/hierarchy-structure-eval.test.ts:417)). The ≥3 rule has a defensible prior—“three is a series”—but was also selected after observing `fowler`.
+   **Code-read:** The comment says 20 was selected because it lies between this corpus’s largest observed stub and smallest observed real section ([heading-tree.ts:79–85](heading-tree.ts:79)). Its motivating examples are the constitution and `scaling-hypothesis`, and the tests encode those same cases ([heading-tree.ts:36–49](heading-tree.ts:36), [test:417](../../tests/structure-whole-document-eval.test.ts:417)). The ≥3 rule has a defensible prior—“three is a series”—but was also selected after observing `fowler`.
 
    The merge fixes part counts, not necessarily labels: the merged constitution title stub remains titled by the first heading in the merged range, which can be the document title rather than the following section heading ([heading-tree.ts:194–215](heading-tree.ts:194)).
 
@@ -74,12 +74,12 @@ I read the committed `a5305a5` implementation, all 21 scorer tests, the producti
 7. **A separately implemented executor can easily stop evaluating the production stage. This is a blocker until parity is designed.**  
    **Code-read:** Production does much more than send model+effort:
 
-   - body/supplement splitting and withholding ([hierarchy.ts:679–691](../../src/hierarchy.ts:679));
+   - body/supplement splitting and withholding ([structure.ts:679–691](../../src/structure.ts:679));
    - a measured output budget plus 40k thinking headroom;
    - adaptive thinking and `output_config.effort`;
    - the exact private system prompt and block rendering;
    - OpenRouter’s Messages skin with Anthropic upstream preference and `require_parameters` ([messages-stream.ts:70–94](../../src/messages-stream.ts:70));
-   - refusal/truncation handling, JSON parsing, `buildTree`, and supplement append ([hierarchy.ts:705–760](../../src/hierarchy.ts:705)).
+   - refusal/truncation handling, JSON parsing, `buildTree`, and supplement append ([structure.ts:705–760](../../src/structure.ts:705)).
 
    Yet `CallSpec` records only `model` and `effort` ([arms.ts:30–35](arms.ts:30)).
 
@@ -92,7 +92,7 @@ I read the committed `a5305a5` implementation, all 21 scorer tests, the producti
 
    - `smart-low` cleanly isolates effort from the incumbent, subject to stochastic noise.
    - `cheap-high` combines model, wire, upstream reasoning semantics, and probably budget behavior. This is acknowledged ([arms.ts:13–17](arms.ts:13)). It may choose a deployable recipe, but cannot explain why it won.
-   - `headings-seeded` tests supplying an entire deterministic proposed tree—not merely making author headings explicit. Production already includes heading blocks and calls them hard boundaries ([hierarchy.ts:81–105](../../src/hierarchy.ts:81)). Add a separate explicit-heading-list arm if salience is the question.
+   - `headings-seeded` tests supplying an entire deterministic proposed tree—not merely making author headings explicit. Production already includes heading blocks and calls them hard boundaries ([structure.ts:81–105](../../src/structure.ts:81)). Add a separate explicit-heading-list arm if salience is the question.
    - `waves` declares only L1 then L2 ([arms.ts:53–54](arms.ts:53)). It does not test the stated L1→L2→L3 process or the book-length, more-than-three-level motivation.
    - `cheap-then-revise` varies model, wire, prompt role, and call count. Judge it as one end-to-end strategy, including both calls’ latency and cost.
 

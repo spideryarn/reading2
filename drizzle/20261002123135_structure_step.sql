@@ -44,6 +44,13 @@
 -- A job naming BOTH spellings is anomalous (`orderSteps` in src/jobs.ts keeps
 -- each step at most once) and refused too, rather than collapsed into two
 -- `structure` entries whose statuses cannot be reconciled.
+-- Keep the guard's answer true until commit: no enqueue or claim can slip
+-- between its read and the rewrites. Take the two DDL locks now as well, with
+-- NOWAIT, so we never hold jobs while waiting for a worker transaction that
+-- already holds a checkpoint or step-run lock. A busy table means retry once
+-- that transaction finishes; every lock is released on refusal or commit.
+LOCK TABLE "spideryarn"."jobs", "spideryarn"."checkpoints", "spideryarn"."revision_step_runs"
+  IN ACCESS EXCLUSIVE MODE NOWAIT;--> statement-breakpoint
 DO $$
 DECLARE live bigint;
 DECLARE mixed_steps bigint;

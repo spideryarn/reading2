@@ -28,6 +28,7 @@ import {
   formatSpendNanos,
 } from "../admin.js";
 import { CARD } from "./card.js";
+import { currentStepName } from "../step-order.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
 export type ArticleCostLoad =
@@ -37,10 +38,13 @@ export type ArticleCostLoad =
 
 /** What a line is called: the pipeline step for step work, the job otherwise. */
 export function lineName(line: ArticleCostLine): string {
-  const name = line.stepName ?? line.job;
-  /* `labels` runs inside the `structure` step and is recorded with both names;
-     saying only "structure" would hide which of the two calls cost what. */
-  const detail = line.stepName && line.job !== line.stepName ? ` · ${line.job}` : "";
+  // The append-only ledger keeps old names; only their presentation changes.
+  const step = line.stepName === null ? null : currentStepName(line.stepName);
+  const job = currentStepName(line.job);
+  const name = step ?? job;
+  /* Historical labels calls ran inside the structure step. Keep that detail
+     so the two kinds of calls remain distinguishable. */
+  const detail = step && job !== step ? ` · ${job}` : "";
   return `${name.replaceAll("_", " ")}${detail.replaceAll("_", " ")}`;
 }
 

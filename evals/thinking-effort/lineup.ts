@@ -4,7 +4,7 @@
  * nothing.
  *
  *   npx tsx evals/thinking-effort/lineup.ts --results <dir> --mode sketch
- *   npx tsx evals/thinking-effort/lineup.ts --results <dir> --mode structure --hierarchy-run evals/results/structure-whole-document/<run>
+ *   npx tsx evals/thinking-effort/lineup.ts --results <dir> --mode structure --structure-run evals/results/structure-whole-document/<run>
  *
  * Per article, ONE lineup of every arm's output under shuffled labels (W, X,
  * Y, Z for four) — GPT Sol's review, F8: a lineup ranked with ties, not three
@@ -112,14 +112,14 @@ function parseArgs(argv: string[]): Options {
     };
     if (a === "--results") results = next();
     else if (a === "--mode") mode = next();
-    else if (a === "--hierarchy-run") structureRun = next();
+    else if (a === "--structure-run") structureRun = next();
     else if (a === "--arms") arms = next().split(",");
     else if (a === "--seed") seed = Number.parseInt(next(), 10);
     else throw new Error(`unknown argument ${a}`);
   }
   if (!results) throw new Error("--results <dir> is required: the directory run.ts wrote");
   if (!(JUDGED_MODES as readonly string[]).includes(mode)) throw new Error(`--mode must be one of ${JUDGED_MODES.join(", ")}`);
-  if (mode === "structure" && !structureRun) throw new Error("--mode structure needs --hierarchy-run <evals/results/structure-whole-document/run dir>");
+  if (mode === "structure" && !structureRun) throw new Error("--mode structure needs --structure-run <evals/results/structure-whole-document/run dir>");
   return { results, mode: mode as JudgedMode, structureRun, arms, seed };
 }
 

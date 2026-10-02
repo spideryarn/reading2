@@ -212,3 +212,24 @@ in: each is its own migration, and bundling them would make one review cover thr
   `AiJob` and every protocol literal held to stage 2 (F2, F3), `whole-document` not `sections` (F4),
   `evals/cost/baseline/` kept as history (F5), checkpoint keys confirmed namespace-free (F6), an
   explicit `CASE` (F7). Waiting on 261001s to push before stage 1.
+- 2026-10-02: **stage 1 on dev** (`b96fb333e`, merged as `d1794917c`). Scripted: 43 `git mv`s and
+  ~460 files; stored-literal counts checked equal to HEAD's (115 namespace, 1,196 step). The script
+  first rewrote paths inside history's prose too; those files were restored and only their link
+  targets repointed. One test (`parse-json`) built `src/${stage}.ts` from the step list — found by
+  the full suite, fixed.
+- 2026-10-02: **stage 2 built** (`d988cc77f` + review fixes). A literal pass (144 files), then 93
+  compiler errors for bare `hierarchy:` keys, then three Opus prose passes (src/scripts, tests/evals,
+  docs) reading ~1,480 hits one by one. **Two paths broken by the namespace swap** — a plan name
+  (`260904c-hierarchy-structure-in-waves.md`) and the dated results folder
+  `evals/results/hierarchy-structure/` — both restored; eval review records restored to their
+  original text. The job-reader translation has a test watched red (`tests/retired-step-names`).
+  Production counts, read-only: `revision_step_runs` 421 of 4,116; `checkpoints` 139 labels + 30
+  whole-document + 0 deepen; 2 finished jobs; none live.
+- GPT Sol code review
+  ([code-review-sol](261002b-rename-the-hierarchy-step-to-structure-everywhere-code-review-sol.md)),
+  write access: five fixes taken — `LOCK TABLE … ACCESS EXCLUSIVE NOWAIT` before the drain guard so
+  no enqueue slips between the guard and the rewrites (a busy table refuses; retry); retired-name
+  translation in the two raw publication readers in `src/store/pg-revisions.ts`; Article cost shows
+  old ledger rows under the new name; review-record links; checkpoint comments. Left, and recorded
+  here rather than fixed: `evals/cost/harness.ts` still assumes labels run inside the structure step
+  (pre-existing, since 2026-09-06). Taken after: the eval flag `--hierarchy-run` → `--structure-run`.

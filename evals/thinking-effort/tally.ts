@@ -169,7 +169,7 @@ async function main(): Promise<void> {
   const results = argv[argv.indexOf("--results") + 1];
   const mode = argv[argv.indexOf("--mode") + 1];
   if (!results || !mode || argv.indexOf("--results") < 0 || argv.indexOf("--mode") < 0) {
-    throw new Error("usage: tally.ts --results <dir> --mode <mode> [--judging <subdir>] [--hierarchy-run <dir>]");
+    throw new Error("usage: tally.ts --results <dir> --mode <mode> [--judging <subdir>] [--structure-run <dir>]");
   }
   /* `--judging <subdir>` for a second round kept beside the first, e.g.
      `judging/illustrated-low/` next to the medium round's `judging/illustrated/`. */
@@ -245,11 +245,11 @@ async function main(): Promise<void> {
   lines.push(`**Combined (worse of the two)**: ${combined}`, "");
 
   // Savings and validity.
-  const structureRun = argv[argv.indexOf("--hierarchy-run") + 1];
+  const structureRun = argv[argv.indexOf("--structure-run") + 1];
   const rows = mode === "structure"
-    ? structureRun && argv.indexOf("--hierarchy-run") >= 0
+    ? structureRun && argv.indexOf("--structure-run") >= 0
       ? await structureRows(structureRun)
-      : (() => { throw new Error("--mode structure needs --hierarchy-run <dir>"); })()
+      : (() => { throw new Error("--mode structure needs --structure-run <dir>"); })()
     : (await readFile(path.join(results, `runs.${mode}.jsonl`), "utf-8"))
         .split("\n")
         .filter((line) => line.trim())

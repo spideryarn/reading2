@@ -161,12 +161,11 @@
  * have addressed them. Closed, and matched by a CHECK on the table, so a typo
  * cannot open a namespace nothing ever reads.
  *
- * **`structure-labels` keeps its name, and that is a decision.** It is the
- * `labels` step's namespace now, and renaming it to match would have
- * invalidated every stored row for nothing: `batchFingerprint` (src/labels.ts)
- * carries no step and no job identity, so every checkpoint written before the
- * split is still readable after it — provided the key does not move. The name
- * records which call wrote these rows rather than which step asks for them.
+ * **`structure-labels` names the call, not its owning step.** The split into
+ * a separate `labels` step kept the checkpoint keys: `batchFingerprint`
+ * (src/labels.ts) carries no step or job identity. The Structure rename moves
+ * the namespace's rows in `drizzle/20261002123135_structure_step.sql`, still
+ * preserving those keys, so the old answers remain readable.
  *
  * **Two of these belong to `structure` and one to `labels`, and that is the
  * point of the split.** `structure-whole-document` is stage 4's one big call — the

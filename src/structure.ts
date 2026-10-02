@@ -3235,7 +3235,7 @@ export async function generateStructure(opts: {
        The deepening term is zero on every run with the flag off, because
        `deepen` is `null` there — so an undeepened run's four figures are
        arithmetically identical to what it reported before the wave was metered,
-       and `tests/structure-deepen-tokens.test.ts` is the gate on that. What it
+       and `tests/structure-step-deepen-wave.test.ts` is the gate on that. What it
        cannot recover is a wave that *threw*: `deepenTree` returns nothing to add
        up, and `deepenFailed` beside these says the AI-spend ledger under task
        `structure` is where that attempt's money is. */

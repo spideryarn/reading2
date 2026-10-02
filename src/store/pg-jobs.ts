@@ -771,7 +771,7 @@ async function tryEnqueue(
  * **Then each candidate is let off if the two may overlap** — `mayOverlap` in
  * src/sharing-steps.ts, since 2026-09-29: two mode jobs that make different
  * columns and read nothing the other makes run side by side, and anything else
- * (an ingest, a re-extraction, `hierarchy`, `labels`, a reset, Skim
+ * (an ingest, a re-extraction, `structure`, `labels`, a reset, Skim
  * behind the Quotes it routes through) waits exactly as before.
  * docs/plans/260929c-modes-generate-in-parallel-on-one-article.md. FIFO is kept
  * for every pair that may not overlap, so a mode job newer than a queued
@@ -1605,7 +1605,7 @@ const rawPgJobStore: JobStore = {
        * `claim`, or inside `stepIsDone`, which runs before it — and the job then
        * ended `error` having marked nothing, which is the bug this whole change
        * exists to fix. And a `["structure","labels"]` job that dies inside
-       * `hierarchy` leaves the base `pending` with **no other successor** — and
+       * `structure` leaves the base `pending` with **no other successor** — and
        * that last clause is the whole of it, which is why the live-promise check
        * below exists. GPT Sol, F4 of the stage 2c review and G1 of the second.
        *
@@ -1708,7 +1708,7 @@ const rawPgJobStore: JobStore = {
                  * **What it actually cost.** On a *first* ingest there is no
                  * published revision to copy blocks from, so a fresh draft makes
                  * `blocks` re-run as a genuine first ingest and mint every block
-                 * id afresh (src/ids.ts). Those ids are inside the `hierarchy`
+                 * id afresh (src/ids.ts). Those ids are inside the `structure`
                  * structure request, so its fingerprint moves and the
                  * checkpoint the previous window paid for — ~508 s and about $2
                  * on a 142-page paper — becomes unreachable for ever. Keyed on
@@ -1864,7 +1864,7 @@ const rawPgJobStore: JobStore = {
        * 1. Job A, `["structure","labels"]`, queues behind running job C.
        * 2. C publishes a `pending` revision and queues successor B, `["labels"]`.
        * 3. A predates B, so A claims first and opens its draft from that revision.
-       * 4. A dies inside `hierarchy`.
+       * 4. A dies inside `structure`.
        * 5. Membership says mark it — **while B is still queued to make exactly
        *    those labels**, and B then runs and they arrive.
        *

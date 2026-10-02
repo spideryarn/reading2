@@ -87,6 +87,7 @@ import {
 } from "../messages.js";
 import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
+import { currentStepName } from "../step-order.js";
 import { checkTree } from "../tree-invariants.js";
 import type { Block, JobReset, OwnerId, StepName, Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
@@ -2399,7 +2400,8 @@ export async function publishRevisionIn(
         await enqueueSuccessorIn(tx, {
           ownerId: article.ownerId as OwnerId,
           slug,
-          steps: [step],
+          // The fenced reset is a raw row, bypassing pg-jobs.ts's toJob.
+          steps: [currentStepName(step) as StepName],
           ...(reset.profile !== undefined && { profile: reset.profile }),
           scope: opts.job.id,
           after: i + 1,
@@ -2621,7 +2623,8 @@ export async function rebaseSharingDraftIn(
   if (row.draftRevisionId !== revisionId) return { kind: "declined", why: "draft-not-owned" };
 
   const shape: JobShape = {
-    steps: row.steps.map((step) => step.name),
+    // Publication reads the row directly, just as the overlap check does.
+    steps: row.steps.map((step) => currentStepName(step.name) as StepName),
     reset: row.reset !== null,
     reservesName: row.reservesName,
   };

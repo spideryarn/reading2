@@ -234,6 +234,16 @@ describe("the article cost section", () => {
 });
 
 describe("lineName", () => {
+  it("uses current names for historical ledger rows without changing their facts", () => {
+    const historical = line({ job: "hierarchy", stepName: "hierarchy" });
+    expect(lineName(historical)).toBe("structure");
+    expect(lineName(line({ job: "labels", stepName: "hierarchy" }))).toBe("structure · labels");
+    expect(lineName(line({ job: "structure", stepName: "hierarchy" }))).toBe("structure");
+    expect(lineName(line({ job: "trajectory", stepName: "trajectory" }))).toBe("skim");
+    expect(historical.job).toBe("hierarchy");
+    expect(historical.stepName).toBe("hierarchy");
+  });
+
   it("names step work by its step and request work by its job", () => {
     expect(lineName(line({}))).toBe("structure");
     expect(lineName(line({ job: "referee_claims", stepName: null }))).toBe("referee claims");
