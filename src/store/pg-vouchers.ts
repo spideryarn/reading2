@@ -35,13 +35,13 @@
 
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 
-import { budgetFor, ingestHeadroom } from "../billing/points.js";
+import { type Articles, type Points, articles as articlesOf, budgetFor, ingestHeadroom } from "../billing/points.js";
 import type { Gift } from "../billing-plan.js";
 import { getDb } from "../db/client.js";
 import { billingAccounts, billingVouchers } from "../db/schema.js";
 import { log } from "../log.js";
-import type { AccountConfirmation, AccountEmail } from "./admin-accounts.js";
-import { accountEmail, confirmedAccountEmail } from "./admin-accounts.js";
+import type { AccountByEmail, AccountConfirmation, AccountEmail } from "./admin-accounts.js";
+import { accountEmail, confirmedAccountByEmail, confirmedAccountEmail } from "./admin-accounts.js";
 import {
   accountSnapshot,
   entitlementFromRow,
@@ -53,7 +53,13 @@ import {
 } from "./pg-billing.js";
 import { allTiers } from "./pg-tiers.js";
 import { READ_COMMITTED } from "./isolation.js";
-import { latestVoucherEmails, queueClaimedEmail, queueGiftEmail, skipQueuedGifts } from "./pg-voucher-emails.js";
+import {
+  type GiftAudience,
+  latestVoucherEmails,
+  queueClaimedEmail,
+  queueGiftEmail,
+  skipQueuedGifts,
+} from "./pg-voucher-emails.js";
 import type { AdminVoucher, ClaimantUsage } from "../admin-vouchers.js";
 import { isUuid } from "../ids.js";
 
@@ -278,8 +284,15 @@ export async function listVouchers(deps: ListDeps = {}): Promise<AdminVoucher[]>
   });
 }
 
-/** One claimant's standing, decided by `entitlementFromRow` like every other surface. */
-async function claimantUsage(ownerId: string, tiers: Awaited<ReturnType<typeof allTiers>>): Promise<ClaimantUsage> {
+/** One account's standing, decided by `entitlementFromRow` like every other surface. */
+async function standingOf(
+  ownerId: string,
+  tiers: Awaited<ReturnType<typeof allTiers>>,
+): Promise<
+  | { readonly kind: "unknown" }
+  | { readonly kind: "paid"; readonly tierId: string }
+  | { readonly kind: "free"; readonly used: number; readonly limit: Articles; readonly wallUsed: Points; readonly lapsed: boolean }
+> {
   const row = await accountSnapshot(ownerId);
   const entitlement = entitlementFromRow(row, tiers, new Date());
   if ("kind" in entitlement) return { kind: "unknown" };
@@ -289,9 +302,101 @@ async function claimantUsage(ownerId: string, tiers: Awaited<ReturnType<typeof a
     kind: "free",
     used: ingestsUsed(usage),
     limit: entitlement.limit,
-    remaining: ingestHeadroom(wallUsed(usage), budgetFor(entitlement.limit)),
+    wallUsed: wallUsed(usage),
     lapsed: hasLapsed(row),
   };
+}
+
+/** One claimant's standing, for the admin table's *how used* column. */
+async function claimantUsage(ownerId: string, tiers: Awaited<ReturnType<typeof allTiers>>): Promise<ClaimantUsage> {
+  const standing = await standingOf(ownerId, tiers);
+  if (standing.kind !== "free") return standing;
+  return {
+    kind: "free",
+    used: standing.used,
+    limit: standing.limit,
+    remaining: ingestHeadroom(standing.wallUsed, budgetFor(standing.limit)),
+    lapsed: standing.lapsed,
+  };
+}
+
+/** Seams for tests; each defaults to the real thing. */
+export interface VoucherWriteDeps {
+  /** Who the recipient's email is written for. */
+  readonly audience?: (normalisedEmail: string) => Promise<GiftAudience>;
+}
+
+/**
+ * **Who the recipient's email is written for**: an existing reader — exactly
+ * one account with this address confirmed — with their plan as of now, or
+ * anybody else, who is invited. Asked **before** the event's transaction,
+ * because it is a network call, and frozen into the queued email with the rest.
+ * docs/plans/261002a-fb99-voucher-email-for-existing-user.md.
+ *
+ * **Never throws.** A failed lookup, or a failed read of the reader's plan,
+ * falls back: the first to the invitation (true for anybody), the second to the
+ * reader's email without numbers. Logged by label, never with the address.
+ */
+export async function giftAudienceFor(
+  normalisedEmail: string,
+  deps: {
+    readonly lookup?: (email: string) => Promise<AccountByEmail>;
+    readonly standing?: (ownerId: string) => Promise<Awaited<ReturnType<typeof standingOf>>>;
+  } = {},
+): Promise<GiftAudience> {
+  let found: AccountByEmail;
+  try {
+    found = await (deps.lookup ?? confirmedAccountByEmail)(normalisedEmail);
+  } catch (err) {
+    /* The real lookup returns `unavailable`, but keep the fallback at this
+       boundary too: an Auth/listing failure must not fail the voucher write. */
+    logger.warn(
+      { error: err instanceof Error ? err.name : "unknown error" },
+      "voucher email: account lookup failed, inviting",
+    );
+    return { kind: "invite" };
+  }
+  if (found.kind !== "one") {
+    if (found.kind === "unavailable") {
+      /* `reason` is deliberately not repeated: a future lookup must not be
+         able to put an address or provider response into a log line. */
+      logger.warn("voucher email: account lookup unavailable, inviting");
+    }
+    return { kind: "invite" };
+  }
+  try {
+    const standing = await (deps.standing ?? (async (owner: string) => standingOf(owner, await allTiers())))(found.id);
+    if (standing.kind !== "free") return { kind: "reader", plan: { kind: standing.kind } };
+    /* **Gifts already waiting at this address** are claimed with this one, by
+       the same `UPDATE` the next visit makes, so the *after* counts them too
+       (Sol, 261002a F5). This voucher is not among them: on create it is not
+       inserted yet, and on a readdress it is still at its old address. */
+    const [waiting] = await getDb()
+      .select({ articles: sql<number>`coalesce(sum(${billingVouchers.articles}), 0)::int`.mapWith(Number) })
+      .from(billingVouchers)
+      .where(
+        and(
+          eq(billingVouchers.email, normalisedEmail),
+          isNull(billingVouchers.claimedBy),
+          isNull(billingVouchers.revokedAt),
+        ),
+      );
+    return {
+      kind: "reader",
+      plan: {
+        kind: "free",
+        limit: standing.limit,
+        wallUsed: standing.wallUsed,
+        waiting: articlesOf(waiting?.articles ?? 0),
+      },
+    };
+  } catch (err) {
+    logger.warn(
+      { error: err instanceof Error ? err.name : "unknown error" },
+      "voucher email: reader's plan unreadable, writing without numbers",
+    );
+    return { kind: "reader", plan: { kind: "unknown" } };
+  }
 }
 
 /** What `/admin/vouchers` may create. Validated by the route before it arrives. */
@@ -324,8 +429,14 @@ export type CreateVoucherAnswer =
  * exactly what it carries; anything else under that id is a `conflict`. The
  * email is queued only when this call's insert is the one that inserted.
  */
-export async function createVoucher(input: NewVoucher, createdBy: string): Promise<CreateVoucherAnswer> {
+export async function createVoucher(
+  input: NewVoucher,
+  createdBy: string,
+  deps: VoucherWriteDeps = {},
+): Promise<CreateVoucherAnswer> {
   const email = normaliseEmail(input.email);
+  /* Before the transaction: a network call does not belong inside one. */
+  const audience = await giftAudienceOrInvite(email, deps.audience ?? giftAudienceFor);
   return await getDb().transaction(
     async (tx): Promise<CreateVoucherAnswer> => {
       const [row] = await tx
@@ -334,7 +445,7 @@ export async function createVoucher(input: NewVoucher, createdBy: string): Promi
         .onConflictDoNothing({ target: billingVouchers.id })
         .returning({ id: billingVouchers.id });
       if (row) {
-        const delivery = await queueGiftEmail(tx, row.id, email, input.articles);
+        const delivery = await queueGiftEmail(tx, row.id, email, input.articles, audience);
         return { kind: "created", id: row.id, delivery };
       }
       const [existing] = await tx
@@ -478,15 +589,41 @@ export type VoucherUpdate =
  * attempt sees the claimant on the unlocked read. Two attempts are enough —
  * nothing claims a voucher twice — and a third is a bug, said loudly.
  */
-export async function updateVoucher(id: string, patch: VoucherPatch): Promise<VoucherUpdate> {
+export async function updateVoucher(id: string, patch: VoucherPatch, deps: VoucherWriteDeps = {}): Promise<VoucherUpdate> {
+  /* Asked only when the address is being set, and before any transaction: it
+     is a network call. Whether it is a *real* change is decided inside. */
+  const audience =
+    patch.email === undefined
+      ? undefined
+      : await giftAudienceOrInvite(normaliseEmail(patch.email), deps.audience ?? giftAudienceFor);
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const answer = await updateOnce(id, patch);
+    const answer = await updateOnce(id, patch, audience);
     if (answer !== "retry") return answer;
   }
   throw new Error(`updating gift voucher ${id} kept racing its claim`);
 }
 
-async function updateOnce(id: string, patch: VoucherPatch): Promise<VoucherUpdate | "retry"> {
+/** The write's last fail-open boundary: audience enrichment never owns the voucher event. */
+async function giftAudienceOrInvite(
+  normalisedEmail: string,
+  resolve: (email: string) => Promise<GiftAudience>,
+): Promise<GiftAudience> {
+  try {
+    return await resolve(normalisedEmail);
+  } catch (err) {
+    logger.warn(
+      { error: err instanceof Error ? err.name : "unknown error" },
+      "voucher email: audience unavailable, inviting",
+    );
+    return { kind: "invite" };
+  }
+}
+
+async function updateOnce(
+  id: string,
+  patch: VoucherPatch,
+  audience: GiftAudience | undefined,
+): Promise<VoucherUpdate | "retry"> {
   const db = getDb();
   const [seen] = await db
     .select({ claimedBy: billingVouchers.claimedBy })
@@ -544,7 +681,13 @@ async function updateOnce(id: string, patch: VoucherPatch): Promise<VoucherUpdat
       if (patch.revoked === true) await skipQueuedGifts(tx, id, "voucher revoked");
       if (readdressed && newEmail !== undefined && !revokedAfter) {
         await skipQueuedGifts(tx, id, "address changed");
-        const giftDelivery = await queueGiftEmail(tx, id, newEmail, patch.articles ?? current.articles);
+        const giftDelivery = await queueGiftEmail(
+          tx,
+          id,
+          newEmail,
+          patch.articles ?? current.articles,
+          audience ?? { kind: "invite" },
+        );
         return { kind: "updated", giftDelivery };
       }
       return { kind: "updated" };

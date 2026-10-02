@@ -451,6 +451,16 @@ sentence. Namecheap is named there but not added to the subprocessor list: it al
 every mail a reader sends `hello@`, and this is the first time the page has said so.
 [email.md](email.md) owns the mechanics.
 
+## A gift email to an existing reader carries their allowance
+
+**Added 2026-10-02** ([261002a](../plans/261002a-fb99-voucher-email-for-existing-user.md)): when a
+gift voucher's address is already exactly one account's, confirmed, its email tells that reader how
+many articles they had left and how many they have with the gift. That is usage-derived data in
+Resend's log and the reader's inbox, so the Resend entry on the page says so, `LAST_UPDATED` moved,
+and `tests/privacy-page.test.ts` holds the clause. An address two accounts share, or one not
+confirmed, gets the plain invitation instead, so the counts never go to an inbox we cannot tie to
+one reader.
+
 ## What is pinned by a test, and what is not
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to

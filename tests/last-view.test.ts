@@ -48,9 +48,10 @@ describe("rememberableSearch", () => {
     expect(restoredHref("/read/x", "?deep=2", "?mode=quotes")).toBe(null);
   });
 
-  it("keeps Summary's sub-mode, which only a press on its chip can spend on", () => {
+  it("keeps Summary's sub-mode, which only a press can spend on", () => {
     /* `?summary=simple` restored mounts Simple's read and nothing else: the run
-       is armed by the slider's press (SummaryMode.tsx), never by arrival — so
+       is armed by a press — the bar's Summary, or the slider (SummaryMode.tsx) —
+       never by arrival — so
        it is a place you were, like `?at=`. Plan 260930i. */
     expect(rememberableSearch("?mode=summary&summary=simple")).toBe("?mode=summary&summary=simple");
     expect(hasArticleState("?summary=simple")).toBe(true);

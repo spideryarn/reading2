@@ -7582,7 +7582,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (reserved.kind === "refused") {
         throw httpError(
           409,
-          "That email cannot be retried: it has been sent, or is being sent now, or its voucher has since been claimed, revoked or given another address.",
+          "That email cannot be retried: it has been sent, or is being sent now, or its voucher has since been revoked or given another address.",
         );
       }
       const attempts = reserved.attempts;
