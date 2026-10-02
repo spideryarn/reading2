@@ -15,13 +15,16 @@ import { describe, expect, it, vi } from "vitest";
 let answer = "";
 let stop: "end_turn" | "max_tokens" = "end_turn";
 /** What the last call sent — the reference list test reads its system blocks. */
-let sent: { system?: { text: string }[] } | null = null;
+let sent: {
+  system?: { text: string }[];
+  output_config?: { effort?: string; format?: unknown };
+} | null = null;
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
   return {
     ...real,
-    streamMessage: (_job: string, params: { system?: { text: string }[] }) => {
+    streamMessage: (_job: string, params: NonNullable<typeof sent>) => {
       sent = params;
       const message = {
         id: "msg_stub",
@@ -44,6 +47,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
 
 import {
   buildCitations,
+  CITATIONS_OUTPUT_SCHEMA,
   type Draft,
   emptyDrops,
   ENTRY_CAP,
@@ -622,6 +626,8 @@ describe("generateCitations", () => {
     expect(run.citations.version).toBe(PROMPT_VERSION);
     expect(run.citations.citations).toHaveLength(1);
     expect(run.coverage).toEqual({ notes: 1, notesReached: 1, references: 1, referencesReached: 0, works: 1 });
+    expect(sent?.output_config?.effort).toBe("medium");
+    expect(sent?.output_config?.format).toEqual({ type: "json_schema", schema: CITATIONS_OUTPUT_SCHEMA });
   });
 
   it("a truncated answer is a truncation failure, not a short list", async () => {

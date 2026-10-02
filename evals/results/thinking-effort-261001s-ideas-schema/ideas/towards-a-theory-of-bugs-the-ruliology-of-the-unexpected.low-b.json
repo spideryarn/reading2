@@ -1,0 +1,200 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "sourceHash": "fa2d01c869c0a26f.94c19520d2431db5.893f578d23ba5f72",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-uy90sa",
+      "name": "A test suite only samples a pocket, never the whole behavior space",
+      "provenance": "assumed",
+      "statement": "Running a program on some finite collection of test inputs, however large, can only ever sample a limited region of its possible behavior, and a region that looks uniform from inside can still conceal rare exceptions just outside it.",
+      "whyYouNeedIt": "Without this assumption, the detailed discussion of random sampling, fuzzing, and 'how many cases is enough' wouldn't make sense as a genuine open problem rather than something solvable by just testing more.",
+      "occurrences": [
+        {
+          "blockId": "spya-vy3nfe",
+          "quote": "How do we know if we’re “stuck in a pocket of reducibility”, or are actually seeing the whole “spectrum of behavior”, bugs and all?",
+          "reasoning": "The question only has bite if one assumes any finite sample is inherently partial and possibly unrepresentative.",
+          "start": 90
+        },
+        {
+          "blockId": "spya-utamf4",
+          "quote": "even if the sampling doesn’t “systematically avoid” bugs, it might just not hit them, because the bugs exist only in some “special corner” of possible inputs.",
+          "reasoning": "Depends on treating any particular sampling method as inherently limited in coverage.",
+          "start": 11
+        }
+      ]
+    },
+    {
+      "id": "spya-vem7s0",
+      "name": "Computational irreducibility forces running to know outcomes",
+      "provenance": "introduced",
+      "statement": "For many simple-looking systems, the only way to know what they will do on a given input is to actually run them step by step; no shortcut calculation can predict the outcome in general.",
+      "whyYouNeedIt": "This is the mechanism that explains why bugs can appear at arbitrarily late inputs with no warning in the earlier behavior.",
+      "occurrences": [
+        {
+          "blockId": "spya-b9z7g9",
+          "quote": "such programs can exhibit computational irreducibility—which means that they will inevitably be able to do things we can’t foresee and don’t expect, and that we will consider to be bugs.",
+          "reasoning": "States the core mechanism directly.",
+          "start": 259
+        },
+        {
+          "blockId": "spya-gj554s",
+          "quote": "when there’s computational irreducibility nothing short of explicitly running a computation will determine what will happen.",
+          "reasoning": "Explicit statement of the idea.",
+          "start": 340
+        }
+      ]
+    },
+    {
+      "id": "spya-s4euma",
+      "name": "Bugs are relative to a chosen specification",
+      "provenance": "introduced",
+      "statement": "A program cannot be a 'bug' relative to itself; something only counts as a bug when measured against some separate, simpler description of what it should do.",
+      "whyYouNeedIt": "Without this framing, the many different kinds of examples (matching a formula, not blowing up memory, always outputting even numbers) wouldn't cohere as the same phenomenon.",
+      "occurrences": [
+        {
+          "blockId": "spya-mhwnwh",
+          "quote": "the program itself provides a specification for what it will do. And with respect to this specification the program will always just “do what it does”, with no possibility of “having a bug”.",
+          "reasoning": "States the relativity of bugs to specification.",
+          "start": 183
+        },
+        {
+          "blockId": "spya-tzs7f4",
+          "quote": "There are several different types of specifications that end up being used.",
+          "reasoning": "Frames subsequent examples as variations on specification type.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-vmnnp8",
+      "name": "Pockets of reducibility amid general irreducibility",
+      "provenance": "introduced",
+      "statement": "Even inside a system that is mostly computationally irreducible, there can be specific, limited facts or properties that remain predictable and provable.",
+      "whyYouNeedIt": "This explains why some bug-free proofs (like the n+1 Turing machine proof, or the cellular automaton doubling proof) are possible at all despite irreducibility being ubiquitous.",
+      "occurrences": [
+        {
+          "blockId": "spya-y9hee0",
+          "quote": "whenever it’s present, there must also be pockets of computational reducibility present. In other words, even though computational irreducibility says one can’t predict everything about what a system will do, there will always be certain things about a system that one will be able to predict.",
+          "reasoning": "Directly introduces the concept.",
+          "start": 265
+        },
+        {
+          "blockId": "spya-fg7dg2",
+          "quote": "there are still cases where—despite that complexity—the feature of behavior that we are concerned about (here, the successful doubling of any input) still always reliably happens, without any bugs.",
+          "reasoning": "Shows a concrete pocket of reducibility being found.",
+          "start": 194
+        }
+      ]
+    },
+    {
+      "id": "spya-c2pek9",
+      "name": "Failure to find a proof can itself mean the claim is false",
+      "provenance": "introduced",
+      "statement": "When searching a space of possible proof steps turns up no path to the desired theorem, that can be because the statement is actually false (i.e. the program has a bug), not just because the search wasn't thorough enough.",
+      "whyYouNeedIt": "This connects the multiway-graph proof-search procedure to the earlier bug examples, showing that proving and bug-hunting are the same kind of search.",
+      "occurrences": [
+        {
+          "blockId": "spya-zkkrs3",
+          "quote": "But now—however far we go—we never find a proof",
+          "reasoning": "Shows the search failing.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-vs44ga",
+          "quote": "because, in fact, the result we’re trying to prove isn’t true, so there isn’t a proof. And we know that because, if we test sufficiently many cases of the Turing machine, we can explicitly find the bug.",
+          "reasoning": "Explains why the search fails for a buggy machine.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-qm9xcd",
+      "name": "Full predictability makes running a program pointless",
+      "provenance": "introduced",
+      "statement": "If you could completely foresee everything a program would do, there would be no reason to actually execute it—you could just write down the answer directly.",
+      "whyYouNeedIt": "This justifies why useful programs must contain unpredictable, irreducible behavior, which is the root cause of bugs.",
+      "occurrences": [
+        {
+          "blockId": "spya-nd4kn9",
+          "quote": "if you can completely foresee what a program will do, what’s the point of running it? Why not, in effect, just immediately “write down the answer”, without ever having to run the program?",
+          "reasoning": "States the paradox directly.",
+          "start": 180
+        },
+        {
+          "blockId": "spya-uqhm5n",
+          "quote": "if you can really understand everything your program can do that basically means the program is doing something computationally reducible, and you probably in the end didn’t actually need to run the program",
+          "reasoning": "Restates the same tradeoff in the practice section.",
+          "start": 254
+        }
+      ]
+    },
+    {
+      "id": "spya-tz0w9j",
+      "name": "Scientific induction depends on hidden pockets of reducibility",
+      "provenance": "introduced",
+      "statement": "Inferring a general law from repeated observations only works because the regularity you're tracking happens to come from a reducible part of the underlying process; where the process is genuinely irreducible, such induction will eventually be contradicted by a counterexample.",
+      "whyYouNeedIt": "This explains why physics mostly succeeds with scientific laws while biology, medicine, and ruliology keep producing exceptions and failures of reproducibility.",
+      "occurrences": [
+        {
+          "blockId": "spya-ym6u26",
+          "quote": "such narratives—almost by definition—rely on pockets of computational reducibility. What’s underneath may involve all sorts of computational irreducibility. But that’s not what we concentrate on when we want to “do science”.",
+          "reasoning": "States the mechanism behind why induction sometimes works.",
+          "start": 464
+        }
+      ]
+    },
+    {
+      "id": "spya-nf82nv",
+      "name": "Mathematics avoids ruliology's bugs by staying at human scale",
+      "provenance": "introduced",
+      "statement": "Mainstream pure mathematics mostly sidesteps the endless surprises of computational irreducibility because mathematicians deliberately choose questions and structures that are tractable for human understanding, rather than sampling the full space of possible formal systems.",
+      "whyYouNeedIt": "This explains the contrast between the rarity of surprising counterexamples in mainstream math versus their ubiquity in ruliology and in exhaustive number-theoretic searches.",
+      "occurrences": [
+        {
+          "blockId": "spya-whd6dc",
+          "quote": "pure mathematics as it’s normally practiced tends to concentrate on what amount to more “human-level” questions, that in effect exist in pockets of computational reducibility, that avoid the generic computational irreducibility of ruliology.",
+          "reasoning": "States the idea directly.",
+          "start": 269
+        },
+        {
+          "blockId": "spya-ppan8f",
+          "quote": "it’s a direct reflection of the fact that the development of pure mathematics has at every stage emphasized human understanding.",
+          "reasoning": "Reinforces the same claim.",
+          "start": 109
+        },
+        {
+          "blockId": "spya-y7q6q3",
+          "quote": "You try many cases. All of them seem to give results with coefficients ±1. But then you try x105 – 1. And suddenly there’s something different",
+          "reasoning": "Shows that when math strays into exhaustive/experimental territory, irreducibility-style surprises do appear.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-xj2ad4",
+      "name": "Good language design packs irreducibility into primitives",
+      "provenance": "introduced",
+      "statement": "A well-designed programming language absorbs the messy, irreducible computational work into its built-in primitives, leaving the programmer to compose only the human-understandable, reducible parts, which lowers the chance of unintended behavior.",
+      "whyYouNeedIt": "This supports the claim that short, idiomatic programs in a well-designed language are less bug-prone than equivalent low-level code, without which the advice to 'use good language design' would be unmotivated.",
+      "occurrences": [
+        {
+          "blockId": "spya-x8ag2t",
+          "quote": "what’s happened is that most of the computational irreducibility has been packed into the primitives of the language, so that what’s left over is the part that’s accessible to us humans, and that maps into our natural patterns of thinking.",
+          "reasoning": "States the mechanism directly.",
+          "start": 173
+        },
+        {
+          "blockId": "spya-s0e3qm",
+          "quote": "in Wolfram Language it’s the short program that’s the one that does what you want, without what you consider bugs.",
+          "reasoning": "Draws the practical consequence of the mechanism.",
+          "start": 34
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:07:30.752Z",
+  "elapsedMs": 34451
+}

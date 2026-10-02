@@ -183,7 +183,7 @@ Rewriting any existing sentence for voice; the strapline; the ten unanswered int
 - 2026-10-02: browser check of `/` and `/features` at 1440 and 390, and of `/design` at 1440: all
   pass. No console errors, and /design sent no writes. One cosmetic nit is left: in a three-up row,
   an untagged tile's title sits about 27px above its tagged neighbours.
-- 2026-10-02: GPT Sol code review ([261002b-code-review-sol.md](261002b-code-review-sol.md)) found
+- 2026-10-02: GPT Sol code review ([261002b-homepage-code-review-sol.md](261002b-homepage-code-review-sol.md)) found
   no P0, one P1 and two P2s, and fixed them in place:
   - the P1: the Tweets tile promised more than the code does;
   - the two P2s: the experimental-tag and privacy tests are now directional, and found by visible

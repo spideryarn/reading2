@@ -1,5 +1,7 @@
 # Simple's fidelity guard, built: check each level against its cited passages, retry once, record it
 
+Research write-up: [docs/research/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md](../research/261002c-simple-fidelity-guard-prompt-rules-failed-luna-checks-opus-writes.md).
+
 **Status as of 2026-10-01:** built; Sol's plan review taken (one P1 declined, below); one real press run.
 The writer it guards moved to Opus the same day, with the guard kept; on Opus it fires on about one
 level in 18 on the PID paper rather than 6 in 18 —

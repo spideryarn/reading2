@@ -1,5 +1,7 @@
 # Estimate article ingestion and mode generation costs
 
+Research write-up: [docs/research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
+
 ## Goal
 
 Know what one article costs us in AI spend — the full ingestion queue plus every AI-powered

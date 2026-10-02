@@ -151,8 +151,11 @@ import type { BlockId } from "./types.js";
  * question nobody asked it. An article *with* figures is asked something new,
  * and `inputFingerprint` (src/illustrated.ts) says so for exactly those: the
  * figures are in its hash. docs/plans/260930f-illustrated-diagram-draws-on-the-paper-figures.md.
+ *
+ * `illustrated/5`, 2026-10-02: the brief-writing request gained
+ * `ILLUSTRATED_BRIEF_OUTPUT_SCHEMA`; the prompt text is unchanged.
  */
-export const ILLUSTRATED_VERSION = "illustrated/4";
+export const ILLUSTRATED_VERSION = "illustrated/5";
 
 /**
  * **How many of the article's figures one plate may be handed.** With the

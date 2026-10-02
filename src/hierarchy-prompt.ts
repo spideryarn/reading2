@@ -105,7 +105,12 @@ import type { Block } from "./types.js";
    and gets a gist saying what it is, not what it says (Greg,
    SPIDERYARN-READING2-8M). New articles only, as before.
    docs/plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md. */
-export const PROMPT_VERSION = "toc/10";
+/* **`toc/11`, 2026-10-02**: the whole-document answer carries one `start`
+   per child instead of redundant ranges, and the Messages request constrains
+   that starts-only shape with an unrolled JSON schema. Existing trees stay as
+   they are; the new stamp affects new articles and explicit regenerations only.
+   docs/plans/261001s-structure-answer-writes-code-to-correct-an-id.md § Stage 2. */
+export const PROMPT_VERSION = "toc/11";
 
 /**
  * How hard the model thinks before it starts writing.
@@ -234,4 +239,3 @@ export function renderBlocks(blocks: Block[]): string {
     })
     .join("\n\n");
 }
-

@@ -70,31 +70,11 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
 `kind-callout`, an indent and a big faint quote mark ([260831ae-callouts-the-box-the-author-drew.md](../plans/260831ae-callouts-the-box-the-author-drew.md)),
 and `kind-caption`, which had never been styled at all.
 
-## A face per voice (experimental, since 2026-10-01)
+## A face per voice (experimental)
 
-Greg's v1, behind the [Experimental switch](experimental-features.md):
-
-> I'm leaning towards the idea of using font to distinguish the author-generated from AI-generated
-> from user-generated text. … Perhaps try a v1 of this and I'll see how I feel about it, and then we
-> can do a v2 that really goes to town if it feels good.
->
-> — Greg, 2026-10-01
-
-| Token | Voice | Face |
-|---|---|---|
-| `--font-author` | the article, and verbatim quotes of it | Source Serif 4, variable, self-hosted |
-| `--font-ai` | anything a model wrote | Courier Prime, self-hosted |
-| `--font-reader` | anything the reader typed | Arial, from the system |
-| `--font-ui` | the chrome | Geist, unchanged — the fourth voice by being left alone |
-
-All of the type rules are in one file, [`styles/voices.css`](../../src/web/styles/voices.css): three
-selector lists, with narrow component wrappers where mixed-provenance text needs separating, and
-every rule under `:root[data-voices]`, which
-[`useVoiceFaces`](../../src/web/useVoiceFaces.ts) sets on `<html>` while the reading view is open
-and the switch is on. With the switch off it matches nothing, and the table at the top of this doc
-is the whole truth. Why these faces rather than the system ones Greg named, which elements are
-in which voice, and what v1 leaves out (section titles, third-party text, block ids now looking
-like AI) are in [261001d-typeface-per-voice.md](../plans/261001d-typeface-per-voice.md).
+Behind the [Experimental switch](experimental-features.md), the author, the model and the reader
+each get their own face — a serif, IBM Plex Mono and Arial — and Geist stays the chrome. The rule,
+the tokens, and how to put a new element in its voice: **[fonts.md](fonts.md)**.
 
 ## Weight, and the variable axis
 

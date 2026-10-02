@@ -1,0 +1,151 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "sourceHash": "b575dff238ed648a.dd64d05f4c045d91.5c63b9373f64e9a9",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-xsknrv",
+      "name": "A shrinking effect under tighter controls signals artifact, not fragile truth",
+      "provenance": "assumed",
+      "statement": "If a claimed effect keeps getting smaller as an experiment is made more careful and controlled, that is evidence the effect was never real, rather than evidence that the real phenomenon is simply delicate.",
+      "whyYouNeedIt": "Without this assumption, the sarcastic jab at parapsychology does not land: a reader could just as easily conclude that ESP is a weak but genuine effect that only shows up under looser conditions, and the passage gives no separate argument against that reading.",
+      "occurrences": [
+        {
+          "blockId": "spya-rbpppq",
+          "quote": "they improve the techniques so that the effects are smaller, and smaller, and smaller until they gradually disappear",
+          "reasoning": "Treats a vanishing effect size under improved method as damning rather than as a sign of a subtle real phenomenon, which only follows if one already assumes shrinkage-under-rigor means artifact.",
+          "start": 176
+        },
+        {
+          "blockId": "spya-g203mu",
+          "quote": "be sure they only train students who have shown their ability to get PSI results to an acceptable extent",
+          "reasoning": "The condemnation of selecting for students who get positive results only makes sense if one assumes that selection effects, not a real but rare ability, explain the positive results.",
+          "start": 220
+        }
+      ]
+    },
+    {
+      "id": "spya-pydz55",
+      "name": "Following scientific form isn't the same as doing science",
+      "provenance": "introduced",
+      "statement": "A field can copy every outward procedure of science—measurements, controls, technical vocabulary, publication—and still produce nothing real, because the one thing that actually makes science work is missing.",
+      "whyYouNeedIt": "This is the article's own label for the failure mode it is diagnosing in education research, parapsychology, and elsewhere.",
+      "occurrences": [
+        {
+          "blockId": "spya-fd2muf",
+          "quote": "They’re doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn’t work.",
+          "reasoning": "States directly that correct form without the working result is the defining feature of Cargo Cult Science.",
+          "start": 581
+        },
+        {
+          "blockId": "spya-afgs74",
+          "quote": "there is one feature I notice that is generally missing in Cargo Cult Science",
+          "reasoning": "Names the missing ingredient as the point of the whole talk.",
+          "start": 314
+        },
+        {
+          "blockId": "spya-rub3a2",
+          "quote": "That’s why the planes don’t land—but they don’t land.",
+          "reasoning": "Reaffirms that whatever else is going on, the test is simply whether the thing works.",
+          "start": 217
+        }
+      ]
+    },
+    {
+      "id": "spya-rm6kjc",
+      "name": "Report what could prove you wrong, not just what supports you",
+      "provenance": "introduced",
+      "statement": "Genuine scientific honesty means volunteering the flaws, alternative explanations, and disconfirming data in your own work, not merely avoiding outright lies.",
+      "whyYouNeedIt": "This is the concrete content Feynman gives to \"scientific integrity,\" distinguishing it from ordinary honesty like the Wesson Oil ad that is technically true but misleading.",
+      "occurrences": [
+        {
+          "blockId": "spya-rxj5wa",
+          "quote": "Details that could throw doubt on your interpretation must be given, if you know them.",
+          "reasoning": "States the obligation to disclose weaknesses in one's own findings.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-qpwryx",
+          "quote": "the idea is to try to give all of the information to help others to judge the value of your contribution",
+          "reasoning": "Summarizes the principle as full disclosure rather than selective persuasion.",
+          "start": 12
+        },
+        {
+          "blockId": "spya-bpyx8n",
+          "quote": "it’s the implication which has been conveyed, not the fact, which is true, and the difference is what we have to deal with",
+          "reasoning": "Distinguishes mere truthfulness from the deeper standard of not misleading by omission.",
+          "start": 536
+        },
+        {
+          "blockId": "spya-jk7mj4",
+          "quote": "If we only publish results of a certain kind, we can make the argument look good. We must publish both kinds of result.",
+          "reasoning": "Extends the integrity principle to the decision of what gets published at all.",
+          "start": 185
+        }
+      ]
+    },
+    {
+      "id": "spya-uqvukh",
+      "name": "You are your own first and hardest-to-catch deceiver",
+      "provenance": "introduced",
+      "statement": "Before worrying about deceiving others, a scientist must guard against unconsciously deceiving themselves, since bias toward a wanted answer creeps in without any intent to lie.",
+      "whyYouNeedIt": "This is offered as the foundational rule from which all the other integrity practices follow.",
+      "occurrences": [
+        {
+          "blockId": "spya-ed9mzv",
+          "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.",
+          "reasoning": "States the principle explicitly as the foundation of everything else discussed.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-s9msxy",
+          "quote": "It’s a little bit off, because he had the incorrect value for the viscosity of air.",
+          "reasoning": "Sets up the Millikan case as the illustration of unintentional error entering a result.",
+          "start": 250
+        },
+        {
+          "blockId": "spya-uj9v2h",
+          "quote": "When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong.",
+          "reasoning": "Shows self-deception operating through selective scrutiny of one's own data rather than deliberate fraud.",
+          "start": 181
+        }
+      ]
+    },
+    {
+      "id": "spya-twg60w",
+      "name": "A control is only real once you know the actual cue the subject is using",
+      "provenance": "introduced",
+      "statement": "An experiment isn't properly controlled by guessing which variables matter; it is controlled only after you've discovered, by elimination, the specific cue the subject is actually relying on.",
+      "occurrences": [
+        {
+          "blockId": "spya-rndcqw",
+          "quote": "Obviously there was something about the door that was different from the other doors.",
+          "reasoning": "Frames the problem as needing to find the actual, not assumed, source of the rats' information.",
+          "start": 142
+        },
+        {
+          "blockId": "spya-npdc6n",
+          "quote": "So he covered one after another of all possible clues and finally was able to fool the rats so that they had to learn to go in the third door.",
+          "reasoning": "Shows control being achieved only by successively eliminating every real channel of information, not by stipulating which ones matter.",
+          "start": 150
+        },
+        {
+          "blockId": "spya-yzzxkw",
+          "quote": "That is the experiment that makes rat‑running experiments sensible, because it uncovers the clues that the rat is really using—not what you think it’s using.",
+          "reasoning": "States the principle directly: valid control requires discovering the subject's real cue rather than assuming it.",
+          "start": 69
+        },
+        {
+          "blockId": "spya-wye8g6",
+          "quote": "they just went right on running rats in the same old way, and paid no attention to the great discoveries of Mr. Young",
+          "reasoning": "Illustrates the cost of ignoring this principle once established.",
+          "start": 227
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:33:57.878Z",
+  "elapsedMs": 63042
+}

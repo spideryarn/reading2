@@ -90,7 +90,26 @@ export interface UseDebate {
   cancel(id: string): void;
 }
 
-export function useDebate(slug: string): UseDebate {
+/**
+ * **The read half, alone** — the GET, its ordering and nothing else: no job, no
+ * poll, no automatic run, so mounting it can never spend (this is the most
+ * expensive step in the app to start by accident). Marginalia reads the claim
+ * rows through this; `useDebate` layers the job on it, as `useIdeas` does on
+ * `useIdeasRead`. docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md.
+ */
+export interface DebateRead {
+  status: DebateStatus;
+  debate: Debate | null;
+  stale: boolean;
+  outdated: boolean;
+  error: string | null;
+  /** Join a read in flight, or start one. `OrderedRead.reload`. */
+  reload(): Promise<void>;
+  /** Read again because the list has just changed. `OrderedRead.refresh`. */
+  refresh(): Promise<void>;
+}
+
+export function useDebateRead(slug: string): DebateRead {
   const [status, setStatus] = useState<DebateStatus>("loading");
   const [debate, setDebate] = useState<Debate | null>(null);
   const [stale, setStale] = useState(false);
@@ -149,6 +168,13 @@ export function useDebate(slug: string): UseDebate {
     void reload();
   }, [reload]);
 
+  return { status, debate, stale, outdated, error, reload, refresh };
+}
+
+export function useDebate(slug: string): UseDebate {
+  const read = useDebateRead(slug);
+  const { status, reload, refresh } = read;
+
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts. */
   const queue = useStepJob(slug, "debate", refresh, "watches-queue");
@@ -171,11 +197,11 @@ export function useDebate(slug: string): UseDebate {
 
   return {
     status,
-    debate,
-    stale,
-    outdated,
+    debate: read.debate,
+    stale: read.stale,
+    outdated: read.outdated,
     slug,
-    error,
+    error: read.error,
     job: queue.job,
     failed: queue.failed,
     stalled: queue.stalled,

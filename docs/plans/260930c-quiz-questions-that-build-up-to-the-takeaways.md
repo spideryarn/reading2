@@ -1,5 +1,7 @@
 # Quiz questions that build up to the takeaways
 
+Research write-up: [docs/research/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md](../research/261002l-quiz-prompt-evals-easier-build-up-reading-goal-and-profile.md).
+
 **Status: shipped on `dev`, 2026-09-30.** Plan reviewed twice by GPT Sol (round 1 "do not build", round 2 "build
 with the listed fixes"), code reviewed twice (round 2 "do not ship" on a token budget that outlived the
 job claim — fixed, § What the measurements said), browser-checked on the box. Written 2026-09-30 in `worktree-quiz-build-up`, from

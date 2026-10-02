@@ -1678,14 +1678,14 @@ function HitCard({ found, criterion }: { found: Found; criterion: string | null 
   const pct = Math.round(Math.min(1, Math.max(0, found.at)) * 100);
   return (
     <>
-      <p>{found.long}</p>
+      <p className="tip-hit-quote">{found.long}</p>
       <p className="tip-hit-meta">
         {/* Which question found it, in words. The dot on the row is the glance
             version and this is the one that actually answers it — a hue is a
             handle for something you already know, not a way of learning it. */}
         {criterion !== null && (
           <>
-            Found by <b>{criterion}</b>.
+            Found by <b className="tip-hit-criterion">{criterion}</b>.
             <br />
           </>
         )}

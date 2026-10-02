@@ -208,8 +208,12 @@ async function givenVoucher(
   n: number,
   createdBy = CREATOR_A,
   note: string | null = SECRET_NOTE,
+  recipientNote: string | null = null,
 ): Promise<{ id: string; delivery: string }> {
-  const made = await createVoucher({ id: randomUUID(), email: emailOf(owner), articles: n, note }, createdBy);
+  const made = await createVoucher(
+    { id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote },
+    createdBy,
+  );
   if (made.kind !== "created") throw new Error(`expected a new voucher, got ${made.kind}`);
   return { id: made.id, delivery: made.delivery };
 }
@@ -882,7 +886,7 @@ describe("the recipient's email is written for who they are", () => {
       expect(await giftAudienceFor(emailOf(READER), { lookup: failed })).toEqual({ kind: "invite" });
 
       const made = await createVoucher(
-        { id: randomUUID(), email: emailOf(READER), articles: 2, note: null },
+        { id: randomUUID(), email: emailOf(READER), articles: 2, note: null, recipientNote: null },
         CREATOR_A,
         { audience: failed },
       );
@@ -975,6 +979,175 @@ describe("the recipient's email is written for who they are", () => {
 });
 
 /* ------------------------------------------------- logs, and the route -- */
+
+describe("a note to them, from whoever gave the gift", () => {
+  /* Greg, 2026-10-01 (spya-hc5q0e): "add a note for them so that I can add a
+     sentence or two that they will see". Plan 261002b stage 1. Written by the
+     administrator and drawn in a stranger's mail client, so untrusted on render. */
+  const NOTE = 'Great to meet you today!\nSee <script>alert(1)</script> & <a href="https://evil.example">this</a>';
+  const READER_FREE: GiftAudience = {
+    kind: "reader",
+    plan: { kind: "free", limit: articles(3), wallUsed: points(0), waiting: articles(0) },
+  };
+
+  it("sits under the heading, above everything we wrote, in both audiences' text and HTML", () => {
+    for (const audience of [{ kind: "invite" } as const, READER_FREE]) {
+      const mail = giftMessage(20, audience, NOTE);
+      expect(mail.text).toContain("Great to meet you today!\nSee <script>alert(1)</script>");
+      expect(mail.text.indexOf("Great to meet you")).toBeLessThan(mail.text.indexOf("You have been given"));
+      expect(mail.text.indexOf("Great to meet you")).toBeGreaterThan(mail.text.indexOf("A gift of 20"));
+      const html = mail.html ?? "";
+      expect(html).toContain(
+        "Great to meet you today!<br>See &lt;script&gt;alert(1)&lt;/script&gt; &amp; &lt;a href=&quot;https://evil.example&quot;&gt;this&lt;/a&gt;",
+      );
+      expect(html.indexOf("Great to meet you")).toBeLessThan(html.indexOf("You have been given"));
+      expect(html).not.toContain("<script>");
+      expect(html).not.toContain('href="https://evil.example"');
+      expect(mail.subject).toBe("A gift of 20 free articles on Spideryarn");
+    }
+  });
+
+  it("says who it is from, in both parts", () => {
+    const mail = giftMessage(20, { kind: "invite" }, "Hello.");
+    expect(mail.text).toContain("A note from the person who gave you this gift:\nHello.");
+    expect(mail.html).toContain("A note from the person who gave you this gift:");
+  });
+
+  it("turns every kind of line break into one, and every other control character into a space", () => {
+    /* Sol, plan review F4: a lone CR or a Unicode separator draws a line a
+       `\n`-only rule would not see, and NUL has no business in a mail. Built
+       from char codes so this file holds no raw separator byte. */
+    const controls = [0, 13, 0x2028, 0x2029, 9, 0x7f, 0x85].map((c) => String.fromCharCode(c));
+    const [nul, cr, ls, ps, tab, del, nextLine] = controls;
+    const raw = `one${cr}\ntwo${cr}three${ls}four${ps}five${nul}six${tab}seven${del}eight${nextLine}nine\n\n\n\nten`;
+    const mail = giftMessage(3, { kind: "invite" }, raw);
+    expect(mail.text).toContain("one\ntwo\nthree\nfour\nfive six seven eight nine\n\nten");
+    expect(mail.html).toContain("one<br>two<br>three<br>four<br>five six seven eight nine<br><br>ten");
+    for (const c of controls) {
+      expect(mail.text.includes(c)).toBe(false);
+      expect((mail.html ?? "").includes(c)).toBe(false);
+    }
+    /* Blank once cleaned is no note at all. */
+    expect(giftMessage(3, { kind: "invite" }, `${nul} ${cr}\n`)).toEqual(giftMessage(3));
+  });
+
+  it("leaves no empty block when there is no note", () => {
+    const without = giftMessage(20);
+    const blank = giftMessage(20, { kind: "invite" }, null);
+    expect(blank).toEqual(without);
+    expect(without.html).not.toContain("border-left");
+  });
+
+  it("is sent with the gift, refuses a replay with a different note, and never reaches the creator's notice", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const id = randomUUID();
+    const body = { id, email: emailOf(READER), articles: 5, note: SECRET_NOTE, recipientNote: "Lovely to meet you." };
+    expect((await drive("POST", "/api/admin/vouchers", JSON.stringify(body), ADMIN_USER_ID_LOCAL)).status).toBe(201);
+    expect(box.sent[0]?.text).toContain("Lovely to meet you.");
+    expect(box.sent[0]?.html).toContain("Lovely to meet you.");
+
+    const replay = await drive("POST", "/api/admin/vouchers", JSON.stringify(body), ADMIN_USER_ID_LOCAL);
+    expect(replay.status).toBe(200);
+    const different = { ...body, recipientNote: "Something else." };
+    expect((await drive("POST", "/api/admin/vouchers", JSON.stringify(different), ADMIN_USER_ID_LOCAL)).status).toBe(409);
+
+    const listed = (await listVouchers()).find((v) => v.id === id);
+    expect(listed?.recipientNote).toBe("Lovely to meet you.");
+
+    box.sent.length = 0;
+    control.auth.set(READER, { kind: "confirmed", email: emailOf(READER) });
+    expect((await drive("GET", "/api/billing/usage", "", READER)).status).toBe(200);
+    const notice = box.sent.find((m) => m.subject.startsWith("Gift voucher claimed"));
+    expect(notice?.text).toBeDefined();
+    expect(notice?.text).not.toContain("Lovely to meet you.");
+  });
+
+  it("is checked like the private note: trimmed, blank is none, at most 500 characters", async () => {
+    const make = (recipientNote: unknown) =>
+      drive(
+        "POST",
+        "/api/admin/vouchers",
+        JSON.stringify({ id: randomUUID(), email: emailOf(OTHER), articles: 1, note: null, recipientNote }),
+        ADMIN_USER_ID_LOCAL,
+      );
+    expect((await make("x".repeat(501))).status).toBe(400);
+    /* Postgres char_length counts Unicode code points, not JavaScript UTF-16
+       code units: one emoji is one character at this seam. */
+    expect((await make("😀".repeat(500))).status).toBe(201);
+    expect((await make("😀".repeat(501))).status).toBe(400);
+    /* The input limit applies before cleaning too. Otherwise an arbitrarily
+       large request made only of trimmable/control characters evades it. */
+    expect((await make(`${"x".repeat(500)}\u0000`)).status).toBe(400);
+    expect((await make(7)).status).toBe(400);
+    const blank = await make("   ");
+    expect(blank.status).toBe(201);
+    const listed = (await listVouchers()).find((v) => v.id === (blank.body as { id: string }).id);
+    expect(listed?.recipientNote).toBeNull();
+  });
+
+  it("changing it sends nothing; a new address sends the note as it now stands", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const { id, delivery } = await givenVoucher(READER, 4, CREATOR_A, null, "First words.");
+    await sendQueuedVoucherEmail(delivery, box.deps);
+    expect(box.sent[0]?.text).toContain("First words.");
+
+    const edit = await drive(
+      "PATCH",
+      `/api/admin/vouchers/${id}`,
+      JSON.stringify({ recipientNote: "Second words." }),
+      ADMIN_USER_ID_LOCAL,
+    );
+    expect(edit.status).toBe(200);
+    expect(edit.body).toEqual({ ok: true });
+    expect(box.sent).toHaveLength(1);
+    expect((await listVouchers()).find((v) => v.id === id)?.recipientNote).toBe("Second words.");
+
+    const moved = `moved-${emailOf(READER)}`;
+    await drive("PATCH", `/api/admin/vouchers/${id}`, JSON.stringify({ email: moved }), ADMIN_USER_ID_LOCAL);
+    expect(box.sent.map((m) => m.to)).toEqual([[emailOf(READER)], [moved]]);
+    expect(box.sent[1]?.text).toContain("Second words.");
+    expect(box.sent[1]?.text).not.toContain("First words.");
+
+    /* Both at once: the new address gets the new note. */
+    const again = `again-${emailOf(READER)}`;
+    await drive(
+      "PATCH",
+      `/api/admin/vouchers/${id}`,
+      JSON.stringify({ email: again, recipientNote: "Third words." }),
+      ADMIN_USER_ID_LOCAL,
+    );
+    expect(box.sent[2]?.to).toEqual([again]);
+    expect(box.sent[2]?.text).toContain("Third words.");
+  });
+
+  it("retries the body frozen at create time after the stored note changes", async () => {
+    const first = mailbox({ answer: async () => new Response("{}", { status: 500 }) });
+    control.deps = first.deps;
+    const { id, delivery } = await givenVoucher(READER, 4, CREATOR_A, null, "First words.");
+    await sendQueuedVoucherEmail(delivery, first.deps);
+
+    await drive(
+      "PATCH",
+      `/api/admin/vouchers/${id}`,
+      JSON.stringify({ recipientNote: "Second words." }),
+      ADMIN_USER_ID_LOCAL,
+    );
+
+    const retried = mailbox();
+    control.deps = retried.deps;
+    const answer = await drive(
+      "POST",
+      `/api/admin/voucher-emails/${delivery}/retry`,
+      "",
+      ADMIN_USER_ID_LOCAL,
+    );
+    expect(answer.status).toBe(202);
+    expect(retried.sent[0]?.text).toContain("First words.");
+    expect(retried.sent[0]?.text).not.toContain("Second words.");
+  });
+});
 
 describe("what is said, and to whom", () => {
   it("puts no address and no note in any log line or detail", async () => {

@@ -50,12 +50,20 @@
 
 import { and, eq, isNull, sql } from "drizzle-orm";
 
-import type { VoucherEmailState, VoucherEmailStatus, VoucherEmails } from "../admin-vouchers.js";
+import {
+  type VoucherEmailState,
+  type VoucherEmailStatus,
+  type VoucherEmails,
+  GIFT_NOTE_LABEL,
+  freeArticles,
+  giftEmailHeading,
+  giftEmailSubject,
+} from "../admin-vouchers.js";
 import { type Articles, type Points, articles as toArticles, budgetFor, ingestHeadroom } from "../billing/points.js";
 import { FREE_LIFETIME_INGESTS } from "../billing/tiers.js";
 import { getDb } from "../db/client.js";
 import { billingVoucherEmails, billingVouchers } from "../db/schema.js";
-import { type EmailDeps, type SendResult, oneLine, sendEmail } from "../email.js";
+import { type EmailDeps, type SendResult, noteText, oneLine, sendEmail } from "../email.js";
 import { log } from "../log.js";
 import { ADMIN_VOUCHERS_URL, PUBLIC_ORIGIN } from "../urls.js";
 import { type AccountEmail, accountEmail } from "./admin-accounts.js";
@@ -82,11 +90,6 @@ function errorName(err: unknown): string {
 const LOGIN_URL = `${PUBLIC_ORIGIN}/login`;
 const HOME_URL = `${PUBLIC_ORIGIN}/`;
 const SMALL_NUMBERS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
-
-/** `20 free articles`, `1 free article` — digits even for one, as the wording says. */
-function freeArticles(n: number): string {
-  return `${n} free article${n === 1 ? "" : "s"}`;
-}
 
 /** `the three articles every free account starts with`, from the constant. */
 function freeAllowanceClause(): string {
@@ -136,10 +139,45 @@ function articlesCount(n: number): string {
   return `${n} article${n === 1 ? "" : "s"}`;
 }
 
-/** One email in the shape of supabase/templates/confirmation.html. Every value interpolated is ours. */
+/**
+ * **Somebody else's text, made safe for the HTML part** — the note to the
+ * recipient (plan 261002b), which an administrator wrote and a stranger's mail
+ * client draws. Every character that could open markup or close an attribute
+ * is an entity; newlines become `<br>`, and nothing else of it is markup. So a
+ * `<a href>` in a note arrives as the visible text of a tag, never a link.
+ */
+function escapeNoteHtml(note: string): string {
+  return note
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\n/g, "<br>");
+}
+
+/** The note, as a quoted block under the heading, or nothing at all. */
+function noteRow(note: string | null): string {
+  if (note === null) return "";
+  return (
+    `<tr><td style="font-size:13px;line-height:1.5;color:#a3a3a3;padding:0 0 6px 0;">${GIFT_NOTE_LABEL}</td></tr>\n` +
+    `<tr><td style="padding:0 0 20px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>` +
+    `<td style="font-size:16px;line-height:1.6;color:#f5f5f5;border-left:3px solid #DB8A45;padding:2px 0 2px 14px;">` +
+    `${escapeNoteHtml(note)}</td></tr></table></td></tr>\n`
+  );
+}
+
+/**
+ * One email in the shape of supabase/templates/confirmation.html. Every value
+ * interpolated is ours, **except `note`**, which is escaped here, at the one
+ * place it meets markup.
+ */
 function giftHtml(parts: {
   readonly subject: string;
   readonly heading: string;
+  /** The note to the recipient, raw; null for none. */
+  readonly note: string | null;
   readonly paragraphs: readonly string[];
   readonly button: { readonly label: string; readonly url: string };
   readonly after: string;
@@ -166,7 +204,7 @@ function giftHtml(parts: {
 <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
 </td></tr>
 <tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">${parts.heading}</td></tr>
-${paragraphs.join("\n")}
+${noteRow(parts.note)}${paragraphs.join("\n")}
 <tr><td style="padding:0 0 28px 0;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="${parts.button.url}" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">${parts.button.label}</a></td></tr></table>
 </td></tr>
@@ -185,26 +223,46 @@ const FOOTER_TEXT =
 
 /**
  * **The recipient's email.** The values in it are `articles`, an integer the
- * route validated, and for an existing reader two counts we computed, so there
- * is nothing to escape. **Never the note, the creator or the voucher id** —
- * tests/billing-voucher-emails.test.ts pins that, for both audiences.
+ * route validated, for an existing reader two counts we computed, and
+ * `recipientNote` — the administrator's note *to them*, the one value that is
+ * not ours, escaped where it meets the HTML (`escapeNoteHtml`). It goes
+ * directly under the heading, above anything we wrote, in both audiences, and
+ * never in the subject. **Never the private note, the creator or the voucher
+ * id** — tests/billing-voucher-emails.test.ts pins that, for both audiences.
+ * Plan 261002b.
  */
-export function giftMessage(articles: number, audience: GiftAudience = INVITE): RenderedEmail {
+export function giftMessage(
+  articles: number,
+  audience: GiftAudience = INVITE,
+  recipientNote: string | null = null,
+): RenderedEmail {
   if (!Number.isInteger(articles) || articles < 1) throw new Error("a gift message needs a whole number of articles");
-  return audience.kind === "reader" ? readerGiftMessage(articles, audience.plan) : inviteGiftMessage(articles);
+  /* Cleaned again here as well as on the way in: this is where it meets the
+     mail, and a row written before the rule, or by hand, gets the same rule. */
+  const cleaned = recipientNote === null ? "" : noteText(recipientNote);
+  const note = cleaned === "" ? null : cleaned;
+  return audience.kind === "reader"
+    ? readerGiftMessage(articles, audience.plan, note)
+    : inviteGiftMessage(articles, note);
+}
+
+/** The text part's note, labelled, above the intro, or nothing. */
+function noteLines(note: string | null): string[] {
+  return note === null ? [] : [GIFT_NOTE_LABEL, note, ""];
 }
 
 /** To somebody who may not know Spideryarn: what it is, and how to collect. */
-function inviteGiftMessage(articles: number): RenderedEmail {
+function inviteGiftMessage(articles: number, note: string | null): RenderedEmail {
   const gift = freeArticles(articles);
-  const subject = `A gift of ${gift} on Spideryarn`;
+  const subject = giftEmailSubject(articles);
   const intro = `You have been given ${gift} on Spideryarn, for this email address. Spideryarn is a reading tool: add an article or a paper, and it helps you read it deeply and efficiently. It highlights, annotates and explains, but keeps you in the text itself.`;
   const how =
     "Sign in, or create an account, with this same address. The articles are added to your free allowance when you do, with no code to type in.";
   const after = `They come on top of ${freeAllowanceClause()}. If you use Continue with Google, choose the Google account for this address. If you were not expecting this, you can ignore this email.`;
   const text = [
-    `A gift of ${gift}`,
+    giftEmailHeading(articles),
     "",
+    ...noteLines(note),
     intro,
     "",
     how,
@@ -218,7 +276,8 @@ function inviteGiftMessage(articles: number): RenderedEmail {
   ].join("\n");
   const html = giftHtml({
     subject,
-    heading: `A gift of ${gift}`,
+    heading: giftEmailHeading(articles),
+    note,
     paragraphs: [intro, how],
     button: { label: "Sign in or create an account", url: LOGIN_URL },
     after,
@@ -231,9 +290,9 @@ function inviteGiftMessage(articles: number): RenderedEmail {
  * many they have with the gift — or, on a paid plan, that it waits for Free
  * (billing.md: a gift counts on Free only).
  */
-function readerGiftMessage(articles: number, plan: ReaderStanding): RenderedEmail {
+function readerGiftMessage(articles: number, plan: ReaderStanding, note: string | null): RenderedEmail {
   const gift = freeArticles(articles);
-  const subject = `A gift of ${gift} on Spideryarn`;
+  const subject = giftEmailSubject(articles);
   const intro = `You have been given ${gift} on Spideryarn, for your account with this address.`;
   let standing: string | null;
   switch (plan.kind) {
@@ -260,8 +319,9 @@ function readerGiftMessage(articles: number, plan: ReaderStanding): RenderedEmai
   const after = "If you were not expecting this, you can ignore this email.";
   const paragraphs = standing === null ? [intro, how] : [intro, standing, how];
   const text = [
-    `A gift of ${gift}`,
+    giftEmailHeading(articles),
     "",
+    ...noteLines(note),
     ...paragraphs.flatMap((p) => [p, ""]),
     `Open Spideryarn: ${HOME_URL}`,
     "",
@@ -272,7 +332,8 @@ function readerGiftMessage(articles: number, plan: ReaderStanding): RenderedEmai
   ].join("\n");
   const html = giftHtml({
     subject,
-    heading: `A gift of ${gift}`,
+    heading: giftEmailHeading(articles),
+    note,
     paragraphs,
     button: { label: "Open Spideryarn", url: HOME_URL },
     after,
@@ -337,8 +398,10 @@ export async function queueGiftEmail(
   recipient: string,
   articles: number,
   audience: GiftAudience,
+  /** The administrator's note to them, frozen into the email here. Plan 261002b. */
+  recipientNote: string | null,
 ): Promise<string> {
-  const message = giftMessage(articles, audience);
+  const message = giftMessage(articles, audience, recipientNote);
   const [row] = await tx
     .insert(billingVoucherEmails)
     .values({

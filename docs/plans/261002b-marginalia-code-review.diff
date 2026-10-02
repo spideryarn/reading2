@@ -1,0 +1,1527 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index ce67193b9..b7b186185 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -46,6 +46,7 @@ listed here; the names under each are files in `docs/project/`.
+ - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
+   sees: the spine, the prose, and the band the modes take turns in.
+   <br>↳ `interface-vision.md` (three columns — not decided, a direction to explore) ·
++  `marginalia.md` (the notes right of the prose, and what other modes' items belong there) ·
+   `web-client.md` (where the client code is) · `mode.md` (the checklist) ·
+   `granularity-zoom.md` (the tree Structure draws; most of it is the removed gist columns) ·
+   `column-context.md` (history: the gist columns' fisheye) ·
+diff --git a/docs/plans/261002b-marginalia-plan-review-prompt.md b/docs/plans/261002b-marginalia-plan-review-prompt.md
+new file mode 100644
+index 000000000..32db752a4
+--- /dev/null
++++ b/docs/plans/261002b-marginalia-plan-review-prompt.md
+@@ -0,0 +1,4 @@
++You are reviewing a plan, read-only. Repo: the current directory (Spideryarn, TypeScript/React reader).
++Plan: docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md
++Relevant code: src/web/marginalia/ (notes.ts, MarginaliaColumn.tsx, press.ts), src/web/reader/Reader.tsx (search marginaliaNotes, OwnerIdeasFeed, `works`, `comments`), src/web/useIdeas.ts (useIdeasRead), src/web/useFaq.ts, src/web/useDebate.ts, src/web/useCitations.ts (useCitationsRead), src/types.ts (Faq, CitedWork, Debate, ClaimDebateRow, Comment), src/public-types.ts (PublicArtefactSet), src/web/styles/marginalia.css, docs/project/interface-vision.md, docs/project/citations.md, docs/project/block-ids.md, docs/project/security-map.md.
++Check: (1) can anything in this plan start a model run or spend money (auto-run hooks, POSTs)? (2) anchoring by block position, stale artefacts, visitor vs owner data exposure (anything a visitor would newly see that they should not — e.g. owner-private comments, citations); (3) the TableView cell click handler and keyboard/tap accessibility of an open/shut button inside a cell; (4) the collision layout re-running when a note opens; (5) density; (6) anything simpler. Give numbered findings with severity (P0-P3), file:line evidence, and a suggested fix. Be concrete; skip praise.
+diff --git a/docs/plans/261002b-marginalia-plan-review-sol.md b/docs/plans/261002b-marginalia-plan-review-sol.md
+new file mode 100644
+index 000000000..ef96eeee8
+--- /dev/null
++++ b/docs/plans/261002b-marginalia-plan-review-sol.md
+@@ -0,0 +1,31 @@
++No P0 findings.
++
++1. **P1 — “Nothing generates” is not protected by a test.**  
++   The plan requires GET-only `useFaqRead` / `useDebateRead` hooks ([plan:56](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md:56)), but the existing hooks also mount `useStepJob` and `useAutoRun`: [useFaq.ts:133](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/useFaq.ts:133), [useFaq.ts:145](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/useFaq.ts:145), [useDebate.ts:154](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/useDebate.ts:154), [useDebate.ts:170](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/useDebate.ts:170). Debate can cost about $0.27 per run ([useDebate.ts:6](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/useDebate.ts:6)).  
++   **Fix:** make the split structural: `useFaqRead`/`useDebateRead` own only GET state; `useFaq`/`useDebate` compose those reads with jobs and auto-run. Add a network test that opens Marginalia, including beside an open FAQ/Debate band, and proves only artefact GETs occur—no job polling and no POST. The current Marginalia activation is correctly `kind: "none"` ([activation.ts:274](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/activation.ts:274)), but that should not be the only spend defence.
++
++2. **P1 — The stale-artifact claim is false for visitors, and citations need a separate owner freshness gate.**  
++   The plan says stale owner artefacts are not drawn ([plan:59](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md:59)). Public FAQ and Debate carry no freshness result by design; the public reader explicitly says it does not compute one ([public-reader.ts:301](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/store/public-reader.ts:301)). A stale public row whose block ID still exists can therefore be placed confidently beside changed prose. Missing-block filtering catches only fully orphaned IDs. Separately, Reader’s existing owner citation list ignores `status` and `stale` ([Reader.tsx:983](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/reader/Reader.tsx:983)); reusing `works` would violate the plan.  
++   **Fix:** either omit stale FAQ/Debate from the public payload for this surface, or carry a public drawable/fresh decision as cross-references already do. At minimum, verify FAQ `quote` and Debate `claimQuote` against the current block before placing them. Derive marginal citations separately as `owner && status === "ready" && !stale`; never fall back to `artefacts.citations`. Add owner-stale, visitor-stale, and visitor-with-public-citations tests.
++
++3. **P1 — Per-block grouping does not solve citation density.**  
++   The plan claims grouping makes a forty-reference paper cease producing forty margin lines ([plan:52](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md:52)). It only groups works sharing one block. Each work has its own `firstCited` ([types.ts:3949](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/types.ts:3949)), and a list can contain 80 works ([types.ts:4349](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/types.ts:4349)). A normal paper citing one work per paragraph still adds forty lines—the “second article” the plan says it prevents. Citations are already marked precisely in owner prose ([citations.md:184](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/docs/project/citations.md:184)).  
++   **Fix:** simplest is to omit citation marginalia in v1. Otherwise specify an article-wide density policy, such as showing margin citation rows only for multi-citation blocks or unmarked footnote-only citations, with a hard cap and a test using forty distinct `firstCited` blocks.
++
++4. **P2 — FAQ anchoring must choose the earliest surviving current block, not `passages[0]`.**  
++   The plan describes the anchor as both `passages[0]` and “by block position” ([plan:47](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md:47)). Stored passage order is fixed when the artefact is written ([types.ts:4631](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/types.ts:4631)); IDs themselves encode no order ([block-ids.md:310](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/docs/project/block-ids.md:310)). If the first passage disappears while a later one survives, skipping the whole question wastes a still-valid anchor.  
++   **Fix:** resolve every surviving passage through `blockIndex`, choose the lowest current index, and skip only when none survive. Mirror the existing Ideas scan ([notes.ts:103](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/marginalia/notes.ts:103)). Test random ID order, reordered passages, and a missing original first passage.
++
++5. **P2 — `aria-expanded` alone does not settle the disclosure’s keyboard/tap behavior.**  
++   A real `<button>` is correctly exempt from TableView’s touch row-selection handler ([TableView.tsx:362](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/TableView.tsx:362), [TableView.tsx:427](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/TableView.tsx:427)). However, the proposed open Debate content contains a link ([plan:48](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md:48)); that link cannot be nested inside the disclosure button. The existing focus-visible rule also covers only `.marg-idea` and `.marg-arc`, not the new control ([marginalia.css:87](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/styles/marginalia.css:87)).  
++   **Fix:** make the trigger button and disclosed region siblings, with `aria-expanded`, `aria-controls`, and a stable panel ID. Give the button an explicit focus-visible treatment and full-line tap target. Use the existing external-link policy—`target="_blank" rel="noreferrer noopener"` as in [DebatePanel.tsx:1923](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/DebatePanel.tsx:1923). Extend the real TableView tap test to prove button and link clicks do not select the row, and test Enter/Space plus tabbing into the opened link.
++
++6. **P2 — Owner comments include referee notes unless explicitly filtered.**  
++   `Comment` includes `criterionId`, identifying a peer-review placement rather than an ordinary reading note ([types.ts:2828](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/types.ts:2828)). The public query correctly excludes those rows and unfinished calls ([public-reader.ts:503](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/store/public-reader.ts:503)), so visitors are safe if Reader passes its existing unified `comments` value. The owner list is unrestricted, though; passing it wholesale would show referee notes as context-free “YOUR NOTE” marginalia and increase density.  
++   **Fix:** filter owner marginalia to `criterionId === undefined`. If referee placements are intended, make them a separate labelled kind retaining criterion context. Add a visitor test proving ordinary published comments appear while referee, pending, and failed comments do not.
++
++7. **P3 — The count → shut rows → individual open rows design is unnecessarily two-level.**  
++   The plan makes a count disclosure open another set of disclosures ([plan:52](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md:52)). That adds nested state, extra tab stops, and more collision-layout transitions.  
++   **Fix:** use one disclosure per kind per block. Its shut label is the item title for one item or “N citations/comments” for several; opening it renders the details for that kind directly.
++
++The current collision mechanism itself is suitable: `useMarginLayout` observes every outer note with `ResizeObserver` ([MarginaliaColumn.tsx:325](/home/greg/code/spideryarn2/.claude/worktrees/fb82-marginalia-other-modes/src/web/marginalia/MarginaliaColumn.tsx:325)), so an in-flow disclosure changing the note’s height schedules another pass. Keep opened content inside that observed box and add one interaction test proving the next note’s translate changes after opening.
+\ No newline at end of file
+diff --git a/docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md b/docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md
+new file mode 100644
+index 000000000..5d24bfb4f
+--- /dev/null
++++ b/docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md
+@@ -0,0 +1,132 @@
++# Marginalia shows FAQ, Citations, Debate and comments, shut by default
++
++Two of Greg's reports about the same right-hand column, both admin suggestions, so built.
++
++**SPIDERYARN-READING2-82** (spya-h6rrhv, 2026-10-01):
++
++> Perhaps include FAQ, Citations, Debate items, Comments etc (if generated) in Annotations.
++>
++> And make a note in new-mode.md and/or docs for Annotation mode that we should keep an eye out for
++> where new mode-items might be useful to include/display in Annotations mode.
++>
++> Rather than showing the full item, maybe show them default-collapsed.
++>
++> — Greg, 2026-10-01
++
++**spya-rczgjb** (2026-10-01):
++
++> I really like the rail at the top of the annotation marginalia mode that tells you where you are,
++> both in terms of the structure and the arc. Can we make it visually look slightly different from
++> the rest of the annotations? Perhaps put a box around it or a line under it or something to show
++> that it's not just a regular margin-annotation?
++>
++> — Greg, 2026-10-01
++
++Annotations has since become **Marginalia** (261001n); `new-mode.md` is [mode.md](../project/mode.md),
++and Marginalia has no doc of its own yet, so this plan gives it one.
++
++## What the reader gets
++
++Beside a block, under the part's question and any idea stamp, at most **one shut line per kind**:
++
++```
++  prose …                         │  What does the author mean by X?      ← question (as now)
++                                  │  ASSUMES  rational agents             ← idea stamp (as now)
++                                  │  ▸ FAQ  Why does the bound hold?      ← one question here
++                                  │  ▸ DEBATE  disputes · Smith 2021
++                                  │  ▸ 3 CITATIONS                        ← several, counted
++                                  │  ▸ YOUR NOTE  check this against §4
++```
++
++Pressing a line opens it in place (not a hover card — it is an open/shut row, so the column grows
++and the collision pass pushes the notes below down). Open, each kind shows what its own band shows
++in short:
++
++| Kind | Anchor (block) | Shut line | Open |
++|---|---|---|---|
++| FAQ | the question's first answering passage (`passages[0]` by block position) | the question | the quoted answering words; "+N more passages" |
++| Debate | each claim row's `blockId` (whole-article `direct` rows have no block, so they stay in the band) | relation · work title | the source's quote, a link to the page, `applies` |
++| Citations | `firstCited` | the work's title (short) | by-line, year, `why` |
++| Comments | the comment's `blockId` | the body's first words, or "Bookmark" | the whole body (and the AI answer's first lines if there is one) |
++
++Several items of one kind in one block collapse to a count ("3 citations") that opens to their
++shut lines. That is the density rule: the risk 261001d named is *"a second article down the
++margin"*, and a paper with forty references would otherwise put forty lines there.
++
++**Nothing generates.** Each kind is read only if it already exists: Citations and comments are
++already held by the Reader in every mode; FAQ and Debate get read-only hooks (`useFaqRead`,
++`useDebateRead`, GET only, no `useStepJob`, no `useAutoRun`) mounted only while the column is open,
++in the same feed component that reads Ideas today. A stale owner artefact (`stale: true`) is not
++drawn, as for Ideas; a note naming a block the article no longer has is skipped.
++
++**Visitors** get FAQ and Debate from their payload (`artefacts.faq`, `artefacts.debate`) and the
++owner's public comments, as they already get Ideas. **Citations stay owner-only**, matching the
++prose marks' decision ([citations.md § Who sees it](../project/citations.md)): the margin is not the
++place to quietly reverse it.
++
++**The head** (spya-rczgjb): a hairline rule under it, the same `--rule` colour as the app's other
++dividers, above the existing fade. Greg offered a box or a line; the line is the quieter of the two
++and the column's notes have no rules of their own below the head except the question's left rule,
++so a horizontal rule reads as a different thing. One CSS declaration.
++
++## Where it fits the interface vision
++
++[interface-vision.md](../project/interface-vision.md) question 2 asked which stored content goes into
++the margin first: Debate disputes, FAQ beside its answers, or both. Report 82 is Greg's own answer,
++wider than either: FAQ, Citations, Debate and comments, shut. FAQ sits beside the passage that
++answers it, which is option B's shape, so nothing here pre-empts it; Debate shows every relation,
++not only `disputes`, with the relation word first so a reader can tell. Each kind is one entry in a
++list (`notes.ts`) so dropping one, or narrowing Debate to disputes, is one line. The question comes
++off the open list and the doc records what was built.
++
++## Simpler options passed over
++
++- **Show the items in full** — what Greg asked us not to do.
++- **One line per item, no per-kind count** — simpler by a few lines, but a citation-heavy paper
++  fills the column; the count is the cheapest density guard.
++- **Hover cards like the idea stamp** — reuse, but a card is not "collapsed"; Greg asked for
++  default-collapsed, which is an open/shut row. Hover cards also cannot hold a link to click.
++
++## Deferred
++
++- Quotes, glossary terms, timeline, cross-references in the margin (the "etc"). Quotes and glossary
++  already mark the prose; adding them is one entry each once this shape is liked. Named in
++  marginalia.md's list of candidates.
++- Debate's whole-article rows, which have no block.
++- Remembering which lines a reader opened.
++
++## Stages
++
++1. **Pure notes** (red-first tests in `tests/marginalia-notes.test.ts`): `MarginaliaNote` gains
++   `faq | debate | citation | comment` kinds grouped per kind per block; anchors resolved by block
++   position (block-ids.md); stale/missing blocks skipped.
++2. **Reads and drawing**: `useFaqRead`, `useDebateRead`; the feed component reads them; Reader
++   passes citations/comments/faq/debate into `marginaliaNotes`; `MarginShutNote` button with
++   `aria-expanded`; CSS; the head's rule. Browser check, desktop and 390px (where the notes are
++   hidden — confirm nothing new leaks).
++3. **Docs**: `docs/project/marginalia.md` (new, owned by reading-view-overview.md) with the rule
++   "when a mode adds block-anchored items, ask whether they belong in the margin", and a line in
++   mode.md's checklist pointing to it; interface-vision.md question 2 resolved.
++
++GPT Sol on the plan (`--sandbox review`) and on the code (`--sandbox workspace-write`).
++
++## GPT Sol on the plan, and what changed
++
++[The review](261002b-marginalia-plan-review-sol.md); no P0.
++
++1. **Read-only by structure** — accepted: `useFaqRead` and `useDebateRead` are the read halves that
++   `useFaq` and `useDebate` now compose, as `useIdeas` composes `useIdeasRead`; a test proves the
++   read hooks issue only a GET.
++2. **Stale for visitors, and citations' own gate** — accepted: an FAQ passage or a Debate claim is
++   placed only where its quoted words are still in the block's text (both readers, since a visitor's
++   payload carries no freshness); citations only when the owner's read is `ready` and not `stale`,
++   never from `artefacts.citations`.
++3. **Citation density** — grouping per block does not stop a paper citing one work per paragraph
++   adding forty lines. Measured on a real paper in the browser before deciding; the fallback is to
++   drop citations from the margin (the prose marks them already) and say so to Greg.
++4. **FAQ at its earliest surviving passage** by block position, not `passages[0]` — accepted.
++5. **Button and panel as siblings**, `aria-controls`, a focus ring, links outside the button —
++   accepted.
++6. **Referee notes are not reading notes** — owner comments with a `criterionId` are left out.
++7. **One disclosure per kind per block** — accepted, replacing the two-level count: one item shows
++   its title shut; several show "3 citations", and opening shows them all.
+diff --git a/docs/project/interface-vision.md b/docs/project/interface-vision.md
+index 6573a00d0..fe39adb1e 100644
+--- a/docs/project/interface-vision.md
++++ b/docs/project/interface-vision.md
+@@ -75,8 +75,8 @@ anchored, so placing it costs layout, not a model call.
+ | Quiz questions | paragraphs | middle: italic line after the paragraph | **yes** ([quiz.md](quiz.md)) |
+ | Socratic questions, the arc | parts | right, and the right's head | **yes**, in Marginalia |
+ | Ideas (assumes / introduces) | block ids | right: a stamp at first occurrence | **in the margin**, once Ideas has run; marked in the prose only while Ideas' band is open (`selectPassages`, `src/web/reader/passages.ts`) |
+-| Debate's disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/debate.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: only the `disputes` rows (the filter is a decision), collapsed, opening the replies | data yes, placement no |
+-| FAQ answers | the passages that answer | right, or a mark | data yes; marked nowhere, not even in its own band (open report 82) |
++| Debate's disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/debate.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: collapsed, opening the replies | **in the margin** since 261002b, every relation with its word first (narrowing to `disputes` is open question 2) |
++| FAQ answers | the passages that answer | right, or a mark | **in the margin** since 261002b, beside the earliest answering passage, shut; marked nowhere in the prose |
+ | Timeline events | resolved passages | right, or a mark | data yes; marked in the prose only while Timeline's band is open |
+ | Rebuttals, conclusions ("this answers §2", "so…") | blocks | right | **no** — a new model pass (the relation words in [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md) stage 2) |
+ | Explaining a hard paragraph | blocks | right, collapsed | **no** — needs [vision.md](vision.md)'s difficulty map, which does not exist |
+@@ -158,9 +158,11 @@ Each step is useful on its own, and none commits us to the next.
+ 
+ 1. **Rename Annotations to Marginalia** — done, 2026-10-01
+    ([261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md)).
+-2. **One small trial of a note from data already stored** — Debate's `disputes` rows, or FAQ's
+-   answers — collapsed by default, one line each, opening to the stored content. No model call.
+-   (Report 82 asks for this.)
++2. **Notes from data already stored** — done, 2026-10-02, wider than the trial this step proposed:
++   report 82 asked for FAQ, Citations, Debate and comments, shut by default, and that is what
++   [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md)
++   built: one line per kind per block, opening to the stored content, no model call.
++   [marginalia.md](marginalia.md).
+ 3. **Every mark explains itself on hover and on tap** — the app-side version of the playground's
+    check, before adding marks.
+ 4. **Recede the single-purpose modes** from the Dock into an overflow and the command bar — each
+@@ -181,9 +183,12 @@ question comes off this list.
+ 1. **For now, is the left still today's band?** (A) yes — one mode at a time, chosen as now, and the
+    structural change waits until the right and middle have moved; (B) no — design a left column that
+    holds several unanchored things at once, stacked or tabbed, now. *Recommended: A.*
+-2. **Which stored content goes into the margin first, as one small trial?** (A) Debate's rows that
+-   *dispute* a claim (not those that qualify, extend or corroborate it); (B) FAQ's answers, beside
+-   the passages that answer them; (C) both at once. *Recommended: A, then B.*
++2. **Debate in the margin: every relation, or only disputes?** Report 82 answered the first half of
++   this question (which stored content goes in: FAQ, Citations, Debate and comments, all shut).
++   What is left is the filter: (A) every claim row, with its relation word first — "disputes",
++   "qualifies", "extends", "agrees" — as built in 261002b; (B) only the rows that *dispute* a
++   claim, so the margin flags disagreement and nothing else. Changing to B is one line in
++   `src/web/marginalia/notes.ts`. *Recommended: A until a real article shows it is too busy.*
+ 3. **May opening Marginalia ever spend money to make what it is missing?** (A) no — it shows only
+    what is already stored, as now; (B) yes, for some modes, under a policy Greg sets.
+    *Recommended: A until Greg sets that policy.*
+diff --git a/docs/project/marginalia.md b/docs/project/marginalia.md
+new file mode 100644
+index 000000000..65bc20d0a
+--- /dev/null
++++ b/docs/project/marginalia.md
+@@ -0,0 +1,62 @@
++# Marginalia
++
++The column of notes to the right of the prose, each level with the block it is about. Its address is
++`?margin=1`, and it stands beside whichever band is open. Up from here:
++[reading-view-overview.md](reading-view-overview.md). Where this is meant to go is
++[interface-vision.md](interface-vision.md): the right column is for what is anchored to the text.
++
++The code is `src/web/marginalia/`: `notes.ts` decides which note goes beside which block (pure, and
++tested in `tests/marginalia-notes.test.ts`), `MarginaliaColumn.tsx` draws them and the head, and
++`press.ts` decides what the Dock button does on a narrow window.
++
++## What it shows
++
++**It generates nothing.** Every note comes from something another mode has already stored, and
++opening the column never starts a run. The owner's lists are read through each mode's *read half*
++(`useIdeasRead`, `useFaqRead`, `useDebateRead`), never the full mode hook, because the full hook
++can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
++read. A visitor's lists come in their payload.
++
++- **The head**, pinned at the top: which part and section you are in, and the arc's sentence for
++  where the argument has got to. It has a rule under it so it does not read as one more note (Greg,
++  spya-rczgjb).
++- **Each part's Socratic question**, beside the part's first real paragraph.
++- **An idea stamp** ("assumes", "introduces") where each idea first occurs.
++- **Other modes' items, shut by default**: FAQ questions, Debate's claim rows, Citations and the
++  reader's comments and bookmarks. Each block gets at most one line of each kind. One item shows its
++  title; several show a count ("3 works"). Pressing the line opens the rest underneath. This was
++  [report 82](../user-feedback/261002_0300-marginalia-shows-other-modes-items.md), and the reasons
++  are in [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md):
++
++  > Perhaps include FAQ, Citations, Debate items, Comments etc (if generated) in Annotations. […]
++  > Rather than showing the full item, maybe show them default-collapsed.
++  >
++  > — Greg, 2026-10-01
++
++  | Kind | Beside | Rule |
++  |---|---|---|
++  | FAQ | the question's earliest answering passage that is still there | the quoted words must still be in that block |
++  | Debate | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
++  | Citations | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([citations.md](citations.md)) |
++  | Comments | the comment's block | a referee note (one with a `criterionId`) is left out |
++
++  The quote check is there because a visitor's payload carries no staleness flag (no "this was
++  written against an older version of the article"). A list written before a block changed could
++  otherwise sit beside prose that no longer says what it quotes.
++
++## Keep an eye out for new kinds
++
++Greg, 2026-10-01: *"make a note … that we should keep an eye out for where new mode-items might be
++useful to include/display in Annotations mode."*
++
++**When a mode stores items that are anchored to blocks, ask whether they belong here**, shut by
++default. Adding one is one new kind in `MarginaliaNote`, one loop in `marginaliaNotes` that places
++it at its earliest surviving block and checks its quote, one small component in
++`MarginaliaColumn.tsx`, and a read half if the mode hook can start a run.
++[mode.md](mode.md) points here from its checklist. Not here yet, and named so they are not
++forgotten: Quotes, glossary terms, Timeline events, cross-references. The first two already mark
++the prose.
++
++The constraint each new kind is weighed against is the one the first plan named: the risk is *"a
++second article down the margin"*. That is why there is one line per kind per block, and why every
++kind starts shut.
+diff --git a/docs/project/mode.md b/docs/project/mode.md
+index 459053771..4f4e9d0d5 100644
+--- a/docs/project/mode.md
++++ b/docs/project/mode.md
+@@ -250,6 +250,18 @@ modes; each item points to the mode doc that holds its machinery.
+   [`ThresholdSlider`](../../src/web/ThresholdSlider.tsx); the reasoning is
+   [glossary.md § The threshold, and whose it is](glossary.md#the-threshold-and-whose-it-is) and
+   [faq.md § A few big questions first](faq.md#a-few-big-questions-first-and-a-threshold).
++- **A mode whose items are anchored to blocks is a candidate for Marginalia**, shut by default.
++  Asked when FAQ, Citations, Debate and comments went there:
++
++  > And make a note in new-mode.md and/or docs for Annotation mode that we should keep an eye out
++  > for where new mode-items might be useful to include/display in Annotations mode.
++  >
++  > — Greg, 2026-10-01 (SPIDERYARN-READING2-82,
++  > [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md))
++
++  So when you add a mode, ask whether its items belong in the right-hand column.
++  [marginalia.md § Keep an eye out for new kinds](marginalia.md#keep-an-eye-out-for-new-kinds) says
++  what adding one takes, and which kinds are not there yet.
+ 
+ ## The card on the button
+ 
+diff --git a/docs/project/reading-view-overview.md b/docs/project/reading-view-overview.md
+index 544c22c0d..94f837011 100644
+--- a/docs/project/reading-view-overview.md
++++ b/docs/project/reading-view-overview.md
+@@ -154,8 +154,10 @@ readers never are.
+   (612px with the rail, 600 without), whichever you pressed last wins, and below that the notes
+   stay hidden — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md),
+   [261001k](../plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md). Greg's layout from SPIDERYARN-READING2-7K: left for what is not anchored
+-  to the text, the middle for the text, the right for what is. Behind the switch. It has no doc of
+-  its own yet; the plans are the reference —
++  to the text, the middle for the text, the right for what is. Behind the switch. Since 261002b
++  it also carries, shut, the FAQ, Debate, Citations and comments other modes have stored.
++  **[marginalia.md](marginalia.md)** is its doc: what it shows, and the rule to keep an eye out for
++  new kinds of item that belong there. The plans before it:
+   [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md), then 261001i,
+   261001k and 261001n above.
+ 
+diff --git a/docs/user-feedback/261002_0300-marginalia-shows-other-modes-items.md b/docs/user-feedback/261002_0300-marginalia-shows-other-modes-items.md
+new file mode 100644
+index 000000000..dde88d81f
+--- /dev/null
++++ b/docs/user-feedback/261002_0300-marginalia-shows-other-modes-items.md
+@@ -0,0 +1,48 @@
++---
++reports: spya-h6rrhv, spya-rczgjb
++ending: shipped
++---
++# Marginalia shows FAQ, Debate, Citations and comments, shut; and a rule under its head
++
++Two suggestions from Greg about the same right-hand column, both checked as his with
++`feedback-reporter.ts` (exit 0), so both built. Overseer queue item qi-a844m5nr.
++
++**spya-h6rrhv** (Sentry SPIDERYARN-READING2-82), 2026-10-01, sent from Annotations (now Marginalia)
++on `9689-full-spya-m43th2`:
++
++> Perhaps include FAQ, Citations, Debate items, Comments etc (if generated) in Annotations.
++>
++> And make a note in new-mode.md and/or docs for Annotation mode that we should keep an eye out for
++> where new mode-items might be useful to include/display in Annotations mode.
++>
++> Rather than showing the full item, maybe show them default-collapsed.
++
++**spya-rczgjb**, 2026-10-01, sent from Summary with the margin open on
++`jco-2005-01-libre-spya-hk9cc7`:
++
++> I really like the rail at the top of the annotation marginalia mode that tells you where you are,
++> both in terms of the structure and the arc. Can we make it visually look slightly different from
++> the rest of the annotations? Perhaps put a box around it or a line under it or something to show
++> that it's not just a regular margin-annotation?
++
++## What we did
++
++- **Other modes' items in the margin, shut.** Beside a block, at most one line per kind: an FAQ
++  question the block answers, a page on the web that answers a claim made there (Debate), a work
++  first cited there, and the reader's own notes and bookmarks. One item shows its title; several
++  show a count. Pressing the line opens the rest underneath. Nothing is generated: each list is read
++  only if it already exists, through read-only hooks that cannot start a run. Citations stay
++  owner-only, as their prose marks are. Plan:
++  [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md).
++- **A thin line under the head**, the quieter of the two things Greg offered. No note in the column
++  has a horizontal line, so it reads as "not a note".
++- **The note he asked for**: Marginalia now has a doc of its own,
++  [marginalia.md](../project/marginalia.md), with a section on keeping an eye out for new kinds of
++  item. [mode.md](../project/mode.md) points to it from its list of patterns, because there is no
++  `new-mode.md`.
++
++One question for Greg is left in [interface-vision.md](../project/interface-vision.md) (open
++question 2, now narrower). Should Debate show every row in the margin, as built, or only the rows
++that dispute a claim? It does not hold this report up.
++
++Commits: (filled in at commit).
+diff --git a/src/web/marginalia/MarginaliaColumn.tsx b/src/web/marginalia/MarginaliaColumn.tsx
+index 12e184579..1f04b3c74 100644
+--- a/src/web/marginalia/MarginaliaColumn.tsx
++++ b/src/web/marginalia/MarginaliaColumn.tsx
+@@ -19,16 +19,22 @@ import {
+   Fragment,
+   type ReactNode,
+   useEffect,
++  useId,
+   useLayoutEffect,
+   useState,
+ } from "react";
+-import type { Ideas } from "../../types.js";
++import { ChevronRight } from "lucide-react";
++import type { CitedWork, Faq, Ideas } from "../../types.js";
++import { useDebateRead } from "../useDebate.js";
++import { useFaqRead } from "../useFaq.js";
++import { byLineOf } from "../CitationsPanel.js";
++import { rowWork } from "../DebatePanel.js";
+ import { nameOfThrown, recordLog } from "../log-buffer.js";
+ import { captureClientFailure } from "../monitoring.js";
+ import { useRenderCount } from "../perf.js";
+ import { Tooltip } from "../Tooltip.js";
+ import { useIdeasRead } from "../useIdeas.js";
+-import { type MarginaliaNote, layoutNotes } from "./notes.js";
++import { type MarginClaim, type MarginComment, type MarginaliaNote, layoutNotes } from "./notes.js";
+ 
+ /** The gap the collision pass keeps between two notes, in px. */
+ export const NOTE_GAP_PX = 8;
+@@ -93,24 +99,196 @@ function MarginNotes({ notes }: { notes: readonly MarginaliaNote[] }) {
+   useRenderCount("MarginNotes");
+   return (
+     <div className="marg-note" data-marg-note="">
+-      {notes.map((note) =>
+-        note.kind === "question" ? (
+-          <p
+-            key={`q${note.depth}`}
+-            className="marg-question"
+-            data-depth={note.depth}
+-            title={QUESTION_TIP(note.depth)}
+-          >
+-            {note.text}
+-          </p>
+-        ) : (
+-          <IdeaStamp key={`i${note.ideaId}`} note={note} />
+-        ),
+-      )}
++      {notes.map((note) => {
++        switch (note.kind) {
++          case "question":
++            return (
++              <p
++                key={`q${note.depth}`}
++                className="marg-question"
++                data-depth={note.depth}
++                title={QUESTION_TIP(note.depth)}
++              >
++                {note.text}
++              </p>
++            );
++          case "idea":
++            return <IdeaStamp key={`i${note.ideaId}`} note={note} />;
++          case "faq":
++            return <FaqNote key="faq" items={note.items} />;
++          case "debate":
++            return <DebateNote key="debate" items={note.items} />;
++          case "citation":
++            return <CitationNote key="citation" items={note.items} />;
++          case "comment":
++            return <CommentNote key="comment" items={note.items} />;
++          default: {
++            const never: never = note;
++            return never;
++          }
++        }
++      })}
++    </div>
++  );
++}
++
++/**
++ * **One shut line, opened in place** — report 82: *"Rather than showing the
++ * full item, maybe show them default-collapsed."* A disclosure rather than a
++ * hover card, so it is collapsed in the ordinary sense and its open half can
++ * hold a link. The button and the panel are siblings, so nothing interactive
++ * sits inside the button (GPT Sol, F5 on the plan); TableView leaves a press on
++ * a button or a link alone, so neither selects the row. Opening grows the
++ * note, and `useMarginLayout`'s ResizeObserver pushes the notes below down.
++ * docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md.
++ */
++function ShutNote({
++  kind,
++  stamp,
++  tip,
++  line,
++  children,
++}: {
++  kind: string;
++  stamp: string;
++  /** What this kind of line is, on hover — every mark explains itself. */
++  tip: string;
++  line: string;
++  /** The open half; null when there is nothing more to show than the line. */
++  children: ReactNode | null;
++}) {
++  const [open, setOpen] = useState(false);
++  const panel = useId();
++  const label = (
++    <>
++      <span className="marg-stamp">{stamp}</span> <span className="marg-shut-line">{line}</span>
++    </>
++  );
++  if (children === null) {
++    return (
++      <p className="marg-shut" data-kind={kind} title={tip}>
++        {label}
++      </p>
++    );
++  }
++  return (
++    <div className="marg-shut" data-kind={kind} data-open={open ? "" : undefined}>
++      <button
++        type="button"
++        className="marg-shut-button"
++        title={tip}
++        aria-expanded={open}
++        aria-controls={panel}
++        onClick={() => setOpen((was) => !was)}
++      >
++        <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
++        {label}
++      </button>
++      <div id={panel} className="marg-open" hidden={!open}>
++        {open ? children : null}
++      </div>
+     </div>
+   );
+ }
+ 
++const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
++
++function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["items"] }) {
++  const only = items.length === 1 ? items[0] : undefined;
++  return (
++    <ShutNote
++      kind="faq"
++      stamp="FAQ"
++      tip="A question a careful reader might ask, which this passage answers. From FAQ mode."
++      line={only ? only.question.question : plural(items.length, "question", "questions")}
++    >
++      {items.map(({ question, quote }) => (
++        <div key={question.id} className="marg-open-item">
++          {!only && <p className="marg-open-head">{question.question}</p>}
++          <p className="marg-open-quote">Answered here: “{quote}”</p>
++        </div>
++      ))}
++    </ShutNote>
++  );
++}
++
++/** The relation in the reader's words. `unclear` is not a failure, only unsaid. */
++const RELATION_WORD: Record<MarginClaim["relation"], string> = {
++  disputes: "disputes",
++  qualifies: "qualifies",
++  extends: "extends",
++  corroborates: "agrees",
++  unclear: "discusses",
++};
++
++function DebateNote({ items }: { items: readonly MarginClaim[] }) {
++  const only = items.length === 1 ? items[0] : undefined;
++  return (
++    <ShutNote
++      kind="debate"
++      stamp={only ? RELATION_WORD[only.relation] : "Debate"}
++      tip="A page elsewhere on the web that answers a claim made here, and how it bears on it. From Debate mode."
++      line={only ? rowWork(only).headline : plural(items.length, "page on the web", "pages on the web")}
++    >
++      {items.map((row) => (
++        <div key={row.url} className="marg-open-item">
++          <p className="marg-open-head">
++            {!only && <span className="marg-stamp">{RELATION_WORD[row.relation]}</span>}{" "}
++            <a href={row.url} target="_blank" rel="noreferrer noopener">
++              {rowWork(row).headline}
++            </a>
++          </p>
++          {row.applies && <p>{row.applies}</p>}
++        </div>
++      ))}
++    </ShutNote>
++  );
++}
++
++function CitationNote({ items }: { items: readonly CitedWork[] }) {
++  const only = items.length === 1 ? items[0] : undefined;
++  return (
++    <ShutNote
++      kind="citation"
++      stamp="Cites"
++      tip="A work the piece cites here for the first time, and why. From Citations mode."
++      line={only ? only.title : plural(items.length, "work", "works")}
++    >
++      {items.map((work) => {
++        const by = byLineOf(work);
++        return (
++          <div key={work.id} className="marg-open-item">
++            {!only && <p className="marg-open-head">{work.title}</p>}
++            {by && <p className="marg-open-by">{by}</p>}
++            <p>{work.why}</p>
++          </div>
++        );
++      })}
++    </ShutNote>
++  );
++}
++
++function CommentNote({ items }: { items: readonly MarginComment[] }) {
++  const only = items.length === 1 ? items[0] : undefined;
++  const written = items.filter((c) => c.body);
++  return (
++    <ShutNote
++      kind="comment"
++      stamp={only && !only.body ? "Bookmark" : "Note"}
++      tip="A comment or bookmark on this passage. All of them are in the drawer at the foot of the window."
++      line={only ? (only.body ?? "") : plural(items.length, "note", "notes")}
++    >
++      {written.length === 0 && only
++        ? null
++        : items.map((c) => (
++            <p key={c.id} className="marg-open-item">
++              {c.body ?? "Bookmarked."}
++            </p>
++          ))}
++    </ShutNote>
++  );
++}
++
+ /**
+  * **An idea's stamp: a real button**, so it can be reached by keyboard, opened
+  * by a tap where there is nothing to hover with, and pressed without the cell's
+@@ -256,26 +434,42 @@ function ArcLine({ arc }: { arc: string }) {
+   );
+ }
+ 
++/** What the owner's feed hands the Reader: each list, or null for none. */
++export type MarginFeed = {
++  ideas: Ideas["ideas"] | null;
++  faq: Faq["questions"] | null;
++  claims: readonly MarginClaim[] | null;
++};
++
++export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, claims: null };
++
+ /**
+- * **The owner's ideas, read and never made.** A component of its own so the
+- * read happens only while Marginalia is open — `useIdeasRead`, not `useIdeas`,
+- * which would arm the auto-run and could spend. A stale list (the article moved
+- * under it) is not drawn: its blocks may not be these. Owner only: a visitor's
+- * ideas are in their payload.
++ * **The owner's ideas, FAQ and Debate, read and never made.** A component of
++ * its own so the reads happen only while Marginalia is open — the read halves
++ * (`useIdeasRead`, `useFaqRead`, `useDebateRead`), never the full hooks, which
++ * arm the automatic run and could spend (Debate is the dearest step in the
++ * app). A stale list (the article moved under it) is not drawn: its blocks may
++ * not be these. Owner only: a visitor's lists are in their payload. Citations
++ * and comments are not read here — the Reader holds both in every mode.
+  */
+-export function OwnerIdeasFeed({
++export function OwnerMarginFeed({
+   slug,
+-  onIdeas,
++  onFeed,
+ }: {
+   slug: string;
+-  onIdeas(ideas: Ideas["ideas"] | null): void;
++  onFeed(feed: MarginFeed): void;
+ }) {
+-  const read = useIdeasRead(slug);
+-  const usable = read.status === "ready" && !read.stale ? (read.ideas?.ideas ?? null) : null;
++  const ideasRead = useIdeasRead(slug);
++  const faqRead = useFaqRead(slug);
++  const debateRead = useDebateRead(slug);
++  const ideas = ideasRead.status === "ready" && !ideasRead.stale ? (ideasRead.ideas?.ideas ?? null) : null;
++  const faq = faqRead.status === "ready" && !faqRead.stale ? (faqRead.faq?.questions ?? null) : null;
++  const claims =
++    debateRead.status === "ready" && !debateRead.stale ? (debateRead.debate?.claims.rows ?? null) : null;
+   useEffect(() => {
+-    onIdeas(usable);
+-  }, [usable, onIdeas]);
+-  useEffect(() => () => onIdeas(null), [onIdeas]);
++    onFeed({ ideas, faq, claims });
++  }, [ideas, faq, claims, onFeed]);
++  useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
+   return null;
+ }
+ 
+diff --git a/src/web/marginalia/notes.ts b/src/web/marginalia/notes.ts
+index 699efa46b..6807a5125 100644
+--- a/src/web/marginalia/notes.ts
++++ b/src/web/marginalia/notes.ts
+@@ -14,9 +14,26 @@
+  * Ranges are resolved by block position, never by comparing id strings
+  * (docs/project/block-ids.md).
+  */
+-import type { Arc, Block, BlockId, Idea, IdeaProvenance, Tree } from "../../types.js";
++import type {
++  Arc,
++  Block,
++  BlockId,
++  CitedWork,
++  Comment,
++  FaqQuestion,
++  Idea,
++  IdeaProvenance,
++  Tree,
++} from "../../types.js";
++import type { PublicClaimDebateRow, PublicComment } from "../../public-types.js";
++import { findQuote } from "../../quote-match.js";
+ import { blockIndex, sectionNodesOf } from "../../section-path.js";
+ 
++/** A Debate claim row, the owner's or a visitor's — every owner row is one. */
++export type MarginClaim = PublicClaimDebateRow;
++/** A comment or bookmark, the owner's or a visitor's. */
++export type MarginComment = Comment | PublicComment;
++
+ export type MarginaliaNote =
+   /** The question a part — or, at `depth` 0, the whole article — answers. */
+   | { kind: "question"; depth: number; text: string }
+@@ -27,7 +44,33 @@ export type MarginaliaNote =
+       name: string;
+       statement: string;
+       provenance: IdeaProvenance;
+-    };
++    }
++  /* **Other modes' items, one shut line per kind per block** — report 82,
++     docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md.
++     `items` is never empty. */
++  /** FAQ questions this block answers, each with the words here that do. */
++  | { kind: "faq"; items: { question: FaqQuestion; quote: string }[] }
++  /** Pages on the web that answer a claim made in this block. */
++  | { kind: "debate"; items: MarginClaim[] }
++  /** Works first cited in this block. Owner only — the caller's rule. */
++  | { kind: "citation"; items: CitedWork[] }
++  /** The reader's own comments and bookmarks on this block. */
++  | { kind: "comment"; items: MarginComment[] };
++
++/**
++ * **What other modes have already stored**, each already filtered by the caller
++ * for whether it may be shown at all (owner, fresh). Absent or null is "none".
++ */
++export type MarginSources = {
++  faq?: readonly FaqQuestion[] | null;
++  claims?: readonly MarginClaim[] | null;
++  citations?: readonly CitedWork[] | null;
++  comments?: readonly MarginComment[] | null;
++};
++
++type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
++/** The order the kinds are drawn in below the question and the stamps. */
++const GROUPED_ORDER = ["faq", "debate", "citation", "comment"] as const;
+ 
+ /** A sentence's worth: fewer words than this is a heading, a date or a byline. */
+ export const PARAGRAPH_MIN_WORDS = 12;
+@@ -44,6 +87,7 @@ export function marginaliaNotes(
+   tree: Tree | null | undefined,
+   blocks: readonly Block[],
+   ideas: readonly Idea[] | null | undefined,
++  more: MarginSources = {},
+ ): Map<BlockId, MarginaliaNote[]> {
+   const index = blockIndex(blocks);
+   const out = new Map<BlockId, MarginaliaNote[]>();
+@@ -118,6 +162,96 @@ export function marginaliaNotes(
+       provenance: idea.provenance,
+     });
+   }
++
++  for (const [blockId, notes] of groupedNotes(index, blocks, more)) {
++    for (const note of notes) add(blockId, note);
++  }
++  return out;
++}
++
++/**
++ * **Other modes' items** (report 82): each placed at its earliest block *by
++ * position* that still holds it, and grouped per kind per block, so a block
++ * carries at most one line of each kind however many items land there. In
++ * `GROUPED_ORDER` within a block; `marginaliaNotes` appends them after the
++ * question and the stamps.
++ */
++function groupedNotes(
++  index: ReadonlyMap<string, number>,
++  blocks: readonly Block[],
++  more: MarginSources,
++): Map<BlockId, GroupedKind[]> {
++  const grouped = new Map<BlockId, Partial<{ [K in GroupedKind["kind"]]: Extract<GroupedKind, { kind: K }>["items"] }>>();
++  const put = <K extends GroupedKind["kind"]>(
++    blockId: BlockId,
++    kind: K,
++    item: Extract<GroupedKind, { kind: K }>["items"][number],
++  ) => {
++    let byKind = grouped.get(blockId);
++    if (!byKind) {
++      byKind = {};
++      grouped.set(blockId, byKind);
++    }
++    const list = (byKind[kind] ?? []) as unknown[];
++    list.push(item);
++    byKind[kind] = list as never;
++  };
++  /* **A quote is checked against the block it names, every time.** A
++     visitor's payload carries no freshness verdict (src/store/public-reader.ts),
++     so an artefact written against an earlier version of a block whose id
++     survived could otherwise sit confidently beside prose that no longer says
++     it. The forgiving pass, as every browser-side check against a block uses
++     (quote-match.ts § `findQuote`); `start` only picks between repeats. */
++  const holds = (blockId: BlockId, quote: string, near?: number): boolean => {
++    const at = index.get(blockId);
++    const block = at === undefined ? undefined : blocks[at];
++    return block !== undefined && quote.trim() !== "" && findQuote(block.text, quote, near) !== null;
++  };
++  const earliest = <T>(candidates: readonly T[], blockOf: (c: T) => BlockId, ok: (c: T) => boolean): T | null => {
++    let best: T | null = null;
++    let bestAt = Number.POSITIVE_INFINITY;
++    for (const c of candidates) {
++      const at = index.get(blockOf(c));
++      if (at !== undefined && at < bestAt && ok(c)) {
++        best = c;
++        bestAt = at;
++      }
++    }
++    return best;
++  };
++
++  for (const question of more.faq ?? []) {
++    const passage = earliest(
++      question.passages,
++      (p) => p.blockId,
++      (p) => holds(p.blockId, p.quote, p.start),
++    );
++    if (passage) put(passage.blockId, "faq", { question, quote: passage.quote });
++  }
++  for (const row of more.claims ?? []) {
++    if (holds(row.blockId, row.claimQuote)) put(row.blockId, "debate", row);
++  }
++  for (const work of more.citations ?? []) {
++    const first = earliest(work.citedAt, (id) => id, () => true);
++    if (first !== null) put(first, "citation", work);
++  }
++  /* **Referee notes are not reading notes**: a comment with a `criterionId` is
++     a peer-review placement (referee-mode.md), meaningless here without its
++     criterion. A visitor's payload never carries one. GPT Sol, F6 on the plan. */
++  for (const comment of more.comments ?? []) {
++    if ("criterionId" in comment && comment.criterionId !== undefined) continue;
++    if (index.has(comment.blockId)) put(comment.blockId, "comment", comment);
++  }
++
++  const out = new Map<BlockId, GroupedKind[]>();
++  for (const [blockId, byKind] of grouped) {
++    const list: GroupedKind[] = [];
++    for (const kind of GROUPED_ORDER) {
++      const items = byKind[kind];
++      if (items && items.length > 0) list.push({ kind, items } as GroupedKind);
++    }
++    if (list.length > 0) out.set(blockId, list);
++  }
+   return out;
+ }
+ 
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index e62384d96..2d109a4c0 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -25,12 +25,14 @@ import {
+   useState,
+ } from "react";
+ import { useQueryState, useQueryStates } from "nuqs";
+-import type { Article, BlockId, CitedWork, GlossaryEntry, Ideas } from "../../types.js";
++import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
+ import { marginaliaNotes, arcAt, headPath } from "../marginalia/notes.js";
+ import {
+   MarginaliaHead,
+   MarginNotesSlot,
+-  OwnerIdeasFeed,
++  type MarginFeed,
++  NO_OWNER_FEED,
++  OwnerMarginFeed,
+   useMarginLayout,
+ } from "../marginalia/MarginaliaColumn.js";
+ import { MODE_CATALOG } from "../../mode-catalog.js";
+@@ -1371,22 +1373,48 @@ export function Reader({
+   /**
+    * **Marginalia: the notes beside each block** — MarginaliaColumn.tsx.
+    *
+-   * The ideas are the owner's stored list (read by `OwnerIdeasFeed` beside
++   * The ideas are the owner's stored list (read by `OwnerMarginFeed` beside
+    * the column's head, never made) or the visitor's payload. Drawn only while the
+    * window has room for the column (`fit.margW`); on a narrow one the head
+    * says why there is nothing. Memoised on the notes alone, so scrolling does
+    * not re-render `TableView`.
+    */
+-  const [ownerIdeas, setOwnerIdeas] = useState<Ideas["ideas"] | null>(null);
+-  const marginaliaIdeas = owner ? ownerIdeas : (artefacts?.ideas?.ideas ?? null);
++  const [ownerFeed, setOwnerFeed] = useState<MarginFeed>(NO_OWNER_FEED);
++  const marginaliaIdeas = owner ? ownerFeed.ideas : (artefacts?.ideas?.ideas ?? null);
++  /* **Other modes' items, already stored** (report 82, plan 261002b): the
++     owner's FAQ and Debate from the feed's read-only reads, a visitor's from
++     their payload. **Citations are the owner's, and only a fresh list** —
++     never `artefacts.citations`, because the prose's citation marks are
++     owner-only (citations.md § Who sees it) and the margin is not the place to
++     reverse that quietly. Comments are the one list both arms already share. */
++  const marginaliaFaq = owner ? ownerFeed.faq : (artefacts?.faq?.questions ?? null);
++  const marginaliaClaims = owner ? ownerFeed.claims : (artefacts?.debate?.claims.rows ?? null);
++  const marginaliaCitations =
++    owner && owner.citations.status === "ready" && !owner.citations.stale
++      ? (owner.citations.citations?.citations ?? null)
++      : null;
+   const marginRoom = marginOpen && fit.margW > 0;
+   const marginNotes = useMemo(() => {
+     if (!marginRoom) return null;
+-    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas);
++    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
++      faq: marginaliaFaq,
++      claims: marginaliaClaims,
++      citations: marginaliaCitations,
++      comments,
++    });
+     const out = new Map<BlockId, ReactElement>();
+     for (const [blockId, notes] of byBlock) out.set(blockId, <MarginNotesSlot notes={notes} />);
+     return out;
+-  }, [marginRoom, article.tree, article.blocks, marginaliaIdeas]);
++  }, [
++    marginRoom,
++    article.tree,
++    article.blocks,
++    marginaliaIdeas,
++    marginaliaFaq,
++    marginaliaClaims,
++    marginaliaCitations,
++    comments,
++  ]);
+   useMarginLayout(marginRoom, marginNotes);
+ 
+   /**
+@@ -2421,7 +2449,7 @@ export function Reader({
+         owner={owner !== null}
+         onPlain={() => void setMargin(null)}
+       >
+-        {owner && <OwnerIdeasFeed slug={slug} onIdeas={setOwnerIdeas} />}
++        {owner && <OwnerMarginFeed slug={slug} onFeed={setOwnerFeed} />}
+         {!covered && (
+           <MarginaliaHead
+             room={fit.margW > 0}
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index 3aefe89da..8dffd6a13 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -97,6 +97,79 @@
+   color: var(--ink-faint);
+ }
+ 
++/* ------------------------------------------------- § other modes' items --
++   FAQ, Debate, Citations and the reader's notes (report 82, plan 261002b):
++   one shut line per kind per block, its stamp in the idea stamp's small
++   capitals, its words cut at one line. A press opens the rest underneath, in
++   flow, so the note grows and the collision pass moves the notes below. The
++   chevron hangs in the gap, like the question's rule, so the words keep the
++   column's one left edge. */
++.marg-shut {
++  margin: 0;
++  min-width: 0;
++}
++.marg-shut-button {
++  all: unset;
++  box-sizing: border-box;
++  display: block;
++  position: relative;
++  width: 100%;
++  /* A full-width target, and at least a finger's height on a touch screen. */
++  min-height: 1.5rem;
++  cursor: pointer;
++  color: var(--ink-soft);
++  border-radius: 2px;
++  overflow: hidden;
++  white-space: nowrap;
++  text-overflow: ellipsis;
++}
++p.marg-shut {
++  overflow: hidden;
++  white-space: nowrap;
++  text-overflow: ellipsis;
++}
++.marg-shut-button:focus-visible {
++  outline: 2px solid var(--rule-strong);
++  outline-offset: 2px;
++}
++.marg-chevron {
++  position: absolute;
++  left: -0.9rem;
++  top: 0.2rem;
++  color: var(--ink-faint);
++  transition: rotate 120ms ease;
++}
++.marg-shut[data-open] .marg-chevron {
++  rotate: 90deg;
++}
++@media (prefers-reduced-motion: reduce) {
++  .marg-chevron {
++    transition: none;
++  }
++}
++.marg-open {
++  display: grid;
++  gap: 0.375rem;
++  padding: 0.25rem 0 0.125rem;
++  color: var(--ink-soft);
++  overflow-wrap: anywhere;
++}
++.marg-open-item {
++  display: grid;
++  gap: 0.125rem;
++}
++.marg-open-head {
++  color: var(--ink);
++}
++.marg-open-by {
++  color: var(--ink-faint);
++}
++.marg-open a {
++  color: inherit;
++  text-decoration: underline 1px var(--rule-strong);
++  text-underline-offset: 2px;
++}
++
+ /* ---------------------------------------------------------- § the head --
+    Pinned flush under the controls bar, across the whole column, with the page
+    behind it and a short fade below: notes scrolling up pass under one clean
+@@ -112,6 +185,13 @@
+   box-sizing: border-box;
+   padding: 0.5rem 0.5rem 0.5rem var(--marg-gap);
+   background: var(--page);
++  /* **A rule under it, so it does not read as one more note** — Greg, on
++     spya-rczgjb: *"Can we make it visually look slightly different from the
++     rest of the annotations? Perhaps put a box around it or a line under it"*.
++     The line, the quieter of his two: no note in the column has a horizontal
++     rule, so this one says "not a note" without a box's weight. Inset to the
++     text's edge, so it underlines the head's words rather than the gutter:
++     `::before`, since `::after` is the fade. */
+   font-family: var(--font-ui);
+   font-size: 0.8125rem;
+   line-height: 1.4;
+@@ -121,6 +201,15 @@
+   display: grid;
+   gap: 0.25rem;
+ }
++.marg-head::before {
++  content: "";
++  position: absolute;
++  left: var(--marg-gap);
++  right: 0.5rem;
++  bottom: 0;
++  border-bottom: 1px solid var(--rule);
++  pointer-events: none;
++}
+ .marg-head::after {
+   content: "";
+   position: absolute;
+diff --git a/src/web/useDebate.ts b/src/web/useDebate.ts
+index 31993c97d..0cea3be00 100644
+--- a/src/web/useDebate.ts
++++ b/src/web/useDebate.ts
+@@ -90,7 +90,26 @@ export interface UseDebate {
+   cancel(id: string): void;
+ }
+ 
+-export function useDebate(slug: string): UseDebate {
++/**
++ * **The read half, alone** — the GET, its ordering and nothing else: no job, no
++ * poll, no automatic run, so mounting it can never spend (this is the most
++ * expensive step in the app to start by accident). Marginalia reads the claim
++ * rows through this; `useDebate` layers the job on it, as `useIdeas` does on
++ * `useIdeasRead`. docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md.
++ */
++export interface DebateRead {
++  status: DebateStatus;
++  debate: Debate | null;
++  stale: boolean;
++  outdated: boolean;
++  error: string | null;
++  /** Join a read in flight, or start one. `OrderedRead.reload`. */
++  reload(): Promise<void>;
++  /** Read again because the list has just changed. `OrderedRead.refresh`. */
++  refresh(): Promise<void>;
++}
++
++export function useDebateRead(slug: string): DebateRead {
+   const [status, setStatus] = useState<DebateStatus>("loading");
+   const [debate, setDebate] = useState<Debate | null>(null);
+   const [stale, setStale] = useState(false);
+@@ -149,6 +168,13 @@ export function useDebate(slug: string): UseDebate {
+     void reload();
+   }, [reload]);
+ 
++  return { status, debate, stale, outdated, error, reload, refresh };
++}
++
++export function useDebate(slug: string): UseDebate {
++  const read = useDebateRead(slug);
++  const { status, reload, refresh } = read;
++
+   /* The job half — the poll, the running job, and what a refused or dead run
+      says to the reader — is src/web/useStepJob.ts. */
+   const queue = useStepJob(slug, "debate", refresh, "watches-queue");
+@@ -171,11 +197,11 @@ export function useDebate(slug: string): UseDebate {
+ 
+   return {
+     status,
+-    debate,
+-    stale,
+-    outdated,
++    debate: read.debate,
++    stale: read.stale,
++    outdated: read.outdated,
+     slug,
+-    error,
++    error: read.error,
+     job: queue.job,
+     failed: queue.failed,
+     stalled: queue.stalled,
+diff --git a/src/web/useFaq.ts b/src/web/useFaq.ts
+index d00b617dc..d64e576c9 100644
+--- a/src/web/useFaq.ts
++++ b/src/web/useFaq.ts
+@@ -65,7 +65,28 @@ export interface UseFaq {
+   cancel(id: string): void;
+ }
+ 
+-export function useFaq(slug: string): UseFaq {
++/**
++ * **The read half, alone** — the GET, its ordering and nothing else: no job, no
++ * poll, no automatic run, so mounting it can never spend. Marginalia reads the
++ * questions through this (src/web/marginalia/MarginaliaColumn.tsx §
++ * `OwnerMarginFeed`); `useFaq` layers the job on it, as `useIdeas` does on
++ * `useIdeasRead`. docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md.
++ */
++export interface FaqRead {
++  status: FaqStatus;
++  faq: Faq | null;
++  stale: boolean;
++  outdated: boolean;
++  error: string | null;
++  /** Repeat only the GET after a failed read. `UseFaq.retryRead`. */
++  retryRead(): Promise<void>;
++  /** Join a read in flight, or start one. `OrderedRead.reload`. */
++  reload(): Promise<void>;
++  /** Read again because the list has just changed. `OrderedRead.refresh`. */
++  refresh(): Promise<void>;
++}
++
++export function useFaqRead(slug: string): FaqRead {
+   const [status, setStatus] = useState<FaqStatus>("loading");
+   const [faq, setFaq] = useState<Faq | null>(null);
+   const [stale, setStale] = useState(false);
+@@ -128,6 +149,13 @@ export function useFaq(slug: string): UseFaq {
+     void reload();
+   }, [reload]);
+ 
++  return { status, faq, stale, outdated, error, retryRead, reload, refresh };
++}
++
++export function useFaq(slug: string): UseFaq {
++  const read = useFaqRead(slug);
++  const { status, reload, refresh } = read;
++
+   /* `refresh`, not `reload`: a finished job has just written a new list, and a
+      request already in flight read the old one. */
+   const queue = useStepJob(slug, "faq", refresh, "watches-queue");
+@@ -146,17 +174,17 @@ export function useFaq(slug: string): UseFaq {
+ 
+   return {
+     status,
+-    faq,
+-    stale,
+-    outdated,
++    faq: read.faq,
++    stale: read.stale,
++    outdated: read.outdated,
+     slug,
+-    error,
++    error: read.error,
+     job: queue.job,
+     failed: queue.failed,
+     stalled: queue.stalled,
+     starting: queue.starting,
+     automatic: auto && (queue.job !== null || queue.starting),
+-    retryRead,
++    retryRead: read.retryRead,
+     ensure,
+     regenerate,
+     cancel: queue.cancel,
+diff --git a/tests/artefact-read-hooks.test.tsx b/tests/artefact-read-hooks.test.tsx
+index 1f020145d..b3b40a2bb 100644
+--- a/tests/artefact-read-hooks.test.tsx
++++ b/tests/artefact-read-hooks.test.tsx
+@@ -3,7 +3,8 @@
+  * **A read hook reads, and that is all it does** — `useIdeasRead` and
+  * `useTimelineRead`, split out of their mode hooks for Skim's stop
+  * card (Sol F22, docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+- * § Revised after GPT Sol's stage-3 plan review).
++ * § Revised after GPT Sol's stage-3 plan review), and `useFaqRead` and
++ * `useDebateRead`, split out for Marginalia's notes (plan 261002b).
+  *
+  * The card promises that nothing on it starts a run. With the mode hooks that
+  * was true only because `useAutoRun` happened not to fire for another mode's
+@@ -57,6 +58,18 @@ const BODIES: Record<string, unknown> = {
+     stale: false,
+     outdated: true,
+   },
++  debate: {
++    debate: {
++      version: "debate/t",
++      generator: "t",
++      slug: "read-hooks",
++      sourceHash: "h",
++      direct: { rows: [] },
++      claims: { rows: [] },
++    },
++    stale: false,
++    outdated: false,
++  },
+   timeline: {
+     timeline: {
+       version: "timeline/t",
+@@ -78,7 +91,7 @@ vi.mock("../src/web/lib/api.js", async () => {
+   const apiFetch = async (url: string, init?: RequestInit) => {
+     asked.push({ url, method: init?.method ?? "GET" });
+     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
+-    const kind = /^\/api\/(ideas|faq|timeline)\//.exec(url)?.[1];
++    const kind = /^\/api\/(ideas|faq|debate|timeline)\//.exec(url)?.[1];
+     if (kind && present.has(kind)) return new Response(JSON.stringify(BODIES[kind]), { status: 200 });
+     return new Response(null, { status: 404 });
+   };
+@@ -87,7 +100,8 @@ vi.mock("../src/web/lib/api.js", async () => {
+ 
+ const { useIdeas, useIdeasRead } = await import("../src/web/useIdeas.js");
+ const faqHooks = await import("../src/web/useFaq.js");
+-const { useFaq } = faqHooks;
++const { useFaq, useFaqRead } = faqHooks;
++const { useDebate, useDebateRead } = await import("../src/web/useDebate.js");
+ const { useTimeline, useTimelineRead } = await import("../src/web/useTimeline.js");
+ 
+ let host: HTMLDivElement;
+@@ -122,8 +136,13 @@ async function mount(use: (slug: string) => unknown, name: string): Promise<void
+ 
+ const jobRequests = () => asked.filter((r) => r.url.startsWith("/api/jobs"));
+ 
++/* FAQ and Debate since 2026-10-02: Marginalia reads both and must never
++   spend (plan 261002b, GPT Sol's F1 on it). Debate is the dearest step in the
++   app to start by accident. */
+ const READS = [
+   ["ideas", useIdeasRead],
++  ["faq", useFaqRead],
++  ["debate", useDebateRead],
+   ["timeline", useTimelineRead],
+ ] as const;
+ 
+@@ -153,6 +172,8 @@ describe("the read hooks start no job", () => {
+ describe("the positive control: a mode hook can reach the queue, and a read hook has no way to", () => {
+   const MODES = [
+     ["ideas", useIdeas, useIdeasRead],
++    ["faq", useFaq, useFaqRead],
++    ["debate", useDebate, useDebateRead],
+     ["timeline", useTimeline, useTimelineRead],
+   ] as const;
+   for (const [kind, useMode, useRead] of MODES) {
+@@ -170,7 +191,7 @@ describe("the positive control: a mode hook can reach the queue, and a read hook
+     });
+   }
+ 
+-  it("FAQ keeps its mode hook, but not the read-only hook that existed only for Skim's removed snippets", async () => {
++  it("FAQ's mode hook still reads through its read half, freshness and all", async () => {
+     present = new Set(["faq"]);
+     await mount(useFaq, "faq");
+     const mode = seen.faq as ReturnType<typeof useFaq>;
+@@ -184,6 +205,5 @@ describe("the positive control: a mode hook can reach the queue, and a read hook
+       await mode.ensure().catch(() => undefined);
+     });
+     expect(jobRequests().some((r) => r.method === "POST")).toBe(true);
+-    expect(faqHooks).not.toHaveProperty("useFaqRead");
+   });
+ });
+diff --git a/tests/marginalia-notes.test.ts b/tests/marginalia-notes.test.ts
+index 0fb1ed728..c25a796a7 100644
+--- a/tests/marginalia-notes.test.ts
++++ b/tests/marginalia-notes.test.ts
+@@ -5,8 +5,15 @@
+  */
+ import { describe, expect, it } from "vitest";
+ import { blockIndex } from "../src/section-path.js";
+-import type { Arc, Block, Idea, Tree, TreeNode } from "../src/types.js";
+-import { marginaliaNotes, arcAt, headPath, layoutNotes } from "../src/web/marginalia/notes.js";
++import type { Arc, Block, CitedWork, FaqQuestion, Idea, Tree, TreeNode } from "../src/types.js";
++import {
++  type MarginClaim,
++  type MarginComment,
++  marginaliaNotes,
++  arcAt,
++  headPath,
++  layoutNotes,
++} from "../src/web/marginalia/notes.js";
+ 
+ const ids = ["spya-aaaaa1", "spya-aaaaa2", "spya-aaaaa3", "spya-aaaaa4", "spya-aaaaa5", "spya-aaaaa6"];
+ /* The first block is a heading, as a part's first block usually is. */
+@@ -195,3 +202,109 @@ describe("the head", () => {
+     expect(arcAt(null, index, "spya-aaaaa2")).toBe(null);
+   });
+ });
++
++/* ------------------------------------------------------------------------
++   Report 82: FAQ, Debate, Citations and comments, beside their blocks, one
++   shut line per kind per block. Nothing here generates; these are the items
++   other modes have already stored.
++   docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md. */
++
++/* Blocks whose text a quote can be checked against. */
++const quoted = ids.map((id, i) => ({
++  id,
++  text: `Paragraph ${i} says something particular about topic ${i}.`,
++  html: "",
++  kind: "text",
++  gistable: true,
++  words: 40,
++})) as unknown as Block[];
++const say = (i: number) => `something particular about topic ${i}`;
++
++function faqQ(id: string, passages: { blockId: string; quote: string }[]): FaqQuestion {
++  return { id, question: `Question ${id}?`, passages: passages.map((p) => ({ ...p, start: 0 })) } as FaqQuestion;
++}
++function claim(url: string, blockId: string, claimQuote: string): MarginClaim {
++  return { url, blockId, claimQuote, relation: "disputes", sourceQuote: "s", applies: "a" } as unknown as MarginClaim;
++}
++function work(id: string, citedAt: string[]): CitedWork {
++  return { id, title: `Work ${id}`, why: "w", citedAt, firstCited: citedAt[0], mentions: [] } as unknown as CitedWork;
++}
++
++describe("marginaliaNotes, other modes' items (report 82)", () => {
++  it("puts an FAQ question beside its earliest answering passage by block position, not passages[0]", () => {
++    const q = faqQ("f1", [
++      { blockId: "spya-aaaaa5", quote: say(4) },
++      { blockId: "spya-aaaaa3", quote: say(2) },
++    ]);
++    const notes = marginaliaNotes(null, quoted, null, { faq: [q] });
++    expect([...notes.keys()]).toEqual(["spya-aaaaa3"]);
++    expect(notes.get("spya-aaaaa3")).toEqual([{ kind: "faq", items: [{ question: q, quote: say(2) }] }]);
++  });
++
++  it("passes over an FAQ passage whose block is gone, or whose words are no longer in it", () => {
++    const q = faqQ("f2", [
++      { blockId: "spya-zzzzzz", quote: say(0) },
++      { blockId: "spya-aaaaa2", quote: "words this block never said" },
++      { blockId: "spya-aaaaa4", quote: say(3) },
++    ]);
++    expect([...marginaliaNotes(null, quoted, null, { faq: [q] }).keys()]).toEqual(["spya-aaaaa4"]);
++    const none = faqQ("f3", [{ blockId: "spya-aaaaa2", quote: "nothing like it" }]);
++    expect(marginaliaNotes(null, quoted, null, { faq: [none] }).size).toBe(0);
++  });
++
++  it("groups several of one kind in one block into one note", () => {
++    const notes = marginaliaNotes(null, quoted, null, {
++      citations: [work("c1", ["spya-aaaaa2"]), work("c2", ["spya-aaaaa2", "spya-aaaaa5"])],
++    });
++    const here = notes.get("spya-aaaaa2") ?? [];
++    expect(here).toHaveLength(1);
++    expect(here[0]?.kind).toBe("citation");
++    expect(here[0]?.kind === "citation" && here[0].items.map((w) => w.id)).toEqual(["c1", "c2"]);
++    expect(notes.has("spya-aaaaa5")).toBe(false);
++  });
++
++  it("places a citation at its earliest surviving citing block", () => {
++    const notes = marginaliaNotes(null, quoted, null, {
++      citations: [work("c3", ["spya-zzzzzz", "spya-aaaaa6", "spya-aaaaa4"])],
++    });
++    expect([...notes.keys()]).toEqual(["spya-aaaaa4"]);
++  });
++
++  it("places a Debate claim row only where its claim's words still are", () => {
++    const notes = marginaliaNotes(null, quoted, null, {
++      claims: [claim("https://a.example", "spya-aaaaa3", say(2)), claim("https://b.example", "spya-aaaaa4", "not said")],
++    });
++    expect([...notes.keys()]).toEqual(["spya-aaaaa3"]);
++  });
++
++  it("leaves referee notes out of the reader's comments, and keeps bookmarks", () => {
++    const comments = [
++      { id: "m1", blockId: "spya-aaaaa2", createdAt: "t", body: "mine", status: "none" },
++      { id: "m2", blockId: "spya-aaaaa2", createdAt: "t", status: "none" },
++      { id: "m3", blockId: "spya-aaaaa2", createdAt: "t", body: "a referee note", status: "none", criterionId: "k" },
++    ] as unknown as MarginComment[];
++    const here = marginaliaNotes(null, quoted, null, { comments }).get("spya-aaaaa2") ?? [];
++    expect(here[0]?.kind === "comment" && here[0].items.map((c) => c.id)).toEqual(["m1", "m2"]);
++  });
++
++  it("orders the kinds on one block: question, idea, FAQ, Debate, citations, the reader's own", () => {
++    const tree2 = {
++      ...tree,
++      nodes: { ...tree.nodes, a: { ...(tree.nodes.a as TreeNode), range: ["spya-aaaaa2", "spya-aaaaa3"] } },
++    } as Tree;
++    const here = idea({
++      id: "i9",
++      name: "Here",
++      occurrences: [{ blockId: "spya-aaaaa2", quote: "q", reasoning: "r" }],
++    } as Partial<Idea> & Pick<Idea, "id" | "name">);
++    const kinds = (
++      marginaliaNotes(tree2, quoted, [here], {
++        comments: [{ id: "m", blockId: "spya-aaaaa2", createdAt: "t", status: "none" }] as unknown as MarginComment[],
++        citations: [work("c", ["spya-aaaaa2"])],
++        claims: [claim("https://c.example", "spya-aaaaa2", say(1))],
++        faq: [faqQ("f", [{ blockId: "spya-aaaaa2", quote: say(1) }])],
++      }).get("spya-aaaaa2") ?? []
++    ).map((n) => n.kind);
++    expect(kinds).toEqual(["question", "idea", "faq", "debate", "citation", "comment"]);
++  });
++});
+diff --git a/tests/marginalia-shut-notes.test.tsx b/tests/marginalia-shut-notes.test.tsx
+new file mode 100644
+index 000000000..ad41056c1
+--- /dev/null
++++ b/tests/marginalia-shut-notes.test.tsx
+@@ -0,0 +1,93 @@
++// @vitest-environment jsdom
++/* Other modes' items in Marginalia are shut by default. Greg, 2026-10-01
++   (SPIDERYARN-READING2-82): "Rather than showing the full item, maybe show them
++   default-collapsed." One line per kind per block; a press opens the rest in
++   place; the open half may hold a link, which must not sit inside the button.
++   docs/plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md. */
++import { act } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, describe, expect, it } from "vitest";
++import type { CitedWork, FaqQuestion } from "../src/types.js";
++import { MarginNotesSlot } from "../src/web/marginalia/MarginaliaColumn.js";
++import type { MarginClaim, MarginComment, MarginaliaNote } from "../src/web/marginalia/notes.js";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++let host: HTMLDivElement | null = null;
++let root: Root | null = null;
++afterEach(async () => {
++  await act(async () => root?.unmount());
++  host?.remove();
++  host = null;
++  root = null;
++});
++
++function draw(notes: MarginaliaNote[]): HTMLDivElement {
++  const el = document.createElement("div");
++  host = el;
++  document.body.append(el);
++  const nextRoot = createRoot(el);
++  root = nextRoot;
++  act(() => nextRoot.render(<MarginNotesSlot notes={notes} />));
++  return el;
++}
++
++const question = { id: "q1", question: "Why does the bound hold?", passages: [] } as unknown as FaqQuestion;
++const row = {
++  url: "https://elsewhere.example/a",
++  title: "A reply",
++  blockId: "spya-aaaaa1",
++  claimQuote: "c",
++  relation: "disputes",
++  sourceQuote: "s",
++  applies: "It says the bound is loose.",
++} as unknown as MarginClaim;
++
++describe("a shut line", () => {
++  it("is shut until pressed, then opens in place, and shuts again", () => {
++    const el = draw([{ kind: "faq", items: [{ question, quote: "because it does" }] }]);
++    const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
++    expect(button?.textContent).toContain("Why does the bound hold?");
++    expect(button?.getAttribute("aria-expanded")).toBe("false");
++    const panel = document.getElementById(button?.getAttribute("aria-controls") ?? "");
++    expect(panel?.hidden).toBe(true);
++    expect(el.textContent).not.toContain("because it does");
++
++    act(() => button?.click());
++    expect(button?.getAttribute("aria-expanded")).toBe("true");
++    expect(panel?.hidden).toBe(false);
++    expect(el.textContent).toContain("because it does");
++
++    act(() => button?.click());
++    expect(panel?.hidden).toBe(true);
++  });
++
++  it("explains itself on hover", () => {
++    const el = draw([{ kind: "debate", items: [row] }]);
++    expect(el.querySelector(".marg-shut-button")?.getAttribute("title")).toMatch(/From Debate mode/);
++  });
++
++  it("puts a Debate row's link beside the button, never inside it", () => {
++    const el = draw([{ kind: "debate", items: [row] }]);
++    const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
++    expect(button?.textContent).toContain("disputes");
++    act(() => button?.click());
++    const link = el.querySelector<HTMLAnchorElement>(".marg-open a");
++    expect(link?.href).toBe("https://elsewhere.example/a");
++    expect(link?.rel).toContain("noopener");
++    expect(button?.contains(link ?? null)).toBe(false);
++  });
++
++  it("counts several of a kind on its shut line", () => {
++    const works = ["a", "b", "c"].map((id) => ({ id, title: `Work ${id}`, why: "w" })) as unknown as CitedWork[];
++    const el = draw([{ kind: "citation", items: works }]);
++    expect(el.querySelector(".marg-shut-button")?.textContent).toContain("3 works");
++  });
++
++  it("draws a lone bookmark as a line with nothing to open", () => {
++    const bookmark = { id: "b", blockId: "spya-aaaaa1", createdAt: "t", status: "none" } as unknown as MarginComment;
++    const el = draw([{ kind: "comment", items: [bookmark] }]);
++    expect(el.querySelector(".marg-shut-button")).toBeNull();
++    expect(el.querySelector(".marg-shut")?.textContent).toContain("Bookmark");
++  });
++});

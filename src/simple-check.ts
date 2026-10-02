@@ -23,6 +23,11 @@
  */
 
 import { openRouterJson } from "./ai-call.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withChatJsonSchema,
+} from "./messages-structured-output.js";
 import { modelFor } from "./models.js";
 import type { SimpleCheckFailure, SimpleCheckFlag, SimpleLevelCheck, SimpleParagraph } from "./types.js";
 
@@ -115,6 +120,44 @@ export function parseCheckVerdicts(content: string, count: number): CheckVerdict
   return out;
 }
 
+/** The prompt's live answer shape; the parser above remains tolerant of the measured pre-schema answers. */
+export const SIMPLE_CHECK_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["verdicts"],
+  properties: {
+    verdicts: {
+      type: "array",
+      items: {
+        anyOf: [
+          {
+            type: "object",
+            additionalProperties: false,
+            required: ["n", "verdict"],
+            properties: {
+              n: { type: "integer" },
+              verdict: { type: "string", enum: ["ok"] },
+            },
+          },
+          {
+            type: "object",
+            additionalProperties: false,
+            required: ["n", "verdict", "why"],
+            properties: {
+              n: { type: "integer" },
+              verdict: { type: "string", enum: ["contradicts"] },
+              why: { type: "string" },
+            },
+          },
+        ],
+      },
+    },
+  },
+} as const;
+
+validateAnthropicJsonSchema(SIMPLE_CHECK_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(SIMPLE_CHECK_OUTPUT_SCHEMA, []);
+
 /** What one check came to. `failed` is the checker's own failure, never the level's. */
 export type CheckOutcome =
   | { kind: "passed" }
@@ -148,26 +191,43 @@ export async function checkLevel(
   try {
     const call = await openRouterJson(
       "simple-check",
-      {
-        /* Quick tier: High-powered AI does not move it, as with `quiz-verdict`. */
-        model: modelFor("simple-check", "standard"),
-        max_completion_tokens: CHECK_MAX_TOKENS,
-        messages: [
-          { role: "system", content: SIMPLE_CHECK_SYSTEM },
-          { role: "user", content: checkMessage(paragraphs, textOf) },
-        ],
-      },
+      withChatJsonSchema(
+        {
+          /* Quick tier: High-powered AI does not move it, as with `quiz-verdict`. */
+          model: modelFor("simple-check", "standard"),
+          max_completion_tokens: CHECK_MAX_TOKENS,
+          messages: [
+            { role: "system", content: SIMPLE_CHECK_SYSTEM },
+            { role: "user", content: checkMessage(paragraphs, textOf) },
+          ],
+        },
+        "simple_check",
+        SIMPLE_CHECK_OUTPUT_SCHEMA,
+      ),
       { signal: signal ? AbortSignal.any([signal, deadline]) : deadline },
     );
     const body = call.json as {
-      choices?: { message?: { content?: unknown } }[];
+      choices?: {
+        finish_reason?: unknown;
+        message?: { content?: unknown; refusal?: unknown };
+      }[];
       usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
     } | null;
     const tokens = {
       inputTokens: typeof body?.usage?.prompt_tokens === "number" ? body.usage.prompt_tokens : 0,
       outputTokens: typeof body?.usage?.completion_tokens === "number" ? body.usage.completion_tokens : 0,
     };
-    const content = body?.choices?.[0]?.message?.content;
+    const choice = body?.choices?.[0];
+    /* A syntactically complete JSON object is still not an answer when the
+       provider says it stopped early or the model refused. Keep both out of
+       the parser; the call's reported token counts still belong to the check. */
+    if (
+      choice?.finish_reason !== "stop" ||
+      (choice.message?.refusal !== undefined && choice.message.refusal !== null)
+    ) {
+      return { outcome: { kind: "failed", failure: "call" }, ...tokens };
+    }
+    const content = choice.message?.content;
     const verdicts = typeof content === "string" ? parseCheckVerdicts(content, paragraphs.length) : null;
     if (!verdicts) return { outcome: { kind: "failed", failure: "unreadable" }, ...tokens };
     const flags = verdicts.flatMap((v, paragraph) => (v.verdict === "contradicts" ? [{ paragraph, why: v.why }] : []));

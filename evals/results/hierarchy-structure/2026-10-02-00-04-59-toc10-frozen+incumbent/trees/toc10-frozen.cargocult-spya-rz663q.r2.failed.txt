@@ -1,0 +1,8 @@
+{"root":{"title":"Cargo Cult Science","gist":"Science demands a strict self-honesty that cargo-cult imitators, despite copying scientific form, always lack.","question":"Cargo Cult Science — what makes real science different from its hollow imitations? (an honesty principle)","range":["spya-arxt8r","spya-ndyj3t"],"sourceHeading":"Cargo Cult Science","children":[
+{"title":"Title and byline","gist":"The title, author, and abstract of the speech.","range":["spya-arxt8r","spya-wv9g0v"],"children":[
+ {"title":"Cargo Cult Science","gist":"The title of the speech.","range":["spya-arxt8r","spya-arxt8r"],"sourceHeading":"Cargo Cult Science"},
+ {"title":"Byline and abstract","gist":"The reading time, author's name, and a one-line description of the speech's occasion and topic.","range":["spya-hwqz3q","spya-wv9g0v"]}
+]},
+{"title":"The lure of pseudoscience","gist":"Feynman surveys mysticism, ESP, and failed social-science methods to show how easily people mistake elaborate ritual for genuine knowledge.","question":"Pseudoscience — why do so many widely believed methods never actually work? (several examples)","range":["spya-ddrr9m","spya-fd2muf".__class__ and "spya-fd2muf" or "spya-fd2muf"],"children":[]},
+{"title":"placeholder"}
+]}}

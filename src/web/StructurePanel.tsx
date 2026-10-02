@@ -245,7 +245,14 @@ function RowCard({ card, number, text }: { card: StructureCard; number: string; 
       {card.children.length > 0 && (
         <ul className="tip-kids">
           {card.children.map((c) => (
-            <li key={c.id}>{c.text}</li>
+            <li
+              key={c.id}
+              className={
+                c.voice === "ai" ? "tip-kid-ai" : c.voice === "author" ? "tip-kid-author" : undefined
+              }
+            >
+              {c.text}
+            </li>
           ))}
           {card.more > 0 && <li className="tip-more">+ {card.more} more</li>}
         </ul>
@@ -306,7 +313,20 @@ function Row({
               lining up with them. Outline renders its empty span for the same
               reason. GPT Sol's code review, finding 5. */}
           <span className="struct-num">{row.number}</span>
-          <span className="struct-text">{row.text}</span>
+          {/* A navLabel standing in for a title is the model's words, or the
+              author's heading when the node starts at one (structure.ts §
+              `rowVoice`); voices.css puts the face on the modifier. */}
+          <span
+            className={
+              row.voice === "ai"
+                ? "struct-text struct-text-ai"
+                : row.voice === "author"
+                  ? "struct-text struct-text-author"
+                  : "struct-text"
+            }
+          >
+            {row.text}
+          </span>
           {/* Inside the title's grid, in its column, so a gist starts where its
               title does — the list face's `.outln-gist` does the same. */}
           {row.gist ? <span className="struct-gist">{row.gist}</span> : null}

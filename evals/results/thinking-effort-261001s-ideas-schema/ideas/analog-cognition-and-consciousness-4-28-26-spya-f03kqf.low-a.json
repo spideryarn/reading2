@@ -1,0 +1,173 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.ce29b6cc004bedb5",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-ttsvs5",
+      "name": "Fixed synaptic routing can't explain moment-to-moment flexibility",
+      "provenance": "assumed",
+      "statement": "If neural information were organized solely by which synapses connect which neurons, then redirecting a signal to a new purpose would require a controller that already knows and selectively recruits the exact synapses and neurons involved, which is implausible on the timescales cognition requires.",
+      "whyYouNeedIt": "The whole case for needing a wave-based controller depends on readers accepting that synapse-level routing is too slow and too knowledge-hungry to do the job; without this the paper's motivation collapses.",
+      "occurrences": [
+        {
+          "blockId": "spya-d73kfb",
+          "quote": "That would require a control system to \"know\" which synapses and neurons were employed for any given neural representation and selectively coordinate them with subsecond precision, a seemingly implausible computational demand.",
+          "reasoning": "States the assumption that synaptic rewiring/selection is too slow for flexible control, motivating the need for an alternative mechanism.",
+          "start": 372
+        },
+        {
+          "blockId": "spya-dtnkkk",
+          "quote": "Such flexible routing is difficult to reconcile with a purely connectionist framework based solely on changing synaptic weights.",
+          "reasoning": "Relies on the reader accepting synaptic-weight-only routing as inherently inflexible.",
+          "start": 210
+        }
+      ]
+    },
+    {
+      "id": "spya-m67h2g",
+      "name": "Electric fields can move and merge independent of synapses",
+      "provenance": "assumed",
+      "statement": "Neurons' electric fields can influence neighboring neurons' membrane potentials directly, without needing a synaptic connection, and these fields can add together or cancel like physical waves.",
+      "whyYouNeedIt": "The analog-computation and ephaptic-coupling arguments only work if field effects are treated as a real, independent causal channel on spiking, separate from synaptic transmission.",
+      "occurrences": [
+        {
+          "blockId": "spya-bzqaf5",
+          "quote": "Ephaptic coupling in the brain is the influence of neuronal electric fields on nearby neurons' membrane potentials, allowing interaction and coordination independent of synapses",
+          "reasoning": "States the non-synaptic causal channel the later analog computing argument depends on.",
+          "start": 156
+        },
+        {
+          "blockId": "spya-vp5h33",
+          "quote": "When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference",
+          "reasoning": "Assumes field superposition as a physical fact underlying the computation claim.",
+          "start": 328
+        }
+      ]
+    },
+    {
+      "id": "spya-e6dgrs",
+      "name": "Top-down control signals must be content-agnostic to be reusable",
+      "provenance": "assumed",
+      "statement": "For a control mechanism to flexibly apply to any task or representation, it must operate without needing to specify which particular neurons or synapses encode that content, acting on location or pattern rather than on identity.",
+      "whyYouNeedIt": "The claim that the same control signal can be reused across arbitrary tasks depends on this principle; without it, the compositional reuse argument has no basis.",
+      "occurrences": [
+        {
+          "blockId": "spya-gxyg0d",
+          "quote": "It also allows for compositional reuse of the same control signals for any arbitrary information.",
+          "reasoning": "Assumes content-agnostic control as the reason reuse is possible, without separately justifying why this follows.",
+          "start": 283
+        }
+      ]
+    },
+    {
+      "id": "spya-xbjd9k",
+      "name": "Population activity lives on a low-dimensional subspace",
+      "provenance": "assumed",
+      "statement": "Even though many individual neurons carry complex, mixed, noisy signals, the coordinated activity of the whole population can be described as moving through a much smaller set of effective dimensions, like a trajectory on a surface rather than scattering through the full space of possibilities.",
+      "whyYouNeedIt": "The claim that waves 'pull' population trajectories smoothly through subspaces only makes sense if the reader already accepts that population activity is structured and low-dimensional rather than an unconstrained cloud of independent neurons.",
+      "occurrences": [
+        {
+          "blockId": "spya-xphb7u",
+          "quote": "population spiking tends to occupy a lower-dimensional \"subspace\" or \"manifold\" within the high-dimensional space defined by all possible population activity patterns",
+          "reasoning": "Introduces but the later traveling-wave argument assumes this as settled background.",
+          "start": 275
+        },
+        {
+          "blockId": "spya-ah94dx",
+          "quote": "population spiking traces smooth trajectories through its activity subspace, consistent with the temporal evolution of a dynamical system",
+          "reasoning": "Depends on readers already accepting subspace structure to make sense of 'trajectories'.",
+          "start": 32
+        }
+      ]
+    },
+    {
+      "id": "spya-fxkghd",
+      "name": "Convergent large-scale effects despite different molecular causes implicate systems-level organization",
+      "provenance": "assumed",
+      "statement": "When very different drugs acting on different receptors all produce the same global pattern of brain activity and the same loss of consciousness, this suggests the relevant cause of consciousness lies at the level of large-scale dynamics rather than at the level of specific molecules or cell types.",
+      "whyYouNeedIt": "The anesthesia section only supports the wave theory if the reader accepts that convergence onto one macroscopic pattern, despite differing microscopic mechanisms, points to the macroscopic pattern itself being causally central.",
+      "occurrences": [
+        {
+          "blockId": "spya-k02vdw",
+          "quote": "This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.",
+          "reasoning": "States the inference but relies on the reader accepting the general logic of convergence-implies-causal-level, which is not separately argued.",
+          "start": 173
+        },
+        {
+          "blockId": "spya-wnqgmn",
+          "quote": "Despite acting on different molecular targets, different anesthetic agents, such as propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects in the cortex",
+          "reasoning": "Presents the convergence fact that the inference is built on.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-udzz0r",
+      "name": "A single neuron's firing can mean different things in different contexts",
+      "provenance": "introduced",
+      "statement": "Many cortical neurons are not dedicated to one fixed function but instead change what their spiking signifies depending on context, a phenomenon called mixed selectivity.",
+      "whyYouNeedIt": "This is the empirical anomaly that the whole wave-control theory is built to explain.",
+      "occurrences": [
+        {
+          "blockId": "spya-x5m34h",
+          "quote": "A neuron might spike to object A, but only when it was seen first, and to object B, but only when it is seen second.",
+          "reasoning": "Directly introduces the concept with a concrete example.",
+          "start": 319
+        },
+        {
+          "blockId": "spya-njs6ff",
+          "quote": "nonlinear mixed selectivity seems to reflect a core computational principle",
+          "reasoning": "States the idea as a general principle, not just an example.",
+          "start": 660
+        }
+      ]
+    },
+    {
+      "id": "spya-a7r2bx",
+      "name": "Slow waves act as spatial stencils gating fast local signals",
+      "provenance": "introduced",
+      "statement": "Spatially patterned alpha/beta rhythms suppress gamma-band spiking in a location-specific way, so where sensory or motor information gets expressed depends on the interaction between random feedforward drive and this imposed suppression pattern.",
+      "analogy": "Like a stencil held over a spray-painted surface: the same spray (feedforward drive) produces a different picture depending on which stencil is laid down first.",
+      "occurrences": [
+        {
+          "blockId": "spya-gkfdys",
+          "quote": "They function as temporary inhibitory \"stencils\" across the surface of cortex.",
+          "reasoning": "Core statement of the mechanism.",
+          "start": 238
+        },
+        {
+          "blockId": "spya-gxyg0d",
+          "quote": "This scheme allows for flexible control over the neural expression of information in spiking, without the control system needing to know the precise neurons and synapses employed for any specific information",
+          "reasoning": "Explains why this solves the routing problem raised earlier.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-ngc0kc",
+      "name": "Analog wave interference as a form of computation",
+      "provenance": "introduced",
+      "statement": "Continuous physical quantities like overlapping wave amplitudes can carry out mathematical operations simply by interacting physically, all at once across space, rather than through sequential symbolic steps.",
+      "analogy": "Like dropping two stones in a pond and reading the resulting ripple pattern as the answer, instead of calculating it digit by digit.",
+      "occurrences": [
+        {
+          "blockId": "spya-vp5h33",
+          "quote": "Analog computing uses continuous physical quantities, such as voltages or mechanical motion, to directly represent and solve mathematical problems",
+          "reasoning": "States the idea directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-mgnqxk",
+          "quote": "Because the wave interactions occur everywhere simultaneously, the computation is inherently parallel.",
+          "reasoning": "Elaborates the core mechanism of analog computation.",
+          "start": 330
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:19:29.311Z",
+  "elapsedMs": 28952
+}

@@ -2176,6 +2176,19 @@ export const jobs = spideryarn.table(
     failureKind: text("failure_kind"),
 
     /**
+     * **When the reader pressed Dismiss on this job's card**, or null.
+     *
+     * Dismiss used to delete the row. Since 2026-10-02 it stamps this instead
+     * and every reader-facing lookup treats a stamped row as gone, so to the
+     * reader it is gone exactly as before. The row stays because a failed import's
+     * *Report this* names the job by id and nothing else — no URL, filename or
+     * error, which may be private (Greg, Q-import-report-details) — and an id
+     * whose record Dismiss deleted traces nothing. `trimFinished` still
+     * retires it with the rest, so it is kept for as long as any finished job.
+     */
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+
+    /**
      * The upload this job's document came off, when it came off a reader's disk.
      *
      * **Two columns rather than one jsonb `JobUpload`**, because the id is a
@@ -4964,6 +4977,13 @@ export const billingVouchers = spideryarn.table(
     articles: integer("articles").notNull(),
     /** The administrator's private note. Never sent to the reader. */
     note: text("note"),
+    /**
+     * **A note to the recipient**, written by the administrator and put in the
+     * gift email above everything we wrote. Untrusted on render: it reaches a
+     * stranger's inbox, so the HTML part escapes it (pg-voucher-emails.ts).
+     * Plan 261002b.
+     */
+    recipientNote: text("recipient_note"),
     createdAt: createdAt(),
     /** The administrator who made it. A plain uuid, like every admin id. */
     createdBy: uuid("created_by").notNull(),
@@ -4990,6 +5010,10 @@ export const billingVouchers = spideryarn.table(
        free account may spend. The route validates the same range. */
     check("billing_vouchers_articles_range", sql`${t.articles} between 1 and 1000`),
     check("billing_vouchers_note_length", sql`${t.note} is null or char_length(${t.note}) <= 500`),
+    check(
+      "billing_vouchers_recipient_note_length",
+      sql`${t.recipientNote} is null or char_length(${t.recipientNote}) <= 500`,
+    ),
     /* A claim is an account and a moment, or neither. */
     check("billing_vouchers_claimed_together", sql`num_nonnulls(${t.claimedBy}, ${t.claimedAt}) <> 1`),
     /* The claim's lookup: an unclaimed voucher by address. */
@@ -5082,11 +5106,12 @@ export const billingVoucherEmails = spideryarn.table(
  *
  * ## Why this is not a count of jobs, or of articles
  *
- * Jobs are reader-deletable (`DELETE /api/jobs/:id`), so a quota derived from
- * job rows is erasable by the person being counted — which is the one thing an
- * abuse boundary may not be. Articles answer a different question again: they
- * can be archived, and deleting one does not refund the slot. Nothing deletes
- * from this table.
+ * Job rows are bounded history rather than a ledger: retention and permanent
+ * article deletion remove them, and Dismiss itself deleted them until
+ * 2026-10-02. So a quota derived from job rows can shrink — which is the one
+ * thing an abuse boundary may not do. Articles answer a different question
+ * again: they can be archived, and deleting one does not refund the slot.
+ * Nothing deletes from this table.
  *
  * ## The three timestamps, and why they are not one status column
  *

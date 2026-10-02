@@ -42,6 +42,7 @@ const VOUCHERS = [
     email: "waiting@example.test",
     articles: 20,
     note: "met at the conference",
+    recipientNote: "Lovely to meet you at the conference.",
     createdAt: "2026-10-01T10:00:00Z",
     createdBy: "admin",
     updatedAt: "2026-10-01T10:00:00Z",
@@ -56,6 +57,7 @@ const VOUCHERS = [
     email: "claimed@example.test",
     articles: 10,
     note: null,
+    recipientNote: null,
     createdAt: "2026-09-20T10:00:00Z",
     createdBy: "admin",
     updatedAt: "2026-09-21T10:00:00Z",
@@ -71,6 +73,7 @@ const VOUCHERS = [
     email: "revoked@example.test",
     articles: 5,
     note: null,
+    recipientNote: null,
     createdAt: "2026-09-10T10:00:00Z",
     createdBy: "admin",
     updatedAt: "2026-09-11T10:00:00Z",
@@ -226,6 +229,25 @@ describe("/admin/vouchers", () => {
     expect(editing?.querySelector('input[type="email"]')).toBeNull();
   });
 
+  it("shows the note to them, and lets it be edited without pretending that resends it", async () => {
+    await mount();
+    const waiting = rowFor("waiting@example.test");
+    expect(waiting?.textContent).toContain("Lovely to meet you at the conference.");
+    await act(async () => buttonIn(waiting, "Edit")?.click());
+    const area = waiting?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Note to them"]');
+    expect(area?.value).toBe("Lovely to meet you at the conference.");
+    expect(waiting?.textContent).toContain("Changing it does not resend");
+
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(area, "Better words.");
+      area?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => buttonIn(waiting, "Save")?.click());
+    await settle();
+    expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ recipientNote: "Better words." });
+  });
+
   it("keeps every text field at a non-zooming size on a coarse pointer", async () => {
     await mount();
     await act(async () => buttonIn(rowFor("waiting@example.test"), "Edit")?.click());
@@ -272,7 +294,7 @@ describe("/admin/vouchers", () => {
       const state = useAdminVouchers();
       return (
         <>
-          <button type="button" onClick={() => void state.create({ email: "fresh@example.test", articles: 20, note: null })}>
+          <button type="button" onClick={() => void state.create({ email: "fresh@example.test", articles: 20, note: null, recipientNote: null })}>
             Create
           </button>
           <span>{state.vouchers?.map((voucher) => voucher.email).join(",") ?? "loading"}</span>
@@ -320,7 +342,7 @@ describe("/admin/vouchers", () => {
     const withEmails = (gift: unknown, claimed: unknown = null) => [
       { ...VOUCHERS[1], emails: { gift, claimed } },
     ];
-    const statusCell = () => rowFor("claimed@example.test")?.querySelectorAll("td")[4];
+    const statusCell = () => rowFor("claimed@example.test")?.querySelectorAll("td")[5];
 
     it("says an email was sent, and when", async () => {
       listAnswer = withEmails(delivery({}), delivery({ id: NOTICE_ID, kind: "claimed" }));
@@ -481,6 +503,43 @@ describe("/admin/vouchers", () => {
       await fill("other@example.test");
       await submit();
       expect(idOf(creates()[3])).not.toBe(idOf(third));
+    });
+
+    async function write(note: string) {
+      const area = host.querySelector("#voucher-new-recipient-note") as HTMLTextAreaElement;
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(area, note);
+        area.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+
+    const sketch = () => host.querySelector('[aria-label="What their email will look like"]');
+
+    it("sends a note to them, and resends the same id only for the same note", async () => {
+      /* Greg, 2026-10-01 (spya-hc5q0e). Plan 261002b. */
+      await mount();
+      await fill("new@example.test");
+      await write("Great to meet you today.");
+      postAnswer = { status: 0, body: null };
+      await submit();
+      expect(creates()[0]?.body).toMatchObject({ recipientNote: "Great to meet you today." });
+      await write("Something else.");
+      await submit();
+      expect(idOf(creates()[1])).not.toBe(idOf(creates()[0]));
+    });
+
+    it("sketches the email, with the note where it will go", async () => {
+      await mount();
+      /* Native maxLength counts UTF-16 units, unlike Postgres char_length, so
+         it must not reject a valid 500-emoji note before the server sees it. */
+      expect(host.querySelector("#voucher-new-recipient-note")?.hasAttribute("maxlength")).toBe(false);
+      expect(sketch()?.textContent).toContain("A gift of 20 free articles on Spideryarn");
+      expect(sketch()?.textContent).toContain("Your note to them goes here");
+      await write("Great to meet you today.");
+      expect(sketch()?.textContent).toContain("Great to meet you today.");
+      expect(sketch()?.textContent).toContain("A note from the person who gave you this gift:");
+      expect(sketch()?.textContent).not.toContain("Your note to them goes here");
     });
 
     it("says the email is on its way", async () => {

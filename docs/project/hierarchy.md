@@ -218,12 +218,12 @@ up: **an endpoint that is not a block id**. One unresolvable child leaves its wh
 underived, so the precise error survives instead of being buried by a tree built as though that child
 had never been proposed.
 
-**A child with no range at all is not that** (since 2026-10-01). Only an absent `range` or `null`
-counts — a half-stated one (`[start]`, `[start, 3]`) still carries a start and is refused as
-malformed. The model named nothing, which is a start that carries no information, so it is derived by
-the rule above — pinned if first, the previous child's end + 1 otherwise, dropped if neither — and
-lends no end to the child after it. Counted in `rangelessChildren`. One of these cost a 1,041-block
-book its whole tree.
+**A child with no range at all stopped being a live-answer case in `toc/11`.** The earlier ranged
+answer could omit `range`; the builder derived one — pinned if first, the previous child's end + 1
+otherwise, dropped if neither — and counted it in `BuildReport.rangelessChildren`. One such answer
+cost a 1,041-block book its whole tree. The starts-only schema now requires every child's `start`,
+and `modelNodeFromStarts` derives every range before the builder runs, so that counter remains only
+for legacy and direct ranged-builder inputs and is no longer production telemetry.
 
 **And an answer that still cannot become a tree is asked for once more, inside the step** — any
 failure of `treeFrom` (parse, build, supplement, invariants) on a freshly bought answer, if the
@@ -1121,6 +1121,17 @@ The structure call sees the whole document in one pass, which is what lets it ke
 consistent with each other and makes the [partition invariant](#the-partition-invariant) something
 the model can satisfy rather than something we have to stitch together. That holds up to about
 123,500 words.
+
+**Since `toc/11` (2026-10-02) the answer carries starts, not ranges, and a schema holds it.** Each
+child names only the block it starts at, as the scoped expansion call already did. The root names
+nothing, and every range is derived by the shared kernel in
+[`src/start-ranges.ts`](../../src/start-ranges.ts), through
+[`src/hierarchy-starts.ts`](../../src/hierarchy-starts.ts), before `buildTree`. The request carries
+a three-level JSON schema (`STRUCTURE_OUTPUT_SCHEMA`), so a completed, non-refusal answer cannot
+break its JSON shape. Refusals and token-limit stops are checked before parsing. Asking for ends
+was where the model kept rewriting an id as code mid-answer.
+[261001s](../plans/261001s-structure-answer-writes-code-to-correct-an-id.md),
+[261002b](../postmortems/261002b-an-unconstrained-json-answer-fails-the-step.md).
 
 Each label batch sees: the whole article's outline, its own sections' crumbs and gists, its
 paragraphs numbered, and one block of context either side marked `CONTEXT` so it can feel the flow

@@ -55,6 +55,15 @@ import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { PRODUCTION_EFFORT as EFFORT, PROMPT_VERSION, renderBlocks } from "./hierarchy-prompt.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
+import {
+  modelNodeFromStarts,
+  type StartsOnlyStructureAnswer,
+} from "./hierarchy-starts.js";
 /* **The one value import that points at the cascade**, and the reason three
    things were hoisted out of this file into leaves: everything under
    `hierarchy-deepen.ts` may name this module's *types* and none of its values.
@@ -85,7 +94,7 @@ import { paperwork } from "./paperwork.js";
  */
 export { PRODUCTION_EFFORT, PROMPT_VERSION, renderBlocks } from "./hierarchy-prompt.js";
 
-const SYSTEM = `You are building a nested table of contents for an article. It goes all the
+export const TOC10_SYSTEM = `You are building a nested table of contents for an article. It goes all the
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.
 
 You receive the article as a numbered list of blocks. Each block has an id
@@ -214,6 +223,95 @@ Use only block ids that appear in the input. Do not invent ids.
 ${plainWords()}
 
 ${paperwork("structure")}`;
+
+const TOC10_STRUCTURE = `Produce a tree of INTERNAL nodes only. Every node covers a contiguous range of
+blocks, and a node's children exactly partition its range — no gaps, no
+overlaps, no reordering. The first child starts where its parent starts; the
+last child ends where its parent ends.`;
+
+const TOC11_STRUCTURE = `Produce a tree of INTERNAL nodes only. The root covers the whole input and has no
+"start". Give each child one "start": the id of the first block it covers. Do
+not give an end — ends are computed from the next child's start, and the last
+child ends where its parent ends. The first child must start where its parent
+starts. List children in document order; after the first child, each "start"
+must occur strictly later than the previous child's start. Do not write a range
+anywhere.`;
+
+const TOC10_OUTPUT = `{"root": {"title": "...", "gist": "...", "question": "...",
+          "range": ["<firstBlockId>", "<lastBlockId>"],
+          "sourceHeading": "...", "children": [ ... ]}}`;
+
+const TOC11_OUTPUT = `{"root": {"title": "...", "gist": "...", "question": "...",
+          "sourceHeading": "...", "children": [
+            {"title": "...", "gist": "...", "question": "...",
+             "start": "<firstBlockId>", "children": [ ... ]}
+          ]}}`;
+
+function replacePromptBlock(prompt: string, before: string, after: string): string {
+  if (!prompt.includes(before)) throw new Error("The toc/11 prompt patch no longer matches toc/10.");
+  return prompt.replace(before, after);
+}
+
+/** Every block outside STRUCTURE and OUTPUT is inherited byte-for-byte from toc/10. */
+export const SYSTEM = replacePromptBlock(
+  replacePromptBlock(TOC10_SYSTEM, TOC10_STRUCTURE, TOC11_STRUCTURE),
+  TOC10_OUTPUT,
+  TOC11_OUTPUT,
+);
+
+const stringSchema = { type: "string" } as const;
+const nonEmptyArrayOf = (items: Readonly<Record<string, unknown>>) => ({ type: "array", items, minItems: 1 }) as const;
+const objectSchema = (
+  properties: Readonly<Record<string, unknown>>,
+  required: readonly string[],
+) => ({ type: "object", properties, required, additionalProperties: false }) as const;
+
+const depth2Schema = objectSchema(
+  {
+    title: stringSchema,
+    gist: stringSchema,
+    start: stringSchema,
+    sourceHeading: stringSchema,
+  },
+  ["title", "gist", "start"],
+);
+
+const depth1Schema = objectSchema(
+  {
+    title: stringSchema,
+    gist: stringSchema,
+    question: stringSchema,
+    start: stringSchema,
+    sourceHeading: stringSchema,
+    /* **Optional, unlike the root's.** A chapter with no sections is an answer
+       the model gives often — 184 of 882 chapters across the 70 measured
+       `toc/11` answers (261001s § Stage 2) — and `buildTree` handles it. Requiring
+       sections here would force the model to invent them for short chapters, an
+       unmeasured change to a shape that passed its quality panel. */
+    children: { type: "array", items: depth2Schema },
+  },
+  ["title", "gist", "question", "start"],
+);
+
+/** Three levels, unrolled: root → depth 1 → depth 2, exactly as SYSTEM asks. */
+export const STRUCTURE_OUTPUT_SCHEMA = objectSchema(
+  {
+    root: objectSchema(
+      {
+        title: stringSchema,
+        gist: stringSchema,
+        question: stringSchema,
+        sourceHeading: stringSchema,
+        children: nonEmptyArrayOf(depth1Schema),
+      },
+      ["title", "gist", "question", "children"],
+    ),
+  },
+  ["root"],
+);
+
+validateAnthropicJsonSchema(STRUCTURE_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(STRUCTURE_OUTPUT_SCHEMA, ["start"]);
 
 export interface ModelNode {
   title: string;
@@ -622,13 +720,13 @@ export function structureRequest(body: Block[]): {
     user,
     maxTokens,
     effort: EFFORT,
-    params: {
+    params: withMessagesJsonSchema({
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
       output_config: { effort: EFFORT },
       system: SYSTEM,
       messages: [{ role: "user", content: user }],
-    },
+    }, STRUCTURE_OUTPUT_SCHEMA),
   };
 }
 
@@ -729,7 +827,7 @@ export interface StructureCheckpointEntry {
  * run then builds a tree from an answer to a different question and looks
  * exactly like a run that worked.
  */
-function usableStructure(value: unknown, fingerprint: string): string | null {
+function usableStructure(value: unknown, fingerprint: string, blocks: readonly Block[]): string | null {
   if (typeof value !== "object" || value === null) return null;
   const entry = value as Partial<StructureCheckpointEntry>;
   if (entry.fingerprint !== fingerprint) return null;
@@ -755,7 +853,7 @@ function usableStructure(value: unknown, fingerprint: string): string | null {
    * different fact from "the answer still builds".
    */
   try {
-    parseStructureAnswer(entry.answer);
+    parseStructureAnswer(entry.answer, blocks);
   } catch {
     return null;
   }
@@ -882,8 +980,13 @@ export function checkCoverage(
  * this function accepts —
  * docs/postmortems/261001b-a-harness-shared-the-request-and-copied-the-parser.md.
  */
-export function parseStructureAnswer(raw: string): { root: ModelNode } {
-  return parseJsonAnswer(raw, "the table-of-contents response");
+export function parseStructureAnswer(
+  raw: string,
+  blocks: readonly Block[],
+  report?: BuildReport,
+): { root: ModelNode } {
+  const answer = parseJsonAnswer<StartsOnlyStructureAnswer>(raw, "the table-of-contents response");
+  return { root: modelNodeFromStarts(answer, blocks, report) };
 }
 
 /**
@@ -1020,8 +1123,12 @@ export interface BuildReport {
    * Its own figure for the reason `collapsedRungs` has one: it is not a boundary
    * that moved by a measurable amount, so as a `PartitionRepair` it would be a
    * repair of no size. It cost a 1,041-block book its whole tree on 2026-10-01
-   * (docs/plans/261001s-fb93-long-pdf-hierarchy-asks-again.md). Normally empty,
-   * and reported at zero.
+   * (docs/plans/261001s-fb93-long-pdf-hierarchy-asks-again.md).
+   *
+   * This now belongs only to callers that feed the ranged builder directly.
+   * `toc/11` requires every child start and `modelNodeFromStarts` derives every
+   * range before this builder runs, so a live whole-document answer cannot add
+   * an entry here.
    */
   rangelessChildren: string[];
   /**
@@ -2256,8 +2363,6 @@ export interface HierarchyRun {
    * has quietly become the common case doubles the stage's bill and its wait.
    */
   structureCalls: 0 | 1 | 2;
-  /** Children that stated no range and were derived — `BuildReport.rangelessChildren`. */
-  rangelessChildren: number;
   /**
    * **What the deepening wave did**, or `null` where it was not run at all —
    * which is every reader today, because the flag is off
@@ -2464,9 +2569,8 @@ export async function generateHierarchy(opts: {
    * Two calls, deliberately: this one is a cost guard, the one below is the
    * guarantee about the file. `checkTree` is pure and takes microseconds.
    * docs/postmortems/260830a-the-article-with-one-heading.md.
-   */
+  */
   const treeFrom = (answer: string): { tree: Tree; bodyTree: Tree; built: BuildReport } => {
-    const { root } = parseStructureAnswer(answer);
     const built: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
     let tree: Tree;
     /**
@@ -2482,6 +2586,7 @@ export async function generateHierarchy(opts: {
      */
     let bodyTree: Tree;
     try {
+      const { root } = parseStructureAnswer(answer, body, built);
       bodyTree = buildTree(root, {}, body, slug, built);
       tree = appendSupplement(bodyTree, groups);
     } catch (err) {
@@ -2492,11 +2597,11 @@ export async function generateHierarchy(opts: {
        * look at it. GPT Sol, finding 7.
        *
        * No tiling fault reaches here any more (`planChildRanges` derives the
-       * partition rather than checking it), so what throws now is a range that
-       * runs backwards, an endpoint that is not a block id, or a root that
-       * misses the article's ends. The repair figures are still worth attaching:
-       * a node whose siblings were all mended and which then failed on an
-       * invented id is a different story from one that failed on its own.
+       * partition rather than checking it). What can still throw is an invented
+       * start during the starts-only conversion or an invalid derived tree. The
+       * repair figures are still worth attaching: a node whose siblings were
+       * all mended and which then failed on an invented id is a different story
+       * from one that failed on its own.
        *
        * `where`, `kind`, `at` and `size` are all derived from the shape of the
        * answer rather than from anything in it, so they are safe to put in a
@@ -2545,7 +2650,7 @@ export async function generateHierarchy(opts: {
     const stored = await opts.checkpoints.read<unknown>(slug, "hierarchy-structure", [
       structureFingerprint,
     ]);
-    raw = usableStructure(stored.get(structureFingerprint), structureFingerprint);
+    raw = usableStructure(stored.get(structureFingerprint), structureFingerprint, body);
     /* `found` and `usable` are separate numbers on purpose: a row that is there
        and is refused by the gate above is a different story from no row at all,
        and reporting only the first would make a format change look like a cold
@@ -3113,7 +3218,6 @@ export async function generateHierarchy(opts: {
        nonsense on the run where nothing was repaired — the common case. */
     largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
     droppedChildren: built.droppedChildren.length,
-    rangelessChildren: built.rangelessChildren.length,
     droppedHeadings: built.droppedHeadings.length,
     collapsedRungs: built.collapsedRungs.length,
     droppedQuestions: built.droppedQuestions.length,

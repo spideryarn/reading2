@@ -18,7 +18,7 @@ import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { type AdminUser, formatSpendNanos } from "../src/admin.js";
+import { type AdminUser, formatSpendNanos, formatWholeDollars } from "../src/admin.js";
 import { formatNanos } from "../src/ai-spend.js";
 import { ADMIN_CHIP_ORDER, adminColumns } from "../src/web/admin-columns.js";
 
@@ -85,7 +85,22 @@ function cellFor(u: AdminUser): string {
 describe("the number", () => {
   it("draws the money and sorts by it", () => {
     expect(spendColumn().accessorFn(user(), 0)).toBe(1_234_500_000);
-    expect(cellFor(user())).toContain("$1.2345");
+    expect(cellFor(user())).toContain(">$1<");
+  });
+
+  it("draws whole dollars, with the exact figure in the tooltip", () => {
+    /* Greg, 2026-10-01 (spya-cm0qa7): "round to integer dollars (with exact
+       figure as tooltip)". Plan 261002b stage 3. */
+    const drawn = cellFor(user({ spendNanos: 3_141_600_000 }));
+    expect(drawn).toContain(">$3<");
+    expect(drawn).toMatch(/title="\$3\.1416 — 42 model call\(s\) over 2026-09 \(UTC\)"/);
+  });
+
+  it("draws <$1 rather than a free-looking $0 for a cost under fifty cents", () => {
+    const drawn = cellFor(user({ spendNanos: 21_523_500 }));
+    expect(drawn).toContain("&lt;$1");
+    expect(drawn).not.toContain(">$0<");
+    expect(drawn).toContain("$0.0215");
   });
 
   it("draws an em dash, not $0.0000, for an account that made no calls", () => {
@@ -148,6 +163,15 @@ describe("the browser's formatter and the server's", () => {
     for (const nanos of [0, 1, 99, 100_000, 1_234_500_000, 21_523_500, 9_000_000_000, 1e15]) {
       expect(formatSpendNanos(nanos)).toBe(formatNanos(nanos));
     }
+  });
+
+  it("rounds whole dollars half up, groups thousands, and never says $0 for a real cost", () => {
+    expect(formatWholeDollars(0)).toBe("$0");
+    expect(formatWholeDollars(1)).toBe("<$1");
+    expect(formatWholeDollars(499_999_999)).toBe("<$1");
+    expect(formatWholeDollars(500_000_000)).toBe("$1");
+    expect(formatWholeDollars(2_499_999_999)).toBe("$2");
+    expect(formatWholeDollars(1_234_567_000_000)).toBe("$1,235");
   });
 
   it("does not round a real cost down to a free-looking zero", () => {

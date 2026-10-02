@@ -42,7 +42,8 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
   };
 });
 
-const { generateQuotes, inputFingerprint, noneDropped, PROMPT_VERSION } = await import("../src/quotes.js");
+const { generateQuotes, inputFingerprint, noneDropped, PROMPT_VERSION, QUOTES_OUTPUT_SCHEMA } =
+  await import("../src/quotes.js");
 
 const FIRST = "Writing is thinking, and there is no other kind of thinking.";
 const SECOND = "The mathematical marriage of convenience starts to fall apart here.";
@@ -92,6 +93,15 @@ describe("generateQuotes, on a first pass", () => {
     await generateQuotes({ power: "standard", article: ARTICLE, previous: null });
     expect(sent[0]).toContain("Each quote should say something the others do not.");
     expect(sent[0]).toContain("keep the best statement of it");
+  });
+
+  it("carries the Quotes schema without losing medium effort", async () => {
+    answer = JSON.stringify({ quotes: [{ text: FIRST }] });
+    await generateQuotes({ power: "standard", article: ARTICLE, previous: null });
+    expect((JSON.parse(sent[0]!) as { output_config: unknown }).output_config).toEqual({
+      effort: "medium",
+      format: { type: "json_schema", schema: QUOTES_OUTPUT_SCHEMA },
+    });
   });
 });
 

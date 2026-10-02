@@ -346,6 +346,8 @@ describe("GET /api/billing/usage", () => {
       atLimit: false,
       periodEnd: period.end.toISOString(),
       endsAt: null,
+      periodAllowance: tier.limit,
+      trial: false,
     });
     expect(reply.body.manageable).toBe(true);
   });
@@ -516,6 +518,11 @@ describe("GET /api/billing/usage", () => {
       from?: string;
     };
     expect(purchase).toMatchObject({ kind: "switch", from: "trial" });
+    expect((await get("/api/billing/usage", OWNER)).body.plan).toMatchObject({
+      kind: "paid",
+      periodAllowance: tier.limit,
+      trial: true,
+    });
   });
 
   /**

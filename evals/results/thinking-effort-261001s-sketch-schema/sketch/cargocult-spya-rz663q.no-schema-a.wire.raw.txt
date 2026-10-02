@@ -1,0 +1,105 @@
+{
+  "caption": "A chain down the page: Feynman moves from spotting unscientific beliefs, to naming the failure as 'Cargo Cult Science', to the principle of integrity that cures it, to examples of scientists fooling themselves, to case studies proving the point, ending on a final wish — each part building on the last.",
+  "title": "Chain of Argument",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Cargo Cult Science — overview",
+      "caption": "A single chain: pseudoscience observed, named, diagnosed, and then illustrated with cases, ending in a wish.",
+      "height": 1120,
+      "items": [
+        {"kind":"node","id":"intro","shape":"ellipse","x":280,"y":30,"w":200,"h":60,"text":"Avoiding self-deception in science","size":"md","block":"spya-wv9g0v"},
+
+        {"kind":"region","x":24,"y":110,"w":712,"h":230,"label":"PSEUDOSCIENCE OBSERVED","style":"band","tone":1,"opens":"inside-pseudoscience"},
+        {"kind":"node","id":"science_v_superstition","shape":"box","x":40,"y":150,"w":210,"h":60,"text":"Science works by testing and discarding ideas","size":"sm","tone":1,"block":"spya-ddrr9m"},
+        {"kind":"node","id":"mysticism","shape":"box","x":275,"y":150,"w":210,"h":60,"text":"ESP, Esalen, Geller — nothing works","size":"sm","tone":1,"block":"spya-q4502k"},
+        {"kind":"node","id":"education","shape":"box","x":510,"y":150,"w":210,"h":60,"text":"Education, crime 'science' with no progress","size":"sm","tone":1,"block":"spya-aww976"},
+        {"kind":"node","id":"cocktail","shape":"box","x":275,"y":245,"w":210,"h":60,"text":"The cocktail-party test for empty fields","size":"sm","tone":1,"block":"spya-wc4h5s"},
+
+        {"kind":"node","id":"cargo_define","shape":"hex","x":280,"y":380,"w":200,"h":80,"text":"Named: 'Cargo Cult Science'","sub":"form without substance","size":"md","block":"spya-fd2muf","opens":"inside-cargocult"},
+
+        {"kind":"region","x":24,"y":500,"w":712,"h":150,"label":"THE CURE: INTEGRITY","style":"band","tone":2,"opens":"inside-cargocult"},
+        {"kind":"node","id":"integrity","shape":"box","x":40,"y":540,"w":220,"h":70,"text":"Report everything against your own theory","size":"sm","tone":2,"block":"spya-afgs74"},
+        {"kind":"node","id":"advertising","shape":"box","x":280,"y":540,"w":210,"h":70,"text":"Not just true, but not misleading","size":"sm","tone":2,"block":"spya-bpyx8n"},
+        {"kind":"node","id":"truth_out","shape":"box","x":510,"y":540,"w":210,"h":70,"text":"Careless work gets exposed eventually","size":"sm","tone":2,"block":"spya-az6z7k"},
+
+        {"kind":"node","id":"millikan","shape":"box","x":280,"y":690,"w":210,"h":70,"text":"Millikan's charge crept slowly to truth","size":"sm","tone":3,"block":"spya-s9msxy"},
+        {"kind":"node","id":"fool_self","shape":"box","x":60,"y":770,"w":200,"h":60,"text":"You are the easiest person to fool","size":"sm","tone":3,"block":"spya-bvx2u8"},
+        {"kind":"node","id":"layman","shape":"box","x":280,"y":790,"w":210,"h":60,"text":"Owe laymen the same honesty","size":"sm","tone":3,"block":"spya-c46yyu"},
+        {"kind":"node","id":"publish_all","shape":"box","x":510,"y":770,"w":210,"h":60,"text":"Publish every result, not just favorable ones","size":"sm","tone":3,"block":"spya-jk7mj4"},
+
+        {"kind":"node","id":"case_studies","shape":"hex","x":280,"y":900,"w":200,"h":80,"text":"Case studies in poor science","sub":"psychology, physics, parapsychology","size":"md","tone":4,"block":"spya-w9nnq6","opens":"inside-cases"},
+
+        {"kind":"node","id":"final_wish","shape":"ellipse","x":280,"y":1030,"w":200,"h":60,"text":"Final wish: freedom to keep integrity","size":"md","block":"spya-ndyj3t"},
+
+        {"kind":"edge","from":"intro","to":"science_v_superstition","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"science_v_superstition","to":"mysticism","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"mysticism","to":"education","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"mysticism","to":"cocktail","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"cocktail","to":"cargo_define","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"cargo_define","to":"integrity","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"integrity","to":"advertising","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"advertising","to":"truth_out","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"truth_out","to":"millikan","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"millikan","to":"fool_self","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"millikan","to":"layman","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"millikan","to":"publish_all","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"layman","to":"case_studies","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"case_studies","to":"final_wish","via":"straight","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-cargocult",
+      "title": "Defining Cargo Cult Science",
+      "caption": "A hub: the cargo cult story names the failure, and the principle of integrity along with its contrast and consequence elaborate what is missing.",
+      "height": 620,
+      "items": [
+        {"kind":"node","id":"story","shape":"ellipse","x":280,"y":40,"w":220,"h":80,"text":"Islanders mimic the form, planes don't land","size":"lg","block":"spya-fd2muf"},
+        {"kind":"node","id":"missing","shape":"box","x":280,"y":170,"w":220,"h":70,"text":"What's missing: scientific integrity","size":"sm","block":"spya-afgs74"},
+        {"kind":"node","id":"integrity2","shape":"box","x":60,"y":300,"w":220,"h":80,"text":"Lean over backwards: report evidence against yourself","size":"sm","tone":2,"block":"spya-afgs74"},
+        {"kind":"node","id":"details","shape":"box","x":60,"y":420,"w":220,"h":70,"text":"Give details that could throw doubt on your theory","size":"sm","tone":2,"block":"spya-rxj5wa"},
+        {"kind":"node","id":"summary_int","shape":"box","x":280,"y":500,"w":200,"h":60,"text":"Give all information, not just the favorable kind","size":"sm","tone":2,"block":"spya-qpwryx"},
+        {"kind":"node","id":"ad_contrast","shape":"box","x":500,"y":300,"w":220,"h":80,"text":"Advertising: true but misleading (Wesson Oil)","size":"sm","tone":2,"block":"spya-bpyx8n"},
+        {"kind":"node","id":"truth_out2","shape":"box","x":500,"y":420,"w":220,"h":70,"text":"Other experimenters will find you out","size":"sm","tone":2,"block":"spya-az6z7k"},
+        {"kind":"node","id":"hard_subj","shape":"note","x":280,"y":570,"w":220,"h":50,"text":"Difficulty of subject doesn't excuse it","size":"xs","block":"spya-rub3a2"},
+
+        {"kind":"edge","from":"story","to":"missing","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"missing","to":"integrity2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"missing","to":"ad_contrast","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"integrity2","to":"details","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"details","to":"summary_int","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"ad_contrast","to":"truth_out2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"summary_int","to":"hard_subj","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"truth_out2","to":"hard_subj","via":"curve","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-cases",
+      "title": "Case Studies in Poor Science",
+      "caption": "Four parallel cases, side by side in the order Feynman tells them, each showing a different way the scientific form is kept but the integrity is dropped.",
+      "height": 680,
+      "items": [
+        {"kind":"node","id":"psych_repeat","shape":"box","x":40,"y":60,"w":200,"h":90,"text":"Student told not to repeat a prior rat experiment","size":"sm","tone":4,"block":"spya-w9nnq6"},
+        {"kind":"node","id":"should_repeat","shape":"note","x":40,"y":180,"w":200,"h":60,"text":"Feynman: repeat it first, then vary it","size":"xs","block":"spya-tf8rj2"},
+
+        {"kind":"node","id":"physics_ex","shape":"box","x":280,"y":60,"w":200,"h":90,"text":"Accelerator skips comparison run for speed","size":"sm","tone":4,"block":"spya-m95kqm"},
+
+        {"kind":"node","id":"young","shape":"box","x":520,"y":60,"w":200,"h":90,"text":"Young eliminates every clue to find what rats really use","size":"sm","tone":4,"block":"spya-fvenms"},
+        {"kind":"node","id":"young_ignored","shape":"note","x":520,"y":180,"w":200,"h":60,"text":"Later researchers ignored his careful method","size":"xs","block":"spya-wye8g6"},
+
+        {"kind":"node","id":"rhine","shape":"box","x":280,"y":300,"w":200,"h":90,"text":"ESP effects shrink as controls improve","size":"sm","tone":4,"block":"spya-rbpppq"},
+        {"kind":"node","id":"repeatable","shape":"note","x":280,"y":420,"w":200,"h":60,"text":"Leader rejects repeatability as a fair demand","size":"xs","block":"spya-rbpppq"},
+
+        {"kind":"node","id":"wish","shape":"ellipse","x":280,"y":540,"w":220,"h":70,"text":"Wish: freedom to keep integrity","size":"md","block":"spya-ndyj3t"},
+
+        {"kind":"edge","from":"psych_repeat","to":"should_repeat","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"young","to":"young_ignored","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"rhine","to":"repeatable","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"should_repeat","to":"rhine","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"physics_ex","to":"rhine","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"young_ignored","to":"rhine","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"repeatable","to":"wish","via":"straight","arrow":"end"}
+      ]
+    }
+  ]
+}

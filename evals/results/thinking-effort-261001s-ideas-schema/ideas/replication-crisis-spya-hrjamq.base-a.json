@@ -1,0 +1,251 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "replication-crisis-spya-hrjamq",
+  "sourceHash": "17b187c11da22548.677ec6955421d529.a8a587fa27f4a79f",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-dyg79z",
+      "name": "Science's replication machinery presumes one fixed true effect",
+      "provenance": "assumed",
+      "statement": "Power calculations, meta-analyses, and direct replications are built on the idea that a given hypothesis corresponds to one stable, context-independent effect size that every properly run study is estimating.",
+      "whyYouNeedIt": "Without this assumption, concepts like 'statistical power to detect the effect' or 'pooling studies to estimate the effect' would not make sense — yet the article treats power, effect-size estimation, and meta-analysis this way until heterogeneity findings quietly undercut it.",
+      "occurrences": [
+        {
+          "blockId": "spya-cxbx9m",
+          "quote": "the full null hypothesis is often reduced to a simplified null hypothesis \"the effect size is 0\", where \"effect size\" is a real number that is 0 if the full null hypothesis is true",
+          "reasoning": "Treats effect size as a single real number attached to the hypothesis, which only works if that number is fixed rather than context-dependent.",
+          "start": 59
+        },
+        {
+          "blockId": "spya-c08svn",
+          "quote": "In practice, effect sizes cannot be directly observed, but must be measured by statistical estimators.",
+          "reasoning": "Speaks of 'the' effect size as something estimators approximate, presupposing a single quantity exists to be approximated.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-x02d6v",
+          "quote": "If considered along sampling error, heterogeneity yields a standard deviation from one study to the next even larger than the median effect size of the 200 meta-analyses they investigated.",
+          "reasoning": "This finding only reads as a problem for replication if the reader had been assuming, up to this point, that there was one effect size each study should converge on.",
+          "start": 328
+        }
+      ]
+    },
+    {
+      "id": "spya-ab70uj",
+      "name": "Citation counts are assumed to track a finding's merit",
+      "provenance": "assumed",
+      "statement": "How often a paper gets cited is treated as a rough signal of how sound or important its findings are, which is why it registers as troubling when heavily cited findings turn out not to replicate.",
+      "whyYouNeedIt": "The reported pattern — that non-replicable papers get cited more, even after being debunked — only reads as a problem, rather than a neutral fact, if citations are expected to track validity in the first place.",
+      "occurrences": [
+        {
+          "blockId": "spya-m3et6t",
+          "quote": "papers that cannot be replicated are more likely to be cited.",
+          "reasoning": "Presents this correlation as a notable finding, which presumes citations should otherwise track replicability/validity.",
+          "start": 77
+        }
+      ]
+    },
+    {
+      "id": "spya-bkra79",
+      "name": "Low power mathematically caps replication odds",
+      "provenance": "introduced",
+      "statement": "If an original study's statistical power (its chance of detecting a real effect) is low, then even a true effect will often fail to turn up again in a repeat study — the replication rate is bounded by the power, no matter how the original study was designed or whether the hypothesis is actually true.",
+      "analogy": "It is like a smoke detector set too low to trigger reliably: testing it again and again on a real fire will often fail to set it off, not because the fire went out but because the detector itself is weak.",
+      "occurrences": [
+        {
+          "blockId": "spya-x7d5t5",
+          "quote": "the probability of replicating a previous publication that rejected a null hypothesis in favor of an alternative is assuming significance is less than power. Thus, low power implies low probability of replication, regardless of how the previous publication was designed, and regardless of which hypothesis is really true.",
+          "reasoning": "States the mechanical link between low power and low replication probability as a near-mathematical certainty.",
+          "start": 16
+        },
+        {
+          "blockId": "spya-zvfgme",
+          "quote": "implying that a positive result would replicate with probability less than 10%, regardless of whether the positive result was a true positive or a false positive.",
+          "reasoning": "Applies the power-replication link to real psychology data to explain the field's poor replication rates.",
+          "start": 443
+        },
+        {
+          "blockId": "spya-hdubm3",
+          "quote": "Low statistical power hinders replication for three reasons: (1) low-power replications have reduced ability to detect true effects, (2) low-power original studies produce biased effect size estimates leading to undersized replications, and (3) low-power original studies yield results unlikely to reflect true effects.",
+          "reasoning": "Lays out the causal chain from low power to replication failure that the rest of the section depends on.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-h7qg2e",
+          "quote": "most psychological studies have low power (true positive rate), but low power persisted for 50 years, indicating a structural and persistent problem in psychological research.",
+          "reasoning": "Treats chronic low power itself as the structural explanation for persistent replication trouble, relying on the power-replication link.",
+          "start": 55
+        }
+      ]
+    },
+    {
+      "id": "spya-wvf3f8",
+      "name": "Published effect sizes are inflated estimates (winner's curse)",
+      "provenance": "introduced",
+      "statement": "Because only the largest, most eye-catching results from small or noisy studies tend to clear the bar for publication, the effect sizes that make it into print are systematically bigger than the true effect, so later, better-powered studies routinely find something smaller.",
+      "analogy": "It is like judging a bidding war only by the winning bid: the winner is, by definition, the most optimistic bidder, so the price that gets recorded overstates what the item is really worth.",
+      "occurrences": [
+        {
+          "blockId": "spya-r42sms",
+          "quote": "Even when the study replicates, the replication typically has a smaller effect size. Underpowered[clarification needed] studies have a large effect size bias.",
+          "reasoning": "States the shrinkage pattern as a general statistical phenomenon, not a one-off anomaly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-hw9d4p",
+          "quote": "when the dataset is small, noise tends to cause the regression factor to be overestimated",
+          "reasoning": "Gives the statistical mechanism (small-sample noise) underlying the inflation of published estimates.",
+          "start": 173
+        },
+        {
+          "blockId": "spya-bha57y",
+          "quote": "36% replicated successfully (p value below 0.05), with effect sizes averaging half the original magnitude",
+          "reasoning": "Reports the empirical shrinkage that only makes sense as an instance of this general inflation phenomenon.",
+          "start": 476
+        },
+        {
+          "blockId": "spya-k59a2x",
+          "quote": "the effect sizes were 85% smaller on average than the original findings",
+          "reasoning": "Another concrete instance of the same inflation-then-shrinkage pattern, this time in cancer biology.",
+          "start": 477
+        }
+      ]
+    },
+    {
+      "id": "spya-cptvmh",
+      "name": "Publication bias inflates false positives in the literature",
+      "provenance": "introduced",
+      "statement": "Journals' preference for positive, significant findings means negative or null results are disproportionately left unpublished, so the published record is a skewed, over-positive sample of all the research actually conducted.",
+      "occurrences": [
+        {
+          "blockId": "spya-y782zn",
+          "quote": "Publication bias—the tendency to publish only positive, significant results—creates the \"file drawer effect\", where negative results remain unpublished.[a] This produces misleading literature and biased meta-analyses.",
+          "reasoning": "States directly that selective publication distorts the overall body of literature.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-f76az5",
+          "quote": "When publication bias is considered along with the fact that a majority of tested hypotheses might be false a priori, it is plausible that a considerable proportion of research findings might be false positives",
+          "reasoning": "Connects publication bias to the buildup of false positives that later fail to replicate.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-asmt0d",
+          "quote": "the desire to make research accessible to the public led to oversimplification and exaggeration of findings, creating unrealistic expectations and amplifying the impact of non-replications",
+          "reasoning": "Extends the publication-bias idea to popular science coverage, showing the same selective-positivity mechanism at a different stage.",
+          "start": 64
+        },
+        {
+          "blockId": "spya-q6s08t",
+          "quote": "Rosenthal's point is that certain effect sizes are large enough, such that even if there is a total publication bias against null results (the \"file drawer problem\"), the number of unpublished null results would be impossibly large to swamp out the effect size.",
+          "reasoning": "A proposed statistical remedy only makes sense against the backdrop of unpublished null results systematically missing from the record.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-rphjxk",
+      "name": "Flexible analysis choices manufacture false significance",
+      "provenance": "introduced",
+      "statement": "When researchers have many undisclosed choices about how to collect, exclude, or analyze data, trying several of these and reporting only the one that comes out significant can make a false effect look statistically real far more often than the stated significance threshold suggests.",
+      "analogy": "It is like playing twenty slot machines at once and only mentioning the one that paid out — of course one eventually will, even if every machine is rigged to lose.",
+      "occurrences": [
+        {
+          "blockId": "spya-umu7gf",
+          "quote": "These choices in the \"garden of forking paths\" multiply, creating many \"researcher degrees of freedom\". The effect is similar to the file-drawer problem, as the paths not taken are not published.",
+          "reasoning": "Names the mechanism by which many small, unreported analytic choices compound into inflated false-positive rates.",
+          "start": 209
+        },
+        {
+          "blockId": "spya-jp3k7e",
+          "quote": "The probability that at least 1 out of 20 is significant is, by assumption of independence, .",
+          "reasoning": "The worked example only shows a problem once the reader accepts that testing many hypotheses and reporting the one hit is the hidden failure mode.",
+          "start": 308
+        },
+        {
+          "blockId": "spya-kqvxfb",
+          "quote": "Questionable research practices are behaviors that exploit researcher degrees of freedom (researcher DF)—choices in study design, data analysis, or reporting—to inflate false positive rates and undermine reproducibility.",
+          "reasoning": "Defines the whole category of questionable research practices in terms of exploiting this flexibility.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-qsad7n",
+          "quote": "moderately flexible data analysis, routine in research, can increase the false-positive rate to above 60%",
+          "reasoning": "Quantifies how ordinary, non-malicious flexibility in analysis drives false-positive rates up, relying on the forking-paths mechanism.",
+          "start": 128
+        }
+      ]
+    },
+    {
+      "id": "spya-uycfys",
+      "name": "True effects can genuinely vary by context, not be one fixed number",
+      "provenance": "introduced",
+      "statement": "An effect may not have a single 'true' size waiting to be estimated; it can genuinely differ across populations, settings, and times because of hidden moderating factors, so even careful, well-powered direct replications can legitimately disagree with each other.",
+      "occurrences": [
+        {
+          "blockId": "spya-r23rs2",
+          "quote": "this suggested that heterogeneity could have been a genuine characteristic of the phenomena being investigated. For instance, phenomena might be influenced by so-called \"hidden moderators\"",
+          "reasoning": "Explicitly frames variation across replications as reflecting real features of the phenomenon rather than noise.",
+          "start": 671
+        },
+        {
+          "blockId": "spya-x02d6v",
+          "quote": "if replication is defined by a subsequent study finding a sufficiently similar effect size to the original, replication success is not likely even if replications have very large sample sizes",
+          "reasoning": "Shows that even infinite sample size cannot fix replication failure when the underlying effect is not a single fixed quantity.",
+          "start": 546
+        },
+        {
+          "blockId": "spya-audpsj",
+          "quote": "higher ratings of context sensitivity were associated with lower probabilities of replicating an effect",
+          "reasoning": "Links context-dependence directly to replication outcomes, reinforcing that some effects are not single fixed quantities.",
+          "start": 90
+        }
+      ]
+    },
+    {
+      "id": "spya-s3yg7b",
+      "name": "A significant p-value's evidential weight depends on prior plausibility",
+      "provenance": "introduced",
+      "statement": "Rejecting the null hypothesis at the 5% level does not mean there is a 95% chance the alternative is true; by Bayes' theorem, how much a significant result should update belief depends heavily on how plausible the hypothesis was before the data came in.",
+      "analogy": "It resembles a medical test for a rare disease: even an accurate positive result is more often a false alarm than a true case, simply because the disease is uncommon to start with.",
+      "occurrences": [
+        {
+          "blockId": "spya-fhcf00",
+          "quote": "rejecting the null hypothesis at significance level 5% does not mean that the posterior probability for the alternative hypothesis is 95%, and the posterior probability is also different from the probability of replication",
+          "reasoning": "States directly that significance and posterior truth-probability are different quantities governed by prior odds.",
+          "start": 61
+        },
+        {
+          "blockId": "spya-esjk29",
+          "quote": "if the prior probability of the null hypothesis is , and the study found a positive result, then the posterior probability for is , and the replication probability is",
+          "reasoning": "Works through the numeric consequence that a low prior sharply limits how much a significant finding should be trusted.",
+          "start": 13
+        }
+      ]
+    },
+    {
+      "id": "spya-xu3jdx",
+      "name": "Triangulation beats repeating the same method",
+      "provenance": "introduced",
+      "statement": "Confirming a finding through several methods that each rely on different, unrelated assumptions gives stronger evidence than simply repeating the original method, because a flaw baked into one method will reappear in every direct replication of it.",
+      "occurrences": [
+        {
+          "blockId": "spya-astgqn",
+          "quote": "research should emphasize triangulation, not just replication, to protect against flawed ideas",
+          "reasoning": "States the core claim that multiple independent methods, not repetition, protect against error.",
+          "start": 112
+        },
+        {
+          "blockId": "spya-w073xf",
+          "quote": "replication alone will get us only so far (and) might actually make matters worse ... [Triangulation] is the strategic use of multiple approaches to address one question. Each approach has its own unrelated assumptions, strengths and weaknesses. Results that agree across different methodologies are less likely to be artefacts.",
+          "reasoning": "Spells out why shared assumptions across repeated identical methods fail to catch systematic flaws, which only triangulation can.",
+          "start": 0
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T00:51:20.322Z",
+  "elapsedMs": 158841
+}

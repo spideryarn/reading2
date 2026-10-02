@@ -85,8 +85,39 @@ describe("keepVerified — only what code finds, in the chunk named", () => {
 describe("the request", () => {
   it("has no tools, fences the paper, and puts the reminder after it", () => {
     const paper = paperRead();
-    const body = paperPassagesRequest(paper, CONTEXT, "m") as unknown as { tools?: unknown; messages: { content: string }[] };
+    const body = paperPassagesRequest(paper, CONTEXT, "m") as unknown as {
+      tools?: unknown;
+      messages: { content: string }[];
+      response_format?: unknown;
+    };
     expect(body.tools).toBeUndefined();
+    expect(body.response_format).toEqual({
+      type: "json_schema",
+      json_schema: {
+        name: "paper_passages",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["passages"],
+          properties: {
+            passages: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["chunk", "quote", "bears"],
+                properties: {
+                  chunk: { type: "string", pattern: "^c[1-9]\\d{0,4}$" },
+                  quote: { type: "string" },
+                  bears: { type: "string", enum: ["supports", "partly", "context"] },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
     expect(body.messages[0]?.content).toBe(PAPER_PASSAGES_SYSTEM);
     const user = body.messages[1]?.content ?? "";
     expect(user.indexOf("What the article uses it for: The power law.")).toBeLessThan(user.indexOf("<<<UNTRUSTED PAPER TEXT"));

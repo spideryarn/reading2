@@ -305,7 +305,18 @@ async function main(): Promise<void> {
               `$${(r.costNanos / 1e9).toFixed(4)}, ${(r.elapsedMs / 1000).toFixed(1)}s`,
           );
         }
-        writeFileSync(`${base}.json`, JSON.stringify({ promptVersion: PROMPT_VERSION, nudge: NUDGE, anchor: ANCHOR, baselines, results }, null, 2));
+        const attempted = SLUGS.length * RUNS * 2;
+        writeFileSync(
+          `${base}.json`,
+          JSON.stringify({
+            promptVersion: PROMPT_VERSION,
+            nudge: NUDGE,
+            anchor: ANCHOR,
+            validity: { valid: results.length, attempted },
+            baselines,
+            results,
+          }, null, 2),
+        );
       }
     }
   });
@@ -323,7 +334,9 @@ async function main(): Promise<void> {
     lines.push(`## ${slug}`, "");
     for (const [label, r] of [["A", a], ["B", b]] as const) {
       lines.push(`### ${label} (${r.quotes.length} quotes)`, "");
-      r.quotes.forEach((q, i) => lines.push(`${i + 1}. ${q.text.replace(/\s+/g, " ")}`));
+      r.quotes.forEach((q, i) => {
+        lines.push(`${i + 1}. ${q.text.replace(/\s+/g, " ")}`);
+      });
       lines.push("");
     }
   }
@@ -331,9 +344,11 @@ async function main(): Promise<void> {
   writeFileSync(`${base}-key.json`, JSON.stringify(key, null, 2));
 
   const total = results.reduce((s, r) => s + r.costNanos, 0);
+  const attempted = SLUGS.length * RUNS * 2;
+  console.log(`Validity: ${results.length}/${attempted} calls produced a valid Quotes artefact`);
   console.log(`\n${results.length} calls, nudge applied ${nudgeApplied}x, total $${(total / 1e9).toFixed(4)}`);
   console.log(`Wrote ${base}.json, ${base}-pairs.md, ${base}-key.json`);
-  if (results.length !== SLUGS.length * RUNS * 2) process.exitCode = 1;
+  if (results.length !== attempted) process.exitCode = 1;
 }
 
 try {
