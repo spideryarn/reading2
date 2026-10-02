@@ -86,6 +86,8 @@ export interface AutosavedText {
   seed(value: string): void;
   /** Save the draft if it differs from what is stored. Safe to call often. */
   commit(): void;
+  /** Explicitly give up this draft, so unmount does not send it behind the reader's back. */
+  abandon(): void;
   /** For a load that failed: said in the status line, the box stays shut. */
   fail(message: string): void;
   /**
@@ -119,6 +121,9 @@ export function useAutosavedText({
   const now = useRef({ saved: null as string | null, draft: "" });
   const inFlight = useRef(false);
   const queued = useRef(false);
+  /* An unmount save must be ordered after an ordinary write already in flight.
+     Sending two independent PATCHes at once lets the older one land last. */
+  const leaveAfterFlight = useRef(false);
   /* Bumped by `seed`, so a save begun for the previous value — Metadata's box
      moving to another article — cannot land on the new one. */
   const epoch = useRef(0);
@@ -147,6 +152,20 @@ export function useAutosavedText({
   }, []);
 
   const fail = useCallback((message: string) => setError(message), []);
+
+  const abandon = useCallback(() => {
+    epoch.current++;
+    queued.current = false;
+    leaveAfterFlight.current = false;
+    now.current.saved = now.current.draft;
+  }, []);
+
+  /* The page, or the box, is going: send what the server does not have, with
+     nothing awaited first. */
+  const lastChance = useCallback(() => {
+    const { saved: stored, draft: text } = now.current;
+    if (stored !== null && text !== stored) io.current.leave(text);
+  }, []);
 
   const commit = useCallback(() => {
     const { saved: stored, draft: text } = now.current;
@@ -194,19 +213,22 @@ export function useAutosavedText({
         if (mine !== epoch.current) return;
         inFlight.current = false;
         setSending(null);
+        /* Component unmount is different from pagehide: the page remains alive,
+           so the older request can finish and the keepalive write can be sent
+           strictly after it. That order is what prevents the older text from
+           becoming the final server value. */
+        if (leaveAfterFlight.current) {
+          leaveAfterFlight.current = false;
+          queued.current = false;
+          lastChance();
+          return;
+        }
         if (queued.current) {
           queued.current = false;
           commit();
         }
       });
-  }, []);
-
-  /* The page, or the box, is going: send what the server does not have, with
-     nothing awaited first. */
-  const lastChance = useCallback(() => {
-    const { saved: stored, draft: text } = now.current;
-    if (stored !== null && text !== stored) io.current.leave(text);
-  }, []);
+  }, [lastChance]);
 
   useEffect(() => {
     const hidden = () => {
@@ -224,14 +246,21 @@ export function useAutosavedText({
      boxes live inside the profile popover too, which sits in a mode band the
      dock or an article change unmounts whatever the popover thinks — and an
      SPA navigation fires neither `visibilitychange` nor `pagehide`. So the
-     unmount sends what `pagehide` would: the `keepalive` request, because an
-     ordinary save started by a component that no longer exists has nobody to
-     report to. The metadata page's box had the same gap. GPT Sol's review of
+     unmount sends what `pagehide` would: the `keepalive` request. If an ordinary
+     save is already out it waits for that request first, because two concurrent
+     PATCHes could put the older words down last. The metadata page's box had
+     the same gap. GPT Sol's review of
      docs/plans/261002b-written-for-your-profile-panel-edit-in-place-and-regenerate.md.
 
      Safe under StrictMode's mount–unmount–mount: nothing is loaded at mount,
      so the first cleanup finds `saved` null and sends nothing. */
-  useEffect(() => lastChance, [lastChance]);
+  useEffect(
+    () => () => {
+      if (inFlight.current) leaveAfterFlight.current = true;
+      else lastChance();
+    },
+    [lastChance],
+  );
 
   const state = saveStateOf({
     loaded: saved !== null,
@@ -244,5 +273,5 @@ export function useAutosavedText({
     savedThisVisit,
   });
 
-  return { saved, draft, setDraft, seed, commit, fail, inFlight: sending !== null, state };
+  return { saved, draft, setDraft, seed, commit, abandon, fail, inFlight: sending !== null, state };
 }

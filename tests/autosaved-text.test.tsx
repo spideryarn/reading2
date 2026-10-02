@@ -217,6 +217,31 @@ describe("leaving", () => {
     expect(left).toEqual(["typed, then switched mode"]);
   });
 
+  /* An ordinary PATCH and a keepalive PATCH are two independent requests. If
+     unmount sends the newer draft immediately, the older ordinary request can
+     land afterwards and put the server back to the older text. The last-chance
+     write therefore waits behind an ordinary write that is already in flight. */
+  it("orders an unmount save after the older ordinary save already in flight", async () => {
+    act(() => get().setDraft("an older draft"));
+    act(() => get().commit());
+    act(() => get().setDraft("the newest words"));
+
+    act(() => root.render(null));
+    expect(left, "the newer write raced the older PATCH").toEqual([]);
+
+    await act(async () => sent[0]?.ok("an older draft"));
+    expect(left).toEqual(["the newest words"]);
+  });
+
+  it("does not send a last-chance duplicate after a successful save", async () => {
+    act(() => get().setDraft("already stored"));
+    act(() => get().commit());
+    await act(async () => sent[0]?.ok("already stored"));
+
+    act(() => root.render(null));
+    expect(left).toEqual([]);
+  });
+
   /* The other half, and the one StrictMode leans on: it mounts, unmounts and
      mounts again in development, and nothing is pending at mount, so the
      cleanup must be a no-op rather than a PATCH per page load. */

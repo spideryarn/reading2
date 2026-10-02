@@ -127,10 +127,14 @@ let root: Root;
 /** A mode's regenerate, recorded. */
 interface Spy {
   run: Mock<() => void>;
-  refresh: Mock<() => void>;
+  refresh: Mock<() => Promise<void>>;
   busy: boolean;
 }
-const spy = (busy = false): Spy => ({ run: vi.fn<() => void>(), refresh: vi.fn<() => void>(), busy });
+const spy = (busy = false): Spy => ({
+  run: vi.fn<() => void>(),
+  refresh: vi.fn(async () => {}),
+  busy,
+});
 
 /** The real badge, on text written for a profile — never the panel on its own,
  *  so every assertion below is about something a reader can get to. */
@@ -407,6 +411,32 @@ describe("dismissing it with words unsaved", () => {
     expect(box(1).value).toBe("Too long, say.");
   });
 
+  it("does not retry a refused save on every outside press, and offers an explicit escape", async () => {
+    render();
+    await open();
+    type(box(1), "Words the server cannot save.");
+    await pressOutside();
+    await act(async () =>
+      patches[0]?.answer(
+        new Response(JSON.stringify({ error: "The server is unavailable." }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    await settle();
+
+    await pressOutside();
+    expect(patches, "outside press retried a persistent failure").toHaveLength(1);
+    expect(box(1).value).toBe("Words the server cannot save.");
+
+    const close = button(/close without saving/i);
+    if (!close) throw new Error("no explicit way out after a refused save");
+    await act(async () => close.click());
+    expect(panel()).toBeNull();
+    expect(left, "the explicit escape retried through the unmount flush").toEqual([]);
+  });
+
   /* The explicit way out, with the same promise. */
   it("Done saves and closes once both halves are clean", async () => {
     render();
@@ -511,5 +541,74 @@ describe("Regenerate", () => {
     await act(async () => patches[0]?.answer(ok({ profile: "A physicist." })));
     await settle();
     expect(r.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("holds Regenerate until the post-save profile verdict has arrived", async () => {
+    let finishRefresh: (() => void) | undefined;
+    const r = spy();
+    r.refresh = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRefresh = resolve;
+        }),
+    );
+    render({ changed: true, regenerate: r });
+    await open();
+    type(box(0), "A changed profile.");
+    blur(box(0));
+    await act(async () => patches[0]?.answer(ok({ profile: "A changed profile." })));
+    await settle();
+
+    expect(r.refresh).toHaveBeenCalledTimes(1);
+    expect(button(/regenerate/i)?.disabled, "enabled against the pre-refresh verdict").toBe(true);
+
+    await act(async () => finishRefresh?.());
+    await settle();
+    expect(button(/regenerate/i)?.disabled).toBe(false);
+  });
+
+  /* The shared staleness rule deliberately says that clearing a profile is not
+     a reason to spend money removing personalisation from old text. The old
+     `changed` prop must not leave a pressable button in the gap before that
+     refreshed verdict replaces it. */
+  it("removes Regenerate when clearing the profile makes the refreshed verdict current", async () => {
+    server.profile = "A physicist.";
+    const r = spy();
+    r.refresh = vi.fn(async () => {
+      render({ changed: false, regenerate: r });
+    });
+    render({ changed: true, regenerate: r });
+    await open();
+    type(box(0), "");
+    blur(box(0));
+    await act(async () => patches[0]?.answer(ok({ profile: null })));
+    await settle();
+
+    expect(r.refresh).toHaveBeenCalledTimes(1);
+    expect(button(/regenerate/i)).toBeUndefined();
+    expect(r.run).not.toHaveBeenCalled();
+  });
+});
+
+describe("more than one personalised badge on a page", () => {
+  it("never leaves two profile panels open at once", async () => {
+    act(() => {
+      root.render(
+        createElement(
+          "div",
+          null,
+          createElement(WrittenForYou, { written: true, changed: false, slug: "first" }),
+          createElement(WrittenForYou, { written: true, changed: false, slug: "second" }),
+        ),
+      );
+    });
+    const triggers = [...host.querySelectorAll<HTMLButtonElement>("button.prof-badge")];
+    await act(async () => triggers[0]?.click());
+    await settle();
+    expect(document.querySelectorAll(".prof-panel")).toHaveLength(1);
+
+    await act(async () => triggers[1]?.click());
+    await settle();
+    expect(document.querySelectorAll(".prof-panel")).toHaveLength(1);
   });
 });

@@ -196,8 +196,11 @@ export interface Regenerate {
    * Read the mode's artefact again, so `profileChanged` is the server's
    * verdict on the profile as it now is. Never spends.
    */
-  refresh(): void;
+  refresh(): Promise<void>;
 }
+
+/** One open editor at a time, even when a surface happens to render two badges. */
+const OPEN_PROFILE_PANEL = "spideryarn:open-profile-panel";
 
 /** Text the server may not have — `ProfileBox`'s own `pending`. */
 function pending(s: SaveState): boolean {
@@ -253,10 +256,25 @@ export function ProfilePanel({
    * does not.
    */
   const mayClose = useRef<() => boolean>(() => true);
+  useEffect(() => {
+    const closeForAnother = (event: Event) => {
+      if (!open) return;
+      if (mayClose.current()) setOpen(false);
+      else event.preventDefault();
+    };
+    document.addEventListener(OPEN_PROFILE_PANEL, closeForAnother);
+    return () => document.removeEventListener(OPEN_PROFILE_PANEL, closeForAnother);
+  }, [open]);
   const { refs, floatingStyles, context } = useFloating({
     open,
     onOpenChange: (next) => {
-      if (next) setOpen(true);
+      if (next) {
+        /* Existing dirty/busy panels may veto this opening. A clean one closes
+           in the same React turn, so the page never carries two editors for the
+           same profile. */
+        const request = new Event(OPEN_PROFILE_PANEL, { cancelable: true });
+        if (document.dispatchEvent(request)) setOpen(true);
+      }
       else if (mayClose.current()) setOpen(false);
     },
     placement: "top-start",
@@ -429,14 +447,29 @@ function PanelBody({
 
   /* What the dismissal asks. Read through a ref, because Floating UI calls it
      from listeners set up on an earlier render. */
-  const now = useRef({ settled, dictating, commitAbout: about.commit, commitPurpose: purpose.commit });
-  now.current = { settled, dictating, commitAbout: about.commit, commitPurpose: purpose.commit };
-  const ask = useCallback((): boolean => {
-    const { settled: clean, dictating: busy, commitAbout, commitPurpose } = now.current;
+  const now = useRef({
+    settled,
+    dictating,
+    refused,
+    commitAbout: about.commit,
+    commitPurpose: purpose.commit,
+  });
+  now.current = {
+    settled,
+    dictating,
+    refused,
+    commitAbout: about.commit,
+    commitPurpose: purpose.commit,
+  };
+  const ask = useCallback((retryRefused = false): boolean => {
+    const { settled: clean, dictating: busy, refused: rejected, commitAbout, commitPurpose } = now.current;
     /* Not while a dictation is running — its unmount aborts. The reader stops
        the microphone, and the next dismissal goes through. */
     if (busy) return false;
     if (clean) return true;
+    /* Outside press and Escape must not turn a persistent 500/offline failure
+       into one PATCH per gesture. The explicit Done button is the retry. */
+    if (rejected && !retryRefused) return false;
     commitAbout();
     commitPurpose();
     setClosing(true);
@@ -459,6 +492,14 @@ function PanelBody({
   const refreshed = useRef(false);
   const latestRegenerate = useRef(regenerate);
   latestRegenerate.current = regenerate;
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshGeneration = useRef(0);
+  useEffect(
+    () => () => {
+      refreshGeneration.current++;
+    },
+    [],
+  );
   useEffect(() => {
     if (!settled) {
       refreshed.current = false;
@@ -466,7 +507,17 @@ function PanelBody({
     }
     if (savedHere && !refreshed.current) {
       refreshed.current = true;
-      latestRegenerate.current?.refresh();
+      const refresh = latestRegenerate.current?.refresh;
+      if (refresh) {
+        const mine = ++refreshGeneration.current;
+        setRefreshing(true);
+        /* A failed re-read leaves the old verdict visible, but it must not
+           become an unhandled rejection or update a panel that has closed. */
+        void refresh().then(
+          () => mine === refreshGeneration.current && setRefreshing(false),
+          () => mine === refreshGeneration.current && setRefreshing(false),
+        );
+      }
     }
   }, [settled, savedHere]);
 
@@ -551,7 +602,7 @@ function PanelBody({
                would be written for the old words and stamped as current — and
                while the mode already has a job, so a press is never a second
                paid call. */
-            disabled={!settled || dictating || regenerate.busy}
+            disabled={!settled || dictating || refreshing || regenerate.busy}
             onClick={() => {
               regenerate.run();
               onClose();
@@ -563,13 +614,31 @@ function PanelBody({
             Regenerate
           </Button>
         )}
+        {refused && (
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            disabled={about.inFlight || purpose.inFlight || dictating}
+            onClick={() => {
+              /* Explicitly suppress the hooks' unmount flush: the label says
+                 exactly what is being given up, and closing must not retry the
+                 refused write invisibly. */
+              about.abandon();
+              purpose.abandon();
+              onClose();
+            }}
+          >
+            Close without saving
+          </Button>
+        )}
         <Button
           type="button"
           size="xs"
           className="prof-panel-done"
           disabled={closing}
           onClick={() => {
-            if (ask()) onClose();
+            if (ask(true)) onClose();
           }}
         >
           Done

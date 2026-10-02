@@ -275,7 +275,7 @@ export function GlossaryPanel({
         regenerate={{
           run: () => void owner.more(true),
           busy: owner.job !== null || owner.starting,
-          refresh: () => void owner.refresh(),
+          refresh: () => owner.refresh(),
         }}
       />
     ) : null;

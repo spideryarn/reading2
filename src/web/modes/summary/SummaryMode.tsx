@@ -109,7 +109,7 @@ function OwnerSimple({
         regenerate={{
           run: () => void owner.regenerate(),
           busy: owner.job !== null || owner.starting,
-          refresh: () => void owner.refresh(),
+          refresh: () => owner.refresh(),
         }}
       />
     ) : null;

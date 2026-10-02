@@ -285,7 +285,7 @@ function OwnerSketch({
       regenerate={{
         run: () => void view.regenerate(),
         busy: view.job !== null || view.starting,
-        refresh: () => void view.refresh(),
+        refresh: () => view.refresh(),
       }}
     />
   ) : null;
