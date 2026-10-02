@@ -63,7 +63,7 @@ const BLOCKS: Block[] = [
 
 describe("hoisting the structure prompt's three values", () => {
   it("moved the stamp and the effort without moving either value", () => {
-    expect(PROMPT_VERSION).toBe("toc/10");
+    expect(PROMPT_VERSION).toBe("toc/11");
     expect(PRODUCTION_EFFORT).toBe("low");
   });
 
@@ -120,11 +120,12 @@ describe("hoisting the structure prompt's three values", () => {
    * change and the shared plain-words core (`plainWords()`, appended after
    * OUTPUT) went out as `toc/9`, 2026-09-28 — plan 260926a § Stage 3. It
    * moved from `749c4a601f07fea7` on 2026-10-01, when SYSTEM gained the
-   * paperwork rule and the stamp went to `toc/10` (plan 261001p).
+   * paperwork rule and the stamp went to `toc/10` (plan 261001p). It moved
+   * from `b6130eea42744aee` for toc/11's starts-only schema (plan 261001s).
    */
-  it("mints one stable key for the toc/10 structure request", () => {
+  it("mints one stable key for the toc/11 structure request", () => {
     expect(checkpointKey(canonicalStructureRequest(structureRequest(BLOCKS).params, "standard"))).toBe(
-      "b6130eea42744aee",
+      "2aa7d4a737bab61b",
     );
   });
 });

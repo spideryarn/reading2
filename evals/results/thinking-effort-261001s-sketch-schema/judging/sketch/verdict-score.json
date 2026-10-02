@@ -1,0 +1,354 @@
+{
+  "mode": "sketch",
+  "viewedPictures": true,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Definitions → origins → evidence band → two cause clusters → responses chain; recognisably this article's shape",
+            "c2": "Decision diamond 'Why so much fails to replicate?' is only a fork into two cause clusters; otherwise devices earned",
+            "c3": "All main sections present; origins and statistics expanded, but publication-system causes and the reforms get no detail",
+            "c4": "Overview reads cleanly, but in the statistics scene the converging edges run through the Bayesian and NHST boxes",
+            "c5": "Doors land right (origins, statistics); 'Defining replication' links to the title block and 'Broader change' to 'Replication efforts' rather than 'Broader changes'"
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Chain with two parallel cause bands converging on public reaction and reforms matches the article",
+            "c2": "Publication-causes scene chains growth → bias → maths errors → publish-or-perish → reporting as 'each feeding the next', which the article does not claim; stats causes also drawn as a chain",
+            "c3": "Good coverage of both cause clusters, but space goes on a 'See also & references' node and reforms are not expanded",
+            "c4": "Clean overview; the publication scene's curves to the result ellipse cross each other",
+            "c5": "Labels accurate, but neither detail scene has a door (regions muted, no 'opens'), and 'What the crisis is' links to the title"
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 2, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Funnel → fork into two cause columns → converge on response/reform; recognisable",
+            "c2": "Invented loop 'returns to the opening question, changed' from the theory section back to the definition; the publishing scene's 'each problem feeding the next' chain is also stronger than the prose",
+            "c3": "Covers vocabulary through to revising theories; both cause clusters detailed; reforms are thin",
+            "c4": "Loop label floats inside the publishing region, away from its line; in the practice scene, edges cross the middle-row boxes",
+            "c5": "'Vocabulary' links to the 'failures do not indicate lack of rigor' block; the result node reuses the publication heading; neither detail scene has a door"
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 5, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Chain into two kinds of cause, then a responses band; cause and response scenes give the shape at both grains",
+            "c2": "Causes scene states 'two parallel columns, not a sequence'; reforms are shown as parallel efforts; devices earned",
+            "c3": "Complete: both cause columns, public/academic reaction, credibility revolution, each reform, broader change",
+            "c4": "Reads easily; last box in the research-practices column overruns its band, and text in the reform cards is small",
+            "c5": "Region doors open the right scenes; 'Vocabulary' node links to the rigor block (#14) rather than the statistics passages"
+          }
+        }
+      }
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 3, "c3": 5, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Motivation → MI/TE → 'flow ≠ processing' → PID → findings converge → practice/future coda; clear shape",
+            "c2": "'Synergy marks real neural computation' is stronger than the paper, which says PID gives statistical rather than mechanistic explanation (§6.2)",
+            "c3": "Every section present; empirical findings and practice/future both expanded",
+            "c4": "PID diamond text is truncated ('PID splits info int…'); overview edges cross the primates box",
+            "c5": "Doors right; rich-club node says '40% of neurons' where the text says 'less than 40%'"
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Chain into a PID-building band, then fan-out of findings, then limits/future; recognisable",
+            "c2": "Redundancy-measure diamond leads to 'No universal answer', which is earned; findings → caveat → primates in the detail scene implies a sequence",
+            "c3": "Summary and the synergy-as-processing conclusion are absent; practice/future not expanded",
+            "c4": "Clean layout, no overlaps, clear reading order",
+            "c5": "Labels true to the text (recurrent vs feedback, peak correlation); every node door opens its matching scene"
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Problem → PID band → evidence band → limits; summary placed oddly beside practice",
+            "c2": "Evidence scene converges the long-timescale 'redundancy dominates instead' onto 'computation concentrates in correlated cores'; rich club → primates arrow implies a sequence",
+            "c3": "PID building is well detailed, but the correlation finding is missing from the overview",
+            "c4": "Last PID box is truncated ('choice depends on…'); edges cross the 'synergy rises' box",
+            "c5": "Doors right; 'Computation concentrates…' links to #57, which poses the question rather than stating the conclusion"
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Chain into a convergence of findings, then practice → future → summary",
+            "c2": "'Synergy = where computation happens', with the caveat note drawn as feeding that conclusion, overstates the paper",
+            "c3": "PID and evidence expanded; practice and future each a single box",
+            "c4": "PID hex is truncated ('Partial Information…', 'redundant / unique…'); edges cross the caveat note",
+            "c5": "Conclusion node links to the §5 heading; '~7% of max correlation' where the text says mutual information at 7% of its maximum"
+          }
+        }
+      }
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 3, "c3": 4, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Stakes → temptations band → assumption → four arguments converge → 'unlikely, not impossible' → ethics → soul; a reader gets the shape",
+            "c2": "In the arguments scene, steam governor (arg 2) → 'simulated storm' (arg 4) chains two arguments the essay says stand alone",
+            "c3": "Temptations and arguments expanded; ethics compressed into one box plus an illusion note",
+            "c4": "'Simulation isn't instantiation' box crowds the conclusion ellipse; the loop label floats detached at the left",
+            "c5": "Doors right; the 'illusion persists' note links to the rights pull-quote (#124) rather than the Müller-Lyer passage"
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 2, "c3": 4, "c4": 4, "c5": 2 },
+          "evidence": {
+            "c1": "Funnel → four arguments converge → ethics fork → loop; recognisable",
+            "c2": "Arguments scene chains brains → analogue → perception → simulation down each column, contradicting 'each of these lines of argument can stand up by itself'; the conclusion is drawn as a decision diamond",
+            "c3": "Ethics detail is good; temptations have no detail scene",
+            "c4": "Clean bands; the loop label overlaps the region edge",
+            "c5": "The 'Language, hype and techno-rapture' node opens the four-arguments scene, a wrong door; the temptations band has no door"
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Opening → biases → hidden assumption → four arguments → verdict → two duties → loop",
+            "c2": "Arrows 'old fantasies → biases' and 'why it matters → language' are arbitrary; in the detail scene 'simulated brain' hangs off the analogue-dynamics argument",
+            "c3": "Includes opening stakes, both detail scenes; ethics is only two boxes",
+            "c4": "Final ellipse truncated ('We are 'more meat than…'); 'Brains aren't computers' overflows its hex; small detail text",
+            "c5": "Region doors open the right scenes; labels faithful ('unlikely, not impossible')"
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Funnel → diamond → four arguments → verdict → ethics → loop, but the arguments sit in a 2x2 grid and the diamond feeds only two of them",
+            "c2": "Detail scene derives simulation (arg 4) from args 1 and 2, against the essay's 'each can stand up by itself'",
+            "c3": "Temptations and arguments detailed; ethics three boxes, no detail",
+            "c4": "Argument-to-verdict lines cut across the 'Other games' and 'Simulation' boxes",
+            "c5": "Labels accurate, but no door opens either detail scene (regions muted, no 'opens')"
+          }
+        }
+      }
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Turing-machine and cellular-automaton columns plus proofs converge on computational irreducibility, then testing, surprises and practice; matches the essay's 'fundamental source' turn",
+            "c2": "'Can we tell in advance?' diamond with only a 'sometimes yes' branch; otherwise earned",
+            "c3": "All parts present; mathematics and practice are single boxes",
+            "c4": "Readable; the 'symbolic axioms' hex floats with no incoming edge, and the TM band's last box sits on its edge",
+            "c5": "Doors land right; the proof scene's caption calls it 'a fork' but it is drawn as a chain; proof nodes link to empty figure blocks"
+          }
+        },
+        "X": {
+          "scores": { "c1": 1, "c2": 1, "c3": 1, "c4": 1, "c5": 1 },
+          "evidence": { "c1": "no output", "c2": "no output", "c3": "no output", "c4": "no output", "c5": "no output" }
+        },
+        "Y": {
+          "scores": { "c1": 3, "c2": 3, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Overview is an 11-box single stack in section order; no convergence on irreducibility shown",
+            "c2": "Irreducibility drawn as a decision diamond with one exit, a device for a choice the text does not pose",
+            "c3": "Every section, from bugs in Turing machines to bugs in practice, plus two detailed zooms",
+            "c4": "Clean and orderly, but long and with small text in the zooms",
+            "c5": "Doors right, but the 'surprises' zoom also holds mathematics and language design, so its title drifts"
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Funnel into an irreducibility hub, then fan-out; recognisable, though proofs (before §159 in the article) are drawn as a consequence",
+            "c2": "Edges testing → math, testing → language and surprises → discovery assert derivations the essay does not make",
+            "c3": "Cellular-automaton detail and the surprises section get no detail, despite the scene caption",
+            "c4": "Hub hex truncated ('only running it…'); large empty space in the bottom band",
+            "c5": "The 'Ruliology keeps turning up surprises' node opens the math/practice scene; the simple-systems caption promises cellular automata it does not show"
+          }
+        }
+      }
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 5, "c4": 5, "c5": 3 },
+          "evidence": {
+            "c1": "Single chain in section order with two theory bands; right for a mostly linear paper, but undifferentiated",
+            "c2": "Analog computation → anesthesia arrow makes supporting evidence look like a derivation; otherwise earned",
+            "c3": "Complete, including comparison to other theories and the conclusion",
+            "c4": "Clean, no overlaps, clear order",
+            "c5": "Neither detail scene has a door although node details say 'opens into its own scene'; a stray '=' in a detail"
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Thesis → classical model fails → oscillations as fix → spatial computing → waves as computation → synthesis",
+            "c2": "Analog → anesthesia arrow again implies derivation; the spatial hub with three payoffs is earned",
+            "c3": "Comparison with other theories of consciousness omitted",
+            "c4": "Clean bands, reads at a glance",
+            "c5": "Labels accurate; both region doors open the matching scenes"
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Problem → three strands converge on wave control → spatial theory fork → traveling waves → anesthesia → hybrid",
+            "c2": "Mixed selectivity (a problem) drawn as one of three converging lines of evidence that waves steer spiking",
+            "c3": "Caption says the framework is 'checked against rival theories', but neither the comparison nor the conclusion is drawn",
+            "c4": "Readable; small text in 'Confirmed in primate PFC' and in the dashed label",
+            "c5": "Node doors open the right scenes; the caption's rival-check claim drifts from the picture"
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 3, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Fork into oscillations and ephaptic coupling converging on spatial computing is a good touch; the rest is a chain",
+            "c2": "Traveling waves and analog computation converge on 'far more energy-efficient', but efficiency is a property of analog computing only; efficiency → anesthesia arrow",
+            "c3": "Complete, including the comparison with Global Workspace, IIT and HOT",
+            "c4": "Overview clean; the spatial-computing hub and its subs are truncated",
+            "c5": "Doors right; 'efficient' node links to the duplicate heading (#62) rather than the efficiency passage (#64)"
+          }
+        }
+      }
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 3, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Thesis fans into three parallel case studies that converge on what work gives",
+            "c2": "Convergence earned; evidence placed after the conclusion inverts the article's order",
+            "c3": "The ending (free friendship, the author's ambivalence about liberal individualism) is reduced to a sub-line; no working-class detail",
+            "c4": "Third-row boxes overflow the bottom of their bands; labels for the two door bands do not show",
+            "c5": "Conclusion links to the section heading; 'Apes, not fixed regression' is cryptic; 'no ambition' is not the article's claim"
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Three case columns converge on synthesis → evidence → free friendship; a reader gets the shape",
+            "c2": "Earned; evidence still placed after the synthesis",
+            "c3": "Ending present; the working-class study and the closing argument have no detail",
+            "c4": "Clear; the amoral-familism note overruns its band",
+            "c5": "Node doors right; 'Markets freed friendship' links to the moral-equality block (#78), not the Scottish Enlightenment passage"
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Three columns converge on the conclusion, and the conclusion scene walks to free friendship and the author's wariness",
+            "c2": "Earned; parallel cases drawn as parallel",
+            "c3": "Full: both case scenes, plus the conclusion scene with Pew, Strauss, FWP, Terkel, Smith/Hume and the ending",
+            "c4": "Third-row boxes overflow their bands; the evidence note is off to the side; the conclusion scene's text is small",
+            "c5": "Three doors open the right scenes; the salons node links to #21 rather than the Lilti passage"
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Three columns converge on a three-step conclusion: clannish → impersonal respect → free friendship",
+            "c2": "Earned; Elias note correctly framed as 'not fate'",
+            "c3": "Complete at the right grain; the work-evidence scene included",
+            "c4": "Clean; labels for the two door bands are not shown",
+            "c5": "Doors right; 'Group-based dignity breeds policing' links to #66 ('relational living comes naturally'); free friendship links to #78"
+          }
+        }
+      }
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 3, "c2": 3, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Single chain of the article's sections, which fits any encyclopedia entry; bands hold one box each",
+            "c2": "Property-grid arrows (strength → Darwin's bark spider → temperature) assert links the article does not make; 'Both needed together' drawn as a decision diamond",
+            "c3": "Properties and synthesis expanded; gland anatomy and medicine/science uses missing",
+            "c4": "Readable; bands mostly empty space",
+            "c5": "Labels accurate (stronger than steel, tougher than Kevlar); both doors open the right scenes"
+          }
+        },
+        "X": {
+          "scores": { "c1": 1, "c2": 1, "c3": 1, "c4": 1, "c5": 1 },
+          "evidence": { "c1": "no output", "c2": "no output", "c3": "no output", "c4": "no output", "c5": "no output" }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Properties fork into uses and gland types, converge on spinning, fork into feedstock/apparatus, converge on synthetic silk",
+            "c2": "Arrows from uses and types into spinning imply derivation; the sections are topical",
+            "c3": "Uses and synthesis expanded; mechanical properties not expanded",
+            "c4": "In the uses hub, curves pass through the prey-capture, food and ballooning boxes",
+            "c5": "Region doors right; 'wet-spinning', 'half the strength' and the company names all check against the text"
+          }
+        },
+        "Z": {
+          "scores": { "c1": 3, "c2": 2, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Chain of sections with asides; generic for an encyclopedia entry",
+            "c2": "Properties 'ladder' runs tensile strength → supercontraction → adhesive and the caption says structure 'underlies the adhesive', but adhesion is a separate pyriform secretion",
+            "c3": "Includes the gland and spinneret census; references node is trivia",
+            "c4": "Readable; the properties band shows no label and the third-row text is small",
+            "c5": "Doors right (properties region; spinning/artificial/research open synthesis); labels accurate"
+          }
+        }
+      }
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 3, "c3": 4, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Pseudoscience observed → named → integrity → Millikan and principles → cases → wish",
+            "c2": "Case scene converges the rat, accelerator and Young cases into Rhine's ESP, although its caption calls them parallel; principles drawn as stemming from Millikan",
+            "c3": "All parts present; the survey of failed beliefs is not expanded",
+            "c4": "Intro ellipse ('Avoiding self-deception in…') and the cargo-cult story ellipse are truncated",
+            "c5": "Doors right (cargo cult and integrity → definition scene, cases → cases scene)"
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 2, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Funnel → name → integrity diamond → three principles → cases → wish",
+            "c2": "Arbitrary pairings (not-fool → rat student, Millikan → accelerator, laymen → Young), all cases converging into Rhine, and an invented loop back to the opening",
+            "c3": "Definition and cases detailed; 'publish every result' principle dropped",
+            "c4": "Diamond sub truncated ('report…'); loop label floats; arrows criss-cross into Rhine",
+            "c5": "Labels accurate, but no door opens either detail scene"
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 3, "c3": 5, "c4": 3, "c5": 4 },
+          "evidence": {
+            "c1": "Funnel to the name and the missing ingredient, which fans into Millikan, honesty and cases converging on the wish",
+            "c2": "Survey scene chains Geller → reading scores/teachers → test as if derived; integrity drawn as a decision diamond",
+            "c3": "Complete: survey, definition and all four cases each expanded",
+            "c4": "Survey-scene arrows tangle; the psychotherapy box is squashed; the ESP column's text is cramped",
+            "c5": "Three doors open the right scenes; labels faithful"
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 3, "c3": 3, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Funnel into the cargo-cult hub, then an integrity band, Millikan, laymen and cases",
+            "c2": "Integrity requirements chained (report → advertising → truth out) and 'laymen' drawn as leading to Young and Rhine",
+            "c3": "The rat-student and accelerator cases are missing entirely; the cases have no detail scene",
+            "c4": "Intro edges cut through the text of the investigation boxes",
+            "c5": "Doors right; the 'All share one missing thing: integrity' node links to #11 rather than the integrity passage (#15)"
+          }
+        }
+      }
+    }
+  ]
+}

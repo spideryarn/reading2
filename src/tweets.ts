@@ -53,6 +53,11 @@ import {
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
 import { parseJsonAnswer } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -71,8 +76,11 @@ import { paperwork } from "./paperwork.js";
  * fingerprint too — see `isStale`.
  *
  * `tweets/4`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+ *
+ * `tweets/7`, 2026-10-02: the request gained `TWEETS_OUTPUT_SCHEMA`; the
+ * prompt text is unchanged.
  */
-export const PROMPT_VERSION = "tweets/6";
+export const PROMPT_VERSION = "tweets/7";
 
 /** The most passages one post may link to. More is a row of chips nobody reads. */
 export const MAX_POST_BLOCKS = 3;
@@ -394,6 +402,32 @@ function parseJson(raw: string): { tweets?: unknown } {
   return parseJsonAnswer<{ tweets?: unknown }>(raw, "the tweet-thread response");
 }
 
+const tweetObjectSchema = {
+  type: "object",
+  properties: {
+    text: { type: "string" },
+    blocks: { type: "array", items: { type: "string" } },
+  },
+  required: ["text", "blocks"],
+  additionalProperties: false,
+} as const;
+
+/** The object row the current prompt requires; the parser below remains tolerant of stored legacy rows. */
+export const TWEETS_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    tweets: {
+      type: "array",
+      items: tweetObjectSchema,
+    },
+  },
+  required: ["tweets"],
+  additionalProperties: false,
+} as const;
+
+validateAnthropicJsonSchema(TWEETS_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(TWEETS_OUTPUT_SCHEMA, ["blocks"]);
+
 /** One post as the model sent it, before anything is checked. */
 interface RawPost {
   text: string;
@@ -580,8 +614,9 @@ export async function generateTweets(opts: {
    * **Off by default, because a cache write costs 1.25x and a prefix nobody
    * reads never earns it back.** Each of these stages makes one call per run, so
    * none of them caches anything for itself; the entry only pays off if a stage
-   * in the same group (src/models.ts § STAGE_EFFORT) runs behind it, inside the
-   * 5-minute TTL. Ordinary ingest stops at `arc` — tweets, glossary and summary
+   * with the same renderer, effort and output schema runs behind it, inside the
+   * 5-minute TTL. No current peer has Tweets' schema (`ARTICLE_OUTPUT_FORMAT`
+   * in src/pipeline.ts). Ordinary ingest stops at `arc` — tweets, glossary and summary
    * are things a reader asks for later — so on the normal path that reader never
    * arrives, and marking unconditionally was a premium paid on every article
    * against a read that does not come. src/jobs.ts sets this from the steps the
@@ -654,28 +689,30 @@ export async function generateTweets(opts: {
      `anthropicCallFailed` never sees them. See docs/project/logging.md. */
   let message: Anthropic.Message;
   try {
-    const call = streamMessage("tweets", {
+    const call = streamMessage("tweets", withMessagesJsonSchema({
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
       output_config: { effort: effortFor("tweets") },
       /* Article first, this stage's instructions second — the prefix runs from the
          top of the request, so the article has to precede anything stage-specific
-         for the arc, the glossary and this to share one entry.
+         for matching article bytes to be cache-compatible. Distinct output
+         schemas currently separate every article stage anyway.
          docs/plans/260826g-prompt-caching.md. */
       system: [
         {
           type: "text" as const,
           /* **`articleWithIds`, not `articleText`, since `tweets/5`**: each post
              names its passages, so the ids have to be on the page. That moves
-             this stage out of the arc/glossary cached prefix and into the
-             ideas/FAQ one — `ARTICLE_RENDERER` in src/models.ts. */
+             this stage out of arc/glossary's renderer and into the ids renderer
+             used by Ideas and FAQ. Its schema still gives it a distinct cache
+             key — `ARTICLE_OUTPUT_FORMAT` in src/pipeline.ts. */
           text: articleWithIds(meta, evidence),
           ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
         },
         { type: "text" as const, text: TWEETS_SYSTEM },
       ],
       messages: [{ role: "user", content: renderPrompt({ meta: realMeta, tree, posts, profile }) }],
-    }, { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) });
+    }, TWEETS_OUTPUT_SCHEMA), { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) });
 
     if (opts.onProgress) {
       const report = opts.onProgress;

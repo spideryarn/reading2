@@ -35,7 +35,7 @@
  * sorts at the low end rather than being banished with the unknowns.
  */
 
-import { type AdminUser, formatSpendNanos, isAdmin } from "../admin.js";
+import { type AdminUser, formatSpendNanos, formatWholeDollars, isAdmin } from "../admin.js";
 import type { SortableColumn } from "./lib/DataTable.js";
 import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { exactly, timeAgo } from "./relative-time.js";
@@ -111,8 +111,10 @@ function Spend({ user }: { user: AdminUser }) {
   }
   return (
     <div className="tw:min-w-0">
-      <div title={`${user.spendCalls} model call(s) ${period}`}>
-        {formatSpendNanos(user.spendNanos)}
+      {/* Whole dollars on the cell and the exact figure on hover — Greg,
+          2026-10-01, plan 261002b stage 3. */}
+      <div title={`${formatSpendNanos(user.spendNanos)} — ${user.spendCalls} model call(s) ${period}`}>
+        {formatWholeDollars(user.spendNanos)}
       </div>
       {user.spendUnpricedCalls > 0 && (
         <div

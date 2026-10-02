@@ -92,8 +92,8 @@ async function main(): Promise<void> {
     "utf-8",
   );
 
-  const { root } = parseStructureAnswer(raw);
   const report: BuildReport = { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] };
+  const { root } = parseStructureAnswer(raw, body, report);
   const tree = buildTree(root, {}, body, "spike", report);
   console.log(
     `tree: ${Object.keys(tree.nodes).length} nodes, ${report.repairs.length} repair(s), ` +

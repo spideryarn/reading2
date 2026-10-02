@@ -1,5 +1,7 @@
 # Cheap frontier models for the hierarchy structure pass
 
+Research write-up: [docs/research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
+
 Greg, 2026-09-03:
 
 > Ok, what about some of the other recent models on OpenRouter? Stick with ZDR, won't train on our

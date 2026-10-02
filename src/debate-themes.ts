@@ -34,6 +34,7 @@
  */
 import type { ClaimDebateRow, DebateSynthesis, DirectDebateRow } from "./types.js";
 import { mintId } from "./ids.js";
+import { assertNoBlockIdEnums, validateAnthropicJsonSchema } from "./messages-structured-output.js";
 import { plainWords } from "./plain-words.js";
 import {
   type CandidateKey,
@@ -93,13 +94,54 @@ ${plainWords("explain", "landmark")}
 
 ANSWER FORMAT
 
-Close your answer with exactly one fenced block, opened by a line reading
-\`\`\`debate and closed by a line reading \`\`\`, holding this JSON and nothing else:
+Answer with this JSON object, and nothing else — no prose before it and no code
+fence around it:
 
 {"themes": [{"label": "...", "gist": "...", "sources": ["<id>", "<id>"]}],
  "key": [{"source": "<id>", "role": "responds|advances|dissents|origin", "why": "..."}]}
 
-Use the ids exactly as given. Give the fenced block and nothing before it.`;
+Use the ids exactly as given.`;
+
+/** The model-answer shape `readSynthesisAnswer` consumes. */
+export const DEBATE_SYNTHESIS_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["themes", "key"],
+  properties: {
+    themes: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["label", "gist", "sources"],
+        properties: {
+          label: { type: "string" },
+          gist: { type: "string" },
+          sources: { type: "array", items: { type: "string" } },
+        },
+      },
+    },
+    key: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["source", "role", "why"],
+        properties: {
+          source: { type: "string" },
+          role: {
+            type: "string",
+            enum: ["responds", "advances", "dissents", "origin"],
+          },
+          why: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
+
+validateAnthropicJsonSchema(DEBATE_SYNTHESIS_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(DEBATE_SYNTHESIS_OUTPUT_SCHEMA, []);
 
 type AnyRow = DirectDebateRow | ClaimDebateRow;
 
@@ -173,4 +215,3 @@ export function readSynthesisAnswer(
   if (offered > 0 && settled.themes.length + settled.key.length === 0) return { kind: "failed" };
   return { kind: "made", ...settled };
 }
-

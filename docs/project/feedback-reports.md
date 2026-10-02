@@ -16,7 +16,27 @@ Greg, 2026-09-04:
 
 ## Where the queue lives
 
-Sentry, not Postgres — the mirror is the queue because it has a status field and the table does not.
+**Two reads, and the second one cannot be skipped.** Sentry is the working queue, because it has a
+status field and the table does not. **But Sentry is the copy, and the row is the report.** Until
+2026-10-02 the sweep read only Sentry. 13 of Greg's reports from 2026-10-01 never reached it, and
+nothing looked at them —
+[261002b](../postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md). So after
+the Sentry read, every run also reads the table:
+
+```
+npx tsx scripts/feedback-unswept.ts            # --since 30d by default; exit 2 = could not read, not "none"
+```
+
+It lists every production row that no note's `reports:` header and no queue item's `source` names.
+Report ids are unique only per owner; if two owners share one, it lists both as ambiguous even when
+that id is covered, because the coverage record cannot say which row it meant.
+Each line says whether Sentry confirmed it. Search the unconfirmed ones in one go,
+`report_id:[spya-…,spya-…]`, because most of them did arrive. A row Sentry has is handled through
+its issue, as below. A row Sentry lacks is a report like any other: classify it, queue it under its
+report id, and read its words with `--show <id>`. For an admin's report, use
+`feedback-reporter.ts --report-id <id>`, which proves provenance. **Always put the report id in a
+queue entry's `--source`**, next to the Sentry short id when there is one. That is what the script
+matches on, so it is the difference between a report covered and a report listed again.
 
 ```
 mcp__sentry__search_issues(
@@ -201,7 +221,8 @@ Greg, 2026-09-10:
 
 So from 2026-09-10 the sweep's first output is queue entries, not sessions: every report it reads
 goes into the Overseer's queue ([overseer-queue.md](overseer-queue.md);
-`npx tsx scripts/overseer-queue.ts add --by overseer --priority <0..1> --source <Sentry short id>
+`npx tsx scripts/overseer-queue.ts add --by overseer --priority <0..1>
+--source "<report id; Sentry short id when there is one>"
 --text …`), and the dispatch below happens **from the queue, in priority order**. Priority is a
 judgment, but the order of the bands is not: an admin's bug report sits above a reader's bug report,
 which sits above an admin's suggestion, which sits above a reader's suggestion; within a band, what

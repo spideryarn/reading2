@@ -1,0 +1,136 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "sourceHash": "b575dff238ed648a.dd64d05f4c045d91.5c63b9373f64e9a9",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-a8u6gy",
+      "name": "A field's stagnant real-world results prove its methods are invalid",
+      "provenance": "assumed",
+      "statement": "If a domain of expert practice has not produced improving real-world outcomes despite sustained effort by its practitioners, that lack of improvement itself is enough to show its methods are not genuine knowledge, regardless of how it is otherwise organized or credentialed.",
+      "whyYouNeedIt": "The jump from exposing failed mystics and con artists to indicting entire established disciplines like education and criminal justice only works if flat or declining outcomes are treated as decisive evidence of invalid method rather than as something that could have many other causes; the piece never argues for this leap, it just makes it.",
+      "occurrences": [
+        {
+          "blockId": "spya-aww976",
+          "quote": "if you notice, you’ll see the reading scores keep going down—or hardly going up—in spite of the fact that we continually use these same people to improve the methods. There’s a witch doctor remedy that doesn’t work.",
+          "reasoning": "Treats stagnant test scores alone, without ruling out other causes, as sufficient proof that reading-education theory is as invalid as witch-doctoring.",
+          "start": 386
+        },
+        {
+          "blockId": "spya-aww976",
+          "quote": "We obviously have made no progress—lots of theory, but no progress—in decreasing the amount of crime by the method that we use to handle criminals.",
+          "reasoning": "Again infers invalid method directly from unchanged outcome, assuming no other confound could explain the lack of progress.",
+          "start": 721
+        },
+        {
+          "blockId": "spya-re4634",
+          "quote": "Yet these things are said to be scientific. We study them. And I think ordinary people with commonsense ideas are intimidated by this pseudoscience.",
+          "reasoning": "Labels whole fields pseudoscience on the strength of the outcome test alone, which only follows if that test is taken as sufficient.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-g2cwvy",
+          "quote": "So we really ought to look into theories that don’t work, and science that isn’t science.",
+          "reasoning": "Generalizes the single diagnostic (does it produce the promised result) into a method for identifying fake science across any field.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-mmbx4v",
+      "name": "Copying the outward form without the working mechanism fails",
+      "provenance": "introduced",
+      "statement": "Faithfully reproducing all the visible rituals and trappings of a successful process will not produce its result if the actual causal mechanism that made it work is missing or never understood.",
+      "occurrences": [
+        {
+          "blockId": "spya-fd2muf",
+          "quote": "They’re doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn’t work. No airplanes land.",
+          "reasoning": "This is the direct statement of the idea: exact imitation of form without the underlying mechanism cannot produce the outcome.",
+          "start": 581
+        },
+        {
+          "blockId": "spya-rub3a2",
+          "quote": "A great deal of their difficulty is, of course, the difficulty of the subject and the inapplicability of the scientific method to the subject. Nevertheless, it should be remarked that this is not the only difficulty. That’s why the planes don’t land—but they don’t land.",
+          "reasoning": "Reaffirms that the failure is about a missing essential element, not just subject difficulty, which only makes sense if form-without-substance is the operative idea.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-b5e06z",
+      "name": "Scientific integrity means actively disclosing what could prove you wrong",
+      "provenance": "introduced",
+      "statement": "Being honest as a scientist is not merely avoiding lies; it requires volunteering every fact, alternative explanation, and weakness you know of that could undermine your own claim, even when no one is asking.",
+      "occurrences": [
+        {
+          "blockId": "spya-afgs74",
+          "quote": "if you’re doing an experiment, you should report everything that you think might make it invalid—not only what you think is right about it",
+          "reasoning": "States the core obligation of proactively disclosing counter-evidence rather than just not lying.",
+          "start": 833
+        },
+        {
+          "blockId": "spya-rxj5wa",
+          "quote": "Details that could throw doubt on your interpretation must be given, if you know them.",
+          "reasoning": "Extends the obligation to any detail that casts doubt, reinforcing that omission itself counts as a failure of integrity.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-qpwryx",
+          "quote": "the idea is to try to give all of the information to help others to judge the value of your contribution; not just the information that leads to judgment in one particular direction or another",
+          "reasoning": "Summarizes the principle as giving balanced information rather than selectively persuasive information.",
+          "start": 12
+        }
+      ]
+    },
+    {
+      "id": "spya-dgwapx",
+      "name": "You are your own easiest dupe",
+      "provenance": "introduced",
+      "statement": "The hardest person to deceive honestly is yourself, so guarding against self-deception has to come before, and is harder than, being honest with others.",
+      "occurrences": [
+        {
+          "blockId": "spya-ed9mzv",
+          "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.",
+          "reasoning": "States the idea directly as the foundational principle.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-s9msxy",
+          "quote": "It’s a little bit off, because he had the incorrect value for the viscosity of air.",
+          "reasoning": "Sets up the Millikan case as an instance of an honest scientist still being wrong through unrecognized self-deception rather than fraud.",
+          "start": 250
+        },
+        {
+          "blockId": "spya-uj9v2h",
+          "quote": "When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong. When they got a number closer to Millikan’s value they didn’t look so hard.",
+          "reasoning": "Illustrates researchers unconsciously fooling themselves, only interpretable as a cautionary case through the lens of the self-deception principle.",
+          "start": 181
+        },
+        {
+          "blockId": "spya-c46yyu",
+          "quote": "bending over backwards to show how you’re maybe wrong, that you ought to do when acting as a scientist",
+          "reasoning": "Connects the earlier integrity principle back to guarding against self-deception as its source.",
+          "start": 519
+        }
+      ]
+    },
+    {
+      "id": "spya-ndm7ke",
+      "name": "Results must be reported regardless of which way they come out",
+      "provenance": "introduced",
+      "statement": "A finding, or a piece of policy advice, is only scientific if you commit in advance to publishing it whatever the outcome; letting whether you publish depend on the answer turns research into advocacy.",
+      "occurrences": [
+        {
+          "blockId": "spya-m95kqm",
+          "quote": "the men in charge of programs at NAL are so anxious for new results, in order to get more money to keep the thing going for public relations purposes, they are destroying—possibly—the value of the experiments themselves",
+          "reasoning": "Shows institutional pressure to produce favorable or newsworthy results corrupting the work, which only reads as a violation given the rule against outcome-dependent publication.",
+          "start": 677
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:32:54.791Z",
+  "elapsedMs": 69254
+}

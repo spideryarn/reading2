@@ -1,0 +1,360 @@
+{
+  "mode": "hierarchy",
+  "viewedPictures": true,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Follows the article's heading groups well, but cuts 'Tenets of open science' in two: its second paragraph ('Online repositories…') opens See Also.",
+            "c2": "Causes split sensibly in two and reforms nested by sub-heading (result-blind review, metadata tools appear as children); the depth looks right.",
+            "c3": "Mostly clear ('Statistical and Methodological Causes'), but 'Introduction and Statistical Background' and 'Historical, Structural, and Publication Causes' are long and blur two things.",
+            "c4": "Accurate overall ('public mostly trusts science' matches the German survey), but the section-1 gist hardly mentions the definitions it covers.",
+            "c5": "Everything is covered, but an open-science paragraph lands in 'See Also and References'."
+          }
+        },
+        "X": {
+          "scores": { "c1": 3, "c2": 4, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Two misplaced boundaries: 'Evidence Across Disciplines' starts mid-psychology at the 2018 Nature Human Behaviour study, which leaves the Reproducibility Project in 'Origins', and See Also starts at 'Falsifiability', partway down the list.",
+            "c2": "Definitions and statistical foundations kept apart, causes in two parts, reform sub-headings as children: reasonable depth.",
+            "c3": "Concise and specific ('Causes: Power, Bias, and Interpretation'); 'Replication Efforts and Broader Changes' is a bit of a bundle.",
+            "c4": "Accurate ('public remains largely unaware' matches the 75% figure); the stats gist is clear and specific.",
+            "c5": "Nothing lost, but the See Also list is split across two sections."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Front matter apart, definitions, origins, disciplines, two cause groups, reaction, reform, broader reform; See Also starts exactly at 'Base rate fallacy'.",
+            "c2": "Reform sub-headings (pre-registration, result-blind review, involving original authors) nested as children; sensible depth.",
+            "c3": "Sharp ('Causes: Statistical Pitfalls', 'Crisis Across Disciplines'); 'Authors and publication details' is plain but accurate.",
+            "c4": "Specific and accurate, e.g. statistical causes list power, inflated effects, meta-analysis, context, Bayesian reading and NHST, which matches the subsections.",
+            "c5": "Clean coverage from byline to references, with no catch-alls."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Good splits (causes in two, 'Replication Efforts' separate from publishing reform), but the appendices are not set apart.",
+            "c2": "Sub-headings like 'Involving original authors' and the metadata tools are nested under replication efforts; reasonable.",
+            "c3": "Mostly sharp; 'Broader Changes and Appendices' mixes content with back matter.",
+            "c4": "Accurate, but the final gist tacks on 'alongside open data and source lists' and the definitions gist is generic.",
+            "c5": "See Also and references are folded into a catch-all final section."
+          }
+        }
+      }
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Abstract set apart, then exactly the paper's numbered sections 1–8.",
+            "c2": "The numbered subsections sit as children (6.3 Practical Limitations, 2.x); the depth follows the paper.",
+            "c3": "Author's numbered headings plus 'Overview and Abstract'; clear landmarks.",
+            "c4": "Mostly specific, but the PID gist says the 'synergy measure' is contested where the paper says redundancy.",
+            "c5": "Nothing lost, but the author-contribution, funding and COI statements have no home of their own and are presumably folded into the Summary."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 4, "c3": 5, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "The title block, authors, abstract and keywords are merged into 'Introduction'; otherwise it follows sections 2–8 and gives the back matter its own section.",
+            "c2": "Subsections such as 2.1 Defining Key Dimensions appear as children.",
+            "c3": "Author's headings and 'Author and funding statements'; all clear.",
+            "c4": "Accurate but thinner: the 'PID in Action' gist omits the behaving-primates and task-demand result.",
+            "c5": "Complete, and the back matter is cleanly separated."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Front matter and abstract apart, then sections 1–8 as the author drew them.",
+            "c2": "Section 7's subsections and the authors block appear as children; follows the paper's numbering.",
+            "c3": "Author's headings, but 'Front matter' and 'Summary and closing matter' are generic.",
+            "c4": "Specific and accurate, e.g. section 2 names mutual information and transfer entropy, and 5 names rich clubs, recurrence, correlated inputs and task demands.",
+            "c5": "Back matter is merged into the Summary section (the title says so)."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 4, "c2": 4, "c3": 5, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Front matter and abstract merged into 'Introduction'; otherwise follows sections 2–8 and gives the back matter its own section.",
+            "c2": "Subsections 2.2 and 6.1 appear as children.",
+            "c3": "Clean, un-numbered author headings; scannable.",
+            "c4": "Section gists are good, but section 9's gist, 'The authors and where they work', is wrong for author contributions and funding.",
+            "c5": "Complete, with the back matter separate."
+          }
+        }
+      }
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Credits, an untitled intro, then the author's four headings, with the numbered arguments inside Consciousness & Computation.",
+            "c2": "Numbered arguments ('2: Other Games In Town') and paragraphs inside 'What (Not) To Do?' are children.",
+            "c3": "'Why the question of machine consciousness matters' is long (7 words); the rest are the author's headings.",
+            "c4": "The 'Consciousness & Computation' gist only states the premise and does not say the four arguments against it.",
+            "c5": "Complete and clean."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Same sound carving: credits, intro, the four author sections.",
+            "c2": "'4: Simulation Is Not Instantiation' and the bias paragraphs nest as children.",
+            "c3": "'Fearing Artificial Minds' fits the intro only loosely (it is about fantasy and stakes as much as fear).",
+            "c4": "Specific: Temptations names anthropocentrism, exceptionalism and language; C&C cites brain–computer differences.",
+            "c5": "Complete and clean."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Follows the author's four headings; intro boundary at 'Why might we even think'.",
+            "c2": "'1: Brains Are Not Computers' and the 'conscious-seeming' paragraphs nest as children.",
+            "c3": "'Why Machine Consciousness Matters' plus the author's headings; all sharp.",
+            "c4": "The best C&C gist: it names all four arguments (not computers, other games, life matters, simulation isn't instantiation).",
+            "c5": "Credits and author bio are absorbed into the intro section, and its gist ignores them."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Credits, intro, the four author sections; boundaries sound.",
+            "c2": "'Other Games' and the moral-status paragraphs nest as children.",
+            "c3": "'Why conscious AI matters', 'Credits and author': short and clear.",
+            "c4": "Accurate, but the C&C gist ('may simply be false') doesn't say why.",
+            "c5": "Complete and clean."
+          }
+        }
+      }
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 3, "c2": 3, "c3": 3, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Folds 'A Cellular Automaton Example' into 'What Counts as a Bug?', 'Formal Proofs' into 'Can One Tell…', induction into irreducibility, and 'Mathematical Bugs' into 'Ruliological Surprises'.",
+            "c2": "Author's sibling sections are demoted under unrelated parents (the CA example under specifications).",
+            "c3": "It keeps the author's headings even where the merged content no longer fits them, e.g. 'Some Typical Ruliological Surprises' covers mathematics.",
+            "c4": "The gists do describe the merged content accurately (Ruliological Surprises mentions 'even pure mathematics').",
+            "c5": "Nothing lost, but the merges make two sections catch-alls."
+          }
+        },
+        "X": {
+          "scores": { "c1": 3, "c2": 3, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Pairs unrelated sections: 'Bugs in Mathematics and Practice' joins two distinct sections; formal proofs are joined with irreducibility.",
+            "c2": "Three or four author sections collapse into each top node; partly right.",
+            "c3": "Its own titles describe the merges ('Testing, Induction, and Surprises'), though they read as bundles.",
+            "c4": "Accurate; 'Specifying and Detecting Bugs' gist is vague ('some instances always seem to eventually escape').",
+            "c5": "Complete; the bundled sections are somewhat catch-all."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Follows the author except two sensible merges: 'Can One Tell' under the CA example and 'Did I Test Enough Cases' into irreducibility.",
+            "c2": "'Can One Tell…' nested under 'A Cellular Automaton Example' is a defensible sub-structure.",
+            "c3": "Mostly the author's headings; 'Computational Irreducibility and the Limits of Testing' runs to 7 words.",
+            "c4": "Specific and accurate, e.g. the formal-proofs gist says no proof exists for a buggy machine because the claim is false.",
+            "c5": "Complete and clean, from intro to Thanks."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Exactly the article's twelve headed sections.",
+            "c2": "The top level is flat like the author's, with paragraph-level children (the proof setup, the rind argument).",
+            "c3": "Author's headings; 'Did I Test Enough Cases? The Failure of Ruliological Induction' is too long to scan.",
+            "c4": "Accurate, e.g. 'Can One Tell' notes the complex-looking CA proven correct via the rind argument.",
+            "c5": "Complete and clean."
+          }
+        }
+      }
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 3, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Front matter, abstract, intro and the main sections follow the headings, but anesthesia, the hybrid framework, the comparison and the conclusion are lumped together.",
+            "c2": "Mixed selectivity sits under the classical model, ephaptic coupling under oscillations, and the 'stencil' paragraphs under Spatial Computing; the nesting is the argument's.",
+            "c3": "Keeps long headings ('20th century neuroscience: The classical model of neural information processing') and adds 'Anesthesia, framework, and comparison'.",
+            "c4": "Specific (alpha/beta stencils, ephaptic effects); the section-9 gist is a list rather than a claim.",
+            "c5": "Section 9 is an awkward catch-all that swallows the Conclusion."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 4, "c3": 3, "c4": 4, "c5": 3 },
+          "evidence": {
+            "c1": "Merges oscillations with Spatial Computing (defensible: it 'builds on this idea'), but files the anesthesia evidence, the comparison and the conclusion under 'Hybrid Framework'.",
+            "c2": "Oscillations and Spatial Computing are children of one node, and the hybrid framework is a child; mostly the argument's.",
+            "c3": "Long author headings kept; 'A Hybrid Synapse/Wave Framework…' titles a section that is mostly something else.",
+            "c4": "Accurate and specific (mixed selectivity, population coding, theta waves).",
+            "c5": "The last content section is a catch-all including the Conclusion."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 3, "c2": 3, "c3": 4, "c4": 3, "c5": 3 },
+          "evidence": {
+            "c1": "Section 1 runs from the author list through the abstract, intro, classical model, mixed selectivity and oscillations; paperwork and argument are cut together.",
+            "c2": "One huge first node against small later ones; ephaptic coupling is a child, but the depth is uneven.",
+            "c3": "Its own titles are concise ('Waves, Anesthesia, and a Hybrid Framework'); one long author heading.",
+            "c4": "'Waves, Anesthesia, and a Hybrid Framework' gist covers only anesthesia, and section 1's gist ignores the front matter.",
+            "c5": "The front-matter-plus-argument opening section is a catch-all."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 2, "c3": 3, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Every one of the article's headings is a boundary.",
+            "c2": "Seventeen flat siblings: ephaptic coupling and 'Explaining mixed selectivity' are peers of their parents, not children.",
+            "c3": "'Paperwork' is odd, and long author headings ('Comparison to other theories of consciousness and executive control') stop being landmarks.",
+            "c4": "Accurate and specific throughout (anesthetics converge on slow desynchronized waves; GW/IIT/HOT comparison).",
+            "c5": "Complete; acknowledgements, conclusion and front matter each in place."
+          }
+        }
+      }
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Intro then the author's four headings (apes, ladies who lunch, working classes, Scotland).",
+            "c2": "Ostrander and the 'moral equality' paragraphs nest as children; sensible.",
+            "c3": "'The relational future thesis' plus the author's headings.",
+            "c4": "Accurate, e.g. Ostrander's volunteering is 'social display, not practical results'.",
+            "c5": "The footnotes are a child of the Scotland section rather than a section of their own."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Same, following the author's headings.",
+            "c2": "The volunteering and moral-equality paragraphs nest as children.",
+            "c3": "'Work becomes relational' is short and specific.",
+            "c4": "Accurate and specific: Versailles and the Russian court; conformity and distrust in the West End.",
+            "c5": "The endnotes are nested inside the Scotland section."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Author's headings, plus Notes as a separate section starting at the Imas footnote.",
+            "c2": "The notes are sub-grouped, and the Scotland paragraphs nest.",
+            "c3": "'Introduction' is generic.",
+            "c4": "'Upper-class women who never worked' is slightly wrong (one of them works), and the aristocrat gist overreaches ('rather than freedom or fulfillment').",
+            "c5": "Clean: notes and further reading each have their own place."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 4 },
+          "evidence": {
+            "c1": "Byline apart, the dek-led intro, then the author's headings.",
+            "c2": "The chimpanzee/Elias paragraphs nest under the apes section.",
+            "c3": "'A relational future predicted' is crisp.",
+            "c4": "Specific and accurate, e.g. Versailles to St. Petersburg, and chimp-like dominance hierarchies.",
+            "c5": "Footnotes nested under the Scotland section."
+          }
+        }
+      }
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Follows the article's headings: Properties, Uses, Silk types, Synthesis, Artificial synthesis, Research table, Human uses, back matter.",
+            "c2": "Medicine and the evolution paragraph sit as children; mechanical properties presumably nested under Properties.",
+            "c3": "The intro section is titled just 'Spider silk', which is generic.",
+            "c4": "Specific: 'shear force, pH change, and water removal'; the research table's chemistry-to-spinning arc.",
+            "c5": "Complete and clean."
+          }
+        },
+        "X": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Same sound carving along the headings.",
+            "c2": "Uses and Medicine paragraphs nested as children.",
+            "c3": "'Spider silk' and 'Back matter' are generic.",
+            "c4": "Accurate but vaguer ('outperforms many engineered materials'; Silk types 'chemically distinct silks').",
+            "c5": "Complete and clean."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 5, "c2": 4, "c3": 5, "c4": 5, "c5": 5 },
+          "evidence": {
+            "c1": "Same sound carving along the headings.",
+            "c2": "Adhesive and 'Science and technology' nested as children.",
+            "c3": "'What Spiders Use Silk For' makes the intro a real landmark.",
+            "c4": "Specific and accurate, e.g. 'pultrusion' is the article's own term, and the silk types are listed.",
+            "c5": "Complete and clean."
+          }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Same sound carving along the headings.",
+            "c2": "Structural properties and the human-uses history nested as children.",
+            "c3": "'Spider Silk' and 'Back matter' are generic.",
+            "c4": "Mostly specific (goats, plants), but the intro adds 'one of the most versatile materials found in nature', which the article doesn't say.",
+            "c5": "Complete and clean."
+          }
+        }
+      }
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "candidates": {
+        "W": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "The cargo-cult definition is folded into the pseudoscience survey; the later turns ('what they're missing', Millikan, Cornell, Young, closing) are well placed.",
+            "c2": "Paragraph-level children (Uri Geller, osmosis, Young's neglected work) under sensible parents.",
+            "c3": "Specific mid-titles ('Young's Rat Experiment'); 'Opening Remarks' is generic.",
+            "c4": "'Opening Remarks' gist claims a whole argument for what is only the byline and subtitle.",
+            "c5": "Complete, with the closing wish separate."
+          }
+        },
+        "X": {
+          "scores": { "c1": 4, "c2": 4, "c3": 4, "c4": 4, "c5": 4 },
+          "evidence": {
+            "c1": "Good split at 'Cargo Cult Science', but the closing wish is buried in 'Case Studies' along with Rhine's ESP.",
+            "c2": "Five top sections with paragraph children; the Rhine-plus-closing node is a mixed child.",
+            "c3": "'Case Studies in Scientific Rigor' is somewhat generic.",
+            "c4": "Section 5's gist omits ESP and the closing wish entirely.",
+            "c5": "Nothing lost, but the closing is absorbed into a catch-all last section."
+          }
+        },
+        "Y": {
+          "scores": { "c1": 1, "c2": 1, "c3": 1, "c4": 1, "c5": 1 },
+          "evidence": { "c1": "no output", "c2": "no output", "c3": "no output", "c4": "no output", "c5": "no output" }
+        },
+        "Z": {
+          "scores": { "c1": 5, "c2": 4, "c3": 4, "c4": 4, "c5": 5 },
+          "evidence": {
+            "c1": "Splits at the cargo-cult definition, Millikan, 'Other kinds of errors', and the closing wish: where the talk turns.",
+            "c2": "Paragraph children (the hot-tub episode, 'planes don't land') under sensible parents.",
+            "c3": "Clear; 'Case studies in good and bad science' is a little generic.",
+            "c4": "Mostly right; 'honesty toward laymen and funders' stretches the senator/radio examples.",
+            "c5": "Complete; the subtitle sits in section 2, which is harmless."
+          }
+        }
+      }
+    }
+  ]
+}

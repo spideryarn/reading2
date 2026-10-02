@@ -1,0 +1,667 @@
+{
+  "version": "sketch/4",
+  "title": "Chain into a synthesis",
+  "caption": "The piece is a chain: each section's gap forces the next idea, running from the problem (how can billions of neurons coordinate fast) down through oscillations, a specific wave theory, and anesthesia evidence, converging on one synthesis that is then checked against rival theories.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "height": 1180,
+      "items": [
+        {
+          "kind": "node",
+          "id": "n1",
+          "shape": "box",
+          "x": 260,
+          "y": 30,
+          "w": 260,
+          "h": 70,
+          "text": "Flexible thought needs fast, brain-wide coordination",
+          "size": "sm",
+          "block": "spya-f6m6jv"
+        },
+        {
+          "kind": "node",
+          "id": "n2",
+          "shape": "box",
+          "x": 260,
+          "y": 130,
+          "w": 260,
+          "h": 70,
+          "text": "Classical view: fixed, specialized neurons can't explain this",
+          "size": "sm",
+          "block": "spya-k046f6"
+        },
+        {
+          "kind": "region",
+          "x": 40,
+          "y": 230,
+          "w": 680,
+          "h": 230,
+          "style": "band",
+          "label": "OSCILLATIONS AS A CANDIDATE CONTROLLER",
+          "tone": 1,
+          "muted": true
+        },
+        {
+          "kind": "node",
+          "id": "n3",
+          "shape": "box",
+          "x": 70,
+          "y": 270,
+          "w": 210,
+          "h": 70,
+          "text": "Neurons multiplex many roles at once",
+          "size": "sm",
+          "block": "spya-v0gbwq",
+          "opens": "oscillatory-coordination"
+        },
+        {
+          "kind": "node",
+          "id": "n4",
+          "shape": "box",
+          "x": 300,
+          "y": 270,
+          "w": 200,
+          "h": 70,
+          "text": "Waves organize & route neural signals",
+          "size": "sm",
+          "block": "spya-jnp59d"
+        },
+        {
+          "kind": "node",
+          "id": "n5",
+          "shape": "box",
+          "x": 520,
+          "y": 270,
+          "w": 180,
+          "h": 70,
+          "text": "Waves alter spiking directly (ephaptic)",
+          "size": "sm",
+          "block": "spya-mapqhv"
+        },
+        {
+          "kind": "node",
+          "id": "n6",
+          "shape": "box",
+          "x": 260,
+          "y": 390,
+          "w": 260,
+          "h": 50,
+          "text": "These converge: waves can flexibly steer spiking",
+          "size": "xs",
+          "tone": 1
+        },
+        {
+          "kind": "region",
+          "x": 40,
+          "y": 490,
+          "w": 680,
+          "h": 280,
+          "style": "band",
+          "label": "SPATIAL COMPUTING: A SPECIFIC WAVE THEORY",
+          "tone": 2,
+          "muted": true
+        },
+        {
+          "kind": "node",
+          "id": "n7",
+          "shape": "hex",
+          "x": 280,
+          "y": 530,
+          "w": 220,
+          "h": 80,
+          "text": "Alpha/beta waves as inhibitory \"stencils\" over gamma/spiking",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-qck2sw",
+          "opens": "spatial-and-waves"
+        },
+        {
+          "kind": "node",
+          "id": "n8",
+          "shape": "box",
+          "x": 90,
+          "y": 650,
+          "w": 200,
+          "h": 70,
+          "text": "Explains mixed selectivity",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-zmknun"
+        },
+        {
+          "kind": "node",
+          "id": "n9",
+          "shape": "box",
+          "x": 330,
+          "y": 650,
+          "w": 200,
+          "h": 70,
+          "text": "Explains subspace coding",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-m63zb9"
+        },
+        {
+          "kind": "node",
+          "id": "n10",
+          "shape": "box",
+          "x": 550,
+          "y": 650,
+          "w": 150,
+          "h": 70,
+          "text": "Confirmed in primate PFC",
+          "size": "xs",
+          "tone": 2,
+          "block": "spya-azz3c8"
+        },
+        {
+          "kind": "node",
+          "id": "n11",
+          "shape": "box",
+          "x": 260,
+          "y": 800,
+          "w": 260,
+          "h": 70,
+          "text": "Traveling waves shift coding states; wave interference computes",
+          "size": "sm",
+          "block": "spya-y09vju"
+        },
+        {
+          "kind": "node",
+          "id": "n12",
+          "shape": "box",
+          "x": 260,
+          "y": 900,
+          "w": 260,
+          "h": 70,
+          "text": "Anesthesia: diverse drugs all desynchronize waves",
+          "size": "sm",
+          "block": "spya-uvev07"
+        },
+        {
+          "kind": "node",
+          "id": "n13",
+          "shape": "box",
+          "x": 260,
+          "y": 1000,
+          "w": 260,
+          "h": 80,
+          "text": "Hybrid synapse/wave framework for cognition & consciousness",
+          "size": "md",
+          "tone": 3,
+          "block": "spya-dnv2tp"
+        },
+        {
+          "kind": "edge",
+          "from": "n1",
+          "to": "n2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n3",
+          "via": "elbow",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n4",
+          "via": "elbow",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n2",
+          "to": "n5",
+          "via": "elbow",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n3",
+          "to": "n6",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n4",
+          "to": "n6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n5",
+          "to": "n6",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n6",
+          "to": "n7",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n8",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n9",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n7",
+          "to": "n10",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n9",
+          "to": "n11",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "n11",
+          "to": "n12",
+          "via": "straight",
+          "line": "dashed",
+          "arrow": "end",
+          "label": "both point to wave organization"
+        },
+        {
+          "kind": "edge",
+          "from": "n12",
+          "to": "n13",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A single argument builds floor by floor: synapses alone can't explain flexible cognition, so the paper looks to brain waves, builds a specific theory of how they control spiking, tests it against traveling waves and anesthesia, then lands on one hybrid framework and checks it against rivals."
+    },
+    {
+      "id": "oscillatory-coordination",
+      "title": "Oscillations as controller",
+      "height": 760,
+      "items": [
+        {
+          "kind": "node",
+          "id": "m1",
+          "shape": "box",
+          "x": 270,
+          "y": 30,
+          "w": 240,
+          "h": 70,
+          "text": "A task engages ~1/3 of prefrontal neurons",
+          "size": "sm",
+          "block": "spya-amx5qf"
+        },
+        {
+          "kind": "node",
+          "id": "m2",
+          "shape": "box",
+          "x": 270,
+          "y": 130,
+          "w": 240,
+          "h": 70,
+          "text": "So neurons must be multifunctional, not specialized",
+          "size": "sm",
+          "block": "spya-v0gbwq"
+        },
+        {
+          "kind": "node",
+          "id": "m3",
+          "shape": "box",
+          "x": 270,
+          "y": 230,
+          "w": 240,
+          "h": 80,
+          "text": "Mixed selectivity: a neuron's response changes with context",
+          "size": "sm",
+          "sub": "e.g. object A only if seen first",
+          "block": "spya-x5m34h"
+        },
+        {
+          "kind": "node",
+          "id": "m4",
+          "shape": "box",
+          "x": 270,
+          "y": 340,
+          "w": 240,
+          "h": 60,
+          "text": "This needs flexible routing, hard for fixed synapses alone",
+          "size": "sm",
+          "block": "spya-dtnkkk"
+        },
+        {
+          "kind": "node",
+          "id": "m5",
+          "shape": "box",
+          "x": 60,
+          "y": 440,
+          "w": 230,
+          "h": 80,
+          "text": "Oscillations organize, route, and time information exchange",
+          "size": "sm",
+          "block": "spya-jnp59d"
+        },
+        {
+          "kind": "node",
+          "id": "m6",
+          "shape": "box",
+          "x": 320,
+          "y": 440,
+          "w": 230,
+          "h": 80,
+          "text": "Ephaptic coupling: fields directly shift spike timing, fast & widely",
+          "size": "sm",
+          "block": "spya-mapqhv"
+        },
+        {
+          "kind": "node",
+          "id": "m7",
+          "shape": "box",
+          "x": 270,
+          "y": 580,
+          "w": 240,
+          "h": 70,
+          "text": "Waves can flexibly coordinate huge populations of neurons",
+          "size": "md",
+          "tone": 1,
+          "block": "spya-f59f0p"
+        },
+        {
+          "kind": "edge",
+          "from": "m1",
+          "to": "m2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "m2",
+          "to": "m3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "m3",
+          "to": "m4",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "m4",
+          "to": "m5",
+          "via": "elbow",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "m4",
+          "to": "m6",
+          "via": "elbow",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "m5",
+          "to": "m7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "m6",
+          "to": "m7",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Three independent lines of evidence — multifunctional neurons, wave organization, and direct electrical (ephaptic) effects — converge on the idea that waves, not synapses alone, could flexibly route information."
+    },
+    {
+      "id": "spatial-and-waves",
+      "title": "Spatial computing and analog waves",
+      "height": 820,
+      "items": [
+        {
+          "kind": "node",
+          "id": "s1",
+          "shape": "hex",
+          "x": 270,
+          "y": 30,
+          "w": 240,
+          "h": 80,
+          "text": "Alpha/beta stencils suppress gamma/spiking by location",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-hcav4k"
+        },
+        {
+          "kind": "node",
+          "id": "s2",
+          "shape": "box",
+          "x": 60,
+          "y": 160,
+          "w": 230,
+          "h": 80,
+          "text": "Same neuron: suppressed in one context, active in another",
+          "size": "sm",
+          "sub": "→ mixed selectivity",
+          "block": "spya-zmknun"
+        },
+        {
+          "kind": "node",
+          "id": "s3",
+          "shape": "box",
+          "x": 330,
+          "y": 160,
+          "w": 230,
+          "h": 80,
+          "text": "Stencils split population activity into separate subspaces",
+          "size": "sm",
+          "sub": "→ subspace coding",
+          "block": "spya-m63zb9"
+        },
+        {
+          "kind": "node",
+          "id": "s4",
+          "shape": "box",
+          "x": 270,
+          "y": 280,
+          "w": 240,
+          "h": 60,
+          "text": "Confirmed in primate prefrontal cortex",
+          "size": "sm",
+          "block": "spya-azz3c8"
+        },
+        {
+          "kind": "node",
+          "id": "s5",
+          "shape": "box",
+          "x": 270,
+          "y": 380,
+          "w": 240,
+          "h": 80,
+          "text": "Traveling waves move the stencil, shifting activity between subspaces",
+          "size": "sm",
+          "block": "spya-mrsvfu"
+        },
+        {
+          "kind": "node",
+          "id": "s6",
+          "shape": "box",
+          "x": 270,
+          "y": 500,
+          "w": 240,
+          "h": 70,
+          "text": "Waves can also directly compute, not just gate",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-h5qjz4"
+        },
+        {
+          "kind": "node",
+          "id": "s7",
+          "shape": "box",
+          "x": 60,
+          "y": 610,
+          "w": 230,
+          "h": 80,
+          "text": "Analog computation: continuous, parallel, interference-based",
+          "size": "sm",
+          "block": "spya-vp5h33"
+        },
+        {
+          "kind": "node",
+          "id": "s8",
+          "shape": "box",
+          "x": 330,
+          "y": 610,
+          "w": 230,
+          "h": 80,
+          "text": "Far more energy-efficient than digital computing",
+          "size": "sm",
+          "block": "spya-mgnqxk"
+        },
+        {
+          "kind": "node",
+          "id": "s9",
+          "shape": "box",
+          "x": 270,
+          "y": 720,
+          "w": 240,
+          "h": 70,
+          "text": "Overlapping context-waves could compute task combinations",
+          "size": "sm",
+          "block": "spya-prykb8"
+        },
+        {
+          "kind": "edge",
+          "from": "s1",
+          "to": "s2",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s1",
+          "to": "s3",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s2",
+          "to": "s4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s3",
+          "to": "s4",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s4",
+          "to": "s5",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s5",
+          "to": "s6",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s6",
+          "to": "s7",
+          "via": "elbow",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s6",
+          "to": "s8",
+          "via": "elbow",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s7",
+          "to": "s9",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "s8",
+          "to": "s9",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "One mechanism (alpha/beta as inhibitory stencils over gamma spiking) is shown to explain two separate puzzles, mixed selectivity and subspace coding, and then is extended in time (traveling waves) and in kind (analog computation)."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.ce29b6cc004bedb5",
+  "profileHash": null
+}

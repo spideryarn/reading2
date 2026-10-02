@@ -1,0 +1,85 @@
+{
+  "mode": "sketch",
+  "viewedPictures": true,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "ranking": [["Z"], ["W"], ["X"], ["Y"]],
+      "separations": [
+        "Z over W: Z covers causes, reactions, reforms, and broader changes with cleaner grouping and substantially better legibility.",
+        "W over X: W treats the statistical causes as converging factors, while X misleadingly chains several largely independent weaknesses together.",
+        "X over Y: Y adds an unsupported loop from theory revision back to the article's opening definition."
+      ],
+      "criterionNotes": "Shape fidelity and no overclaiming decide this lineup: Z and W preserve the causes-to-responses structure, whereas X invents causal sequences and Y invents a closing loop. Z is also the easiest picture to scan."
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "ranking": [["X"], ["Y"], ["Z"], ["W"]],
+      "separations": [
+        "X over Y: X most clearly separates the stepwise construction of PID from the empirical findings that fan out from it.",
+        "Y over Z: Y gives fuller coverage without Z's overly strong claim that synergy simply is where computation happens.",
+        "Z over W: Z presents the core method and evidence more cleanly, while W clips its central PID label and overstates synergy as proof of real neural computation."
+      ],
+      "criterionNotes": "The candidates differ most in no overclaiming and legibility: the article presents synergy as a measure of processing, not an unqualified identity with computation. X states that relationship most cautiously and renders it most clearly."
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "ranking": [["Z"], ["W", "Y"], ["X"]],
+      "separations": [
+        "Z over W/Y: Z gives the clearest overview of four distinct arguments converging on a cautious verdict while preserving the ethical consequences and return to human nature.",
+        "W/Y over X: X's detail view turns the four related but distinct arguments into two unsupported causal chains."
+      ],
+      "criterionNotes": "All four capture the essay's funnel, convergence, ethical fork, and closing return, but their argument detail differs sharply. W is especially legible, Y has a stronger overview but a clipped closing node, and X overstates sequential relationships."
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "ranking": [["Y"], ["W"], ["Z"], ["X"]],
+      "separations": [
+        "Y over W: Y covers the full progression from examples and proofs through irreducibility, failed induction, mathematical surprises, and practical mitigations without W's overstatement that each section repeats the previous section's exact failure.",
+        "W over Z: W keeps the central computational-irreducibility claim fully readable and supplies a useful proof-focused expansion, while Z clips that central node and omits more of the proof story.",
+        "Z over X: Z provides a usable and largely faithful funnel-and-fan diagram, whereas X produced no usable output."
+      ],
+      "criterionNotes": "Coverage and shape fidelity separate the usable candidates: Y best follows the article's complete argumentative spine, while W and Z offer more distinctive convergence shapes at the cost of omissions or stronger claims. X has no output."
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "ranking": [["X"], ["Z"], ["W"], ["Y"]],
+      "separations": [
+        "X over Z: X most faithfully presents the paper's cumulative chain from the limits of fixed wiring through oscillatory control and analog computation to the consciousness evidence and hybrid synthesis.",
+        "Z over W: Z uses meaningful branches for oscillations versus ephaptic influence and traveling waves versus analog computation, while W renders nearly every move as a single sequence.",
+        "W over Y: W preserves the paper's section-by-section development better than Y's claim that mixed selectivity, oscillatory organization, and ephaptic coupling are parallel evidence converging on the same point."
+      ],
+      "criterionNotes": "Shape fidelity is decisive because the paper builds a cumulative mechanism rather than merely listing evidence. X combines that structure with excellent legibility and accurate labels."
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "ranking": [["Y"], ["Z"], ["X"], ["W"]],
+      "separations": [
+        "Y over Z: Y correctly makes the surveys and historical studies parallel evidence for the conclusion, whereas Z turns those independent sources into a sequential chain.",
+        "Z over X: Z includes a full view of what work supplies and how commercial society frees friendship, while X leaves that concluding movement mostly compressed into the overview.",
+        "X over W: X is cleaner, more complete, and avoids W's overlapping case-study boxes and thinner treatment of the final argument."
+      ],
+      "criterionNotes": "The best candidates show three parallel social case studies converging on a two-part conclusion about impersonal respect and freer friendship. Y has the strongest combination of coverage, earned relationships, and legibility."
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "ranking": [["Y"], ["W"], ["Z"], ["X"]],
+      "separations": [
+        "Y over W: Y captures the article-specific branching from properties into ecological uses and specialized glands, followed by the two requirements for artificial synthesis.",
+        "W over Z: W explicitly marks adhesive attachment as a separate property and gives artificial synthesis a true convergence, while Z falsely chains supercontraction into adhesion and spends overview space on reference matter.",
+        "Z over X: Z remains a readable, reasonably comprehensive diagram, whereas X produced no usable output."
+      ],
+      "criterionNotes": "No overclaiming is the main separator: Y avoids inventing causal links among independent silk properties and accurately depicts feedstock plus spinning apparatus as jointly necessary. X has no output."
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "ranking": [["Y"], ["X"], ["W"], ["Z"]],
+      "separations": [
+        "Y over X: Y accurately presents four parallel case studies testing one principle, while X calls them five and links several independent examples as though they caused one another.",
+        "X over W: X's funnel from failed beliefs to integrity and then outward to cases is more faithful and legible than W's mostly linear chain and clipped key labels.",
+        "W over Z: W covers the student, accelerator, Young, and ESP examples, while Z omits the first two and has heavily crossing arrows in its overview."
+      ],
+      "criterionNotes": "Y wins on shape fidelity, coverage, and text accuracy by narrowing the survey to scientific integrity and then fanning that principle across independent cases. The others either impose false sequences, miscount or omit cases, or lose legibility."
+    }
+  ]
+}

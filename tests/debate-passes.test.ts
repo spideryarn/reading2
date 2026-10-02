@@ -216,7 +216,7 @@ describe("two passes, one artefact", () => {
     answers = [
       answer({ fenced: TWO_DIRECT_ROWS, searches: 3, annotations: [REVIEW, SECOND_REVIEW] }),
       answer({ fenced: CLAIM_ROW, searches: 5, annotations: [BLOG] }),
-      answer({ fenced: JSON.stringify({ themes: [], key: [] }), searches: 0 }),
+      answer({ content: JSON.stringify({ themes: [], key: [] }), searches: 0 }),
     ];
 
     const run = await generateDebate({ power: "standard", article });

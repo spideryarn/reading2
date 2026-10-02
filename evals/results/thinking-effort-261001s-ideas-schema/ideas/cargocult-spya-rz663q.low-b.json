@@ -1,0 +1,128 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "sourceHash": "b575dff238ed648a.dd64d05f4c045d91.5c63b9373f64e9a9",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-qm60uy",
+      "name": "A result that cannot be repeated is not yet a scientific finding",
+      "provenance": "assumed",
+      "statement": "An effect only counts as established once independent attempts reliably reproduce it; a one-off statistical result, however striking, is not evidence of a real phenomenon.",
+      "whyYouNeedIt": "Feynman's dismissal of the parapsychologist's claim that repeatability is an 'irrelevant demand' only reads as absurd if the reader already treats reproducibility as the non-negotiable bar for a finding being real.",
+      "occurrences": [
+        {
+          "blockId": "spya-rbpppq",
+          "quote": "And now you find a man saying that it is an irrelevant demand to expect a repeatable experiment. This is science?",
+          "reasoning": "The rhetorical question only lands as devastating if reproducibility is assumed to be essential to science, a standard never argued for explicitly here.",
+          "start": 602
+        },
+        {
+          "blockId": "spya-g203mu",
+          "quote": "be sure they only train students who have shown their ability to get PSI results to an acceptable extent",
+          "reasoning": "Condemning this selection policy as dangerous relies on the unstated premise that selecting for a desired result rather than for a reproducible method undermines the very possibility of a real finding.",
+          "start": 220
+        }
+      ]
+    },
+    {
+      "id": "spya-e3e6f4",
+      "name": "Form without function fails silently",
+      "provenance": "introduced",
+      "statement": "Copying the outward procedures of science exactly—experiments, publications, institutions—can still produce nothing real if the underlying substance is missing, and this failure often goes unnoticed because the form looks right.",
+      "whyYouNeedIt": "This is the defining concept of the whole talk; without it the Cargo Cult metaphor is just an anecdote rather than a diagnostic category for a whole class of failures.",
+      "occurrences": [
+        {
+          "blockId": "spya-fd2muf",
+          "quote": "They’re doing everything right. The form is perfect. It looks exactly the way it looked before. But it doesn’t work. No airplanes land.",
+          "reasoning": "States directly that correct form does not guarantee function, the core claim.",
+          "start": 581
+        },
+        {
+          "blockId": "spya-rub3a2",
+          "quote": "That’s why the planes don’t land—but they don’t land.",
+          "reasoning": "Reaffirms that the surface resemblance to science is insufficient.",
+          "start": 217
+        }
+      ]
+    },
+    {
+      "id": "spya-u9tv0n",
+      "name": "Report disconfirming evidence, not just supporting evidence",
+      "provenance": "introduced",
+      "statement": "Genuine scientific integrity requires disclosing all details, alternative explanations, and contrary data—not merely avoiding false statements.",
+      "whyYouNeedIt": "This explains why Feynman treats the technically true Wesson Oil ad as still dishonest; without this idea that example seems contradictory.",
+      "occurrences": [
+        {
+          "blockId": "spya-rxj5wa",
+          "quote": "If you make a theory, for example, and advertise it, or put it out, then you must also put down all the facts that disagree with it, as well as those that agree with it.",
+          "reasoning": "States the obligation to disclose disconfirming evidence directly.",
+          "start": 184
+        },
+        {
+          "blockId": "spya-bpyx8n",
+          "quote": "It’s not dishonest; but the thing I’m talking about is not just a matter of not being dishonest, it’s a matter of scientific integrity, which is another level.",
+          "reasoning": "Distinguishes mere truthfulness from the fuller standard of disclosing all relevant facts, needed to resolve the Wesson Oil case.",
+          "start": 168
+        },
+        {
+          "blockId": "spya-jk7mj4",
+          "quote": "If we only publish results of a certain kind, we can make the argument look good. We must publish both kinds of result.",
+          "reasoning": "Applies the disclosure principle to publication practices.",
+          "start": 185
+        }
+      ]
+    },
+    {
+      "id": "spya-t6mm5p",
+      "name": "Self-fooling precedes and enables fooling others",
+      "provenance": "introduced",
+      "statement": "The primary discipline required is catching your own biases before worrying about deceiving your audience; honesty toward others is comparatively easy once you've mastered this.",
+      "whyYouNeedIt": "The Millikan and rat-corridor stories only make sense as lessons if the reader accepts that the main danger is unintentional self-deception, not deliberate lying.",
+      "occurrences": [
+        {
+          "blockId": "spya-ed9mzv",
+          "quote": "The first principle is that you must not fool yourself—and you are the easiest person to fool.",
+          "reasoning": "States the priority of self-deception over deceiving others directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-s9msxy",
+          "quote": "It’s interesting to look at the history of measurements of the charge of the electron, after Millikan.",
+          "reasoning": "Sets up the case study illustrating unintentional bias in measurement.",
+          "start": 334
+        },
+        {
+          "blockId": "spya-uj9v2h",
+          "quote": "When they got a number that was too high above Millikan’s, they thought something must be wrong—and they would look for and find a reason why something might be wrong.",
+          "reasoning": "Shows researchers unconsciously biasing results toward an expected answer, the mechanism of self-fooling.",
+          "start": 181
+        }
+      ]
+    },
+    {
+      "id": "spya-y8kasg",
+      "name": "Controlling for a hidden variable requires first reproducing the uncontrolled result",
+      "provenance": "introduced",
+      "statement": "To know that changing one condition caused a change in outcome, you must first confirm the original result under the original condition in your own setup before varying it.",
+      "whyYouNeedIt": "This is necessary to understand why Feynman's advice to the psychology student matters, and why Young's rat experiment is praised while others are faulted—otherwise the rat-corridor story reads as just a quirky anecdote.",
+      "occurrences": [
+        {
+          "blockId": "spya-tf8rj2",
+          "quote": "I explained to her that it was necessary first to repeat in her laboratory the experiment of the other person—to do it under condition X to see if she could also get result A—and then change to Y and see if A changed.",
+          "reasoning": "States the need to reproduce baseline before testing the variable.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-npdc6n",
+          "quote": "He finally found that they could tell by the way the floor sounded when they ran over it. And he could only fix that by putting his corridor in sand.",
+          "reasoning": "Shows the painstaking elimination of confounds required to isolate the true cause, the same logic the student needed.",
+          "start": 0
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:30:27.151Z",
+  "elapsedMs": 20700
+}

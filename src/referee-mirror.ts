@@ -171,6 +171,11 @@ import {
 } from "./openrouter-stream.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { ENDED_UNFINISHED, NOT_CONFIGURED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withChatJsonSchema,
+} from "./messages-structured-output.js";
 import { type ModelPower, modelFor } from "./models.js";
 import { findQuote } from "./quote-match.js";
 import { plainWords } from "./plain-words.js";
@@ -1067,6 +1072,55 @@ A JSON object, and nothing else — no prose before it, no code fence around it:
 - Address the referee as "you", and write "this comment", not "the reviewer".
 - Nothing worth raising ⇒ {"remarks": []}. Say that and stop.`;
 
+const mirrorRemarkSchema = {
+  anyOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "comment", "note"],
+      properties: {
+        kind: { type: "string", enum: ["specificity", "tone"] },
+        comment: { type: "string" },
+        note: { type: "string" },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "comment", "passage", "note"],
+      properties: {
+        kind: { type: "string", enum: ["misunderstanding"] },
+        comment: { type: "string" },
+        passage: { type: "string" },
+        note: { type: "string" },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "criterion", "note"],
+      properties: {
+        kind: { type: "string", enum: ["coverage"] },
+        criterion: { type: "string" },
+        note: { type: "string" },
+      },
+    },
+  ],
+} as const;
+
+/** The four model-written remark shapes; placement remarks remain code-only. */
+export const MIRROR_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["remarks"],
+  properties: {
+    remarks: { type: "array", items: mirrorRemarkSchema },
+  },
+} as const;
+
+validateAnthropicJsonSchema(MIRROR_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(MIRROR_OUTPUT_SCHEMA, []);
+
 /**
  * **A delimiter the document cannot forge.**
  *
@@ -1510,20 +1564,24 @@ export async function* mirrorStream({
      "the stream broke off" arrive at the same catch. */
   let answered = false;
 
-  const request = {
-    model,
-    /* Room for six remarks, each a quoted phrase and two sentences, with slack.
-       A ceiling too low truncates the JSON mid-object, and a truncated object
-       is not a short list — `parseHits` reports it as
-       `ANSWER_OVERFLOWED_FIXED_ASK`, which is the honest answer but not one
-       anybody wants to see. (The `FIXED_ASK` half because Mirror has no scoping
-       control: src/search.ts § `AskKind`.) */
-    max_tokens: 2000,
-    /* No tools. Nothing on the web can say whether this referee's sentence is
-       vague, and a call that goes looking is a call spending their money to
-       find out about a paper it is not allowed to have an opinion on. */
-    messages,
-  };
+  const request = withChatJsonSchema(
+    {
+      model,
+      /* Room for six remarks, each a quoted phrase and two sentences, with slack.
+         A ceiling too low truncates the JSON mid-object, and a truncated object
+         is not a short list — `parseHits` reports it as
+         `ANSWER_OVERFLOWED_FIXED_ASK`, which is the honest answer but not one
+         anybody wants to see. (The `FIXED_ASK` half because Mirror has no scoping
+         control: src/search.ts § `AskKind`.) */
+      max_tokens: 2000,
+      /* No tools. Nothing on the web can say whether this referee's sentence is
+         vague, and a call that goes looking is a call spending their money to
+         find out about a paper it is not allowed to have an opinion on. */
+      messages,
+    },
+    "referee_mirror",
+    MIRROR_OUTPUT_SCHEMA,
+  );
 
   let text = "";
   let used = model;

@@ -324,6 +324,32 @@ export interface OutlineEntry {
    * what says *the argument ends at this line*. Spine.tsx draws it.
    */
   supplement?: boolean;
+  /** The node starts at a heading block, so its navLabel is the author's. `navLabelVoice`. */
+  startsAtHeading?: true;
+}
+
+/**
+ * Whose words a node's `navLabel` is, when it is shown. A model writes the label
+ * of every leaf **except one that starts at a heading**: there src/labels.ts §
+ * `parseLabels` (and src/heading-tree.ts) copy the heading off the block rather
+ * than taking the model's attempt, so the label is the author's own title. So
+ * the voice is read off **the block the node starts at** (`node.range[0]`), not
+ * inferred from whether a navLabel is present — GPT Sol, plan review of
+ * docs/plans/261002b-a-nicer-ai-typeface-and-the-voices-trawl.md (P1).
+ *
+ * `startsAtHeading` is that fact, carried on `OutlineEntry` and `SummaryNode`
+ * the way `supplement` is: present only when true. A title shown in a title slot
+ * is `"ui"`, as the v1 decided for section titles.
+ */
+export type TextVoice = "author" | "ai" | "ui";
+
+export function navLabelVoice(entry: { startsAtHeading?: true }): "author" | "ai" {
+  return entry.startsAtHeading ? "author" : "ai";
+}
+
+/** The same test the label writers use: a heading block, by kind or by tag. */
+function isHeadingBlock(block: Block | undefined): boolean {
+  return block !== undefined && (block.kind === "heading" || /^h[1-6]$/.test(block.tag));
 }
 
 /**
@@ -361,7 +387,15 @@ export function buildOutline(
             .map((id) => entryFor(tree.nodes[id]))
             .filter((e): e is OutlineEntry => e !== null)
         : [];
-    return { node, startRow, endRow, words, children, ...(supplement && { supplement: true }) };
+    return {
+      node,
+      startRow,
+      endRow,
+      words,
+      children,
+      ...(supplement && { supplement: true }),
+      ...(isHeadingBlock(blocks[startRow]) && { startsAtHeading: true as const }),
+    };
   };
 
   const root = tree.nodes[tree.rootId];
@@ -424,6 +458,8 @@ export interface SummaryNode {
    * draws it; structural views may ignore it. Absent everywhere else.
    */
   question?: string;
+  /** The node starts at a heading block, so its navLabel is the author's. `navLabelVoice`. */
+  startsAtHeading?: true;
   children: SummaryNode[];
 }
 
@@ -486,6 +522,7 @@ export function buildSummaryTree(
       ...(apparatus && { supplement: true as const }),
       ...(node.gist !== undefined && { gist: node.gist }),
       ...(node.question !== undefined && { question: node.question }),
+      ...(isHeadingBlock(blocks[startRow]) && { startsAtHeading: true as const }),
       children,
     };
   };

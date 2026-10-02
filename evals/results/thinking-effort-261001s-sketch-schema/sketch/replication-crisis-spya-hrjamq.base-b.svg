@@ -1,0 +1,239 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 3109.45" width="760" height="3109.45">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="3109.45" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Funnel, fork, loop</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">A funnel into definitions narrows to the named crisis, which chains into evidence, forks into two parallel columns</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">of causes (publication system vs. research practices/statistics), then converges into responses and reforms,</text>
+<text x="16" y="77.2" font-size="12" fill="#b8b8b8">looping back at the end to the idea that replication should revise theory rather than just confirm it.</text>
+<g transform="translate(0 112.80000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">The replication crisis: shape of the argument</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Definitions narrow into a named crisis; evidence of failure feeds two parallel streams of cause (publishing system,</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">research practice/statistics); both converge on institutional response and reform, which loops back to a call for</text>
+<text x="16" y="60.900000000000006" font-size="11.5" fill="#b8b8b8">better theory.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 80.85)"><rect x="40" y="480" width="320" height="260" rx="8" fill="rgba(232,112,58,0.07)" stroke="rgba(232,112,58,0.24)" stroke-width="1"/>
+<rect x="400" y="480" width="320" height="260" rx="8" fill="rgba(47,191,149,0.07)" stroke="rgba(47,191,149,0.24)" stroke-width="1"/>
+<path d="M380 110 L380 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,150 376.5,140 383.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 220 L380 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,260 376.5,250 383.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 330 L380 370" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,370 376.5,360 383.5,360" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 440 C380 485 200 495 200 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="200,540 196.5,530 203.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 440 C380 485 560 495 560 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,540 556.5,530 563.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M200 620 C200 692 380 708 380 780" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,780 376.5,770 383.5,770" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 620 C560 692 380 708 380 780" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,780 376.5,770 383.5,770" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 850 L380 890" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,890 376.5,880 383.5,880" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 960 L380 1000" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,1000 376.5,990 383.5,990" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 1070 L380 1090" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,1090 376.5,1080 383.5,1080" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M270 1125 C8 1125 8 70 270 70" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="270,70 260,73.5 260,66.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Published findings often fail to reproduce — → spya-kv0w8d</title>
+<ellipse cx="380" cy="70" rx="110" ry="40" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="65.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Published findings often</text>
+<text x="380" y="84.25" font-size="15" text-anchor="middle" fill="#f7f7f7">fail to reproduce</text>
+</g>
+<g>
+<title>Vocabulary: power, effect size, p-value — → spya-cxcn8h</title>
+<rect x="270" y="150" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="181.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Vocabulary: power, effect size,</text>
+<text x="380" y="196.4" font-size="12" text-anchor="middle" fill="#f7f7f7">p-value</text>
+</g>
+<g>
+<title>Early-2010s failures name the 'crisis' — → spya-yru28f</title>
+<rect x="270" y="260" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="291.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Early-2010s failures name the</text>
+<text x="380" y="306.4" font-size="12" text-anchor="middle" fill="#f7f7f7">'crisis'</text>
+</g>
+<g>
+<title>~Half of findings fail across fields — → spya-bha57y</title>
+<rect x="270" y="370" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="400.5" font-size="15" text-anchor="middle" fill="#f7f7f7">~Half of findings fail</text>
+<text x="380" y="419.25" font-size="15" text-anchor="middle" fill="#f7f7f7">across fields</text>
+</g>
+<g>
+<title>Bias, sloppy errors, publish-or-perish — → spya-sy87zk</title>
+<rect x="70" y="540" width="260" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="200" y="583.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Bias, sloppy errors, publish-or-perish</text>
+</g>
+<g>
+<title>Low power, p-hacking, bad null tests — → spya-bfx638</title>
+<rect x="430" y="540" width="260" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="560" y="583.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Low power, p-hacking, bad null tests</text>
+</g>
+<g>
+<title>Public trust and academic backlash — → spya-qht6nk</title>
+<rect x="270" y="780" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="811.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Public trust and academic</text>
+<text x="380" y="826.4" font-size="12" text-anchor="middle" fill="#f7f7f7">backlash</text>
+</g>
+<g>
+<title>Reforms: preregistration, review, p&lt;0.005 — → spya-h32yv9</title>
+<rect x="270" y="890" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="921.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Reforms: preregistration, review,</text>
+<text x="380" y="936.4" font-size="12" text-anchor="middle" fill="#f7f7f7">p&lt;0.005</text>
+</g>
+<g>
+<title>Funding, education, databases, collaboration — → spya-hc3p7c</title>
+<rect x="270" y="1000" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="1031.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Funding, education, databases,</text>
+<text x="380" y="1046.4" font-size="12" text-anchor="middle" fill="#f7f7f7">collaboration</text>
+</g>
+<g>
+<title>Replication should revise theory, not just confirm — → spya-d4kvnh</title>
+<ellipse cx="380" cy="1125" rx="110" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="1120.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Replication should revise</text>
+<text x="380" y="1139.25" font-size="15" text-anchor="middle" fill="#f7f7f7">theory, not just confirm</text>
+</g>
+<text x="50" y="495" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">CAUSES: PUBLISHING SYSTEM</text>
+<text x="410" y="495" font-size="11" text-anchor="start" fill="rgba(47,191,149,0.95)" font-weight="500" letter-spacing="0.07em">CAUSES: RESEARCH PRACTICE &amp; STATS</text>
+<rect x="4" y="709.0196800000001" width="220" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="114" y="719.0196800000001" font-size="10" text-anchor="middle" fill="#8f8f8f">returns to the opening question, changed</text></g>
+</g>
+<g transform="translate(0 1401.6499999999999)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Inside: causes in the publishing system</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain showing how the structure of publishing itself—incentives, bias, sloppiness—discourages reliable science, each</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">problem feeding the next.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-PUBLISHING</text>
+<g transform="translate(0 65.9)"><path d="M400 100 L400 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,140 396.5,130 403.5,130" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 210 L400 250" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,250 396.5,240 403.5,240" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 320 L400 360" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,360 396.5,350 403.5,350" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 430 L400 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,470 396.5,460 403.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 540 L400 580" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,580 396.5,570 403.5,570" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Explosive growth, commodified science — → spya-sy87zk</title>
+<rect x="270" y="30" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="68.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Explosive growth, commodified science</text>
+</g>
+<g>
+<title>Publication bias: null results go unpublished — → spya-d040tg</title>
+<rect x="270" y="140" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="171.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Publication bias: null results go</text>
+<text x="400" y="186.4" font-size="12" text-anchor="middle" fill="#f7f7f7">unpublished</text>
+</g>
+<g>
+<title>Even top journals contain math/stat errors — → spya-xxd5as</title>
+<rect x="270" y="250" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="281.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Even top journals contain math/stat</text>
+<text x="400" y="296.4" font-size="12" text-anchor="middle" fill="#f7f7f7">errors</text>
+</g>
+<g>
+<title>'Publish or perish' punishes replication work — → spya-h2nvfj</title>
+<rect x="270" y="360" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="391.4" font-size="12" text-anchor="middle" fill="#f7f7f7">'Publish or perish' punishes</text>
+<text x="400" y="406.4" font-size="12" text-anchor="middle" fill="#f7f7f7">replication work</text>
+</g>
+<g>
+<title>Missing methodological detail blocks redo — → spya-wjstmr</title>
+<rect x="270" y="470" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="501.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Missing methodological detail blocks</text>
+<text x="400" y="516.4" font-size="12" text-anchor="middle" fill="#f7f7f7">redo</text>
+</g>
+<g>
+<title>Result: flashy, unreplicable work gets published — → spya-d040tg</title>
+<rect x="270" y="580" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="610.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Result: flashy, unreplicable</text>
+<text x="400" y="629.25" font-size="15" text-anchor="middle" fill="#f7f7f7">work gets published</text>
+</g></g>
+</g>
+<g transform="translate(0 2255.5499999999997)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Inside: causes in research practice and statistics</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Several independent statistical and practical problems converge on the same outcome: findings that cannot be</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">reproduced.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-RESEARCH-PRACTICE</text>
+<g transform="translate(0 65.9)"><path d="M140 120 C140 210 390 380 390 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,470 386.5,460 393.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 120 C380 210 390 380 390 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,470 386.5,460 393.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M620 120 C620 210 390 380 390 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,470 386.5,460 393.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M140 260 C140 350 390 380 390 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,470 386.5,460 393.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 260 C380 350 390 380 390 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,470 386.5,460 393.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M620 260 C620 350 390 380 390 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,470 386.5,460 393.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M140 400 C140 431.5 390 438.5 390 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,470 386.5,460 393.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 400 C380 431.5 390 438.5 390 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,470 386.5,460 393.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M620 400 C620 431.5 390 438.5 390 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,470 386.5,460 393.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Questionable practices: HARKing, data dredging — → spya-bfx638</title>
+<rect x="40" y="40" width="200" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="140" y="76.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Questionable practices:</text>
+<text x="140" y="91.4" font-size="12" text-anchor="middle" fill="#f7f7f7">HARKing, data dredging</text>
+</g>
+<g>
+<title>Chronic low power (~20-35%) — → spya-p7pun6</title>
+<rect x="280" y="40" width="200" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="83.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Chronic low power (~20-35%)</text>
+</g>
+<g>
+<title>Underpowered studies inflate effect sizes — → spya-nqwfh4</title>
+<rect x="520" y="40" width="200" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="620" y="76.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Underpowered studies inflate</text>
+<text x="620" y="91.4" font-size="12" text-anchor="middle" fill="#f7f7f7">effect sizes</text>
+</g>
+<g>
+<title>Meta-analysis has its own flaws — → spya-z2xbqp</title>
+<rect x="40" y="180" width="200" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="140" y="216.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Meta-analysis has its own</text>
+<text x="140" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">flaws</text>
+</g>
+<g>
+<title>Forking paths inflate false positives — → spya-qsad7n</title>
+<rect x="280" y="180" width="200" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="216.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Forking paths inflate false</text>
+<text x="380" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">positives</text>
+</g>
+<g>
+<title>High, unexplained heterogeneity — → spya-ngbkx2</title>
+<rect x="520" y="180" width="200" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="620" y="216.4" font-size="12" text-anchor="middle" fill="#f7f7f7">High, unexplained</text>
+<text x="620" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">heterogeneity</text>
+</g>
+<g>
+<title>Effects sensitive to hidden context — → spya-z4db8z</title>
+<rect x="40" y="320" width="200" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="140" y="356.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Effects sensitive to hidden</text>
+<text x="140" y="371.4" font-size="12" text-anchor="middle" fill="#f7f7f7">context</text>
+</g>
+<g>
+<title>Bayes: p&lt;0.05 implies less than assumed — → spya-pytr5c</title>
+<rect x="280" y="320" width="200" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="356.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Bayes: p&lt;0.05 implies less</text>
+<text x="380" y="371.4" font-size="12" text-anchor="middle" fill="#f7f7f7">than assumed</text>
+</g>
+<g>
+<title>Null hypothesis testing ill-suited to 'soft' science — → spya-h9wzrk</title>
+<rect x="520" y="320" width="200" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="620" y="356.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Null hypothesis testing</text>
+<text x="620" y="371.4" font-size="12" text-anchor="middle" fill="#f7f7f7">ill-suited to 'soft' science</text>
+</g>
+<g>
+<title>Together: many published effects are genuinely unreplicable — → spya-bfx638</title>
+<rect x="270" y="470" width="240" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="496.125" font-size="15" text-anchor="middle" fill="#f7f7f7">Together: many published</text>
+<text x="390" y="514.875" font-size="15" text-anchor="middle" fill="#f7f7f7">effects are genuinely</text>
+<text x="390" y="533.625" font-size="15" text-anchor="middle" fill="#f7f7f7">unreplicable</text>
+</g></g>
+</g>
+</svg>

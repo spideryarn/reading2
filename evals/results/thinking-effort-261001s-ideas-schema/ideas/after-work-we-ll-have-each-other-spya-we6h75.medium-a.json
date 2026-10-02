@@ -1,0 +1,166 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+  "sourceHash": "01f7bd1e81b8b33a.fdae19af9862492e.d4a0aca1a37cfbff",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-gz4y59",
+      "name": "Case studies of relative leisure predict a post-work future",
+      "provenance": "assumed",
+      "statement": "Groups who historically had their material needs met without needing to labor for them (aristocrats, rich women, precarious peer-group laborers) are usable stand-ins for what humans in general will do once AI removes the need to work, despite enormous differences in surrounding technology, scarcity, and social structure.",
+      "whyYouNeedIt": "The entire essay's method depends on treating these ethnographies as previews of a coming AI-driven world rather than as artifacts of their own specific historical constraints.",
+      "occurrences": [
+        {
+          "blockId": "spya-c4s3en",
+          "quote": "Aristocrats are (typically) rich, which we certainly will be if we have robots capable of all normal nonrelational labor.",
+          "reasoning": "Draws a direct equivalence between court aristocrats and a robot-served future population that only holds if their leisure conditions are comparable in the relevant respects.",
+          "start": 43
+        }
+      ]
+    },
+    {
+      "id": "spya-c900fq",
+      "name": "Psychological needs for status are stable across eras",
+      "provenance": "assumed",
+      "statement": "The underlying human drive to seek status, respect, and group standing is a constant across very different historical and economic systems, rather than something produced by any one era's particular institutions.",
+      "whyYouNeedIt": "Without this, jumping from Versailles courtiers to 1980s Cleveland women to Boston day laborers to a hypothetical AI future would be an arbitrary set of anecdotes rather than evidence for a recurring pattern.",
+      "occurrences": [
+        {
+          "blockId": "spya-cz0cgg",
+          "quote": "Aristocrats are basically chimpanzees. They’re highly social, cunning, at all times hyperaware of their strict internal dominance hierarchy",
+          "reasoning": "Treats status hierarchy behavior as a deep, cross-species constant rather than an artifact of 18th-century court institutions, which the comparison to a post-AI future requires.",
+          "start": 125
+        },
+        {
+          "blockId": "spya-j3vvp7",
+          "quote": "both societies share the same fundamental source of value: one’s family and the system it belongs to",
+          "reasoning": "Assumes a single underlying psychological need for the two very different groups to be compared at all.",
+          "start": 164
+        }
+      ]
+    },
+    {
+      "id": "spya-t5w9mx",
+      "name": "Lost work means relationships become the status system",
+      "provenance": "introduced",
+      "statement": "If machines take over all economically necessary labor, the social functions that jobs currently serve — structure, identity, and a claim to respect — will fall back onto personal relationships and group membership, as they did before industrial work existed.",
+      "occurrences": [
+        {
+          "blockId": "spya-k44gdt",
+          "quote": "When the machines can do everything else, our relationships will be what’s left.",
+          "reasoning": "States the core forecast the whole piece exists to test.",
+          "start": 128
+        },
+        {
+          "blockId": "spya-zy53n3",
+          "quote": "We were not defined by our jobs but by our participation in a densely interconnected social world. And we might be again.",
+          "reasoning": "Generalizes the forecast into the article's thesis about a coming relational world.",
+          "start": 125
+        },
+        {
+          "blockId": "spya-b3re57",
+          "quote": "Economic transactions had a distinct social component that was innately linked to the consumption experience.",
+          "reasoning": "Grounds the forecast in the pre-industrial model of work as inseparable from personal relationships.",
+          "start": 265
+        }
+      ]
+    },
+    {
+      "id": "spya-evavd9",
+      "name": "Status through group membership turns clannish",
+      "provenance": "introduced",
+      "statement": "When a person's dignity comes from belonging to a group rather than from individual achievement, the group inevitably polices who may join and punishes anyone who deviates, producing exclusivity and conformity.",
+      "occurrences": [
+        {
+          "blockId": "spya-hdbtc0",
+          "quote": "When our dignity depends on our membership in a group, we start to police who else can join and what happens when they do. When humans get relational, we get clannish.",
+          "reasoning": "States the mechanism explicitly as the article's conclusion from the case studies.",
+          "start": 275
+        },
+        {
+          "blockId": "spya-tyj2mt",
+          "quote": "Finally, they all spend an enormous amount of energy policing deviant behavior.",
+          "reasoning": "Shows the mechanism at work in the West End peer-group society.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-j337dx",
+          "quote": "While there are any number of things these groups don’t have in common, all of them share certain features.",
+          "reasoning": "Sets up the cross-case comparison that yields the clannishness conclusion.",
+          "start": 99
+        }
+      ]
+    },
+    {
+      "id": "spya-qyr5bg",
+      "name": "Material conditions reshape desires, not just options",
+      "provenance": "introduced",
+      "statement": "Changes in material circumstances don't just change what people can do, they change what people want and value in the first place.",
+      "occurrences": [
+        {
+          "blockId": "spya-t4xpae",
+          "quote": "In other words, our material conditions don’t just change what we have, but what we want. We may not have a choice.",
+          "reasoning": "States the idea directly as the lesson drawn from the West End's shift away from amoral familism.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-b3pf45",
+          "quote": "As economic conditions improve,\" Gans writes, \"the ethos which Banfield calls amoral familism has begun to recede in importance.",
+          "reasoning": "Shows the empirical case the idea generalizes from.",
+          "start": 419
+        }
+      ]
+    },
+    {
+      "id": "spya-xds6g6",
+      "name": "Work's real payoff is impersonal respect",
+      "provenance": "introduced",
+      "statement": "Beyond money, what work chiefly supplies is a way to earn dignity based on skills, accomplishments, and contribution to a shared goal, rather than on who you are or who you know.",
+      "whyYouNeedIt": "This is the article's answer to why losing work would be a loss rather than a liberation, so later claims about relational societies being worse only land if this is granted.",
+      "occurrences": [
+        {
+          "blockId": "spya-zd83ts",
+          "quote": "The most important thing work gives us — after money, of course — is an alternative way to meet those needs. Not all jobs are pleasant or rewarding, but all of us benefit from living in a system where we can earn respect and dignity as adults from what we do, not who we know, or who we are.",
+          "reasoning": "States the idea directly as the article's central claim about work's value.",
+          "start": 556
+        },
+        {
+          "blockId": "spya-ms0vr5",
+          "quote": "But unlike members of relational societies, the things we want respect for are impersonal: our skills, our accomplishments, our contributions to a shared goal.",
+          "reasoning": "Summarizes the contrast that defines what makes work's dignity distinct.",
+          "start": 70
+        }
+      ]
+    },
+    {
+      "id": "spya-twdrjz",
+      "name": "Markets free friendship from necessity",
+      "provenance": "introduced",
+      "statement": "Before commercial society, personal ties were forced by survival need and so were transactional; impersonal markets removed that necessity and let relationships be based on genuine affection rather than dependence.",
+      "occurrences": [
+        {
+          "blockId": "spya-hb8vvc",
+          "quote": "When we can all support ourselves by our own labor, these transactions are no longer necessary. For Smith, the absence of necessity created room for a better form of friendship, based on \"natural sympathy\" instead of mutual need.",
+          "reasoning": "States the Smithian argument that the article adopts to explain why work-based independence improved relationships.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-tmepex",
+          "quote": "In the bad old days before impersonal markets and bureaucracies, the only way to survive was through personal ties to allies or to kin. As a result, every personal relationship was transactional.",
+          "reasoning": "Lays out the prior condition the argument contrasts with post-market friendship.",
+          "start": 277
+        },
+        {
+          "blockId": "spya-d6v2bb",
+          "quote": "relying on our personal relationships to meet all our needs for identity and belonging creates a similar kind of dependence",
+          "reasoning": "Extends the logic to warn that losing work risks recreating the old dependence.",
+          "start": 249
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:22:18.875Z",
+  "elapsedMs": 46488
+}

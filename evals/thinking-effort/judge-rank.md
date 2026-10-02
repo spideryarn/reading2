@@ -24,9 +24,8 @@ candidate produced no usable output" ranks below every candidate that has one, t
 such candidate. Judge quality, not length: a longer
 candidate is better only if what it adds is good.
 
-**Answer** with one fenced JSON block and nothing after it, in exactly this shape:
+**Answer** with JSON only, with no code fence and nothing after it, in exactly this shape:
 
-```json
 {
   "mode": "{MODE}",
   "viewedPictures": true,
@@ -42,7 +41,6 @@ candidate is better only if what it adds is good.
     }
   ]
 }
-```
 
 `ranking` is best first; each inner list is a tier of tied candidates; all four labels appear exactly
 once. All eight articles must be present. `viewedPictures` is whether you actually looked at the

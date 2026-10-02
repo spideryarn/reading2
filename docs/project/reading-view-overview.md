@@ -154,8 +154,10 @@ readers never are.
   (612px with the rail, 600 without), whichever you pressed last wins, and below that the notes
   stay hidden — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md),
   [261001k](../plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md). Greg's layout from SPIDERYARN-READING2-7K: left for what is not anchored
-  to the text, the middle for the text, the right for what is. Behind the switch. It has no doc of
-  its own yet; the plans are the reference —
+  to the text, the middle for the text, the right for what is. Behind the switch. Since 261002b
+  it also carries, shut, the FAQ, Debate, Citations and comments other modes have stored.
+  **[marginalia.md](marginalia.md)** is its doc: what it shows, and the rule to keep an eye out for
+  new kinds of item that belong there. The plans before it:
   [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md), then 261001i,
   261001k and 261001n above.
 

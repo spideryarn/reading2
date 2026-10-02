@@ -1,0 +1,11 @@
+RangeError: Invalid array length
+    at Array.push (<anonymous>)
+    at wrap (/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/sketch-scene.ts:1041:11)
+    at layoutNodeText (/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/sketch-scene.ts:1158:17)
+    at nodeFits (/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/sketch-scene.ts:1188:11)
+    at <anonymous> (/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/sketch-scene.ts:1274:39)
+    at Array.filter (<anonymous>)
+    at scoreSketch (/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/sketch-scene.ts:1274:24)
+    at generateSketch (/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/sketch.ts:746:17)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async collectSpend.attribution.scopeKind (/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/thinking-effort/run.ts:924:23)

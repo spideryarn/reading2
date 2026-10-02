@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."billing_vouchers" ADD COLUMN "recipient_note" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."billing_vouchers" ADD CONSTRAINT "billing_vouchers_recipient_note_length" CHECK ("spideryarn"."billing_vouchers"."recipient_note" is null or char_length("spideryarn"."billing_vouchers"."recipient_note") <= 500);

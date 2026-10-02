@@ -6,8 +6,8 @@
 
    **Visibly ours.** Small sans, soft ink and no hue: the accent belongs to the
    reader's own marks (docs/research/260828c-decorated-mode-ideas.md § The
-   channel budget), so these can never be mistaken for a comment, and comments
-   can join this column one day without being mistaken for ours. Upright, not
+   channel budget), so these can never be mistaken for a comment; the reader's
+   comments in this column retain their own words. Upright, not
    italic: the article's own synopsis under the title is italic, and a margin
    in the same voice read as the author's.
 
@@ -97,6 +97,91 @@
   color: var(--ink-faint);
 }
 
+/* ------------------------------------------------- § other modes' items --
+   FAQ, Debate, Citations and the reader's notes (report 82, plan 261002b):
+   one shut line per kind per block, its stamp in the idea stamp's small
+   capitals, its words cut at one line. A press opens the rest underneath, in
+   flow, so the note grows and the collision pass moves the notes below. The
+   chevron hangs in the gap, like the question's rule, so the words keep the
+   column's one left edge. */
+.marg-shut {
+  margin: 0;
+  min-width: 0;
+}
+.marg-shut-button {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  position: relative;
+  width: 100%;
+  /* A full-width target, and at least a finger's height on a touch screen. */
+  min-height: 1.5rem;
+  cursor: pointer;
+  color: var(--ink-soft);
+  border-radius: 2px;
+}
+.marg-shut-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+p.marg-shut {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.marg-shut-button:focus-visible {
+  outline: 2px solid var(--rule-strong);
+  outline-offset: 2px;
+}
+.marg-chevron {
+  position: absolute;
+  left: -0.9rem;
+  top: 0.2rem;
+  color: var(--ink-faint);
+  transition: rotate 120ms ease;
+}
+.marg-shut[data-open] .marg-chevron {
+  rotate: 90deg;
+}
+@media (prefers-reduced-motion: reduce) {
+  .marg-chevron {
+    transition: none;
+  }
+}
+.marg-open {
+  display: grid;
+  gap: 0.375rem;
+  padding: 0.25rem 0 0.125rem;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.marg-open-item {
+  display: grid;
+  gap: 0.125rem;
+}
+.marg-open-head {
+  color: var(--ink);
+}
+.marg-open-by {
+  color: var(--ink-faint);
+}
+.marg-open-answer {
+  color: var(--ink-faint);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.marg-open a {
+  color: inherit;
+  text-decoration: underline 1px var(--rule-strong);
+  text-underline-offset: 2px;
+}
+
 /* ---------------------------------------------------------- § the head --
    Pinned flush under the controls bar, across the whole column, with the page
    behind it and a short fade below: notes scrolling up pass under one clean
@@ -112,6 +197,13 @@
   box-sizing: border-box;
   padding: 0.5rem 0.5rem 0.5rem var(--marg-gap);
   background: var(--page);
+  /* **A rule under it, so it does not read as one more note** — Greg, on
+     spya-rczgjb: *"Can we make it visually look slightly different from the
+     rest of the annotations? Perhaps put a box around it or a line under it"*.
+     The line, the quieter of his two: no note in the column has a horizontal
+     rule, so this one says "not a note" without a box's weight. Inset to the
+     text's edge, so it underlines the head's words rather than the gutter:
+     `::before`, since `::after` is the fade. */
   font-family: var(--font-ui);
   font-size: 0.8125rem;
   line-height: 1.4;
@@ -120,6 +212,15 @@
   -webkit-user-select: none;
   display: grid;
   gap: 0.25rem;
+}
+.marg-head::before {
+  content: "";
+  position: absolute;
+  left: var(--marg-gap);
+  right: 0.5rem;
+  bottom: 0;
+  border-bottom: 1px solid var(--rule-strong);
+  pointer-events: none;
 }
 .marg-head::after {
   content: "";

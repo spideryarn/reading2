@@ -72,6 +72,11 @@ import {
 import { findQuote } from "./quote-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -96,8 +101,11 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * version tests the fixture.
  *
  * `ideas/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+ *
+ * `ideas/4`, 2026-10-02: the request gained `IDEAS_OUTPUT_SCHEMA`; the prompt
+ * text is unchanged.
  */
-export const PROMPT_VERSION = "ideas/3";
+export const PROMPT_VERSION = "ideas/4";
 
 /** The most ideas one call may return. A piece does not have forty. */
 export const MAX_IDEAS = 10;
@@ -828,6 +836,41 @@ function parseJson(raw: string): { ideas?: unknown } {
   return parseJsonAnswer<{ ideas?: unknown }>(raw, "the model's answer");
 }
 
+const stringSchema = { type: "string" } as const;
+const objectSchema = <Properties extends Readonly<Record<string, unknown>>>(
+  properties: Properties,
+  required: readonly string[],
+) => ({ type: "object", properties, required, additionalProperties: false }) as const;
+
+const occurrenceProperties = { blockId: stringSchema, quote: stringSchema, reasoning: stringSchema } as const;
+const occurrenceSchema = objectSchema(occurrenceProperties, ["blockId", "quote", "reasoning"]);
+
+const ideaSchema = objectSchema(
+  {
+    name: stringSchema,
+    provenance: { type: "string", enum: ["assumed", "introduced"] },
+    statement: stringSchema,
+    whyYouNeedIt: stringSchema,
+    analogy: stringSchema,
+    occurrences: { type: "array", items: occurrenceSchema },
+  },
+  ["name", "provenance", "statement", "occurrences"],
+);
+
+/** The model-answer shape `parseJson` and `buildIdeas` consume. */
+export const IDEAS_OUTPUT_SCHEMA = objectSchema(
+  {
+    ideas: {
+      type: "array",
+      items: ideaSchema,
+    },
+  },
+  ["ideas"],
+);
+
+validateAnthropicJsonSchema(IDEAS_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(IDEAS_OUTPUT_SCHEMA, ["blockId"]);
+
 export async function generateIdeas(opts: {
   /**
    * The article, read once by whoever has a store or a directory —
@@ -932,7 +975,7 @@ export async function generateIdeas(opts: {
   try {
     const call = streamMessage(
       "ideas",
-      {
+      withMessagesJsonSchema({
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: effortFor("ideas") },
@@ -956,19 +999,17 @@ export async function generateIdeas(opts: {
                an invented id. The stage reported "the model returned no ideas"
                and the model had done nothing wrong.
 
-               The cost is that these bytes match search/explain/converse rather
-               than the other pipeline stages, so this stage shares no cached
-               prefix with arc or tweets. `ARTICLE_RENDERER` in src/models.ts is
-               where that fact is recorded, because `sharesArticleCache` would
-               otherwise group on effort alone and claim a share that cannot
-               happen. */
+               The bytes match the other `ids` stages, but Ideas now sends its
+               own output schema. `ARTICLE_RENDERER` in models.ts and
+               `ARTICLE_OUTPUT_FORMAT` in pipeline.ts together keep it out of
+               every current cache group. */
             text: articleWithIds(meta, evidence),
             ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
           },
           { type: "text" as const, text: SYSTEM },
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, count, profile }) }],
-      },
+      }, IDEAS_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 

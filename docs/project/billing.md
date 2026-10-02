@@ -579,7 +579,9 @@ arms only: `describePlan`'s headline, the server's `remaining` (further *private
 `limit − used`), and a collapsed *How free articles work* that links `/pricing` and `/profile`. It
 is the shelf's one `useBilling()`, and the read it makes is also what claims a waiting gift voucher
 (§ Gift vouchers below), so the box is where a new gift first shows — a gift icon by the count, the
-gift listed in the collapsed half, and a dismissible *has been added* line for seven days.
+gift listed in the collapsed half, and a dismissible *has been added* line for seven days. The
+explainer, the gift list and an (i) linking to `/pricing` are shared with `/profile` since
+2026-10-02 (`src/web/PlanHelp.tsx`).
 
 ## We never touch a card
 
@@ -1033,8 +1035,9 @@ and pressing **Stop** costs a slot for ever.
 
 **The last two have no caller in `src/`** and were missing until GPT Sol counted the paths
 (2026-09-03). That made them a trap rather than a leak — but they are the advertised `JobStore` API,
-and `forget`/`trimFinished` delete terminal jobs, so a job ended through either of them and then
-forgotten leaves a reservation `in_flight` for ever with nothing left to say what it was spent on.
+and `trimFinished` deletes terminal jobs (`forget` did too before 2026-10-02), so a job ended through
+either of them and then retired leaves a reservation `in_flight` for ever with nothing left to say
+what it was spent on.
 They **release even for a `done`**, because that path moves the job row and publishes nothing: the
 only transition entitled to charge is the one that publishes in the same transaction.
 
@@ -1115,8 +1118,14 @@ one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review
   held-transaction tests, beside twenty concurrent ingests on a 3+2 account admitting exactly five.
 
 What the reader is told is `ReaderPlan.gifts` — articles, the claim date and an opaque `noticeKey`,
-on the `free` and `lapsed` arms only, and **absent when there are none**, so no surface can mention a
-voucher to somebody without one. The note, the creator and the address never leave the admin
+on the `free` and `lapsed` arms and, since 2026-10-02, the `paid` arm too, where it is drawn as
+*waiting* for Free; **absent when there are none**, so no surface can mention a
+voucher to somebody without one. `/profile` shows a held gift in the open, and both it and the shelf
+draw the same (i) and *How … works* from `src/web/PlanHelp.tsx`, whose words are `planTip` and
+`planExplainer` in `src/billing-plan.ts`: when a paid allowance starts again and what to (the tier
+row's `periodAllowance`, never a prorated `limit`), that a trial promises no reset, and that an
+ending plan does not hand back a fresh free allowance
+([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md)). The note, the creator and the address never leave the admin
 routes. The copy says *3 free + 20 from a gift* rather than a bare 23 (`giftMakeup`).
 
 **A voucher emails its recipient when it is made, and its creator when it is claimed**, each at most

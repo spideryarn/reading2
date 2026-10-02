@@ -1,0 +1,68 @@
+{"caption":"The piece runs as one long chain from problem to method to evidence to practice, with a convergence in the middle where several empirical findings all support one claim about synergy, and a fork near the end into forward-looking extensions.","title":"chain into convergence","scenes":[{"id":"overview","title":"Overview","caption":"A chain from the problem (no good way to measure neural computation) through the PID method to a cluster of findings that all converge on 'synergy marks information processing', then branching into practical limits and future extensions.","height":1180,"items":[
+{"kind":"node","id":"intro","shape":"ellipse","x":280,"y":30,"w":200,"h":70,"text":"How do brains process information?","size":"md","block":"spya-yb735k","detail":"New recording tech and new analysis methods now make this tractable."},
+{"kind":"node","id":"tracking","shape":"box","x":280,"y":140,"w":200,"h":70,"text":"Mutual information vs. transfer entropy","sub":"connectivity vs. flow","size":"sm","block":"spya-ygkzd8"},
+{"kind":"node","id":"limit","shape":"note","x":280,"y":250,"w":200,"h":60,"text":"Flow alone can't show how inputs combine","size":"sm","block":"spya-dhy39x"},
+{"kind":"node","id":"pid","shape":"hex","x":270,"y":340,"w":220,"h":80,"text":"Partial Information Decomposition","sub":"redundant / unique / synergistic","size":"lg","block":"spya-u0wm5e","detail":"Splits joint mutual information into non-overlapping pieces via a lattice and a chosen redundancy measure.","opens":"inside-pid"},
+
+{"kind":"region","x":30,"y":470,"w":700,"h":330,"label":"EMPIRICAL EVIDENCE FOR SYNERGY AS COMPUTATION","style":"band","tone":1,"opens":"inside-evidence"},
+{"kind":"node","id":"richclub","shape":"box","x":50,"y":520,"w":190,"h":70,"text":"Rich-club neurons hold most synergy","size":"sm","tone":1,"block":"spya-e3ghxj"},
+{"kind":"node","id":"motifs","shape":"box","x":280,"y":520,"w":190,"h":70,"text":"Recurrent links raise synergy, feedback doesn't","size":"sm","tone":1,"block":"spya-p8by2y"},
+{"kind":"node","id":"corr","shape":"box","x":510,"y":520,"w":190,"h":70,"text":"Synergy peaks at moderate input correlation","size":"sm","tone":1,"block":"spya-zfs2z7"},
+{"kind":"node","id":"primate","shape":"box","x":165,"y":630,"w":190,"h":70,"text":"In behaving monkeys, synergy shifts with task","size":"sm","tone":1,"block":"spya-aqcngt"},
+{"kind":"node","id":"caveat","shape":"note","x":395,"y":630,"w":190,"h":70,"text":"Caveats: culture data, bivariate estimates","size":"sm","block":"spya-vjzxxm"},
+{"kind":"node","id":"conclusion1","shape":"ellipse","x":280,"y":730,"w":200,"h":60,"text":"Synergy = where computation happens","size":"md","block":"spya-cc282b"},
+
+{"kind":"node","id":"practical","shape":"box","x":280,"y":830,"w":220,"h":70,"text":"Practical limits: data type, sample size, tools","size":"sm","block":"spya-kmgwhs","opens":"inside-practical"},
+{"kind":"node","id":"future","shape":"box","x":280,"y":940,"w":220,"h":70,"text":"Future: local PID, multi-target (ΦID)","size":"sm","block":"spya-zz5xxs"},
+{"kind":"node","id":"summary","shape":"ellipse","x":280,"y":1050,"w":200,"h":70,"text":"Neurons compute on patterns, not just sums","size":"md","block":"spya-rc5z33"},
+
+{"kind":"edge","from":"intro","to":"tracking","arrow":"end"},
+{"kind":"edge","from":"tracking","to":"limit","arrow":"end"},
+{"kind":"edge","from":"limit","to":"pid","arrow":"end"},
+{"kind":"edge","from":"pid","to":"richclub","arrow":"end","via":"curve"},
+{"kind":"edge","from":"pid","to":"motifs","arrow":"end","via":"curve"},
+{"kind":"edge","from":"pid","to":"corr","arrow":"end","via":"curve"},
+{"kind":"edge","from":"richclub","to":"conclusion1","arrow":"end","via":"curve"},
+{"kind":"edge","from":"motifs","to":"conclusion1","arrow":"end"},
+{"kind":"edge","from":"corr","to":"conclusion1","arrow":"end","via":"curve"},
+{"kind":"edge","from":"primate","to":"conclusion1","arrow":"end","via":"curve"},
+{"kind":"edge","from":"conclusion1","to":"practical","arrow":"end"},
+{"kind":"edge","from":"practical","to":"future","arrow":"end"},
+{"kind":"edge","from":"future","to":"summary","arrow":"end"}
+]},
+
+{"id":"inside-pid","title":"Building the PID framework","caption":"A ladder: from the puzzle that parts don't sum to the whole, through the two-neuron case, up to the general lattice, which still needs an arbitrary choice of redundancy measure to compute.","height":620,"items":[
+{"kind":"node","id":"puzzle","shape":"diamond","x":280,"y":30,"w":200,"h":80,"text":"Whole ≠ sum of parts","size":"sm","block":"spya-u0wm5e"},
+{"kind":"node","id":"synergy_def","shape":"box","x":70,"y":150,"w":200,"h":70,"text":"Whole > parts: synergy","size":"sm","block":"spya-e94ury"},
+{"kind":"node","id":"redund_def","shape":"box","x":490,"y":150,"w":200,"h":70,"text":"Whole < parts: redundancy","size":"sm","block":"spya-e94ury"},
+{"kind":"node","id":"twoparent","shape":"box","x":280,"y":260,"w":200,"h":70,"text":"Two-parent case: four unknown atoms, three equations","size":"sm","block":"spya-y7wdb7"},
+{"kind":"node","id":"lattice","shape":"hex","x":280,"y":370,"w":220,"h":80,"text":"General lattice of source subsets","size":"sm","block":"spya-k378fv","detail":"Mobius inversion over a redundancy function gives every partial information atom."},
+{"kind":"node","id":"redmeasure","shape":"note","x":280,"y":480,"w":220,"h":70,"text":"No agreed redundancy measure; pick per data type","size":"sm","block":"spya-d2quz5"},
+{"kind":"edge","from":"puzzle","to":"synergy_def","arrow":"end"},
+{"kind":"edge","from":"puzzle","to":"redund_def","arrow":"end"},
+{"kind":"edge","from":"synergy_def","to":"twoparent","arrow":"end"},
+{"kind":"edge","from":"redund_def","to":"twoparent","arrow":"end"},
+{"kind":"edge","from":"twoparent","to":"lattice","arrow":"end"},
+{"kind":"edge","from":"lattice","to":"redmeasure","arrow":"end"}
+]},
+
+{"id":"inside-evidence","title":"Evidence that synergy marks computation","caption":"Several independent findings, from cortical cultures and from behaving monkeys, all converge on the same claim: synergy concentrates where the real information processing happens.","height":560,"items":[
+{"kind":"node","id":"setup","shape":"box","x":280,"y":30,"w":220,"h":70,"text":"512-electrode recordings, thousands of triads","size":"sm","block":"spya-cc282b"},
+{"kind":"node","id":"ff","shape":"box","x":280,"y":130,"w":220,"h":60,"text":"Synergy tracks feedforward transfer entropy","size":"sm","block":"spya-kqkb58"},
+{"kind":"node","id":"rich2","shape":"box","x":60,"y":230,"w":190,"h":70,"text":"Rich-club triads: 88% of network synergy","size":"sm","tone":1,"block":"spya-fud8q3"},
+{"kind":"node","id":"motif2","shape":"box","x":280,"y":230,"w":190,"h":70,"text":"Recurrent > feedback for raising synergy","size":"sm","tone":1,"block":"spya-sd9fzd"},
+{"kind":"node","id":"corr2","shape":"box","x":500,"y":230,"w":190,"h":70,"text":"Synergy peaks at ~7% of max correlation","size":"sm","tone":1,"block":"spya-ybmve2"},
+{"kind":"node","id":"caveat2","shape":"note","x":60,"y":340,"w":190,"h":70,"text":"Bivariate TE overstates edges; culture ≠ in vivo","size":"sm","block":"spya-j4cy9j"},
+{"kind":"node","id":"monkey","shape":"box","x":280,"y":340,"w":220,"h":70,"text":"Macaques: synergy/redundancy shift by task epoch","size":"sm","tone":1,"block":"spya-t8fayf"},
+{"kind":"node","id":"conv","shape":"ellipse","x":280,"y":450,"w":220,"h":70,"text":"Synergy = behaviorally shaped computation","size":"md","block":"spya-b32ecw"},
+{"kind":"edge","from":"setup","to":"ff","arrow":"end"},
+{"kind":"edge","from":"ff","to":"rich2","arrow":"end","via":"curve"},
+{"kind":"edge","from":"ff","to":"motif2","arrow":"end"},
+{"kind":"edge","from":"ff","to":"corr2","arrow":"end","via":"curve"},
+{"kind":"edge","from":"rich2","to":"caveat2","arrow":"end"},
+{"kind":"edge","from":"motif2","to":"monkey","arrow":"end"},
+{"kind":"edge","from":"caveat2","to":"conv","arrow":"end","via":"curve"},
+{"kind":"edge","from":"monkey","to":"conv","arrow":"end"},
+{"kind":"edge","from":"corr2","to":"conv","arrow":"end","via":"curve"}
+]}
+]}

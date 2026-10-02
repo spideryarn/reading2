@@ -1,6 +1,6 @@
 /**
- * **Strict JSON on the Anthropic Messages wire, with the request-time failures
- * caught before the request.**
+ * **Strict JSON on the Messages and chat-completions wires, with the
+ * request-time failures caught before the request.**
  *
  * Anthropic compiles `output_config.format` into a grammar. Its supported JSON
  * Schema subset is deliberately smaller than JSON Schema itself, so an ordinary
@@ -20,6 +20,7 @@
  * caller can validate at its construction seam without copying a possibly large
  * schema or changing the bytes used for cache identity.
  */
+import type { AiRequestBody } from "./ai-call.js";
 import type { MessagesBody } from "./messages-stream.js";
 
 export type AnthropicJsonSchema = Readonly<Record<string, unknown>>;
@@ -339,6 +340,81 @@ export function validateAnthropicJsonSchema<T extends AnthropicJsonSchema>(schem
   return schema;
 }
 
+/**
+ * Refuse the smaller strict-schema subset accepted by OpenAI's chat wire.
+ *
+ * OpenAI requires the root to be an object and every property of every object
+ * to appear in `required`; an optional value is represented by a required
+ * nullable property instead. `withChatJsonSchema` can route to OpenAI, so the
+ * shared adapter validates this before a reader pays for a request that the
+ * provider will reject.
+ */
+export function validateOpenAiJsonSchema<T extends AnthropicJsonSchema>(schema: T): T {
+  validateAnthropicJsonSchema(schema);
+  const root = recordAt(schema, "$");
+  if (root.type !== "object" || root.anyOf !== undefined) {
+    throw new Error("OpenAI strict structured-output schema root must be an object, not anyOf.");
+  }
+
+  const childrenOf = (
+    node: Record<string, unknown>,
+    path: string,
+  ): { value: unknown; path: string }[] => {
+    const children: { value: unknown; path: string }[] = [];
+    const { isObject } = validateTypeKeyword(node, path);
+    const object = objectProperties(node, path, isObject);
+    if (object !== null) {
+      const missing = Object.keys(object.properties).filter((name) => !object.required.has(name));
+      if (missing.length > 0) {
+        throw new Error(
+          `OpenAI strict structured-output schema requires all properties at ${path} to be required; ` +
+            `missing ${missing.join(", ")}.`,
+        );
+      }
+      children.push(
+        ...Object.entries(object.properties).map(([name, value]) => ({
+          value,
+          path: `${path}.properties.${name}`,
+        })),
+      );
+    }
+    if (typeof node.$ref === "string") {
+      children.push({ value: resolveLocalRef(root, node.$ref, path), path: `${path} -> ${node.$ref}` });
+    }
+    if (node.items !== undefined) children.push({ value: node.items, path: `${path}.items` });
+    for (const keyword of ["$defs", "definitions"] as const) {
+      if (node[keyword] === undefined) continue;
+      children.push(
+        ...Object.entries(schemaMap(node[keyword], keyword, path)).map(([name, value]) => ({
+          value,
+          path: `${path}.${keyword}.${name}`,
+        })),
+      );
+    }
+    for (const keyword of ["anyOf", "allOf"] as const) {
+      if (node[keyword] === undefined) continue;
+      children.push(
+        ...schemaList(node[keyword], keyword, path).map((value, i) => ({
+          value,
+          path: `${path}.${keyword}[${i}]`,
+        })),
+      );
+    }
+    return children;
+  };
+
+  const visited = new WeakSet<object>();
+  const visit = (raw: unknown, path: string): void => {
+    const node = recordAt(raw, path);
+    if (visited.has(node)) return;
+    visited.add(node);
+    for (const child of childrenOf(node, path)) visit(child.value, child.path);
+  };
+
+  visit(root, "$");
+  return schema;
+}
+
 function schemaContainsEnum(
   raw: unknown,
   root: Record<string, unknown>,
@@ -402,6 +478,22 @@ export function withMessagesJsonSchema(
     output_config: {
       ...body.output_config,
       format: { type: "json_schema", schema },
+    },
+  };
+}
+
+/** Add a validated, named strict JSON schema to a chat-completions body. */
+export function withChatJsonSchema(
+  body: AiRequestBody,
+  name: string,
+  schema: AnthropicJsonSchema,
+): AiRequestBody {
+  validateOpenAiJsonSchema(schema);
+  return {
+    ...body,
+    response_format: {
+      type: "json_schema",
+      json_schema: { name, strict: true, schema },
     },
   };
 }

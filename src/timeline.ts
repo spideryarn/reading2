@@ -122,6 +122,11 @@ import {
 import { findQuote } from "./quote-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import {
@@ -154,8 +159,11 @@ import { plainWords } from "./plain-words.js";
  * literal — a fixture that hardcodes the version tests the fixture.
  *
  * `timeline/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+ *
+ * `timeline/4`, 2026-10-02: the request gained `TIMELINE_OUTPUT_SCHEMA`; the
+ * prompt text is unchanged.
  */
-export const PROMPT_VERSION = "timeline/3";
+export const PROMPT_VERSION = "timeline/4";
 
 /**
  * The most events one call may carry into the artefact.
@@ -1109,10 +1117,10 @@ story in time should come back with an empty list, and that is a real answer.`;
  *
  * **The publication date goes here, in the user prompt, and not in the article
  * block.** `articleWithIds` writes TITLE / BY / PUBLISHED IN / URL and no date,
- * which is what keeps this stage's article bytes identical to `ideas`' so the
- * two can share one cached prefix
- * (`ARTICLE_RENDERER` in src/models.ts). A date in the head would break that
- * for every article, to save nothing.
+ * which keeps this stage's article bytes identical to `ideas`'. Their output
+ * schemas differ, so they do not currently share a cache key
+ * (`ARTICLE_OUTPUT_FORMAT` in src/pipeline.ts); a date in the head would still
+ * make the bytes diverge for no gain.
  */
 export function renderPrompt(opts: { tree: Tree; frame: string | null }): string {
   const skeleton = partsOf(opts.tree)
@@ -1157,6 +1165,41 @@ ${skeleton}`;
 function parseJson(raw: string): { events?: unknown } {
   return parseJsonAnswer<{ events?: unknown }>(raw, "the model's answer");
 }
+
+const timelineStringSchema = { type: "string" } as const;
+const timelineOccurrenceSchema = {
+  type: "object",
+  properties: { blockId: timelineStringSchema, quote: timelineStringSchema },
+  required: ["blockId", "quote"],
+  additionalProperties: false,
+} as const;
+
+/** The required event fields in the prompt; date interpretation remains post-parse. */
+export const TIMELINE_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    events: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          label: timelineStringSchema,
+          order: { type: "number" },
+          modality: { type: "string", enum: ["happened", "predicted", "hypothetical"] },
+          phrase: { type: ["string", "null"] },
+          occurrences: { type: "array", items: timelineOccurrenceSchema },
+        },
+        required: ["label", "order", "modality", "phrase", "occurrences"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["events"],
+  additionalProperties: false,
+} as const;
+
+validateAnthropicJsonSchema(TIMELINE_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(TIMELINE_OUTPUT_SCHEMA, ["blockId"]);
 
 /**
  * The answer budget, in tokens. **Measured, not guessed**: the spike's two runs
@@ -1254,7 +1297,7 @@ export async function generateTimeline(opts: {
   try {
     const call = streamMessage(
       "timeline",
-      {
+      withMessagesJsonSchema({
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: effortFor("timeline") },
@@ -1276,7 +1319,7 @@ export async function generateTimeline(opts: {
           { type: "text" as const, text: SYSTEM },
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, frame }) }],
-      },
+      }, TIMELINE_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 

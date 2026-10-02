@@ -51,6 +51,11 @@ import { streamMessage, wasRefused } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower } from "./models.js";
 import { REF_ATTR } from "./notes.js";
 import { parseJsonAnswer } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { findQuote } from "./quote-match.js";
 import { type NumberedReferenceList, referenceListText } from "./citation-reference-list.js";
 import { capEntry, entryOfText } from "./citation-entry.js";
@@ -88,8 +93,11 @@ export type { CitedWork, CitationDrops, CitationPlace, Citations, CitationScoreD
 /* `citations/2`, 2026-09-11: the quote rule forbids "..." and quoting across
    blocks — the stage-1 runs' commonest reason a place failed verification. */
 /* `citations/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3). */
-/* `citations/4`, 2026-09-30: a PDF's reference list is read from its text layer and sent after the article, with an `entry` field per work, and `authors` asked for as surnames (plan 260930i, SPIDERYARN-READING2-6K). */
-export const PROMPT_VERSION = "citations/4";
+/* `citations/4`, 2026-09-30: a PDF's reference list is read from its text layer and sent after the article, with an `entry` field per work, and `authors` asked for as surnames (plan 260930i, SPIDERYARN-READING2-6K).
+ *
+ * `citations/5`, 2026-10-02: the request gained `CITATIONS_OUTPUT_SCHEMA`;
+ * the prompt text is unchanged. */
+export const PROMPT_VERSION = "citations/5";
 
 /** Mentions kept per work. The first-cited jump needs one; three is room for the shorthand and the note. */
 export const MAX_MENTIONS = 3;
@@ -1727,6 +1735,46 @@ function parseJson(raw: string): { works?: unknown; capped?: unknown } {
   return parseJsonAnswer<{ works?: unknown; capped?: unknown }>(raw, "the model's answer");
 }
 
+const citationStringSchema = { type: "string" } as const;
+const citationPlaceSchema = {
+  type: "object",
+  properties: { block: citationStringSchema, quote: citationStringSchema },
+  required: ["block", "quote"],
+  additionalProperties: false,
+} as const;
+
+/** The prompt's list shape; place verification and score bounds remain code checks. */
+export const CITATIONS_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    capped: { type: "boolean" },
+    works: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: citationStringSchema,
+          authors: citationStringSchema,
+          year: citationStringSchema,
+          why: citationStringSchema,
+          relevance: { type: "number" },
+          influence: { type: "number" },
+          reference: citationPlaceSchema,
+          mentions: { type: "array", items: citationPlaceSchema },
+          entry: { type: "integer" },
+        },
+        required: ["title", "why", "relevance", "influence"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["capped", "works"],
+  additionalProperties: false,
+} as const;
+
+validateAnthropicJsonSchema(CITATIONS_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(CITATIONS_OUTPUT_SCHEMA, ["block"]);
+
 /* -------------------------------------------------------------- the call -- */
 
 export interface CitationsRun {
@@ -1785,7 +1833,7 @@ export async function generateCitations(opts: {
   try {
     const call = streamMessage(
       "citations",
-      {
+      withMessagesJsonSchema({
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort },
@@ -1805,7 +1853,7 @@ export async function generateCitations(opts: {
           { type: "text" as const, text: SYSTEM },
         ],
         messages: [{ role: "user", content: renderPrompt() }],
-      },
+      }, CITATIONS_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
     if (opts.onProgress) {
