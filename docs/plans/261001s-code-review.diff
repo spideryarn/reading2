@@ -1,0 +1,1865 @@
+diff --git a/src/web/AddArticle.tsx b/src/web/AddArticle.tsx
+index 87b203ae8..fa82f37af 100644
+--- a/src/web/AddArticle.tsx
++++ b/src/web/AddArticle.tsx
+@@ -38,7 +38,12 @@ import {
+   KEEP_A_TAB_OPEN,
+ } from "../job-state.js";
+ import { ADDING_SENDS_TEXT_AWAY } from "../messages.js";
++import { mintId } from "../ids.js";
++import { isWebUrl } from "../urls.js";
++import { useFeedbackOpen } from "./FeedbackButton.js";
++import { importProblemReport } from "./import-report.js";
+ import { QuotaNotice } from "./QuotaNotice.js";
++import { exactly, relativeAgo } from "./relative-time.js";
+ import { addHref, navigate } from "./router.js";
+ import { isMinimalJob } from "./read-this.js";
+ import { UploadPicker, type UploadSlots } from "./UploadPicker.js";
+@@ -538,17 +543,22 @@ export function JobCard({
+    * began and sit there for six minutes, which is a worse lie than showing
+    * nothing.
+    *
+-   * A second while something is running, and **off** otherwise: a finished card
+-   * has no running step, so nothing on it changes with time and a minute would
+-   * be a re-render an hour to paint the same pixels. `useNow` stops dead while
+-   * the tab is hidden and catches up on return, which is exactly right here —
+-   * nobody is watching a timer they cannot see.
++   * A second while something is running, and **a minute** otherwise. It was
++   * off for finished cards until 2026-10-01, when nothing on one changed with
++   * time; the source line below now says "3 hours ago", and the same
++   * `sameJobs` suppression would freeze that for as long as the tab sat open.
++   * Greg, 2026-10-01, spya-a5gzb9; plan 261001s, GPT Sol's review item 9.
++   * `useNow` stops dead while the tab is hidden and catches up on return, which
++   * is exactly right here — nobody is watching a timer they cannot see.
+    *
+    * This said `86_400_000` and called it "one timer that never fires" until
+    * 2026-09-01. It fired — once a day, per card, for the life of the tab.
+-   * Harmless and untrue, which is the worse half; `useNow` takes `null` now.
++   * Harmless and untrue, which is the worse half.
+    */
+-  const now = useNow(busy ? 1000 : null);
++  const now = useNow(busy ? 1000 : 60_000);
++  /* `null` where no Feedback host is mounted above, and then there is no
++     *Report this* — a button that opens nothing is worse than none. */
++  const openFeedback = useFeedbackOpen();
+   const shown = displayJob(job, now);
+   /* Only while it is going. A count that outlived its job would be a warning
+      about something that has already stopped — and the engine drops the count
+@@ -632,6 +642,27 @@ export function JobCard({
+                 <RotateCw size={13} /> Retry
+               </Button>
+             )}
++            {/* **Report this, on a failed job only** — a cancelled one is the
++                reader's own doing. It opens the Feedback dialog as a Problem
++                with the job's ids and times in the box, and nothing else: no
++                address, filename or error sentence, which src/web/import-report.ts
++                says why. A fresh request id per press, so pressing it again
++                after sending is a new request and a re-render is not
++                (FeedbackDialog.tsx § `FeedbackPrefill`). Greg, 2026-10-01,
++                spya-a5gzb9; plan 261001s § Stage 1. */}
++            {job.status === "error" && openFeedback !== null && (
++              <Button
++                type="button"
++                variant="ghost"
++                size="sm"
++                title="Tell us about this failure — the job's id and times go in the report"
++                onClick={() =>
++                  openFeedback({ id: mintId(), kind: "problem", body: importProblemReport(job) })
++                }
++              >
++                Report this
++              </Button>
++            )}
+             <Button
+               type="button"
+               variant="ghost"
+@@ -648,6 +679,8 @@ export function JobCard({
+         )}
+       </div>
+ 
++      <SourceLine job={job} now={now} />
++
+       <ol className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-1 tw:p-0">
+         {job.steps.map((step) => (
+           <StepRow
+@@ -690,6 +723,67 @@ export function JobCard({
+   );
+ }
+ 
++/**
++ * **Where it came from, and when** — one muted line under the title.
++ *
++ * Greg, 2026-10-01 (spya-a5gzb9): past imports on the signed-in home page
++ * carried too little — a title, and nothing to say which address it was or how
++ * long ago. Plan 261001s § Stage 1.
++ *
++ * - **An address is a link only when `isWebUrl` says `http(s)`.** It is the
++ *   reader's own input drawn back at them, and an `href` built from it must
++ *   never be `javascript:` — anything else is drawn as text.
++ *   docs/project/security-map.md.
++ * - **An upload is its filename, as text.** A re-run with neither origin says
++ *   nothing here and keeps only the time.
++ * - **Both times, because Greg asked for both**: the exact one from `exactly`,
++ *   and how long ago. `relativeAgo` rather than `timeAgo` for the second, since
++ *   past thirty days `timeAgo` falls back to the date, which the first already
++ *   shows — review item 9.
++ *
++ * Long addresses truncate rather than widen the card: at 390px an arXiv PDF
++ * address is wider than the phone.
++ */
++function SourceLine({ job, now }: { job: Job; now: number }) {
++  const when = exactly(job.createdAt);
++  const ago = relativeAgo(job.createdAt, now);
++  const source = job.url ?? job.upload?.filename;
++  return (
++    <p className="tw:-mt-1 tw:mb-2 tw:flex tw:min-w-0 tw:flex-wrap tw:items-baseline tw:gap-x-1.5 tw:text-xs tw:text-muted-foreground">
++      {source !== undefined && (
++        <>
++          {job.url !== undefined && isWebUrl(job.url) ? (
++            <a
++              href={job.url}
++              target="_blank"
++              rel="noopener noreferrer"
++              className="tw:min-w-0 tw:max-w-full tw:truncate tw:text-muted-foreground tw:underline tw:decoration-dotted tw:underline-offset-2"
++            >
++              {job.url}
++            </a>
++          ) : (
++            <span className="tw:min-w-0 tw:max-w-full tw:truncate">{source}</span>
++          )}
++          {when !== undefined && <span aria-hidden="true">·</span>}
++        </>
++      )}
++      {when !== undefined && (
++        <time dateTime={job.createdAt} className="tw:whitespace-nowrap">
++          {when}
++        </time>
++      )}
++      {ago !== undefined && (
++        <>
++          <span aria-hidden="true">·</span>
++          <time dateTime={job.createdAt} title={when} className="tw:whitespace-nowrap">
++            {ago}
++          </time>
++        </>
++      )}
++    </p>
++  );
++}
++
+ /**
+  * One line per stage. The icon carries the status; the text never repeats it.
+  *
+diff --git a/src/web/AddPage.tsx b/src/web/AddPage.tsx
+index c456ab95b..1f80aa3d7 100644
+--- a/src/web/AddPage.tsx
++++ b/src/web/AddPage.tsx
+@@ -48,6 +48,7 @@
+  * See docs/project/ingest-queue.md and docs/project/library.md.
+  */
+ import { useEffect, useRef, useState } from "react";
++import { LoaderCircle, TriangleAlert } from "lucide-react";
+ import { Link } from "./Link.js";
+ import { JobCard } from "./AddArticle.js";
+ import { normaliseUrl, slugFromUrl } from "../ingest.js";
+@@ -71,6 +72,7 @@ import { apiFetch, readJson } from "./lib/api.js";
+ import { AUTO_MODES_LABEL, autoModesDetail, queueAutoModes, readAutoModes, writeAutoModes } from "./auto-modes.js";
+ import { MAX_PURPOSE_CHARS } from "../types.js";
+ import { savePurpose } from "./purpose.js";
++import { markAskPurpose } from "./ask-purpose.js";
+ import { Button } from "@/components/ui/button";
+ 
+ /**
+@@ -342,6 +344,15 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+   const draftRef = useRef(draft);
+   draftRef.current = draft;
+   const focusedRef = useRef(false);
++  /**
++   * **Whether the reader has ever been in the box** — focus or a keystroke —
++   * for this source. Monotonic: a blur does not undo it, and only a new
++   * address does. `focusedRef` is "in the box right now", which is the right
++   * question for *waiting* and the wrong one for *asking again later*: a reader
++   * who clicked in, thought, and clicked out has seen the question and passed
++   * on it. Plan 261001s § Stage 3, GPT Sol's plan review item 2.
++   */
++  const purposeTouchedRef = useRef(false);
+   const [phase, setPhase] = useState<Phase>({ kind: "running" });
+   /**
+    * **The once-guard on the terminal decision**, holding the completion's key.
+@@ -369,6 +380,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+     draftSource.current = wanted;
+     draftRef.current = "";
+     focusedRef.current = false;
++    purposeTouchedRef.current = false;
+     setDraft("");
+     setPhase({ kind: "running" });
+     claimed.current = null;
+@@ -578,6 +590,14 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+     /* **Nothing said, nothing to wait for** — exactly the page before 260930e. */
+     if (draftRef.current.trim() === "" && !focusedRef.current) {
+       claimed.current = completionKey;
++      /* **And ask once, when it opens**, if the reader never so much as
++         clicked into the box — the "didn't notice it" case. Greg, 2026-10-01,
++         spya-hbqezu; plan 261001s § Stage 3. Only here: *Open without it* is a
++         reader who saw the box and declined, and *Save and open* has its
++         answer. A re-add of an article already on the shelf is marked too, on
++         purpose (Sol's item 1) — the reading view asks only if it has no
++         purpose. */
++      if (draftRef.current === "" && !purposeTouchedRef.current) markAskPurpose(completionSlug);
+       setPhase({ kind: "opened" });
+       openArticle(finished, autoModesRef.current, runRef.current);
+       return;
+@@ -674,6 +694,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+      exactly when the box has to stay. While running it also stays over a failed
+      job, whose card has a Retry that may yet finish it (F3). */
+   const showPurpose = deciding || (phase.kind === "running" && (showAutoModes || job !== null));
++  const purposeStatus = purposeStatusOf(phase, draft);
+ 
+   return (
+     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
+@@ -941,14 +962,21 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+       {showPurpose && (
+         <PurposeBox
+           value={draft}
++          status={purposeStatus}
+           onChange={(value) => {
+             /* In the gesture as well as at render, for the reason the tick box
+                writes its ref: a completion can land before the re-render. */
+             draftRef.current = value;
++            purposeTouchedRef.current = true;
+             setDraft(value);
++            /* A refusal describes the words that were sent. Once they are
++               edited it is about text no longer in the box, and "Not saved —"
++               over the new words would be a claim about them. Sol's item 10. */
++            setPhase((p) => (p.kind === "ready" && p.error !== null ? { ...p, error: null } : p));
+           }}
+           onFocusChange={(focused) => {
+             focusedRef.current = focused;
++            if (focused) purposeTouchedRef.current = true;
+           }}
+           onShortcut={saveAndOpen}
+         />
+@@ -973,11 +1001,6 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+               Open without it
+             </Button>
+           </div>
+-          {phase.kind === "ready" && phase.error !== null && (
+-            <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-destructive" role="alert">
+-              Not saved — {phase.error}
+-            </p>
+-          )}
+         </div>
+       )}
+ 
+@@ -1003,14 +1026,23 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+  * Capped rather than counted past: the server refuses more than
+  * `MAX_PURPOSE_CHARS`, and a refusal after the import is a worse place to learn
+  * that than the box.
++ *
++ * **It says whether the words have been saved**, in `ProfileBox`'s status line
++ * and its `prof-save` clothes. Greg, 2026-10-01, spya-hbqezu: *"it doesn't have
++ * a UI indication of when/whether it has saved it or not."* There is no
++ * *Saved* state, because a successful save navigates straight to the article:
++ * the line says *Not saved yet* until the moment the sentence can be stored,
++ * which is the honest shape. Plan 261001s § Stage 2.
+  */
+ function PurposeBox({
+   value,
++  status,
+   onChange,
+   onFocusChange,
+   onShortcut,
+ }: {
+   value: string;
++  status: PurposeStatus;
+   onChange: (value: string) => void;
+   onFocusChange: (focused: boolean) => void;
+   onShortcut: () => void;
+@@ -1051,10 +1083,65 @@ function PurposeBox({
+           {value.length} / {MAX_PURPOSE_CHARS}
+         </span>
+       </div>
++      {/* Mounted for the life of the box and `aria-live`, as ProfileBox's is,
++          so what is announced is the change. The refusal inside it is
++          `role="alert"` as it was when it sat under the buttons. */}
++      <p className={`prof-save is-${status.kind}`} aria-live="polite">
++        {purposeStatusWords(status)}
++      </p>
+     </div>
+   );
+ }
+ 
++/** Where the add page's purpose stands. `PurposeBox`'s status line draws it. */
++type PurposeStatus =
++  | { kind: "none" }
++  | { kind: "waiting" }
++  | { kind: "ready" }
++  | { kind: "saving" }
++  | { kind: "error"; message: string };
++
++/**
++ * The status, from the phase and the draft. An empty (or blank) draft says
++ * nothing: the hint already says *Optional*, and a blank one is never sent, so
++ * "Save and open stores it" would be untrue of it.
++ */
++function purposeStatusOf(phase: Phase, draft: string): PurposeStatus {
++  if (phase.kind === "saving") return { kind: "saving" };
++  if (phase.kind === "ready" && phase.error !== null) return { kind: "error", message: phase.error };
++  if (draft.trim() === "") return { kind: "none" };
++  if (phase.kind === "ready") return { kind: "ready" };
++  if (phase.kind === "running") return { kind: "waiting" };
++  return { kind: "none" };
++}
++
++function purposeStatusWords(status: PurposeStatus) {
++  switch (status.kind) {
++    case "none":
++      return null;
++    case "waiting":
++      return "Not saved yet — kept here until the import finishes.";
++    case "ready":
++      return "Not saved yet — Save and open stores it.";
++    case "saving":
++      return (
++        <>
++          <LoaderCircle size={12} className="cmt-spinner" aria-hidden="true" /> Saving…
++        </>
++      );
++    case "error":
++      return (
++        <span role="alert" className="tw:inline-flex tw:items-center tw:gap-[0.3rem]">
++          <TriangleAlert size={12} aria-hidden="true" /> Not saved — {status.message}
++        </span>
++      );
++    default: {
++      const never: never = status;
++      return never;
++    }
++  }
++}
++
+ /**
+  * Whether this tab is still moving bytes, or about to be.
+  *
+diff --git a/src/web/FeedbackButton.tsx b/src/web/FeedbackButton.tsx
+index 6968a65cb..cd7088c03 100644
+--- a/src/web/FeedbackButton.tsx
++++ b/src/web/FeedbackButton.tsx
+@@ -98,13 +98,20 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
+ import type { Placement } from "@floating-ui/react";
+ import { MessageSquareWarning } from "lucide-react";
+ 
+-import { FeedbackDialog } from "./FeedbackDialog.js";
++import { FeedbackDialog, type FeedbackPrefill } from "./FeedbackDialog.js";
+ import { useRoute } from "./router.js";
+ import { ControlTip, Tooltip } from "./Tooltip.js";
+ 
+-/** What a trigger may do, and it is the whole of the contract: open the box. */
++/**
++ * What a trigger may do, and it is the whole of the contract: open the box —
++ * **optionally with words in it**, since 2026-10-01. A failed import's *Report
++ * this* is the caller (AddArticle.tsx § `JobCard`; Greg, spya-a5gzb9, plan
++ * 261001s). Still one verb: a request is something to open *with*, not a second
++ * thing a caller can do to the dialog. FeedbackDialog.tsx § `FeedbackPrefill`
++ * says what may go in one and how it is applied.
++ */
+ interface FeedbackApi {
+-  open(): void;
++  open(request?: FeedbackPrefill): void;
+ }
+ 
+ /**
+@@ -154,7 +161,7 @@ const FeedbackContext = createContext<FeedbackApi | null>(null);
+  * return type every caller has to read, instead of in a `useContext` a caller
+  * can forget to check.
+  */
+-export function useFeedbackOpen(): (() => void) | null {
++export function useFeedbackOpen(): ((request?: FeedbackPrefill) => void) | null {
+   const api = useContext(FeedbackContext);
+   return api === null ? null : api.open;
+ }
+@@ -171,10 +178,22 @@ export function useFeedbackOpen(): (() => void) | null {
+ export function FeedbackHost({ children }: { children: ReactNode }) {
+   const route = useRoute();
+   const [open, setOpen] = useState(false);
++  /* **The last request, kept rather than cleared.** The dialog applies each id
++     once (FeedbackDialog.tsx § `applied`), so holding it costs nothing and
++     clearing it would be a second state change to keep in step with this one. */
++  const [prefill, setPrefill] = useState<FeedbackPrefill | null>(null);
+   /* **Stable**, so that opening the box does not re-render the bar and every
+-     button in it. `setOpen` is itself stable, so an empty dependency list is
+-     honest rather than a lie the linter happens to accept. */
+-  const api = useMemo<FeedbackApi>(() => ({ open: () => setOpen(true) }), []);
++     button in it. Both setters are themselves stable, so an empty dependency
++     list is honest rather than a lie the linter happens to accept. */
++  const api = useMemo<FeedbackApi>(
++    () => ({
++      open: (request) => {
++        if (request) setPrefill(request);
++        setOpen(true);
++      },
++    }),
++    [],
++  );
+   return (
+     <FeedbackContext.Provider value={api}>
+       {children}
+@@ -205,6 +224,7 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
+           about which article a report is against. */}
+       <FeedbackDialog
+         open={open}
++        prefill={prefill}
+         onClose={() => setOpen(false)}
+         where={{
+           url: location.href,
+@@ -496,7 +516,9 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
+            exception in the bar's row would make a last-rung bar scroll where it
+            would otherwise have fitted. GPT Sol, G7 and T2. */
+         className={shape.button}
+-        onClick={api.open}
++        /* Not `onClick={api.open}`: since `open` takes a request, handing it
++           straight to `onClick` would pass the click event in as one. */
++        onClick={() => api.open()}
+         /* **The accessible name, now that `title` is not supplying one.**
+            Three of the four shapes hide the word at some width — the corner's
+            under the 731px query, the dock's under the fit ladder, and the
+diff --git a/src/web/FeedbackDialog.tsx b/src/web/FeedbackDialog.tsx
+index 9640c8543..91f3ee0c9 100644
+--- a/src/web/FeedbackDialog.tsx
++++ b/src/web/FeedbackDialog.tsx
+@@ -153,10 +153,32 @@ export interface FeedbackWhere {
+  * hover card on the Feedback button (FeedbackButton.tsx) and on /privacy, both
+  * of which say it without naming anybody.
+  */
++/**
++ * **Words another surface asks to have put in the box**, and the kind with
++ * them — the first caller is a failed import's *Report this* (AddArticle.tsx §
++ * `JobCard`). Greg, 2026-10-01, spya-a5gzb9; plan 261001s § Stage 1.
++ *
++ * `id` is what makes it applied **once**: see `applied` in the component. A
++ * caller mints a fresh one per press, so a second press is a second request
++ * and a re-render is not.
++ *
++ * What may go in `body` is bounded by docs/project/feedback.md § The one rule,
++ * which a pre-typed value does not get round by being in the box — the import
++ * report is ids, closed values and times for exactly that reason
++ * (src/web/import-report.ts).
++ */
++export interface FeedbackPrefill {
++  id: string;
++  kind: FeedbackKind;
++  body: string;
++}
++
+ interface Props {
+   open: boolean;
+   onClose(): void;
+   where: FeedbackWhere;
++  /** The latest request to fill the box, if anything has asked. */
++  prefill?: FeedbackPrefill | null;
+ }
+ 
+ /**
+@@ -336,7 +358,7 @@ function reportBody(input: {
+   };
+ }
+ 
+-export function FeedbackDialog({ open, onClose, where }: Props) {
++export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) {
+   const ref = useRef<HTMLDialogElement>(null);
+   /** The one box. `useDictationField` needs it to find the caret. */
+   const box = useRef<HTMLTextAreaElement>(null);
+@@ -572,6 +594,42 @@ export function FeedbackDialog({ open, onClose, where }: Props) {
+   const bodyRef = useRef(body);
+   bodyRef.current = body;
+ 
++  /**
++   * **A prefill is applied once per request id, and never over the reader's
++   * words.** Plan 261001s, GPT Sol's review item 7.
++   *
++   * `applied` is a ref of the ids already taken, so a re-render, a close and
++   * reopen, or StrictMode running this effect twice cannot put the same text
++   * in a second time — the host keeps the last request in state for as long as
++   * the page lives, and this effect sees it again on every change of it.
++   *
++   * An empty draft takes the body and the kind. A draft with something in it is
++   * the reader's, which the header's rule about drafts surviving everything
++   * exists to protect: the request goes **after** it, past a blank line, and
++   * their kind stands unless they had not chosen one. If that would take the
++   * box past `MAX_FEEDBACK_ANSWER_CHARS`, or the text is already in it from an
++   * earlier press, nothing is added — a box made unsendable by a button is
++   * worse than a box that is missing a paragraph they can see on the card.
++   *
++   * A layout effect for the same reason as the one above: it lands in the
++   * commit that opens the dialog, so the reader never sees the empty box first.
++   */
++  const applied = useRef(new Set<string>());
++  useLayoutEffect(() => {
++    if (prefill === null || applied.current.has(prefill.id)) return;
++    applied.current.add(prefill.id);
++    const draft = bodyRef.current;
++    if (draft.trim() === "") {
++      setBody(prefill.body);
++      setKind(prefill.kind);
++      return;
++    }
++    const joined = `${draft.replace(/\s+$/, "")}\n\n${prefill.body}`;
++    if (draft.includes(prefill.body.trim()) || joined.length > MAX_FEEDBACK_ANSWER_CHARS) return;
++    setBody(joined);
++    setKind((chosen) => chosen ?? prefill.kind);
++  }, [prefill]);
++
+   const takeFile = useCallback(async (file: File) => {
+     const mine = ++shotGeneration.current;
+     setShotProblem(null);
+diff --git a/src/web/PurposePrompt.tsx b/src/web/PurposePrompt.tsx
+new file mode 100644
+index 000000000..67d8cb4b2
+--- /dev/null
++++ b/src/web/PurposePrompt.tsx
+@@ -0,0 +1,183 @@
++/**
++ * **"Why are you reading this?", asked once when the article first opens.**
++ *
++ * > Also, if they don't fill this in (e.g. because they didn't notice it), pop
++ * > up an input box asking why they're reading it when the article loads for
++ * > the first time.
++ * >
++ * > — Greg, 2026-10-01, spya-hbqezu
++ *
++ * The add page leaves a mark in this tab (src/web/ask-purpose.ts) only when it
++ * opened the article by itself with its own box empty and never touched. This
++ * component reads that mark and, if the article still has no purpose, asks.
++ * docs/plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md
++ * § Stage 3.
++ *
++ * ## The boundaries, and why each is a component rather than a condition
++ *
++ * - **Owner only, by where it is mounted** — inside `OwnedReader`
++ *   (src/web/article/ArticlePage.tsx), so a visitor never mounts the hook or
++ *   makes the request. GPT Sol's plan review, item 5.
++ * - **No mark, no request.** `PurposePrompt` peeks once, at mount, and renders
++ *   nothing without the mark; `Ask`, which calls `usePurpose`, exists only
++ *   with it. Every owner's article view mounts this, so the ordinary case must
++ *   cost nothing.
++ * - **The mark is cleared on a definitive answer, never on mount.** A purpose
++ *   exists → cleared, nothing shown. Definitively none → cleared, asked. A
++ *   failed read, or `purposeFailed` (the shelf could not be read, which must
++ *   never pass for "you have not said") → kept for the next load. Sol's item 3.
++ *
++ * ## The dialog
++ *
++ * A native modal `<dialog>`, after Lightbox.tsx and FeedbackDialog.tsx: it
++ * interrupts on purpose, once, and `showModal()` brings the inert background,
++ * the focus trap and Escape. The box is `ProfileBox` with `useAutosavedText`,
++ * wired exactly as Metadata's "Why you're reading this one" is, so it saves
++ * itself after a pause and says so. **Done** is a latch (Sol's item 4): it
++ * commits, and closes only once the state is back to clean or saved; a refusal
++ * keeps it open with the reason in the box's own status line. **Not now**,
++ * Escape and the backdrop just close — anything typed has been or will be
++ * saved by the box itself (a blur commits), because a box that saves as you
++ * type and then drops the words on "Not now" would be two promises at odds.
++ *
++ * The dialog stays mounted once closed rather than unmounting, so the box's
++ * idle save, its leave warning and `useAutosavedText`'s `pagehide` keep
++ * working for words typed just before closing.
++ */
++import { useEffect, useLayoutEffect, useRef, useState } from "react";
++import { Button } from "@/components/ui/button";
++import { MAX_PURPOSE_CHARS } from "../types.js";
++import { clearAskPurpose, peekAskPurpose } from "./ask-purpose.js";
++import { leavingFetch } from "./lib/api.js";
++import { ProfileBox } from "./ProfileBox.js";
++import { savePurpose, usePurpose } from "./purpose.js";
++import { useAutosavedText } from "./useAutosavedText.js";
++import { useVisualViewport } from "./useVisualViewport.js";
++
++/** Mount with `key={slug}`: the peek is taken once, for the article it was mounted on. */
++export function PurposePrompt({ slug }: { slug: string }) {
++  /* Once, at mount, and latched: once `Ask` clears the mark, a peek on the next
++     render would answer "no" and unmount the dialog the reader is typing in. */
++  const [asking] = useState(() => peekAskPurpose(slug));
++  return asking ? <Ask slug={slug} /> : null;
++}
++
++function Ask({ slug }: { slug: string }) {
++  const read = usePurpose(slug);
++  const purpose = useAutosavedText({
++    /* As Metadata.tsx's box: the server's answer, not what was typed, and an
++       empty box clears. Here the box was seeded empty over a purpose that is
++       definitively none, so there is nothing hidden to erase. */
++    save: async (text) => (await savePurpose(slug, text === "" ? null : text)) ?? "",
++    leave: (text) =>
++      leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
++        method: "PATCH",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ purpose: text === "" ? null : text }),
++      }),
++  });
++  const seed = purpose.seed;
++  const [open, setOpen] = useState(false);
++
++  /* **Decided once.** A ref rather than state, so StrictMode's second run of
++     this effect finds it taken and does not seed again over a first keystroke. */
++  const decided = useRef(false);
++  useEffect(() => {
++    if (read.state !== "ready" || read.purposeFailed) return;
++    clearAskPurpose(slug);
++    if (read.purpose !== null || decided.current) return;
++    decided.current = true;
++    seed("");
++    setOpen(true);
++  }, [read, slug, seed]);
++
++  /* **Done, latched.** Set by the press; this closes once the save it started
++     has landed, and lets go on a refusal so the reader can see why. */
++  const [closing, setClosing] = useState(false);
++  const state = purpose.state.kind;
++  useEffect(() => {
++    if (!closing) return;
++    if (state === "clean" || state === "saved") {
++      setClosing(false);
++      setOpen(false);
++    } else if (state === "error") {
++      setClosing(false);
++    }
++  }, [closing, state]);
++  const done = () => {
++    purpose.commit();
++    setClosing(true);
++  };
++
++  const ref = useRef<HTMLDialogElement>(null);
++  /* Lightbox.tsx § closingOurselves: `close()` fires the same `close` event
++     Escape does, so our own close would otherwise come back as a second one. */
++  const closingOurselves = useRef(false);
++  useLayoutEffect(() => {
++    const dialog = ref.current;
++    if (!dialog) return;
++    if (open && !dialog.open) {
++      closingOurselves.current = false;
++      dialog.showModal();
++    } else if (!open && dialog.open) {
++      closingOurselves.current = true;
++      dialog.close();
++    }
++  }, [open]);
++
++  /* FeedbackDialog.tsx § the box the reader can see: on iOS the keyboard pans
++     a smaller visual viewport over the layout one, and a dialog centred on the
++     latter has its box under the keys. */
++  const visible = useVisualViewport(open);
++
++  return (
++    // The click is the backdrop, whose keyboard equivalent is Escape — which
++    // <dialog> implements itself. Lightbox.tsx carries the same exemption.
++    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape is the backdrop's keyboard twin, native to <dialog>
++    <dialog
++      ref={ref}
++      className="purpose-prompt"
++      aria-labelledby="prompt-purpose-title"
++      style={
++        visible === null
++          ? undefined
++          : { top: `${visible.offsetTop}px`, height: `${visible.height}px`, bottom: "auto" }
++      }
++      onClose={() => {
++        if (closingOurselves.current) return;
++        setClosing(false);
++        setOpen(false);
++      }}
++      onClick={(e) => {
++        if (e.target === ref.current) setOpen(false);
++      }}
++    >
++      <div className="purpose-prompt-panel">
++        <h2 id="prompt-purpose-title" className="purpose-prompt-title">
++          Why are you reading this?
++        </h2>
++        <ProfileBox
++          id="prompt-purpose"
++          label="In a sentence, for this article"
++          placeholder="e.g. I want to know how they handled missing data"
++          hint="Shapes the quotes, ideas, glossary and the reading route — for this article only. Never what the article says. You can change it later on Metadata."
++          value={purpose.draft}
++          onChange={purpose.setDraft}
++          onCommit={purpose.commit}
++          max={MAX_PURPOSE_CHARS}
++          disabled={purpose.saved === null}
++          rows={2}
++          save={purpose.state}
++        />
++        <div className="purpose-prompt-actions">
++          <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
++            Not now
++          </Button>
++          <Button type="button" size="sm" onClick={done} disabled={closing}>
++            Done
++          </Button>
++        </div>
++      </div>
++    </dialog>
++  );
++}
+diff --git a/src/web/article/ArticlePage.tsx b/src/web/article/ArticlePage.tsx
+index 2a9d0a5dd..8f9574353 100644
+--- a/src/web/article/ArticlePage.tsx
++++ b/src/web/article/ArticlePage.tsx
+@@ -38,6 +38,7 @@ import { useComments } from "../useComments.js";
+ import { useChatAnchors } from "../useChatAnchors.js";
+ import { useExperimental } from "../useExperimental.js";
+ import { useReadingTime } from "../useReadingTime.js";
++import { PurposePrompt } from "../PurposePrompt.js";
+ import { useSourceGuess } from "../useSourceGuess.js";
+ import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
+ import { apiFetch } from "../lib/api.js";
+@@ -536,23 +537,31 @@ function OwnedReader({
+   const readingTime = useReadingTime(slug, words, experimental.on);
+ 
+   return (
+-    <Reader
+-      slug={slug}
+-      article={article}
+-      capability={{
+-        kind: "owner",
+-        comments,
+-        chatAnchors,
+-        glossary,
+-        quotes,
+-        citations,
+-        quiz,
+-        crossrefs,
+-        arc,
+-        readingTime,
+-      }}
+-      onRenamed={onRenamed}
+-    />
++    <>
++      <Reader
++        slug={slug}
++        article={article}
++        capability={{
++          kind: "owner",
++          comments,
++          chatAnchors,
++          glossary,
++          quotes,
++          citations,
++          quiz,
++          crossrefs,
++          arc,
++          readingTime,
++        }}
++        onRenamed={onRenamed}
++      />
++      {/* **"Why are you reading this?", asked once** after a silent import —
++          Greg, 2026-10-01, spya-hbqezu; plan 261001s § Stage 3. Owner-only by
++          being here, which is the point (Sol's item 5): it reads and writes
++          the reader's purpose. Without the add page's mark it renders nothing
++          and asks the server nothing. Keyed so another article peeks afresh. */}
++      <PurposePrompt key={slug} slug={slug} />
++    </>
+   );
+ }
+ 
+diff --git a/src/web/ask-purpose.ts b/src/web/ask-purpose.ts
+new file mode 100644
+index 000000000..c64bb885a
+--- /dev/null
++++ b/src/web/ask-purpose.ts
+@@ -0,0 +1,57 @@
++/**
++ * **The one-shot mark that asks "Why are you reading this?" when the article
++ * first opens.**
++ *
++ * > Also, if they don't fill this in (e.g. because they didn't notice it), pop
++ * > up an input box asking why they're reading it when the article loads for
++ * > the first time.
++ * >
++ * > — Greg, 2026-10-01, spya-hbqezu
++ *
++ * The add page writes it (`markAskPurpose`) only when it opens an article by
++ * itself with the box empty and never touched — the "didn't notice it" case.
++ * The reading view, for the owner only, peeks at it (src/web/PurposePrompt.tsx)
++ * and clears it once it knows the answer. docs/plans/261001s-….md § Stage 3.
++ *
++ * **Peek, then clear — never take on mount.** A read of the purpose that fails
++ * must leave the mark for the next load, or the question is lost to a network
++ * blip (GPT Sol's plan review, item 3). And clear only removes a mark naming
++ * *this* slug: another add in the same tab may have written a newer one.
++ *
++ * **sessionStorage, so a tab is the unit**: it survives a reload of the article
++ * and does not follow the reader to another device, which is right for a
++ * question asked once. Every access is wrapped, because storage can throw
++ * (Safari with site data blocked, a full quota) — and the cost of that is only
++ * not being asked.
++ */
++
++export const ASK_PURPOSE_KEY = "spideryarn.ask-purpose";
++
++/** Ask about `slug` the next time its reading view opens in this tab. */
++export function markAskPurpose(slug: string): void {
++  try {
++    window.sessionStorage.setItem(ASK_PURPOSE_KEY, slug);
++  } catch {
++    /* Not asked, and nothing else lost. */
++  }
++}
++
++/** Whether the mark names `slug`. Does not consume it. */
++export function peekAskPurpose(slug: string): boolean {
++  try {
++    return window.sessionStorage.getItem(ASK_PURPOSE_KEY) === slug;
++  } catch {
++    return false;
++  }
++}
++
++/** Remove the mark, but only if it names `slug`. */
++export function clearAskPurpose(slug: string): void {
++  try {
++    if (window.sessionStorage.getItem(ASK_PURPOSE_KEY) === slug) {
++      window.sessionStorage.removeItem(ASK_PURPOSE_KEY);
++    }
++  } catch {
++    /* Nothing to do: a storage that cannot be read held no mark we could see. */
++  }
++}
+diff --git a/src/web/import-report.ts b/src/web/import-report.ts
+new file mode 100644
+index 000000000..c2d15219e
+--- /dev/null
++++ b/src/web/import-report.ts
+@@ -0,0 +1,49 @@
++/**
++ * **What "Report this" on a failed import puts in the Feedback box** — the
++ * words, as a pure function, so they are tested without a dialog.
++ *
++ * Greg, 2026-10-01 (spya-a5gzb9): past imports on the signed-in home page
++ * carried too little to act on. A failed one now offers to report itself.
++ * docs/plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md
++ * § Stage 1.
++ *
++ * **Ids, closed values and timestamps, and nothing else.** The plan first had
++ * the source URL, the filename and the step's error sentence in here, and GPT
++ * Sol's review (item 6) showed that breaks docs/project/feedback.md § The one
++ * rule: a pre-typed value is not "something the reader typed into this dialog"
++ * just because it sits in the box. A URL can carry a private token, a filename
++ * is the reader's own words, and an error sentence is open-ended. The card
++ * still shows all three; this does not carry them. Whether it may is Greg's
++ * call, written up in the plan rather than built.
++ *
++ * The price of ids alone: Dismiss forgets the job record (`DELETE
++ * /api/jobs/:id`), so a report filed and then dismissed names a job we no
++ * longer have. The slug and the times are what survive that.
++ */
++import type { Job } from "../types.js";
++
++export function importProblemReport(job: Job): string {
++  /* Optional on purpose — the runner can fail with no step having failed at
++     all (src/types.ts § `Job.failureKind`). Review item 8. */
++  const failed = job.steps.find((step) => step.status === "error");
++  const lines = [
++    "This import failed.",
++    "",
++    `Job: ${job.id}`,
++    `Article: ${job.slug}`,
++    `Status: ${job.status}`,
++    /* The step's `name`, a closed `StepName`, and never its `label` or
++       `error`: the label is ours but changes with the copy, and the error is a
++       sentence. */
++    ...(failed ? [`Failed at step: ${failed.name}`] : []),
++    ...(job.failureKind ? [`Failure kind: ${job.failureKind}`] : []),
++    /* *Added*, not *Started*: `createdAt` is when it was queued. Review item 8. */
++    `Added: ${job.createdAt}`,
++    ...(job.startedAt ? [`Started: ${job.startedAt}`] : []),
++    ...(job.finishedAt ? [`Ended: ${job.finishedAt}`] : []),
++    "",
++    "What I expected:",
++    "",
++  ];
++  return lines.join("\n");
++}
+diff --git a/src/web/styles/profile.css b/src/web/styles/profile.css
+index cbe2f2015..b48786894 100644
+--- a/src/web/styles/profile.css
++++ b/src/web/styles/profile.css
+@@ -109,6 +109,66 @@
+   font-size: 0.79rem;
+ }
+ 
++/* -------------------------------------- profile: the first-open prompt --
++   "Why are you reading this?", asked once when an article opened straight
++   from the add page with its box untouched — PurposePrompt.tsx, plan 261001s
++   § Stage 3. A native modal `<dialog>` with a ProfileBox in it; the dialog
++   box is `.fb-dialog`'s shape (feedback.css), for its reasons: `inset: 0`
++   rather than `100vw`, the UA's max sizes undone, and the backdrop a literal
++   colour because `::backdrop` has not reliably inherited custom properties. */
++.purpose-prompt {
++  position: fixed;
++  inset: 0;
++  width: auto;
++  height: auto;
++  max-width: none;
++  max-height: none;
++  margin: 0;
++  padding: 0;
++  border: 0;
++  background: transparent;
++  overflow: hidden;
++  overscroll-behavior: contain;
++}
++.purpose-prompt[open] {
++  display: flex;
++  align-items: center;
++  justify-content: center;
++}
++.purpose-prompt::backdrop {
++  background: rgb(10 10 10 / 0.7);
++  backdrop-filter: blur(2px);
++}
++/* `100vw - 32px`: the 16px side gutter at 390px. `max-height: 90%` of the
++   dialog, which PurposePrompt.tsx sizes to the visual viewport on iOS — the
++   same one-line keyboard fix `.fb-panel` explains. */
++.purpose-prompt-panel {
++  display: flex;
++  flex-direction: column;
++  gap: 0.75rem;
++  width: min(30rem, calc(100vw - 32px));
++  max-height: 90%;
++  overflow-y: auto;
++  padding: 1rem 1.15rem 1.15rem;
++  border: 1px solid var(--rule-strong);
++  border-radius: 10px;
++  background: var(--surface-raised);
++  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.8);
++  color: var(--ink);
++  font-family: var(--font-ui);
++}
++.purpose-prompt-title {
++  margin: 0;
++  font-size: 1rem;
++  font-weight: 600;
++  letter-spacing: -0.01em;
++}
++.purpose-prompt-actions {
++  display: flex;
++  justify-content: flex-end;
++  gap: 0.5rem;
++}
++
+ /* -------------------------------------------- profile: dictation feedback --
+    The strip under the box while the microphone is on. It exists because the
+    old version rendered *nothing at all* until the first transcript came back —
+diff --git a/tests/add-page-purpose.test.tsx b/tests/add-page-purpose.test.tsx
+index 65c195999..d33514d84 100644
+--- a/tests/add-page-purpose.test.tsx
++++ b/tests/add-page-purpose.test.tsx
+@@ -45,6 +45,18 @@ Object.defineProperty(window, "localStorage", {
+     clear: () => stored.clear(),
+   },
+ });
++/* And `sessionStorage`, where the ask-purpose mark lives (plan 261001s § Stage 3). */
++const session = new Map<string, string>();
++Object.defineProperty(window, "sessionStorage", {
++  configurable: true,
++  value: {
++    getItem: (key: string) => session.get(key) ?? null,
++    setItem: (key: string, value: string) => void session.set(key, value),
++    removeItem: (key: string) => void session.delete(key),
++    clear: () => session.clear(),
++  },
++});
++const mark = () => session.get("spideryarn.ask-purpose") ?? null;
+ 
+ /** Everything that left the page, in order: `patch:<body>` and `run:<steps>`. */
+ const events: string[] = [];
+@@ -226,6 +238,7 @@ const PRODUCERS: Producer[] = [
+ 
+ beforeEach(() => {
+   window.localStorage.clear();
++  session.clear();
+   events.length = 0;
+   navigations.length = 0;
+   jobs = [];
+@@ -519,3 +532,96 @@ describe("Retry after a failed import (F3)", () => {
+     expect(navigations).toEqual([`/read/${SLUG}`]);
+   });
+ });
++
++/* ---------------------------------------------------------------------------
++ * Plan 261001s (Greg, 2026-10-01, spya-hbqezu): *"it doesn't have a UI
++ * indication of when/whether it has saved it or not"* — Stage 2's status line —
++ * and *"if they don't fill this in … pop up an input box asking why they're
++ * reading it when the article loads for the first time"* — Stage 3's mark.
++ * ------------------------------------------------------------------------- */
++
++const statusLine = (): string => host.querySelector(".prof-save")?.textContent?.trim() ?? "";
++
++describe("the purpose box's status line (261001s § Stage 2)", () => {
++  it("says nothing over an empty box, and says where typed words are in each phase", async () => {
++    let answer: (r: Response) => void = () => {};
++    patchAnswer = () =>
++      new Promise((resolve) => {
++        answer = resolve;
++      });
++    const producer = PRODUCERS[0] as Producer;
++    await producer.start();
++    expect(statusLine(), "an empty box claimed a save state").toBe("");
++    type("the evidence");
++    expect(statusLine()).toBe("Not saved yet — kept here until the import finishes.");
++    await producer.finish();
++    expect(statusLine()).toBe("Not saved yet — Save and open stores it.");
++    press("Save and open");
++    await settle();
++    expect(statusLine()).toBe("Saving…");
++    answer(new Response(JSON.stringify({ purpose: "the evidence" }), { status: 200 }));
++    await settle();
++  });
++
++  it("shows a refusal in the line, and an edit clears it (Sol's item 10)", async () => {
++    patchAnswer = async () => new Response(JSON.stringify({ error: "The shelf is unavailable." }), { status: 503 });
++    const producer = PRODUCERS[0] as Producer;
++    await producer.start();
++    type("the evidence");
++    await producer.finish();
++    press("Save and open");
++    await settle();
++    expect(statusLine()).toBe("Not saved — The shelf is unavailable.");
++    expect(host.querySelector(".prof-save [role=alert]"), "the refusal is no longer an alert").toBeTruthy();
++    type("the evidence, again");
++    expect(statusLine()).toBe("Not saved yet — Save and open stores it.");
++    expect(host.textContent).not.toContain("The shelf is unavailable.");
++  });
++});
++
++describe.each(PRODUCERS)("the ask-purpose mark (261001s § Stage 3) when $name", (producer) => {
++  it("is written when the page opens the article by itself, untouched", async () => {
++    await producer.start();
++    await producer.finish();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++    expect(mark()).toBe(SLUG);
++  });
++
++  it("is not written after a focus and a blur over an empty box", async () => {
++    await producer.start();
++    focus();
++    blur();
++    await producer.finish();
++    expect(navigations, "the auto-open rule changed").toEqual([`/read/${SLUG}`]);
++    expect(mark(), "a reader who looked at the box is asked again").toBeNull();
++  });
++
++  it("is not written for a box typed in and emptied", async () => {
++    await producer.start();
++    type("x");
++    type("");
++    await producer.finish();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++    expect(mark()).toBeNull();
++  });
++
++  it("is not written on Open without it", async () => {
++    await producer.start();
++    type("the evidence");
++    await producer.finish();
++    press("Open without it");
++    await settle();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++    expect(mark()).toBeNull();
++  });
++
++  it("is not written on Save and open", async () => {
++    await producer.start();
++    type("the evidence");
++    await producer.finish();
++    press("Save and open");
++    await settle();
++    expect(navigations).toEqual([`/read/${SLUG}`]);
++    expect(mark()).toBeNull();
++  });
++});
+diff --git a/tests/ask-purpose.test.ts b/tests/ask-purpose.test.ts
+new file mode 100644
+index 000000000..b0dfff91e
+--- /dev/null
++++ b/tests/ask-purpose.test.ts
+@@ -0,0 +1,74 @@
++// @vitest-environment jsdom
++/**
++ * **The one-shot mark that asks "Why are you reading this?" when the article
++ * first opens** — src/web/ask-purpose.ts, plan 261001s § Stage 3 and GPT Sol's
++ * review item 3.
++ *
++ * Peek must not consume (a failed read keeps the mark for the next load), clear
++ * must only clear the slug it names (another add in this tab may have written a
++ * newer one), and a browser that throws on storage must cost nothing worse than
++ * not being asked.
++ */
++import { afterEach, beforeEach, describe, expect, it } from "vitest";
++
++const stored = new Map<string, string>();
++let throwing = false;
++const fake = {
++  getItem: (key: string) => {
++    if (throwing) throw new Error("SecurityError");
++    return stored.get(key) ?? null;
++  },
++  setItem: (key: string, value: string) => {
++    if (throwing) throw new Error("QuotaExceededError");
++    stored.set(key, value);
++  },
++  removeItem: (key: string) => {
++    if (throwing) throw new Error("SecurityError");
++    stored.delete(key);
++  },
++  clear: () => stored.clear(),
++};
++Object.defineProperty(window, "sessionStorage", { configurable: true, value: fake });
++
++const { ASK_PURPOSE_KEY, clearAskPurpose, markAskPurpose, peekAskPurpose } = await import(
++  "../src/web/ask-purpose.js"
++);
++
++beforeEach(() => {
++  stored.clear();
++  throwing = false;
++});
++afterEach(() => {
++  throwing = false;
++});
++
++describe("the ask-purpose mark", () => {
++  it("is written under spideryarn.ask-purpose, naming the slug", () => {
++    markAskPurpose("a-paper");
++    expect(ASK_PURPOSE_KEY).toBe("spideryarn.ask-purpose");
++    expect(stored.get("spideryarn.ask-purpose")).toBe("a-paper");
++  });
++
++  it("peek answers for the named slug only, and does not consume it", () => {
++    markAskPurpose("a-paper");
++    expect(peekAskPurpose("another-paper")).toBe(false);
++    expect(peekAskPurpose("a-paper")).toBe(true);
++    expect(peekAskPurpose("a-paper"), "peek consumed the mark").toBe(true);
++  });
++
++  it("clear removes the mark only when it names that slug", () => {
++    markAskPurpose("a-paper");
++    clearAskPurpose("another-paper");
++    expect(peekAskPurpose("a-paper"), "clearing another slug removed this one").toBe(true);
++    clearAskPurpose("a-paper");
++    expect(peekAskPurpose("a-paper")).toBe(false);
++    expect(stored.has("spideryarn.ask-purpose")).toBe(false);
++  });
++
++  it("survives storage that throws, answering 'no mark'", () => {
++    throwing = true;
++    expect(() => markAskPurpose("a-paper")).not.toThrow();
++    expect(peekAskPurpose("a-paper")).toBe(false);
++    expect(() => clearAskPurpose("a-paper")).not.toThrow();
++  });
++});
+diff --git a/tests/feedback-dialog.test.tsx b/tests/feedback-dialog.test.tsx
+index 518699701..016a76ed9 100644
+--- a/tests/feedback-dialog.test.tsx
++++ b/tests/feedback-dialog.test.tsx
+@@ -1760,3 +1760,104 @@ describe("the Earlier tab", () => {
+     expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
+   });
+ });
++
++/**
++ * **A request to fill the box**, from a failed import's *Report this*.
++ * Plan 261001s, stage 1, as GPT Sol's review item 7 shaped it: each id once,
++ * and never over the reader's own words.
++ */
++describe("a prefill", () => {
++  const REPORT = { id: "req-1", kind: "problem" as const, body: "This import failed.\n\nJob: spya-jobaaa" };
++
++  function showWith(prefill: { id: string; kind: "problem" | "suggestion"; body: string } | null, open = true) {
++    act(() => {
++      root.render(
++        createElement(FeedbackDialog, {
++          open,
++          onClose: () => {},
++          where: { url: "https://www.spideryarn.com/", slug: null },
++          prefill,
++        }),
++      );
++    });
++  }
++
++  function mountWith(prefill: Parameters<typeof showWith>[0]) {
++    host = document.createElement("div");
++    document.body.append(host);
++    root = createRoot(host);
++    showWith(prefill);
++  }
++
++  function kindPressed(): string | null {
++    const pressed = host.querySelector<HTMLButtonElement>('.fb-kind-button[aria-pressed="true"]');
++    return pressed === null ? null : (pressed.textContent ?? "");
++  }
++
++  it("into an empty draft, puts the body in and chooses the kind", () => {
++    mountWith(REPORT);
++    expect(firstBox().value).toBe(REPORT.body);
++    expect(kindPressed()).toContain("A problem");
++  });
++
++  it("into a draft, goes after the reader's words and keeps the kind they chose", () => {
++    mountWith(null);
++    type("The shelf looked odd.");
++    pick("A suggestion");
++    showWith(REPORT);
++    expect(firstBox().value).toBe(`The shelf looked odd.\n\n${REPORT.body}`);
++    expect(kindPressed()).toContain("A suggestion");
++  });
++
++  it("is applied once per id — not again on a re-render, or a close and reopen", () => {
++    mountWith(REPORT);
++    /* The reader replaces it with their own words, so a second application
++       would show — the guard against appending text already in the box would
++       otherwise hide one. */
++    type("My own words instead.");
++    showWith({ ...REPORT });
++    showWith(REPORT, false);
++    showWith(REPORT, true);
++    expect(firstBox().value).toBe("My own words instead.");
++  });
++
++  it("is applied once more for a new id — a second press of the button", () => {
++    mountWith(REPORT);
++    type("My own words instead.");
++    showWith({ ...REPORT, id: "req-2" });
++    expect(firstBox().value).toBe(`My own words instead.\n\n${REPORT.body}`);
++  });
++
++  /* A smoke test rather than a proof: StrictMode's second run of a mount effect
++     sees the same empty draft, so a double application would write the same
++     text twice over rather than twice in a row. The test above is the one that
++     can see the ref missing. */
++  it("is applied once under StrictMode", () => {
++    host = document.createElement("div");
++    document.body.append(host);
++    root = createRoot(host);
++    act(() => {
++      root.render(
++        createElement(
++          StrictMode,
++          null,
++          createElement(FeedbackDialog, {
++            open: true,
++            onClose: () => {},
++            where: { url: "https://www.spideryarn.com/", slug: null },
++            prefill: REPORT,
++          }),
++        ),
++      );
++    });
++    expect(firstBox().value).toBe(REPORT.body);
++  });
++
++  it("does not push a draft past the length cap", () => {
++    mountWith(null);
++    const long = "x".repeat(MAX_FEEDBACK_ANSWER_CHARS - 5);
++    type(long);
++    showWith(REPORT);
++    expect(firstBox().value).toBe(long);
++  });
++});
+diff --git a/tests/import-report.test.ts b/tests/import-report.test.ts
+new file mode 100644
+index 000000000..ab6cff0e7
+--- /dev/null
++++ b/tests/import-report.test.ts
+@@ -0,0 +1,89 @@
++/**
++ * **What "Report this" on a failed import puts in the Feedback box.**
++ *
++ * Plan 261001s, stage 1, as GPT Sol's review item 6 changed it: ids, closed
++ * values and timestamps only. A source URL can carry a private token, a
++ * filename is the reader's own words, and a step's error sentence is ours but
++ * open-ended — none of them is "something the reader typed into this dialog",
++ * so none of them is pre-typed for them (docs/project/feedback.md § The one
++ * rule). The card still shows all three; the report does not carry them.
++ */
++import { describe, expect, it } from "vitest";
++
++import type { Job } from "../src/types.js";
++import { importProblemReport } from "../src/web/import-report.js";
++
++const SECRET_URL = "https://example.com/private/paper.pdf?token=hunter2";
++const FILENAME = "my-secret-draft.pdf";
++const ERROR = "The page answered 403 Forbidden, so we could not read it.";
++
++const BASE: Job = {
++  id: "spya-jobaaa",
++  ownerId: "00000000-0000-4000-8000-00000000c0de" as Job["ownerId"],
++  slug: "a-failed-import",
++  title: "A title the reader may not want sent",
++  status: "error",
++  createdAt: "2026-10-01T10:35:00.220Z",
++  startedAt: "2026-10-01T10:35:01.000Z",
++  finishedAt: "2026-10-01T10:36:12.004Z",
++  error: ERROR,
++  failureKind: "blocked",
++  steps: [
++    { name: "fetch", label: "Fetching the page", status: "error", error: ERROR },
++    { name: "extract", label: "Reading the article", status: "pending" },
++  ],
++};
++
++function neverLeaks(report: string): void {
++  for (const secret of [SECRET_URL, "hunter2", "example.com", FILENAME, ERROR, "403", BASE.title!]) {
++    expect(report, `the report carries ${secret}`).not.toContain(secret);
++  }
++}
++
++describe("importProblemReport", () => {
++  it("names the job, the article, the failed step and the times, for an address import", () => {
++    const report = importProblemReport({ ...BASE, url: SECRET_URL });
++    expect(report).toBe(
++      [
++        "This import failed.",
++        "",
++        "Job: spya-jobaaa",
++        "Article: a-failed-import",
++        "Status: error",
++        "Failed at step: fetch",
++        "Failure kind: blocked",
++        "Added: 2026-10-01T10:35:00.220Z",
++        "Started: 2026-10-01T10:35:01.000Z",
++        "Ended: 2026-10-01T10:36:12.004Z",
++        "",
++        "What I expected:",
++        "",
++      ].join("\n"),
++    );
++    neverLeaks(report);
++  });
++
++  it("carries no filename for an upload", () => {
++    const report = importProblemReport({
++      ...BASE,
++      upload: { id: "00000000-0000-4000-8000-0000000000aa", filename: FILENAME },
++    });
++    neverLeaks(report);
++    expect(report).toContain("Job: spya-jobaaa");
++  });
++
++  it("leaves out the lines it has nothing for — no failed step, no kind, never started", () => {
++    const { startedAt: _s, finishedAt: _f, failureKind: _k, ...rest } = BASE;
++    const report = importProblemReport({
++      ...rest,
++      steps: [{ name: "fetch", label: "Fetching the page", status: "pending" }],
++    });
++    expect(report).not.toContain("Failed at step");
++    expect(report).not.toContain("Failure kind");
++    expect(report).not.toContain("Started:");
++    expect(report).not.toContain("Ended:");
++    /* `createdAt` is when it was added, not when it started — review item 8. */
++    expect(report).toContain("Added: 2026-10-01T10:35:00.220Z");
++    neverLeaks(report);
++  });
++});
+diff --git a/tests/job-card-progress.test.tsx b/tests/job-card-progress.test.tsx
+index a893e445b..fb9e23248 100644
+--- a/tests/job-card-progress.test.tsx
++++ b/tests/job-card-progress.test.tsx
+@@ -211,19 +211,32 @@ it("puts its timer down when it unmounts", () => {
+ });
+ 
+ /**
+- * **And starts no clock at all for a card with nothing to count.**
++ * **A finished card keeps a minute clock, not a second one.**
+  *
+- * This used to be `useNow(86_400_000)`, described in the code as "one timer
+- * that never fires". It fired: once a day, per finished card, for the life of
+- * the tab. `useNow` takes `null` now, and this is what says so — GPT Sol,
+- * 2026-09-01, *"supporting a disabled interval would be cleaner"*.
++ * This said *"starts no clock at all"* until 2026-10-01, and that was right
++ * while nothing on a finished card changed with time. The source line now says
++ * how long ago it was added, which a poll will not refresh (`sameJobs`
++ * suppresses identical snapshots), so the card ticks once a minute — plan
++ * 261001s, GPT Sol's review item 9; Greg, spya-a5gzb9. What is still pinned is
++ * the part the old test was really about: not once a second, which is what a
++ * card that confused itself with a running one would do.
++ *
++ * Before that it was `useNow(86_400_000)`, "one timer that never fires", which
++ * fired once a day — GPT Sol, 2026-09-01.
+  */
+-it("starts no clock for a card that has nothing to count", () => {
++it("keeps a minute clock, not a second one, for a finished card", () => {
+   card(job({ status: "done", steps: [], finishedAt: ago(1000) }));
+   expect(host.textContent, "no card rendered, so the count below proves nothing").toContain(
+     "An import in progress",
+   );
+-  expect(vi.getTimerCount(), "an idle card is holding a timer").toBe(0);
++  expect(vi.getTimerCount(), "a finished card holds more than one timer").toBe(1);
++  const before = host.textContent;
++  act(() => void vi.advanceTimersByTime(1_000));
++  expect(host.textContent, "a finished card re-rendered after a second").toBe(before);
++  /* Added 200 seconds before `NOW`: "3 minutes ago", and after one tick "4". */
++  expect(host.textContent).toContain("3 minutes ago");
++  act(() => void vi.advanceTimersByTime(60_000));
++  expect(host.textContent, "the how-long-ago froze").toContain("4 minutes ago");
+ });
+ 
+ it("only counts the step the reader is waiting on", () => {
+diff --git a/tests/job-card-source-and-report.test.tsx b/tests/job-card-source-and-report.test.tsx
+new file mode 100644
+index 000000000..cae66bb71
+--- /dev/null
++++ b/tests/job-card-source-and-report.test.tsx
+@@ -0,0 +1,163 @@
++// @vitest-environment jsdom
++/**
++ * **A past import says where it came from, when, and — if it failed — offers
++ * to report itself.**
++ *
++ * Greg, 2026-10-01 (spya-a5gzb9): past imports on the signed-in home page
++ * carried too little. Plan 261001s § Stage 1, with GPT Sol's review items 6–9.
++ *
++ * The source line is the reader's own input drawn back at them, so the one
++ * claim here that is about safety rather than looks is that a `javascript:`
++ * address is never an `href` — `isWebUrl` (src/urls.ts) decides, and this file
++ * mounts the card to check the anchor is really absent rather than reading the
++ * function.
++ */
++import { act } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++
++import type { Job } from "../src/types.js";
++import type { UseJobs } from "../src/web/useJobs.js";
++
++/* The host is App.tsx's business; what is under test is what the card does
++   with the opener it is or is not handed. `null` is the no-host case. */
++let opener: ((request?: { id: string; kind: string; body: string }) => void) | null = null;
++vi.mock("../src/web/FeedbackButton.js", () => ({
++  useFeedbackOpen: () => opener,
++}));
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++const { JobCard } = await import("../src/web/AddArticle.js");
++const { importProblemReport } = await import("../src/web/import-report.js");
++
++/** A queue that does nothing — interrupted-job-card.test.tsx gives the reason. */
++const queue: UseJobs = {
++  jobs: [],
++  loaded: true,
++  error: null,
++  driverFailures: {},
++  lastFailure: () => null,
++  add: async () => null,
++  addUpload: async () => null,
++  run: async () => null,
++  reset: async () => null,
++  cancel: async () => undefined,
++  retry: async () => null,
++  forget: async () => undefined,
++};
++
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  opener = null;
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++function render(job: Job): void {
++  act(() => {
++    root.render(<JobCard job={job} queue={queue} onHide={() => undefined} />);
++  });
++}
++
++/** An hour ago, so the relative label is a relative one. */
++const RECENT = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
++
++const BASE: Job = {
++  id: "spya-cardbb",
++  ownerId: "00000000-0000-4000-8000-00000000c0de" as Job["ownerId"],
++  slug: "a-piece",
++  title: "A piece",
++  status: "done",
++  createdAt: RECENT,
++  finishedAt: RECENT,
++  steps: [{ name: "fetch", label: "Fetching the page", status: "done" }],
++};
++
++const FAILED: Job = {
++  ...BASE,
++  status: "error",
++  error: "The page answered 403.",
++  failureKind: "blocked",
++  steps: [{ name: "fetch", label: "Fetching the page", status: "error", error: "The page answered 403." }],
++};
++
++function reportButton(): HTMLButtonElement | undefined {
++  return [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
++    (b.textContent ?? "").includes("Report this"),
++  );
++}
++
++describe("the source line", () => {
++  it("links an https address, in a new tab, without an opener", () => {
++    render({ ...BASE, url: "https://arxiv.org/abs/2401.01234" });
++    const link = host.querySelector<HTMLAnchorElement>('a[href="https://arxiv.org/abs/2401.01234"]');
++    expect(link).not.toBeNull();
++    expect(link?.target).toBe("_blank");
++    expect(link?.rel).toBe("noopener noreferrer");
++  });
++
++  it("draws a javascript: address as text and never as an href", () => {
++    render({ ...BASE, url: "javascript:alert(1)" });
++    expect(host.textContent).toContain("javascript:alert(1)");
++    expect(host.querySelector("a")).toBeNull();
++  });
++
++  it("shows an upload's filename, unlinked", () => {
++    render({ ...BASE, upload: { id: "00000000-0000-4000-8000-0000000000aa", filename: "draft.pdf" } });
++    expect(host.textContent).toContain("draft.pdf");
++    expect(host.querySelector("a")).toBeNull();
++  });
++
++  it("shows when it was added, both exactly and how long ago", () => {
++    render({ ...BASE, url: "https://arxiv.org/abs/2401.01234" });
++    const times = [...host.querySelectorAll("time")];
++    expect(times).toHaveLength(2);
++    expect(times[0]?.getAttribute("dateTime")).toBe(RECENT);
++    expect(host.textContent).toContain("3 hours ago");
++  });
++
++  it("drops the how-long-ago once it has fallen back to a date, so the date is not printed twice", () => {
++    render({ ...BASE, createdAt: "2026-01-05T09:00:00.000Z", url: "https://arxiv.org/abs/2401.01234" });
++    expect(host.querySelectorAll("time")).toHaveLength(1);
++  });
++});
++
++describe("Report this", () => {
++  it("is not offered on a job that did not fail", () => {
++    opener = vi.fn();
++    render({ ...BASE, status: "cancelled" });
++    expect(reportButton()).toBeUndefined();
++    render(BASE);
++    expect(reportButton()).toBeUndefined();
++  });
++
++  it("is not offered when there is no Feedback host to open", () => {
++    opener = null;
++    render(FAILED);
++    expect(reportButton()).toBeUndefined();
++  });
++
++  it("opens the dialog as a Problem, filled with the ids-only report", () => {
++    const calls: unknown[] = [];
++    opener = (request) => calls.push(request);
++    render({ ...FAILED, url: "https://example.com/?token=secret" });
++    const button = reportButton();
++    expect(button).toBeDefined();
++    act(() => button?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
++    expect(calls).toHaveLength(1);
++    const request = calls[0] as { id: string; kind: string; body: string };
++    expect(request.kind).toBe("problem");
++    expect(request.body).toBe(importProblemReport({ ...FAILED, url: "https://example.com/?token=secret" }));
++    expect(typeof request.id).toBe("string");
++    expect(request.id.length).toBeGreaterThan(0);
++  });
++});
+diff --git a/tests/purpose-prompt.test.tsx b/tests/purpose-prompt.test.tsx
+new file mode 100644
+index 000000000..b26d32103
+--- /dev/null
++++ b/tests/purpose-prompt.test.tsx
+@@ -0,0 +1,281 @@
++// @vitest-environment jsdom
++/**
++ * **"Why are you reading this?", asked once when the article first opens** —
++ * src/web/PurposePrompt.tsx, plan 261001s § Stage 3.
++ *
++ * > Also, if they don't fill this in (e.g. because they didn't notice it), pop
++ * > up an input box asking why they're reading it when the article loads for
++ * > the first time.
++ * >
++ * > — Greg, 2026-10-01, spya-hbqezu
++ *
++ * What is pinned, and why each matters:
++ *
++ *  - **No mark, no request.** Every owner's article mounts this; a GET per
++ *    article view for a question almost never asked would be a cost on every
++ *    page, and the public network trace counts requests.
++ *  - **The mark is cleared only on a definitive answer** (Sol's item 3). A read
++ *    that fails keeps it, so a network blip does not lose the question; a
++ *    `purposeFailed` read must never be taken for "you have not said".
++ *  - **Done is a latch** (Sol's item 4): it saves what is typed and closes only
++ *    once the save has landed; a refusal keeps the dialog open with the reason.
++ *  - **Under StrictMode** the dialog opens once and is seeded once.
++ */
++import { act, createElement, StrictMode } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++
++/* --------------------------------------------------------------- storage -- */
++
++const session = new Map<string, string>();
++Object.defineProperty(window, "sessionStorage", {
++  configurable: true,
++  value: {
++    getItem: (key: string) => session.get(key) ?? null,
++    setItem: (key: string, value: string) => void session.set(key, value),
++    removeItem: (key: string) => void session.delete(key),
++    clear: () => session.clear(),
++  },
++});
++const MARK = "spideryarn.ask-purpose";
++
++/* ------------------------------------------------------------ the network -- */
++
++let readerBody: { purpose: string | null; purposeFailed?: boolean } | "fail" = { purpose: null };
++/** How the PATCH answers. The default stores what it was sent. */
++let patchAnswer: (body: { purpose: string | null }) => Promise<Response> = async (body) =>
++  new Response(JSON.stringify({ purpose: body.purpose?.trim() ?? null }), { status: 200 });
++const requested: { url: string; method: string; body?: unknown }[] = [];
++vi.mock("../src/web/lib/api.js", async () => {
++  const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
++  const apiFetch = async (url: string, init?: RequestInit) => {
++    const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
++    requested.push({ url, method: init?.method ?? "GET", body });
++    if (url.startsWith("/api/reader")) {
++      return readerBody === "fail"
++        ? new Response(JSON.stringify({ error: "Could not read." }), { status: 500 })
++        : new Response(JSON.stringify(readerBody), { status: 200 });
++    }
++    if (url.startsWith("/api/library/") && init?.method === "PATCH") return patchAnswer(body);
++    return new Response(null, { status: 404 });
++  };
++  return { ...real, apiFetch, leavingFetch: () => {} };
++});
++
++/* The microphone is not what this file is about; feedback-dialog.test.tsx stubs it the same way. */
++vi.mock("../src/web/useDictationField.js", () => ({
++  useDictationField: () => ({
++    dictation: { supported: false, armed: false, transcribing: false },
++    readOnly: false,
++    toggle: () => {},
++  }),
++}));
++vi.mock("../src/web/DictationStrip.js", () => ({
++  DictationButton: () => null,
++  DictationStrip: () => null,
++}));
++
++/* `showModal`/`close` are not implemented in jsdom — feedback-dialog.test.tsx § the same stand-in. */
++let showModals = 0;
++beforeEach(() => {
++  const proto = window.HTMLDialogElement?.prototype;
++  if (proto) {
++    proto.showModal = function showModal(this: HTMLDialogElement) {
++      showModals++;
++      this.open = true;
++    };
++    proto.close = function close(this: HTMLDialogElement) {
++      this.open = false;
++      this.dispatchEvent(new Event("close"));
++    };
++  }
++});
++
++const { PurposePrompt } = await import("../src/web/PurposePrompt.js");
++
++/* ------------------------------------------------------------- the harness -- */
++
++const SLUG = "a-paper";
++let host: HTMLDivElement;
++let root: Root;
++
++function render(strict = false): void {
++  const prompt = createElement(PurposePrompt, { slug: SLUG });
++  act(() => {
++    root.render(strict ? createElement(StrictMode, null, prompt) : prompt);
++  });
++}
++
++async function settle(): Promise<void> {
++  for (let i = 0; i < 4; i++) {
++    await act(async () => {
++      await new Promise((resolve) => setTimeout(resolve, 0));
++    });
++  }
++}
++
++const dialog = (): HTMLDialogElement | null => host.querySelector("dialog");
++const isOpen = (): boolean => dialog()?.open === true;
++const box = (): HTMLTextAreaElement => {
++  const el = host.querySelector<HTMLTextAreaElement>("textarea");
++  if (!el) throw new Error("no box in the prompt");
++  return el;
++};
++function type(value: string): void {
++  const el = box();
++  act(() => {
++    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, value);
++    el.dispatchEvent(new Event("input", { bubbles: true }));
++  });
++}
++const press = (name: string): void => {
++  const b = [...host.querySelectorAll("button")].find((x) => x.textContent?.trim() === name);
++  if (!b) throw new Error(`no ${name} button`);
++  act(() => b.click());
++};
++const patches = () => requested.filter((r) => r.method === "PATCH");
++
++beforeEach(() => {
++  session.clear();
++  requested.length = 0;
++  showModals = 0;
++  readerBody = { purpose: null };
++  patchAnswer = async (body) =>
++    new Response(JSON.stringify({ purpose: body.purpose?.trim() ?? null }), { status: 200 });
++  host = document.createElement("div");
++  document.body.appendChild(host);
++  root = createRoot(host);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++describe("PurposePrompt", () => {
++  it("without the mark renders nothing and makes no request", async () => {
++    render();
++    await settle();
++    expect(dialog()).toBeNull();
++    expect(requested, "an article view without the mark asked the server").toEqual([]);
++  });
++
++  it("with a mark for another article renders nothing and makes no request", async () => {
++    session.set(MARK, "another-paper");
++    render();
++    await settle();
++    expect(dialog()).toBeNull();
++    expect(requested).toEqual([]);
++    expect(session.get(MARK)).toBe("another-paper");
++  });
++
++  it("with the mark and no purpose, opens the dialog and clears the mark", async () => {
++    session.set(MARK, SLUG);
++    render();
++    await settle();
++    expect(requested.map((r) => r.url)).toEqual([`/api/reader?slug=${SLUG}`]);
++    expect(isOpen()).toBe(true);
++    expect(dialog()?.textContent).toContain("Why are you reading this?");
++    expect(box().value).toBe("");
++    expect(session.has(MARK), "the question would be asked again").toBe(false);
++  });
++
++  it("with the mark and a purpose already set, shows nothing and clears the mark", async () => {
++    session.set(MARK, SLUG);
++    readerBody = { purpose: "the evidence" };
++    render();
++    await settle();
++    expect(isOpen()).toBe(false);
++    expect(session.has(MARK)).toBe(false);
++  });
++
++  it("with the mark and a failed read, shows nothing and keeps the mark", async () => {
++    session.set(MARK, SLUG);
++    readerBody = "fail";
++    render();
++    await settle();
++    expect(isOpen()).toBe(false);
++    expect(session.get(MARK), "a failed read lost the question").toBe(SLUG);
++  });
++
++  it("with the mark and an unreadable shelf (purposeFailed), shows nothing and keeps the mark", async () => {
++    session.set(MARK, SLUG);
++    readerBody = { purpose: null, purposeFailed: true };
++    render();
++    await settle();
++    expect(isOpen(), "an unreadable purpose was taken for 'not said'").toBe(false);
++    expect(session.get(MARK)).toBe(SLUG);
++  });
++
++  it("Done with typed text saves it, then closes", async () => {
++    let answer: (r: Response) => void = () => {};
++    patchAnswer = () =>
++      new Promise((resolve) => {
++        answer = resolve;
++      });
++    session.set(MARK, SLUG);
++    render();
++    await settle();
++    type("how they handled missing data");
++    press("Done");
++    await settle();
++    expect(patches().map((p) => p.body)).toEqual([{ purpose: "how they handled missing data" }]);
++    expect(patches()[0]?.url).toBe(`/api/library/${SLUG}`);
++    expect(isOpen(), "closed before the save had landed").toBe(true);
++    answer(new Response(JSON.stringify({ purpose: "how they handled missing data" }), { status: 200 }));
++    await settle();
++    expect(isOpen()).toBe(false);
++  });
++
++  it("Done over a refused save stays open and says why", async () => {
++    patchAnswer = async () => new Response(JSON.stringify({ error: "The shelf is unavailable." }), { status: 503 });
++    session.set(MARK, SLUG);
++    render();
++    await settle();
++    type("the evidence");
++    press("Done");
++    await settle();
++    expect(isOpen(), "a refused save was closed over").toBe(true);
++    expect(host.querySelector(".prof-save")?.textContent).toContain("The shelf is unavailable.");
++  });
++
++  it("Done with nothing typed closes without a PATCH", async () => {
++    session.set(MARK, SLUG);
++    render();
++    await settle();
++    press("Done");
++    await settle();
++    expect(isOpen()).toBe(false);
++    expect(patches()).toEqual([]);
++  });
++
++  it("Not now closes it", async () => {
++    session.set(MARK, SLUG);
++    render();
++    await settle();
++    press("Not now");
++    await settle();
++    expect(isOpen()).toBe(false);
++    expect(patches()).toEqual([]);
++  });
++
++  it("Escape (the dialog's own close) closes it and it stays closed", async () => {
++    session.set(MARK, SLUG);
++    render();
++    await settle();
++    act(() => dialog()?.close());
++    await settle();
++    expect(isOpen()).toBe(false);
++  });
++
++  it("under StrictMode, opens once and clears the mark", async () => {
++    session.set(MARK, SLUG);
++    render(true);
++    await settle();
++    expect(isOpen()).toBe(true);
++    expect(showModals).toBe(1);
++    expect(session.has(MARK)).toBe(false);
++  });
++});

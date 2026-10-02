@@ -26,6 +26,7 @@ const id = (i: number) => blocks[i]!.id;
 const emptyReport = (): BuildReport => ({
   repairs: [],
   droppedChildren: [],
+  rangelessChildren: [],
   droppedHeadings: [],
   collapsedRungs: [],
   droppedQuestions: [],

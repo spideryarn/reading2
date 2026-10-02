@@ -13,6 +13,14 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-01 · SPIDERYARN-READING2-8A (the report itself shipped; this is its follow-up) · may a
+  failed import's pre-filled Problem report also carry the source URL, filename and error sentence?
+  Today it carries ids, step names and times only, because those three would bend
+  feedback.md § The one rule; the cost is that a dismissed job's id leads nowhere. And: build a
+  link back to an uploaded original (a new owner-only read path onto Storage)? ·
+  [261001s § review item 6](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md) ·
+  [note](261001_1035-past-imports-say-more-and-why-you-are-reading-says-if-saved.md)
+
 ## Attempted abuse, not yet seen by Greg
 
 A different thing from the list above: reports that tried to get something nefarious out of an agent,

@@ -69,7 +69,7 @@ const BLOCKS: Block[] = [
   block("spya-ffffff", "A closing paragraph"),
 ];
 
-const report = (): BuildReport => ({ repairs: [], droppedChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] });
+const report = (): BuildReport => ({ repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] });
 
 /** Every leaf's block, in tree order — what the reader can actually reach. */
 function leafBlocks(tree: ReturnType<typeof buildTree>): string[] {
@@ -568,6 +568,225 @@ describe("a child with nowhere to start is dropped, and counted", () => {
     buildTree(crowded, {}, BLOCKS, "test", r);
     // "child 3", not "child 2" — its position in the answer, not in the tree.
     expect(r.droppedChildren).toEqual(["root > child 1 > child 3"]);
+  });
+});
+
+/**
+ * **A child that states no range has made no claim, and is derived like one** —
+ * 2026-10-01, docs/plans/261001s-fb93-long-pdf-hierarchy-asks-again.md.
+ *
+ * A 1,041-block book lost its whole tree to *"The node at root > child 3 >
+ * child 4 > child 1 has no [start, end] block range"*: one field left out of a
+ * 25,000-character answer. A missing range is not an invented id — the model
+ * named nothing that does not exist, it named nothing at all — so it goes
+ * through the rule the derivation already has for a start that carries no
+ * information: the first child is pinned, a later one falls back to the
+ * previous child's end, and one with neither is dropped.
+ */
+describe("a child that states no range is derived, not refused", () => {
+  const three = (middle: Partial<ModelNode>): ModelNode => ({
+    ...WHOLE,
+    children: [
+      { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-bbbbbb"] },
+      { title: "Middle", gist: "It turns.", ...middle } as ModelNode,
+      { title: "Last", gist: "It closes.", range: ["spya-eeeeee", "spya-ffffff"] },
+    ],
+  });
+
+  it("pins a rangeless first child to its parent's start", () => {
+    const answer: ModelNode = {
+      ...WHOLE,
+      children: [
+        { title: "First", gist: "It opens." } as ModelNode,
+        { title: "Second", gist: "It closes.", range: ["spya-dddddd", "spya-ffffff"] },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(answer, {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    expect(titled(tree, "First")?.range).toEqual(["spya-aaaaaa", "spya-cccccc"]);
+    expect(titled(tree, "Second")?.range).toEqual(["spya-dddddd", "spya-ffffff"]);
+    expect(r.rangelessChildren).toEqual(["root > child 1"]);
+    expect(r.droppedChildren).toEqual([]);
+    // The claims that were made agreed, so nothing else was mended.
+    expect(r.repairs).toEqual([]);
+  });
+
+  it("starts a rangeless middle child where the one before it ended", () => {
+    const r = report();
+    const tree = buildTree(three({}), {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    expect(titled(tree, "Middle")?.range).toEqual(["spya-cccccc", "spya-dddddd"]);
+    expect(titled(tree, "Last")?.range).toEqual(["spya-eeeeee", "spya-ffffff"]);
+    expect(r.rangelessChildren).toEqual(["root > child 2"]);
+    expect(r.droppedChildren).toEqual([]);
+  });
+
+  it("counts an absent range and a null one as missing", () => {
+    for (const range of [undefined, null]) {
+      const r = report();
+      const tree = buildTree(three({ range } as unknown as Partial<ModelNode>), {}, BLOCKS, "test", r);
+      expect(checkTree(BLOCKS, tree).problems, String(range)).toEqual([]);
+      expect(r.rangelessChildren, String(range)).toEqual(["root > child 2"]);
+    }
+  });
+
+  /* A half-stated range still carries a start claim. Calling it "none" would
+     throw that claim away and attach the child's title to the previous
+     child's tail, with nothing measured — GPT Sol on the plan, finding 1. */
+  it("still refuses a range of the wrong shape, which may carry a real start", () => {
+    for (const range of [[], ["spya-dddddd"], ["spya-dddddd", 3], "spya-dddddd"]) {
+      expect(
+        () => buildTree(three({ range } as unknown as Partial<ModelNode>), {}, BLOCKS, "test", report()),
+        JSON.stringify(range),
+      ).toThrow(/root > child 2 has no \[start, end\] block range/);
+    }
+  });
+
+  it("ends a rangeless last child at its parent's end, and measures nothing it did not say", () => {
+    const answer: ModelNode = {
+      ...WHOLE,
+      children: [
+        { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-cccccc"] },
+        { title: "Last", gist: "It closes." } as ModelNode,
+      ],
+    };
+    const r = report();
+    const tree = buildTree(answer, {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    expect(titled(tree, "Last")?.range).toEqual(["spya-dddddd", "spya-ffffff"]);
+    expect(r.repairs).toEqual([]);
+    expect(r.rangelessChildren).toEqual(["root > child 2"]);
+  });
+
+  /* One claim left about each of the rangeless child's two boundaries: the
+     end before it, and the start after it. Each is measured on its own. */
+  it("measures the one claim left at each boundary of a rangeless child", () => {
+    const answer = three({});
+    // First stops a block short; Last starts a block late.
+    answer.children![0] = { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-aaaaaa"] };
+    answer.children![2] = { title: "Last", gist: "It closes.", range: ["spya-ffffff", "spya-ffffff"] };
+    const r = report();
+    const tree = buildTree(answer, {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    // Middle starts where First said it ended; Last is believed.
+    expect(titled(tree, "Middle")?.range).toEqual(["spya-bbbbbb", "spya-eeeeee"]);
+    expect(titled(tree, "Last")?.range).toEqual(["spya-ffffff", "spya-ffffff"]);
+    expect(r.repairs).toEqual([]);
+  });
+
+  it("calls a lone next-start claim beyond its parent a gap", () => {
+    const answer: ModelNode = {
+      ...WHOLE,
+      children: [
+        {
+          title: "First half",
+          gist: "It opens.",
+          range: ["spya-aaaaaa", "spya-dddddd"],
+          children: [
+            { title: "Rangeless", gist: "It begins." } as ModelNode,
+            {
+              title: "Late start",
+              gist: "It follows.",
+              range: ["spya-eeeeee", "spya-eeeeee"],
+            },
+          ],
+        },
+        { title: "Second half", gist: "It closes.", range: ["spya-eeeeee", "spya-ffffff"] },
+      ],
+    };
+    const r = report();
+    const tree = buildTree(answer, {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    expect(r.repairs).toEqual([
+      { where: "root > child 1 > child 2", kind: "gap", at: 3, size: 1 },
+      { where: "root > child 1 > child 2", kind: "over", at: 4, size: 1 },
+    ]);
+  });
+
+  it("snaps a rangeless child onto the heading it names, like any other", () => {
+    // First claims through the heading; Middle names it and has no range.
+    const answer = three({ sourceHeading: "The Second Part" });
+    answer.children![0] = { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-dddddd"] };
+    answer.children![2] = { title: "Last", gist: "It closes.", range: ["spya-ffffff", "spya-ffffff"] };
+    const r = report();
+    const tree = buildTree(answer, {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    // Derived to start after First's end, then snapped back onto its heading.
+    expect(titled(tree, "Middle")?.range).toEqual(["spya-dddddd", "spya-eeeeee"]);
+    expect(r.repairs).toEqual([{ where: "root > child 2", kind: "heading", at: 3, size: 1 }]);
+    expect(titled(tree, "Middle")?.sourceHeading).toBe("The Second Part");
+  });
+
+  it("counts a rangeless rung even when it is spliced away", () => {
+    const answer: ModelNode = {
+      ...WHOLE,
+      children: [
+        {
+          title: "Only",
+          gist: "The same as the whole.",
+          children: [
+            { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-cccccc"] },
+            { title: "Second", gist: "It closes.", range: ["spya-dddddd", "spya-ffffff"] },
+          ],
+        } as ModelNode,
+      ],
+    };
+    const r = report();
+    const tree = buildTree(answer, {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    expect(titled(tree, "Only")).toBeUndefined();
+    expect(r.collapsedRungs).toEqual(["root > child 1"]);
+    expect(r.rangelessChildren).toEqual(["root > child 1"]);
+  });
+
+  it("does not lend a missing end to the child after it", () => {
+    // Middle has no end to borrow, and Last's own start is not past Middle's.
+    const answer = three({});
+    answer.children![2] = { title: "Last", gist: "It closes." } as ModelNode;
+    const r = report();
+    const tree = buildTree(answer, {}, BLOCKS, "test", r);
+    expect(checkTree(BLOCKS, tree).problems).toEqual([]);
+    expect(titled(tree, "Middle")?.range).toEqual(["spya-cccccc", "spya-ffffff"]);
+    expect(titled(tree, "Last")).toBeUndefined();
+    expect(r.rangelessChildren).toEqual(["root > child 2", "root > child 3"]);
+    expect(r.droppedChildren).toEqual(["root > child 3"]);
+  });
+
+  /* The precise error, whichever side of the rangeless child the invented id
+     is on — both are checked before any sibling is visited. GPT Sol on the
+     plan, finding 2. */
+  it("still refuses an id that is not in the article, beside a rangeless sibling", () => {
+    const after = three({});
+    after.children![2] = { title: "Last", gist: "It closes.", range: ["spya-zzzzzz", "spya-ffffff"] };
+    expect(() => buildTree(after, {}, BLOCKS, "test", report())).toThrow(
+      /not in blocks\.json — at root > child 3/,
+    );
+    const before = three({ range: ["spya-zzzzzz", "spya-dddddd"] });
+    before.children![0] = { title: "First", gist: "It opens." } as ModelNode;
+    expect(() => buildTree(before, {}, BLOCKS, "test", report())).toThrow(
+      /not in blocks\.json — at root > child 2/,
+    );
+  });
+
+  it("keeps the established invented-range message for an internal child", () => {
+    const answer: ModelNode = {
+      ...WHOLE,
+      children: [
+        {
+          title: "Invented parent",
+          gist: "Its end does not exist.",
+          range: ["spya-aaaaaa", "spya-zzzzzz"],
+          children: [
+            { title: "First", gist: "It opens.", range: ["spya-aaaaaa", "spya-cccccc"] },
+            { title: "Second", gist: "It closes.", range: ["spya-dddddd", "spya-ffffff"] },
+          ],
+        },
+      ],
+    };
+    expect(() => buildTree(answer, {}, BLOCKS, "test", report())).toThrow(
+      'The node at root > child 1 has a range not in blocks.json: start "spya-aaaaaa"; end "spya-zzzzzz"',
+    );
   });
 });
 
