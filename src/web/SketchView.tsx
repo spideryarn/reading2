@@ -912,7 +912,7 @@ function SketchBody({
                   key={sc.id}
                   placement="bottom"
                   keepSide
-                  className="tip-soon"
+                  className="tip-soon sk-scene-tip"
                   content={
                     <ControlTip
                       head={i === 0 ? sketch.title : sc.title}
@@ -971,7 +971,7 @@ function SketchBody({
           <Tooltip
             placement="bottom"
             keepSide
-            className="tip-soon"
+            className="tip-soon sk-scene-tip"
             content={
               <ControlTip
                 head={sketch.title}

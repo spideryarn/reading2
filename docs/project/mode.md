@@ -212,6 +212,12 @@ Then the residue, which is why this page exists:
   [reading-view-overview.md § The modes in the band](reading-view-overview.md#the-modes-in-the-band)
   with the doc that owns it. *[`tests/doc-links.test.ts`](../../tests/doc-links.test.ts), for the
   doc; nothing for the line.*
+- **Each voice in its face**: what a model wrote in `--font-ai`, the article's words in
+  `--font-author`, what the reader typed in `--font-reader` — a class per element in
+  [`voices.css`](../../src/web/styles/voices.css), and the rule for which is which, in
+  [fonts.md](fonts.md). *[`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) §
+  `VOICES_BY_MODE`, a `Record<Mode, …>`: the mode's AI classes, or why it has none. It cannot see an
+  element you forgot to name.*
 
 A mode that shows nothing generated — Plain, Search — stops here.
 
@@ -514,6 +520,7 @@ written since have the same shape and the same purpose:
 |---|---|
 | [`tests/every-mode-draws-its-surface.test.tsx`](../../tests/every-mode-draws-its-surface.test.tsx) § `SPENDS` **and** § `DRAWS` | two errors, not one — what the press buys, and what the band draws |
 | [`tests/command-bar.test.tsx`](../../tests/command-bar.test.tsx) § `GENERATES` | whether the bar marks the row `generates`, checked against `MODE_TARGET` from the other side |
+| [`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) § `VOICES_BY_MODE` | which of the band's text a model wrote, and so goes in the AI face (added 2026-10-02, not in either measurement) |
 
 That is the mechanism working rather than drifting: each new table is an independently written
 `Record<Mode, …>`, so every one of them adds a place a new mode has to be decided rather than

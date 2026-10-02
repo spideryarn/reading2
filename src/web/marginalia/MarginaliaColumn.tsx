@@ -127,8 +127,8 @@ function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }
       onOpenChange={setOpen}
       content={
         <>
-          <div className="tip-soon-head">{note.name}</div>
-          <p>{note.statement}</p>
+          <div className="tip-soon-head marg-idea-tipname">{note.name}</div>
+          <p className="marg-idea-statement">{note.statement}</p>
           <p className="tip-soon-how">{PROVENANCE_TIP[note.provenance]}</p>
         </>
       }
@@ -242,7 +242,7 @@ function ArcLine({ arc }: { arc: string }) {
       keepSide
       open={open}
       onOpenChange={setOpen}
-      content={<p>{arc}</p>}
+      content={<p className="marg-arc-full">{arc}</p>}
     >
       <button
         type="button"

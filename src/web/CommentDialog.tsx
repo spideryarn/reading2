@@ -370,7 +370,7 @@ export function CommentDialog({
           <blockquote className="cmt-quote">
             {passage.whole ? (
               <>
-                <em>Whole paragraph</em> — {passage.text}
+                <em className="passage-whole">Whole paragraph</em> — {passage.text}
               </>
             ) : (
               passage.text

@@ -788,14 +788,14 @@ function StopCardView({
                 aria-expanded={entry.id === term?.entry.id}
                 onClick={() => onToggle("term", entry.id)}
               >
-                {entry.name}
+                <span className="skim-chip-name">{entry.name}</span>
                 {alsoAt !== null && <span className="skim-also">also at stop {alsoAt}</span>}
               </button>
             ))}
           </div>
           {term && (
             <div className="skim-sense">
-              {lead && <p>{lead}</p>}
+              {lead && <p className="skim-sense-text">{lead}</p>}
               {canOpen({ kind: "term", id: term.entry.id }) && (
                 <OpenIn
                   label="Open in Glossary"
@@ -819,13 +819,13 @@ function StopCardView({
                 aria-expanded={i.id === idea?.id}
                 onClick={() => onToggle("idea", i.id)}
               >
-                {i.name}
+                <span className="skim-chip-name">{i.name}</span>
               </button>
             ))}
           </div>
           {idea && (
             <div className="skim-sense">
-              <p>{idea.statement}</p>
+              <p className="skim-sense-text">{idea.statement}</p>
               {canOpen({ kind: "idea", id: idea.id }) && (
                 <OpenIn label="Open in Ideas" icon={<Lightbulb size={16} />} onOpen={() => onOpen({ kind: "idea", id: idea.id })} />
               )}
@@ -840,11 +840,15 @@ function StopCardView({
             {card.events.map((event) => (
               <li key={event.id}>
                 {canOpen({ kind: "event", id: event.id }) ? (
-                  <button type="button" className="skim-link" onClick={() => onOpen({ kind: "event", id: event.id })}>
+                  <button
+                    type="button"
+                    className="skim-link skim-event-label"
+                    onClick={() => onOpen({ kind: "event", id: event.id })}
+                  >
                     {event.label}
                   </button>
                 ) : (
-                  <span>{event.label}</span>
+                  <span className="skim-event-label">{event.label}</span>
                 )}
               </li>
             ))}
@@ -916,7 +920,11 @@ export function SkimDoor({
       </div>
       {/* Where the door leads: the next stop's cue, small and muted — or, at
           the end of a pass, which pass has ended. */}
-      {door?.kind === "next" && door.cue && <p className="skim-door-cue">{door.cue}</p>}
+      {/* The model's cue for the next stop; the fixed "End of …" line below
+          shares `skim-door-cue` and stays UI, so the voice is on a modifier. */}
+      {door?.kind === "next" && door.cue && (
+        <p className="skim-door-cue skim-door-cue-next">{door.cue}</p>
+      )}
       {door?.kind === "end" && (
         <p className="skim-door-cue">
           End of {door.pass} — {door.count} {door.count === 1 ? "stop" : "stops"}.

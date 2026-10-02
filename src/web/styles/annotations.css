@@ -991,6 +991,9 @@ td.text.has-hit[data-hues="8"] {
   line-height: 1.45;
   color: var(--ink-soft);
 }
+/* "Whole paragraph" is our label, not the author's words, so it is the app's
+   face even inside the quote (docs/project/fonts.md). */
+.cmt-quote .passage-whole { font-family: var(--font-ui); }
 
 .cmt-loading {
   display: flex;

@@ -100,7 +100,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { OutlineEntry } from "./tree.js";
+import { navLabelVoice, type OutlineEntry, type TextVoice } from "./tree.js";
 import type { BlockMatch } from "./search-hits.js";
 import type { BlockId } from "../types.js";
 import {
@@ -1356,8 +1356,10 @@ const MAX_CHILDREN = 5;
  * navigation chrome, and the spine is one of the two places the node shape
  * sanctions it. It is never standing in for prose the reader could be shown.
  */
-function childLabel(e: OutlineEntry): string {
-  return e.node.navLabel?.trim() || e.node.title?.trim() || "";
+function childLabel(e: OutlineEntry): { label: string; voice: TextVoice } {
+  const nav = e.node.navLabel?.trim();
+  if (nav) return { label: nav, voice: navLabelVoice(e) };
+  return { label: e.node.title?.trim() || "", voice: "ui" };
 }
 
 /**
@@ -1414,7 +1416,7 @@ function BandCard({
      reader would actually get. Counting first and filtering second is how a
      card ends up saying "+ 3 more" and then showing three blank bullets. */
   const kids = children
-    .map((c) => ({ id: c.node.id, label: childLabel(c) }))
+    .map((c) => ({ id: c.node.id, ...childLabel(c) }))
     .filter((c) => c.label !== "");
   return (
     <>
@@ -1450,7 +1452,14 @@ function BandCard({
       {kids.length > 0 && (
         <ul className="tip-kids">
           {kids.slice(0, MAX_CHILDREN).map((c) => (
-            <li key={c.id}>{c.label}</li>
+            <li
+              key={c.id}
+              className={
+                c.voice === "ai" ? "tip-kid-ai" : c.voice === "author" ? "tip-kid-author" : undefined
+              }
+            >
+              {c.label}
+            </li>
           ))}
           {kids.length > MAX_CHILDREN && (
             <li className="tip-more">+ {kids.length - MAX_CHILDREN} more</li>
