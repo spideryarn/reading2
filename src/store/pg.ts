@@ -136,6 +136,7 @@ import {
   describeArticle,
   headingTitleOf,
   titleFor,
+  titleRenamed,
   type LibraryScalars,
 } from "../library-scalars.js";
 import { LABELS_PROMPT_VERSION } from "../labels.js";
@@ -1729,6 +1730,7 @@ function unreadPaperFrom(
   return {
     slug,
     title: meta.title,
+    titleOverridden: titleRenamed(shelfFrom(found.article)),
     authors,
     ...(meta.abstract ? { abstract: meta.abstract } : {}),
     ...(meta.doi ? { doi: meta.doi } : {}),
@@ -2717,6 +2719,9 @@ const rawPgArticleReader: ArticleReader = {
         titleFor(metaFrom(slug, found.revision, headingTitleOf(blocks)), shelfFrom(found.article)),
         found.revision.authors,
       ),
+      /* Whose words that title is — the same test `titleFor` just made
+         (library-scalars.ts § `titleRenamed`). Required on `Article`. */
+      titleOverridden: titleRenamed(shelfFrom(found.article)),
       blocks,
       tree: tree as Tree,
       ...(arc ? { arc: arc as Arc } : {}),

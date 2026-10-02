@@ -43,7 +43,7 @@
  * (`offeredDepths`). Each is a real `<button>` and its own tab stop, with
  * `aria-pressed` — keyboard.md's rule that arrow keys belong to the article.
  */
-import { Fragment, type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import {
   BookA,
   ChevronLeft,
@@ -65,7 +65,8 @@ import { ModeSurface } from "./ModeSurface.js";
 import { PurposeLine } from "./SkimPurpose.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
-import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { StepTip } from "./StepTip.js";
 import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
 import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
@@ -405,40 +406,6 @@ function RouteHead({ view, total }: { view: SkimView; total: number }) {
   );
 }
 
-/**
- * **A step control's card**: what it does, and its key — Skim's ‹ › and
- * the door's *Next stop ›* (plan 260930h). "While reading" covers keynav's
- * guards, including the Dock drawer suspending the keys while the buttons stay
- * mounted behind it; docs/project/tooltips.md § A shortcut is named on its card.
- */
-function StepTip({
-  head,
-  what,
-  keyName,
-  placement = "bottom",
-  enabled = true,
-  children,
-}: {
-  head: string;
-  what: string;
-  keyName: "←" | "→";
-  placement?: "top" | "bottom";
-  /** False when the native button is disabled; also closes a card already open. */
-  enabled?: boolean;
-  children: ReactElement<Record<string, unknown>>;
-}) {
-  return (
-    <Tooltip
-      placement={placement}
-      keepSide
-      className="tip-soon"
-      enabled={enabled}
-      content={<ControlTip head={head} what={what} how={`While reading, press ${keyName}.`} />}
-    >
-      {children}
-    </Tooltip>
-  );
-}
 
 /**
  * **Who is looking, and what they hold.** The owner's arm is the whole

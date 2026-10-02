@@ -47,7 +47,7 @@ import { addressWithout, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
 import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
-import { useQuoteMarks } from "./useQuoteMarks.js";
+import { quoteCardQuotes, useQuoteMarks } from "./useQuoteMarks.js";
 import { DebateBand, VisitorDebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand, VisitorCitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
@@ -66,6 +66,7 @@ import type { Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
+import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
 import { SummaryBand, VisitorSummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
@@ -92,7 +93,7 @@ import { CommentDialog } from "../CommentDialog.js";
 import { Masthead } from "../Masthead.js";
 import { Dock } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
-import { ProseHoverCard } from "../ProseHoverCard.js";
+import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import { shownEntries } from "../glossary-shown.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
@@ -102,7 +103,7 @@ import {
   hitMarks as buildHitMarks,
   type Found,
 } from "../search-hits.js";
-import { buildArcColumn, buildGeometry, buildOutline } from "../tree.js";
+import { buildArcColumn, buildGeometry, buildOutline, buildSummaryTree, nodeLabel } from "../tree.js";
 import {
   marginParam,
   modeParam,
@@ -166,7 +167,10 @@ import { makeBlockBookmarker } from "../block-bookmark.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-context.js";
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
-import { proseFound, selectPassages } from "./passages.js";
+import { proseFound, railFound, selectPassages } from "./passages.js";
+import { quoteAlphaByBlock } from "../spine-marks.js";
+import { stepQuote } from "../QuotesPanel.js";
+import type { OnRenamed } from "../TitleEditor.js";
 
 /** A module constant for `NO_QUOTES`'s reason: the visitor's Skim band keys memos on it by identity. */
 const NO_PUBLIC_QUOTES: Quote[] = [];
@@ -235,7 +239,7 @@ export function Reader({
    * have, so the button could only ever fail, and a button that can only fail is
    * worse than no button because pressing it is how you find out.
    */
-  onRenamed?: ((slug: string, title: string) => void) | undefined;
+  onRenamed?: OnRenamed | undefined;
   /** The owner's controller, kept above the article/metadata view switch. */
   archive?: ArchiveControl | undefined;
 }) {
@@ -504,6 +508,58 @@ export function Reader({
     [geometry, liveArc],
   );
 
+  /**
+   * **The headings breadcrumb's tree** — the one Structure draws, cut at the
+   * section depth so the path never names a paragraph. HeadingsCrumbs.tsx,
+   * crumbs.ts.
+   */
+  const crumbsRoot = useMemo(
+    () =>
+      experimental.on
+        ? buildSummaryTree(article.tree, article.blocks, sectionDepth(geometry))
+        : null,
+    [experimental.on, article.tree, article.blocks, geometry],
+  );
+  /**
+   * **Is the breadcrumb drawn?** For a reader with Experimental features on,
+   * at every scroll position — Greg, 2026-09-29 (spya-m3pteb): *"always
+   * present if experimental features are turned on, and invisible if not"*.
+   *
+   * **Not while a band covers the prose** (a phone with a mode open): the
+   * shell's guard would pin the bar over the band, and the band is what is on
+   * screen. That includes the band *stepped aside* (`bandAway`), deliberately
+   * for v1: drawing the bar the moment a band link is followed would push the
+   * prose down 44px in the middle of that jump, before its position write has
+   * landed (GPT Sol, plan review of 261002h, finding 2).
+   *
+   * **Not for a tree with nothing to name** either, or the bar is 44px of
+   * blank. A tree where no part has a title or a navLabel is the case.
+   *
+   * The tree itself is not built while the switch is off. `Reader` renders for
+   * every scroll-independent state change, and an experimental feature should
+   * not add a full block map and tree walk for readers who cannot see it.
+   */
+  const showCrumbs =
+    experimental.on &&
+    !(bandOpen && fit.modeW === 0) &&
+    (crumbsRoot?.children.some((c) => nodeLabel(c, c.title) !== null) ?? false);
+  /**
+   * **Is the controls bar drawn at all?** For a visitor, whose read-only chip
+   * is in it, and since 2026-10-02 for anybody it holds the breadcrumb for.
+   * The Parts / Sections / Paragraphs pills that were the rest of it went
+   * with the Hierarchy mode on 2026-09-29
+   * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md § 7). On
+   * a narrow mode view the chip is the only thing telling a visitor they are
+   * read-only, so the bar stays for it.
+   *
+   * The CSS half is `:root:not(:has(.controls))` in shell.css § the bar that
+   * leaves while you read, which lets `--bar-bottom` fall to the status-bar
+   * inset when this is false. Nothing in `scroll.ts` needs telling: both
+   * `stickyOffset` and `stickyDestination` already answer `--safe-top` for an
+   * absent bar, and measure a present one.
+   */
+  const showBar = owner === null || showCrumbs;
+
   // A string, so it compares by value: a fresh object every render would restart the scroll
   // listener every render. `modeW` is in it because entering a mode moves every
   // row on the page sideways, and the `?at=` tracker holds row elements it
@@ -514,7 +570,13 @@ export function Reader({
   // the prose with `modeW` still 0, so without them switching into it at a
   // medium width rewrapped the article under an unchanged key (GPT Sol, F2 on
   // docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md).
-  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}`;
+  //
+  // `showBar` since 2026-10-02: the controls bar is 44px in flow above the
+  // table, and it now comes and goes with the experimental switch, which loads
+  // after the article and can be pressed mid-read. That moves every row down
+  // without resizing the table, so the table's ResizeObserver hears nothing
+  // (GPT Sol, plan review of 261002h, finding 1).
+  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}`;
 
   /**
    * **Is the prose on screen, for the reading-time recorder** — only this
@@ -1160,10 +1222,10 @@ export function Reader({
    * another set — a memo has by construction.
    * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
    */
-  const quotes = useQuoteMarks(
-    article.blocks,
-    capability.kind === "owner" ? capability.quotes.quotes : (artefacts?.quotes ?? null),
-  );
+  const quoteSource =
+    capability.kind === "owner" ? capability.quotes.quotes : (artefacts?.quotes ?? null);
+  const allQuotes = quoteSource?.quotes ?? NO_PUBLIC_QUOTES;
+  const quotes = useQuoteMarks(article.blocks, quoteSource);
   /* **A fourth state, for the reason the second and third have their own**, and
      not because Timeline needs anything ideas do not: two modes sharing one
      `Found[]` clear each other on the way out, and which one wins is an
@@ -1277,8 +1339,19 @@ export function Reader({
      Note it is `blockMatches` and not `hitHues`. A literal match has no palette
      slot, so `blockHues` drops it — right for the paragraph bar, which falls
      back to the one fixed search hue, and wrong for the rail, which would then
-     show nothing at all in words mode. search-hits.ts § Why `null` survives. */
-  const hitBlocks = useMemo(() => blockMatches(passages), [passages]);
+     show nothing at all in words mode. search-hits.ts § Why `null` survives.
+
+     **Less any quote** (passages.ts § `railFound`), since 2026-10-02: the
+     quotes have a strip of their own, so in a lane they would be drawn twice,
+     in a search's colour, and counted as search matches. */
+  const hitBlocks = useMemo(() => blockMatches(railFound(passages)), [passages]);
+  /* **The quotes in the rail, in every mode** — their own strip down the left
+     edge (spine-marks.ts § `quoteRailMarks`; Greg, 2026-09-10, spya-yd2c47).
+     From `proseMarked`, what the prose actually outlines, and not from
+     `quotes.found`: Skim's stop can be a quote the bar hides from the band,
+     resolved afresh and outlined all the same (passages.ts § `proseFound`).
+     `quoteAlphaByBlock` keeps only what carries a quote stroke. */
+  const quoteRail = useMemo(() => quoteAlphaByBlock(proseMarked), [proseMarked]);
 
   /**
    * The bottom drawer — see Dock.tsx, and docs/plans/260825c-bottom-bar.md for why the
@@ -1318,12 +1391,64 @@ export function Reader({
   /* …and the quiz's questions while Remember's Quiz half is showing — `quizKeys`
      is only ever set while `QuizPanel` is mounted. */
   const quizStepKeys = mode === "remember" ? quizKeys : null;
+  /* …and the quotes while Quotes is the mode — Greg, 2026-09-11 (spya-mtyquy):
+     *"use left/right to navigate between quotes"*. `stepQuote` is the band's
+     ‹ › rule too, so the keys can do no more than the buttons; `null` from it
+     (→ on the last) answers "took nothing" and the key goes to the browser.
+     keyboard.md § ← / → in Quotes. */
+  const {
+    steppable: steppableQuotes,
+    selectedId: selectedQuote,
+    select: selectQuote,
+    reveal: revealQuote,
+  } = quotes;
+  const goToQuote = useCallback(
+    (quote: Quote, jump: (id: BlockId) => void) => {
+      selectQuote(quote.id);
+      jump(quote.blockId);
+    },
+    [selectQuote],
+  );
+  const quoteKeys = useCallback(
+    (dir: -1 | 1) => {
+      const next = stepQuote(steppableQuotes, selectedQuote, dir);
+      if (!next) return false;
+      goToQuote(next, bandJump);
+      return true;
+    },
+    [steppableQuotes, selectedQuote, goToQuote, bandJump],
+  );
+  const quoteStepKeys = mode === "quotes" ? quoteKeys : null;
+  /* **The card on a quote in the prose** (ProseHoverCard.tsx § `QuoteCard`).
+     Its ‹ › walk **down the page**, in document order, where the band and the
+     keys walk the band's list. The two agree in the default order and in
+     *prioritised*; under *most important* the band's order is invisible from
+     the prose, and "next" jumping back up the page would be a surprise (GPT
+     Sol's plan review, P2). `quoteCardQuotes` reads the actual prose marks, not
+     only the band's list: Skim may outline its current quote after the Quotes
+     bar has hidden it. Only outlined quotes enter the map, so no step lands on
+     nothing. `jumpTo` and not `bandJump`: the reader is in the prose already.
+     Opening Quotes selects the quote first, so the band opens on its row. */
+  const quoteCard = useMemo<QuoteCardSource | null>(() => {
+    const { listed, byKey } = quoteCardQuotes(allQuotes, proseMarked);
+    if (listed.length === 0) return null;
+    return {
+      listed,
+      byKey,
+      inQuotesMode: mode === "quotes",
+      onGo: (quote) => goToQuote(quote, jumpTo),
+      onOpenInQuotes: (quote) => {
+        revealQuote(quote.id);
+        void setMode("quotes");
+      },
+    };
+  }, [allQuotes, proseMarked, mode, goToQuote, jumpTo, revealQuote, setMode]);
   useArrowNav(
     nav,
     article.blocks,
     geometry.leafDepth,
     !drawerOpen,
-    skimKeys ?? quizStepKeys,
+    skimKeys ?? quizStepKeys ?? quoteStepKeys,
     /* …and the lowest-level sections while Structure is the mode — the unit
        `?at=` stores, and the stride ↓ took over the band until 2026-10-01.
        keyboard.md § ← / → in Structure. */
@@ -1947,22 +2072,6 @@ export function Reader({
   const address = useAddress();
 
   /**
-   * **Is the controls bar drawn at all?** Only for a visitor, since 2026-09-29:
-   * the read-only chip is all that is left in it. The Parts / Sections /
-   * Paragraphs pills that were the rest of it went with the Hierarchy mode
-   * (docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md § 7). On
-   * a narrow mode view that chip is the only thing telling a visitor they are
-   * read-only, so the bar stays for it.
-   *
-   * The CSS half is `:root:not(:has(.controls))` in shell.css § the bar that
-   * leaves while you read, which lets `--bar-bottom` fall to the status-bar
-   * inset when this is false. Nothing in `scroll.ts` needs telling: both
-   * `stickyOffset` and `stickyDestination` already answer `--safe-top` for an
-   * absent bar.
-   */
-  const showBar = owner === null;
-
-  /**
    * **The band the modes take turns in — one switch, and the compiler checks
    * it.**
    *
@@ -2184,9 +2293,12 @@ export function Reader({
          the panel, its three controls and — for the owner — the job machinery
          that must not be mounted anywhere else. QuotesMode.tsx. */
       case "quotes":
-        if (owner) return <QuotesBand slug={slug} read={owner.quotes} onJump={bandJump} />;
+        if (owner)
+          return (
+            <QuotesBand slug={slug} read={owner.quotes} onJump={bandJump} steps={steppableQuotes} />
+          );
         return artefacts?.quotes ? (
-          <VisitorQuotesBand quotes={artefacts.quotes} onJump={bandJump} />
+          <VisitorQuotesBand quotes={artefacts.quotes} onJump={bandJump} steps={steppableQuotes} />
         ) : null;
       /* **The owner/visitor pair the ideas and the quotes have, since
          2026-09-04.** It was one branch until then, and the comment here said
@@ -2545,6 +2657,7 @@ export function Reader({
           layoutKey={layoutKey}
           matches={hitBlocks}
           reading={owner?.readingTime.levels}
+          quotes={quoteRail}
           onJump={jumpTo}
         />
       )}
@@ -2613,9 +2726,9 @@ export function Reader({
           the URL still carries `?spine=` for anybody who wants to pin the rail
           by hand (docs/project/url-state.md). */}
       {/* **And since 2026-09-08 it is not drawn at all when that leaves it
-          empty**, which on a reading view is most of the time: `showBar` above,
-          `barHasContent` in layout.ts, and shell.css for the 44px that then
-          stops being reserved. It was no longer "the one piece of chrome that
+          empty**, which on a reading view is most of the time: `showBar` above
+          decides whether the element exists, and shell.css then stops reserving
+          its 44px. It was no longer "the one piece of chrome that
           is on screen at every scroll position" — the sentence below is kept
           because it is still the ordering rule for what goes *in* the bar, and
           the Dock is what that claim is now true of.
@@ -2632,6 +2745,15 @@ export function Reader({
           {/* First of all: what footing you are reading on outranks every control
               that follows. */}
           {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
+          {/* Where in the structure the reader is — `showCrumbs` above. */}
+          {showCrumbs && (
+            <HeadingsCrumbs
+              root={crumbsRoot}
+              sections={sections}
+              layoutKey={layoutKey}
+              onJump={jumpTo}
+            />
+          )}
           {/* **Failures of the comment transport left this bar on 2026-09-08**,
               for the Dock's Comments button — which is the control they are about,
               and which is on screen whether or not this bar is. They were here
@@ -2992,6 +3114,7 @@ export function Reader({
            both verbs (plan 261002c § 3). Null for a visitor, whose arm has no
            read to pass — the enforcement is that there is nothing here. */
         termActions={glossaryRead}
+        quotes={quoteCard}
         blockText={blockText}
         notes={notes}
         onOpenTerm={openTermInGlossary}

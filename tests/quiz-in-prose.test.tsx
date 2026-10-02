@@ -161,6 +161,7 @@ const BLOCKS: Article["blocks"] = [
 
 const OWNED: Article = {
   highPowerSince: null,
+  titleOverridden: false,
   blocks: BLOCKS,
   tree: {
     version: "test",

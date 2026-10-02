@@ -217,14 +217,24 @@ export const RELEASE_LOCK_FILE = "spideryarn-deploy.lock";
  *
  * Judged on the candidate commit's files — what will actually be built — not on
  * the working tree. *Described* is the pending release's `sha`, or the
- * history's last `sha` when nothing is pending. The rule is strict: **no commit
- * that changes what a reader sees may sit after it.** A weaker rule (allow late
- * commits so long as the notes are fresh) was proposed and refused in review,
- * because a revert landing after the notes ships notes about a feature the
- * deployed tree no longer has, and nothing would ever correct them.
+ * history's last `sha` when nothing is pending.
  *
- * `--force-gate=changelog` is the hotfix escape. What that ships uncovered,
- * `promote` leaves behind the watermark for the next `prepare` to describe.
+ * **Commits after the notes roll to the next release's** (docs/plans/261002h).
+ * Until 2026-10-02 the rule was strict — no commit a reader could see after
+ * *described* — and on a `dev` with six sessions pushing that was a treadmill:
+ * every push between `prepare` and the deploy meant another model run. Now
+ * `promote` stops the line at *described* (changelog.ts § planPromotion), so the
+ * next `prepare` plans from there and describes them. The cost, accepted by
+ * Greg: a release's entry can miss a few late commits, and a revert landing
+ * after the notes is described one release late.
+ *
+ * **But no notes at all is still refused.** A `null` pending with release
+ * commits after the history's last line means `prepare` has not run since the
+ * last deploy was promoted — the notes would ship one release behind, which is
+ * what 261001q fixed — or that it found nothing and `dev` has since gained
+ * something, which one more `prepare` settles.
+ *
+ * `--force-gate=changelog` is the hotfix escape for that and for the rest.
  */
 export function changelogGap(opts: {
   /** Problems parsing the candidate's history and pending file, chain included. */
@@ -233,17 +243,19 @@ export function changelogGap(opts: {
   described: string;
   /** Is `described` an ancestor of (or equal to) the candidate? */
   describedInCandidate: boolean;
+  /** Does the candidate carry a pending release, rather than `null`? */
+  pendingPresent: boolean;
   /** Release-path commits in `described..candidate`, oldest first. */
   uncovered: string[];
 }): string | null {
-  const { problems, described, describedInCandidate, uncovered } = opts;
+  const { problems, described, describedInCandidate, pendingPresent, uncovered } = opts;
   if (problems.length > 0) {
     return `the candidate's changelog files do not parse: ${problems.slice(0, 3).join("; ")}`;
   }
   if (!describedInCandidate) {
     return `its release notes describe ${described.slice(0, 8)}, which this commit does not contain`;
   }
-  if (uncovered.length > 0) {
+  if (uncovered.length > 0 && !pendingPresent) {
     const shown = uncovered
       .slice(0, 3)
       .map((s) => s.slice(0, 8))

@@ -420,6 +420,7 @@ const ARTICLE: PublicArticle = {
 
 const OWNED: Article = {
   highPowerSince: null,
+  titleOverridden: false,
   blocks: BLOCKS,
   tree: TREE,
   assets: undefined,

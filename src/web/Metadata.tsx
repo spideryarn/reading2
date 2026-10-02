@@ -271,7 +271,7 @@ import { atParam, type MetadataSection, sectionParam } from "./params.js";
 import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from "./router.js";
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
-import { EditableTitle, useArticleRename } from "./TitleEditor.js";
+import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { AuthorNames } from "./AuthorNames.js";
 import { howLong, timeAgo } from "./relative-time.js";
@@ -452,7 +452,7 @@ export function Metadata({
    * the browser tab and the reading view one click away all change together —
    * the same reason the masthead's pencil reports upwards too.
    */
-  onRenamed: (slug: string, title: string) => void;
+  onRenamed: OnRenamed;
   /**
    * The reader threw the sharing switch below — handed up for the same reason
    * `onRenamed` is, and it is the same hazard: the article payload is fetched
@@ -472,7 +472,7 @@ export function Metadata({
   /* The same rename the shelf offers, on the page that describes the article —
      Greg, 2026-08-27. One hook, one editor, one request shape, shared with the
      masthead and with the shelf: TitleEditor.tsx. */
-  const rename = useArticleRename(slug, onRenamed);
+  const rename = useArticleRename(slug, onRenamed, article.titleOverridden);
 
   /* **The bar is told which modes this reader sees; it does not go and get it.**
      One shared store behind the hook, so this page and the reading view cannot

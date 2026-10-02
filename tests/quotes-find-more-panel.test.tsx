@@ -115,6 +115,7 @@ async function mount(o: QuotesOwner): Promise<void> {
         bar: null,
         onBar: noop,
         onJump: noop,
+        steps: [],
       }),
     ),
   );

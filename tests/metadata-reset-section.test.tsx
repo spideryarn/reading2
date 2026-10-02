@@ -82,6 +82,7 @@ const IMPORT_STEPS: StepName[] = ["fetch", "extract", "blocks", "structure", "la
 
 const ARTICLE: Article = {
   highPowerSince: null,
+  titleOverridden: false,
   meta: { slug: SLUG, title: "A piece" },
   blocks: [
     {

@@ -60,6 +60,7 @@ const UNRECORDED = "No web address was recorded";
 function article(meta: Partial<Meta>): Article {
   return {
     highPowerSince: null,
+    titleOverridden: false,
     meta: { slug: SLUG, title: "A piece", ...meta },
     blocks: [
       {

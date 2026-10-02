@@ -435,6 +435,7 @@ const THREAD: PublicTweets = { limit: 280, tweets: [{ text: PUBLIC_TWEET, chars:
  */
 const OWNED: Article = {
   highPowerSince: null,
+  titleOverridden: false,
   /* The owner's payload is an `Article`, which has no artefact keys at all —
      theirs come from `GET /api/glossary/:slug` and its siblings. Spreading
      `ARTICLE` would carry the public ones across and make the owner control

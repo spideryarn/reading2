@@ -159,9 +159,11 @@ Three things worth carrying to whatever is built next:
   [260902k](../plans/260902k-the-bottom-bar-measures-its-own-fit.md) for the shape of the argument.
   A breakpoint is right when the *window* is what changed; this bar keeps growing instead.
 - **`.controls` is usually not there at all**, since 2026-09-08. What was left in it, until Hierarchy mode
-  went on 2026-09-29, was its granularity pills; now it is only a visitor's read-only chip, so on every other reading view it was 44px of
+  went on 2026-09-29, was its granularity pills; now it is a visitor's read-only chip, and since
+  2026-10-02 the [headings breadcrumb](experimental-features.md#what-is-behind-it-today) for a reader
+  with the switch on, so on every other reading view it was 44px of
   nothing — held on screen in a band mode by the guard below, which is how a reader came to report
-  it. `Reader` draws it only when `barHasContent` ([`src/web/layout.ts`](../../src/web/layout.ts))
+  it. `Reader` draws it only when `showBar` ([`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx))
   says there is something to put in it, and `:root:not(:has(:where(.reader) > .controls))` in
   [`styles/shell.css`](../../src/web/styles/shell.css) then lets `--bar-bottom` fall to the status-bar
   inset. Two things follow that will catch you out: **`.controls` is not a safe thing to

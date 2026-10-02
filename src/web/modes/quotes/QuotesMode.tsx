@@ -21,7 +21,7 @@
  */
 
 import { useQueryState } from "nuqs";
-import type { BlockId } from "../../../types.js";
+import type { BlockId, Quote } from "../../../types.js";
 import type { PublicQuotes } from "../../../public-types.js";
 import { barParam, quoteParam, rankParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
@@ -42,11 +42,14 @@ export function QuotesBand({
   slug,
   read,
   onJump,
+  steps,
 }: {
   slug: string;
   /** The opening read, mounted in `OwnedReader`. src/web/useQuotes.ts § QuotesRead. */
   read: QuotesRead;
   onJump(id: BlockId): void;
+  /** What ‹ › step through — `useQuoteMarks`' `steppable`. QuotesPanel.tsx § Props. */
+  steps: readonly Quote[];
 }) {
   useRenderCount("QuotesBand");
   const quotes = useQuotes(slug, read);
@@ -56,6 +59,7 @@ export function QuotesBand({
       access={{ kind: "owner", owner: quotes, quotes: quotes.quotes }}
       {...band}
       onJump={onJump}
+      steps={steps}
     />
   );
 }
@@ -70,13 +74,17 @@ export function QuotesBand({
 export function VisitorQuotesBand({
   quotes,
   onJump,
+  steps,
 }: {
   quotes: PublicQuotes;
   onJump(id: BlockId): void;
+  steps: readonly Quote[];
 }) {
   useRenderCount("VisitorQuotesBand");
   const band = useQuotesMode();
-  return <QuotesPanel access={{ kind: "visitor", quotes }} {...band} onJump={onJump} />;
+  return (
+    <QuotesPanel access={{ kind: "visitor", quotes }} {...band} onJump={onJump} steps={steps} />
+  );
 }
 
 /**

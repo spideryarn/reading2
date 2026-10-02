@@ -116,6 +116,7 @@ function articleFrom(loaded: Loaded): Article {
   if (!loaded.meta) throw new Error(`${DIR} has no meta.json — the fixture is incomplete`);
   return {
     highPowerSince: null,
+    titleOverridden: false,
     meta: loaded.meta,
     blocks: loaded.blocks,
     tree: loaded.tree,

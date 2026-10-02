@@ -366,6 +366,7 @@ function deploysView(over: Partial<Extract<DeploysView, { kind: "deploys" }>> = 
         release: 74,
         deploymentId: "dpl_test",
         sha: "8cd2206ae24e16c65f76ea9f954c5b300616cd57",
+        deployedSha: "8cd2206ae24e16c65f76ea9f954c5b300616cd57",
         previousSha: "3b4d32f0a1b2c3d4e5f60718293a4b5c6d7e8f90",
         commitCount: 137,
         invisible: false,
@@ -1743,6 +1744,25 @@ describe("the deploys tab", () => {
     expect(closed).toContain("Hover cards on links");
     /* And the body is NOT on that line — it is what opening the row is for. */
     expect(closed).not.toContain("See where a link goes");
+  });
+
+  it("labels a rolled release's count as notes coverage beside the deployed SHA", async () => {
+    window.location.hash = "#deploys";
+    const feed = manualTransport();
+    const one = deploysView();
+    if (one.kind !== "deploys" || !one.versions[0]) throw new Error("unreachable");
+    const base = one.versions[0];
+    const deployedSha = "f".repeat(40);
+    mount(feed.transport, recordingDeploys(() => deploysView({
+      versions: [{ ...base, deployedSha }],
+    })).api);
+    await act(async () => undefined);
+    const closed = container.querySelector("summary")?.textContent ?? "";
+    expect(closed).toContain("fffffff");
+    expect(closed).not.toContain(base.sha.slice(0, 7));
+    expect(closed).toContain("137 commits covered by notes");
+    expect(container.textContent).toContain("built from");
+    expect([...container.querySelectorAll("a")].some(a => a.href.endsWith(`/commit/${deployedSha}`))).toBe(true);
   });
 
   it("puts each deploy under the day it happened on, in the zone the rows are drawn in", async () => {
