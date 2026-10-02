@@ -48,13 +48,12 @@
  * verified TLS, hosted Supabase, the production project ref, one `select`
  * inside `begin read only` and rolled back, and a `Target:` line.
  */
-import pg, { type QueryResultRow } from "pg";
+import type { QueryResultRow, default as pg } from "pg";
 
 import { isAdmin } from "../src/admin.js";
-import { readEnvProd } from "../src/env.js";
 import { type QueueRead, queueRoot, readQueue } from "../tools/overseer/idea-queue.js";
 import { type NoteFile, parseNoteHeader, readNotes } from "./feedback-endings.js";
-import { CannotTell, isMainModule, productionConnection } from "./feedback-reporter.js";
+import { CannotTell, isMainModule, productionClient } from "./feedback-reporter.js";
 
 /** One row, as much of it as a listing needs — never the body. */
 export interface UnsweptRow {
@@ -276,15 +275,9 @@ async function readProduction<T extends QueryResultRow>(
   sql: string,
   params: unknown[],
 ): Promise<{ target: string; rows: T[] }> {
-  const prod = readEnvProd();
-  const url = prod?.values.DATABASE_URL;
-  if (prod === null || url === undefined || url === "") {
-    throw new CannotTell("no .env.prod with a DATABASE_URL here, so production cannot be read (the box has one)");
-  }
-  const connection = productionConnection(url);
-  const client = new pg.Client(connection.config);
+  const { client, target } = productionClient();
   const rows = await readRowsReadOnly<T>(client, sql, params);
-  return { target: `${prod.file} → ${connection.host}`, rows };
+  return { target, rows };
 }
 
 const COLUMNS =

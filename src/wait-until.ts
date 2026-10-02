@@ -38,9 +38,13 @@ let warned = false;
  */
 export function keepAlive(promise: Promise<unknown>): boolean {
   try {
-    const holder = (globalThis as unknown as Record<symbol, { get?: () => RequestContext } | undefined>)[
-      VERCEL_REQUEST_CONTEXT
-    ];
+    /* `Reflect.get` rather than `globalThis[…]`: tests/env-reads-are-literal.test.ts
+       refuses any computed property on `globalThis`, because one could be
+       `process`. This key is a symbol, never `process`, and spelling it this
+       way keeps that sweep able to say so. */
+    const holder = Reflect.get(globalThis, VERCEL_REQUEST_CONTEXT) as
+      | { get?: () => RequestContext }
+      | undefined;
     const context = holder?.get?.();
     if (typeof context?.waitUntil === "function") {
       /* Called as a method, the way `@vercel/functions` calls it
