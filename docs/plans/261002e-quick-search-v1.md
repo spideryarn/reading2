@@ -177,3 +177,10 @@ with changes*. All nine findings accepted:
   of 20 does real work on queries about the whole article (34–59 blocks clear 0.7).
 - **F8** Jev is a fixed-model, non-tier job like dictation; the privacy page names it.
 - **F9** the quick label reaches each result's score explanation, not only the saved row.
+
+## Landed (2026-10-02)
+
+On `dev` at `6ccf9fc14`: the feature `c549dda30`, docs `a9f217311`, GPT Sol's code-review fixes
+`78b766f82` (F10, F11 — two P1s in chunk cancellation, each with a postmortem), and round 2 (*land*,
+no new findings). Full suite green once the build outputs a fresh worktree lacks were built; a
+browser check passed all six scenarios. Not deployed — that is the Overseer's.
