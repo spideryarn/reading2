@@ -52,7 +52,7 @@ export function isModChord(e: KeyboardEvent, key: string): boolean {
   const matches = key.length === 1 ? e.key.toLowerCase() === key.toLowerCase() : e.key === key;
   if (!matches) return false;
   if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.repeat) return false;
-  return !composing(e);
+  return !isImeComposing(e);
 }
 
 /**
@@ -69,13 +69,13 @@ export function isModChord(e: KeyboardEvent, key: string): boolean {
 export function isModAltChord(e: KeyboardEvent, code: string): boolean {
   if (e.code !== code) return false;
   if (!(e.metaKey || e.ctrlKey) || !e.altKey || e.shiftKey || e.repeat) return false;
-  return !composing(e);
+  return !isImeComposing(e);
 }
 
 /**
  * A key press as either a DOM or a React event, as far as these helpers read it.
  * React's synthetic event has no `isComposing` of its own — only `nativeEvent`
- * does — so both places are named and `composing` reads both. (Measured: drop
+ * does — so both places are named and `isImeComposing` reads both. (Measured: drop
  * the `nativeEvent` read and every component-level IME test goes red.)
  */
 interface KeyPress {
@@ -91,7 +91,7 @@ interface KeyPress {
  * the IME's. `keyCode` 229 is the older sentinel some engines send instead of
  * the flag.
  */
-function composing(e: Pick<KeyPress, "keyCode" | "isComposing" | "nativeEvent">): boolean {
+export function isImeComposing(e: Pick<KeyPress, "keyCode" | "isComposing" | "nativeEvent">): boolean {
   return e.isComposing === true || e.nativeEvent?.isComposing === true || e.keyCode === 229;
 }
 
@@ -106,5 +106,5 @@ function composing(e: Pick<KeyPress, "keyCode" | "isComposing" | "nativeEvent">)
  * text box.
  */
 export function isSendEnter(e: KeyPress): boolean {
-  return e.key === "Enter" && !e.shiftKey && !composing(e);
+  return e.key === "Enter" && !e.shiftKey && !isImeComposing(e);
 }

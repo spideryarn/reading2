@@ -54,7 +54,7 @@
  */
 import { Zap } from "lucide-react";
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from "react";
-import { isTyping } from "./key-chord.js";
+import { isImeComposing, isTyping } from "./key-chord.js";
 import { IDLE, PAUSE_MS, type QuickSession, stepQuickSession } from "./quick-session.js";
 import { type HandoffKind, searchDraftFor, useBandTyping, useDraftText } from "./search-draft.js";
 
@@ -202,7 +202,7 @@ export function DockQuickSearch({
   };
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+    if (e.key === "Enter" && !isImeComposing(e)) {
       e.preventDefault();
       const value = e.currentTarget.value;
       if (value.trim() === "") return;

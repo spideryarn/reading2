@@ -116,6 +116,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { useSlow } from "./useSlow.js";
+import { isImeComposing } from "./key-chord.js";
 import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
 
 /**
@@ -635,7 +636,10 @@ const Box = forwardRef<
           onFocus={() => session?.focus()}
           onBlur={() => session?.blur()}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            /* Not the Enter that ends an IME composition: a reader typing
+               Japanese or Chinese presses it to pick a word, not to ask half a
+               question (keyboard.md § Enter in a text box; Sol's D9). */
+            if (e.key === "Enter" && !isImeComposing(e)) {
               e.preventDefault();
               if (ready) ask();
               /* Words mode has nothing to ask — the hits arrived as the reader

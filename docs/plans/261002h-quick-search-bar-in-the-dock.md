@@ -344,3 +344,10 @@ lives in `DockQuickSearch`, so it exists only where the control does. **Not show
 whether iOS raises the keyboard when the ⚡ opens Search mode from closed — the panel's box
 mounts a render after the tap, so a second tap may be needed; accepted, and for the browser
 check to observe on a real device if one is to hand.
+
+**Sol D9, fixed after the stage 3 review.** The Search panel's box asked on the Enter that ends an
+IME composition (the bar's box already refused it). Both now read one helper, `isImeComposing`,
+exported from `src/web/key-chord.ts` (it was the private `composing` behind `isSendEnter`), so the
+flag and `keyCode` 229 are spelled once. Red first in `tests/quick-search-panel.test.tsx`; the bar's
+twin in `tests/dock-quick-search.test.tsx` was already green and was watched red by removing the
+guard.

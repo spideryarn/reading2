@@ -283,6 +283,18 @@ describe("typing in the bar's box", () => {
     expect(document.activeElement).toBe(barBox());
   });
 
+  it("asks nothing on the Enter that ends an IME composition", async () => {
+    const posted = server();
+    mount();
+    type(barBox(), "日本語の");
+    const flagged = key(barBox(), { key: "Enter", isComposing: true });
+    const legacy = key(barBox(), { key: "Enter", keyCode: 229 } as KeyboardEventInit);
+    await flush();
+    expect(posted).toEqual([]);
+    expect(flagged.defaultPrevented).toBe(false);
+    expect(legacy.defaultPrevented).toBe(false);
+  });
+
   it("clears and lets go on Escape", async () => {
     server();
     mount();
