@@ -177,8 +177,8 @@ export type SearchAccess =
       error: string | null;
       /** Requests this tab started and still has in flight, by run id. */
       running: ReadonlySet<string>;
-      /** Ask a new question, as a quick search or a meaning one. */
-      onAsk(criterion: string, kind: SearchKind): void;
+      /** Ask a question; flesh-out identifies the quick row it came from. */
+      onAsk(criterion: string, kind: SearchKind, sourceId?: string): void;
       onRetry(id: string): void;
       /**
        * Pin one saved search to a palette slot — `null` hands it back to the hash.
@@ -494,7 +494,8 @@ const Box = forwardRef<
     running: ReadonlySet<string>;
     /**
      * **Has the saved list come back — answered, failed or given up on?** Find
-     * waits for it: `SearchApi.loaded` says why. Typing does not.
+     * waits for it: `SearchApi.loaded` says why. Quick session controls hold
+     * submission until then, so Enter/find can still record the intent.
      */
     loaded: boolean;
     onAsk(criterion: string, kind: SearchKind): void;
@@ -534,7 +535,8 @@ const Box = forwardRef<
      already running** (Sol F5), which is exactly the state a pause leaves. */
   const session = matcher === "quick" ? typing : undefined;
   const repeat = asking !== null && session === undefined && running.has(runningKey(draft, asking));
-  const ready = asking !== null && loaded && draft.trim().length > 0 && !repeat;
+  const ready =
+    asking !== null && (loaded || session !== undefined) && draft.trim().length > 0 && !repeat;
   const ask = () => {
     if (!ready || asking === null) return;
     if (session) session.flush(draft);
@@ -1083,7 +1085,7 @@ function Saved({
                   }
                   onClick={() => {
                     if (fleshing) return;
-                    own.onAsk(run.criterion, "meaning");
+                    own.onAsk(run.criterion, "meaning", run.id);
                     onToggle(run.id, false);
                   }}
                 >

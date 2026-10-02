@@ -247,7 +247,14 @@ export function useSearch(
   const lanes = useRef(
     new Map<
       string,
-      { superseded: boolean; abort: AbortController; begun: boolean; queued: string | null }
+      {
+        superseded: boolean;
+        abort: AbortController;
+        begun: boolean;
+        /** Failed before begin: only an explicit retry can replace this lane. */
+        failed: boolean;
+        queued: string | null;
+      }
     >(),
   );
   /** `revise`, for `send` to call from a `begin` without a dependency cycle. */
@@ -382,12 +389,17 @@ export function useSearch(
   }, [slug]);
 
   /** Replace one run in place, or append it if it is new. */
-  const put = useCallback((next: SearchRun) => {
+  const put = useCallback((next: SearchRun, keepCreatedAt = false) => {
     // Whatever the frame says about the colour, this tab's own choice wins —
     // see `chosen`. Nothing happens to a run the reader has not recoloured.
     const run = chosen.current.has(next.id) ? withChoice(next, chosen.current.get(next.id)) : next;
     setRuns((prev) =>
-      prev.some((r) => r.id === run.id) ? prev.map((r) => (r.id === run.id ? run : r)) : [...prev, run],
+      prev.some((r) => r.id === run.id)
+        ? prev.map((r) => {
+            if (r.id !== run.id) return r;
+            return keepCreatedAt ? { ...run, createdAt: r.createdAt } : run;
+          })
+        : [...prev, run],
     );
   }, []);
 
@@ -526,6 +538,7 @@ export function useSearch(
         superseded: false,
         abort: new AbortController(),
         begun: false,
+        failed: false,
         queued: null as string | null,
       };
       const before = lanes.current.get(id);
@@ -703,19 +716,18 @@ export function useSearch(
           if (deleted.current.has(liveId)) return;
           const message = describeFetchFailure(e as Error);
           setError(message);
-          put({ id: liveId, criterion, kind, createdAt, status: "error", hits: [], error: message });
+          me.failed = !me.begun;
+          put(
+            { id: liveId, criterion: me.queued ?? criterion, kind, createdAt, status: "error", hits: [], error: message },
+            revises,
+          );
         } finally {
           if (!me.superseded) {
             land();
-            if (lanes.current.get(liveId) === me) lanes.current.delete(liveId);
-            /* Ended before `begin` — a refused POST, a dropped connection — with
-               a revision waiting: send it. The server mints under this id if it
-               never stored the row, so the session keeps its one row. */
-            if (me.queued !== null && belongsHere() && !deleted.current.has(liveId)) {
-              const words = me.queued;
-              me.queued = null;
-              reviseRef.current(liveId, words);
-            }
+            // A transport failure before begin does not acknowledge the server's
+            // write. Keep its lane as a barrier until an explicit retry replaces
+            // it; automatic successors could begin first and then be overwritten.
+            if (!me.failed && lanes.current.get(liveId) === me) lanes.current.delete(liveId);
           }
         }
       })();
@@ -732,12 +744,17 @@ export function useSearch(
         /* One request at a time: park the words, latest wins, and show them on
            the row now so the list follows the box. */
         lane.queued = words;
+        const flight = inFlight.current.get(id);
+        if (flight && flight.criterion !== words) {
+          flight.criterion = words;
+          flown();
+        }
         setRuns((prev) => prev.map((r) => (r.id === id ? { ...r, criterion: words } : r)));
         return;
       }
       send(id, words, "quick", new Date().toISOString(), { revises: true });
     },
-    [send],
+    [send, flown],
   );
   reviseRef.current = revise;
 

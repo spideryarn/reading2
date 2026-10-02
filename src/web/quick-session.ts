@@ -29,7 +29,7 @@
  *   asked before it would be wiped from the screen when it landed).
  * - Enter or *find* **flushes** changed words into the row and **ends** the
  *   session. With no session open they ask a fresh search, as they always did.
- *   They wait for `loaded` as they always did; a pause is what is carried.
+ *   Before `loaded`, explicit flushes are held too, with their words sealed.
  * - The session also **ends** on: the box emptied; a matcher switch; ↺ or ✕
  *   or *flesh out* (`rowGone` / `end`); leaving the mode or the article (the
  *   caller's state simply goes); and the box blurred for longer than a pause.
@@ -54,9 +54,13 @@ export interface QuickSession {
   text: string;
   /** A pause arrived before the saved list did; ask when it does (Sol F1). */
   due: boolean;
+  /** Explicit searches sealed before loading; later edits belong to a new session. */
+  flushes: QuickEffect[];
 }
 
-export const IDLE: QuickSession = { open: false, rowId: null, asked: null, text: "", due: false };
+export const IDLE: QuickSession = {
+  open: false, rowId: null, asked: null, text: "", due: false, flushes: [],
+};
 
 export type QuickEvent =
   /** The reader changed the box (quick chosen). `""` is the box emptied. */
@@ -86,12 +90,14 @@ export type QuickEffect =
 export function stepQuickSession(
   state: QuickSession,
   event: QuickEvent,
-): { state: QuickSession; effect: QuickEffect | null } {
+): { state: QuickSession; effect: QuickEffect | null; sealed?: boolean } {
   switch (event.type) {
     case "edit": {
-      if (event.text.trim() === "") return { state: { ...IDLE, text: event.text }, effect: null };
+      if (event.text.trim() === "") {
+        return { state: { ...IDLE, text: event.text, flushes: state.flushes }, effect: null };
+      }
       if (!state.open) {
-        return { state: { ...IDLE, open: true, text: event.text }, effect: null };
+        return { state: { ...IDLE, open: true, text: event.text, flushes: state.flushes }, effect: null };
       }
       return { state: { ...state, text: event.text }, effect: null };
     }
@@ -101,22 +107,22 @@ export function stepQuickSession(
       return ask({ ...state, due: false }, MIN_CHARS);
     }
     case "loaded": {
+      const [effect, ...flushes] = state.flushes;
+      if (effect) return { state: { ...state, flushes }, effect, sealed: true };
       if (!state.open || !state.due) return { state, effect: null };
       return ask({ ...state, due: false }, MIN_CHARS);
     }
     case "flush": {
-      if (!event.loaded) return { state, effect: null };
       const words = event.text.trim();
-      if (!state.open) {
-        // No session: Enter asks a fresh search, as it always has.
-        return {
-          state: { ...state, text: event.text },
-          effect: words === "" ? null : { type: "ask", words },
-        };
+      const effect = state.open
+        ? ask({ ...state, text: event.text }, 1).effect
+        : (words === "" ? null : { type: "ask" as const, words });
+      // Seal now, including before loading: the next edit starts a new row.
+      const closed = { ...IDLE, text: event.text, flushes: state.flushes };
+      if (!event.loaded && effect) {
+        return { state: { ...closed, flushes: [...state.flushes, effect] }, effect: null };
       }
-      const { effect } = ask({ ...state, text: event.text }, 1);
-      // Flushed, then sealed: the next edit starts a new row.
-      return { state: { ...IDLE, text: event.text }, effect };
+      return { state: closed, effect };
     }
     case "asked": {
       if (!state.open) return { state, effect: null };

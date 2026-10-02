@@ -152,10 +152,10 @@ export function SearchBand({
         loadError,
         error,
         typing,
-        onAsk: (criterion, kind) => {
+        onAsk: (criterion, kind, sourceId) => {
           const question = criterion.trim();
-          // *Flesh out* — a meaning ask from a quick row — ends the session.
-          if (kind === "meaning") typing.end();
+          // Flesh out ends only the session belonging to that quick row.
+          if (sourceId !== undefined) typing.rowGone(sourceId);
           if (isRunning(question, kind)) return;
           /* `ask` mints the id, so `?runs=` can name the search before the
              model has said anything — the same trick `?note=` and `?thread=`
@@ -231,8 +231,12 @@ function useTypingSession({
       state = out.state;
       if (!state.open) stop();
       const effect = out.effect;
-      if (effect?.type === "ask") dispatch({ type: "asked", id: latest.current.start(effect.words) });
-      else if (effect?.type === "revise") latest.current.revise(effect.id, effect.words);
+      if (effect?.type === "ask") {
+        const id = latest.current.start(effect.words);
+        if (!out.sealed) dispatch({ type: "asked", id });
+      } else if (effect?.type === "revise") latest.current.revise(effect.id, effect.words);
+      // Drain sealed flushes before any pause carried by the new session.
+      if (out.sealed) dispatch({ type: "loaded" });
     };
     return {
       edit(text: string) {

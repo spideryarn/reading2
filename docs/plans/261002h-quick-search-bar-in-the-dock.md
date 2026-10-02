@@ -298,3 +298,18 @@ and every frame, rename, failure and clean-up of a superseded send is dropped. A
 row's previous hits until its own first hit. A queued revision is still sent if the request it
 waited on failed before `begin` (the server then mints under the same id). Tested through the real
 band in `tests/search-as-you-type.test.tsx` and the hook in `tests/use-search.test.ts`.
+
+
+**Stage 1–2 code review (Sol, working-tree fixes, 2026-10-02).** The two stage-2 deviations
+above are corrected: Enter/find before loading are carried as sealed searches (including short
+words), and flesh-out ends only its own row's typing session. Parked words also update the
+duplicate guard, and a failed revision keeps the saved creation time. A request that fails before
+`begin` now retains an unresolved lane: later automatic edits update its failed row's words but
+send nothing until explicit retry, because a lost connection does not prove the server has begun.
+The reason and regression evidence are in
+[the postmortem](../postmortems/261002g-transport-completion-is-not-server-acknowledgement.md).
+Stage 1's shared catch now suppresses expected quick cancellation only; meaning failures after
+connection close are reported as before. All six findings were reproduced red before fixing;
+74 tests in the four requested files and two additional mocked-route cases pass, as do 110
+adjacent panel/parallel-search/hit-resolution cases. PostgreSQL integration tests were not run.
+Cross-tab deletion remains outside this fix: an absent-id revision can still create a row.

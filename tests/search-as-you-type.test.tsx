@@ -280,6 +280,79 @@ describe("quick search as you type", () => {
     expect(rows()).toBe(1);
   });
 
+  it.each(["Enter", "find"])("carries %s before loading, including short words, and seals that session", async (action) => {
+    const { posted, releaseGet } = server({ holdGet: true });
+    mount();
+    await flush();
+    type("ai");
+    if (action === "Enter") enter();
+    else click(must("button.srch-go"));
+    await flush();
+    expect(posted).toHaveLength(0);
+    type("why later");
+    await pause();
+    act(() => releaseGet());
+    await flush();
+    expect(posted.map((p) => p.body.criterion)).toEqual(["ai", "why later"]);
+    expect(posted[1]?.body.id).not.toBe(posted[0]?.body.id);
+    expect(posted[1]?.body.revises).toBeUndefined();
+  });
+
+  it("a repeated Enter does not duplicate a revision parked before begin", async () => {
+    const posted: Posted["body"][] = [];
+    answer = (_url, init) => {
+      if (init.method === "POST") {
+        posted.push(JSON.parse(String(init.body)) as Posted["body"]);
+        return Promise.resolve(new Response(new ReadableStream()));
+      }
+      return Promise.resolve(json({ runs: [] }));
+    };
+    mount();
+    await flush();
+    type("why");
+    await pause();
+    type("why now");
+    enter();
+    await flush();
+    enter();
+    await flush();
+    expect(posted).toHaveLength(1);
+    expect(rows()).toBe(1);
+  });
+
+  it.each([false, true])("flesh out ends only its own typing session (own=%s)", async (own) => {
+    const { posted } = server();
+    const original = answer;
+    answer = (url, init) => {
+      if (!init.method) return Promise.resolve(json({ runs: [{
+        id: "spya-old002", criterion: "older question", kind: "quick",
+        createdAt: "2026-01-01T00:00:00.000Z", status: "done", hits: [],
+      }] }));
+      if (init.method === "POST") {
+        const body = JSON.parse(String(init.body)) as Posted["body"];
+        posted.push({ body, signal: init.signal ?? undefined });
+        const run = { ...body, createdAt: "2026-10-02T09:00:00.000Z", status: "done", hits: [] };
+        return Promise.resolve(new Response(`event: begin\ndata: ${JSON.stringify(run)}\n\nevent: done\ndata: ${JSON.stringify(run)}\n\n`));
+      }
+      return original(url, init);
+    };
+    mount();
+    await flush();
+    type("why");
+    await pause();
+    const id = posted[0]!.body.id;
+    const row = [...host.querySelectorAll(".srch-saved-row")].find((r) =>
+      r.querySelector(`input[aria-label="Also mark: ${own ? "why" : "older question"}"]`))!;
+    click(row.querySelector(".srch-flesh")!);
+    await flush();
+    type("why later");
+    await pause();
+    const next = posted.at(-1)!.body;
+    expect(next.kind).toBe("quick");
+    if (own) expect(next.id).not.toBe(id);
+    else expect(next).toMatchObject({ id, revises: true });
+  });
+
   it("leaves words inert after a matcher switch: nothing is asked until the next edit", async () => {
     const { posted } = server();
     mount();

@@ -129,7 +129,10 @@ describe("Enter and find", () => {
   it("wait for the saved list, as find always has", () => {
     const { effects, state } = play([edit("why"), { type: "flush", loaded: false, text: "why" }]);
     expect(effects).toEqual([]);
-    expect(state.open).toBe(true);
+    expect(state.open).toBe(false);
+    expect(play([{ type: "loaded" }], { from: state }).effects).toEqual([
+      { type: "ask", words: "why" },
+    ]);
   });
 });
 

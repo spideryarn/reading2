@@ -884,6 +884,48 @@ describe("revising a quick search in place", () => {
     expect(latest?.runs.find((r) => r.id === id)?.hits).toEqual([H2]);
   });
 
+  it("keeps a failed unacknowledged request as a barrier to automatic revisions", async () => {
+    await mount("a-slug");
+    await flush();
+    const held = holdPosts();
+    let id = "";
+    act(() => { id = latest?.ask("why", "quick") ?? ""; });
+    await flush();
+    act(() => latest?.revise(id, "why replication"));
+    held[0]!.fail();
+    await flush();
+    expect(held, "failure before begin is not an acknowledgement").toHaveLength(1);
+    expect(latest?.runs[0]).toMatchObject({ id, criterion: "why replication", status: "error" });
+    act(() => latest?.revise(id, "why replication fails"));
+    await flush();
+    expect(held).toHaveLength(1);
+    expect(latest?.runs[0]).toMatchObject({ id, criterion: "why replication fails", status: "error" });
+    act(() => latest?.retry(id));
+    await flush();
+    expect(held).toHaveLength(2);
+    expect(held[1]!.body).toMatchObject({ id, criterion: "why replication fails" });
+  });
+
+  it("keeps the saved creation time when a revision fails", async () => {
+    await mount("a-slug");
+    await flush();
+    const held = holdPosts();
+    let id = "";
+    act(() => { id = latest?.ask("why", "quick") ?? ""; });
+    await flush();
+    held[0]!.frame("begin", run(id, "why"));
+    held[0]!.frame("done", run(id, "why", { status: "done", hits: [H1] }));
+    held[0]!.end();
+    await flush();
+    act(() => latest?.revise(id, "why replication"));
+    await flush();
+    held[1]!.frame("begin", run(id, "why replication"));
+    await flush();
+    held[1]!.fail();
+    await flush();
+    expect(latest?.runs[0]).toMatchObject({ id, criterion: "why replication", status: "error", createdAt });
+  });
+
   it("never resurrects a row the reader deleted", async () => {
     await mount("a-slug");
     await flush();

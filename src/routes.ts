@@ -4444,7 +4444,9 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
          is expected, not a fault. It still finishes as an error below, through
          the attempt fence: a superseded attempt's write updates nothing, and an
          abandoned one does not sit `pending` where the trim cannot reach it. */
-      if (!gone.aborted) captureFailure(err, { route: "search", slug, id: run.id });
+      if (run.kind !== "quick" || !gone.aborted) {
+        captureFailure(err, { route: "search", slug, id: run.id });
+      }
       patch = { status: "error", error: sayToReader(err, { route: "search", slug }) };
     }
 
