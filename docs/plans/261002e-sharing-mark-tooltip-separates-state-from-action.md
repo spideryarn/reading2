@@ -121,8 +121,14 @@ one artefact that crosses with no mode, the tweet thread through the sweep.
 
 ## Deferred, by name
 
-- **A *Share…* button inside the card** — waits for `hover-cards-clickable`'s opt-in prop on
-  `Tooltip`. Then the `press` line on the private card becomes the button.
+- **A button inside the card.** `Tooltip`'s `interactive={{ label }}` prop (Q10) reached `dev` in
+  982025104 while this was being built, and was **deliberately not used here**. The mark is itself
+  a link to the Metadata page, so an in-card *Share…* would go exactly where the icon goes; and
+  making the card interactive turns that link into a dialog trigger (`aria-haspopup`) and takes the
+  card out of its `aria-describedby`, which is a worse screen-reader story for a duplicate control.
+  It earns its place when the card's action does something the icon cannot — **Copy link** on a
+  shared article's card, or a *Share…* that lands on *Access & sharing* rather than the page top
+  (the item below). Either is a small follow-up on the prop as it stands.
 - **Landing on *Access & sharing* rather than the top of the Metadata page.** The page has no
   hash-to-section handling yet; the `Share…` button at its top does the scroll. The `press` line says
   where it lands, honestly.

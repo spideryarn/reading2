@@ -252,9 +252,10 @@ with anyone."*:
 
 So the masthead's two marks (sharing and archive) now keep the state in `what`, the explanation in
 `how`, and the press in `press`. It sits outside the two paragraphs above, which keep their rule;
-it is a different kind of sentence, not a third paragraph. The line is still text, not a button — the card cannot be entered by
-the pointer ([§ The pointer cannot enter a card](#the-pointer-cannot-enter-a-card-and-that-used-to-be-exempt)),
-so the action is the control the card sits on, and `press` says what it does. The outside evidence for
+it is a different kind of sentence, not a third paragraph. The line is text, not a button: the action is the control the card sits on, and `press` says
+what it does. A card *can* now hold a button ([§ A card the pointer can enter](#a-card-the-pointer-can-enter)),
+but these two do not use it — the sharing mark is itself a link to the same page an in-card
+button would go to, and the plan says what would make one worth it. The outside evidence for
 the split is
 [261002b-tooltip-text-state-versus-action.md](../research/261002b-tooltip-text-state-versus-action.md);
 the plan is
