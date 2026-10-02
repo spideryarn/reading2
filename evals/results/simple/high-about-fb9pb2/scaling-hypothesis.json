@@ -1,0 +1,273 @@
+{
+  "arm": "high-about-fb9pb2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple-prompt/4",
+  "sourceSha256": "a9729ecb9458a1e96b8255614e2b71759ac91583a0fd4f3049015c1857f65f27",
+  "at": "2026-10-02T19:29:17.056Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 26631,
+  "costUsd": 0.1363254,
+  "tokens": {
+    "input": 20518,
+    "output": 5148,
+    "reasoning": 2885
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 183,
+  "fullerWords": 240,
+  "briefWords": 87,
+  "paragraphs": [
+    {
+      "text": "This is Gwern's long 2020 essay on GPT-3 and the \"scaling hypothesis\". That hypothesis says general intelligence may just be simple neural nets and learning rules, trained on varied data at huge scale. Make them bigger, the claim goes, and they keep getting smarter.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "This is Gwern's long 2020 essay on GPT-3 and the \"scaling hypothesis\".",
+          "id": null
+        },
+        {
+          "text": "That hypothesis says general intelligence may just be simple neural nets and learning rules, trained on varied data at huge scale.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "Make them bigger, the claim goes, and they keep getting smarter.",
+          "id": "spya-suzdvz"
+        }
+      ]
+    },
+    {
+      "text": "Gwern says GPT-3 matters because a crude, old architecture still showed runtime meta-learning, and its scaling curves were not bending. At 175b parameters, loss kept falling roughly as a power law, as forecast. He argues trillion-parameter models are affordable by government or corporate budgets.",
+      "ids": [
+        "spya-fvqe70",
+        "spya-asr663"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern says GPT-3 matters because a crude, old architecture still showed runtime meta-learning, and its scaling curves were not bending.",
+          "id": "spya-fvqe70"
+        },
+        {
+          "text": "At 175b parameters, loss kept falling roughly as a power law, as forecast.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "He argues trillion-parameter models are affordable by government or corporate budgets.",
+          "id": "spya-asr663"
+        }
+      ]
+    },
+    {
+      "text": "His proposed reason: a big net holds countless sub-models that average out, favoring simple solutions. Enough hard, varied data pushes it past memorizing toward general skills, a pattern he traces across many deep learning results. In prediction, \"the last bits are deepest\": the final small drops in loss demand real reasoning.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-kmyg3w",
+        "spya-ypbup8"
+      ],
+      "sentences": [
+        {
+          "text": "His proposed reason: a big net holds countless sub-models that average out, favoring simple solutions.",
+          "id": "spya-grkhs8"
+        },
+        {
+          "text": "Enough hard, varied data pushes it past memorizing toward general skills, a pattern he traces across many deep learning results.",
+          "id": "spya-ypbup8"
+        },
+        {
+          "text": "In prediction, \"the last bits are deepest\": the final small drops in loss demand real reasoning.",
+          "id": "spya-kmyg3w"
+        }
+      ]
+    },
+    {
+      "text": "He concludes most labs and experts lack the conviction to bet on scaling, and that critics' forecasts rest on no coherent model. Few who predicted failure have admitted error. An appendix warns that \"tool\" AIs may become agents however their training data is filtered.",
+      "ids": [
+        "spya-scr8jb",
+        "spya-m9r8zx",
+        "spya-hjpau9"
+      ],
+      "sentences": [
+        {
+          "text": "He concludes most labs and experts lack the conviction to bet on scaling, and that critics' forecasts rest on no coherent model.",
+          "id": "spya-scr8jb"
+        },
+        {
+          "text": "Few who predicted failure have admitted error.",
+          "id": "spya-m9r8zx"
+        },
+        {
+          "text": "An appendix warns that \"tool\" AIs may become agents however their training data is filtered.",
+          "id": "spya-hjpau9"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is Gwern's long 2020 essay on GPT-3 and what it suggests about how AI progress happens. Its thesis is the scaling hypothesis: simple neural nets, given ever more data and compute, keep gaining new abilities without cleverer architectures.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "This is Gwern's long 2020 essay on GPT-3 and what it suggests about how AI progress happens.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "Its thesis is the scaling hypothesis: simple neural nets, given ever more data and compute, keep gaining new abilities without cleverer architectures.",
+          "id": "spya-suzdvz"
+        }
+      ]
+    },
+    {
+      "text": "The piece argues GPT-3 matters less for its outputs than for what it reveals. It was 117 times larger than GPT-2, yet its loss kept falling along the forecast power-law curve, with no sign of diminishing returns. It also showed meta-learning, picking up new tasks from a few prompt examples, though nobody designed it to.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663"
+      ],
+      "sentences": [
+        {
+          "text": "The piece argues GPT-3 matters less for its outputs than for what it reveals.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "It was 117 times larger than GPT-2, yet its loss kept falling along the forecast power-law curve, with no sign of diminishing returns.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "It also showed meta-learning, picking up new tasks from a few prompt examples, though nobody designed it to.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    },
+    {
+      "text": "Gwern's tentative explanation: a big net holds countless sub-models that average out, favouring simple solutions. But nets are lazy, grabbing memorization and surface shortcuts first; only enough size, data and compute push them toward general algorithms. The final bits of prediction loss are the deepest, he argues, because they demand real reasoning and understanding.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-uknzzk",
+        "spya-kmyg3w"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern's tentative explanation: a big net holds countless sub-models that average out, favouring simple solutions.",
+          "id": "spya-grkhs8"
+        },
+        {
+          "text": "But nets are lazy, grabbing memorization and surface shortcuts first; only enough size, data and compute push them toward general algorithms.",
+          "id": "spya-uknzzk"
+        },
+        {
+          "text": "The final bits of prediction loss are the deepest, he argues, because they demand real reasoning and understanding.",
+          "id": "spya-kmyg3w"
+        }
+      ]
+    },
+    {
+      "text": "He contrasts OpenAI with DeepMind, which he says holds a weaker view: build a brain module by module, using scale as a tool. He also charges that expert critics predicted failure, were wrong, and rarely admitted it.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-m9r8zx",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "He contrasts OpenAI with DeepMind, which he says holds a weaker view: build a brain module by module, using scale as a tool.",
+          "id": "spya-vr9q2p"
+        },
+        {
+          "text": "He also charges that expert critics predicted failure, were wrong, and rarely admitted it.",
+          "id": "spya-m9r8zx"
+        }
+      ]
+    },
+    {
+      "text": "An appendix argues agency, meaning goal-directed behaviour, may emerge even from non-human data like physics or random Turing machines. So filtering training data will not reliably stop tool AIs from becoming agents. The main conclusion: scaling is working, and depending on investment and compute growth, the 2020s may bring a plateau or something far larger.",
+      "ids": [
+        "spya-mkbrjp",
+        "spya-hjpau9",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "An appendix argues agency, meaning goal-directed behaviour, may emerge even from non-human data like physics or random Turing machines.",
+          "id": "spya-mkbrjp"
+        },
+        {
+          "text": "So filtering training data will not reliably stop tool AIs from becoming agents.",
+          "id": "spya-hjpau9"
+        },
+        {
+          "text": "The main conclusion: scaling is working, and depending on investment and compute growth, the 2020s may bring a plateau or something far larger.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "Gwern's essay uses GPT-3 to argue for the scaling hypothesis. That is the claim that simply making neural nets, data and compute bigger yields ever more sophisticated behavior. It matters because GPT-3 showed meta-learning from a few prompt examples, which nobody designed in.",
+      "ids": [
+        "spya-m3gtj6",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern's essay uses GPT-3 to argue for the scaling hypothesis.",
+          "id": null
+        },
+        {
+          "text": "That is the claim that simply making neural nets, data and compute bigger yields ever more sophisticated behavior.",
+          "id": "spya-m3gtj6"
+        },
+        {
+          "text": "It matters because GPT-3 showed meta-learning from a few prompt examples, which nobody designed in.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    },
+    {
+      "text": "GPT-3's loss kept falling along the forecast power-law curves, with no sign of bending. He argues the last bits of prediction loss demand real understanding, so lower loss should force it. He concludes the scaling advocates were right and he, once skeptical, was wrong.",
+      "ids": [
+        "spya-asr663",
+        "spya-g3b5y7",
+        "spya-emqjaa"
+      ],
+      "sentences": [
+        {
+          "text": "GPT-3's loss kept falling along the forecast power-law curves, with no sign of bending.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "He argues the last bits of prediction loss demand real understanding, so lower loss should force it.",
+          "id": "spya-g3b5y7"
+        },
+        {
+          "text": "He concludes the scaling advocates were right and he, once skeptical, was wrong.",
+          "id": "spya-emqjaa"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

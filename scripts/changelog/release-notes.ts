@@ -17,9 +17,10 @@
  *   release would fold it into the next one — then plans the release from the
  *   history's last line to `dev`'s tip, runs the model stages through
  *   `run-claude.ts` (trawl, GPT Sol, copy; `prepare-prompt.md`), and commits
- *   and pushes the pending file. It checks its own result with `notesAt`, the
- *   same function the deploy gate calls, and exits non-zero unless `dev`'s tip
- *   is then covered.
+ *   and pushes the pending file. One round: whatever lands on `dev` during the
+ *   model run rides along and rolls to the next release's notes (261002h). It
+ *   checks its own result with `notesAt`, the same function the deploy gate
+ *   calls, and exits non-zero if the gate would refuse it.
  *
  * Both hold the deploy's own lock (deploy-checks.ts § RELEASE_LOCK_FILE): notes
  * planned while a deploy is finishing would be planned against a history that
@@ -43,11 +44,9 @@ import { CHANGELOG_FILE, PENDING_FILE, notesAt, releaseCommits } from "./release
 
 const HOST = "https://www.spideryarn.com";
 const TRUNK = "dev";
-/** One plan, one model run, and up to two more if `dev` moves with release commits in the meantime. */
-const MAX_ROUNDS = 3;
 const LOG = "logs/changelog-loop.log";
 
-class Stop extends Error {}
+export class Stop extends Error {}
 
 function root(): string {
   return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
@@ -90,16 +89,50 @@ function lock(cwd: string): () => void {
   }
 }
 
-/** On `dev`, and level with `origin/dev` after a fetch — the same footing `deploy.ts` insists on. */
+/**
+ * On `dev`, and level with `origin/dev` after a fetch — the same footing
+ * `deploy.ts` insists on. **Merely behind is fast-forwarded** (`--ff-only`,
+ * which refuses cleanly rather than touching anybody's edits): on a busy `dev`
+ * "pull first" was a stop nearly every time (261002h). Ahead or diverged still
+ * stops, because only a merge would settle it.
+ */
 function levelWithTrunk(cwd: string): string {
   const branch = git(["branch", "--show-current"], cwd);
   if (branch !== TRUNK) throw new Stop(`on '${branch || "a detached HEAD"}', not ${TRUNK} — run this where you deploy from`);
   const fetched = gitRun(["fetch", "origin", TRUNK, "main", "--quiet"], cwd);
   if (fetched.code !== 0) throw new Stop(`could not fetch origin: ${fetched.out}`);
-  const head = git(["rev-parse", "HEAD"], cwd);
   const trunk = git(["rev-parse", `origin/${TRUNK}`], cwd);
-  if (head !== trunk) throw new Stop(`HEAD ${head.slice(0, 8)} is not origin/${TRUNK} ${trunk.slice(0, 8)} — pull first`);
-  return head;
+  fastForwardTo(trunk, cwd);
+  return trunk;
+}
+
+/**
+ * **Bring HEAD to exactly `target`, or stop with HEAD and the tree untouched.**
+ *
+ * `merge --ff-only` alone is not that: from a HEAD *ahead* of the target it
+ * succeeds with "Already up to date" and leaves HEAD where it was (GPT Sol on
+ * 261002h). So ancestry is asked first and the result checked after. The
+ * target is a sha captured once, not `origin/dev`, which another fetch could
+ * move between the question and the merge. A merge refused for an uncommitted
+ * edit in a file it would change leaves that edit alone — the reason this is
+ * `--ff-only` and never a merge (see the header).
+ */
+export function fastForwardTo(target: string, cwd: string): void {
+  const head = git(["rev-parse", "HEAD"], cwd);
+  if (head === target) return;
+  const behind = gitRun(["merge-base", "--is-ancestor", head, target], cwd).code === 0;
+  if (!behind) {
+    throw new Stop(
+      `HEAD ${head.slice(0, 8)} is not behind origin/${TRUNK} ${target.slice(0, 8)} — it is ahead or has diverged; ` +
+        "push or merge it by hand first",
+    );
+  }
+  /* Do not inherit merge.autoStash, or git's default of overwriting ignored
+     files newly tracked by the target. Both can move another agent's work. */
+  const ff = gitRun(["merge", "--ff-only", "--no-autostash", "--no-overwrite-ignore", "--quiet", target], cwd);
+  if (ff.code !== 0) throw new Stop(`could not fast-forward to origin/${TRUNK} ${target.slice(0, 8)}: ${ff.out}`);
+  const now = git(["rev-parse", "HEAD"], cwd);
+  if (now !== target) throw new Stop(`fast-forwarded, but HEAD is ${now.slice(0, 8)}, not ${target.slice(0, 8)}`);
 }
 
 /**
@@ -171,75 +204,74 @@ async function prepare(cwd: string): Promise<void> {
   log(cwd, "changelog:prepare — promoting what production serves");
   await promote(cwd);
 
-  for (let round = 1; round <= MAX_ROUNDS; round++) {
-    const tip = levelWithTrunk(cwd);
-    const work = path.join(cwd, "logs", "changelog", `prepare-${stamp()}`);
-    run(["plan", "--upcoming", tip, "--work", work]);
-    const upcoming = JSON.parse(readFileSync(path.join(work, "upcoming.json"), "utf8")) as {
-      release_commits: number;
-    };
+  const tip = levelWithTrunk(cwd);
+  const work = path.join(cwd, "logs", "changelog", `prepare-${stamp()}`);
+  run(["plan", "--upcoming", tip, "--work", work]);
+  const upcoming = JSON.parse(readFileSync(path.join(work, "upcoming.json"), "utf8")) as {
+    release_commits: number;
+  };
 
-    if (upcoming.release_commits === 0) {
-      log(cwd, `round ${round}: nothing a reader would see up to ${tip.slice(0, 8)} — pending is null`);
-      if (pendingNow(cwd).trim() !== "null") writeFileSync(path.join(cwd, PENDING_FILE), "null\n");
-    } else {
-      log(cwd, `round ${round}: ${upcoming.release_commits} release commits up to ${tip.slice(0, 8)} — model stages, work ${work}`);
-      const before = pendingNow(cwd);
-      const prompt = readFileSync(path.join(cwd, "scripts/changelog/prepare-prompt.md"), "utf8")
-        .replaceAll("{{SHA}}", tip)
-        .replaceAll("{{WORK}}", path.relative(cwd, work));
-      const promptFile = path.join(work, "prompt.md");
-      writeFileSync(promptFile, prompt);
-      const env = { ...process.env };
-      /* The box's default login, the one the changelog job has always run under. */
-      delete env.CLAUDE_CONFIG_DIR;
-      const agent = spawnSync(
-        "npx",
-        [
-          "tsx", "scripts/run-claude.ts", "--model", "opus", "--effort", "high", "--access", "write",
-          "--tools", "Read,Grep,Glob,Bash,Edit,Write,TodoWrite,Agent",
-          "--timeout-minutes", "240", "--prompt-file", promptFile,
-          "--output", path.join(work, "debrief.md"), "--activity-log", path.join(work, "activity.jsonl"),
-        ],
-        { cwd, env, stdio: "inherit" },
-      );
-      log(cwd, `round ${round}: model stages exit=${agent.status} debrief=${path.join(work, "debrief.md")}`);
-      if (agent.status !== 0) throw new Stop(`the model stages exited ${agent.status} — read ${path.join(work, "debrief.md")}`);
-      if (pendingNow(cwd) === before || pendingRelease(cwd)?.sha !== tip) {
-        throw new Stop(`the model stages exited 0 but ${PENDING_FILE} does not describe ${tip.slice(0, 8)} — read the debrief`);
-      }
-    }
-
-    /* `dev` may have moved during the model run. Commits a reader cannot see
-       are fine to ride along; ones they can mean another round, because the
-       deploy gate will refuse notes that stop short of what ships. */
-    gitRun(["fetch", "origin", TRUNK, "--quiet"], cwd);
-    const trunk = git(["rev-parse", `origin/${TRUNK}`], cwd);
-    if (trunk !== tip) {
-      const ff = gitRun(["merge", "--ff-only", "--quiet", `origin/${TRUNK}`], cwd);
-      if (ff.code !== 0) throw new Stop(`${TRUNK} moved and would not fast-forward: ${ff.out}`);
-      const late = releaseCommits(`${tip}..${trunk}`, cwd);
-      if (late.length > 0) {
-        log(cwd, `round ${round}: ${late.length} release commits landed meanwhile — planning again`);
-        continue;
-      }
-    }
-
-    const pending = pendingRelease(cwd);
-    commitAndPush(
-      cwd,
-      [PENDING_FILE],
-      pending
-        ? `Changelog: release notes for the next deploy, up to ${tip.slice(0, 8)}, ${pending.entries.length} entries`
-        : "Changelog: nothing pending — no change a reader would see since the last release",
+  if (upcoming.release_commits === 0) {
+    log(cwd, `nothing a reader would see up to ${tip.slice(0, 8)} — pending is null`);
+    if (pendingNow(cwd).trim() !== "null") writeFileSync(path.join(cwd, PENDING_FILE), "null\n");
+  } else {
+    log(cwd, `${upcoming.release_commits} release commits up to ${tip.slice(0, 8)} — model stages, work ${work}`);
+    const before = pendingNow(cwd);
+    const prompt = readFileSync(path.join(cwd, "scripts/changelog/prepare-prompt.md"), "utf8")
+      .replaceAll("{{SHA}}", tip)
+      .replaceAll("{{WORK}}", path.relative(cwd, work));
+    const promptFile = path.join(work, "prompt.md");
+    writeFileSync(promptFile, prompt);
+    const env = { ...process.env };
+    /* The box's default login, the one the changelog job has always run under. */
+    delete env.CLAUDE_CONFIG_DIR;
+    const agent = spawnSync(
+      "npx",
+      [
+        "tsx", "scripts/run-claude.ts", "--model", "opus", "--effort", "high", "--access", "write",
+        "--tools", "Read,Grep,Glob,Bash,Edit,Write,TodoWrite,Agent",
+        "--timeout-minutes", "240", "--prompt-file", promptFile,
+        "--output", path.join(work, "debrief.md"), "--activity-log", path.join(work, "activity.jsonl"),
+      ],
+      { cwd, env, stdio: "inherit" },
     );
-    const head = git(["rev-parse", "HEAD"], cwd);
-    const notes = notesAt(head, cwd);
-    if (notes.gap !== null) throw new Stop(`pushed ${head.slice(0, 8)}, but the deploy gate would refuse it: ${notes.gap}`);
-    log(cwd, `ready: ${head.slice(0, 8)} carries its own release notes — npm run deploy`);
-    return;
+    log(cwd, `model stages exit=${agent.status} debrief=${path.join(work, "debrief.md")}`);
+    if (agent.status !== 0) throw new Stop(`the model stages exited ${agent.status} — read ${path.join(work, "debrief.md")}`);
+    if (pendingNow(cwd) === before || pendingRelease(cwd)?.sha !== tip) {
+      throw new Stop(`the model stages exited 0 but ${PENDING_FILE} does not describe ${tip.slice(0, 8)} — read the debrief`);
+    }
   }
-  throw new Stop(`${TRUNK} kept moving with release commits for ${MAX_ROUNDS} rounds — run prepare again when it is quieter`);
+
+  /* `dev` has usually moved during the model run. Fast-forward so the push is
+     one, and let what landed meanwhile ride along: commits a reader can see
+     roll to the next release's notes, because `promote` stops this release's
+     line at `tip` and the next `prepare` plans from there (261002h). Until
+     2026-10-02 they sent this round again, up to three times. */
+  /* Fetch must succeed, and today's HEAD must still be on dev and behind its
+     captured tip even when origin/dev did not move during the model run. */
+  const trunk = levelWithTrunk(cwd);
+  if (trunk !== tip) {
+    const late = releaseCommits(`${tip}..${trunk}`, cwd);
+    if (late.length > 0) log(cwd, `${late.length} release commits landed meanwhile — the next release's notes describe them`);
+  }
+
+  const pending = pendingRelease(cwd);
+  commitAndPush(
+    cwd,
+    [PENDING_FILE],
+    pending
+      ? `Changelog: release notes for the next deploy, up to ${tip.slice(0, 8)}, ${pending.entries.length} entries`
+      : "Changelog: nothing pending — no change a reader would see since the last release",
+  );
+  const head = git(["rev-parse", "HEAD"], cwd);
+  const notes = notesAt(head, cwd);
+  if (notes.gap !== null) throw new Stop(`pushed ${head.slice(0, 8)}, but the deploy gate would refuse it: ${notes.gap}`);
+  log(
+    cwd,
+    `ready: ${head.slice(0, 8)} carries its release notes` +
+      (notes.late.length > 0 ? `, and ${notes.late.length} later release commit(s) roll to the next release's` : "") +
+      " — npm run deploy",
+  );
 }
 
 export async function main(argv: string[]): Promise<number> {

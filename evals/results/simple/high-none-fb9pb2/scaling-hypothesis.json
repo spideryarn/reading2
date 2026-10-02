@@ -1,0 +1,268 @@
+{
+  "arm": "high-none-fb9pb2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple-prompt/4",
+  "sourceSha256": "a9729ecb9458a1e96b8255614e2b71759ac91583a0fd4f3049015c1857f65f27",
+  "at": "2026-10-02T19:29:17.086Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "9ec08000cec1b7d081ce083fff072583e4602475964ddd003ff5dbdcd756e5fd",
+  "power": "high",
+  "guard": true,
+  "wallMs": 27562,
+  "costUsd": 0.1172374,
+  "tokens": {
+    "input": 17799,
+    "output": 4289,
+    "reasoning": 2062
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 196,
+  "fullerWords": 243,
+  "briefWords": 102,
+  "paragraphs": [
+    {
+      "text": "This is a long essay by Gwern about GPT-3, a text-writing program that OpenAI announced in May 2020. GPT-3 was trained only to guess the next word in a huge pile of internet text. Yet this model, 117 times bigger than GPT-2, could pick up new tasks from just a few examples. The essay calls this \"meta-learning\": learning how to learn.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-aqts9c"
+      ],
+      "sentences": [
+        {
+          "text": "This is a long essay by Gwern about GPT-3, a text-writing program that OpenAI announced in May 2020.",
+          "id": "spya-suzdvz"
+        },
+        {
+          "text": "GPT-3 was trained only to guess the next word in a huge pile of internet text.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "Yet this model, 117 times bigger than GPT-2, could pick up new tasks from just a few examples.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "The essay calls this \"meta-learning\": learning how to learn.",
+          "id": "spya-suzdvz"
+        }
+      ]
+    },
+    {
+      "text": "Gwern says this matters because it supports the \"scaling hypothesis.\" That is the idea that intelligence is simple learning parts, run at a huge scale. If it is true, making neural networks bigger, with more data and computing power, would keep making them smarter.",
+      "ids": [
+        "spya-m3gtj6",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern says this matters because it supports the \"scaling hypothesis.\"",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "That is the idea that intelligence is simple learning parts, run at a huge scale.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "If it is true, making neural networks bigger, with more data and computing power, would keep making them smarter.",
+          "id": "spya-m3gtj6"
+        }
+      ]
+    },
+    {
+      "text": "A key idea is the \"blessings of scale\": bigger networks learn faster, more steadily, and handle new cases better. GPT-3's gains followed the predicted curves, with no sign yet of slowing down. Gwern also argues that predicting text perfectly would need real understanding, so the last, hardest improvements matter most.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-asr663",
+        "spya-kmyg3w"
+      ],
+      "sentences": [
+        {
+          "text": "A key idea is the \"blessings of scale\": bigger networks learn faster, more steadily, and handle new cases better.",
+          "id": "spya-sfkxh8"
+        },
+        {
+          "text": "GPT-3's gains followed the predicted curves, with no sign yet of slowing down.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "Gwern also argues that predicting text perfectly would need real understanding, so the last, hardest improvements matter most.",
+          "id": "spya-kmyg3w"
+        }
+      ]
+    },
+    {
+      "text": "The essay says most big AI labs still doubt scaling, and experts who predicted failure were wrong yet rarely admitted it. An appendix warns that AI meant only as a tool may still learn to act like an agent pursuing goals.",
+      "ids": [
+        "spya-scr8jb",
+        "spya-m9r8zx",
+        "spya-hjpau9"
+      ],
+      "sentences": [
+        {
+          "text": "The essay says most big AI labs still doubt scaling, and experts who predicted failure were wrong yet rarely admitted it.",
+          "id": "spya-m9r8zx"
+        },
+        {
+          "text": "An appendix warns that AI meant only as a tool may still learn to act like an agent pursuing goals.",
+          "id": "spya-hjpau9"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is a long essay by Gwern about GPT-3, an AI system from OpenAI that learned from huge amounts of Internet text. It uses GPT-3 to argue for the scaling hypothesis: the idea that simple neural networks, made much bigger and given more data and computing power, keep getting smarter.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "This is a long essay by Gwern about GPT-3, an AI system from OpenAI that learned from huge amounts of Internet text.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "It uses GPT-3 to argue for the scaling hypothesis: the idea that simple neural networks, made much bigger and given more data and computing power, keep getting smarter.",
+          "id": "spya-suzdvz"
+        }
+      ]
+    },
+    {
+      "text": "GPT-3 was 117 times larger than GPT-2, its predecessor, yet its gains did not slow down as many expected. It also showed meta-learning, meaning it could pick up a new task from just a few examples in its prompt. Gwern argues the steady scaling curves suggest models with trillions of parameters would be possible and useful.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-asr663"
+      ],
+      "sentences": [
+        {
+          "text": "GPT-3 was 117 times larger than GPT-2, its predecessor, yet its gains did not slow down as many expected.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "It also showed meta-learning, meaning it could pick up a new task from just a few examples in its prompt.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "Gwern argues the steady scaling curves suggest models with trillions of parameters would be possible and useful.",
+          "id": "spya-asr663"
+        }
+      ]
+    },
+    {
+      "text": "A key idea is the \"blessings of scale\": in deep learning, bigger models and harder problems often make learning easier and better. Gwern suggests big models hold countless small sub-models, which average out toward simple, general solutions. He also argues that predicting text nearly as well as humans would require real understanding, so the last bits of error are the deepest.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-g3b5y7"
+      ],
+      "sentences": [
+        {
+          "text": "A key idea is the \"blessings of scale\": in deep learning, bigger models and harder problems often make learning easier and better.",
+          "id": "spya-sfkxh8"
+        },
+        {
+          "text": "Gwern suggests big models hold countless small sub-models, which average out toward simple, general solutions.",
+          "id": "spya-grkhs8"
+        },
+        {
+          "text": "He also argues that predicting text nearly as well as humans would require real understanding, so the last bits of error are the deepest.",
+          "id": "spya-g3b5y7"
+        }
+      ]
+    },
+    {
+      "text": "The essay criticizes experts who confidently said this approach would fail and rarely admitted error. It contrasts OpenAI's bet on scaling with DeepMind's \"weak\" version, which holds that the right algorithms must still be built piece by piece.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-m9r8zx"
+      ],
+      "sentences": [
+        {
+          "text": "The essay criticizes experts who confidently said this approach would fail and rarely admitted error.",
+          "id": "spya-m9r8zx"
+        },
+        {
+          "text": "It contrasts OpenAI's bet on scaling with DeepMind's \"weak\" version, which holds that the right algorithms must still be built piece by piece.",
+          "id": "spya-vr9q2p"
+        }
+      ]
+    },
+    {
+      "text": "Gwern, once skeptical, concludes that the scaling hypothesis's supporters were right and it looks more plausible every year. Depending on investment and compute growth, he expects the 2020s to bring either a leveling off or a dramatic leap.",
+      "ids": [
+        "spya-emqjaa",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern, once skeptical, concludes that the scaling hypothesis's supporters were right and it looks more plausible every year.",
+          "id": "spya-emqjaa"
+        },
+        {
+          "text": "Depending on investment and compute growth, he expects the 2020s to bring either a leveling off or a dramatic leap.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay is about GPT-3, a huge AI program from 2020 that learned by predicting text from the internet. It matters because GPT-3 could learn new tasks from just a few examples, though nobody built it to. The author calls the idea behind this the scaling hypothesis: just making AI bigger, with more data and computing, makes it smarter.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-m3gtj6",
+        "spya-aqts9c"
+      ],
+      "sentences": [
+        {
+          "text": "This essay is about GPT-3, a huge AI program from 2020 that learned by predicting text from the internet.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "It matters because GPT-3 could learn new tasks from just a few examples, though nobody built it to.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "The author calls the idea behind this the scaling hypothesis: just making AI bigger, with more data and computing, makes it smarter.",
+          "id": "spya-m3gtj6"
+        }
+      ]
+    },
+    {
+      "text": "The author argues the gains from growing bigger have not slowed down yet. He admits he once doubted the scaling hypothesis, but now says its believers were right. He also says most experts predicted this would fail, and few have admitted being wrong.",
+      "ids": [
+        "spya-asr663",
+        "spya-emqjaa",
+        "spya-m9r8zx"
+      ],
+      "sentences": [
+        {
+          "text": "The author argues the gains from growing bigger have not slowed down yet.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "He admits he once doubted the scaling hypothesis, but now says its believers were right.",
+          "id": "spya-emqjaa"
+        },
+        {
+          "text": "He also says most experts predicted this would fail, and few have admitted being wrong.",
+          "id": "spya-m9r8zx"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  }
+}

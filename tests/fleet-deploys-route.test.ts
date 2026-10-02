@@ -160,6 +160,30 @@ describe("the payload", () => {
     expect(git.asked).toEqual([at(SHA_C)]);
   });
 
+  /**
+   * Since 2026-10-02 a line's `sha` can stop short of what was built, when
+   * commits rolled to the next release's notes (docs/plans/261002h). Measured
+   * from `sha`, the distance would count shipped commits as still to ship.
+   */
+  it("measures from the commit that was DEPLOYED, not the one the notes stop at", async () => {
+    const git = fakeGit();
+    const rolled = line({ sha: SHA_A, deployed_sha: SHA_B });
+    const payload = await deploysPayload(deps({ readRecord: () => ({ ok: true, text: rolled }), git }), 10);
+
+    if (payload.kind !== "deploys") throw new Error("unreachable");
+    expect(payload.newestRecordedSha).toBe(SHA_B);
+    expect(git.asked).toEqual([at(SHA_B)]);
+    expect(payload.versions[0]).toMatchObject({ sha: SHA_A, deployedSha: SHA_B });
+  });
+
+  it("refuses a deployed_sha that is not a sha", async () => {
+    const payload = await deploysPayload(
+      deps({ readRecord: () => ({ ok: true, text: line({ deployed_sha: "nope" }) }) }),
+      10,
+    );
+    expect(JSON.stringify(payload)).toMatch(/deployed_sha is neither absent nor a sha/);
+  });
+
   it("parses the WHOLE file before applying the limit", async () => {
     /* A corrupt line older than the page's cut still counts towards the
        denominator and still holds its release number. Slicing first would make

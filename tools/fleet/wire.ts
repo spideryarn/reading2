@@ -2540,10 +2540,23 @@ export type DeployVersion = {
   /** Which release this is, counted from the OLDEST line — the number `/changelog` shows. */
   release: number;
   deploymentId: string;
+  /**
+   * The last commit this release's notes describe — the changelog's watermark.
+   * Stops short of `deployedSha` when commits landed after the notes and rolled
+   * to the next release's (docs/plans/261002h).
+   */
   sha: string;
+  /**
+   * The commit production was built from. The line's own `deployed_sha`, or
+   * `sha` on lines written before 2026-10-02, which did not carry one. **What
+   * "commits since the newest deploy" is measured from.**
+   */
+  deployedSha: string;
   previousSha: string | null;
   /**
-   * How many commits this deploy shipped, or null when the line does not say.
+   * How many commits this release's notes cover (`previousSha..sha`), or null
+   * when the line does not say. Usually what the deploy shipped; fewer when
+   * commits rolled to the next release, and those are counted there.
    *
    * **A NON-MERGE COUNT** — the changelog pipeline drops merge commits, because
    * every one of them here is a `Merge remote-tracking branch 'origin/dev'`

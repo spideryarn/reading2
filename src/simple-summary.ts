@@ -44,10 +44,11 @@
  *
  * The shared profile machinery, as Glossary and Ideas use it: `PROFILE_RULES`
  * in the constant system prompt and `profileSection` after the breakpoint, in
- * the user message. **The profile moves the floor, not the level**: a
- * fifteen-year-old *who already knows what the reader says they know*, so a
- * reader who says they build AI systems is not told what a language model is.
- * The goal changes what the paragraphs lead with, never what the piece says.
+ * the user message. In Simple and Fuller, **the profile moves the floor, not
+ * the level**: a fifteen-year-old *who already knows what the reader says they
+ * know*, so a reader who says they build AI systems is not told what a language
+ * model is. Brief is the exception: the profile changes what leads, but never
+ * licenses field terms. The goal changes emphasis, never what the piece says.
  *
  * The profile is recorded as `profileHash` and is **not in `sourceHash`**: a
  * changed profile does not make the paragraphs stale (the owner's GET reports
@@ -152,8 +153,13 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * each naming the one of the paragraph's ids it rests on, or none (Greg,
  * SPIDERYARN-READING2-8V; plan 261002e). The stored shape only gained an
  * optional field, so `SIMPLE_VERSION` stays.
+ *
+ * `simple-prompt/5` (2026-10-02): Brief is written for a reader in a hurry
+ * from outside the field, whatever the profile claims, with few terms and one
+ * phrase of method; every level opens on the piece's goal or question (Greg,
+ * spya-rpqqxb; plan 261002h).
  */
-export const SIMPLE_PROMPT_VERSION = "simple-prompt/4";
+export const SIMPLE_PROMPT_VERSION = "simple-prompt/5";
 
 /** The prompt a stored summary was written with; a row from before the field is the first. */
 export function simplePromptVersion(simple: SimpleSummary): string {
@@ -248,15 +254,63 @@ const PITCH: Record<SimpleLevel, { reader: string; shape: string; words: number;
 const NOTCH_UP: Record<SimpleLevel, string> = {
   brief: `
 
-Keep it very simple: the one thing the piece is about, why it matters, and
-what it concludes. At most one other key idea. Leave out anything a first-time
-reader could do without.`,
+Keep it very simple, for a reader in a hurry who does not know the field. What
+the piece set out to do, what it found or concluded, and why that matters. At
+most one other key idea.
+
+- How it was done gets one plain phrase at most ("in an experiment with
+  rats"): no equipment, no technique names, no experimental conditions.
+- At most two technical terms, each said in everyday words where it appears.
+  A term the reader does not need to follow the point is left out, not
+  explained.
+- Only the numbers the takeaway rests on.
+- Fewer facts, each one plain, rather than every fact squeezed in. Leave out
+  anything a first-time reader could do without.`,
   simple: "",
   fuller: `
 
 You may keep more of the piece's own terms than a beginner's version would (each
 still said in plain words where it first appears), and add one more layer of how
 or why.`,
+};
+
+/**
+ * **What a reader's claimed background does to the words**, per level. Simple
+ * and Fuller take what the reader says they know as everyday words. Brief does
+ * not: it is for a reader in a hurry from outside the field, whatever the
+ * profile claims (Greg, spya-rpqqxb — his own profiled Brief was denser in
+ * jargon than the Simple beside it). Plan 261002h.
+ */
+const KNOWN_AS_EVERYDAY = `- If the request describes the reader, what they say they already know counts
+  as everyday words for them: use it without explaining it. Everything else
+  stays at this pitch.`;
+const KNOWN_WORDS: Record<SimpleLevel, string> = {
+  brief: `- If the request describes the reader, it may steer what you put first. It
+  never changes the words: this version stays in everyday words even when the
+  request below describes a reader who does know the field.`,
+  simple: KNOWN_AS_EVERYDAY,
+  fuller: KNOWN_AS_EVERYDAY,
+};
+
+/**
+ * Brief's exception to `PROFILE_RULES`, said **after** them so it is the last
+ * word on the profile in the prompt. The shared rules tell every prompt to
+ * "assume the background they claim", and an override said only before them
+ * left the precedence to the model (GPT Sol's plan review of 261002h, P1).
+ * `PROFILE_RULES` is shared by five prompts and stays as it is.
+ */
+const AFTER_PROFILE: Record<SimpleLevel, string> = {
+  brief: `
+
+FOR THIS VERSION, THE READER'S BACKGROUND DOES NOT CHANGE THE WORDS
+
+This version is for a reader in a hurry from outside the field, even when the
+request below describes a reader who does know it. Use the description only
+for what to put first. Where it conflicts with "Assume the background they
+claim" above, this paragraph wins: explain each technical term you keep as you
+would for an outsider, and keep as few as you can.`,
+  simple: "",
+  fuller: "",
 };
 
 /**
@@ -281,23 +335,21 @@ ${p.reader} who has not studied this field. Everyday words and short sentences.$
   sentence, in everyday words. Never explain one hard word with another.
 - Keep the author's key term where the reader will meet it in the article; it
   is their handhold. Say what it means.
-- If the request describes the reader, what they say they already know counts
-  as everyday words for them: use it without explaining it. Everything else
-  stays at this pitch.
+${KNOWN_WORDS[level]}
 
 LENGTH
 
 ${p.shape}. Every sentence under ${p.sentence} words. About ${p.words} words in
 all, and never more than ${p.words + 50}. Shorter is fine; this is an
-orientation, not a digest, so leave detail to the article.${SYSTEM_TAIL}`;
+orientation, not a digest, so leave detail to the article.${systemTail(level)}`;
 }
 
-const SYSTEM_TAIL = `
+const systemTail = (level: SimpleLevel): string => `
 
 THE SHAPE
 
-- First: what the piece is about — its question or its subject, and what kind
-  of piece it is.
+- First: what the piece is about — its goal or question, or its subject, and
+  what kind of piece it is.
 - Then: why it matters — why THE PIECE says it matters, not why you think it
   might.
 - Then: its key ideas or findings.
@@ -332,7 +384,7 @@ ${plainWords("explain")}
 
 ${paperwork("summary")}
 
-${PROFILE_RULES}
+${PROFILE_RULES}${AFTER_PROFILE[level]}
 
 OUTPUT
 

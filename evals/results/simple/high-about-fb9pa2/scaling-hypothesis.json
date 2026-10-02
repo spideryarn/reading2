@@ -1,0 +1,295 @@
+{
+  "arm": "high-about-fb9pa2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple-prompt/5",
+  "sourceSha256": "e5ccff348d97e8bb668d4774a9e72abf6516d93448f9ed18a0e6fd5e44bb197a",
+  "at": "2026-10-02T19:43:59.316Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "2b6dfdb3acd015cc3c4a3cec2d03a6da8ee3bec2d0f8854f9cb84d524115683c",
+  "power": "high",
+  "guard": true,
+  "wallMs": 28922,
+  "costUsd": 0.2593686,
+  "tokens": {
+    "input": 20201,
+    "output": 4884,
+    "reasoning": 2526
+  },
+  "ok": true,
+  "reader": "about",
+  "words": 184,
+  "fullerWords": 280,
+  "briefWords": 109,
+  "paragraphs": [
+    {
+      "text": "This is Gwern's long 2020 essay on GPT-3 and what it implies for AI. Its core claim is the scaling hypothesis: simple neural nets, given ever more data and compute, keep gaining new abilities on their own.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "This is Gwern's long 2020 essay on GPT-3 and what it implies for AI.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "Its core claim is the scaling hypothesis: simple neural nets, given ever more data and compute, keep gaining new abilities on their own.",
+          "id": "spya-suzdvz"
+        }
+      ]
+    },
+    {
+      "text": "Gwern argues GPT-3 is the evidence: at 175b parameters it learned new tasks from a few prompt examples, though nothing was designed for that. Its scaling curves still showed no bending, and it was cheap by government or military budget standards. So far larger, better models look feasible, perhaps trillions of parameters.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern argues GPT-3 is the evidence: at 175b parameters it learned new tasks from a few prompt examples, though nothing was designed for that.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "Its scaling curves still showed no bending, and it was cheap by government or military budget standards.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "So far larger, better models look feasible, perhaps trillions of parameters.",
+          "id": "spya-asr663"
+        }
+      ]
+    },
+    {
+      "text": "His explanation: a big model holds countless sub-models that average out toward simple solutions. Small models settle for memorizing or surface shortcuts, since \"neural nets are lazy\". Scale and hard data push them past this, and the last bits of prediction loss demand real reasoning.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-uknzzk",
+        "spya-kmyg3w"
+      ],
+      "sentences": [
+        {
+          "text": "His explanation: a big model holds countless sub-models that average out toward simple solutions.",
+          "id": "spya-grkhs8"
+        },
+        {
+          "text": "Small models settle for memorizing or surface shortcuts, since \"neural nets are lazy\".",
+          "id": "spya-uknzzk"
+        },
+        {
+          "text": "Scale and hard data push them past this, and the last bits of prediction loss demand real reasoning.",
+          "id": "spya-kmyg3w"
+        }
+      ]
+    },
+    {
+      "text": "He concludes that most labs and expert critics lack conviction in scaling, and their AI forecasts have no coherent model behind them. An appendix warns that agency may emerge even from non-human data, so \"tool AIs\" may well become agents. The 2020s, he says, should be interesting: sigmoid or singularity?",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-scr8jb",
+        "spya-hjpau9"
+      ],
+      "sentences": [
+        {
+          "text": "He concludes that most labs and expert critics lack conviction in scaling, and their AI forecasts have no coherent model behind them.",
+          "id": "spya-scr8jb"
+        },
+        {
+          "text": "An appendix warns that agency may emerge even from non-human data, so \"tool AIs\" may well become agents.",
+          "id": "spya-hjpau9"
+        },
+        {
+          "text": "The 2020s, he says, should be interesting: sigmoid or singularity?",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This is Gwern's long 2020 essay on GPT-3, OpenAI's 175-billion-parameter model, and the theory he thinks it supports. That theory is the scaling hypothesis: simple neural networks, made far larger and trained on more data and compute, keep gaining new abilities on their own. His main evidence is GPT-3's meta-learning, picking up new tasks from a few examples in the prompt, which nothing in its design was built to do.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-aqts9c",
+        "spya-m3gtj6"
+      ],
+      "sentences": [
+        {
+          "text": "This is Gwern's long 2020 essay on GPT-3, OpenAI's 175-billion-parameter model, and the theory he thinks it supports.",
+          "id": "spya-suzdvz"
+        },
+        {
+          "text": "That theory is the scaling hypothesis: simple neural networks, made far larger and trained on more data and compute, keep gaining new abilities on their own.",
+          "id": "spya-m3gtj6"
+        },
+        {
+          "text": "His main evidence is GPT-3's meta-learning, picking up new tasks from a few examples in the prompt, which nothing in its design was built to do.",
+          "id": "spya-aqts9c"
+        }
+      ]
+    },
+    {
+      "text": "The essay says this matters because GPT-3's scaling curves still had not bent. Training cost an estimated $5 million in 2020 dollars, tiny next to government or military budgets, so models 100 to 1000 times larger looked feasible. It notes Hans Moravec forecast decades ago that compute for the first sub-human systems would arrive in the 2020s.",
+      "ids": [
+        "spya-asr663",
+        "spya-dfjr4c",
+        "spya-ad5qgy"
+      ],
+      "sentences": [
+        {
+          "text": "The essay says this matters because GPT-3's scaling curves still had not bent.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "Training cost an estimated $5 million in 2020 dollars, tiny next to government or military budgets, so models 100 to 1000 times larger looked feasible.",
+          "id": "spya-dfjr4c"
+        },
+        {
+          "text": "It notes Hans Moravec forecast decades ago that compute for the first sub-human systems would arrive in the 2020s.",
+          "id": "spya-ad5qgy"
+        }
+      ]
+    },
+    {
+      "text": "To explain why scale helps, Gwern pictures a big network as a vast ensemble of sub-models that average out toward simple solutions. Small models settle for memorizing and shallow shortcuts, but with enough varied data, real algorithms become the cheapest way to lower loss. He argues the last bits of prediction error, short of humans' roughly 0.7 bits per character, are the deepest and may demand genuine understanding.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-vkkfzh",
+        "spya-kmyg3w"
+      ],
+      "sentences": [
+        {
+          "text": "To explain why scale helps, Gwern pictures a big network as a vast ensemble of sub-models that average out toward simple solutions.",
+          "id": "spya-grkhs8"
+        },
+        {
+          "text": "Small models settle for memorizing and shallow shortcuts, but with enough varied data, real algorithms become the cheapest way to lower loss.",
+          "id": "spya-vkkfzh"
+        },
+        {
+          "text": "He argues the last bits of prediction error, short of humans' roughly 0.7 bits per character, are the deepest and may demand genuine understanding.",
+          "id": "spya-kmyg3w"
+        }
+      ]
+    },
+    {
+      "text": "In his account, OpenAI bet on scaling, while DeepMind holds a weaker version and builds brain-like modules piece by piece. He faults expert critics for confident dismissals that offered no testable predictions, proved wrong, and were rarely retracted.",
+      "ids": [
+        "spya-arrq35",
+        "spya-vr9q2p",
+        "spya-m9r8zx"
+      ],
+      "sentences": [
+        {
+          "text": "In his account, OpenAI bet on scaling, while DeepMind holds a weaker version and builds brain-like modules piece by piece.",
+          "id": "spya-vr9q2p"
+        },
+        {
+          "text": "He faults expert critics for confident dismissals that offered no testable predictions, proved wrong, and were rarely retracted.",
+          "id": "spya-m9r8zx"
+        }
+      ]
+    },
+    {
+      "text": "An appendix argues agency could emerge even from models trained on physics or random programs, not just human text. His conclusion is that tool AIs may well become agent AIs, that filtering data is no fix, and that the 2020s could bring a plateau or a singularity.",
+      "ids": [
+        "spya-cwwvxw",
+        "spya-hjpau9",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "An appendix argues agency could emerge even from models trained on physics or random programs, not just human text.",
+          "id": "spya-cwwvxw"
+        },
+        {
+          "text": "His conclusion is that tool AIs may well become agent AIs, that filtering data is no fix, and that the 2020s could bring a plateau or a singularity.",
+          "id": "spya-hjpau9"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay by Gwern uses GPT-3, a huge text-predicting AI from 2020, to argue for the scaling hypothesis. That is the idea that simple AI programs keep getting smarter just by being made bigger and fed more data and computing power. It matters because the author thinks this may be the path to human-level AI, and that experts are not ready.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Gwern uses GPT-3, a huge text-predicting AI from 2020, to argue for the scaling hypothesis.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "That is the idea that simple AI programs keep getting smarter just by being made bigger and fed more data and computing power.",
+          "id": "spya-suzdvz"
+        },
+        {
+          "text": "It matters because the author thinks this may be the path to human-level AI, and that experts are not ready.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    },
+    {
+      "text": "GPT-3 was about 117 times bigger than GPT-2, yet its gains did not level off. It even learned new tasks from a few examples, though nobody built it to do that. The author concludes that bigger models may keep gaining new skills, and smarter behavior may simply emerge.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-asr663",
+        "spya-m3gtj6"
+      ],
+      "sentences": [
+        {
+          "text": "GPT-3 was about 117 times bigger than GPT-2, yet its gains did not level off.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "It even learned new tasks from a few examples, though nobody built it to do that.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "The author concludes that bigger models may keep gaining new skills, and smarter behavior may simply emerge.",
+          "id": "spya-m3gtj6"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "simple": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

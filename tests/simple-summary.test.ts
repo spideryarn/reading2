@@ -826,6 +826,28 @@ describe("the request", () => {
     expect(SIMPLE_SYSTEMS.simple).not.toContain("eighteen-year-old");
     for (const level of ["simple", "fuller"] as const) expect(SIMPLE_SYSTEMS[level]).toContain("PLAIN WORDS");
   });
+
+  /* Plan 261002h (Greg, spya-rpqqxb): Brief is for a reader in a hurry from
+     outside the field, whatever the profile claims. His own profiled Brief was
+     denser in jargon than the Simple beside it. */
+  it("writes Brief for an outsider even when the reader claims the field, and only Brief", () => {
+    const flat = (s: string) => s.replace(/\s+/g, " ");
+    const brief = flat(SIMPLE_SYSTEMS.brief);
+    expect(brief).toContain("even when the request below describes a reader who does");
+    expect(brief).toContain("this paragraph wins");
+    /* After the shared rules, so it is the last word on the profile (Sol P1). */
+    expect(SIMPLE_SYSTEMS.brief.indexOf("this paragraph wins")).toBeGreaterThan(
+      SIMPLE_SYSTEMS.brief.indexOf(PROFILE_RULES),
+    );
+    expect(SIMPLE_SYSTEMS.brief.indexOf(PROFILE_RULES)).toBeGreaterThan(-1);
+    expect(brief).not.toContain("counts as everyday words for them");
+    for (const level of ["simple", "fuller"] as const) {
+      const system = flat(SIMPLE_SYSTEMS[level]);
+      expect(system).not.toContain("even when the request below describes a reader who does");
+      expect(system).toContain("counts as everyday words for them");
+    }
+    for (const system of Object.values(SIMPLE_SYSTEMS)) expect(flat(system)).toContain("its goal or question");
+  });
 });
 
 /* ------------------------------------------------------ the fidelity guard -- */
