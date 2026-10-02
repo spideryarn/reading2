@@ -18,8 +18,8 @@ web or literature deep dives, library or vendor selection, best-practice surveys
 ## The rule
 
 **Any eval, model comparison or spike that informs a decision gets a write-up here before the work
-is called done.** A plan's § Result or a file under `evals/results/` is not where anyone looks: the
-write-up is the one place that says what was asked, what was measured, what was decided and what was
+is called done.** A plan's § Result or a file under `evals/results/` is not where anyone looks. The
+write-up says what was asked, what was measured, what was decided and what was
 ruled out. It links to the plan and the raw results rather than copying their tables.
 
 ## Naming

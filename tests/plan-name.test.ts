@@ -110,6 +110,10 @@ describe("datePrefix", () => {
 });
 
 describe("DIRS", () => {
+  it("names investigations in its own folder as Markdown", () => {
+    expect(DIRS.investigations).toEqual({ dir: "docs/investigations", ext: ".md" });
+  });
+
   it("covers every dated docs folder, and each one exists", () => {
     // `--dir=` refuses a name not in this table, so a folder missing from it
     // sends its author back to picking a letter by hand.
