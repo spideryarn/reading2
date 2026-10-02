@@ -29,7 +29,7 @@
  */
 import type { LibraryEntry } from "../types.js";
 import { exactly } from "./relative-time.js";
-import { SHARING_ON } from "../messages.js";
+import { SHARING_MARK_ON_ARCHIVED, SHARING_ON } from "../messages.js";
 import { NOT_PROCESSED_MARK } from "./ShelfEntry.js";
 import { TopicDot } from "./ShelfTermChip.js";
 
@@ -85,7 +85,12 @@ export function paperCardFacts(entry: LibraryEntry, topics: readonly PaperTopic[
 
   const archived = exactly(entry.archivedAt);
   if (archived) facts.push({ label: "Archived", value: archived });
-  if (entry.visibility === "public") facts.push({ label: "Shared", value: SHARING_ON });
+  if (entry.visibility === "public") {
+    facts.push({
+      label: "Shared",
+      value: entry.archivedAt ? SHARING_MARK_ON_ARCHIVED : SHARING_ON,
+    });
+  }
 
   const byline = [entry.byline, entry.siteName].filter((s): s is string => Boolean(s?.trim())).join(" · ");
 
@@ -105,7 +110,7 @@ function cut(text: string, max: number): string {
   if (t.length <= max) return t;
   const head = t.slice(0, max);
   const space = head.lastIndexOf(" ");
-  return `${(space > max / 2 ? head.slice(0, space) : head).replace(/[\s,;:.]+$/, "")}…`;
+  return `${(space > 0 ? head.slice(0, space) : head).replace(/[\s,;:.]+$/, "")}…`;
 }
 
 /**

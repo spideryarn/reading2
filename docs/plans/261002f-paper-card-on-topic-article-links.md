@@ -19,10 +19,11 @@ nothing picked up:
 1. **`src/web/PaperCard.tsx`** — the reusable part. Two exports:
    - `paperCardFacts(entry, topics)` → plain data (the house pattern from `rowCardFacts`, so a test
      checks data, not markup): title; a byline line (`byline · siteName`, either may be absent);
-     the gist as the preview; facts — *Added* (exact), *Last opened* (exact, or *never*), *Length*
-     (*N min · N words*, or *not read yet — title and abstract only* for a `processing: 'minimal'`
-     paper, whose counts are 0), *Archived* (exact, when it is), *Shared* when public; and the
-     topics it is in.
+     the gist as the preview, or an abstract cut at 280 characters on a word when there is no gist;
+     facts — *Added* (exact), *Last opened* (exact, or *never*), *Length* (*N min · N words*) for a
+     fully processed paper or *Status — Not AI-processed yet* for a `processing: 'minimal'` paper,
+     *Archived* (exact, when it is), *Shared* when public; and up to six topics it is in, then
+     *+N more*.
    - `PaperCard` — draws that with the existing `.tip-*` classes (`tip-title`, `tip-gist`,
      `tip-facts`), plus one new rule for the byline and one for the topic list, so it reads as the
      same kind of card as the shelf table's row card. Topics are drawn as small labels each with
@@ -37,11 +38,12 @@ nothing picked up:
    wrapped in a `Tooltip` whose content is the `PaperCard`, `placement="bottom-start"`, inside the
    view's existing `TooltipGroup` so scrubbing down the list opens neighbours instantly. A slug with
    no entry on the loaded lists keeps the bare link.
-   - `useShelfTopics` gains `entryOf(slug)` next to `titleOf` (same map, holding the entry).
-   - `TermTipScope` gains `entryOf` and `topicsOf(slug)`; `ShelfTerms` builds `topicsOf` once per
-     server answer from **every** topic the server chose (not only those drawn), in rank order, with
-     the hue each already wears — so an article's card names the same topics whatever the view is
-     narrowed to.
+   - `useShelfTopics` returns `entryOf(slug)` in place of `titleOf` (the same map, now holding the
+     entry); `ShelfTerms` derives `TermTipScope.titleOf` from it.
+   - A separate `PaperScope` carries `entryOf` and `topicsOf(slug)` only to `ShelfTermsDetail`.
+     `ShelfTerms` builds `topicsOf` once per server answer from **every** topic the server chose (not
+     only those drawn), in rank order, with the hue each already wears — so an article's card names
+     the same topics whatever the view is narrowed to.
 
 ### Decisions, and the simpler options passed over
 
