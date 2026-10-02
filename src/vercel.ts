@@ -52,6 +52,7 @@ import { reportBundleImport, reportFirstRequest } from "./cold-start.js";
 import { builtShell, servePublicReadPage } from "./public/page.js";
 import { handleApi } from "./routes.js";
 import { health } from "./vercel-health.js";
+import { keepAlive } from "./wait-until.js";
 
 export const config = { runtime: "nodejs" };
 
@@ -251,24 +252,30 @@ export function readSlug(path: string): string | null {
  * whole exercise is for and the one kind that went unreported.
  */
 export default function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  return withMonitoringScope(async () => {
+  const done = withMonitoringScope(async () => {
     try {
       await serve(req, res);
     } finally {
-      /* **The line without which none of this works.** A Vercel function
-         freezes the instant its handler resolves, and Sentry's transport is an
-         in-memory buffer drained by a background worker that then never runs.
-         So the events that go missing are the ones raised at the end of a
-         request — which is all of them. src/monitoring.ts § flushMonitoring.
-
-         Awaited rather than handed to `waitUntil`: awaiting keeps the
-         invocation alive until the buffer drains, which is the property we
-         need, and it costs no new dependency. The response has already been
-         written by this point, so nothing a reader is waiting for is held up by
-         it. */
+      /* Sentry's transport is an in-memory buffer drained by a background
+         worker, so the events raised in a request leave here, after the
+         response. src/monitoring.ts § flushMonitoring. */
       await flushMonitoring();
     }
   });
+  /**
+   * **And none of that runs unless the platform is told about it.** A Vercel
+   * instance is suspended once its *response* is complete, not when this
+   * promise settles. This comment used to say "awaiting keeps the invocation
+   * alive until the buffer drains", and that was the bug: the flush, and the
+   * feedback mirror `fileFeedback` awaits after answering, ran only when a
+   * later request woke the instance — 13 reports on 2026-10-01 never reached
+   * Sentry at all. docs/postmortems/261002b-a-pipeline-whose-only-consumer-reads-the-lossy-copy.md.
+   *
+   * The whole promise is registered, not the mirror alone, so anything a route
+   * awaits after `res.end` is covered without that route having to know.
+   */
+  keepAlive(done);
+  return done;
 }
 
 async function serve(req: IncomingMessage, res: ServerResponse): Promise<void> {

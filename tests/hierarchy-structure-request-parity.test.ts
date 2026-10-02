@@ -86,10 +86,11 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => ({
   wasRefused: () => false,
 }));
 
-const { generateHierarchy, structureRequest } = await import("../src/hierarchy.js");
+const { generateHierarchy, structureRequest, STRUCTURE_OUTPUT_SCHEMA } = await import("../src/hierarchy.js");
+const { toc10FrozenRequest } = await import("../evals/hierarchy-structure/toc10-frozen.js");
 
 /** The system prompt production sends, byte for byte. THE pin — do not "tidy" it. */
-const EXPECTED_SYSTEM = `You are building a nested table of contents for an article. It goes all the
+const EXPECTED_TOC10_SYSTEM = `You are building a nested table of contents for an article. It goes all the
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.
 
 You receive the article as a numbered list of blocks. Each block has an id
@@ -251,6 +252,31 @@ evidence, reasoning, method or a limit on its findings — a funder's role that
 it says may bias the result, an ethics rule that shaped the study, an article
 ABOUT research funding — it is content, and the usual rules apply.`;
 
+const EXPECTED_SYSTEM = EXPECTED_TOC10_SYSTEM
+  .replace(
+    `Produce a tree of INTERNAL nodes only. Every node covers a contiguous range of
+blocks, and a node's children exactly partition its range — no gaps, no
+overlaps, no reordering. The first child starts where its parent starts; the
+last child ends where its parent ends.`,
+    `Produce a tree of INTERNAL nodes only. The root covers the whole input and has no
+"start". Give each child one "start": the id of the first block it covers. Do
+not give an end — ends are computed from the next child's start, and the last
+child ends where its parent ends. The first child must start where its parent
+starts. List children in document order; after the first child, each "start"
+must occur strictly later than the previous child's start. Do not write a range
+anywhere.`,
+  )
+  .replace(
+    `{"root": {"title": "...", "gist": "...", "question": "...",
+          "range": ["<firstBlockId>", "<lastBlockId>"],
+          "sourceHeading": "...", "children": [ ... ]}}`,
+    `{"root": {"title": "...", "gist": "...", "question": "...",
+          "sourceHeading": "...", "children": [
+            {"title": "...", "gist": "...", "question": "...",
+             "start": "<firstBlockId>", "children": [ ... ]}
+          ]}}`,
+  );
+
 const BLOCKS: Block[] = [
   { id: "spya-par001", tag: "h2", kind: "heading", level: 2, text: "First Part", words: 2, html: "<h2>First Part</h2>", gistable: true },
   { id: "spya-par002", tag: "p", kind: "text", text: "Some prose about turnips.", words: 4, html: "<p>Some prose about turnips.</p>", gistable: true },
@@ -280,6 +306,20 @@ const EXPECTED_MAX_TOKENS = 80_425;
    so the fixture is the array above and the pinned bytes are unaffected. */
 
 describe("the structure call's request", () => {
+  it("keeps the frozen arm on toc/10's exact request bytes", () => {
+    const frozen = toc10FrozenRequest(BLOCKS);
+    expect(frozen.system).toBe(EXPECTED_TOC10_SYSTEM);
+    expect(frozen.user).toBe(EXPECTED_USER);
+    expect(frozen.maxTokens).toBe(EXPECTED_MAX_TOKENS);
+    expect(frozen.params).toEqual({
+      max_tokens: EXPECTED_MAX_TOKENS,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "low" },
+      system: EXPECTED_TOC10_SYSTEM,
+      messages: [{ role: "user", content: EXPECTED_USER }],
+    });
+  });
+
   it("sends exactly the pinned bytes and settings", async () => {
     captured.length = 0;
     await expect(
@@ -298,7 +338,10 @@ describe("the structure call's request", () => {
        happens to hold. It has now fired on both changes, which is it working.
        See the note on `EFFORT` in src/hierarchy.ts for the evidence behind the
        current value. */
-    expect(body.output_config).toEqual({ effort: "low" });
+    expect(body.output_config).toEqual({
+      effort: "low",
+      format: { type: "json_schema", schema: STRUCTURE_OUTPUT_SCHEMA },
+    });
     expect(body.max_tokens).toBe(EXPECTED_MAX_TOKENS);
     // Nothing else rides along: the exact key set is part of the request.
     expect(Object.keys(body).sort()).toEqual([

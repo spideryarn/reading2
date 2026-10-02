@@ -1,0 +1,82 @@
+{
+  "mode": "ideas",
+  "viewedPictures": false,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "ranking": [["X"], ["W", "Y"], ["Z"]],
+      "separations": [
+        "X over W/Y: X combines the broadest coverage of the crisis's causes and remedies with better-bounded assumptions, while W and Y misclassify or overextend some inferred premises.",
+        "W/Y over Z: W and Y capture important distinctions such as triangulation or reproducibility versus replication that Z omits."
+      ],
+      "criterionNotes": "The largest differences are coverage and the treatment of assumed ideas: X covers nearly every load-bearing mechanism, while several assumptions in W, Y, and Z are actually stated by the article or weakly inferred."
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "ranking": [["Y"], ["W"], ["X"], ["Z"]],
+      "separations": [
+        "Y over W: Y offers more genuinely inferential and locally argued assumptions while still covering the mathematical framework, empirical findings, and scalability limit.",
+        "W over X: W more clearly identifies synergy as the article's proposed signature of computation and gives a more balanced account of PID's central machinery and limitations.",
+        "X over Z: X covers the flow-versus-processing distinction, recurrence, mechanistic caution, and local PID, whereas Z is thinner and relies on a questionable assumption that triad synergies aggregate cleanly."
+      ],
+      "criterionNotes": "All four formulate clear propositions, but they differ most on assumed-idea discipline and coverage; Y's assumptions expose specific interpretive moves, while W and X often label explicitly stated material as assumed and Z makes the riskiest unsupported inference."
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "ranking": [["X"], ["W"], ["Y"], ["Z"]],
+      "separations": [
+        "X over W: X uniquely preserves the full argumentative chain through non-algorithmic dynamics as well as biological naturalism, simulation, and the ethics of conscious-seeming systems.",
+        "W over Y: W adds the substrate-entrenchment argument and the persistence of consciousness illusions, giving it slightly fuller coverage.",
+        "Y over Z: Y's assumptions about epistemic and moral uncertainty are more precise and defensible than Z's treatment of explicitly introduced predictive processing as an assumed premise."
+      ],
+      "criterionNotes": "Coverage is decisive: X captures all four attacks on computational functionalism and the ethical conclusion, while the others omit at least one major bridge; Z also has the weakest provenance classification."
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "ranking": [["Y"], ["W"], ["X"], ["Z"]],
+      "separations": [
+        "Y over W: Y covers the central theory, proof and testing limits, rare bugs, local invariants, and practical language design without relying on W's questionable visual-simplicity assumption.",
+        "W over X: W includes the foundational claim that simple rules can achieve arbitrary computational sophistication and states the proof-versus-testing equivalence more completely.",
+        "X over Z: X ranges across induction, mathematics, proof search, and language design, while Z omits too much of the article's practical and epistemic argument."
+      ],
+      "criterionNotes": "The candidates differ chiefly in coverage and assumed-idea quality: Y gives the strongest set of load-bearing propositions, while W is comprehensive but misclassifies an explicit visual heuristic and Z is substantially incomplete."
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "ranking": [["X"], ["Z"], ["Y"], ["W"]],
+      "separations": [
+        "X over Z: X covers the complete causal sequence from mixed selectivity through ephaptic coupling, spatial and traveling waves, analog computation, and anesthesia.",
+        "Z over Y: Z better preserves the bidirectional spike-wave loop and traveling-wave mechanism, and its assumed ideas are more genuinely necessary to the argument.",
+        "Y over W: Y gives a more coherent account of gating, low-dimensional population structure, and anesthetic convergence, while W pads the set with several explicitly stated claims mislabeled as assumptions."
+      ],
+      "criterionNotes": "Coverage of the proposed mechanism is the main separator, followed by whether assumed ideas identify real inferential dependencies rather than merely restating the paper."
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "ranking": [["X"], ["W"], ["Y", "Z"]],
+      "separations": [
+        "X over W: X best connects the historical method, elite volunteering, material change, the need for dignity, work's impersonal respect, and freely chosen friendship.",
+        "W over Y/Z: W avoids the unsupported claim in Y and Z that status behavior is simply an innate primate constant, a claim the article explicitly qualifies."
+      ],
+      "criterionNotes": "X has the best coverage and balance, while Y and Z weaken otherwise strong central propositions by turning a provocative analogy into a general causal law that the article cautions against."
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "ranking": [["Y"], ["X"], ["Z"], ["W"]],
+      "separations": [
+        "Y over X: Y covers the hierarchical structure, distinct mechanical properties, functional specialization, spinning phase transition, and two-part challenge of artificial replication.",
+        "X over Z: X's anchors remain accurate across material structure, biological function, and manufacture, while Z's gene-transfer assumption overpromises that producing the protein will reproduce fibre behavior.",
+        "Z over W: Z includes the crucial hard-soft composite mechanism that W omits and avoids W's inaccurate one-gland-to-one-function premise."
+      ],
+      "criterionNotes": "Coverage of the structure-process-property relationship is decisive; Y is the only candidate that handles all of it well, while W and Z contain overstrong assumptions about glands or genetic transfer."
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "ranking": [["X", "Y", "Z"], ["W"]],
+      "separations": [
+        "X/Y/Z over W: Each of X, Y, and Z captures scientific integrity, self-deception, cargo-cult form, and experimental controls with sound anchors, while W omits the control-and-replication lesson and weakly anchors selective reporting."
+      ],
+      "criterionNotes": "X, Y, and Z are comparably strong but emphasize different valid assumptions—shrinking effects under tighter controls, reproducibility, and institutional incentives—whereas W's broader indictment of stagnant fields is less securely bounded."
+    }
+  ]
+}

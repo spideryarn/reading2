@@ -1,0 +1,204 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "replication-crisis-spya-hrjamq",
+  "sourceHash": "17b187c11da22548.677ec6955421d529.a8a587fa27f4a79f",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-jgp68y",
+      "name": "Science can be studied scientifically",
+      "provenance": "assumed",
+      "statement": "The research process itself—how studies are designed, published, cited, and corrected—can be treated as an object of empirical investigation, measured and improved the same way any other phenomenon is studied.",
+      "whyYouNeedIt": "The article's entire apparatus of 'metascience,' survey data on researcher behavior, and large coordinated replication projects only makes sense if one accepts that science's own practices are a legitimate, measurable subject of scientific inquiry rather than something outside empirical reach.",
+      "occurrences": [
+        {
+          "blockId": "spya-umxmuu",
+          "quote": "a new scientific discipline known as metascience,[7] which uses methods of empirical research to examine empirical research practice",
+          "reasoning": "This line only lands as sensible to a reader who already grants that research practice can itself be an empirical object of study.",
+          "start": 169
+        },
+        {
+          "blockId": "spya-q8mbr9",
+          "quote": "Meta-research continues to be conducted to identify the roots of the crisis and to address them.",
+          "reasoning": "Presupposes without arguing that the causes of a scientific crisis can themselves be found by doing more science on science.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-na9ke6",
+          "quote": "Metascience is the use of scientific methodology to study science itself.",
+          "reasoning": "States the practice as a going concern, assuming the reader already accepts that this reflexive application of method is coherent and productive.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-h237pk",
+      "name": "Selection for significance inflates reported effect sizes",
+      "provenance": "introduced",
+      "statement": "Because only studies that cross a significance threshold tend to get published, the effect sizes that make it into print are systematically larger than the true effect, so replications with adequate power routinely find smaller effects than the original.",
+      "occurrences": [
+        {
+          "blockId": "spya-hw9d4p",
+          "quote": "when the dataset is small, noise tends to cause the regression factor to be overestimated",
+          "reasoning": "Gives the statistical mechanism (small-sample noise plus selection) that produces inflated published estimates.",
+          "start": 173
+        },
+        {
+          "blockId": "spya-bha57y",
+          "quote": "36% replicated successfully (p value below 0.05), with effect sizes averaging half the original magnitude",
+          "reasoning": "Shows the real-world consequence: even successful replications shrink the reported effect substantially.",
+          "start": 476
+        }
+      ]
+    },
+    {
+      "id": "spya-pet7rw",
+      "name": "Individual incentives diverge from science's collective goal",
+      "provenance": "introduced",
+      "statement": "Career rewards for individual researchers (publishing often, getting cited, landing grants) are not the same thing as the collective goal of accumulating true knowledge, so a population of rational, self-interested scientists can still produce a literature dominated by unreliable findings.",
+      "occurrences": [
+        {
+          "blockId": "spya-huxt52",
+          "quote": "the goals and values of single scientists (e.g., publishability) are not aligned with the general goals of science (e.g., pursuing scientific truth)",
+          "reasoning": "States the incentive-misalignment claim explicitly as the mechanism behind degraded validity.",
+          "start": 133
+        },
+        {
+          "blockId": "spya-ftd2ng",
+          "quote": "the population of labs converge to maximum productivity even at the price of very high false positive rates",
+          "reasoning": "Models formally how selection on career success, not truth, can drive an entire field toward high false-positive output.",
+          "start": 736
+        }
+      ]
+    },
+    {
+      "id": "spya-hphgdt",
+      "name": "Power mathematically caps replication probability",
+      "provenance": "introduced",
+      "statement": "The chance that a second study will successfully reproduce a first study's significant finding is bounded by the statistical power of the test, regardless of how the original study was conducted or whether the hypothesis is true.",
+      "occurrences": [
+        {
+          "blockId": "spya-x7d5t5",
+          "quote": "Thus, low power implies low probability of replication, regardless of how the previous publication was designed, and regardless of which hypothesis is really true.",
+          "reasoning": "Directly asserts the mathematical link between power and replication probability.",
+          "start": 174
+        },
+        {
+          "blockId": "spya-zvfgme",
+          "quote": "the median of studies with adequate statistical power was between 7.7% and 9.1%, implying that a positive result would replicate with probability less than 10%",
+          "reasoning": "Applies the power-replication link to real meta-analytic data to explain why psychology replicates poorly.",
+          "start": 362
+        },
+        {
+          "blockId": "spya-fgq7vr",
+          "quote": "A statistical study with 1000 cases and 1000 controls has 0.03% power for a gene with GRR = 1.15",
+          "reasoning": "Shows a concrete case where tiny power essentially guarantees replication failure even for a real effect.",
+          "start": 673
+        }
+      ]
+    },
+    {
+      "id": "spya-dhfzxe",
+      "name": "Flexible analysis choices inflate false positives unintentionally",
+      "provenance": "introduced",
+      "statement": "When researchers have many defensible choices about how to collect, exclude, and analyze data, trying several and reporting only the ones that reach significance can push the true false-positive rate far above the nominal 5%, even without any deliberate cheating.",
+      "occurrences": [
+        {
+          "blockId": "spya-qsad7n",
+          "quote": "moderately flexible data analysis, routine in research, can increase the false-positive rate to above 60%",
+          "reasoning": "States the core quantitative claim that ordinary flexibility, not fraud, can massively inflate false positives.",
+          "start": 128
+        },
+        {
+          "blockId": "spya-umu7gf",
+          "quote": "These choices in the \"garden of forking paths\" multiply, creating many \"researcher degrees of freedom\"",
+          "reasoning": "Names the mechanism (many small decision points) that produces the inflation described above.",
+          "start": 209
+        },
+        {
+          "blockId": "spya-dz88bh",
+          "quote": "If the data collection or analysis were to stop at a point where the p-value happened to fall below the significance level, a spurious statistically significant difference could be reported",
+          "reasoning": "Illustrates with optional stopping how an honest-seeming procedure generates spurious significance.",
+          "start": 468
+        }
+      ]
+    },
+    {
+      "id": "spya-jth6am",
+      "name": "True effects can vary by hidden context (heterogeneity)",
+      "provenance": "introduced",
+      "statement": "Many findings fail to replicate not because the original result was a fluke but because the underlying effect genuinely differs across populations, settings, or unnoticed 'hidden moderators,' so there is no single fixed effect size to recover.",
+      "occurrences": [
+        {
+          "blockId": "spya-qn347b",
+          "quote": "failures to replicate might be explained by contextual differences between the original experiment and the replication, often called \"hidden moderators\"",
+          "reasoning": "Generalizes the heterogeneity idea to context sensitivity as a cause of non-replication.",
+          "start": 201
+        }
+      ]
+    },
+    {
+      "id": "spya-pchp6g",
+      "name": "Posterior truth differs from p-value significance",
+      "provenance": "introduced",
+      "statement": "Rejecting a null hypothesis at the 5% significance level does not mean there is a 95% chance the alternative hypothesis is true; the actual probability that the finding is real depends on how plausible the hypothesis was before the test (its prior probability), via Bayes' theorem.",
+      "occurrences": [
+        {
+          "blockId": "spya-fhcf00",
+          "quote": "rejecting the null hypothesis at significance level 5% does not mean that the posterior probability for the alternative hypothesis is 95%",
+          "reasoning": "States directly that significance level and posterior truth probability are different quantities.",
+          "start": 61
+        },
+        {
+          "blockId": "spya-esjk29",
+          "quote": "if the prior probability of the null hypothesis is , and the study found a positive result, then the posterior probability for is",
+          "reasoning": "Works a concrete numeric example showing how a low prior keeps the posterior probability of a true effect low even after a 'significant' result.",
+          "start": 13
+        }
+      ]
+    },
+    {
+      "id": "spya-az0tk5",
+      "name": "Low prior truth-rate explains high false-positive share",
+      "provenance": "introduced",
+      "statement": "If most of the hypotheses being tested in a field are false to begin with, then even a technically correct testing procedure with standard error rates will produce a literature in which a large share of 'significant' results are actually false positives.",
+      "occurrences": [
+        {
+          "blockId": "spya-dzsa7e",
+          "quote": "a possible reason for the low rates of replicability in certain scientific fields is that a majority of tested hypotheses are false a priori",
+          "reasoning": "States the base-rate argument explaining low replicability independent of any methodological flaw.",
+          "start": 41
+        },
+        {
+          "blockId": "spya-p6eutd",
+          "quote": "the claim that a majority of tested hypotheses are false a priori in certain scientific fields might be plausible given factors such as the complexity of the phenomena under investigation",
+          "reasoning": "Extends the base-rate explanation to specific fields, linking it to features like inferential distance and ease of hypothesis generation.",
+          "start": 16
+        }
+      ]
+    },
+    {
+      "id": "spya-b0adgx",
+      "name": "Triangulation beats single-method replication",
+      "provenance": "introduced",
+      "statement": "Confidence in a finding should come from agreement across methods that have different, unrelated weaknesses, not merely from repeating the same method again, because repeating a flawed method only reproduces its flaw.",
+      "occurrences": [
+        {
+          "blockId": "spya-w073xf",
+          "quote": "replication alone will get us only so far (and) might actually make matters worse ... [Triangulation] is the strategic use of multiple approaches to address one question",
+          "reasoning": "States directly that converging independent methods, not repeated identical ones, is the stronger form of evidence.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-w073xf",
+          "quote": "Results that agree across different methodologies are less likely to be artefacts.",
+          "reasoning": "Gives the reasoning for why cross-method agreement is more diagnostic than same-method repetition.",
+          "start": 246
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T00:52:25.829Z",
+  "elapsedMs": 65462
+}

@@ -1,0 +1,771 @@
+{
+  "version": "toc/11",
+  "generator": "claude-sonnet-5",
+  "slug": "cargocult-spya-rz663q",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0007",
+        "n0022",
+        "n0033",
+        "n0045"
+      ],
+      "range": [
+        "spya-arxt8r",
+        "spya-ndyj3t"
+      ],
+      "title": "Cargo Cult Science",
+      "gist": "Real science requires a leaning-over-backwards honesty, reporting every fact that might disprove your own idea, to avoid fooling yourself.",
+      "question": "Cargo Cult Science — why do fields that look scientific still fail to produce real results? (several examples)",
+      "sourceHeading": "Cargo Cult Science"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0004",
+        "n0005",
+        "n0006"
+      ],
+      "range": [
+        "spya-arxt8r",
+        "spya-wv9g0v"
+      ],
+      "title": "Title and author",
+      "gist": "Title, byline, and subtitle of the speech."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-arxt8r",
+        "spya-arxt8r"
+      ],
+      "title": ""
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-hwqz3q",
+        "spya-hwqz3q"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-f6b5fs",
+        "spya-f6b5fs"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-wv9g0v",
+        "spya-wv9g0v"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0008",
+        "n0012",
+        "n0015",
+        "n0018"
+      ],
+      "range": [
+        "spya-ddrr9m",
+        "spya-ankp3d"
+      ],
+      "title": "Investigating Pseudoscience",
+      "gist": "Feynman investigates mysticism, ESP, and supposedly scientific fields like education and crime treatment, finding none actually improves despite scientific trappings.",
+      "question": "pseudoscience — why do fields like education and crime policy fail despite claiming scientific method? (several examples)"
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 2,
+      "parent": "n0007",
+      "children": [
+        "n0009",
+        "n0010",
+        "n0011"
+      ],
+      "range": [
+        "spya-ddrr9m",
+        "spya-q4502k"
+      ],
+      "title": "Witch Doctors and Mysticism",
+      "gist": "Feynman traces how science separated true claims from false ones since the Middle Ages, then describes his own forays into isolation tanks and Esalen to sample modern mysticism firsthand."
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0008",
+      "children": [],
+      "range": [
+        "spya-ddrr9m",
+        "spya-ddrr9m"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0008",
+      "children": [],
+      "range": [
+        "spya-bcgpc3",
+        "spya-bcgpc3"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0008",
+      "children": [],
+      "range": [
+        "spya-q4502k",
+        "spya-q4502k"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 2,
+      "parent": "n0007",
+      "children": [
+        "n0013",
+        "n0014"
+      ],
+      "range": [
+        "spya-xm9a87",
+        "spya-mmhbvn"
+      ],
+      "title": "Reflexology and Key-Bending",
+      "gist": "Two personal anecdotes, a reflexology massage session and a failed demonstration by Uri Geller, illustrate how confidently people perform rituals that produce no verifiable result."
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-xm9a87",
+        "spya-xm9a87"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0012",
+      "children": [],
+      "range": [
+        "spya-mmhbvn",
+        "spya-mmhbvn"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 2,
+      "parent": "n0007",
+      "children": [
+        "n0016",
+        "n0017"
+      ],
+      "range": [
+        "spya-aww976",
+        "spya-re4634"
+      ],
+      "title": "Witch Doctor Remedies in Education and Crime",
+      "gist": "Reading instruction and criminal rehabilitation are treated as scientific fields, yet their measured outcomes never improve, showing they function like witch-doctor remedies nobody checks against results."
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-aww976",
+        "spya-aww976"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-re4634",
+        "spya-re4634"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 2,
+      "parent": "n0007",
+      "children": [
+        "n0019",
+        "n0020",
+        "n0021"
+      ],
+      "range": [
+        "spya-g2cwvy",
+        "spya-ankp3d"
+      ],
+      "title": "A Test for Pseudoscience",
+      "gist": "Feynman proposes a cocktail-party rule for spotting untested fields, then applies it to add psychotherapy to his list of subjects claiming scientific status without real verification."
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0018",
+      "children": [],
+      "range": [
+        "spya-g2cwvy",
+        "spya-g2cwvy"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0018",
+      "children": [],
+      "range": [
+        "spya-wc4h5s",
+        "spya-wc4h5s"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0018",
+      "children": [],
+      "range": [
+        "spya-ankp3d",
+        "spya-ankp3d"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0023",
+        "n0025",
+        "n0029"
+      ],
+      "range": [
+        "spya-fd2muf",
+        "spya-rub3a2"
+      ],
+      "title": "Cargo Cult Science",
+      "gist": "Cargo Cult Science follows the outward forms of research without the key ingredient of genuine honesty, the integrity to report evidence against one's own theory.",
+      "question": "Cargo Cult Science — what essential ingredient does it lack despite following scientific form? (one trait named)"
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0024"
+      ],
+      "range": [
+        "spya-fd2muf",
+        "spya-fd2muf"
+      ],
+      "title": "Cargo Cult Science",
+      "gist": "Feynman names \"Cargo Cult Science\" after islanders who built fake runways and control towers, following the military's outward form perfectly, yet no planes land."
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0023",
+      "children": [],
+      "range": [
+        "spya-fd2muf",
+        "spya-fd2muf"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0026",
+        "n0027",
+        "n0028"
+      ],
+      "range": [
+        "spya-afgs74",
+        "spya-qpwryx"
+      ],
+      "title": "Leaning Over Backwards",
+      "gist": "Real scientific integrity means actively reporting every fact that might undermine your own result, not only the evidence supporting it, so others can judge your work fairly."
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-afgs74",
+        "spya-afgs74"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-rxj5wa",
+        "spya-rxj5wa"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-qpwryx",
+        "spya-qpwryx"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0030",
+        "n0031",
+        "n0032"
+      ],
+      "range": [
+        "spya-bpyx8n",
+        "spya-rub3a2"
+      ],
+      "title": "The Wesson Oil Example",
+      "gist": "An advertisement's claim about Wesson Oil is literally true yet misleading by implication, showing that honesty alone is not enough; only sustained integrity under repeated testing reveals the truth."
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0029",
+      "children": [],
+      "range": [
+        "spya-bpyx8n",
+        "spya-bpyx8n"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0029",
+      "children": [],
+      "range": [
+        "spya-az6z7k",
+        "spya-az6z7k"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0029",
+      "children": [],
+      "range": [
+        "spya-rub3a2",
+        "spya-rub3a2"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0034",
+        "n0038",
+        "n0042"
+      ],
+      "range": [
+        "spya-s9msxy",
+        "spya-s05sub"
+      ],
+      "title": "Learning Not to Fool Yourself",
+      "gist": "Scientists repeatedly bias their own measurements, as with Millikan's electron charge, so integrity means actively hunting for your own errors and publishing inconvenient results, even to laymen and politicians.",
+      "question": "self-deception — how can scientists guard against unconsciously skewing their own results? (a historical case, three extensions)"
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 2,
+      "parent": "n0033",
+      "children": [
+        "n0035",
+        "n0036",
+        "n0037"
+      ],
+      "range": [
+        "spya-s9msxy",
+        "spya-bvx2u8"
+      ],
+      "title": "Millikan's Electron Charge",
+      "gist": "Successive measurements of the electron's charge crept slowly upward from Millikan's flawed original value because researchers unconsciously distrusted results that strayed too far from his number, a documented bias scientists now guard against."
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-s9msxy",
+        "spya-s9msxy"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-uj9v2h",
+        "spya-uj9v2h"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-bvx2u8",
+        "spya-bvx2u8"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 2,
+      "parent": "n0033",
+      "children": [
+        "n0039",
+        "n0040",
+        "n0041"
+      ],
+      "range": [
+        "spya-ed9mzv",
+        "spya-mjty2q"
+      ],
+      "title": "Not Fooling Yourself or the Public",
+      "gist": "Because you are the easiest person to deceive, honesty toward yourself must come first, and that same integrity extends to telling laypeople the truth even when it risks losing funding."
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-ed9mzv",
+        "spya-ed9mzv"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-c46yyu",
+        "spya-c46yyu"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-mjty2q",
+        "spya-mjty2q"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 2,
+      "parent": "n0033",
+      "children": [
+        "n0043",
+        "n0044"
+      ],
+      "range": [
+        "spya-jk7mj4",
+        "spya-s05sub"
+      ],
+      "title": "Publishing Inconvenient Results",
+      "gist": "Scientific advice is only genuine if findings are published regardless of outcome, since selectively hiding unwelcome results, whether in advertising or government policy, turns science into a tool for whoever likes the answer."
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-jk7mj4",
+        "spya-jk7mj4"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0042",
+      "children": [],
+      "range": [
+        "spya-s05sub",
+        "spya-s05sub"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0046",
+        "n0051",
+        "n0057"
+      ],
+      "range": [
+        "spya-w9nnq6",
+        "spya-ndyj3t"
+      ],
+      "title": "Case Studies in Scientific Rigor",
+      "gist": "Comparing careless rat and particle-physics experiments against Young's meticulous rat-corridor study shows true rigor means ruling out every possible cue, not merely getting the expected result.",
+      "question": "rigor — what distinguishes sloppy experiments from one that truly controls for every variable? (contrasting case studies)"
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 2,
+      "parent": "n0045",
+      "children": [
+        "n0047",
+        "n0048",
+        "n0049",
+        "n0050"
+      ],
+      "range": [
+        "spya-w9nnq6",
+        "spya-m95kqm"
+      ],
+      "title": "The Danger of Not Repeating Experiments",
+      "gist": "A Cornell student was discouraged from first replicating a prior rat experiment before changing conditions, and a similar shortcut at a modern particle accelerator shows institutional pressure for new results can undermine comparisons."
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-w9nnq6",
+        "spya-w9nnq6"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-tf8rj2",
+        "spya-tf8rj2"
+      ],
+      "title": ""
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-v0xcd7",
+        "spya-v0xcd7"
+      ],
+      "title": ""
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-m95kqm",
+        "spya-m95kqm"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 2,
+      "parent": "n0045",
+      "children": [
+        "n0052",
+        "n0053",
+        "n0054",
+        "n0055",
+        "n0056"
+      ],
+      "range": [
+        "spya-fvenms",
+        "spya-wye8g6"
+      ],
+      "title": "Young's Rat-Corridor Experiment",
+      "gist": "By systematically eliminating every possible cue, texture, smell, light, and sound, Young discovered rats were sensing floor vibrations, yet later researchers ignored his rigorous method and kept running flawed experiments."
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-fvenms",
+        "spya-fvenms"
+      ],
+      "title": ""
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-rndcqw",
+        "spya-rndcqw"
+      ],
+      "title": ""
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-npdc6n",
+        "spya-npdc6n"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-yzzxkw",
+        "spya-yzzxkw"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-wye8g6",
+        "spya-wye8g6"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 2,
+      "parent": "n0045",
+      "children": [
+        "n0058",
+        "n0059",
+        "n0060"
+      ],
+      "range": [
+        "spya-rbpppq",
+        "spya-ndyj3t"
+      ],
+      "title": "ESP and a Final Wish",
+      "gist": "Parapsychology's shrinking, unrepeatable effects and its policy of training only students who get favorable results typify Cargo Cult Science, prompting Feynman's closing wish that scientists keep their integrity free from institutional pressure."
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 3,
+      "parent": "n0057",
+      "children": [],
+      "range": [
+        "spya-rbpppq",
+        "spya-rbpppq"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0057",
+      "children": [],
+      "range": [
+        "spya-g203mu",
+        "spya-g203mu"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0057",
+      "children": [],
+      "range": [
+        "spya-ndyj3t",
+        "spya-ndyj3t"
+      ],
+      "title": ""
+    }
+  }
+}

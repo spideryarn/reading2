@@ -54,9 +54,9 @@
  * `locate` below finds the block. Three things fall out and all three are worth
  * having: the model cannot invent a location; a quote the model would have
  * misattributed is repaired rather than dropped; and the prompt can send
- * `articleText` rather than `articleWithIds`, which is what makes this stage
- * cache-compatible with the glossary (src/models.ts § ARTICLE_RENDERER —
- * compatible, and only a saving inside one job; see `cacheArticle` below).
+ * `articleText` rather than `articleWithIds`. Those bytes still match the
+ * glossary's, but Quotes now sends an output schema and Glossary does not, so
+ * they are no longer cache-compatible (`ARTICLE_OUTPUT_FORMAT` in pipeline.ts).
  *
  * ## It appends, since 2026-09-11 — and replaces a stale or an outdated list
  *
@@ -93,6 +93,11 @@ import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from 
 import { findQuote, type Span } from "./quote-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -154,8 +159,11 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * were longer than 400. docs/plans/260912e-quotes-long-enough-to-stand-on-their-own.md.
  *
  * `quotes/7`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3). Only `reason` is written; `text` is copied, and the core leaves copies alone.
+ *
+ * `quotes/8`, 2026-10-02: the answer is constrained by `QUOTES_OUTPUT_SCHEMA`;
+ * the prompt text and the post-parse quote and score checks are unchanged.
  */
-export const PROMPT_VERSION = "quotes/7";
+export const PROMPT_VERSION = "quotes/8";
 
 /**
  * The most quotes one call may return — **one pass**, not the whole list.
@@ -1530,6 +1538,35 @@ function parseJson(raw: string): { quotes?: unknown } {
   return parseJsonAnswer(raw, "the quotes response");
 }
 
+const stringSchema = { type: "string" } as const;
+const numberSchema = { type: "number" } as const;
+const objectSchema = (
+  properties: Readonly<Record<string, unknown>>,
+  required: readonly string[],
+) => ({ type: "object", properties, required, additionalProperties: false }) as const;
+
+/** The raw rows `parseJson` and `place` consume; 0–1 remains a code check. */
+export const QUOTES_OUTPUT_SCHEMA = objectSchema(
+  {
+    quotes: {
+      type: "array",
+      items: objectSchema(
+        {
+          text: stringSchema,
+          reason: stringSchema,
+          importance: numberSchema,
+          striking: numberSchema,
+        },
+        ["text"],
+      ),
+    },
+  },
+  ["quotes"],
+);
+
+validateAnthropicJsonSchema(QUOTES_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(QUOTES_OUTPUT_SCHEMA, []);
+
 /**
  * Stage 5h over a data directory: one model call, and the artefact handed back.
  *
@@ -1558,15 +1595,11 @@ export async function generateQuotes(opts: {
    *
    * Off by default, because a cache write costs 1.25x and a prefix nobody reads
    * never earns it back. This stage makes one call per run, so it caches
-   * nothing for itself; the entry pays off only if a stage in the same group
-   * runs **later in the same job** inside the TTL. **Its group is `glossary`** —
-   * same effort, same renderer (src/models.ts § ARTICLE_RENDERER).
-   *
-   * That is narrower than it sounds and the plan first overstated it: a reader
-   * who opens the glossary and then the quotes has made two jobs, so neither
-   * marks anything and neither reads anything. The saving is real for
-   * `steps: ["glossary","quotes"]` and for nothing else. src/jobs.ts sets this
-   * from the steps the job actually has left. GPT Sol, 2026-08-31.
+   * nothing for itself; the entry pays off only if a compatible stage runs
+   * later in the same job inside the TTL. The schema is part of cache identity,
+   * so this stage currently has no compatible peer: Glossary shares its effort
+   * and article bytes but sends no schema. src/pipeline.ts §
+   * `ARTICLE_OUTPUT_FORMAT`.
    */
   cacheArticle?: boolean;
   /**
@@ -1686,7 +1719,7 @@ export async function generateQuotes(opts: {
   try {
     const call = streamMessage(
       "quotes",
-      {
+      withMessagesJsonSchema({
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: effortFor("quotes") },
@@ -1714,7 +1747,7 @@ export async function generateQuotes(opts: {
             }),
           },
         ],
-      },
+      }, QUOTES_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 

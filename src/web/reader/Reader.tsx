@@ -25,12 +25,14 @@ import {
   useState,
 } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
-import type { Article, BlockId, CitedWork, GlossaryEntry, Ideas } from "../../types.js";
+import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
 import { marginaliaNotes, arcAt, headPath } from "../marginalia/notes.js";
 import {
   MarginaliaHead,
   MarginNotesSlot,
-  OwnerIdeasFeed,
+  type MarginFeed,
+  NO_OWNER_FEED,
+  OwnerMarginFeed,
   useMarginLayout,
 } from "../marginalia/MarginaliaColumn.js";
 import { MODE_CATALOG } from "../../mode-catalog.js";
@@ -1371,22 +1373,48 @@ export function Reader({
   /**
    * **Marginalia: the notes beside each block** — MarginaliaColumn.tsx.
    *
-   * The ideas are the owner's stored list (read by `OwnerIdeasFeed` beside
+   * The ideas are the owner's stored list (read by `OwnerMarginFeed` beside
    * the column's head, never made) or the visitor's payload. Drawn only while the
    * window has room for the column (`fit.margW`); on a narrow one the head
    * says why there is nothing. Memoised on the notes alone, so scrolling does
    * not re-render `TableView`.
    */
-  const [ownerIdeas, setOwnerIdeas] = useState<Ideas["ideas"] | null>(null);
-  const marginaliaIdeas = owner ? ownerIdeas : (artefacts?.ideas?.ideas ?? null);
+  const [ownerFeed, setOwnerFeed] = useState<MarginFeed>(NO_OWNER_FEED);
+  const marginaliaIdeas = owner ? ownerFeed.ideas : (artefacts?.ideas?.ideas ?? null);
+  /* **Other modes' items, already stored** (report 82, plan 261002b): the
+     owner's FAQ and Debate from the feed's read-only reads, a visitor's from
+     their payload. **Citations are the owner's, and only a fresh list** —
+     never `artefacts.citations`, because the prose's citation marks are
+     owner-only (citations.md § Who sees it) and the margin is not the place to
+     reverse that quietly. Comments are the one list both arms already share. */
+  const marginaliaFaq = owner ? ownerFeed.faq : (artefacts?.faq?.questions ?? null);
+  const marginaliaClaims = owner ? ownerFeed.claims : (artefacts?.debate?.claims.rows ?? null);
+  const marginaliaCitations =
+    owner && owner.citations.status === "ready" && !owner.citations.stale
+      ? (owner.citations.citations?.citations ?? null)
+      : null;
   const marginRoom = marginOpen && fit.margW > 0;
   const marginNotes = useMemo(() => {
     if (!marginRoom) return null;
-    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas);
+    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
+      faq: marginaliaFaq,
+      claims: marginaliaClaims,
+      citations: marginaliaCitations,
+      comments,
+    });
     const out = new Map<BlockId, ReactElement>();
     for (const [blockId, notes] of byBlock) out.set(blockId, <MarginNotesSlot notes={notes} />);
     return out;
-  }, [marginRoom, article.tree, article.blocks, marginaliaIdeas]);
+  }, [
+    marginRoom,
+    article.tree,
+    article.blocks,
+    marginaliaIdeas,
+    marginaliaFaq,
+    marginaliaClaims,
+    marginaliaCitations,
+    comments,
+  ]);
   useMarginLayout(marginRoom, marginNotes);
 
   /**
@@ -2421,7 +2449,7 @@ export function Reader({
         owner={owner !== null}
         onPlain={() => void setMargin(null)}
       >
-        {owner && <OwnerIdeasFeed slug={slug} onIdeas={setOwnerIdeas} />}
+        {owner && <OwnerMarginFeed slug={slug} onFeed={setOwnerFeed} />}
         {!covered && (
           <MarginaliaHead
             room={fit.margW > 0}

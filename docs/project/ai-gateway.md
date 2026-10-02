@@ -1044,6 +1044,10 @@ clause.
 - [`src/messages-stream.ts`](../../src/messages-stream.ts) — the Messages gateway, and the longest
   version of the reasoning above
 - [`src/ai-call.ts`](../../src/ai-call.ts) — the chat gateway, and `AI_JOB_ROUTE`
+- [prompting-guide.md § What the model writes back](prompting-guide.md#what-the-model-writes-back)
+  — compatible calls that expect response JSON send a strict schema through
+  [`src/messages-structured-output.ts`](../../src/messages-structured-output.ts), on either wire;
+  the same rule names the calls that cannot yet do so
 - [`src/ai-spend.ts`](../../src/ai-spend.ts) — the ambient spend collector, the row it builds, and
   `withSpendAttribution`
 - [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) — which ledger is live, and the one place

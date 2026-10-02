@@ -236,6 +236,8 @@ describe("the other plan states", () => {
       atLimit: false,
       periodEnd: "2026-10-03T11:37:00Z",
       endsAt: null,
+      periodAllowance: null,
+      trial: false,
     });
     expect(paid).toContain("2 articles this month, on an allowance of 20");
     expect(paid).toContain("High-powered AI is counted for 2 articles, each of which counts as one more article");
@@ -255,6 +257,8 @@ describe("the other plan states", () => {
       atLimit: false,
       periodEnd: "2026-10-03T11:37:00Z",
       endsAt: null,
+      periodAllowance: null,
+      trial: false,
     });
     expect(singularPaid).toContain("1 article this month");
     expect(singularPaid).not.toContain("1 articles");
@@ -272,6 +276,8 @@ describe("the other plan states", () => {
       atLimit: false,
       periodEnd: "2026-10-03T11:37:00Z",
       endsAt: null,
+      periodAllowance: null,
+      trial: false,
     });
     expect(paid).toContain("0 articles this month");
     expect(paid).toContain("High-powered AI is counted for one article");
@@ -294,6 +300,8 @@ describe("the other plan states", () => {
       atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: null,
+      periodAllowance: null,
+      trial: false,
     });
     expect(words).toContain("Spideryarn Reader");
     expect(words).toContain("3 of 20");
@@ -313,6 +321,8 @@ describe("the other plan states", () => {
       atLimit: true,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: null,
+      periodAllowance: null,
+      trial: false,
     });
     expect(words).not.toContain("40 of 20");
     expect(words).toContain("40 articles this month, on an allowance of 20");
@@ -334,6 +344,8 @@ describe("the other plan states", () => {
       atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: "2026-10-03T11:22:33.000Z",
+      periodAllowance: null,
+      trial: false,
     });
     expect(words).not.toMatch(/starts again/i);
     expect(words).toMatch(/ends on 3 October 2026/);
@@ -362,6 +374,8 @@ describe("the other plan states", () => {
       atLimit: false,
       periodEnd: "2026-10-03T11:22:33.000Z",
       endsAt: "2026-11-17T09:00:00.000Z",
+      periodAllowance: null,
+      trial: false,
     });
     expect(words).toContain("17 November 2026");
     expect(words).not.toContain("3 October 2026");
@@ -684,6 +698,8 @@ describe("papers not yet AI-processed are their own fact (261001m)", () => {
       atLimit: false,
       periodEnd: "2026-11-01T00:00:00Z",
       endsAt: null,
+      periodAllowance: null,
+      trial: false,
     });
     expect(paid).not.toContain("4 of 20");
     expect(paid).toContain("One of them is public, which counts as half an article each.");

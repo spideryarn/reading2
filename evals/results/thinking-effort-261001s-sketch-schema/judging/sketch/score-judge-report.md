@@ -1,0 +1,1 @@
+/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/evals/results/thinking-effort-261001s-sketch-schema/judging/sketch/verdict-score.json done

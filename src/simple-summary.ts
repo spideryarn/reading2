@@ -88,6 +88,11 @@ import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower, modelFor } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withMessagesJsonSchema,
+} from "./messages-structured-output.js";
 import { plainWords } from "./plain-words.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import { paperwork } from "./paperwork.js";
@@ -138,8 +143,11 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  *
  * `simple-prompt/2` (2026-10-01): the paperwork rule (src/paperwork.ts), an
  * ending on the takeaway, a shorter Brief (Greg, SPIDERYARN-READING2-8M, -8F).
+ *
+ * `simple-prompt/3` (2026-10-02): the request gained
+ * `SIMPLE_SUMMARY_OUTPUT_SCHEMA`; the prompt text is unchanged.
  */
-export const SIMPLE_PROMPT_VERSION = "simple-prompt/2";
+export const SIMPLE_PROMPT_VERSION = "simple-prompt/3";
 
 /** The prompt a stored summary was written with; a row from before the field is the first. */
 export function simplePromptVersion(simple: SimpleSummary): string {
@@ -310,6 +318,30 @@ real line break inside a string, and escape any straight double quote as \\".`;
 export const SIMPLE_SYSTEMS = Object.fromEntries(
   SIMPLE_LEVELS.map((level) => [level, simpleSystem(level)]),
 ) as Record<SimpleLevel, string>;
+
+/** The same answer contract for every level and every retry. */
+export const SIMPLE_SUMMARY_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    paragraphs: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          ids: { type: "array", items: { type: "string" } },
+        },
+        required: ["text", "ids"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["paragraphs"],
+  additionalProperties: false,
+} as const;
+
+validateAnthropicJsonSchema(SIMPLE_SUMMARY_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(SIMPLE_SUMMARY_OUTPUT_SCHEMA, ["ids"]);
 
 /**
  * The user message's constant half — and all of what `inputFingerprint` hashes
@@ -719,7 +751,7 @@ export async function generateSimpleSummary(opts: {
     try {
       const call = streamMessage(
         "simple",
-        {
+        withMessagesJsonSchema({
           max_tokens: maxTokens,
           thinking: { type: "adaptive" },
           output_config: { effort: effortFor("simple") },
@@ -736,7 +768,7 @@ export async function generateSimpleSummary(opts: {
              a profile never splits the article's cache entry (src/profile.ts §
              `profileSection`). */
           messages: [{ role: "user", content: user }],
-        },
+        }, SIMPLE_SUMMARY_OUTPUT_SCHEMA),
         { power: opts.power, signal },
       );
       writerCalls += 1;

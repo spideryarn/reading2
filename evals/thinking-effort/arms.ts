@@ -15,14 +15,23 @@ import { mulberry32 } from "../debate/label-sheet.js";
 export const MODES = ["sketch", "ideas", "illustrated"] as const;
 export type Mode = (typeof MODES)[number];
 
-export const ARM_NAMES = ["base-a", "base-b", "low-a", "low-b", "medium-a", "medium-b"] as const;
+export const ARM_NAMES = [
+  "base-a",
+  "base-b",
+  "low-a",
+  "low-b",
+  "medium-a",
+  "medium-b",
+  "no-schema-a",
+  "no-schema-b",
+] as const;
 export type ArmName = (typeof ARM_NAMES)[number];
 
 /** What a default run draws. */
 export const DEFAULT_ARMS: readonly ArmName[] = ["base-a", "base-b", "low-a", "low-b"];
 
 /** Which rung an arm is on. `base` is whatever production does today. */
-export type Level = "base" | "low" | "medium";
+export type Level = "base" | "low" | "medium" | "no-schema";
 
 export function levelOf(arm: ArmName): Level {
   switch (arm) {
@@ -35,6 +44,9 @@ export function levelOf(arm: ArmName): Level {
     case "medium-a":
     case "medium-b":
       return "medium";
+    case "no-schema-a":
+    case "no-schema-b":
+      return "no-schema";
     default: {
       const never: never = arm;
       throw new Error(`unknown arm ${String(never)}`);

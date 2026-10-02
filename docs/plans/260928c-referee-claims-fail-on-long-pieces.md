@@ -1,5 +1,7 @@
 # Referee claims fail on long pieces
 
+Research write-up: [docs/research/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md](../research/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md).
+
 **Status, 2026-09-28: done — three stages built, measured, reviewed twice by GPT Sol, and on `dev`.**
 
 Found by the plain-words session

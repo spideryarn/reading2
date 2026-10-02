@@ -21,6 +21,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { BuildReport, ModelNode } from "../../src/hierarchy.js";
+import { parseToc10StructureAnswer } from "../hierarchy-structure/toc10-frozen.js";
 import { buildTree } from "../../src/hierarchy.js";
 import {
   modelNodeFromStarts,
@@ -299,9 +300,8 @@ async function sourcesFromLocalDatabase(): Promise<{
 }
 
 async function run(): Promise<void> {
-  const [{ parseStructureAnswer }, { splitBlocks }, { loadArticle }, { runAsOwner }, { closeDb }] =
+  const [{ splitBlocks }, { loadArticle }, { runAsOwner }, { closeDb }] =
     await Promise.all([
-      import("../../src/hierarchy.js"),
       import("../../src/supplement.js"),
       import("../../src/store/index.js"),
       import("../../src/owner.js"),
@@ -344,7 +344,7 @@ async function run(): Promise<void> {
     }
     let answer: { root: ModelNode };
     try {
-      answer = parseStructureAnswer(source.raw);
+      answer = parseToc10StructureAnswer(source.raw);
     } catch {
       parseSkipped += 1;
       console.log(`SKIP ${source.label}: did not parse`);

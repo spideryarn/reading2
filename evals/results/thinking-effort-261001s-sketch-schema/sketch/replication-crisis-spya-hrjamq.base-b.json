@@ -1,0 +1,570 @@
+{
+  "version": "sketch/4",
+  "title": "Funnel, fork, loop",
+  "caption": "A funnel into definitions narrows to the named crisis, which chains into evidence, forks into two parallel columns of causes (publication system vs. research practices/statistics), then converges into responses and reforms, looping back at the end to the idea that replication should revise theory rather than just confirm it.",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "The replication crisis: shape of the argument",
+      "height": 1180,
+      "items": [
+        {
+          "kind": "node",
+          "id": "def",
+          "shape": "ellipse",
+          "x": 270,
+          "y": 30,
+          "w": 220,
+          "h": 80,
+          "text": "Published findings often fail to reproduce",
+          "size": "md",
+          "block": "spya-kv0w8d"
+        },
+        {
+          "kind": "node",
+          "id": "stats",
+          "shape": "box",
+          "x": 270,
+          "y": 150,
+          "w": 220,
+          "h": 70,
+          "text": "Vocabulary: power, effect size, p-value",
+          "size": "sm",
+          "block": "spya-cxcn8h"
+        },
+        {
+          "kind": "node",
+          "id": "origins",
+          "shape": "box",
+          "x": 270,
+          "y": 260,
+          "w": 220,
+          "h": 70,
+          "text": "Early-2010s failures name the 'crisis'",
+          "size": "sm",
+          "block": "spya-yru28f"
+        },
+        {
+          "kind": "node",
+          "id": "evidence",
+          "shape": "box",
+          "x": 270,
+          "y": 370,
+          "w": 220,
+          "h": 70,
+          "text": "~Half of findings fail across fields",
+          "size": "md",
+          "block": "spya-bha57y"
+        },
+        {
+          "kind": "region",
+          "x": 40,
+          "y": 480,
+          "w": 320,
+          "h": 260,
+          "style": "band",
+          "label": "CAUSES: PUBLISHING SYSTEM",
+          "tone": 1
+        },
+        {
+          "kind": "node",
+          "id": "pub",
+          "shape": "box",
+          "x": 70,
+          "y": 540,
+          "w": 260,
+          "h": 80,
+          "text": "Bias, sloppy errors, publish-or-perish",
+          "size": "sm",
+          "tone": 1,
+          "block": "spya-sy87zk"
+        },
+        {
+          "kind": "region",
+          "x": 400,
+          "y": 480,
+          "w": 320,
+          "h": 260,
+          "style": "band",
+          "label": "CAUSES: RESEARCH PRACTICE & STATS",
+          "tone": 2
+        },
+        {
+          "kind": "node",
+          "id": "rp",
+          "shape": "box",
+          "x": 430,
+          "y": 540,
+          "w": 260,
+          "h": 80,
+          "text": "Low power, p-hacking, bad null tests",
+          "size": "sm",
+          "tone": 2,
+          "block": "spya-bfx638"
+        },
+        {
+          "kind": "node",
+          "id": "public",
+          "shape": "box",
+          "x": 270,
+          "y": 780,
+          "w": 220,
+          "h": 70,
+          "text": "Public trust and academic backlash",
+          "size": "sm",
+          "block": "spya-qht6nk"
+        },
+        {
+          "kind": "node",
+          "id": "reform",
+          "shape": "box",
+          "x": 270,
+          "y": 890,
+          "w": 220,
+          "h": 70,
+          "text": "Reforms: preregistration, review, p<0.005",
+          "size": "sm",
+          "block": "spya-h32yv9"
+        },
+        {
+          "kind": "node",
+          "id": "efforts",
+          "shape": "box",
+          "x": 270,
+          "y": 1000,
+          "w": 220,
+          "h": 70,
+          "text": "Funding, education, databases, collaboration",
+          "size": "sm",
+          "block": "spya-hc3p7c"
+        },
+        {
+          "kind": "node",
+          "id": "theory",
+          "shape": "ellipse",
+          "x": 270,
+          "y": 1090,
+          "w": 220,
+          "h": 70,
+          "text": "Replication should revise theory, not just confirm",
+          "size": "md",
+          "block": "spya-d4kvnh"
+        },
+        {
+          "kind": "edge",
+          "from": "def",
+          "to": "stats",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "stats",
+          "to": "origins",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "origins",
+          "to": "evidence",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "evidence",
+          "to": "pub",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "evidence",
+          "to": "rp",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "pub",
+          "to": "public",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "rp",
+          "to": "public",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "public",
+          "to": "reform",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "reform",
+          "to": "efforts",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "efforts",
+          "to": "theory",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "theory:left",
+          "to": "def:left",
+          "via": "curve",
+          "line": "dashed",
+          "arrow": "end",
+          "label": "returns to the opening question, changed"
+        }
+      ],
+      "caption": "Definitions narrow into a named crisis; evidence of failure feeds two parallel streams of cause (publishing system, research practice/statistics); both converge on institutional response and reform, which loops back to a call for better theory."
+    },
+    {
+      "id": "inside-publishing",
+      "title": "Inside: causes in the publishing system",
+      "height": 760,
+      "items": [
+        {
+          "kind": "node",
+          "id": "hist",
+          "shape": "box",
+          "x": 270,
+          "y": 30,
+          "w": 260,
+          "h": 70,
+          "text": "Explosive growth, commodified science",
+          "size": "sm",
+          "block": "spya-sy87zk"
+        },
+        {
+          "kind": "node",
+          "id": "filedrawer",
+          "shape": "box",
+          "x": 270,
+          "y": 140,
+          "w": 260,
+          "h": 70,
+          "text": "Publication bias: null results go unpublished",
+          "size": "sm",
+          "block": "spya-d040tg"
+        },
+        {
+          "kind": "node",
+          "id": "matherr",
+          "shape": "box",
+          "x": 270,
+          "y": 250,
+          "w": 260,
+          "h": 70,
+          "text": "Even top journals contain math/stat errors",
+          "size": "sm",
+          "block": "spya-xxd5as"
+        },
+        {
+          "kind": "node",
+          "id": "ppp",
+          "shape": "box",
+          "x": 270,
+          "y": 360,
+          "w": 260,
+          "h": 70,
+          "text": "'Publish or perish' punishes replication work",
+          "size": "sm",
+          "block": "spya-h2nvfj"
+        },
+        {
+          "kind": "node",
+          "id": "reporting",
+          "shape": "box",
+          "x": 270,
+          "y": 470,
+          "w": 260,
+          "h": 70,
+          "text": "Missing methodological detail blocks redo",
+          "size": "sm",
+          "block": "spya-wjstmr"
+        },
+        {
+          "kind": "node",
+          "id": "result",
+          "shape": "box",
+          "x": 270,
+          "y": 580,
+          "w": 260,
+          "h": 70,
+          "text": "Result: flashy, unreplicable work gets published",
+          "size": "md",
+          "block": "spya-d040tg"
+        },
+        {
+          "kind": "edge",
+          "from": "hist",
+          "to": "filedrawer",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "filedrawer",
+          "to": "matherr",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "matherr",
+          "to": "ppp",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "ppp",
+          "to": "reporting",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "reporting",
+          "to": "result",
+          "via": "straight",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "A chain showing how the structure of publishing itself—incentives, bias, sloppiness—discourages reliable science, each problem feeding the next."
+    },
+    {
+      "id": "inside-research-practice",
+      "title": "Inside: causes in research practice and statistics",
+      "height": 760,
+      "items": [
+        {
+          "kind": "node",
+          "id": "qrp",
+          "shape": "box",
+          "x": 40,
+          "y": 40,
+          "w": 200,
+          "h": 80,
+          "text": "Questionable practices: HARKing, data dredging",
+          "size": "sm",
+          "block": "spya-bfx638"
+        },
+        {
+          "kind": "node",
+          "id": "power",
+          "shape": "box",
+          "x": 280,
+          "y": 40,
+          "w": 200,
+          "h": 80,
+          "text": "Chronic low power (~20-35%)",
+          "size": "sm",
+          "block": "spya-p7pun6"
+        },
+        {
+          "kind": "node",
+          "id": "bias",
+          "shape": "box",
+          "x": 520,
+          "y": 40,
+          "w": 200,
+          "h": 80,
+          "text": "Underpowered studies inflate effect sizes",
+          "size": "sm",
+          "block": "spya-nqwfh4"
+        },
+        {
+          "kind": "node",
+          "id": "meta",
+          "shape": "box",
+          "x": 40,
+          "y": 180,
+          "w": 200,
+          "h": 80,
+          "text": "Meta-analysis has its own flaws",
+          "size": "sm",
+          "block": "spya-z2xbqp"
+        },
+        {
+          "kind": "node",
+          "id": "forking",
+          "shape": "box",
+          "x": 280,
+          "y": 180,
+          "w": 200,
+          "h": 80,
+          "text": "Forking paths inflate false positives",
+          "size": "sm",
+          "block": "spya-qsad7n"
+        },
+        {
+          "kind": "node",
+          "id": "heterog",
+          "shape": "box",
+          "x": 520,
+          "y": 180,
+          "w": 200,
+          "h": 80,
+          "text": "High, unexplained heterogeneity",
+          "size": "sm",
+          "block": "spya-ngbkx2"
+        },
+        {
+          "kind": "node",
+          "id": "context",
+          "shape": "box",
+          "x": 40,
+          "y": 320,
+          "w": 200,
+          "h": 80,
+          "text": "Effects sensitive to hidden context",
+          "size": "sm",
+          "block": "spya-z4db8z"
+        },
+        {
+          "kind": "node",
+          "id": "bayes",
+          "shape": "box",
+          "x": 280,
+          "y": 320,
+          "w": 200,
+          "h": 80,
+          "text": "Bayes: p<0.05 implies less than assumed",
+          "size": "sm",
+          "block": "spya-pytr5c"
+        },
+        {
+          "kind": "node",
+          "id": "nhst",
+          "shape": "box",
+          "x": 520,
+          "y": 320,
+          "w": 200,
+          "h": 80,
+          "text": "Null hypothesis testing ill-suited to 'soft' science",
+          "size": "sm",
+          "block": "spya-h9wzrk"
+        },
+        {
+          "kind": "node",
+          "id": "conv",
+          "shape": "box",
+          "x": 270,
+          "y": 470,
+          "w": 240,
+          "h": 80,
+          "text": "Together: many published effects are genuinely unreplicable",
+          "size": "md",
+          "block": "spya-bfx638"
+        },
+        {
+          "kind": "edge",
+          "from": "qrp",
+          "to": "conv",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "power",
+          "to": "conv",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "bias",
+          "to": "conv",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "meta",
+          "to": "conv",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "forking",
+          "to": "conv",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "heterog",
+          "to": "conv",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "context",
+          "to": "conv",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "bayes",
+          "to": "conv",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        },
+        {
+          "kind": "edge",
+          "from": "nhst",
+          "to": "conv",
+          "via": "curve",
+          "line": "solid",
+          "arrow": "end"
+        }
+      ],
+      "caption": "Several independent statistical and practical problems converge on the same outcome: findings that cannot be reproduced."
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "slug": "replication-crisis-spya-hrjamq",
+  "sourceHash": "17b187c11da22548.677ec6955421d529.a8a587fa27f4a79f",
+  "profileHash": null
+}
