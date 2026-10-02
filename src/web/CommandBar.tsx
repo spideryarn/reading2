@@ -117,8 +117,11 @@ import {
   type ActionOutcome,
   type Command,
 } from "./command-match.js";
-import { type Mode, withSection } from "./params.js";
+import { type MetadataSection, type Mode, withSection } from "./params.js";
 import { METADATA_RERUN_STEPS, RERUN_LANDS_IN, rerunCommand } from "./rerun-commands.js";
+import { SECTION_ROWS, archiveCommand, exportCommand, sectionCommand } from "./article-commands.js";
+import { downloadExport } from "./export-download.js";
+import type { ArchiveControl } from "./useArchive.js";
 import {
   type ArticleView,
   CHANGELOG_HREF,
@@ -182,6 +185,43 @@ export interface CommandBarArticle {
    * caller that knows nothing about modes still gets a Help row that works.
    */
   readonly help?: string | undefined;
+  /**
+   * **What the bar may do to the reader's own shelf row** — Archive and Export,
+   * since 2026-10-02 (plan 261002c, stage B) — or `undefined` where there is no
+   * row to act on.
+   *
+   * Absent means no Archive row and no Export row, and that is a statement
+   * about the request rather than about the page: both are calls against the
+   * reader's shelf row (`PATCH /api/library/:slug`, `GET /api/export/:slug`),
+   * and with no row each could only 404 — *a control that can only fail is
+   * worse than no control, because pressing it is how you find out* (Metadata.tsx
+   * § `hasShelfRow`). So the pages that know there is one hand it in: the
+   * reading view for the owner (Reader.tsx, from `OwnedArticle`, which exists
+   * only because the server said the article is theirs), and the Metadata page
+   * unless it is showing the fixture.
+   *
+   * **The Metadata page does not wait for its provenance request first**, as
+   * its own Export section does (`hasShelfRow`). That gate is about the page
+   * drawing controls before it has heard anything; the bar is opened over an
+   * article the server has already answered as the reader's own, which is the
+   * fact the gate waits to learn.
+   *
+   * One object rather than the controller alone, so that what the bar may do
+   * here is one decision at the call site — and a third row of the same kind
+   * is a field, not another optional prop beside this one.
+   */
+  readonly shelfRow?: ShelfRow | undefined;
+}
+
+/**
+ * **The reader's own shelf row, as the bar may act on it** — the archive
+ * controller `OwnedArticle` keeps above both views (useArchive.ts), so a press
+ * in the bar and the buttons on the page are one state and cannot disagree.
+ * Export needs nothing but the slug the bar already has; its presence is
+ * this object's.
+ */
+export interface ShelfRow {
+  readonly archive: ArchiveControl;
 }
 
 /**
@@ -256,7 +296,10 @@ function besideTheModes({
     ...(article === undefined ? [] : articleRows(article)),
     /* After the article's own page and before everything else: these are about
        this article too. Typed-only, so the list the bar opens on is unchanged
-       (command-match.ts § `CommandWords.typedOnly`). */
+       (command-match.ts § `CommandWords.typedOnly`). The Metadata rows first —
+       a section, Archive, Export — then the fourteen *Run again*: on a tie the
+       one-of-a-kind row is the likelier meaning. */
+    ...(article === undefined ? [] : metadataRows(article)),
     ...(article === undefined ? [] : rerunRows(article, queue)),
     helpRow(article?.help),
     ...(openComments === undefined
@@ -326,11 +369,20 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
       description: "Where this came from, how long it is, and every step that built it.",
       /* The second line is what you go there to *do* — the page has the only
          controls for each. Greg, `spya-nkjpte`, 2026-10-02: *"I tried searching
-         for "regenerate" … and nothing matched"*. Plan 261002c. */
+         for "regenerate" … and nothing matched"*. Plan 261002c.
+
+         **`share` and `download` left on stage B of the same plan**, to the
+         rows that do those things (`metadataRows`). Each would tie with that
+         row's own alias, and this row, coming first, would win the tie — the
+         page above the act it was typed for. The words left here either lose
+         to a direct row's *label* (`export`, `archive`, `ai processing`,
+         `high-powered`, all a label prefix there) or have no direct row, and
+         `export` and `archive` still find the page where those rows are
+         withheld. */
       aliases: [
         "about", "details", "source", "reading time", "stats",
         "regenerate", "rerun", "re-run", "redo", "reprocess", "ai processing", "high-powered",
-        "cost", "price", "export", "download", "share", "archive", "delete",
+        "cost", "price", "export", "archive", "delete",
       ],
       /* The metadata page shows what the pipeline already wrote; opening it
          runs nothing. */
@@ -403,12 +455,125 @@ function rerunRows(article: CommandBarArticle, queue: RerunQueue): readonly Comm
     rerunCommand(step, async (): Promise<ActionOutcome> => {
       const job = await queue.run(stepRunRequest(article.slug, step, { force: true }));
       if (job === null) return { kind: "stay", message: queue.lastFailure() ?? RUN_NOT_STARTED };
-      const href = readHref(article.slug, withSection(article.search, RERUN_LANDS_IN), "metadata");
-      if (article.view === "metadata") navigate(href, { replace: true, scroll: false });
-      else navigate(href);
-      return { kind: "close" };
+      return goToSection(article, RERUN_LANDS_IN);
     }),
   );
+}
+
+/**
+ * **Open one of Metadata's sections, from wherever the bar is** — the landing
+ * the *Run again* rows were given first, and the whole of what a section row
+ * does.
+ *
+ * From the reading view it is a step to the Metadata page with `?section=`,
+ * pushed so Back returns to the paragraph (the carried `search` keeps `?at=`).
+ * On the Metadata page it is the same address with the section added,
+ * **replaced** and without the jump to the top: the page does not change, it
+ * opens the section and scrolls there itself, and takes the parameter off
+ * once it has (PageContents.tsx § `useRevealOnArrival`).
+ */
+function goToSection(article: CommandBarArticle, section: MetadataSection): ActionOutcome {
+  const href = readHref(article.slug, withSection(article.search, section), "metadata");
+  if (article.view === "metadata") navigate(href, { replace: true, scroll: false });
+  else navigate(href);
+  return CLOSE;
+}
+
+/**
+ * **What the Metadata page does, from the bar** — three of its sections,
+ * Archive and Export. Greg, 2026-10-01 (SPIDERYARN-READING2-8D): *"Add a lot
+ * more Metadata functionality to Commands"*. The words, and why each waits for
+ * a query and none spends, are article-commands.ts's; this is what Enter does.
+ *
+ * Archive and Export only with a shelf row to act on (`CommandBarArticle` §
+ * `shelfRow` says which pages hand one in), and Archive only while the
+ * controller knows which way round the article is.
+ */
+function metadataRows(article: CommandBarArticle): readonly Command[] {
+  const own = article.shelfRow;
+  return [
+    ...SECTION_ROWS.map((row) => sectionCommand(row, () => goToSection(article, row.section))),
+    ...(own === undefined ? [] : [...archiveRows(own.archive), exportRow(article.slug)]),
+  ];
+}
+
+/**
+ * **What the bar says when an archive press found another already out** — a
+ * press from the masthead or the page, sharing this controller. Nothing was
+ * sent; that one's answer is on its way, and the row's label will follow it.
+ */
+const ARCHIVE_BUSY = "Still saving the last change to this article — a moment.";
+
+/**
+ * **Archive, or Unarchive — never while nobody knows which** (GPT Sol's F6).
+ *
+ * `at === undefined` is useArchive.ts's *we do not know*: the request is out,
+ * or it failed, or a write failed and could not be re-read. Either label could
+ * be false then, and the press would do the opposite of what the row says, so
+ * there is no row — the rule the page's own buttons follow.
+ *
+ * **The press goes through the shared controller**, `set`, the same function
+ * the masthead's mark and the page's two buttons call; so its single-flight
+ * guard is theirs too, and the state it leaves is the one they all draw. Its
+ * answer decides the bar: shut on success — nothing navigates, an archived
+ * article stays readable where it is — and stay open with a sentence on a
+ * press refused for being second (`ARCHIVE_BUSY`) or a write that could not
+ * be confirmed. *Couldn't confirm* rather than *couldn't*, because a failed
+ * request is not proof nothing was written (useArchive.ts § the catch); the
+ * controller has re-read by the time this returns, so the row under the box
+ * already says which way round the article now is.
+ *
+ * A `busy` controller is turned away here as well as inside `set`: the state
+ * says so a render before the ref does, and a press that cannot go anywhere
+ * should not wait for one.
+ */
+function archiveRows(archive: ArchiveControl): readonly Command[] {
+  const { at } = archive;
+  if (at === undefined) return [];
+  const archived = at !== null;
+  return [
+    archiveCommand(archived, async (): Promise<ActionOutcome> => {
+      if (archive.busy) return { kind: "stay", message: ARCHIVE_BUSY };
+      const result = await archive.set(!archived);
+      switch (result.kind) {
+        case "done":
+          return CLOSE;
+        case "busy":
+          return { kind: "stay", message: ARCHIVE_BUSY };
+        case "failed":
+          return { kind: "stay", message: `Couldn't confirm that. ${result.message}` };
+        default: {
+          const never: never = result;
+          return never;
+        }
+      }
+    }),
+  ];
+}
+
+/**
+ * **Export this article** — the download Metadata's Export button starts, from
+ * the same function (export-download.ts), so the file, its name and the
+ * sentence on a refusal are one. A refusal keeps the bar open with that
+ * sentence; a second press for a zip already being built — from the page's
+ * button, under the bar — says so rather than starting another.
+ */
+function exportRow(slug: string): Command {
+  return exportCommand(async (): Promise<ActionOutcome> => {
+    const result = await downloadExport(slug);
+    switch (result.kind) {
+      case "downloaded":
+        return CLOSE;
+      case "busy":
+        return { kind: "stay", message: "This article's zip is already being built — it will download when it's ready." };
+      case "failed":
+        return { kind: "stay", message: result.message };
+      default: {
+        const never: never = result;
+        return never;
+      }
+    }
+  });
 }
 
 /**

@@ -110,6 +110,9 @@ const ARTICLE: Article = {
 };
 
 let posts: unknown[];
+/** Every archive PATCH body, and the answer the next one gets. */
+let patches: unknown[];
+let patchAnswer: () => Response;
 let host: HTMLDivElement;
 let root: Root;
 
@@ -145,6 +148,8 @@ beforeEach(() => {
     };
   }
   posts = [];
+  patches = [];
+  patchAnswer = () => json({ entry: { slug: SLUG, archivedAt: "2026-10-02T00:00:00.000Z" } });
   jobEngine.reset();
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -176,6 +181,10 @@ beforeEach(() => {
       return Promise.resolve(json(job));
     }
     if (url === "/api/jobs") return Promise.resolve(json({ jobs: [] }));
+    if (url === `/api/library/${SLUG}` && method === "PATCH") {
+      patches.push(JSON.parse(String(init?.body ?? "{}")));
+      return Promise.resolve(patchAnswer());
+    }
     return Promise.resolve(json({}));
   });
   host = document.createElement("div");
@@ -282,6 +291,59 @@ describe("arriving with ?section=", () => {
     expect(posts).toEqual([{ slug: SLUG, steps: ["quotes"], force: ["quotes"] }]);
     expect(expanded("AI processing")).toBe("true");
     expect(new URLSearchParams(location.search).getAll("section")).toEqual([]);
+  });
+});
+
+/**
+ * **The bar's other Metadata rows, on the page itself** — stage B of plan
+ * 261002c: a section row reveals its section in place, as *Run again* does,
+ * and Archive goes through the page's own controller, so the bar and the
+ * buttons on the page cannot disagree about which way round the article is.
+ */
+describe("the command bar's Metadata rows, on this page", () => {
+  function command(query: string): void {
+    act(() => host.querySelector<HTMLButtonElement>(".dock-commands")?.click());
+    const input = host.querySelector<HTMLInputElement>("dialog.cmdbar input.cmdbar-input");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter?.call(input, query);
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+  }
+  const status = () => host.querySelector("dialog.cmdbar [role='status']")?.textContent ?? "";
+
+  it("reveals Access & sharing in place for `publish`, and leaves the address clean", async () => {
+    await open("?at=spya-aaaaaa");
+    command("publish");
+    await settle();
+    /* By id: jsdom's selector engine misreads `&` inside an attribute value. */
+    const heading = host.querySelector("main #sec-access-sharing h2");
+    expect(heading).not.toBeNull();
+    expect(document.activeElement).toBe(heading);
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+    expect(location.search).toBe("?at=spya-aaaaaa");
+    expect(posts).toEqual([]);
+  });
+
+  it("archives through the page's controller, and the page's own button follows", async () => {
+    await open("");
+    command("archive");
+    await settle();
+    expect(patches).toEqual([{ archived: true }]);
+    expect(host.querySelector<HTMLDialogElement>("dialog.cmdbar")?.open).toBe(false);
+    expect(host.querySelector('[data-top-action="archive"]')?.textContent).toContain("Put back");
+  });
+
+  it("stays open with a sentence when the archive could not be confirmed", async () => {
+    patchAnswer = () => json({ error: "The shelf is busy." }, 500);
+    await open("");
+    command("archive");
+    await settle();
+    expect(patches).toHaveLength(1);
+    expect(status()).toContain("The shelf is busy.");
   });
 });
 

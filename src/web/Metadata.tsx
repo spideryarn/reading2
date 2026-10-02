@@ -279,7 +279,8 @@ import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { type ArchiveControl, useArchive } from "./useArchive.js";
-import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
+import { downloadExport } from "./export-download.js";
+import { apiFetch, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { isAdmin } from "../admin.js";
@@ -1259,7 +1260,18 @@ export function Metadata({
       {/* No `drawer` prop, and that is the whole reason the Questions button on
           this page is a link back to the article rather than a drawer trigger.
           See Dock.tsx. */}
-      <Dock slug={slug} view="metadata" experimental={experimental} />
+      <Dock
+        slug={slug}
+        view="metadata"
+        experimental={experimental}
+        /* The bar's Archive and Export act on this page's one controller, so
+           a press there and the buttons here are one state. Not on the
+           fixture, where there is no row and both requests would 404 — the
+           rule `ArchiveArticle` and `ExportSection` follow. Not gated on
+           `hasShelfRow`'s provenance wait: CommandBar.tsx §
+           `CommandBarArticle.shelfRow` says why the bar need not wait. */
+        shelfRow={showingFixture ? undefined : { archive }}
+      />
     </>
   );
 }
@@ -1906,52 +1918,20 @@ function ExportSection({
   /* The zip is assembled on the server before a byte is sent, so this is a real
      wait — a second or two on a long article — and the button is disabled for
      it. Not only to say so: a second press would start a second assembly and
-     hand the reader two copies of the same file. */
+     hand the reader two copies of the same file. The request itself, and the
+     guard that also covers the command bar's Export row, are
+     export-download.ts's since 2026-10-02 (plan 261002c). */
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function download(): Promise<void> {
     setBusy(true);
     setError(null);
-    try {
-      const res = await apiFetch(`/api/export/${encodeURIComponent(slug)}`);
-      /* `failure`, not `readJson`: the success body is a zip and reading it as
-         text to look for an `error` key would consume the bytes we came for.
-         On a refusal it hands back the server's own sentence. */
-      if (!res.ok) throw await failure(res);
-
-      const url = URL.createObjectURL(await res.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${slug}.zip`;
-      /* In the document, not detached: Firefox has never dispatched the default
-         action for a `click()` on an anchor that is not in a tree, and the
-         symptom is nothing happening at all. */
-      document.body.append(link);
-      link.click();
-      link.remove();
-      /* A macrotask later, not synchronously. Revoking inside the same task can
-         land before the browser has resolved the URL for the download, and the
-         download then fails silently. A tick is enough — unlike SourceLink's
-         minute-long timer, where a *new tab* has to fetch the URL itself; here
-         the fetch starts during the click above. */
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-    } catch (e) {
-      /* The 413's prose is the server's and it is already written for the
-         reader (src/routes.ts § `sendExport`): it says what happened and that
-         trying again will not help, which is what docs/project/copy.md asks
-         for. Putting "Couldn't build the download" in front of it would add a
-         lead that sentence does not need. Everything else gets the lead,
-         because a bare "No such article." beside a button says nothing about
-         which button. */
-      setError(
-        statusOf(e) === 413
-          ? `${(e as Error).message} [export-too-big]`
-          : `Couldn't build the download. ${(e as Error).message} [export-failed]`,
-      );
-    } finally {
-      setBusy(false);
-    }
+    const result = await downloadExport(slug);
+    /* `busy` is a bar press already building this zip: that one will arrive,
+       so this press has nothing to say. */
+    if (result.kind === "failed") setError(result.message);
+    setBusy(false);
   }
 
   if (!offer) return null;

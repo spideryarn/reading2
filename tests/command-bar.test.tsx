@@ -1080,19 +1080,18 @@ describe("the rows that are not modes", () => {
   it("answers the words for re-running and the page's other controls with Metadata", () => {
     readingSignedIn();
     openBar();
-    for (const query of [
-      "regenerate",
-      "rerun",
-      "reprocess",
-      "ai processing",
-      "cost",
-      "export",
-      "archive",
-      "delete",
-    ]) {
+    /* `export` and `archive` here because this Dock is handed no shelf row, so
+       the bar's own Export and Archive rows are withheld (stage B of plan
+       261002c) and the page is the way there. */
+    for (const query of ["regenerate", "rerun", "reprocess", "cost", "export", "archive", "delete"]) {
       type(query);
       expect(listed()[0], `typing ${JSON.stringify(query)} did not rank Metadata first`).toBe("Metadata");
     }
+    /* Since stage B, the section has a row of its own, and its name is that
+       row's label; the page is still offered under it. */
+    type("ai processing");
+    expect(listed()[0]).toBe("AI processing");
+    expect(listed()).toContain("Metadata");
   });
 
   it("keeps the existing shared-articles destination first for `share` and `public`", () => {
@@ -1103,10 +1102,12 @@ describe("the rows that are not modes", () => {
       expect(listed()[0], query).toBe(PUBLIC_SHELF_LABEL);
     }
     /* `share` still offers the current article's controls underneath the
-       page whose own name starts with the query. `public` does not borrow that
+       page whose own name starts with the query — since stage B of plan
+       261002c, the *Access & sharing* row, which goes to the sharing card
+       itself rather than to the top of Metadata. `public` does not borrow that
        alias: it already names this app-wide destination. */
     type("share");
-    expect(listed()).toContain("Metadata");
+    expect(listed()).toContain("Access & sharing");
   });
 
   it("navigates to this article's metadata page, carrying the reader's place", () => {

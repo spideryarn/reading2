@@ -1691,8 +1691,14 @@ export const libraryTopicsViewParam = createParser<"detail">({
  * tests/metadata-section-param.test.tsx holds against the page itself, so a
  * renamed heading cannot leave a value here that opens nothing. Anything else
  * parses to `null` and does nothing, as a mangled `?at=` does.
+ *
+ * **`access-sharing` joined it later the same day**, for the bar's *Access &
+ * sharing* row (stage B of the same plan; command bar rows in
+ * src/web/article-commands.ts). That section mounts only once the page knows
+ * there is a shelf row, which is the late arrival `useRevealOnArrival` waits
+ * for rather than consuming the address before it can be carried out.
  */
-export const METADATA_SECTIONS = ["ai-processing"] as const;
+export const METADATA_SECTIONS = ["ai-processing", "access-sharing"] as const;
 export type MetadataSection = (typeof METADATA_SECTIONS)[number];
 
 /**

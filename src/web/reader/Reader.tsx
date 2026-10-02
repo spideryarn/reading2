@@ -3117,6 +3117,11 @@ export function Reader({
            added later is marked whether or not whoever adds it remembers.
            visitor.ts § markedModes. */
         marked={marked}
+        /* The command bar's Archive and Export (CommandBar.tsx §
+           `CommandBarArticle.shelfRow`). `archive` arrives only from
+           `OwnedArticle`, which exists only for the reader's own article —
+           so its presence is the shelf row's, and a visitor gets neither. */
+        shelfRow={archive === undefined ? undefined : { archive }}
         drawer={
           owner
             ? {

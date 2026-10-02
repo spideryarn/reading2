@@ -280,6 +280,22 @@ flashed, [url-state.md](url-state.md)), where that step's row shows it — **nev
 whose generate-on-open would start a second, unforced paid run beside it. The words and labels live
 once, in [`src/web/rerun-commands.ts`](../../src/web/rerun-commands.ts), which Metadata reads too.
 
+**Five more of Metadata's controls have rows, typed-only like *Run again*** (the empty list keeps
+the Metadata row as their stand-in), and none of them spends. Three go to a section —
+*High-powered AI* (`opus`, `stronger model`; to *AI processing*, where its switch is first, never
+throwing the switch, whose own copy states its price), *AI processing*, and *Access & sharing*
+(`share`, `publish`, `private`; to the card, which asks before anything goes public) — the way an
+accepted run lands there: a step to Metadata from the reading view, the section added in place on
+Metadata. Not *Export*, which the action below owns, and not *What it cost*, which is an
+administrator's. *Archive this article* — *Unarchive this article* over an archived one, the label
+following the state, and **no row at all while the state is unknown** — presses through the same
+controller as the masthead mark and the page's buttons, so the four cannot disagree and a press while
+another is out sends nothing. *Export this article* downloads the ZIP through the function the
+Export button uses ([`src/web/export-download.ts`](../../src/web/export-download.ts)). Either one
+that fails keeps the bar open with the sentence, and both are offered only where there is a shelf
+row to act on — not on the fixture. Words in
+[`src/web/article-commands.ts`](../../src/web/article-commands.ts).
+
 **`find <words>` searches the article** — also `search`, `search for`, `does it mention` and Greg's
 own *"do they talk about X?"*. It offers one row, *Find “X” in this article*, which opens Search in
 words mode with the words lit up: free, instant, and only when the query starts with one of those

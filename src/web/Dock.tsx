@@ -218,7 +218,7 @@ import { withSubMode, type SubMode } from "./sub-modes.js";
    file — the visible list and the one activation callback go down as props —
    because an import back the other way would close a cycle. GPT Sol, F3 on
    docs/plans/260906h-mode-catalog-and-a-command-bar.md. */
-import { CommandBar, type CommandBarArticle } from "./CommandBar.js";
+import { CommandBar, type CommandBarArticle, type ShelfRow } from "./CommandBar.js";
 import { useDockFit } from "./dock-fit.js";
 /* Plain data and no React (help-anchors.ts says so on purpose), so the bar
    links into Help without pulling the page's words into its own chunk. */
@@ -446,6 +446,14 @@ interface Props {
    * what left two of the three visitor pages saying "Your comments".
    */
   visitor?: boolean | undefined;
+  /**
+   * **The reader's own shelf row, for the command bar's Archive and Export
+   * rows** — since 2026-10-02 (plan 261002c, stage B). Straight through to
+   * the bar; the Dock draws nothing from it. Absent means neither row, and
+   * CommandBar.tsx § `CommandBarArticle.shelfRow` says which pages hand one in
+   * and why its absence is a statement about the request.
+   */
+  shelfRow?: ShelfRow | undefined;
   drawer?: {
     /** Comments in reading order — App already sorts them, see comment-nav.ts. */
     comments: Comment[];
@@ -1593,6 +1601,7 @@ export function Dock({
   margin: marginProp,
   marked,
   visitor,
+  shelfRow,
   drawer,
   experimental,
 }: Props) {
@@ -1989,8 +1998,9 @@ export function Dock({
         /* The same two values the Metadata link below is built
            from, so the bar's rows and the buttons cannot go to different
            places. `search` is already through `carriedSearch`. `help` is the
-           Help link's href, for the same reason. */
-        article={{ slug, search, view, help: helpLink }}
+           Help link's href, for the same reason. `shelfRow` is the page's,
+           handed straight on (Archive and Export in the bar). */
+        article={{ slug, search, view, help: helpLink, shelfRow }}
         /* **The drawer's own callback, bound to its panel**, and `undefined`
            where there is no drawer. `Comments` is the one row in the bar that
            is neither a mode nor a page — it opens the thing that is already
