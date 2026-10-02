@@ -115,7 +115,7 @@ export interface UseIllustrated {
    * de-duplicated, and buys a second four-to-seven-minute, $0.40–$0.65 job.
    * useSketch.ts § `ensure` has the longer version.
    */
-  ensure(): Promise<void>;
+  ensure(note?: string): Promise<void>;
   /**
    * **Paint it again** — forced, offered beside a picture that is already
    * there, where an unforced run would skip while the reader watched a job
@@ -123,7 +123,7 @@ export interface UseIllustrated {
    * `FORCE_ONLY_WHEN_NAMED` and is last in `STEP_ORDER`, so nothing else is
    * swept in with it.
    */
-  regenerate(): Promise<void>;
+  regenerate(note?: string): Promise<void>;
   /**
    * **Draw the Sketch, then paint it** — one job holding both steps, for the
    * three states in which painting alone would be refused.
@@ -169,7 +169,7 @@ export interface UseIllustrated {
    * state, where there is no painting for the step to skip. Narrower than the
    * sentence it replaces, and true.
    */
-  drawThenPaint(): Promise<void>;
+  drawThenPaint(note?: string): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -184,6 +184,15 @@ export interface UseIllustrated {
  * effect on the picture — and would imply the personalisation is this stage's
  * when it is the Sketch's. The panel states the inherited fact instead.
  */
+/**
+ * The reader's steering note as a `StepRun` field, or nothing — each verb
+ * below takes one from the box under the picture (plan 261002j). It rides on
+ * the job; nothing here stores it.
+ */
+function withNote(note: string | undefined): { illustrationNote?: string } {
+  return note?.trim() ? { illustrationNote: note } : {};
+}
+
 export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllustrated {
   const [status, setStatus] = useState<IllustratedStatus>("loading");
   const [illustrated, setIllustrated] = useState<Illustrated | null>(null);
@@ -282,15 +291,24 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
 
   const queue = useStepJob(slug, "illustrated", refresh, "watches-queue");
 
-  const ensure = useCallback(async () => {
-    await queue.start();
-  }, [queue]);
-  const regenerate = useCallback(async () => {
-    await queue.start({ force: true });
-  }, [queue]);
-  const drawThenPaint = useCallback(async () => {
-    await queue.start({ precededBy: ["sketch"] });
-  }, [queue]);
+  const ensure = useCallback(
+    async (note?: string) => {
+      await queue.start(withNote(note));
+    },
+    [queue],
+  );
+  const regenerate = useCallback(
+    async (note?: string) => {
+      await queue.start({ force: true, ...withNote(note) });
+    },
+    [queue],
+  );
+  const drawThenPaint = useCallback(
+    async (note?: string) => {
+      await queue.start({ precededBy: ["sketch"], ...withNote(note) });
+    },
+    [queue],
+  );
 
   /* Asked only when there is nothing to show — see the header. Re-asked when an
      Illustrated job ends, because a refusal is itself evidence the Sketch is

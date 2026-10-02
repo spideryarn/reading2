@@ -125,6 +125,48 @@ what makes the plate answerable at all. The row now shows the caption above what
 it depicts, so a reader who has just read a title off a vignette can find the row
 it belongs to.
 
+## The reader can say how it should come out
+
+<a id="steering"></a>
+
+> There should be a text input box with a microphone next to it for me to add something to the
+> prompt for how I want the image to come out.
+>
+> — a reader, 2026-09-04 (report spya-wxd4nq)
+
+Under the picture, and in the empty state, is one box — *How should it come out?* — with the shared
+microphone ([dictation.md](dictation.md)). Whatever is in it goes with the next paint: *Paint the
+argument*, *Draw the Sketch, then paint*, or *Paint again*, which sits beside a picture that is
+already there and is forced. The design and its review are
+[261002j](../plans/261002j-illustrated-steering-note.md).
+
+Four things to know before touching it:
+
+- **The note is the job's, not the article's.** It is a field of `POST /api/jobs`
+  (`illustrationNote`), frozen onto the job (`jobs.illustration_note`), and recorded on the picture
+  it produced as `Illustrated.note`. Nothing stores it anywhere else — the box is filled from the
+  picture's own note, so *Paint again* untouched keeps the steer and clearing the box paints plain.
+  A Retry carries it; a command-line run (`npx tsx scripts/stage.ts illustrated <slug>`) and a
+  reset's regeneration do not, and repaint plainly. The article-scoped alternative, which would have
+  kept those two, is in the plan with why it was passed over.
+- **It is in the fingerprint as a request, never as a drifting input.** The step stamps with the
+  job's note and the two read sites with the picture's own, so a press with a different note is not
+  skipped as done, and no picture ever goes stale because of one. A line enters `inputFingerprint`
+  and the work key only when there is a note, so nothing painted before it moved.
+- **It reaches the brief, not the illustrator.** A fenced, quoted section of the brief's user
+  message, present only when there is a note — so a plate without one is asked exactly what it was
+  asked before and `ILLUSTRATED_VERSION` did not move. The section says what a note may change
+  (style, emphasis, how many vignettes, how crowded, how large the lettering) and that it adds
+  nothing the article does not say.
+- **That is a bar, not a boundary**, said plainly: the brief model can copy note text into its
+  composition or a title, and both reach the illustrator. It is the residual
+  [§ an article's author can influence](#it-is-an-interpretation-and-the-app-says-so) already
+  accepts, with the owner as the persuader on their own picture. What holds is structural and does
+  not read the note: block-local quotes, the title caps, *caption every drawn vignette or none*.
+  The note itself is capped at 400 characters and refused — never cut — for control, zero-width
+  and bidi characters, by the predicate the brief's own fields use; it is never logged (its length
+  is) and is stripped from `publicJob`.
+
 ## It is an interpretation, and the app says so
 
 **This is the one picture here that cannot be checked**, and

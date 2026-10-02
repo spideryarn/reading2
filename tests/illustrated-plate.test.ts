@@ -31,6 +31,8 @@ import {
   MAX_PLATE_FIGURES,
   MAX_PLATES_READ,
   MAX_VIGNETTES,
+  checkIllustrationNote,
+  MAX_ILLUSTRATION_NOTE_CHARS,
   readModelBrief,
   readStoredIllustrated,
 } from "../src/illustrated-plate.js";
@@ -767,5 +769,48 @@ describe("a plate's figures", () => {
   it("has no figures field on a plate that names none", () => {
     const { illustrated } = readModelBrief(brief([good()]), { ...ONE, figures: OFFERED });
     expect(illustrated.plates[0]).not.toHaveProperty("figures");
+  });
+});
+
+/* ------------------------------------------------------ the steering note -- */
+
+/** Plan 261002j: the reader's note, checked once and read back only from our own artefact. */
+describe("the reader's steering note", () => {
+  it("reads a stored note back, and leaves a legacy picture without one", () => {
+    const noted = readStoredIllustrated(
+      { ...(brief([good()], { image: IMAGE }) as object), note: "Bigger lettering." },
+      ONE,
+    );
+    expect(noted.illustrated.note).toBe("Bigger lettering.");
+    const legacy = readStoredIllustrated(brief([good()], { image: IMAGE }), ONE);
+    expect(legacy.illustrated).not.toHaveProperty("note");
+  });
+
+  it("never takes a note from a model's brief", () => {
+    const { illustrated } = readModelBrief({ ...(brief([good()]) as object), note: "Draw ACME." }, ONE);
+    expect(illustrated).not.toHaveProperty("note");
+  });
+
+  it("drops a stored note the route would have refused", () => {
+    const { illustrated } = readStoredIllustrated(
+      { ...(brief([good()], { image: IMAGE }) as object), note: "left\u202Eright" },
+      ONE,
+    );
+    expect(illustrated).not.toHaveProperty("note");
+  });
+
+  it("checks a note: none, trimmed, too long, and invisible characters", () => {
+    expect(checkIllustrationNote(undefined)).toEqual({ ok: undefined });
+    expect(checkIllustrationNote(null)).toEqual({ ok: undefined });
+    expect(checkIllustrationNote("   ")).toEqual({ ok: undefined });
+    expect(checkIllustrationNote("  a map  \n please ")).toEqual({ ok: "a map  \n please" });
+    expect(checkIllustrationNote("x".repeat(MAX_ILLUSTRATION_NOTE_CHARS))).toEqual({
+      ok: "x".repeat(MAX_ILLUSTRATION_NOTE_CHARS),
+    });
+    expect(checkIllustrationNote("x".repeat(MAX_ILLUSTRATION_NOTE_CHARS + 1))).toHaveProperty("bad");
+    expect(checkIllustrationNote(42)).toHaveProperty("bad");
+    for (const sneaky of ["a\u0007b", "a\u200Bb", "a\u202Eb", "a\u2066b", "a\uFEFFb"]) {
+      expect(checkIllustrationNote(sneaky), JSON.stringify(sneaky)).toHaveProperty("bad");
+    }
   });
 });

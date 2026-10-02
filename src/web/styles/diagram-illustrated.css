@@ -343,3 +343,22 @@
 .ill-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
 .ill-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
 .ill-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+
+/* ---- the reader's note on how it should come out (plan 261002j) ---- */
+
+.ill-steer { margin: 0.8rem 0 0.5rem; font-family: var(--font-ui); }
+.ill-steer-label { display: block; margin-bottom: 0.3rem; font-size: 0.81rem; color: var(--ink-soft); }
+.ill-steer-optional { margin-left: 0.3rem; font-size: 0.72rem; color: var(--ink-faint); }
+.ill-steer-row { display: flex; gap: 0.4rem; align-items: flex-start; }
+.ill-steer-input {
+  flex: 1; min-width: 0;
+  box-sizing: border-box;
+  font: inherit; font-size: 0.88rem; line-height: 1.45;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--rule); border-radius: 4px;
+  /* `--page`, as `.quiz-answer` and `.chat-input` use. */
+  background: var(--page); color: var(--ink);
+  resize: vertical;
+}
+.ill-steer-how { margin: 0.3rem 0 0; font-size: 0.75rem; line-height: 1.35; color: var(--ink-faint); }
+.ill-steer-long { color: var(--destructive); }

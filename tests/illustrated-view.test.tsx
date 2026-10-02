@@ -119,7 +119,7 @@ let asked: string[] = [];
  * `POST /api/jobs` would pass just as happily on a request naming `sketch`
  * alone, on one naming both forced, and on the right one.
  */
-let posted: { slug?: string; steps?: string[]; force?: string[] }[] = [];
+let posted: { slug?: string; steps?: string[]; force?: string[]; illustrationNote?: string }[] = [];
 
 interface Serving {
   /** 404 the artefact, which is the ordinary case for an unpainted article. */
@@ -132,6 +132,8 @@ interface Serving {
   hangSketch?: boolean;
   /** What `GET /api/jobs` answers. Empty unless a test puts a run in flight. */
   jobs?: unknown[];
+  /** The artefact the route answers with, when not `ILLUSTRATED`. */
+  illustrated?: unknown;
 }
 
 /**
@@ -178,7 +180,12 @@ function serving(opts: Serving = {}) {
     if (u.includes("/api/illustrated/")) {
       if (opts.noArtefact) return new Response("{}", { status: 404 });
       return new Response(
-        JSON.stringify({ illustrated: ILLUSTRATED, stale: false, outdated: false, profileChanged: false }),
+        JSON.stringify({
+          illustrated: opts.illustrated ?? ILLUSTRATED,
+          stale: false,
+          outdated: false,
+          profileChanged: false,
+        }),
         { status: 200 },
       );
     }
@@ -1236,5 +1243,71 @@ describe("the chip in the diagram row", () => {
       el.getAttribute("data-diag-kind"),
     );
     expect(kinds.indexOf("illustrated")).toBe(kinds.indexOf("sketch") + 1);
+  });
+});
+
+/* ------------------------------------------------------ the steering note -- */
+
+/** Type into a controlled textarea the way a reader does, so React hears it. */
+function typeInto(box: HTMLTextAreaElement, text: string): void {
+  const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  set?.call(box, text);
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function buttonSaying(text: string): HTMLButtonElement | undefined {
+  return [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes(text));
+}
+
+/** Report spya-wxd4nq, plan 261002j: a box under the picture to steer how it comes out. */
+describe("the reader's steering note", () => {
+  it("sends what the reader typed, trimmed, with the first paint", async () => {
+    serving({ noArtefact: true, sketch: { stale: false, profileChanged: false } });
+    await mount();
+    const box = host.querySelector<HTMLTextAreaElement>("#ill-steer-note");
+    expect(box, "no steering box in the empty state").not.toBeNull();
+    await act(async () => {
+      if (box) typeInto(box, "  Fewer scenes, bigger lettering.  ");
+    });
+    await act(async () => {
+      buttonSaying("Paint the argument")?.click();
+    });
+    await settle();
+    expect(posted.length).toBe(1);
+    expect(posted[0]?.steps).toEqual(["illustrated"]);
+    expect(posted[0]?.illustrationNote).toBe("Fewer scenes, bigger lettering.");
+  });
+
+  it("fills the box with the note a picture was painted with, and Paint again sends it forced", async () => {
+    serving({ illustrated: { ...ILLUSTRATED, note: "A map, not a manuscript." } });
+    await mount();
+    expect(host.querySelector<HTMLTextAreaElement>("#ill-steer-note")?.value).toBe("A map, not a manuscript.");
+    expect(host.querySelector(".ill-your-note")?.textContent).toContain("A map, not a manuscript.");
+    expect(posted, "arriving at a noted picture posted a job").toEqual([]);
+    await act(async () => {
+      buttonSaying("Paint again")?.click();
+    });
+    await settle();
+    expect(posted.length).toBe(1);
+    expect(posted[0]?.force).toEqual(["illustrated"]);
+    expect(posted[0]?.illustrationNote).toBe("A map, not a manuscript.");
+  });
+
+  it("will not paint with a note the server would refuse", async () => {
+    serving();
+    await mount();
+    const box = host.querySelector<HTMLTextAreaElement>("#ill-steer-note");
+    await act(async () => {
+      if (box) typeInto(box, "x".repeat(401));
+    });
+    const again = buttonSaying("Paint again");
+    expect(again, "no Paint again beside a picture").not.toBeUndefined();
+    expect(again?.disabled).toBe(true);
+    expect(host.querySelector(".ill-steer-long")?.textContent).toContain("at most 400");
+    await act(async () => {
+      again?.click();
+    });
+    await settle();
+    expect(posted).toEqual([]);
   });
 });

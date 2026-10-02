@@ -134,6 +134,7 @@ export function JobProgress({
   failed,
   stalled,
   onRun,
+  runDisabled = false,
   onCancel,
   label,
   step,
@@ -200,6 +201,12 @@ export function JobProgress({
    */
   stalled: boolean;
   onRun(): Promise<void>;
+  /**
+   * **The run button is drawn but cannot be pressed** — a box beside it is
+   * still taking dictation, say (docs/project/dictation.md: disable the button
+   * as well as guarding the press). Absent: pressable, as it always was.
+   */
+  runDisabled?: boolean;
   onCancel(id: string): void;
   /** What the button says when there is no job: "Find the terms". */
   label: string;
@@ -326,6 +333,7 @@ export function JobProgress({
           size="sm"
           aria-label={about ? `${label} — ${about}` : undefined}
           aria-describedby={describedBy}
+          disabled={runDisabled}
           onClick={() => void onRun()}
         >
           {icon}
