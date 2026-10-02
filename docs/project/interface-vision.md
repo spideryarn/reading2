@@ -115,10 +115,19 @@ model pass, and they can come last.
 
 ## What would have to change
 
-- **The left becomes a column, not the band.** Today the left is one mode at a time, chosen as a
-  radio, and Plain is "no band". The simplest reading of the vision keeps exactly that and just
-  narrows what belongs there; a richer one (Structure *and* Summary together, stacked or tabbed) is
-  new layout. This is open question 1.
+- **The left stays today's band, for now.** One mode at a time, chosen as a radio, Plain is "no
+  band", and the margin opens beside it. Greg likes having the two open together; several left
+  modes at once is where he can see it going, on very wide screens, and out of scope for now. Whether
+  Marginalia stays the only right-hand mode is undecided:
+
+  > I definitely like being able to have both a left-hand and the right-hand mode open at the same
+  > time. I haven't decided whether Marginalia will be the only right-hand mode, or whether we'll add
+  > other right-hand modes. FWIW I can imagine a future world where (on really wide screens) we might
+  > want to be able to have multiple left-hand-modes open (e.g. both Structure and Summary) plus the
+  > Marginalia right-hand mode all open at the same time, for a really rich text-reading experience.
+  > We can treat that as out of scope for right now if it will add too much complexity.
+  >
+  > — Greg, 2026-10-02
 - **The margin gains kinds of note**, each one sparse and collapsed by default. The constraint the
   261001d plan named still holds: the risk is *"a second article down the margin"*.
 - **The single-purpose modes move off the main bar.** The Dock is a long list today and Greg has
@@ -144,9 +153,25 @@ These are the reasons to go carefully, each one already said by Greg in another 
   comments and bookmarks, the only hue on the page); Marginalia began with *the machine*, kept faint.
   Both now live there, and still need different voices — the
   typefaces experiment (7C: author serif, AI Courier, reader Arial) is one answer.
-- **Cost and consent.** Marginalia generates nothing and shows only what other modes have already
-  made. A margin that is useful on first open would have to run those modes, which spends money on
-  a reader's behalf; the automatic help comments in 7E were declined for that reason.
+- **Cost and consent — settled 2026-10-02: opening Marginalia spends nothing.** It shows only what
+  other modes have already made, and the automatic help comments in 7E were declined for the same
+  reason. Greg would have had it run the missing modes, but only if a mode made later never reached
+  the margin:
+
+  > My worry is that if we *don't* fill in stuff that hasn't been generated, then even if we do
+  > generate that mode afterwards it won't get fed into Marginalia mode... If that concern is
+  > correct, then let's automatically run any missing modes when we first run Marginalia mode.
+  > Perhaps the ideal would be for Marginalia mode to notice if new modes that it depends on have
+  > been run since it first ran, and update itself. But if that's going to add substantial
+  > complexity, let's hold off on it.
+  >
+  > — Greg, 2026-10-02
+
+  For the owner's FAQ, Debate and Ideas, the worry does not hold: the margin reads them each time
+  it opens, and since [261002d](../plans/261002d-marginalia-refreshes-when-a-mode-it-reads-finishes.md)
+  it also refreshes them on completions announced by this tab's job engine — his "ideal", which
+  turned out small. Citations uses the Reader's shared read and has a remaining refresh gap;
+  [marginalia.md § What it shows](marginalia.md) names it.
 - **Phones.** On a phone a band already covers the article, and a passage link in it scrolls text
   you cannot see (5A), and the notes do not fit at all under 612px. The vision has no phone answer
   yet.
@@ -180,16 +205,11 @@ Put to Greg three at a time through the Overseer
 ([ask-me-questions.md](../reusable/ask-me-questions.md)). Answers move into the owning doc, and the
 question comes off this list.
 
-**Queued with the Overseer for Greg, 2026-10-01** (behind three of its own):
+The first batch (the left column, and whether Marginalia may spend) was answered on 2026-10-02; the
+answers are under [What would have to change](#what-would-have-to-change) and
+[Tensions](#tensions-from-the-feedback-so-far).
 
-1. **For now, is the left still today's band?** (A) yes — one mode at a time, chosen as now, and the
-   structural change waits until the right and middle have moved; (B) no — design a left column that
-   holds several unanchored things at once, stacked or tabbed, now. *Recommended: A.*
-2. **May opening Marginalia ever spend money to make what it is missing?** (A) no — it shows only
-   what is already stored, as now; (B) yes, for some modes, under a policy Greg sets.
-   *Recommended: A until Greg sets that policy.*
-
-**Not yet sent** — the next batch, once the first is answered:
+**Not yet sent** — the next batch:
 
 - How the single-purpose modes recede (an overflow and the command bar, or removal as Hierarchy
   was) — not askable until each one's content reaches the reader another way.

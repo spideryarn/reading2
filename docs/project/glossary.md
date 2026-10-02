@@ -638,7 +638,7 @@ not separate the two.
 
 The ~$7 production-shaped Opus-vs-Sol check was not run. The numbers, the models that failed, and
 what would reopen it are
-[research 261002a](../research/261002a-dig-deeper-answer-model.md).
+[investigation 261002a](../investigations/261002a-dig-deeper-answer-model.md).
 
 **Look up** — the typed box, [below](#looking-a-term-up) — is not Dig deeper and did not change: it is
 a first question about a phrase rather than a second look at an answer, so the model still decides

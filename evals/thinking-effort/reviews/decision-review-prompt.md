@@ -5,7 +5,7 @@ Read-only: do not change any file. You may run commands that need no network, e.
 (free; it unblinds and recomputes from the files on disk).
 
 **Candidate (committed):** `6c2afaf0e` on branch `worktree-thinking-effort-eval`. The write-up is
-`docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`; the
+`docs/investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`; the
 plan with the rule fixed before the results (and three notes written mid-run, each dated) is
 `docs/plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`. You
 reviewed the plan twice and the harness once (`evals/thinking-effort/reviews/`).

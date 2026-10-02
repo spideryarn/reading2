@@ -70,6 +70,10 @@
   font-family: inherit; font-size: inherit;
 }
 .sk-zoom { margin-left: auto; }
+/* The owner's *written for you* badge (since 2026-10-02, plan 261002b) sits
+   beside Enlarge at the bar's end, so it takes the push and Enlarge follows. */
+.sk-bar > .prof-badge { margin-left: auto; flex: none; }
+.sk-bar > .prof-badge + .sk-zoom { margin-left: 0; }
 .sk-up:hover, .sk-crumb:hover, .sk-zoom:hover { background: var(--surface-raised); color: var(--ink); }
 .sk-up:focus-visible, .sk-crumb:focus-visible, .sk-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 /* Up sits before the scene row, not after it: it is the way out of where you

@@ -1838,7 +1838,7 @@ function collapseRestatedRungs(
  * reader the article: four structure calls in four made the same wrong claim on
  * the same document, which makes a refusal not an occasional loss but a
  * guaranteed failure loop for it
- * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
+ * (docs/investigations/260830a-opening-an-article-before-the-toc.md § 7b).
  *
  * **Read with `sameHeading`, over the same range, so this is a repair and not a
  * second opinion.** `checkTree` asks the identical question later, against the

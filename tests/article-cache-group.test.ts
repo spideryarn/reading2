@@ -106,7 +106,7 @@ describe("the article cache group", () => {
     /* **Same bytes as `ideas`, different effort, so no share** — the same rule
        that keeps glossary away from arc. Sketch was in the `ids` + `high` group
        until 2026-10-01, when the thinking-effort eval found no visible loss at
-       `low` (docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
+       `low` (docs/investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md).
        Pinned in both directions because the wrong answer either way throws
        nothing: a sketch marked beside `ideas` pays the 1.25x write premium for
        a read that cannot happen. If sketch ever goes back to `high`, this is

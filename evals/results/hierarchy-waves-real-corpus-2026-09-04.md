@@ -58,7 +58,7 @@ stage 1 of [the plan](../../docs/plans/260904c-hierarchy-structure-in-waves.md) 
 
 ### There is no per-call reasoning floor — confirmed, and more strongly than before
 
-`docs/research/260830a-opening-an-article-before-the-toc.md` measured ~6,300 reasoning tokens per
+`docs/investigations/260830a-opening-an-article-before-the-toc.md` measured ~6,300 reasoning tokens per
 call at `effort: "high"` and concluded a cascade would multiply it. Per call on `constitution`:
 
 ```

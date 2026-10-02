@@ -206,6 +206,12 @@ export function IdeasPanel({
               written={owner.profiled}
               changed={owner.profileChanged}
               slug={owner.slug}
+              /* The forced run replaces the list (plan 261002b). */
+              regenerate={{
+                run: () => void owner.regenerate(),
+                busy: owner.job !== null || owner.starting,
+                refresh: () => owner.refresh(),
+              }}
             />
           )}
         </>

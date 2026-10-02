@@ -8,7 +8,7 @@
  * src/explain.ts and src/converse.ts — and they had already drifted apart in
  * two ways, one of them fatal.
  *
- * See docs/plans/260826g-prompt-caching.md and docs/research/260826c-prompt-caching-callsites.md.
+ * See docs/plans/260826g-prompt-caching.md and docs/investigations/260826c-prompt-caching-callsites.md.
  *
  * ## The marker that was in the wrong place
  *

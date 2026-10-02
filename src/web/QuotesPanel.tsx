@@ -596,7 +596,14 @@ export function QuotesPanel({
      `profileHash` never leaves the server (src/public-types.ts). An icon since
      2026-10-01, as Glossary's is (plan 260929a); `null` rather than a component
      that renders nothing, so the rank row's trailing slot is empty when there
-     is nothing to put in it. */
+     is nothing to put in it.
+
+     **No `regenerate`, on purpose.** Its panel edits the profile like every
+     other, but Quotes' forced run appends to a current list — across a profile
+     change too, keeping the first pass's stamp (src/quotes.ts § existingFor)
+     — so a Regenerate here would lengthen the list and leave this badge saying
+     *changed*. It needs a replace intent in the job contract first. Plan
+     261002b § Deferred. */
   const badge =
     quotes && owner?.profiled ? (
       <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} compact />

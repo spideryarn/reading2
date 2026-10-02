@@ -184,7 +184,7 @@ export const PROPOSAL_JOB: ChatJob = "env-proposal";
  *
  * This started on `QUICK_MODEL_OPENROUTER` — a cheap classification, run once
  * per repo. The Stage 4 spike measured both on the two real files
- * (docs/research/260902b-env-key-proposal-spike.md) and moved it:
+ * (docs/investigations/260902b-env-key-proposal-spike.md) and moved it:
  *
  * - **Safety was never the difference.** Across six runs on both models there
  *   was not one false positive — no key that ground truth calls a production or
@@ -269,7 +269,7 @@ const SYSTEM_PROMPT = [
  * this model accepts a temperature, so OpenRouter filtered every endpoint away
  * and answered `No endpoints found that can handle the requested parameters`
  * with `failed_routing_step: "Filter by Parameters"`. Found by the Stage 4
- * spike, docs/research/260902b-env-key-proposal-spike.md.
+ * spike, docs/investigations/260902b-env-key-proposal-spike.md.
  *
  * Two things make it worth a paragraph rather than a deletion. It **failed
  * silently**: `proposeEnvKeys` turns a `ProviderRefused` into "the model could

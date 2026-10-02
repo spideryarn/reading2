@@ -1,6 +1,6 @@
 # Trajectory stage 6 — a coverage baseline, and the script that produces it
 
-Research write-up: [docs/research/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md](../research/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md).
+Investigation write-up: [docs/investigations/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md](../investigations/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md).
 
 Stage 6 of [260928a](260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md): a re-runnable
 measurement of how much of an article Trajectory's route actually touches, replacing the
