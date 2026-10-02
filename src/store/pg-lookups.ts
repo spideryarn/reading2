@@ -39,6 +39,7 @@ import { currentOwnerId } from "../owner.js";
 import type { AddedTerm, Citation, Glossary, GlossaryLookup } from "../types.js";
 import type { GlossaryLookupStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
+import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned } from "./pg.js";
 
 function toLookup(row: typeof glossaryLookups.$inferSelect): GlossaryLookup {
@@ -172,7 +173,11 @@ const rawPgGlossaryLookupStore: GlossaryLookupStore = {
         addedName: name,
       });
       return { kind: "added", entryId };
-    });
+      /* **Read committed, and the lock depends on it**: the waiting add's
+         later statements must see the rows the first one committed. Under
+         repeatable read they would read the snapshot from before the wait
+         and add a second entry. src/store/isolation.ts. */
+    }, READ_COMMITTED);
   },
 };
 

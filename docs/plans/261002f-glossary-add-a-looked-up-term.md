@@ -234,3 +234,29 @@ Tests added to the stages: id collision with a blob id; concurrent equivalent ad
 arm and a malformed id on the client; refresh → select → clear; Dig deeper on an added term; hide
 after a later model entry matches; the chat tool; both export projections; a non-owner cannot
 write; a public read with an added row reveals nothing; the no-glossary arm.
+
+## What landed
+
+Built as revised above, with one more change while building: **a hide does not follow an absorbed
+added term** to the model entry that later names it, because *Unhide* on that entry would then
+clear the wrong row. Only the explanation follows. Chat sees an added term's name and a note, not
+its answer.
+
+- The first concurrency test raced two adds with `Promise.all` and **passed with the lock deleted**,
+  three runs in three. It was rewritten to hold the article row in a second transaction; that
+  version goes red without the lock. The read seam and the client's refresh and id validation were
+  each broken on purpose and seen to go red.
+- GPT Sol's code review ([261002f-glossary-add-code-review-sol.md](261002f-glossary-add-code-review-sol.md),
+  exit 0, answer fresh, 2026-10-02 18:40): approve with fixes. It fixed a real bug, a rollback
+  restore that dropped `addedName`, added the edge-case tests its plan review had asked for, and
+  corrected the comments that still said "nothing is stored". Its Postgres tests could not reach the
+  database from its sandbox; they were run afterwards and pass.
+- Browser check (Sonnet subagent, Playwright on the box, `fowler-phrenology`, three real model
+  calls): add, already-there with *Show it*, hide and unhide, reload, and a 390px row all pass. It
+  found that the hover card labelled every stored answer *checked on the web*, including the many
+  that ran no search, while the band said *no web search*. That mislabel was older than this work,
+  but every added term now carries a stored answer. Fixed in `ProseHoverCard.tsx`, with a test seen
+  red first.
+- **Deferred, found by the browser check:** "already there" is decided after the model has answered,
+  so looking up a term the list already has still pays for one call. Checking the list before the
+  call would save it, at the cost of a second read in `askAboutTerm`.
