@@ -98,6 +98,11 @@ vi.mock("../src/web/router.js", async (importActual) => ({
   navigate: (href: string) => navigations.push(href),
 }));
 
+/** How High-powered AI's PUT answers (plan 261002k). Replaced per test. */
+let putAnswer: () => Promise<Response> = async () =>
+  new Response(JSON.stringify({ highPowerSince: "2026-10-02T23:00:00.000Z" }), { status: 200 });
+const puts = () => events.filter((e) => e.startsWith("put:"));
+
 /** How the PATCH answers. Replaced per test; the default stores what it was sent. */
 let patchAnswer: (body: { purpose: string | null }) => Promise<Response> = async (body) =>
   new Response(JSON.stringify({ purpose: body.purpose?.trim() ?? null }), { status: 200 });
@@ -106,6 +111,11 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
   return {
     ...actual,
     apiFetch: async (input: string, init: RequestInit = {}) => {
+      if (init.method === "PUT" && input.endsWith("/high-power")) {
+        const body = JSON.parse(String(init.body)) as { on: boolean };
+        events.push(`put:${input.split("/")[3]}:${body.on}`);
+        return putAnswer();
+      }
       if (init.method === "PATCH" && input.startsWith("/api/library/")) {
         const body = JSON.parse(String(init.body)) as { purpose: string | null };
         events.push(`patch:${JSON.stringify(body)}`);
@@ -250,6 +260,8 @@ beforeEach(() => {
   source = URL_SOURCE;
   patchAnswer = async (body) =>
     new Response(JSON.stringify({ purpose: body.purpose?.trim() ?? null }), { status: 200 });
+  putAnswer = async () =>
+    new Response(JSON.stringify({ highPowerSince: "2026-10-02T23:00:00.000Z" }), { status: 200 });
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -651,5 +663,61 @@ describe.each(PRODUCERS)("the ask-purpose mark (261001s § Stage 3) when $name",
     await settle();
     expect(navigations).toEqual([`/read/${SLUG}`]);
     expect(mark()).toBeNull();
+  });
+});
+
+/**
+ * **High-powered AI chosen at import** — plan 261002k. The box sends the
+ * Metadata switch's own PUT; what is pinned here is the page's half: nothing is
+ * sent unless ticked, and **no mode is queued before the switch has answered**
+ * (GPT Sol's plan review P1-3), over all three ways an add finishes — one of
+ * which never had a job, so the intent is sent against the completion's slug.
+ */
+describe.each(PRODUCERS)("High-powered AI at import, when $name", (producer) => {
+  const powerBox = (): HTMLInputElement => {
+    const el = host.querySelector<HTMLInputElement>("[data-add-high-power] input[type=checkbox]");
+    if (!el) throw new Error("no High-powered AI box on the page");
+    return el;
+  };
+
+  it("is offered, off, and sends nothing when left alone", async () => {
+    await producer.start();
+    expect(powerBox().checked).toBe(false);
+    await producer.finish();
+    expect(puts()).toEqual([]);
+    expect(runs()).toEqual(EXPECTED_RUNS());
+  });
+
+  it("ticked, it switches the article on before any mode is queued", async () => {
+    let answer: () => void = () => {};
+    putAnswer = () =>
+      new Promise((resolve) => {
+        answer = () =>
+          resolve(new Response(JSON.stringify({ highPowerSince: "2026-10-02T23:00:00.000Z" }), { status: 200 }));
+      });
+    await producer.start();
+    act(() => powerBox().click());
+    expect(powerBox().checked).toBe(true);
+    await producer.finish();
+    expect(puts()).toEqual([`put:${SLUG}:true`]);
+    expect(navigations, "the navigation waited for the switch").toEqual([`/read/${SLUG}`]);
+    expect(runs(), "a mode was queued before High-powered AI answered").toEqual([]);
+    answer();
+    await settle();
+    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(events.indexOf(`put:${SLUG}:true`)).toBe(0);
+  });
+
+  it("a refusal still queues the modes, on the standard model", async () => {
+    putAnswer = async () =>
+      new Response(JSON.stringify({ error: "[pay-high-power] Not enough of your allowance left." }), {
+        status: 402,
+      });
+    await producer.start();
+    act(() => powerBox().click());
+    await producer.finish();
+    await settle();
+    expect(puts()).toEqual([`put:${SLUG}:true`]);
+    expect(runs()).toEqual(EXPECTED_RUNS());
   });
 });

@@ -75,6 +75,8 @@ import { savePurpose } from "./purpose.js";
 import { markAskPurpose } from "./ask-purpose.js";
 import { Button } from "@/components/ui/button";
 import { withVoice } from "./voice.js";
+import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
+import { AddHighPower } from "./AddHighPower.js";
 
 /**
  * Which of the two origins this page is starting.
@@ -160,10 +162,27 @@ type Phase =
  *
  * Callers take the once-guard (`claimed`) first; this does not check it.
  */
-function openArticle(completion: Completion, generate: boolean, run: UseJobs["run"]): void {
-  if (generate) void queueAutoModes(run, completion.slug);
+function openArticle(
+  completion: Completion,
+  generate: boolean,
+  run: UseJobs["run"],
+  highPower: HighPowerIntent,
+): void {
+  /* **The modes wait for High-powered AI; the navigation does not.** A mode job
+     queued before the switch lands could claim and read the standard model
+     (GPT Sol, plan 261002k P1-3). `settle` never rejects. */
+  const settled = highPower.settle(completion.slug);
+  if (generate) void settled.then(() => queueAutoModes(run, completion.slug));
   navigate(readHref(completion.slug), { replace: true });
 }
+
+/** The Metadata switch's own request — src/web/HighPowerSwitch.tsx. */
+const putHighPower: PutHighPower = (slug, on) =>
+  apiFetch(`/api/article/${encodeURIComponent(slug)}/high-power`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ on }),
+  }).then((r) => readJson<{ highPowerSince: string | null }>(r));
 
 /** Whether the file-owning tab still has a live add rather than an outcome. */
 function transferIsActive(transfer: Transfer | null): boolean {
@@ -329,6 +348,19 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   autoModesRef.current = autoModes;
   const runRef = useRef(queue.run);
   runRef.current = queue.run;
+
+  /**
+   * **High-powered AI for this add**, one intent per address — plan 261002k.
+   * Replaced (and the old one's retries stopped) only when the address
+   * changes, not on unmount: a reader who ticked it and then left has still
+   * asked for it, and a request in flight finishes either way.
+   */
+  const highPowerRef = useRef<{ source: string; intent: HighPowerIntent } | null>(null);
+  if (highPowerRef.current?.source !== wanted) {
+    highPowerRef.current?.intent.dispose();
+    highPowerRef.current = { source: wanted, intent: new HighPowerIntent(putHighPower) };
+  }
+  const highPower = highPowerRef.current.intent;
 
   /**
    * **Why the reader is reading this**, asked while the import runs — the one
@@ -581,6 +613,17 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   const activeCompletionKey = useRef<string | null>(completionKey);
   activeCompletionKey.current = completionKey;
 
+  /* **What High-powered AI may send to, and whether a 404 is *not yet*.** The
+     job's own slug, or the completion's — never one derived from the address.
+     Alive until the job ends; before there is a job, alive while nothing has
+     finished. Every render: `observe` only sends when there is something to. */
+  const highPowerSlug = job?.slug ?? completion?.slug ?? null;
+  const highPowerAlive = job ? job.status === "queued" || job.status === "running" : completion === null;
+  const highPowerLate = mayHaveStartedOnStandard(job?.steps) || (job === null && completion !== null);
+  useEffect(() => {
+    highPower.observe(highPowerSlug, highPowerAlive, highPowerLate);
+  }, [highPower, highPowerSlug, highPowerAlive, highPowerLate]);
+
   useEffect(() => {
     if (completionKey === null || completionSlug === null) return;
     if (claimed.current === completionKey) return;
@@ -600,12 +643,12 @@ export function AddPage({ source: origin }: { source: AddSource }) {
          purpose. */
       if (draftRef.current === "" && !purposeTouchedRef.current) markAskPurpose(completionSlug);
       setPhase({ kind: "opened" });
-      openArticle(finished, autoModesRef.current, runRef.current);
+      openArticle(finished, autoModesRef.current, runRef.current, highPower);
       return;
     }
     /* Otherwise wait, indefinitely. A blur or a pause is not a decision. */
     setPhase({ kind: "ready", completion: finished, error: null });
-  }, [completionKey, completionSlug, wanted]);
+  }, [completionKey, completionSlug, wanted, highPower]);
 
   /**
    * **Save and open**: the purpose first and awaited, then the modes, then the
@@ -629,7 +672,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     const text = draftRef.current;
     if (text.trim() === "") {
       setPhase({ kind: "opened" });
-      openArticle(done, autoModesRef.current, runRef.current);
+      openArticle(done, autoModesRef.current, runRef.current, highPower);
       return;
     }
     setPhase({ kind: "saving", completion: done });
@@ -642,7 +685,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         )
           return;
         setPhase({ kind: "opened" });
-        openArticle(done, autoModesRef.current, runRef.current);
+        openArticle(done, autoModesRef.current, runRef.current, highPower);
       },
       /* Back to *ready* with the draft intact, and nothing queued: a mode
          written without the purpose is what the reader has just declined. */
@@ -668,7 +711,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       return;
     claimed.current = phase.completion.key;
     setPhase({ kind: "opened" });
-    openArticle(phase.completion, autoModesRef.current, runRef.current);
+    openArticle(phase.completion, autoModesRef.current, runRef.current, highPower);
   };
 
   /* The tab, naming what is being added — the host for an address, the filename
@@ -969,6 +1012,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           </span>
         </label>
       )}
+      {(showAutoModes || deciding) && <AddHighPower intent={highPower} />}
 
       {showPurpose && (
         <PurposeBox
