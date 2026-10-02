@@ -187,6 +187,8 @@ export type TitleSpec =
   | { kind: "contact" }
   /** Every release since launch, newest first — ChangelogPage.tsx. */
   | { kind: "changelog" }
+  /** How to use it, section by section — help/HelpPage.tsx. */
+  | { kind: "help" }
   /** Where the code lives and what it is licensed under — OpenSourcePage.tsx. */
   | { kind: "opensource" }
   /**
@@ -314,6 +316,12 @@ function segments(spec: TitleSpec): string[] {
        router.ts § `CHANGELOG_LABEL`. */
     case "changelog":
       return [CHANGELOG_LABEL, APP_NAME];
+
+    /* One word, the footer's word and the page's heading. Not the section the
+       fragment names: the tab is the page, and the fragment changes under it
+       with every contents click, which would make the title flicker. */
+    case "help":
+      return ["Help", APP_NAME];
 
     /* Two words, and the same two the footer uses — the tab is where somebody
        who opened this page to check whether the code is public looks to find it

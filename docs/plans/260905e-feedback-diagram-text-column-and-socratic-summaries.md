@@ -141,7 +141,7 @@ Established by reading the code, not assumed.
 [summaries.md](../project/summaries.md) says it outright — *"There is no stage, no artefact and no
 route: everything on screen arrives inside the article payload"* — and the code agrees. Summary mode
 renders the one-sentence **`gist`** that **stage 4** writes onto every internal node of the tree,
-from the `GISTS` section of `SYSTEM` in [`src/hierarchy.ts`](../../src/hierarchy.ts).
+from the `GISTS` section of `SYSTEM` in [`src/hierarchy.ts`](../../src/structure.ts).
 
 That same `gist` string is rendered in **ten other places**. Verified by grep of `src/web` on
 2026-09-05:
@@ -159,7 +159,7 @@ That same `gist` string is rendered in **ten other places**. Verified by grep of
 
 **And it is an input, not only an output** — the argument that actually settles it, which Fable
 found and I verified. `chainRung` and the outline renderer in
-[`hierarchy-expand.ts`](../../src/hierarchy-expand.ts) (lines 331, 337) feed ancestor gists back
+[`hierarchy-expand.ts`](../../src/structure-expand.ts) (lines 331, 337) feed ancestor gists back
 into the later structure waves as context. A gist bent towards questions would therefore degrade the
 trees the cascade goes on to build, not merely the sentences on screen. One prompt edit, ten
 regressions.
@@ -186,10 +186,10 @@ same stage-4 structure call (no extra model call — about 25 more output tokens
 nodes), and drawn **only** in `SummaryPanel`, under the gist, italic and a step smaller.
 
 **Depth is enforced in code, not merely requested in the prompt.**
-[`questionFor`](../../src/hierarchy.ts) drops anything deeper. One question per section on a
+[`questionFor`](../../src/structure.ts) drops anything deeper. One question per section on a
 fifty-section article is noise; the default cut-off (`deep=1`) draws only these rows anyway; and a
 scope the code holds is a fact rather than a hope. It also means
-[`hierarchy-expand.ts`](../../src/hierarchy-expand.ts) — which only ever writes depth ≥ 2 — needs no
+[`hierarchy-expand.ts`](../../src/structure-expand.ts) — which only ever writes depth ≥ 2 — needs no
 change at all, including its strict `["start","title","gist"]` field validator.
 
 **The gist stays on every row.** The claim says what the section says; the question is the door.
@@ -260,7 +260,7 @@ simply a finished tree — there is no re-run trigger.
 - It does **not** backfill anything. Every article already in the library keeps its `toc/4` tree and
   shows no questions at all.
 - To pick it up: `npm run hierarchy -- <slug> --force`, one structure call per article (~$0.10–0.26
-  by [`hierarchy-prompt.ts`](../../src/hierarchy-prompt.ts)'s measured figures).
+  by [`hierarchy-prompt.ts`](../../src/structure-prompt.ts)'s measured figures).
 
 **For Greg:** the feature is invisible on every existing article until you re-run hierarchy on it.
 That is the honest cost of putting the field on the tree rather than in a stage of its own, and the

@@ -1096,7 +1096,7 @@ export const articleRevisions = spideryarn.table(
      * something else. A leaf with no label is
      * a caption or a pull-quote, deliberately unlabelled and legal since the
      * tree was written; *not written yet* is a different claim and had nowhere
-     * to live. src/hierarchy.ts asked for it by name — deferring the labels
+     * to live. src/structure.ts asked for it by name — deferring the labels
      * "needs a state that says 'still arriving' rather than an absence that says
      * nothing".
      *

@@ -62,6 +62,12 @@ const UNDO_MS = 9000;
 
 export interface Shelf {
   articles: LibraryEntry[] | null;
+  /**
+   * A successful live read has established the current reader's active slugs.
+   * The saved copy may paint first, but it is not enough for code that must
+   * distinguish this reader's articles from somebody else's.
+   */
+  liveArticlesLoaded: boolean;
   error: string | null;
   /**
    * Re-read the shelf from the server.
@@ -140,6 +146,7 @@ export interface Shelf {
  */
 export function useShelf(readerId: string): Shelf {
   const [articles, setArticles] = useState<LibraryEntry[] | null>(null);
+  const [liveArticlesLoaded, setLiveArticlesLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [undoable, setUndoable] = useState<LibraryEntry | null>(null);
@@ -246,8 +253,14 @@ export function useShelf(readerId: string): Shelf {
     const mine = ++issued.current;
     const asked = reader.current;
     return apiFetch("/api/library")
-      .then((r) => readJson<LibraryResponse>(r))
-      .then((b) => {
+      .then(async (r) => ({
+        body: await readJson<LibraryResponse>(r),
+        /* apiFetch serves a saved body as a marked synthetic 200 while
+           offline. It may paint the shelf, but it cannot establish that the
+           saved slug set is current. */
+        live: r.headers.get("x-spideryarn-offline") !== "copy",
+      }))
+      .then(({ body, live }) => {
         /* Not this reader's shelf any more. Dropped rather than painted — and
            `settled` is deliberately left alone, so the new reader's own cached
            copy is still free to paint. */
@@ -257,7 +270,8 @@ export function useShelf(readerId: string): Shelf {
            last would undo the later one. */
         if (mine < settled.current) return;
         settled.current = mine;
-        setArticles(b.articles);
+        setArticles(body.articles);
+        if (live) setLiveArticlesLoaded(true);
         // Cleared on success, or a transient failure leaves a red box above a
         // shelf that is now perfectly fine.
         setError(null);
@@ -291,6 +305,7 @@ export function useShelf(readerId: string): Shelf {
         if (statusOf(e) === 401) {
           settled.current = mine;
           setArticles(null);
+          setLiveArticlesLoaded(false);
         }
         /* Through the one rule: a lost connection recognised by `apiFetch`'s
            mark rather than by Chrome's wording (Safari says "Load failed"), a
@@ -329,6 +344,7 @@ export function useShelf(readerId: string): Shelf {
        React bails out and this costs nothing. */
     reader.current += 1;
     setArticles(null);
+    setLiveArticlesLoaded(false);
     setError(null);
     setUndoable(null);
     setArchived(null);
@@ -560,6 +576,7 @@ export function useShelf(readerId: string): Shelf {
   return useMemo(
     () => ({
       articles,
+      liveArticlesLoaded,
       error,
       reload,
       undoable,
@@ -579,6 +596,7 @@ export function useShelf(readerId: string): Shelf {
     }),
     [
       articles,
+      liveArticlesLoaded,
       error,
       reload,
       undoable,

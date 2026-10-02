@@ -1,0 +1,953 @@
+diff --git a/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md b/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md
+index 46ced9ec2..1d1d7d822 100644
+--- a/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md
++++ b/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md
+@@ -123,3 +123,72 @@ bounded, and "nobody else has shared" is not said when every row sent was yours
+ `isPhone` refuses an unmeasured screen (0 or `NaN`) and the 599/600 boundary is pinned; the
+ landscape sentence is picked by an orientation media query so it follows a rotation; library.md,
+ public-shelf.md and touch.md record the change.
++
++## Part D — the chips beside the search's answer, with counts (spya-s9fhmw)
++
++Added the same day, relayed by the Overseer:
++
++> I did a search in the logged-in homepage. It said: "Nothing in the articles' text matches
++> 'holland'. Archived articles aren't searched — turn on Include archived to search them too."
++> Let's add an extra button right there next to that empty-results-message for including archived
++> (and another one for including public), so the user doesn't have to hunt around for it. For extra
++> points, (always) include a sense of how many archived and public results would have matched, so
++> that the user knows whether it's worth bothering to include them.
++>
++> — Greg, 2026-10-02 (spya-s9fhmw)
++
++**One line under the search's answers, whenever a query is typed and either chip is off** — so it
++sits right after "Nothing in the articles' text matches …" when that is the answer, and is still
++there when there are results ("always"). Each half is a count and a button that does exactly what
++the chip does (same setter, so it lands in the URL and Back undoes it):
++
++```
++Also matching: 2 archived articles [Include archived] · 1 public article [Include public]
++```
++
++- **Archived count** = distinct archived articles that match by their card's words
++  (`filterEntries` over the archive list, which is loaded for this — the same
++  `GET /api/library?archived=1` the chip makes) **or** by their text (a second passage search with
++  `&archived=1`, the existing route, counting the slugs of hits marked `archived`). If that search
++  came back `capped`, the number is a floor and reads "2+".
++- **Public count** = public cards by other readers matching the query (`filterEntries`, the same rule
++  as the Include public section), off `usePublicShelf`. "+" when the listing is truncated. Public
++  text is not searched, as in Part A; the button's section says so.
++- **Zero is said too** ("no archived articles", no button) — knowing it is not worth bothering is
++  the point of the counts.
++- While a count is loading, that half says "checking…"; on failure that half is dropped rather than
++  shown as zero.
++- The existing *"Archived articles aren't searched — turn on Include archived"* sentence goes: the
++  line says the same with a number and a button.
++
++**Cost, named:** with Include archived off, each settled query makes a second passage search (the
++archive-inclusive one) and the shelf fetches the archive list once; with Include public off, one
++anonymous public listing read per typed search session. All existing routes; no server change.
++*Simpler option passed over:* buttons without counts. Greg asked for counts "for extra points", and
++the counts are what tell the reader whether to bother, so they are in.
++
++### Part D, as built after the plan review
++
++[261002b-part-d-plan-review-sol.md](261002b-part-d-plan-review-sol.md) — no P0, five P1s, all taken.
++What changed from the sketch above:
++
++- **The buttons are always there; the counts are the extra.** Whenever a query is typed and either
++  chip is off, the line carries the button for each chip that is off — at zero, while counting, and
++  when a count failed. A count is supporting information, not a condition.
++- **Archived: one number, counted on the server, uncapped.** `/api/library/search` (with Include
++  archived off) also returns `archivedArticles` — distinct archived articles with a passage matching
++  the query, by the same predicates as the passage search, counted *before* any cap. It replaces the
++  second search the sketch proposed, which could only ever give a floor (30 passages ranked across
++  both halves), and the archive-list load, which had visible side effects (`actionError`). So the
++  archived count is about the **text**; the label says "mention". Archived cards matching only by
++  title are not counted, and that is said by the word.
++- **Public: one listing read, shared.** `usePublicShelf` is lifted into `Library` (it takes an
++  `enabled` flag) and its state is handed to both the count and the Include public section, so the
++  count and what the button reveals are the same snapshot; still gated on the live owner shelf.
++  Truncated reads "at least", and zero-and-truncated says "none among the most recently shared".
++- **When a count is counted at all.** Archived only once the passage search is eligible (the hook's
++  own `MIN_QUERY`, exported, not a second `3`); public only when `queryTerms` keeps a term (else
++  `filterEntries` returns every card). Below either, the button without a number.
++- **Before Unread and topics** — said beside the counts when either is on.
++- `useLibrarySearch` drops an answer whose request was aborted before it is committed, closing the
++  A → B → A race the review found.
+diff --git a/docs/plans/261002b-part-d-plan-review-prompt.md b/docs/plans/261002b-part-d-plan-review-prompt.md
+new file mode 100644
+index 000000000..f4d9ad3fe
+--- /dev/null
++++ b/docs/plans/261002b-part-d-plan-review-prompt.md
+@@ -0,0 +1,14 @@
++Read-only plan review in the Spideryarn repo (this worktree). Read § Part D of
++docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md,
++and the code it builds on: src/web/Library.tsx (Passages, NOT_SEARCHING_ARCHIVE, the Include public
++section wiring), src/web/useLibrarySearch.ts, src/web/useShelf.ts (loadArchived, archived,
++liveArticlesLoaded), src/web/ShelfPublicSection.tsx, src/web/PublicLibraryPage.tsx (usePublicShelf),
++src/web/shelf-narrow.ts (filterEntries), and the server search route (grep routes for
++/api/library/search) and src/store/pg-shelf.ts searchLibrary.
++
++Tell me: anything wrong about the code; whether the counts are honest (what "match" means in each
++half, caps, the passage-search MIN_QUERY of 3 vs the card filter which matches any length, Unread and
++topics); whether a second search request per query is acceptable or there is a cheaper honest
++route; race/stale-answer risks; whether the archive list being loaded without the chip changes
++anything visible (scope, ownSlugs); privacy. Simpler designs I missed. Rank P0/P1/P2 with file:line.
++Also check the conclusion: is this the right reading of Greg's words?
+diff --git a/docs/plans/261002b-part-d-plan-review-sol.md b/docs/plans/261002b-part-d-plan-review-sol.md
+new file mode 100644
+index 000000000..e2958df48
+--- /dev/null
++++ b/docs/plans/261002b-part-d-plan-review-sol.md
+@@ -0,0 +1,54 @@
++**No P0 found. Part D is reasonable, but I would revise it before implementation.** The main issues are false zeros, unclear counting scope, and hiding the very buttons Greg requested.
++
++1. **P1 — A capped search cannot justify “no archived articles.”**  
++   The route returns at most **30 passages**, ranked across active and archived articles together. Thirty active passages can occupy every place while archived matches remain unseen. The union of matching archived cards and returned archived passage slugs is therefore a **lower bound** when capped. “0+” must mean *unknown whether any match*, with Include archived still available. Likewise, a truncated public listing with zero matching cards cannot justify “no public matches.”  
++   References: [plan:149–157](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md:149), [routes.ts:4989](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/routes.ts:4989), [pg-shelf.ts:650](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/pg-shelf.ts:650).
++
++2. **P1 — The proposed count does not consistently predict what clicking the chip reveals.**  
++   Archived cards obey **Unread and topics**; passages obey **Unread only**. The proposed archived count applies neither. An opened archived article matching only its card can increase the count while contributing nothing visible after clicking under Unread. Topics are harder: their membership is recalculated over the widened shelf, so current active-only membership cannot predict archived card results.  
++   Simplest honest wording: count matches **before Unread and topic filters**, and say that beside the count. Public counts should immediately say **card matches only; Unread/topics do not apply**, rather than explaining this only after the button is pressed.  
++   References: [Library.tsx:283](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:283), [Library.tsx:409](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:409), [Library.tsx:826](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:826), [useShelfTerms.ts:242](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/useShelfTerms.ts:242).
++
++3. **P1 — Short queries need an explicit counting rule.**  
++   The premise that cards match “any length” needs correcting: `queryTerms` drops terms shorter than **two characters**, `or`, and exclusions. If nothing remains, `filterEntries` returns **every card**. I verified that `a`, `or`, `-holland`, and `a b` all return both unrelated sample cards; `ho` filters them. Passage search runs only when the **trimmed query length is at least three**, independently of these terms.  
++   Consequently, one-character queries must not label the whole archive/public listing “also matching”; two-character queries can count cards but have **not searched text**. An idle passage hook is not a successful zero-match answer. Share the eligibility rule rather than duplicating `3`.  
++   References: [library-hits.ts:96](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/library-hits.ts:96), [shelf-narrow.ts:47](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/shelf-narrow.ts:47), [useLibrarySearch.ts:88](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/useLibrarySearch.ts:88).
++
++4. **P1 — Keep the adjacent buttons when counts are zero, unavailable, or loading.**  
++   The plan explicitly removes the button at zero and drops the half on failure. That weakens Greg’s primary request, particularly when the count is incomplete. Removing `NOT_SEARCHING_ARCHIVE` also removes the existing explanation if the replacement disappears on failure. Keep the action; treat the count as optional supporting information.  
++   References: [plan:157–162](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md:157), [Library.tsx:1186](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:1186).
++
++5. **P1 — Share the public answer and preserve the live-owner gate.**  
++   `ShelfPublicResults` currently owns a `usePublicShelf()` instance. Mounting another for preview counts, then mounting the section on click, makes another request and can produce a different count/result snapshot. Lift one listing state into a persistent shelf child and pass it to both consumers. Retain `liveArticlesLoaded`: a saved owner shelf can omit a newly added owned article, causing the preview to call it somebody else’s.  
++   References: [ShelfPublicSection.tsx:76](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/ShelfPublicSection.tsx:76), [Library.tsx:830](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:830).
++
++6. **P2 — Existing search guards have a same-question-returning race.**  
++   Query and archive echoes correctly reject responses for a different current question. They do not reject an old response after **A → B → A**, if it escapes cancellation. Check `controller.signal.aborted` immediately before committing success or failure, or use a generation. New count rendering must also check query/scope identity before displaying a settled count. Search currently does not refresh for archive/restore/revision changes with unchanged query; reconcile archived hit slugs against the current archive or invalidate the answer when that scope changes.  
++   Reference: [useLibrarySearch.ts:112](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/useLibrarySearch.ts:112).
++
++7. **P2 — Background archive loading has visible error effects.**  
++   Loading the archive with the chip off does **not** widen shelf scope or topic scope: both explicitly check `archivedOn`. It enlarges `ownSlugs`, but normally changes no public rows because the public listing already excludes archived articles. However, `loadArchived` clears `actionError` when starting and sets it on failure; Library displays that error globally even with the chip off. Thus “drop the failed count half” will not hide the background failure and can clear an unrelated action error. Also, the loader accepts offline copies without recording that distinction, so those cannot establish an exact current count.  
++   References: [Library.tsx:965](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:965), [Library.tsx:259](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:259), [useShelf.ts:502](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/useShelf.ts:502), [Library.tsx:634](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:634).
++
++The counting definitions themselves can be honest, with these qualifications:
++
++| Half | What a match means | Completeness |
++|---|---|---|
++| Archived cards | Folded substrings of every retained term across title, author, site and gist | Complete for the loaded archive snapshot |
++| Archived text | English PostgreSQL full-text match in a searchable current-revision block; supports stemming, phrases, OR and exclusions | Distinct slugs among returned passages; incomplete when capped |
++| Public | Same card matcher, excluding owned slugs; no passage search | Latest **200** public, readable, unarchived cards; incomplete when truncated |
++
++Deduplicate the archived union by slug. “+” should explicitly mean **at least this many**, not a promise that additional archived/public matches exist: the omitted rows might all be irrelevant. Public fields also have character limits, so this counts the published **card words**, not all underlying metadata. [pg-shelf.ts:572](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/pg-shelf.ts:572), [public-library.ts:100](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/public-library.ts:100), [public-library.ts:134](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/public-library.ts:134).
++
++**Two debounced searches are acceptable for this beta**, with no AI spend, but they duplicate active search work and transfer passage text merely to count slugs. Returning 30 rows bounds the response, not all ranking work. Do not replace both with one inclusive search and split it client-side: archived passages could displace active passages and change the existing answer.
++
++Two simpler alternatives:
++
++- **Smallest change:** adjacent buttons always; public card counts and clearly labelled archived card counts; passage counts deferred. Greg called counts “extra points.”
++- **Better if text counts matter:** extend the authenticated search response with a separate archived text article count, computed before the passage cap. Label text and card counts separately, avoiding the union/overlap machinery. This saves a browser round trip and snippet transfer, although the database still does additional work.
++
++Privacy looks sound with the existing boundaries: archive search remains owner-scoped; public loading omits credentials and sends no search query; owned-slug exclusion stays local. Keep those properties and avoid logging query text. [pg-shelf.ts:616](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/pg-shelf.ts:616), [public-api.ts:103](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/public-api.ts:103), [routes.ts:5000](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/routes.ts:5000).
++
++**The interpretation of “always” as all search outcomes, including successful searches, is reasonable.** The conclusion that counts therefore belong in this first version is stronger than Greg’s words support. His clear requirement is convenient adjacent buttons; counts are a bonus. Public card-only search is also an explicit v1 compromise, not something his text-search example directly endorses.
++
++Read-only review completed; no files changed. Validation was source inspection plus the direct card-matcher probe.
+\ No newline at end of file
+diff --git a/docs/project/library.md b/docs/project/library.md
+index 48c1db385..bb34c2ae6 100644
+--- a/docs/project/library.md
++++ b/docs/project/library.md
+@@ -380,6 +380,19 @@ about your reading), and it says that when either is on.
+ Include public on. Plan
+ [261002b](../plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md).
+ 
++**Under the search's answer, the two chips again, with how much each would add** — since
++2026-10-02. Greg, spya-s9fhmw: *"add an extra button right there next to that empty-results-message
++for including archived (and another one for including public) … include a sense of how many
++archived and public results would have matched"*. Whenever a query is typed and either chip is off,
++one line ([`ShelfSearchAlso.tsx`](../../src/web/ShelfSearchAlso.tsx)) carries a button for each one
++that is off — always, whatever the count — and a number where an honest one exists. The archived
++number is the server's: `/api/library/search` with the archive left out also returns
++`archivedArticles`, a count of archived articles with a matching passage (`countArchivedMatches` in
++[`pg-shelf.ts`](../../src/store/pg-shelf.ts), the same predicates as the passages, uncapped). So it is
++about the text, and says "mention". The public number is the cards that match by the card rule, off
++the one public read `Library` shares with the Include public section. It replaced the sentence
++*"Archived articles aren't searched — turn on Include archived"*. Plan 261002b § Part D.
++
+ **On a phone, the shelf opens with one line** saying Spideryarn is best on a bigger screen, until
+ dismissed — the article banner's sibling, [touch.md § One banner, once](touch.md#one-banner-once-when-both-will-not-fit).
+ 
+diff --git a/docs/user-feedback/261002_1125-include-buttons-and-counts-beside-the-search.md b/docs/user-feedback/261002_1125-include-buttons-and-counts-beside-the-search.md
+new file mode 100644
+index 000000000..401a19aaf
+--- /dev/null
++++ b/docs/user-feedback/261002_1125-include-buttons-and-counts-beside-the-search.md
+@@ -0,0 +1,30 @@
++---
++reports: spya-s9fhmw
++ending: shipped
++---
++# The Include buttons beside the search's answer, with counts
++
++Report `spya-s9fhmw`, a suggestion, from Greg (admin), 2026-10-02, relayed by the Overseer with no
++Sentry mirror, on `https://www.spideryarn.com/?q=holland`:
++
++> I did a search in the logged-in homepage. It said: "Nothing in the articles' text matches
++> 'holland'. Archived articles aren't searched — turn on Include archived to search them too."
++> Let's add an extra button right there next to that empty-results-message for including archived
++> (and another one for including public), so the user doesn't have to hunt around for it. For extra
++> points, (always) include a sense of how many archived and public results would have matched, so
++> that the user knows whether it's worth bothering to include them.
++
++**Ending: Shipped**, on `dev`. Plan
++[261002b](../plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md)
++§ Part D.
++
++What changed: whenever you search the shelf with Include archived or Include public off, a line
++right under the answer has a button for each, and says how many each would add: *"2 archived
++articles mention it"* (counted on the server, exact) and *"1 public article matches by title,
++author, site or description"*. The buttons are there at zero too, and the zero is said. The old
++"Archived articles aren't searched" sentence is gone; this line says the same with a number and a
++button.
++
++Limits, said rather than hidden: the archived number counts matches in the text, not archived cards
++matching only by title; the public number counts card matches only, since public articles' text is
++not searched; and a one-letter query gets the buttons without numbers.
+diff --git a/src/routes.ts b/src/routes.ts
+index 534bc6889..5e49cf401 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -5017,7 +5017,12 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
+   /* `=== "1"`, the same reading as the shelf's own `?archived=1` below. */
+   const archived = params.get("archived") === "1";
+ 
+-  const { hits, capped } = await librarySearch.searchLibrary(query, limit, { includeArchived: archived });
++  /* With the archive left out, also count what it would have added — one
++     uncapped count beside the capped list (plan 261002b § Part D). */
++  const [{ hits, capped }, archivedArticles] = await Promise.all([
++    librarySearch.searchLibrary(query, limit, { includeArchived: archived }),
++    archived ? Promise.resolve(undefined) : librarySearch.countArchivedMatches(query),
++  ]);
+   return {
+     // Echoed so a client can drop a response that arrived after it moved on.
+     // Debounced typing produces out-of-order responses as a matter of course —
+@@ -5028,6 +5033,7 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
+     hits,
+     articles: new Set(hits.map((h) => h.slug)).size,
+     capped,
++    ...(archivedArticles === undefined ? {} : { archivedArticles }),
+   };
+ }
+ 
+diff --git a/src/store/contracts.ts b/src/store/contracts.ts
+index e60f2bf98..325271c03 100644
+--- a/src/store/contracts.ts
++++ b/src/store/contracts.ts
+@@ -763,6 +763,13 @@ export interface LibrarySearch {
+     limit: number,
+     opts?: LibrarySearchOptions,
+   ): Promise<{ hits: LibraryHit[]; capped: boolean }>;
++
++  /**
++   * How many of the reader's **archived** articles have a passage
++   * `searchLibrary` would match — counted, so uncapped. What the shelf says
++   * beside a search run with Include archived off (plan 261002b § Part D).
++   */
++  countArchivedMatches(query: string): Promise<number>;
+ }
+ 
+ /**
+diff --git a/src/store/pg-shelf.ts b/src/store/pg-shelf.ts
+index cdd810830..3616c9e50 100644
+--- a/src/store/pg-shelf.ts
++++ b/src/store/pg-shelf.ts
+@@ -19,7 +19,7 @@
+  *    find. See docs/plans/260826e-postgres-storage-implementation.md § Rules.
+  */
+ 
+-import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
++import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+ 
+ import { getDb } from "../db/client.js";
+ import { articles, articleRevisions, ingestEvents, jobs, revisionBlocks } from "../db/schema.js";
+@@ -550,6 +550,49 @@ async function entryFor(slug: string, archived: boolean): Promise<LibraryEntry>
+   return entry;
+ }
+ 
++
++/* --------------------------------------------- one rule for "a passage matches" --- */
++
++/**
++ * Joined on `current_revision_id`, not just on `article_id`. Without it a
++ * search would return the same paragraph once per historical revision — and
++ * since the pipeline publishes a new revision on every re-run, an article you
++ * had rebuilt three times would quietly outrank everything else by having three
++ * copies of itself in the results.
++ *
++ * Shared by `searchLibrary` and `countArchivedMatches` so that "the archive has
++ * 3 articles that mention it" and the passages the chip then reveals are
++ * answers to the same question (plan 261002b § Part D).
++ */
++const currentRevisionOfItsArticle = and(
++  eq(articles.id, revisionBlocks.articleId),
++  eq(articles.currentRevisionId, revisionBlocks.revisionId),
++);
++
++/** What makes a block a hit, whoever is asking — everything but the archive rule. */
++function matchingPassage(tsquery: ReturnType<typeof sql>) {
++  return [
++    /* **Your library, not the union of everybody's.** This one is reached
++       by chat's `search_library` tool as well as by the reader's own box,
++       so without it a model answering your question could quote a
++       stranger's article back at you. src/store/pg.ts § `ownedSlug`. */
++    ownedByReader(),
++    /* Headings and media carry no prose worth a snippet, and a hit on a
++       one-word heading is noise at the top of the list.
++
++       **And no `treatment <> 'supplement'` beside it, deliberately.** This
++       is library full-text search, and `isSearchable` in
++       src/block-policy.ts is the one predicate of the five that includes
++       supplements: a note is often the best sentence in a piece, and a
++       reader who searches for it has to find it. docs/plans/260828o-footnotes.md
++       recorded the opposite as work to do and was wrong; GPT Sol's
++       decision 4. tests/library-search.test.ts holds the filesystem half
++       to the same rule, and tests/block-policy.test.ts guards this line. */
++    eq(revisionBlocks.gistable, true),
++    sql`${revisionBlocks.fts} @@ ${tsquery}`,
++  ];
++}
++
+ const rawPgLibrarySearch: LibrarySearch = {
+   async searchLibrary(query: string, limit: number, opts: LibrarySearchOptions = {}) {
+     const trimmed = query.trim();
+@@ -598,22 +641,10 @@ const rawPgLibrarySearch: LibrarySearch = {
+       })
+       .from(revisionBlocks)
+       .innerJoin(articleRevisions, eq(articleRevisions.id, revisionBlocks.revisionId))
+-      /* Joined on `current_revision_id`, not just on `article_id`. Without it a
+-         search would return the same paragraph once per historical revision —
+-         and since the pipeline publishes a new revision on every re-run, an
+-         article you had rebuilt three times would quietly outrank everything
+-         else by having three copies of itself in the results. */
+-      .innerJoin(
+-        articles,
+-        and(eq(articles.id, revisionBlocks.articleId), eq(articles.currentRevisionId, revisionBlocks.revisionId)),
+-      )
++      .innerJoin(articles, currentRevisionOfItsArticle)
+       .where(
+         and(
+-          /* **Your library, not the union of everybody's.** This one is reached
+-             by chat's `search_library` tool as well as by the reader's own box,
+-             so without it a model answering your question could quote a
+-             stranger's article back at you. src/store/pg.ts § `ownedSlug`. */
+-          ownedByReader(),
++          ...matchingPassage(tsquery),
+           /* Archived articles are out of the index, not filtered from the
+              results — unless the reader asked for them with the shelf's
+              Include archived chip, and then each hit says it is archived so
+@@ -628,19 +659,6 @@ const rawPgLibrarySearch: LibrarySearch = {
+              An unknown slug simply excludes nothing; `ne` on a column with no
+              such value is true for every row. */
+           ...(opts.excludeSlug ? [ne(articles.slug, opts.excludeSlug)] : []),
+-          /* Headings and media carry no prose worth a snippet, and a hit on a
+-             one-word heading is noise at the top of the list.
+-
+-             **And no `treatment <> 'supplement'` beside it, deliberately.** This
+-             is library full-text search, and `isSearchable` in
+-             src/block-policy.ts is the one predicate of the five that includes
+-             supplements: a note is often the best sentence in a piece, and a
+-             reader who searches for it has to find it. docs/plans/260828o-footnotes.md
+-             recorded the opposite as work to do and was wrong; GPT Sol's
+-             decision 4. tests/library-search.test.ts holds the filesystem half
+-             to the same rule, and tests/block-policy.test.ts guards this line. */
+-          eq(revisionBlocks.gistable, true),
+-          sql`${revisionBlocks.fts} @@ ${tsquery}`,
+         ),
+       )
+       /* Tie-broken by slug then position, so two equally-ranked passages come
+@@ -663,6 +681,25 @@ const rawPgLibrarySearch: LibrarySearch = {
+     log("store").debug({ hits: hits.length, capped }, "library search");
+     return { hits, capped };
+   },
++
++  /* **How many archived articles the search would have found**, counted rather
++     than listed, so no cap applies. The shelf says it beside a search run with
++     Include archived off — Greg, spya-s9fhmw: *"include a sense of how many
++     archived and public results would have matched, so that the user knows
++     whether it's worth bothering"*. Same parse, same predicates; only the
++     archive rule is turned round. */
++  async countArchivedMatches(query: string) {
++    const trimmed = query.trim();
++    if (!trimmed) return 0;
++    const tsquery = sql`websearch_to_tsquery(${CONFIG}, ${trimmed})`;
++    const [row] = await getDb()
++      .select({ n: sql<number>`count(distinct ${articles.id})::int` })
++      .from(revisionBlocks)
++      .innerJoin(articleRevisions, eq(articleRevisions.id, revisionBlocks.revisionId))
++      .innerJoin(articles, currentRevisionOfItsArticle)
++      .where(and(...matchingPassage(tsquery), isNotNull(articles.archivedAt)));
++    return Number(row?.n ?? 0);
++  },
+ };
+ 
+ /** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
+diff --git a/src/types.ts b/src/types.ts
+index 7a15e54a0..4c89b043b 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -2176,6 +2176,14 @@ export interface LibrarySearchResponse {
+    * silent-success shape this repo keeps meeting.
+    */
+   capped: boolean;
++  /**
++   * With `archived` false only: how many archived articles have a matching
++   * passage — counted on the server, before any cap, so it is exact. The shelf
++   * puts it beside the Include archived button under the search's answer
++   * (Greg, spya-s9fhmw; plan 261002b § Part D). Absent when `archived` is true,
++   * because then they are in `hits` already.
++   */
++  archivedArticles?: number;
+ }
+ 
+ /**
+diff --git a/src/web/Library.tsx b/src/web/Library.tsx
+index 0b47cb3d3..d9e23b4b4 100644
+--- a/src/web/Library.tsx
++++ b/src/web/Library.tsx
+@@ -92,7 +92,9 @@ import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
+ import { SiteFooter } from "./SiteFooter.js";
+ import { Tooltip, TooltipGroup } from "./Tooltip.js";
+ import { useJobs } from "./useJobs.js";
+-import { useLibrarySearch } from "./useLibrarySearch.js";
++import { MIN_QUERY, useLibrarySearch } from "./useLibrarySearch.js";
++import { usePublicShelf } from "./PublicLibraryPage.js";
++import { type ArchivedTally, ShelfSearchAlso } from "./ShelfSearchAlso.js";
+ import { useNow } from "./useNow.js";
+ import { useSession } from "./useSession.js";
+ import { useShelf } from "./useShelf.js";
+@@ -389,6 +391,28 @@ export function Library({
+   // Matcher two: the passages inside the articles, from the server.
+   const passages = useLibrarySearch(query, archivedOn);
+ 
++  /* **One read of the public listing**, for the Include public section and for
++     the count beside the search's answer, so the two are the same snapshot
++     (plan 261002b § Part D). Started only once the live owner shelf is in —
++     a saved copy cannot say which public articles are somebody else's — and
++     only when something wants it. */
++  const publicListing = usePublicShelf(
++    shelf.liveArticlesLoaded && (publicOn || queryTerms(query).length > 0),
++  );
++
++  /* The archive's half of that count: the server's, off the passage search
++     run without the archive — taken only from the answer to *this* query, and
++     only once the query is long enough to have been searched at all. */
++  const archivedTally: ArchivedTally = useMemo(() => {
++    const eligible = query.trim().length >= MIN_QUERY;
++    const current =
++      passages.asked && passages.resultsQuery === query.trim() && !passages.resultsArchived;
++    return {
++      count: eligible && current ? (passages.archivedArticles ?? null) : null,
++      checking: eligible && passages.searching,
++    };
++  }, [query, passages]);
++
+   const searching = query.trim().length > 0;
+   /* Every count is over the one list: `total` is what is in scope, `showing`
+      what survives the narrowing. The archived share of each is named in the
+@@ -825,6 +849,23 @@ export function Library({
+           something you have already read" is the useful half of that answer. */}
+       {searching && <Passages state={passages} query={query} only={unread} archived={archivedOn} />}
+ 
++      {/* **Right after the search's answer: what it left out, how much, and the
++          button.** Greg, spya-s9fhmw. ShelfSearchAlso.tsx; plan 261002b § Part D. */}
++      {searching && (!archivedOn || !publicOn) && (
++        <ShelfSearchAlso
++          query={query}
++          archivedOn={archivedOn}
++          publicOn={publicOn}
++          archived={archivedTally}
++          listing={publicListing}
++          listingReady={shelf.liveArticlesLoaded}
++          ownSlugs={ownSlugs}
++          narrowedElsewhere={show === "unread" || topics.length > 0}
++          onArchived={() => pushView(() => void setArchivedOn(true))}
++          onPublic={() => pushView(() => void setPublicOn(true))}
++        />
++      )}
++
+       {/* After your own articles and their passages, because it is the
+           further reach: the same search box, someone else's shelf. */}
+       {/* A saved shelf copy is deliberately enough to paint the owner's cards,
+@@ -832,6 +873,7 @@ export function Library({
+           missing an article added since the last visit. Wait for the live
+           owner list before starting the anonymous public read. */}
+       <ShelfPublicSection
++        listing={publicListing}
+         enabled={publicOn}
+         ownerLoaded={articles !== null}
+         ownerReady={shelf.liveArticlesLoaded}
+@@ -1179,11 +1221,9 @@ function Passages({
+     return (
+       <p className="tw:mt-8 tw:text-sm tw:text-muted-foreground">
+         Nothing in the articles' text matches “{query.trim()}”.
+-        {/* Said once, here, at the end of the search's two answers. Greg
+-            searched for an article he had just archived, found nothing, and
+-            could not tell whether that was the archive or the search
+-            (SPIDERYARN-READING2-72). */}
+-        {!archived && <> {NOT_SEARCHING_ARCHIVE}</>}
++        {/* That the archive was not searched used to be said here, as a
++            sentence (SPIDERYARN-READING2-72). It is the line straight after
++            now, with a count and a button — ShelfSearchAlso.tsx, spya-s9fhmw. */}
+       </p>
+     );
+   }
+@@ -1212,7 +1252,6 @@ function Passages({
+       <section className="tw:mt-8">
+         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
+           Nothing in an unopened article's text matches “{query.trim()}”.
+-          {!archived && <> {NOT_SEARCHING_ARCHIVE}</>}
+         </p>
+         {alsoIn}
+       </section>
+@@ -1240,12 +1279,6 @@ function Passages({
+   );
+ }
+ 
+-/**
+- * What the passages say when they found nothing and the archive was not asked.
+- * The chip's visible words, so the reader can see which one it means.
+- */
+-const NOT_SEARCHING_ARCHIVE = "Archived articles aren't searched — turn on Include archived to search them too.";
+-
+ /** How much of the paragraph to show. Wide enough to judge, short enough to skim. */
+ const SNIPPET_CHARS = 200;
+ 
+diff --git a/src/web/PublicLibraryPage.tsx b/src/web/PublicLibraryPage.tsx
+index c84cac683..1b5bd846c 100644
+--- a/src/web/PublicLibraryPage.tsx
++++ b/src/web/PublicLibraryPage.tsx
+@@ -397,7 +397,15 @@ export type ShelfState =
+  * a reader something false about the world with complete confidence, which is
+  * worse than admitting we could not read it. src/web/public-api.ts.
+  */
+-export function usePublicShelf(): { state: ShelfState; again: () => void } {
++export function usePublicShelf(
++  /**
++   * Whether to read at all. The page always does; the owner's shelf only once
++   * Include public is on or a search wants the count, and its live shelf has
++   * answered (Library.tsx; plan 261002b § Part D). It reads once, the first
++   * time this is true, and keeps the answer if it goes false again.
++   */
++  enabled = true,
++): { state: ShelfState; again: () => void } {
+   const [state, setState] = useState<ShelfState>({ kind: "loading" });
+   /**
+    * **Which read is allowed to answer**, and it is a ref rather than state
+@@ -444,9 +452,12 @@ export function usePublicShelf(): { state: ShelfState; again: () => void } {
+       });
+   }, []);
+ 
++  const started = useRef(false);
+   useEffect(() => {
++    if (!enabled || started.current) return;
++    started.current = true;
+     again();
+-  }, [again]);
++  }, [again, enabled]);
+ 
+   return { state, again };
+ }
+diff --git a/src/web/ShelfPublicSection.tsx b/src/web/ShelfPublicSection.tsx
+index ad8586e4b..18b1c08ed 100644
+--- a/src/web/ShelfPublicSection.tsx
++++ b/src/web/ShelfPublicSection.tsx
+@@ -18,16 +18,17 @@
+  * and the same anonymous read (`usePublicShelf`) that page makes: no new route,
+  * no new query, nothing new in the public import graph.
+  *
+- * The results child is mounted only while the chip is on and a live owner
+- * shelf has established whose slugs must be removed, so the public read happens
+- * only then. A saved shelf copy may paint the owner's cards but cannot make
+- * that ownership claim.
++ * The read itself is `Library`'s — one `usePublicShelf`, shared with the count
++ * beside the search's answer (ShelfSearchAlso.tsx), so the number and what this
++ * section then shows are the same snapshot. It starts only once a live owner
++ * shelf has established whose slugs must be removed: a saved shelf copy may
++ * paint the owner's cards but cannot make that ownership claim.
+  *
+  * docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md § Part A.
+  */
+ import { useMemo } from "react";
+ import { PUBLIC_SHELF_FAILED, PUBLIC_SHELF_RETRY } from "../messages.js";
+-import { PublicCard, usePublicShelf } from "./PublicLibraryPage.js";
++import { PublicCard, type usePublicShelf } from "./PublicLibraryPage.js";
+ import { filterEntries } from "./shelf-narrow.js";
+ import { useSlow } from "./useSlow.js";
+ 
+@@ -53,6 +54,8 @@ export function ShelfPublicSection({
+ }
+ 
+ interface ShelfPublicProps {
++  /** `Library`'s one read of the public listing. */
++  listing: ReturnType<typeof usePublicShelf>;
+   /** The shelf's search box — the one narrowing that applies here. */
+   query: string;
+   /**
+@@ -69,11 +72,11 @@ interface ShelfPublicProps {
+ }
+ 
+ function ShelfPublicResults({
++  listing: { state, again },
+   query,
+   ownSlugs,
+   narrowedElsewhere,
+ }: ShelfPublicProps) {
+-  const { state, again } = usePublicShelf();
+   const slow = useSlow(state.kind === "loading");
+ 
+   const others = useMemo(
+diff --git a/src/web/ShelfSearchAlso.tsx b/src/web/ShelfSearchAlso.tsx
+new file mode 100644
+index 000000000..9eaab0410
+--- /dev/null
++++ b/src/web/ShelfSearchAlso.tsx
+@@ -0,0 +1,138 @@
++/**
++ * **What the search left out, and the button that puts it back in** — one line
++ * under the search's answers whenever a query is typed and Include archived or
++ * Include public is off.
++ *
++ * > Let's add an extra button right there next to that empty-results-message
++ * > for including archived (and another one for including public), so the user
++ * > doesn't have to hunt around for it. For extra points, (always) include a
++ * > sense of how many archived and public results would have matched, so that
++ * > the user knows whether it's worth bothering to include them.
++ * >
++ * > — Greg, 2026-10-02 (spya-s9fhmw)
++ *
++ * **The buttons are the promise; the counts are the extra.** Each button is
++ * drawn whenever its chip is off — at zero, while counting, after a failure —
++ * and does exactly what the chip does. A number is shown only where it is
++ * honest:
++ *
++ * - **Archived** is the server's own count of archived articles with a passage
++ *   that matches (`archivedArticles` on the search answer), uncapped and by the
++ *   same predicates as the passages. It is about the *text*, so it says
++ *   "mention"; an archived card matching only by its title is not in it.
++ * - **Public** is the public cards by other readers that the search box's card
++ *   rule matches, off the same read the Include public section shows. The
++ *   listing is capped, so a truncated one says "at least".
++ *
++ * docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md § Part D.
++ */
++import type { ReactNode } from "react";
++import { queryTerms } from "./library-hits.js";
++import type { usePublicShelf } from "./PublicLibraryPage.js";
++import { filterEntries } from "./shelf-narrow.js";
++
++/** What the archive's half knows. `null` count: not counted (yet, or at all). */
++export interface ArchivedTally {
++  count: number | null;
++  checking: boolean;
++}
++
++export function ShelfSearchAlso({
++  query,
++  archivedOn,
++  publicOn,
++  archived,
++  listing,
++  listingReady,
++  ownSlugs,
++  narrowedElsewhere,
++  onArchived,
++  onPublic,
++}: {
++  query: string;
++  archivedOn: boolean;
++  publicOn: boolean;
++  archived: ArchivedTally;
++  /** `Library`'s one read of the public listing. */
++  listing: ReturnType<typeof usePublicShelf>;
++  /** The read has been allowed to start — the live owner shelf is in. */
++  listingReady: boolean;
++  ownSlugs: ReadonlySet<string>;
++  /** Unread or a topic is on; the counts are taken before either. */
++  narrowedElsewhere: boolean;
++  onArchived: () => void;
++  onPublic: () => void;
++}) {
++  const parts: ReactNode[] = [];
++  let counted = false;
++
++  if (!archivedOn) {
++    let said: string | null = null;
++    if (archived.count !== null) {
++      counted = true;
++      said =
++        archived.count === 0
++          ? "No archived article mentions it."
++          : `${archived.count} archived ${archived.count === 1 ? "article mentions" : "articles mention"} it.`;
++    } else if (archived.checking) {
++      said = "Checking the archive…";
++    }
++    parts.push(
++      <span key="archived">
++        {said && <>{said} </>}
++        <Act onClick={onArchived}>Include archived</Act>
++      </span>,
++    );
++  }
++
++  if (!publicOn) {
++    let said: string | null = null;
++    /* A query the card rule keeps no term of matches *every* card
++       (`filterEntries`), so it is not counted at all — "every public article
++       matches" would be true and useless. */
++    const countable = queryTerms(query).length > 0;
++    const { state } = listing;
++    if (countable && listingReady && state.kind === "loaded") {
++      counted = true;
++      const n = filterEntries(
++        state.shelf.entries.filter((e) => !ownSlugs.has(e.slug)),
++        query,
++      ).length;
++      const capped = state.shelf.truncated;
++      said =
++        n === 0
++          ? capped
++            ? "None of the most recently shared public articles matches by title, author, site or description."
++            : "No public article matches by title, author, site or description."
++          : `${capped ? "At least " : ""}${n} public ${n === 1 ? "article matches" : "articles match"} by title, author, site or description.`;
++    } else if (countable && listingReady && state.kind === "loading") {
++      said = "Checking public articles…";
++    }
++    parts.push(
++      <span key="public">
++        {said && <>{said} </>}
++        <Act onClick={onPublic}>Include public</Act>
++      </span>,
++    );
++  }
++
++  if (parts.length === 0) return null;
++  return (
++    <p data-search-also="" className="tw:mt-4 tw:flex tw:flex-wrap tw:gap-x-4 tw:gap-y-1 tw:text-sm tw:text-muted-foreground">
++      {parts}
++      {counted && narrowedElsewhere && <span>Counted before Unread and topics.</span>}
++    </p>
++  );
++}
++
++function Act({ onClick, children }: { onClick: () => void; children: ReactNode }) {
++  return (
++    <button
++      type="button"
++      onClick={onClick}
++      className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline"
++    >
++      {children}
++    </button>
++  );
++}
+diff --git a/src/web/useLibrarySearch.ts b/src/web/useLibrarySearch.ts
+index f6cbb6f14..44934d57b 100644
+--- a/src/web/useLibrarySearch.ts
++++ b/src/web/useLibrarySearch.ts
+@@ -35,7 +35,7 @@ const DEBOUNCE_MS = 250;
+  * src/library-search.ts) — so the request would reliably cost a walk over every
+  * paragraph to return nothing.
+  */
+-const MIN_QUERY = 3;
++export const MIN_QUERY = 3;
+ 
+ export interface LibrarySearchState {
+   hits: LibraryHit[];
+@@ -54,6 +54,8 @@ export interface LibrarySearchState {
+   /** How many articles those hits are spread across. */
+   articles: number;
+   capped: boolean;
++  /** `LibrarySearchResponse.archivedArticles`: set only on an answer asked without the archive. */
++  archivedArticles?: number;
+   /** True while a request for the current query is in flight. */
+   searching: boolean;
+   error: string | null;
+@@ -113,12 +115,17 @@ export function useLibrarySearch(query: string, includeArchived: boolean): Libra
+           // The answer to a question nobody is asking any more.
+           if (body.query !== current.current.query.trim()) return;
+           if (body.archived !== current.current.includeArchived) return;
++          /* Aborted, and so superseded — even if the words and the chip are
++             back where they were (A → B → A), this is the old A's answer.
++             GPT Sol, plan 261002b § Part D review. */
++          if (controller.signal.aborted) return;
+           setState({
+             hits: body.hits,
+             resultsQuery: body.query,
+             resultsArchived: body.archived,
+             articles: body.articles,
+             capped: body.capped,
++            ...(body.archivedArticles === undefined ? {} : { archivedArticles: body.archivedArticles }),
+             searching: false,
+             error: null,
+             asked: true,
+@@ -132,6 +139,7 @@ export function useLibrarySearch(query: string, includeArchived: boolean): Libra
+           // failure replace newer results (plan 260930d code review).
+           if (current.current.query.trim() !== trimmed) return;
+           if (current.current.includeArchived !== includeArchived) return;
++          if (controller.signal.aborted) return;
+           setState({ ...IDLE, error: e.message, asked: true });
+         });
+     }, DEBOUNCE_MS);
+diff --git a/tests/routes.test.ts b/tests/routes.test.ts
+index 01b485717..c796ff1f7 100644
+--- a/tests/routes.test.ts
++++ b/tests/routes.test.ts
+@@ -562,6 +562,11 @@ describe("the shelf routes", () => {
+     const on = await call("GET", "/api/library/search?q=the&archived=1");
+     expect(on.status).toBe(200);
+     expect((on.body as unknown as { archived: boolean }).archived).toBe(true);
++    // And with the archive left out, how many archived articles it would have
++    // added — a number, counted; absent when they are already in the hits
++    // (plan 261002b § Part D).
++    expect(typeof (off.body as unknown as { archivedArticles?: number }).archivedArticles).toBe("number");
++    expect((on.body as unknown as { archivedArticles?: number }).archivedArticles).toBeUndefined();
+   });
+ 
+   it("answers an empty search with an empty list, not an error", async () => {
+diff --git a/tests/shelf-archived-in-the-list.test.tsx b/tests/shelf-archived-in-the-list.test.tsx
+index ed76515d5..30f8b4732 100644
+--- a/tests/shelf-archived-in-the-list.test.tsx
++++ b/tests/shelf-archived-in-the-list.test.tsx
+@@ -119,7 +119,10 @@ vi.mock("../src/web/lib/api.js", () => ({
+         withArchive && query === "zibble"
+           ? [{ slug: "delta", title: "Delta", blockId: "spya-k3m9qt", text: "a zibble in Delta", rank: 1, archived: true }]
+           : [];
+-      return json({ query, archived: withArchive, hits, articles: hits.length, capped: false });
++      /* With the archive left out, the server also counts the archived
++         articles that would have matched (plan 261002b § Part D). */
++      const count = withArchive ? {} : { archivedArticles: query === "zibble" ? 1 : 0 };
++      return json({ query, archived: withArchive, hits, articles: hits.length, capped: false, ...count });
+     }
+     return json({ error: "unmocked" }, 404);
+   },
+@@ -525,12 +528,28 @@ describe("the Archived chip", () => {
+     expect(passage()?.querySelector("[data-archived-mark]"), "marked Archived").toBeTruthy();
+   });
+ 
+-  it("says the archive was not searched when off and nothing matched", async () => {
++  it("says, beside the empty answer, how many archived articles mention it, with a button that includes them", async () => {
++    /* Greg, spya-s9fhmw: *"add an extra button right there next to that
++       empty-results-message for including archived … include a sense of how
++       many archived … results would have matched"*. Plan 261002b § Part D. */
+     await show("/?q=zibble");
+-    const line = () => [...host.querySelectorAll("p")].find((p) => p.textContent?.includes("Archived articles aren't searched"));
+-    await waitFor(() => !!line(), "the nothing-found line");
++    const line = () => host.querySelector<HTMLElement>("[data-search-also]");
++    await waitFor(() => !!line()?.textContent?.includes("1 archived article mentions it"), "the count");
+     expect(asked).toContain("GET /api/library/search?q=zibble");
+-    expect(line()?.textContent).toContain("turn on Include archived");
++    const button = [...(line()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Include archived");
++    expect(button, "the button beside it").toBeTruthy();
++    if (!button) return;
++    click(button);
++    await waitFor(() => params().get("archived") === "1", "the chip on, in the URL");
++    const passage = () => [...host.querySelectorAll("section li a")].find((a) => a.textContent?.includes("zibble"));
++    await waitFor(() => !!passage(), "the archived passage after pressing it");
++  });
++
++  it("keeps the button at zero, and says zero", async () => {
++    await show("/?q=nothing");
++    const line = () => host.querySelector<HTMLElement>("[data-search-also]");
++    await waitFor(() => !!line()?.textContent?.includes("No archived article mentions it"), "the zero");
++    expect([...(line()?.querySelectorAll("button") ?? [])].map((b) => b.textContent)).toContain("Include archived");
+   });
+ 
+   it("asks again when the chip is pressed with the words unchanged", async () => {
+diff --git a/tests/shelf-include-public.test.tsx b/tests/shelf-include-public.test.tsx
+index fff7e28ff..ff6cdec7d 100644
+--- a/tests/shelf-include-public.test.tsx
++++ b/tests/shelf-include-public.test.tsx
+@@ -262,7 +262,10 @@ describe("the Include public chip", () => {
+     await traverse(() => history.forward());
+     expect(publicChip()?.getAttribute("aria-pressed")).toBe("true");
+     expect(publicTitles()).toEqual(["Zebra crossings", "Yak shaving"]);
+-    expect(publicReads).toBe(2);
++    /* One read: the listing is `Library`'s since Part D, shared by the section
++       and the search's count, so turning the chip off and on again does not
++       ask again. */
++    expect(publicReads).toBe(1);
+   });
+ 
+   it("says when a search leaves none, and says the cap", async () => {
+@@ -301,6 +304,43 @@ describe("the Include public chip", () => {
+   });
+ });
+ 
++describe("beside the search's answer (spya-s9fhmw)", () => {
++  const line = () => host.querySelector<HTMLElement>("[data-search-also]");
++  const buttons = () => [...(line()?.querySelectorAll("button") ?? [])].map((b) => b.textContent);
++
++  it("counts the public cards that match, offers Include public, and pressing it shows them", async () => {
++    await show("/?q=ann");
++    expect(line()?.textContent).toContain("1 public article matches by title, author, site or description.");
++    expect(buttons()).toEqual(["Include archived", "Include public"]);
++    const press = [...(line()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Include public");
++    act(() => press?.click());
++    await settle();
++    expect(new URLSearchParams(location.search).get("public")).toBe("1");
++    expect(publicTitles()).toEqual(["Zebra crossings"]);
++    // One read for the count and the section both.
++    expect(publicReads).toBe(1);
++    expect(buttons()).toEqual(["Include archived"]);
++  });
++
++  it("does not count your own shared article as public, and says 'at least' when the listing is capped", async () => {
++    truncated = true;
++    await show("/?q=mine");
++    expect(line()?.textContent).toContain("None of the most recently shared public articles matches");
++    expect(buttons()).toContain("Include public");
++  });
++
++  it("does not count a query the card rule keeps no word of, but still offers the buttons", async () => {
++    await show("/?q=a");
++    expect(line()?.textContent).not.toContain("public article");
++    expect(buttons()).toEqual(["Include archived", "Include public"]);
++  });
++
++  it("says the counts come before Unread and topics when either is on", async () => {
++    await show("/?q=ann&show=unread");
++    expect(line()?.textContent).toContain("Counted before Unread and topics.");
++  });
++});
++
+ describe("an empty shelf", () => {
+   beforeEach(() => {
+     active = [];
+diff --git a/tests/store-shelf-pg.test.ts b/tests/store-shelf-pg.test.ts
+index 224411b00..34a631290 100644
+--- a/tests/store-shelf-pg.test.ts
++++ b/tests/store-shelf-pg.test.ts
+@@ -607,6 +607,20 @@ describe("the Postgres shelf and library search", () => {
+       }
+     });
+ 
++    it("counts the archived articles a search would have added, and only those", async () => {
++      /* What the shelf says beside Include archived under a search's answer —
++         Greg, spya-s9fhmw; plan 261002b § Part D. Active, it is not counted:
++         it is already in the hits. Archived, it is. */
++      expect(await pgLibrarySearch.countArchivedMatches(RARE)).toBe(0);
++      await pgShelfStore.patch(SLUG, { archived: true });
++      try {
++        expect(await pgLibrarySearch.countArchivedMatches(RARE)).toBe(1);
++        expect(await pgLibrarySearch.countArchivedMatches("")).toBe(0);
++      } finally {
++        await pgShelfStore.patch(SLUG, { archived: false });
++      }
++    });
++
+     /* ---- ported from tests/shelf.test.ts, 2026-09-05 ----------------------
+        `patchShelf` on the filesystem side held the title cap, the three
+        blank-clears-it rules and every claim about `purpose`, and every one of

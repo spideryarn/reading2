@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ModelNode } from "../src/hierarchy.js";
+import type { ModelNode } from "../src/structure.js";
 import {
   gateReplayResults,
   rangedAnswerWithoutEnds,
-  replayStructureAnswer,
+  replayWholeDocumentAnswer,
   type ReplayResult,
 } from "../evals/paperwork/structure-starts-replay.js";
 import type { Block } from "../src/types.js";
@@ -45,7 +45,7 @@ describe("the starts-only offline replay", () => {
   });
 
   it("reports an agreeing ranged answer as an identical replay", () => {
-    const result = replayStructureAnswer("answer-1", { root: agreeing }, blocks);
+    const result = replayWholeDocumentAnswer("answer-1", { root: agreeing }, blocks);
     expect(result).toMatchObject({
       label: "answer-1",
       baselineBuildable: true,
@@ -71,7 +71,7 @@ describe("the starts-only offline replay", () => {
         { title: "Secret close", range: [id(4), id(5)] },
       ],
     };
-    const result = replayStructureAnswer("fallback", { root: fallback }, blocks);
+    const result = replayWholeDocumentAnswer("fallback", { root: fallback }, blocks);
     expect(result.baselineBuildable).toBe(true);
     expect(result.newlyUnbuildable).toBe(false);
     expect(result.additionalDroppedChildren).toBe(1);
@@ -89,7 +89,7 @@ describe("the starts-only offline replay", () => {
         { title: "Secret model second", range: [id(3), id(5)] },
       ],
     };
-    const result = replayStructureAnswer("private", { root: changed }, blocks);
+    const result = replayWholeDocumentAnswer("private", { root: changed }, blocks);
     const printed = result.diff.join("\n");
     expect(printed).toMatch(/title#[0-9a-f]{10}/);
     expect(printed).toContain("spya-r00000");
@@ -100,7 +100,7 @@ describe("the starts-only offline replay", () => {
 
   it("applies every aggregate gate, including zero changes below 100 answers", () => {
     expect(gateReplayResults([]).pass).toBe(false);
-    const good = replayStructureAnswer("good", { root: agreeing }, blocks);
+    const good = replayWholeDocumentAnswer("good", { root: agreeing }, blocks);
     expect(gateReplayResults([good])).toEqual({ pass: true, reasons: [] });
 
     const newlyUnbuildable: ReplayResult = { ...good, newlyUnbuildable: true, identical: null };

@@ -220,7 +220,7 @@ beforeAll(async () => {
       return new Response(refusal(), { status: 200, headers: { "content-type": "text/event-stream" } });
     };
 
-    const { generateHierarchy } = await import(${src("hierarchy.ts")});
+    const { generateStructure } = await import(${src("structure.ts")});
     const { generateArc } = await import(${src("arc.ts")});
     const { generateTweets } = await import(${src("tweets.ts")});
     const { generateGlossary } = await import(${src("glossary.ts")});
@@ -264,7 +264,7 @@ beforeAll(async () => {
       }
     };
 
-    await step("hierarchy", () => generateHierarchy({ blocks, slug: "stop-details", checkpoints: nullCheckpointStore() }));
+    await step("hierarchy", () => generateStructure({ blocks, slug: "stop-details", checkpoints: nullCheckpointStore() }));
     await step("arc", () => generateArc({ article }));
     await step("tweets", () => generateTweets({ article }));
     await step("glossary", () => generateGlossary({ article, previous: null }));

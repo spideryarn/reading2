@@ -5,7 +5,7 @@ R3 is sound. R2’s arithmetic is sound per boundary, but the implementation rep
 ### Findings
 
 1. **High — the structure eval silently stops measuring these faults.**  
-   [`assembleTree`](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/hierarchy-structure/model-arms.ts:393) calls `buildTree` without a report. One-block faults now become `outcome: "ok"` rather than `"threw"`, with no repair count. Invalid headings are removed before [`sourceHeadingValid`](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/hierarchy-structure/score.ts:334), making that measure necessarily `1` or `null` for paid arms.  
+   [`assembleTree`](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/structure-whole-document/model-arms.ts:393) calls `buildTree` without a report. One-block faults now become `outcome: "ok"` rather than `"threw"`, with no repair count. Invalid headings are removed before [`sourceHeadingValid`](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/structure-whole-document/score.ts:334), making that measure necessarily `1` or `null` for paid arms.  
    Keep the production outcome repaired, but add repairs to each eval result—or give `buildTree` an explicit strict/raw mode. The current optional report controls observation, not behavior.
 
 2. **Medium — “one-block bounded” is local, not per answer.**  

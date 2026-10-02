@@ -84,7 +84,7 @@ failure is an assumed idea that launders the model's own reading through the art
 
 ## Hierarchy — the tree Structure, the zoom and the gists all read
 
-From [hierarchy.md](../../docs/project/hierarchy.md) and
+From [structure-step.md](../../docs/project/structure-step.md) and
 [granularity-zoom.md](../../docs/project/granularity-zoom.md): a nested structure of the article
 (ranges, nesting, titles, a one-sentence gist on each internal node) that every reading mode
 depends on. **Held to a higher bar**: a structural regression is disqualifying on its own.

@@ -122,7 +122,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   CALLBACK_PATH: "/auth/callback",
 }));
 
-const { PublicLibraryPage } = await import("../src/web/PublicLibraryPage.js");
+const { PublicLibraryPage, usePublicShelf } = await import("../src/web/PublicLibraryPage.js");
 
 /**
  * Two cards, and every field a card can draw is populated on the first and
@@ -363,48 +363,58 @@ describe("when the read fails", () => {
   });
 });
 
-/**
- * **Two reads in the air at once, which is the production configuration and not
- * an edge case** — `main.tsx` mounts the app inside `<StrictMode>`, so in
- * development every effect runs mount → cleanup → mount and this page issues two
- * requests before either answers.
- *
- * The failure that reaches for is a page showing **two states at once**. The
- * hook held `shelf` and `failed` as independent flags, each set by one branch of
- * one promise and neither clearing the other, so a failing read landing before a
- * succeeding one left both true — the error paragraph drawn above the list of
- * cards, each of them individually correct. GPT Sol's review of this stage,
- * 2026-09-04; the remedy is a single discriminated state, which makes the
- * combination unrepresentable rather than merely untested.
- *
- * **The assertion is exclusivity rather than a particular winner.** Which read
- * lands last is not something this page promises, and pinning it would make the
- * test fail for a reason that is nobody's fault.
- */
-describe("when two reads overlap", () => {
-  it("never shows a failure and a list at the same time", async () => {
-    /* The first read fails and the second succeeds, which is the ordering that
-       produced the defect. `answer` is called per request. */
-    let call = 0;
-    const page = await show(() => (++call === 1 ? null : TWO), { strict: true });
+/* Part D reads once even under StrictMode. Exercise overlapping reads with
+   explicit retries instead: assert that two requests really started, then
+   settle the newer one first. */
+function PublicShelfProbe({ enabled }: { enabled: boolean }) {
+  const { state, again } = usePublicShelf(enabled);
+  return <><output>{state.kind}</output><button type="button" onClick={again}>Retry</button></>;
+}
 
-    const failing = page.textContent?.includes(PUBLIC_SHELF_FAILED) ?? false;
-    const listing = cards(page).length > 0;
-    const empty = page.textContent?.includes(PUBLIC_SHELF_EMPTY) ?? false;
-    /* Exactly one of the three. Counting them rather than asserting `!failing`
-       also catches the page settling into *no* state at all, which a botched
-       fix would produce and which looks like a page that never loaded. */
-    expect({ failing, listing, empty }).toSatisfy(
-      () => [failing, listing, empty].filter(Boolean).length === 1,
-    );
+describe("the public read lifecycle", () => {
+  it("still reads /read/public on mount, once under StrictMode", async () => {
+    const page = await show(() => TWO, { strict: true });
+    expect(asked).toEqual(["/api/public/library"]);
+    expect(cards(page)).toHaveLength(2);
   });
 
-  it("and does the same when the failure lands second", async () => {
-    let call = 0;
-    const page = await show(() => (++call === 1 ? TWO : null), { strict: true });
-    const failing = page.textContent?.includes(PUBLIC_SHELF_FAILED) ?? false;
-    const listing = cards(page).length > 0;
-    expect([failing, listing].filter(Boolean)).toHaveLength(1);
+  it("waits for enabled, and keeps the answer across off/on", async () => {
+    await show();
+    act(() => root.unmount());
+    root = createRoot(host);
+    asked.length = 0;
+    const render = async (enabled: boolean) => {
+      await act(async () => root.render(<StrictMode><PublicShelfProbe enabled={enabled} /></StrictMode>));
+      await settle();
+    };
+    await render(false);
+    expect(asked).toEqual([]);
+    await render(true);
+    expect(asked).toEqual(["/api/public/library"]);
+    expect(host.querySelector("output")?.textContent).toBe("loaded");
+    await render(false);
+    await render(true);
+    expect(asked).toHaveLength(1);
+    expect(host.querySelector("output")?.textContent).toBe("loaded");
+  });
+
+  it.each([true, false])("drops a superseded %s response after a retry", async (oldFails) => {
+    const pending: ((response: Response) => void)[] = [];
+    vi.stubGlobal("fetch", () => new Promise<Response>((resolve) => pending.push(resolve)));
+    await act(async () => root.render(<PublicShelfProbe enabled />));
+    expect(pending).toHaveLength(1);
+    act(() => host.querySelector("button")!.click());
+    expect(pending).toHaveLength(2);
+    const answer = (failed: boolean) => failed
+      ? new Response(JSON.stringify({ error: "nope" }), { status: 500, headers: { "content-type": "application/json" } })
+      : new Response(JSON.stringify(TWO), { status: 200 });
+    pending[1]!(answer(!oldFails));
+    await settle();
+    const winner = oldFails ? "loaded" : "failed";
+    expect(host.querySelector("output")?.textContent).toBe(winner);
+    pending[0]!(answer(oldFails));
+    await settle();
+    expect(host.querySelector("output")?.textContent).toBe(winner);
   });
 });
 

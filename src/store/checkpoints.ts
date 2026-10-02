@@ -484,7 +484,7 @@ export function checkpointCutoff(days: number, now: Date = new Date()): Date {
  * be keyed on. And `npm run eval:pdf-read` is in the same position for the
  * same reason.
  *
- * **It used to be three command lines and is now one.** `npm run hierarchy` and
+ * **It used to be three command lines and is now one.** `npm run structure` and
  * `npm run blocks` go through the queue since 2026-09-05 (`scripts/stage.ts`),
  * so they have an article row and **do** resume — measured, and with an edge
  * worth knowing: a `--force` re-run of `hierarchy` on an unchanged article

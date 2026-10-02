@@ -22,8 +22,8 @@
 import type {
   CandidateRecord,
   OverridingBound,
-} from "../../src/hierarchy-expand.js";
-import type { DeepenStats } from "../../src/hierarchy-deepen.js";
+} from "../../src/structure-expand.js";
+import type { DeepenStats } from "../../src/structure-deepen.js";
 import type { Finding as CostFinding } from "../cost/report.js";
 
 /* --------------------------------------------------------------- findings -- */
@@ -142,7 +142,7 @@ export type BlockRange = readonly [string, string];
  * **The derived range off a record.**
  *
  * `CandidateRecord.range` is what this reads and is the shape that shipped
- * (src/hierarchy-expand.ts, 2026-09-05). The three other spellings below are
+ * (src/structure-expand.ts, 2026-09-05). The three other spellings below are
  * accepted because this harness was written against a `CandidateRecord` that
  * did not have the field yet, and a reader that tolerates the near-misses costs
  * three lines and turns a rename into a working comparison rather than a
@@ -190,7 +190,7 @@ export function requireRanges(passes: readonly RecordsPass[]): void {
     throw new Error(
       `${without.length} of ${pass.records.length} candidate records in "${pass.label}" carry no ` +
         "block range, so they cannot be paired across repeats. `CandidateRecord` " +
-        "(src/hierarchy-expand.ts) needs the node's derived range on it — this harness reads " +
+        "(src/structure-expand.ts) needs the node's derived range on it — this harness reads " +
         "`range: [start, end]`, `rangeStart`/`rangeEnd`, `startBlockId`/`endBlockId` or " +
         "`start`/`end`. Pairing on `where` instead is refused deliberately: it is an ordinal " +
         "path derived from the answer's own fan-out, so a moved boundary would read as a stable " +
@@ -213,7 +213,7 @@ export function parentPath(where: string): string | null {
  *
  * The ordinal path is stable **for a wave-1 parent** — every repeat expands the
  * identical wave-1 tree, because the structure checkpoint is deliberately still
- * resumed (src/hierarchy-deepen.ts § `REASK_ENV`). It would stop being stable
+ * resumed (src/structure-deepen.ts § `REASK_ENV`). It would stop being stable
  * the moment a wave-3 existed, whose parents are themselves wave-2 answers. So
  * the path is used only to *find* the parent record, and the parent's range is
  * what the key is made of — which stays correct when stage 6 adds waves.
@@ -617,7 +617,7 @@ export interface Q2RefusedRates {
  * when we are defeated.
  *
  * A target refused on every draw no longer fails the wave: it keeps the shape
- * wave 1 gave it and is recorded (`RefusedCall` in src/hierarchy-deepen.ts).
+ * wave 1 gave it and is recorded (`RefusedCall` in src/structure-deepen.ts).
  * That is the right behaviour and it converts a loud failure into a quiet
  * absence, so this is what makes the absence loud again.
  *
@@ -938,7 +938,7 @@ export interface StepClock {
    * that wave finish?**
    *
    * It used to mean only "stats are present", which is a weaker fact than it
-   * reads as. When a wave exhausts its redraws, `generateHierarchy` catches the
+   * reads as. When a wave exhausts its redraws, `generateStructure` catches the
    * failure, writes a records file with `failed: true`, falls back to wave 1 and
    * completes the `hierarchy` step — so three failed waves all carried stats, a
    * `done` status and a clock, and question 5 printed "ran at once and finished
@@ -955,7 +955,7 @@ export interface StepClock {
    * question 5 that decides whether a self-abort was survivable. A wave that
    * stopped on time with every answer written down makes the next attempt
    * cheap; one with `uncheckpointed` above zero bought calls the next attempt
-   * will buy again. src/hierarchy-deepen.ts § DeepenStats.uncheckpointed.
+   * will buy again. src/structure-deepen.ts § DeepenStats.uncheckpointed.
    */
   uncheckpointed: number | null;
 }
@@ -1208,7 +1208,7 @@ export function budgetReport(opts: {
  * made checkable.
  *
  * The flag-off run writes **no records file at all** (`saveDeepenRecords`
- * returns early) and its `HierarchyRun.deepen` is `null`. The flag-on run writes
+ * returns early) and its `StructureRun.deepen` is `null`. The flag-on run writes
  * one whose `stats.targets` is 0. So the evidence for inertness is a *pair*: a
  * missing file on one side, a present file reporting zero on the other, and the
  * two trees identical.
@@ -1298,7 +1298,7 @@ export function checkInertness(c: InertnessCheck): DeepenFinding[] {
  * `SPIDERYARN_DEEPEN_REASK` naming this very slug, a second wave reads its own
  * content-addressed rows back, makes no call, and reports **identical verdicts
  * by construction** — which looks exactly like a perfectly stable signal.
- * src/hierarchy-deepen.ts § `REASK_ENV`.
+ * src/structure-deepen.ts § `REASK_ENV`.
  *
  * And the mirror of it: on a **repeat**, the structure call must not have been
  * re-bought, because a resumed wave 1 is what holds the seed constant. The
@@ -1324,12 +1324,12 @@ export function checkRepeatBoughtItsWave(opts: {
   label: string;
   stats: DeepenStats;
   /** Input tokens on `job: "hierarchy"` rows for this job, out of the ledger. */
-  ledgerHierarchyInputTokens: number;
+  ledgerStructureInputTokens: number;
   /**
    * A structure call re-bought on this article would carry at least this many
    * input tokens. The runner takes it from the article's own estimate.
    */
-  structureInputTokensFloor: number;
+  wholeDocumentInputTokensFloor: number;
   /**
    * `"resumed"` for a forced repeat, which must not re-buy the seed;
    * `"bought"` for the ingest, where buying it is the point.
@@ -1349,29 +1349,29 @@ export function checkRepeatBoughtItsWave(opts: {
     });
   }
   const waveTokens = opts.stats.usage.inputTokens;
-  const beyondTheWave = opts.ledgerHierarchyInputTokens - waveTokens;
-  const looksLikeAStructureCall = beyondTheWave >= opts.structureInputTokensFloor;
-  if (opts.structure === "resumed" && looksLikeAStructureCall) {
+  const beyondTheWave = opts.ledgerStructureInputTokens - waveTokens;
+  const looksLikeAWholeDocumentCall = beyondTheWave >= opts.wholeDocumentInputTokensFloor;
+  if (opts.structure === "resumed" && looksLikeAWholeDocumentCall) {
     findings.push({
       kind: "structure-rebought",
       fatal: true,
       message:
-        `"${opts.label}" billed ${opts.ledgerHierarchyInputTokens.toLocaleString()} input tokens ` +
+        `"${opts.label}" billed ${opts.ledgerStructureInputTokens.toLocaleString()} input tokens ` +
         `under job "hierarchy" and the wave accounts for ${waveTokens.toLocaleString()} of them. ` +
-        `The difference is at least one whole-document structure call (${opts.structureInputTokensFloor.toLocaleString()} ` +
+        `The difference is at least one whole-document structure call (${opts.wholeDocumentInputTokensFloor.toLocaleString()} ` +
         "tokens), so the seed was re-bought rather than resumed and this repeat was asked about a " +
         "different tree.",
     });
   }
-  if (opts.structure === "bought" && !looksLikeAStructureCall) {
+  if (opts.structure === "bought" && !looksLikeAWholeDocumentCall) {
     findings.push({
       kind: "note",
       fatal: false,
       message:
         `"${opts.label}" is the ingest, which buys the whole-document structure call — and its ` +
-        `"hierarchy" bill is ${opts.ledgerHierarchyInputTokens.toLocaleString()} input tokens, ` +
+        `"hierarchy" bill is ${opts.ledgerStructureInputTokens.toLocaleString()} input tokens, ` +
         `only ${beyondTheWave.toLocaleString()} of them beyond the wave's own ` +
-        `${waveTokens.toLocaleString()}, under the ${opts.structureInputTokensFloor.toLocaleString()}-token ` +
+        `${waveTokens.toLocaleString()}, under the ${opts.wholeDocumentInputTokensFloor.toLocaleString()}-token ` +
         "floor a structure call on this document would carry. Something resumed a structure " +
         "checkpoint this run did not write, so the seed came from an earlier run. The repeats are " +
         "still comparable with each other; the numbers are not a cold ingest's.",

@@ -63,7 +63,7 @@ so **Stop reached nothing after a save either.** Same cause, quieter symptom.
 granted `claim()`, not a retry inside one. And they overlap in wall clock: `spya-zf0bgj`'s eleven
 started 17:48:10 → 17:53:23 and the first did not finish until 17:53:27. The SDK is built with
 `maxRetries: 0` ([`src/messages-stream.ts`](../../src/messages-stream.ts)) — *"one record, one
-call"* — and [`src/hierarchy.ts`](../../src/hierarchy.ts) has no loop around its `streamMessage`.
+call"* — and [`src/hierarchy.ts`](../../src/structure.ts) has no loop around its `streamMessage`.
 
 **"Truncation."** Five of the eleven came back at 32,913 / 26,856 / 25,748 / 47,605 / 21,830 output
 tokens, well under the 52,225 ceiling. And the same afternoon, at 08:29, the tiny `read` article ran

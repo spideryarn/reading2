@@ -119,6 +119,7 @@ import type { Mode } from "./params.js";
 import {
   CHANGELOG_HREF,
   CHANGELOG_LABEL,
+  HELP_HREF,
   LIBRARY_HREF,
   PROFILE_HREF,
   PUBLIC_LIBRARY_HREF,
@@ -154,6 +155,18 @@ export interface CommandBarArticle {
   readonly slug: string;
   /** Already through `carriedSearch`; `readHref` adds the `?`. */
   readonly search: string;
+  /**
+   * **Where the Help row goes from here** — the section for the mode the band
+   * is in, already built by the Dock (`helpHrefFor` in Dock.tsx) and handed
+   * down, for the reason `slug` and `search` are: the Dock's Help link and this
+   * row then cannot open on different sections. A finished href rather than
+   * the mode, because this file imports nothing from Dock.tsx (see the import
+   * there) and the rule for which section is the Dock's to own.
+   *
+   * Optional, and the row falls back to the top of `/help` without it, so a
+   * caller that knows nothing about modes still gets a Help row that works.
+   */
+  readonly help?: string | undefined;
 }
 
 /**
@@ -223,6 +236,7 @@ function besideTheModes({
 }): readonly Command[] {
   return [
     ...(article === undefined ? [] : articleRows(article)),
+    helpRow(article?.help),
     ...(openComments === undefined
       ? []
       : [
@@ -288,6 +302,38 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
       generates: false,
     },
   ];
+}
+
+/**
+ * **The Help page, opened at the part about where you are standing** —
+ * docs/plans/261002b-help-page.md § After GPT Sol's plan review, R8: the
+ * footer, this row and the Dock's Help link are the three ways in.
+ *
+ * Not in `APP_PAGES` because its href is not the same everywhere: it is the
+ * section for the mode the band is in (`CommandBarArticle` § `help`). And
+ * placed **straight after this article's own rows** rather than among the app
+ * pages, because that is what it is about on an empty query — the thing on
+ * screen — and because the app pages end with the changelog, whose place
+ * directly above the Feedback action is pinned (tests/command-bar.test.tsx §
+ * the Feedback action last).
+ *
+ * **`help` ranks this row first and still reaches Feedback**, which keeps
+ * `help` as an alias: somebody typing it may mean *something is wrong*. That
+ * order is the ranking's, not a special case — a label prefix beats an alias
+ * prefix (command-match.ts § `TIERS`). The aliases are the other words for a
+ * manual, plus `faq`, which ranks the FAQ *mode* above this on a label prefix;
+ * that is right, since the mode is the likelier meaning in an article.
+ */
+function helpRow(href: string | undefined): Command {
+  return {
+    kind: "page",
+    href: href ?? HELP_HREF,
+    label: "Help",
+    description: "How Spideryarn works, open at the part about the mode you are in.",
+    aliases: ["faq", "how do i", "manual", "guide", "documentation", "docs", "instructions"],
+    /* `/help` is words the build shipped; opening it runs nothing. */
+    generates: false,
+  };
 }
 
 /**

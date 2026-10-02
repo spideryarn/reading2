@@ -17,7 +17,7 @@
  *
  * It spends money through `generateIllustrated`, which is the shipping stage —
  * **not through a copy of the prompt**. A harness with its own copy measures a
- * recipe nothing runs, which is the trap `evals/hierarchy-structure/` names in
+ * recipe nothing runs, which is the trap `evals/structure-whole-document/` names in
  * its header. `--system` is the one exception, so a variant can be tried
  * without editing `src/`.
  *

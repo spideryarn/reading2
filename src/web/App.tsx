@@ -65,6 +65,10 @@ const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.Des
    almost nobody opens — docs/project/changelog.md § The page. */
 const loadChangelog = () =>
   import("./ChangelogPage.js").then((m) => ({ default: m.ChangelogPage }));
+/* `/help`'s reason is the changelog's in miniature: a long page of prose, one
+   section per mode, that a reader opens when stuck rather than on every visit —
+   so not in the first download. docs/plans/261002b-help-page.md. */
+const loadHelp = () => import("./help/HelpPage.js").then((m) => ({ default: m.HelpPage }));
 
 
 
@@ -262,6 +266,11 @@ export function App() {
        Lazy for the reason `design` is below: the parsed file is 210 KB.
        LazyPage.tsx. */
     if (route.kind === "changelog") return <LazyPage load={loadChangelog} routeKey="changelog" />;
+    /* Since 2026-10-02, for the changelog's reason and more so: Help is the
+       page we send somebody to — `/help#spine` in an answer to a question —
+       and a stranger who has not signed up is the reader with most to learn
+       from it. Bare and lazy, like the changelog above. help/HelpPage.tsx. */
+    if (route.kind === "help") return <LazyPage load={loadHelp} routeKey="help" />;
     /* Since 2026-09-07, and signed out for a stronger reason than any of them:
        somebody deciding whether to trust us with what they read is exactly the
        person who wants to know the code is public, and they have not signed up
@@ -518,6 +527,15 @@ function SignedIn({
       <>
         <HomeLogo />
         <LazyPage load={loadChangelog} routeKey="changelog" />
+      </>
+    );
+  // The corner logo, as on `/changelog` above; see the signed-out branch for
+  // why `/help` is reachable there too.
+  if (route.kind === "help")
+    return (
+      <>
+        <HomeLogo />
+        <LazyPage load={loadHelp} routeKey="help" />
       </>
     );
   if (route.kind === "opensource")

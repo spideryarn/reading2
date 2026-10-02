@@ -628,6 +628,23 @@ which tells an iOS reader how to get the browser's own chrome out of the way, an
 `media()` in [`src/web/media.ts`](../../src/web/media.ts). They say different things and sit in
 different places: this one is in flow at the top of the article, that one is fixed above the dock.
 
+### Its sibling on the shelf, which asks about the device
+
+> show some kind of banner to people when they open it on a phone to say that it's probably best on
+> a larger screen, and failing that, in Landscape mode. … on the logged-in homepage
+>
+> — Greg, 2026-10-01 (spya-fcbnhq)
+
+[`ShelfPhoneHint.tsx`](../../src/web/ShelfPhoneHint.tsx), at the top of the shelf. Same contract —
+until dismissed, its own `localStorage` bit — but a different gate: this one says *a phone is not the
+best screen*, which is about the device, so it asks the device. A coarse pointer **and a screen whose
+shorter side is under 600 CSS px** (`isPhone` in [`small-screen-hint.ts`](../../src/web/small-screen-hint.ts)):
+true in either orientation, false on any iPad (a mini's short side is 744), false on a laptop window
+however narrow. The landscape sentence is picked by an orientation media query rather than read in
+render, so it follows a rotation. Plan
+[261002b](../plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md)
+§ Part C.
+
 ## A passage link in a covering band shows the passage
 
 A band lying over the article has a problem of its own: every passage link in it — a `BlockRef`, a

@@ -5,7 +5,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 **What this is now: the tree.** The article cut into nested sections, each with a label and a
 summary, which [Structure](structure.md) draws in the band and Marginalia, Diagram and the Spine read
 too. Open [§ The tree](#the-tree) and [§ Generation](#generation) before changing the tree's shape
-or how it is generated; the stages that build it are in [hierarchy.md](hierarchy.md), and the view
+or how it is generated; the stages that build it are in [structure-step.md](structure-step.md), and the view
 is in [structure.md](structure.md). The live material later in this doc is in [Structure's two
 faces](#structures-two-faces-and-the-width-between-them), [the Spine](#the-spine-a-birds-eye-rail),
 [the Arc](#the-arc) and [tree validation](#validate-the-tree-always).
@@ -148,11 +148,11 @@ Two consequences worth stating, because they are easy to get wrong:
   they are wildly different, so three words distinguish it. A paragraph has twenty siblings all
   about the same subtopic, so three words do not. An entry needs only enough words to tell itself
   apart from its neighbours — and that demand rises as you descend. See
-  [hierarchy.md](hierarchy.md) for the length rules.
+  [structure-step.md](structure-step.md) for the length rules.
 - **An absent `navLabel` means *deliberately unlabelled*, and only that** — a caption, a
   pull-quote, a rule. *Not written yet* is a different fact and it does not live on the node: it is
   `Article.navLabelStatus`, one value for the whole revision
-  ([hierarchy.md § Absence on a node](hierarchy.md#absence-on-a-node-is-deliberately-unlabelled-not-written-yet-is-a-column)).
+  ([structure-step.md § Absence on a node](structure-step.md#absence-on-a-node-is-deliberately-unlabelled-not-written-yet-is-a-column)).
   While that says `pending` or `failed`, every surface below **withholds the whole paragraph-label
   layer** rather than drawing what happens to exist —
   [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) is the one rule. The `Paragraphs` pill and
@@ -164,7 +164,7 @@ Two consequences worth stating, because they are easy to get wrong:
   knowing before you read the withheld state as a fault. The label pass left the blocking `hierarchy`
   step — it was 79.5–92% of its wall clock — so pasting a URL gets you the tree and no paragraph
   labels at all, and a free successor job buys them afterwards
-  ([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)). Until it runs the tree carries
+  ([structure-step.md § Why they are two steps](structure-step.md#two-steps)). Until it runs the tree carries
   **no** `navLabel` on any leaf, not merely on some, so there is nothing partial for a surface to be
   tempted to draw.
 
@@ -240,10 +240,10 @@ no `gist`; the first *gists* appear one level up. See [Node shape](#node-shape).
 left to right as a dependency order, and the labels are actually written *last*: the batches are cut
 along the finished tree's own section boundaries, because a label's job is to tell its paragraph
 apart from its neighbours and the model has to see which neighbours those are
-([hierarchy.md § Two passes](hierarchy.md#two-passes)). And since 2026-09-06 the leaf labels are
+([structure-step.md § Two passes](structure-step.md#two-passes)). And since 2026-09-06 the leaf labels are
 **not precomputed at ingest at all** — they are their own pipeline step, off `DEFAULT_INGEST_STEPS`,
 bought by a free successor job minutes later, because that pass was 79.5–92% of stage 4's wall clock
-([hierarchy.md § Why they are two steps](hierarchy.md#two-steps)). The gists still arrive with the
+([structure-step.md § Why they are two steps](structure-step.md#two-steps)). The gists still arrive with the
 tree. What the diagram is right about is the compression relation, which is the paragraph below.
 
 Each parent is written from its children's gists and titles, not from the raw text underneath it.
@@ -269,8 +269,8 @@ Prompt rules, derived from the [vision](vision.md#principles):
   because "one sentence" applied at every depth means a root sentence grows clauses until a whole
   article fits in it. A fine gist is read *instead of* the paragraphs it covers and can afford a
   subordinate clause; the root is a shelf blurb and cannot. The ceilings live in
-  [`src/hierarchy.ts`](../../src/hierarchy.ts) § `GISTS` and
-  [`src/hierarchy-expand.ts`](../../src/hierarchy-expand.ts) § `TITLES AND GISTS`, which must agree
+  [`src/structure.ts`](../../src/structure.ts) § `GISTS` and
+  [`src/structure-expand.ts`](../../src/structure-expand.ts) § `TITLES AND GISTS`, which must agree
   or a tree obeys two budgets.
   [260905f](../plans/260905f-socratic-summaries-eval-admin-page-gating-short-selections.md).
 - **The register of a length rule moves the number; its content mostly does not.** Measured over five
@@ -682,7 +682,7 @@ draws the arc next:
   leave a gap in an HTML table, it shifts every later cell in the row one column left, so every part
   got a cell whether or not the arc had words for it. `buildArcColumn` still emits them that way.
 - **It is a separate artefact, joined by range.** `arc.json`, not a field on `tree.json`, because
-  the tree is stage 4's and `npm run hierarchy` rewrites it wholesale — anything merged in would vanish
+  the tree is stage 4's and `npm run structure` rewrites it wholesale — anything merged in would vanish
   without a trace on the next run. Entries are matched to parts by block range and never by node id:
   ids are positional, a re-run renumbers them, and matching by index would hand every sentence to
   its neighbour while still looking perfectly plausible. An entry that no longer matches is dropped.

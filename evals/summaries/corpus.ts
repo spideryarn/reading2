@@ -1,6 +1,6 @@
 /**
  * The corpus, as a committed manifest rather than a directory listing — the
- * shape [`evals/hierarchy-structure/corpus.ts`](../hierarchy-structure/corpus.ts)
+ * shape [`evals/structure-whole-document/corpus.ts`](../structure-whole-document/corpus.ts)
  * argued for, and for the same two reasons: a directory that grows joins every
  * later run with nothing saying so, and a results file naming only a slug names
  * bytes nothing can recover.

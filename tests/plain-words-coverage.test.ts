@@ -40,7 +40,7 @@ const MODEL_CALLS = [
  * prompt text lives here, so this is the file that must carry the rule.
  */
 const PROMPT_FILES_WITHOUT_A_CALL = [
-  "src/hierarchy-expand.ts", // EXPAND_SYSTEM; the call is in src/hierarchy-deepen.ts
+  "src/structure-expand.ts", // EXPAND_SYSTEM; the call is in src/structure-deepen.ts
   "src/live.ts", // the realtime session's instructions; the session is opened by the browser
   "src/referee-candidates-prompt.ts", // CANDIDATES_SYSTEM; sent by converse
   "scripts/changelog/changelog.ts", // the public changelog's copy prompt, sent through the claude CLI
@@ -90,7 +90,7 @@ describe("the plain-words rule is the default for every prompt", () => {
 
   it("finds the model calls it is meant to find", () => {
     /* A scan that finds nothing passes everything. These are known to call a model today. */
-    for (const f of ["src/arc.ts", "src/explain.ts", "src/converse.ts", "src/glossary.ts", "src/hierarchy.ts"]) {
+    for (const f of ["src/arc.ts", "src/explain.ts", "src/converse.ts", "src/glossary.ts", "src/structure.ts"]) {
       expect(calling, f).toContain(f);
     }
   });

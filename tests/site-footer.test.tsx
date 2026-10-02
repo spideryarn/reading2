@@ -83,6 +83,7 @@ function footerAt(
     | "pricing"
     | "contact"
     | "changelog"
+    | "help"
     | "opensource"
     /* Admitted because `FooterPage` admits it, not because anything passes it:
        no page draws this row at `/read/public`. SiteFooter.tsx § `LINKS`. */
@@ -99,6 +100,7 @@ const HOME = "Home → /";
 const FEATURES = "Features → /features";
 const PRICING = "Pricing → /pricing";
 const PRIVACY = "Privacy → /privacy";
+const HELP = "Help → /help";
 const CONTACT = "Contact → /contact";
 const CHANGELOG = "What’s new → /changelog";
 /* The one entry with a mark before its label (SiteFooter.tsx § `icon`). The
@@ -126,6 +128,7 @@ describe("the site footer", () => {
       SHELF,
       PRICING,
       PRIVACY,
+      HELP,
       CONTACT,
       CHANGELOG,
       OPENSOURCE,
@@ -138,6 +141,7 @@ describe("the site footer", () => {
       SHELF,
       PRICING,
       PRIVACY,
+      HELP,
       CONTACT,
       CHANGELOG,
       OPENSOURCE,
@@ -150,6 +154,7 @@ describe("the site footer", () => {
       SHELF,
       PRICING,
       PRIVACY,
+      HELP,
       CONTACT,
       CHANGELOG,
       OPENSOURCE,
@@ -168,6 +173,7 @@ describe("the site footer", () => {
       FEATURES,
       SHELF,
       PRIVACY,
+      HELP,
       CONTACT,
       CHANGELOG,
       OPENSOURCE,
@@ -180,6 +186,7 @@ describe("the site footer", () => {
       FEATURES,
       SHELF,
       PRICING,
+      HELP,
       CONTACT,
       CHANGELOG,
       OPENSOURCE,
@@ -193,6 +200,7 @@ describe("the site footer", () => {
       SHELF,
       PRICING,
       PRIVACY,
+      HELP,
       CHANGELOG,
       OPENSOURCE,
     ]);
@@ -205,7 +213,21 @@ describe("the site footer", () => {
       SHELF,
       PRICING,
       PRIVACY,
+      HELP,
       CONTACT,
+      OPENSOURCE,
+    ]);
+  });
+
+  it("drops Help on the help page", () => {
+    expect(footerAt("/help")).toEqual([
+      HOME,
+      FEATURES,
+      SHELF,
+      PRICING,
+      PRIVACY,
+      CONTACT,
+      CHANGELOG,
       OPENSOURCE,
     ]);
   });
@@ -217,6 +239,7 @@ describe("the site footer", () => {
       SHELF,
       PRICING,
       PRIVACY,
+      HELP,
       CONTACT,
       CHANGELOG,
     ]);
@@ -234,6 +257,7 @@ describe("the site footer", () => {
       "/privacy",
       "/contact",
       "/changelog",
+      "/help",
       "/opensource",
       "/profile",
     ]) {
@@ -259,6 +283,7 @@ describe("the site footer", () => {
       SHELF,
       PRICING,
       PRIVACY,
+      HELP,
       CONTACT,
       CHANGELOG,
       OPENSOURCE,
@@ -386,6 +411,9 @@ describe("the pages that mount it", () => {
       /* `/contact`, since 2026-09-05 — docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md. */
       "ContactPage.tsx": 1,
       "FeaturesPage.tsx": 1,
+      /* `/help`, since 2026-10-02 — docs/plans/261002b-help-page.md. In its
+         own directory with the words it draws, hence the path. */
+      "help/HelpPage.tsx": 1,
       "LandingPage.tsx": 1,
       "Library.tsx": 1,
       /* `/opensource`, since 2026-09-07 —

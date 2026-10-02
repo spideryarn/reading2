@@ -70,6 +70,7 @@ import { useLogoAnimation } from "./logo-animation.js";
 import { foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
 import {
   libraryArchivedParam,
+  libraryPublicParam,
   libraryByParam,
   libraryQueryParam,
   libraryShowParam,
@@ -79,17 +80,21 @@ import {
 } from "./params.js";
 import { isArchived, narrowShelf, topicCountsForVisible } from "./shelf-narrow.js";
 import { ShelfTerms, ShelfTermsLoading } from "./ShelfTerms.js";
-import { useShelfTopics } from "./useShelfTerms.js";
+import { shelfKeyOf, useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { media } from "./media.js";
 import { ArchivedMark, ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
+import { ShelfPhoneHint } from "./ShelfPhoneHint.js";
+import { ShelfPublicSection } from "./ShelfPublicSection.js";
 import { useShelfHiddenColumns } from "./shelf-hidden-columns.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useJobs } from "./useJobs.js";
-import { useLibrarySearch } from "./useLibrarySearch.js";
+import { MIN_QUERY, useLibrarySearch } from "./useLibrarySearch.js";
+import { usePublicShelf } from "./PublicLibraryPage.js";
+import { type ArchivedTally, ShelfSearchAlso } from "./ShelfSearchAlso.js";
 import { useNow } from "./useNow.js";
 import { useSession } from "./useSession.js";
 import { useShelf } from "./useShelf.js";
@@ -137,6 +142,9 @@ export function Library({
   /* The topics row and the archive switch — docs/project/shelf-terms.md. */
   const [requestedTopics, setTopics] = useQueryState("topics", libraryTopicsParam);
   const [archivedOn, setArchivedOn] = useQueryState("archived", libraryArchivedParam);
+  /* Include public — what other readers have shared, in its own section under
+     the list. ShelfPublicSection.tsx; plan 261002b § Part A. */
+  const [publicOn, setPublicOn] = useQueryState("public", libraryPublicParam);
 
   /**
    * Whether the shelf is showing every row or only the first `SHELF_ROW_CAP`.
@@ -244,6 +252,15 @@ export function Library({
   const scope = useMemo(
     () => shelfScope(articles, shelf.archivedVisible, archivedOn),
     [articles, archivedOn, shelf.archivedVisible],
+  );
+
+  /* Every slug that is yours, so Include public does not list your own shared
+     articles a second time without your verbs on them. Include archive edits
+     even before the archive is loaded: the shared public snapshot can still
+     contain an article you have just archived. */
+  const ownSlugs = useMemo(
+    () => new Set([...(articles ?? []), ...shelf.archivedVisible].map((a) => a.slug)),
+    [articles, shelf.archivedVisible],
   );
 
   /* The archive is fetched when the chip is on and the list is missing — on a
@@ -372,7 +389,37 @@ export function Library({
   const queue = useJobs("watches-queue", reload);
 
   // Matcher two: the passages inside the articles, from the server.
-  const passages = useLibrarySearch(query, archivedOn);
+  /* Counts and passages belong to this shelf snapshot too. Archiving,
+     restoring, or publishing a revision changes the answer at the same query.
+     Use the existing shelf identity; opens and other reading state leave it
+     unchanged. Include known archive edits even with the chip off. */
+  const searchShelfKey = useMemo(
+    () => `${readerId}:${shelfKeyOf(articles, shelf.archivedVisible, true) ?? ""}`,
+    [readerId, articles, shelf.archivedVisible],
+  );
+  const passages = useLibrarySearch(query, archivedOn, searchShelfKey);
+
+  /* **One read of the public listing**, for the Include public section and for
+     the count beside the search's answer, so the two are the same snapshot
+     (plan 261002b § Part D). Started only once the live owner shelf is in —
+     a saved copy cannot say which public articles are somebody else's — and
+     only when something wants it. */
+  const publicListing = usePublicShelf(
+    shelf.liveArticlesLoaded && (publicOn || queryTerms(query).length > 0),
+  );
+
+  /* The archive's half of that count: the server's, off the passage search
+     run without the archive — taken only from the answer to *this* query, and
+     only once the query is long enough to have been searched at all. */
+  const archivedTally: ArchivedTally = useMemo(() => {
+    const eligible = query.trim().length >= MIN_QUERY;
+    const current =
+      passages.asked && passages.resultsQuery === query.trim() && !passages.resultsArchived;
+    return {
+      count: eligible && current ? (passages.archivedArticles ?? null) : null,
+      checking: eligible && passages.searching,
+    };
+  }, [query, passages]);
 
   const searching = query.trim().length > 0;
   /* Every count is over the one list: `total` is what is in scope, `showing`
@@ -593,6 +640,11 @@ export function Library({
             docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md. */}
       </header>
 
+      {/* **On a phone, until dismissed: a bigger screen is better.** Greg,
+          spya-fcbnhq. Above the add box so it is the first thing read, and in
+          flow so it scrolls away. ShelfPhoneHint.tsx; plan 261002b § Part C. */}
+      <ShelfPhoneHint />
+
       <AddArticle queue={queue} />
 
       {/* **Several files dropped at once**, each added with only its title,
@@ -654,6 +706,8 @@ export function Library({
           onFilter={(f) => pushView(() => void setShow(f))}
           archived={archivedOn}
           onArchived={(on) => pushView(() => void setArchivedOn(on ? true : null))}
+          publicOn={publicOn}
+          onPublic={(on) => pushView(() => void setPublicOn(on ? true : null))}
           bare={total === 0}
         />
       )}
@@ -711,11 +765,11 @@ export function Library({
           While the archive is still loading, it is not said at all — it may
           be about to be untrue. */}
       {articles !== null && total === 0 && (!archivedOn || inArchive !== null) && (
-        <p className="tw:text-sm tw:text-muted-foreground">
-          {archivedOn
-            ? "Nothing on the shelf, and nothing archived. Paste a URL above and it'll be here in a minute or two."
-            : "Nothing on the shelf yet. Paste a URL above and it'll be here in a minute or two."}
-        </p>
+        <EmptyShelf
+          archivedOn={archivedOn}
+          publicOn={publicOn}
+          onPublic={() => pushView(() => void setPublicOn(true))}
+        />
       )}
       {showing === 0 && total > 0 && (
         <p className="tw:text-sm tw:text-muted-foreground">
@@ -803,6 +857,39 @@ export function Library({
           something you have already read" is the useful half of that answer. */}
       {searching && <Passages state={passages} query={query} only={unread} archived={archivedOn} />}
 
+      {/* **Right after the search's answer: what it left out, how much, and the
+          button.** Greg, spya-s9fhmw. ShelfSearchAlso.tsx; plan 261002b § Part D. */}
+      {searching && (!archivedOn || !publicOn) && (
+        <ShelfSearchAlso
+          query={query}
+          archivedOn={archivedOn}
+          publicOn={publicOn}
+          archived={archivedTally}
+          listing={publicListing}
+          listingReady={shelf.liveArticlesLoaded}
+          ownSlugs={ownSlugs}
+          narrowedElsewhere={show === "unread" || topics.length > 0}
+          onArchived={() => pushView(() => void setArchivedOn(true))}
+          onPublic={() => pushView(() => void setPublicOn(true))}
+        />
+      )}
+
+      {/* After your own articles and their passages, because it is the
+          further reach: the same search box, someone else's shelf. */}
+      {/* A saved shelf copy is deliberately enough to paint the owner's cards,
+          but not enough to call a public article somebody else's: it may be
+          missing an article added since the last visit. Wait for the live
+          owner list before starting the anonymous public read. */}
+      <ShelfPublicSection
+        listing={publicListing}
+        enabled={publicOn}
+        ownerLoaded={articles !== null}
+        ownerReady={shelf.liveArticlesLoaded}
+        query={query}
+        ownSlugs={ownSlugs}
+        narrowedElsewhere={show === "unread" || topics.length > 0}
+      />
+
       {/* **No "Show archived" here any more** (plan 260929a): it was a
           disclosure at the foot of the shelf, with its own second list, and
           is the Archived chip beside Unread now — ShelfControls.tsx. */}
@@ -826,6 +913,71 @@ export function Library({
     </main>
   );
 }
+
+/**
+ * **An empty shelf, with somewhere to go from it.**
+ *
+ * > if the user has no articles in their shelf, we probably actually want to,
+ * > as well as saying you have no articles yet, you know, upload them, you know,
+ * > see above or whatever with a link that points them to the top. … So just
+ * > kind of provide a bit more help to new users that don't yet have anything
+ * > on their shelf
+ * >
+ * > — Greg, 2026-10-01 (spya-yy5x66)
+ *
+ * Two ways on: the add box, as a link that takes you to it and puts the cursor
+ * in it, and the public shelf, as a button that turns Include public on — the
+ * same act as the chip, so it lands in the URL and Back undoes it. With Include
+ * public already on, the second is not offered.
+ */
+function EmptyShelf({
+  archivedOn,
+  publicOn,
+  onPublic,
+}: {
+  archivedOn: boolean;
+  publicOn: boolean;
+  onPublic: () => void;
+}) {
+  return (
+    <p className="tw:text-sm tw:text-muted-foreground">
+      {archivedOn ? "Nothing on the shelf, and nothing archived." : "Nothing on your shelf yet."}{" "}
+      <a
+        href={`#${ADD_URL_ID}`}
+        onClick={(e) => {
+          /* Focus does the scrolling, and it is the half a fragment link alone
+             would not do: the reader lands *in* the box, ready to paste. */
+          const box = document.getElementById(ADD_URL_ID);
+          if (!box) return;
+          e.preventDefault();
+          box.focus();
+          box.scrollIntoView({ block: "center" });
+        }}
+        className="tw:text-highlight tw:underline"
+      >
+        Paste a link to an article in the box at the top
+      </a>{" "}
+      and it'll be here in a minute or two.
+      {!publicOn && (
+        <>
+          {" "}
+          Or{" "}
+          <button
+            type="button"
+            onClick={onPublic}
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline"
+          >
+            browse what other readers have shared
+          </button>
+          .
+        </>
+      )}
+    </p>
+  );
+}
+
+/** The add box's input — AddArticle.tsx. */
+const ADD_URL_ID = "add-url";
 
 /**
  * Why nothing is on screen.
@@ -1077,11 +1229,9 @@ function Passages({
     return (
       <p className="tw:mt-8 tw:text-sm tw:text-muted-foreground">
         Nothing in the articles' text matches “{query.trim()}”.
-        {/* Said once, here, at the end of the search's two answers. Greg
-            searched for an article he had just archived, found nothing, and
-            could not tell whether that was the archive or the search
-            (SPIDERYARN-READING2-72). */}
-        {!archived && <> {NOT_SEARCHING_ARCHIVE}</>}
+        {/* That the archive was not searched used to be said here, as a
+            sentence (SPIDERYARN-READING2-72). It is the line straight after
+            now, with a count and a button — ShelfSearchAlso.tsx, spya-s9fhmw. */}
       </p>
     );
   }
@@ -1110,7 +1260,6 @@ function Passages({
       <section className="tw:mt-8">
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
           Nothing in an unopened article's text matches “{query.trim()}”.
-          {!archived && <> {NOT_SEARCHING_ARCHIVE}</>}
         </p>
         {alsoIn}
       </section>
@@ -1137,12 +1286,6 @@ function Passages({
     </section>
   );
 }
-
-/**
- * What the passages say when they found nothing and the archive was not asked.
- * The chip's visible words, so the reader can see which one it means.
- */
-const NOT_SEARCHING_ARCHIVE = "Archived articles aren't searched — turn on Include archived to search them too.";
 
 /** How much of the paragraph to show. Wide enough to judge, short enough to skim. */
 const SNIPPET_CHARS = 200;

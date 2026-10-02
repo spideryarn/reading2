@@ -141,7 +141,7 @@ import { withLedger } from "../../src/cli-ledger.js";
 import { getDb } from "../../src/db/client.js";
 import { articles, jobs as jobsTable } from "../../src/db/schema.js";
 import { loadEnvLocal } from "../../src/env.js";
-import { structureRequest } from "../../src/hierarchy.js";
+import { wholeDocumentRequest } from "../../src/structure.js";
 import { isMain } from "../../src/is-main.js";
 import {
   type AdvanceParts,
@@ -240,8 +240,8 @@ interface RunMeta {
    * ledger and no row said so, which made two halves of one table look
    * comparable when they were not.
    *
-   * `hierarchy` is read from `structureRequest` rather than restated, because
-   * the constant it comes from is module-private in src/hierarchy.ts and a
+   * `hierarchy` is read from `wholeDocumentRequest` rather than restated, because
+   * the constant it comes from is module-private in src/structure.ts and a
    * second copy of the string here is a copy free to drift. Labels' effort is
    * private in src/labels.ts with no exported reader at all; `commit` above is
    * what pins it, and that is stated rather than left to be discovered.
@@ -878,15 +878,15 @@ async function cleanup(draws: readonly Draw[]): Promise<void> {
 function currentMeta(databaseTarget: string, scenario: RunMeta["scenario"]): RunMeta {
   const git = (args: string[]): string =>
     execFileSync("git", args, { encoding: "utf-8" }).trim();
-  let hierarchyEffort: string | null = null;
+  let structureEffort: string | null = null;
   try {
     /* Free, and it reads the real constant rather than restating it. An empty
        body is a legal argument: `budgetFor` only throws when the answer cannot
        fit one response. Guarded, because a signature change here must not stop
        a paid run — a missing effort is recoverable from `commit`. */
-    hierarchyEffort = structureEffort();
+    structureEffort = wholeDocumentEffort();
   } catch {
-    hierarchyEffort = null;
+    structureEffort = null;
   }
   return {
     startedAt: new Date().toISOString(),
@@ -909,7 +909,7 @@ function currentMeta(databaseTarget: string, scenario: RunMeta["scenario"]): Run
     node: process.version,
     effort: {
       pipelineEnvOverride: process.env.SPIDERYARN_PIPELINE_EFFORT ?? null,
-      hierarchy: hierarchyEffort,
+      hierarchy: structureEffort,
       labels: "module-private in src/labels.ts — pinned by commit + srcPatchSha256",
       articleStages: Object.fromEntries(
         (Object.keys(STAGE_EFFORT) as (keyof typeof STAGE_EFFORT)[]).map((s) => [s, effortFor(s)]),
@@ -926,8 +926,8 @@ function currentMeta(databaseTarget: string, scenario: RunMeta["scenario"]): Run
  * alternative was writing `"medium"` down here, which is a second copy of a
  * constant that has already moved once and taken a whole analysis with it.
  */
-function structureEffort(): string {
-  return structureRequest([]).effort;
+function wholeDocumentEffort(): string {
+  return wholeDocumentRequest([]).effort;
 }
 
 /** sha256 of the working-tree diff over the code that decides cost, or null. */
@@ -1155,7 +1155,7 @@ async function runDraws(
     /* **Interleaved** — fixture A r1, fixture B r1, fixture A r2, … — so a
        drift over the minutes of a run (a provider warming up, a rate limiter
        engaging) lands across every fixture's repeats rather than inside one
-       fixture's. The same reason evals/hierarchy-structure/run.ts interleaves.
+       fixture's. The same reason evals/structure-whole-document/run.ts interleaves.
        This is the shape that measures hierarchy's observed variation. */
     for (let repeat = 1; repeat <= args.repeat; repeat++) {
       for (const fixture of chosen) {

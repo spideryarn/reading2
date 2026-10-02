@@ -448,7 +448,7 @@ export interface MeteredCall {
  * this module injects into it.
  *
  * Its own function since 2026-09-04, and the reason is a caller that needs the
- * request without sending it: `src/hierarchy.ts` fingerprints the structure call
+ * request without sending it: `src/structure.ts` fingerprints the structure call
  * so a later attempt can reuse an answer it has already paid for, and a key that
  * reconstructs the injected half from knowledge of what this function does is a
  * key that goes stale the day a third field is injected — silently, because a

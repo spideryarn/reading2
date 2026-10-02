@@ -3,7 +3,7 @@
  *
  * One call per (document, arm). The model is shown the article exactly as
  * production shows it — `renderBlocks` over the body blocks, the same function
- * `structureRequest` uses — plus the **fixed** outline of the tree that is
+ * `wholeDocumentRequest` uses — plus the **fixed** outline of the tree that is
  * already on disk, and is asked for a gist and (at depth <= `MAX_QUESTION_DEPTH`)
  * a question per node. It is not asked for structure, ranges, titles or
  * `sourceHeading`, because none of those is what any variant changes.
@@ -33,8 +33,8 @@
  * lines actually parsed out of the answer.
  */
 
-import { MAX_QUESTION_DEPTH } from "../../src/hierarchy.js";
-import { PRODUCTION_EFFORT, renderBlocks } from "../../src/hierarchy-prompt.js";
+import { MAX_QUESTION_DEPTH } from "../../src/structure.js";
+import { PRODUCTION_EFFORT, renderBlocks } from "../../src/structure-prompt.js";
 import { streamMessage } from "../../src/messages-stream.js";
 import { parseJsonAnswer } from "../../src/parse-json.js";
 import { splitBlocks, supplementIndex } from "../../src/supplement.js";

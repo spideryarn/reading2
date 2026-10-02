@@ -1290,7 +1290,7 @@ export async function writeArtefacts(
    * `generateLabels`) beside `mergeLabels(structure, run.file.labels)`, and
    * `mergeLabels` touches `navLabel` alone — which `structureHash` does not hash.
    * Pinned as a property in tests/labels-batching.test.ts, end to end on the
-   * `hierarchy` writer in tests/hierarchy-write-guard.test.ts, and here in
+   * `hierarchy` writer in tests/structure-step-write-guard.test.ts, and here in
    * tests/labels-receipt-invalidation.test.ts.
    *
    * **Only of a `CompletedLabelsFile`.** A pending manifest makes no claim to be

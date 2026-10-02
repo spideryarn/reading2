@@ -153,6 +153,15 @@ import { Toggle } from "@/components/ui/toggle";
 import { Link } from "./Link.js";
 import { LogoLetters, LogoMark } from "./LogoGlyphs.js";
 import { PILL } from "./pill.js";
+import { HighPowerSwitch } from "./HighPowerSwitch.js";
+import { ModeSurface } from "./ModeSurface.js";
+import { SettingsSection } from "./SettingsSection.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
+import type { Mode } from "../modes.js";
+
+/* For the "on" High-powered AI specimen. Relative, for `DESIGN_JOB`'s reason:
+   the line reads "On since …" and a fixed date would age with the page. */
+const DESIGN_HIGH_POWER_SINCE = new Date(Date.now() - 3 * 86_400_000).toISOString();
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF } from "./router.js";
 
@@ -203,6 +212,7 @@ function BandCase({
   real,
   note,
   head,
+  mode,
   children,
 }: {
   /** The name a reader of this page would use. */
@@ -217,6 +227,14 @@ function BandCase({
    * a reader actually sees while a band is loading.
    */
   head?: ReactNode;
+  /**
+   * Given, the band is drawn by the real `ModeSurface` rather than by the
+   * hand-written `<aside>` below — which is what puts the (i) in its corner,
+   * gives it `has-about`, and pads the head clear of it. A bare `BandAbout`
+   * would get none of that. The other cases stay hand-written because they
+   * show an empty head row, which `ModeSurface` (rightly) never draws.
+   */
+  mode?: Mode;
   children: ReactNode;
 }) {
   return (
@@ -225,10 +243,16 @@ function BandCase({
         {state} · <code className="design-token">{real}</code>
       </figcaption>
       <div className="design-band">
-        <aside className="mode-band gloss" aria-label={state}>
-          <div className="band-head">{head}</div>
-          {children}
-        </aside>
+        {mode ? (
+          <ModeSurface label={state} feature="gloss" mode={mode} head={head}>
+            {children}
+          </ModeSurface>
+        ) : (
+          <aside className="mode-band gloss" aria-label={state}>
+            <div className="band-head">{head}</div>
+            {children}
+          </aside>
+        )}
       </div>
       <p className="design-note">{note}</p>
     </figure>
@@ -357,9 +381,10 @@ const SCALES: { name: string; tokens: string[]; note: string; dense?: boolean }[
 const FACES: { token: string; used: string }[] = [
   { token: "--font-reading", used: "the article, and the reader's own words in a comment" },
   /* The table's column headers wore this until 2026-09-05, when that row lost
-     its height and its labels became `.sr-only` spans — it is still in the DOM
-     for the fisheye panels' geometry and for a screen reader, and sets no type
-     at all now. docs/project/granularity-zoom.md § the header row. */
+     its height and its labels became `.sr-only` spans. The gist columns those
+     headers named went on 2026-09-29; one `.sr-only` header is left, for a
+     screen reader and the sticky offsets (TableView.tsx § A head with no
+     height), and it sets no type at all. */
   { token: "--font-ui", used: "chrome: controls, masthead facts" },
   { token: "--font-mono", used: "counts and anything that wants to line up" },
   { token: "--font-id", used: "block ids, and only block ids" },
@@ -479,7 +504,7 @@ export function DesignPage() {
    * on purpose in places where the pixel is the honest unit (shell.css §
    * `--spine-w`, the gutter's `max()` against WCAG's 24px). Anywhere a height
    * in one meets a height in the other, the agreement recorded in
-   * design-css-overview.md § Controls is an agreement at a 16px root only.
+   * controls.md § The numbers is an agreement at a 16px root only.
    *
    * Restored on unmount, or leaving `/design` would leave the whole app at
    * 20px with nothing on screen to say why.
@@ -880,7 +905,7 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <span className="design-note design-note-inline">
             The whole page moves, and that is the control working rather than overreaching — a root
             font size has no smaller scope. `rem` grows and `px` does not, so the control heights in{" "}
-            <code className="design-token">design-css-overview.md § Controls</code> — 28px for a
+            <code className="design-token">controls.md § The numbers</code> — 28px for a
             chip, 32px for <code className="design-token">size="sm"</code>, 36px for the default —
             are an agreement at a 16px root, and this is where you find out whether they still line
             up beside something stated in pixels.
@@ -975,6 +1000,21 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           </BandCase>
 
           <BandCase
+            state="the (i)"
+            real='ModeSurface, mode="glossary"'
+            mode="glossary"
+            head={<span className="gloss-count">24 terms</span>}
+            note="Every mode's band has one, in this corner, in every state (2026-10-01). Drawn by
+                  ModeSurface itself, which also pads the head so the count never runs under it.
+                  Press or hover it: the card opens with the mode's own sentence from
+                  MODE_CATALOG — the same words the bar's card says."
+          >
+            <div className="gloss-list">
+              <p className="gloss-quiet">The feature's own list goes here.</p>
+            </div>
+          </BandCase>
+
+          <BandCase
             state="built, and empty"
             real='status: "ready", nothing in it'
             head={<span className="gloss-count">0 terms</span>}
@@ -1024,11 +1064,13 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <Toggle disabled>disabled</Toggle>
         </div>
         <p className="design-note">
-          <strong>Bottom row: the granularity pills</strong>, which is the toggle this app actually
-          renders — the same component with <code className="design-token">PILL</code> over it
-          (imported from <code className="design-token">pill.ts</code>, not restated here).{" "}
-          <strong>These must be orange when ON.</strong> They were not, for a while: a preflight
-          rule in the wrong layer beat them with{" "}
+          <strong>Second row: the pill</strong> — the same component with{" "}
+          <code className="design-token">PILL</code> over it (imported from{" "}
+          <code className="design-token">pill.ts</code>, not restated here). It was the granularity
+          bar's until the gist columns went on 2026-09-29; nothing in the reading view draws it now,
+          and this page's own <em>Root font 20px</em> control is one.{" "}
+          <strong>It must be orange when ON.</strong> It was not, for a while: a preflight rule in
+          the wrong layer beat it with{" "}
           <code className="design-token">background-color: transparent</code>, the class was on the
           element, twMerge had resolved it correctly, and it was simply outranked. Press one.
         </p>
@@ -1040,6 +1082,23 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <Toggle className={PILL} disabled>
             disabled
           </Toggle>
+        </div>
+        <p className="design-note">
+          <strong>Then the two switches a reader does see</strong>, and neither is a{" "}
+          <code className="design-token">Toggle</code>: both are the native checkbox in a label,
+          tinted with <code className="design-token">accent-color: var(--highlight)</code>, which is
+          every other boolean in this app. <em>High-powered AI</em> is{" "}
+          <code className="design-token">HighPowerSwitch</code>, off and on, for an article that does
+          not exist. <em>Experimental features</em> is <code className="design-token">SettingsSection</code>{" "}
+          itself, so it shows <em>your</em> setting — it reads the one store the bar and /profile
+          share, and has no way to be drawn in a state you are not in. All three are{" "}
+          <code className="design-token">inert</code>: they look exactly as shipped, and a click
+          does nothing, because a click on the real ones writes to the server.
+        </p>
+        <div className="design-panel" inert>
+          <HighPowerSwitch slug="design-example" since={null} onChanged={() => {}} />
+          <HighPowerSwitch slug="design-example" since={DESIGN_HIGH_POWER_SINCE} onChanged={() => {}} />
+          <SettingsSection />
         </div>
       </section>
 
@@ -1063,7 +1122,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         <p className="design-note">
           Lucide at stroke 1.75. The scale is 10 / 13 / 14 / 16 / 20 — sized at the call site, never
           in CSS. <code className="design-token">LoaderCircle</code>, not{" "}
-          <code className="design-token">LoaderCircle</code>: one open arc, still legible at 10px.
+          <code className="design-token">Loader</code>: one open arc, still legible at 10px, where
+          Loader's twelve spokes turn into a grey asterisk (docs/project/icons.md).
         </p>
         <div className="design-row design-icons">
           {[10, 13, 14, 16, 20].map((n) => (
@@ -1074,6 +1134,31 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
               <em className="design-note">{n}px</em>
             </span>
           ))}
+        </div>
+        <p className="design-note">
+          <strong>The tooltip</strong> — <code className="design-token">Tooltip</code>, the one
+          component whose whole look is ours (Floating UI positions it and draws nothing). Hover or
+          Tab to each. The first is a bare sentence; the second is{" "}
+          <code className="design-token">ControlTip</code>, the shape every control in the bar
+          uses: a name, what it does, how.
+        </p>
+        <div className="design-row">
+          <Tooltip content="A single sentence, which is most of them.">
+            <Button variant="outline">A plain tip</Button>
+          </Tooltip>
+          <Tooltip
+            content={
+              <ControlTip
+                head="Find the terms"
+                what="Lists the words this article uses in a sense of its own, and what it means by each."
+                how="One model call over the whole article, kept until the article changes."
+              />
+            }
+          >
+            <Button variant="outline" size="icon" aria-label="Find the terms">
+              <Search />
+            </Button>
+          </Tooltip>
         </div>
       </section>
 
@@ -1097,8 +1182,9 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
       <section>
         <h2>Marks in the prose</h2>
         <p className="design-note">
-          The four things that can be drawn over the author's words, and what happens where they
-          overlap. <strong>Search fills; quotes outline.</strong> A quote's stroke weight is its
+          Everything that can be drawn over the author's words — the reader's comments and
+          conversations, glossary terms, search hits and quotes, citations and cross-references —
+          and what happens where they overlap. A test fails if a kind of mark is missing here. <strong>Search fills; quotes outline.</strong> A quote's stroke weight is its
           priority — heavy above the bar's default, light below it — so running your eye down an
           article finds the passages worth stopping at. Every specimen below is built by the real{" "}
           <code>annotateHtml</code>, not written out by hand, which is the only way this page can
@@ -1280,7 +1366,7 @@ function LogoGlyph({ wrapper }: { wrapper: "logo-text" | "dock-btn-label" }) {
  * route, `annotate.ts` is eagerly loaded by the reader, and
  * `tests/eager-client-graph.test.ts` fails a module that becomes reachable from
  * both without somebody having decided it should be. Importing the annotator for
- * six specimens is not that decision.
+ * a page of specimens is not that decision.
  *
  * **So the copy is checked instead of trusted.** `tests/annotate.test.ts` runs
  * the same inputs through `annotateHtml` and compares, so these strings cannot
@@ -1392,6 +1478,29 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
       { id: "c", start: 33, end: 41, kind: "cite" },
     ],
   },
+  /* The three below were missing until 2026-10-02, and
+     tests/annotate.test.ts now fails if any `MarkKind` is (261002b § Stage 3).
+     The reader's own two come first: a comment and a conversation, each one
+     solid rule and one marker on the final run — so across the `<em>` there
+     should be exactly one ✳ and one ❞, not three. */
+  {
+    label: "A comment the reader left — a solid orange rule, and one ✳ after the last word",
+    marks: [{ id: "spya-cmt001", start: 25, end: 65, kind: "cmt" }],
+  },
+  {
+    label: "A conversation started from these words — the chat hue, and one ❞ after the last word",
+    marks: [{ id: "spya-chat01", start: 25, end: 65, kind: "chat" }],
+  },
+  {
+    /* `id` is `<nonce>-<i>` in the app (annotate.ts § xrefMarks), and means
+       nothing without the cross-reference artefact; nothing on this page
+       handles a click, so this one points nowhere. It is still a Tab stop, as
+       in the reader — the focus ring is half of what it looks like. */
+    label: "A cross-reference — thin, solid and grey; hover it, or Tab to it for the ring",
+    marks: [
+      { id: "design-0", start: 25, end: 65, kind: "xref", label: "mind is software running on wet hardware" },
+    ],
+  },
 ];
 
 /** `annotateHtml(SPECIMEN_HTML, marks)` for each of the above, in the same order. */
@@ -1405,4 +1514,7 @@ export const SPECIMEN_OUT: string[] = [
   '<p>He rejects the idea that mind is <em><mark class="cite" data-cite="c">software</mark></em> running on wet hardware, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that mind is <em><mark class="term cite" data-term="t" data-cite="c">software</mark></em> running on wet hardware, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="">mind is </mark><em><mark class="hit cite" data-hit="q" data-quote="2" style="--quote-a:1.00" data-cite="c">software</mark></em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="cmt" data-comment="spya-cmt001">mind is </mark><em><mark class="cmt" data-comment="spya-cmt001">software</mark></em><mark class="cmt" data-comment="spya-cmt001" data-mark-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="chat" data-chat="spya-chat01">mind is </mark><em><mark class="chat" data-chat="spya-chat01">software</mark></em><mark class="chat" data-chat="spya-chat01" data-chat-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="xref" data-xref="design-0" tabindex="0" role="link" aria-label="mind is software running on wet hardware">mind is </mark><em><mark class="xref" data-xref="design-0">software</mark></em><mark class="xref" data-xref="design-0"> running on wet hardware</mark>, and says so in the first paragraph.</p>',
 ];

@@ -154,9 +154,20 @@ short and the guard makes it safe: deploy when no ingest is queued or running (a
 first); if one starts in between, the migration refuses and the deploy stops before Vercel — retry
 once it drains. In the minutes between the migration and the new code going live, an old worker
 *starting* a `hierarchy` step fails the CHECK loudly, and a job *enqueued* by old code holds
-`"name":"hierarchy"` in `jobs.steps`, which nothing checks. Stage 2 finds out what the new code does
-with such a row and makes sure it fails that one job with a plain message rather than wedging the
-worker loop — no permanent alias in the job reader.
+`"name":"hierarchy"` in `jobs.steps`, which nothing checks.
+
+**What new code does with that row, traced (Sonnet, 2026-10-02):** `toJob`
+(`src/store/pg-jobs.ts`) casts `steps` without checking them; `registry[step.name]` is `undefined`
+and `stepIsDone` throws a `TypeError` *before* `runStep`'s catch, so `advanceJob` 500s with the
+lease held. The job is requeued twice over ~38 minutes, ends `error`, and **Retry copies the same
+step name** into the new job. (With a sibling job on the slug, `readsOf` in `src/sharing-steps.ts`
+throws inside the claim instead.) The reader sees a card stuck with no message. **So stage 2 moves
+`RETIRED_STEPS` out of `src/feedback-payload.ts` into `src/step-order.ts` and applies it where job
+rows are read** (`steps[].name` and `reset.regenerate`) — one table, read by both, so a stale row
+runs under its new name and a retry carries the new name. This reverses this plan's first "no alias
+in the job reader": a guard that fails the job cleanly would still have lost the reader's ingest,
+while the translation finishes it at the cost of one lookup. It also covers the same window left
+open by the Skim rename (`trajectory`).
 
 **Checkpoints keep their keys** (Sol F6, verified): `checkpointKey` hashes only the caller's object,
 never the namespace (`src/source-hash.ts`), so a moved row is found again and an article

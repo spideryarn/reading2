@@ -811,7 +811,7 @@ good as, faster, never refuses.**
 
 ## See also
 
-- [hierarchy.md](../project/hierarchy.md) — the stage
+- [hierarchy.md](../project/structure-step.md) — the stage
 - [260826h-toc-scaling.md](260826h-toc-scaling.md) — the split that moved the labels out, and
   alternatives A–J including the coarse-to-fine shape this plan builds
 - [260830a-opening-an-article-before-the-toc.md](../research/260830a-opening-an-article-before-the-toc.md)

@@ -9,7 +9,7 @@
  * ```
  *
  * `package.json` keeps the familiar names: `npm run ingest`, `npm run extract`,
- * `npm run blocks`, `npm run hierarchy`.
+ * `npm run blocks`, `npm run structure`.
  *
  * ## Why the command line had to leave the stage modules
  *
@@ -69,7 +69,7 @@
  * answer from the model.** `force` is a *step* flag — it makes the step run
  * again rather than skip — and the step then finds its structure and label
  * batches already in `checkpoints` and replays them. Two consecutive
- * `npm run hierarchy -- <slug> --force` runs on an unchanged article: the first
+ * `npm run structure -- <slug> --force` runs on an unchanged article: the first
  * bought two model calls, the second bought **none**, and both printed
  * `13 sections over 19 blocks`.
  *
@@ -126,7 +126,7 @@ const USAGE =
   "  npm run ingest    -- <file>               make an article from a PDF or HTML file here\n" +
   "  npm run extract   -- <slug> [--force]     re-run one stage on an article you have\n" +
   "  npm run blocks    -- <slug> [--force]\n" +
-  "  npm run hierarchy -- <slug> [--force]\n" +
+  "  npm run structure -- <slug> [--force]\n" +
   `\n  any step: ${STEP_ORDER.join(", ")}\n`;
 
 function die(message: string): never {

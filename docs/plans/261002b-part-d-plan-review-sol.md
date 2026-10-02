@@ -1,0 +1,54 @@
+**No P0 found. Part D is reasonable, but I would revise it before implementation.** The main issues are false zeros, unclear counting scope, and hiding the very buttons Greg requested.
+
+1. **P1 — A capped search cannot justify “no archived articles.”**  
+   The route returns at most **30 passages**, ranked across active and archived articles together. Thirty active passages can occupy every place while archived matches remain unseen. The union of matching archived cards and returned archived passage slugs is therefore a **lower bound** when capped. “0+” must mean *unknown whether any match*, with Include archived still available. Likewise, a truncated public listing with zero matching cards cannot justify “no public matches.”  
+   References: [plan:149–157](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md:149), [routes.ts:4989](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/routes.ts:4989), [pg-shelf.ts:650](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/pg-shelf.ts:650).
+
+2. **P1 — The proposed count does not consistently predict what clicking the chip reveals.**  
+   Archived cards obey **Unread and topics**; passages obey **Unread only**. The proposed archived count applies neither. An opened archived article matching only its card can increase the count while contributing nothing visible after clicking under Unread. Topics are harder: their membership is recalculated over the widened shelf, so current active-only membership cannot predict archived card results.  
+   Simplest honest wording: count matches **before Unread and topic filters**, and say that beside the count. Public counts should immediately say **card matches only; Unread/topics do not apply**, rather than explaining this only after the button is pressed.  
+   References: [Library.tsx:283](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:283), [Library.tsx:409](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:409), [Library.tsx:826](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:826), [useShelfTerms.ts:242](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/useShelfTerms.ts:242).
+
+3. **P1 — Short queries need an explicit counting rule.**  
+   The premise that cards match “any length” needs correcting: `queryTerms` drops terms shorter than **two characters**, `or`, and exclusions. If nothing remains, `filterEntries` returns **every card**. I verified that `a`, `or`, `-holland`, and `a b` all return both unrelated sample cards; `ho` filters them. Passage search runs only when the **trimmed query length is at least three**, independently of these terms.  
+   Consequently, one-character queries must not label the whole archive/public listing “also matching”; two-character queries can count cards but have **not searched text**. An idle passage hook is not a successful zero-match answer. Share the eligibility rule rather than duplicating `3`.  
+   References: [library-hits.ts:96](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/library-hits.ts:96), [shelf-narrow.ts:47](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/shelf-narrow.ts:47), [useLibrarySearch.ts:88](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/useLibrarySearch.ts:88).
+
+4. **P1 — Keep the adjacent buttons when counts are zero, unavailable, or loading.**  
+   The plan explicitly removes the button at zero and drops the half on failure. That weakens Greg’s primary request, particularly when the count is incomplete. Removing `NOT_SEARCHING_ARCHIVE` also removes the existing explanation if the replacement disappears on failure. Keep the action; treat the count as optional supporting information.  
+   References: [plan:157–162](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/docs/plans/261002b-include-public-chip-on-the-shelf-empty-shelf-help-and-a-phone-banner-on-the-shelf.md:157), [Library.tsx:1186](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:1186).
+
+5. **P1 — Share the public answer and preserve the live-owner gate.**  
+   `ShelfPublicResults` currently owns a `usePublicShelf()` instance. Mounting another for preview counts, then mounting the section on click, makes another request and can produce a different count/result snapshot. Lift one listing state into a persistent shelf child and pass it to both consumers. Retain `liveArticlesLoaded`: a saved owner shelf can omit a newly added owned article, causing the preview to call it somebody else’s.  
+   References: [ShelfPublicSection.tsx:76](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/ShelfPublicSection.tsx:76), [Library.tsx:830](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:830).
+
+6. **P2 — Existing search guards have a same-question-returning race.**  
+   Query and archive echoes correctly reject responses for a different current question. They do not reject an old response after **A → B → A**, if it escapes cancellation. Check `controller.signal.aborted` immediately before committing success or failure, or use a generation. New count rendering must also check query/scope identity before displaying a settled count. Search currently does not refresh for archive/restore/revision changes with unchanged query; reconcile archived hit slugs against the current archive or invalidate the answer when that scope changes.  
+   Reference: [useLibrarySearch.ts:112](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/useLibrarySearch.ts:112).
+
+7. **P2 — Background archive loading has visible error effects.**  
+   Loading the archive with the chip off does **not** widen shelf scope or topic scope: both explicitly check `archivedOn`. It enlarges `ownSlugs`, but normally changes no public rows because the public listing already excludes archived articles. However, `loadArchived` clears `actionError` when starting and sets it on failure; Library displays that error globally even with the chip off. Thus “drop the failed count half” will not hide the background failure and can clear an unrelated action error. Also, the loader accepts offline copies without recording that distinction, so those cannot establish an exact current count.  
+   References: [Library.tsx:965](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:965), [Library.tsx:259](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:259), [useShelf.ts:502](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/useShelf.ts:502), [Library.tsx:634](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/Library.tsx:634).
+
+The counting definitions themselves can be honest, with these qualifications:
+
+| Half | What a match means | Completeness |
+|---|---|---|
+| Archived cards | Folded substrings of every retained term across title, author, site and gist | Complete for the loaded archive snapshot |
+| Archived text | English PostgreSQL full-text match in a searchable current-revision block; supports stemming, phrases, OR and exclusions | Distinct slugs among returned passages; incomplete when capped |
+| Public | Same card matcher, excluding owned slugs; no passage search | Latest **200** public, readable, unarchived cards; incomplete when truncated |
+
+Deduplicate the archived union by slug. “+” should explicitly mean **at least this many**, not a promise that additional archived/public matches exist: the omitted rows might all be irrelevant. Public fields also have character limits, so this counts the published **card words**, not all underlying metadata. [pg-shelf.ts:572](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/pg-shelf.ts:572), [public-library.ts:100](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/public-library.ts:100), [public-library.ts:134](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/public-library.ts:134).
+
+**Two debounced searches are acceptable for this beta**, with no AI spend, but they duplicate active search work and transfer passage text merely to count slugs. Returning 30 rows bounds the response, not all ranking work. Do not replace both with one inclusive search and split it client-side: archived passages could displace active passages and change the existing answer.
+
+Two simpler alternatives:
+
+- **Smallest change:** adjacent buttons always; public card counts and clearly labelled archived card counts; passage counts deferred. Greg called counts “extra points.”
+- **Better if text counts matter:** extend the authenticated search response with a separate archived text article count, computed before the passage cap. Label text and card counts separately, avoiding the union/overlap machinery. This saves a browser round trip and snippet transfer, although the database still does additional work.
+
+Privacy looks sound with the existing boundaries: archive search remains owner-scoped; public loading omits credentials and sends no search query; owned-slug exclusion stays local. Keep those properties and avoid logging query text. [pg-shelf.ts:616](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/store/pg-shelf.ts:616), [public-api.ts:103](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/web/public-api.ts:103), [routes.ts:5000](/home/greg/code/spideryarn2/.claude/worktrees/fb-yy5x66-fcbnhq-shelf-public-phone/src/routes.ts:5000).
+
+**The interpretation of “always” as all search outcomes, including successful searches, is reasonable.** The conclusion that counts therefore belong in this first version is stronger than Greg’s words support. His clear requirement is convenient adjacent buttons; counts are a bonus. Public card-only search is also an explicit v1 compromise, not something his text-search example directly endorses.
+
+Read-only review completed; no files changed. Validation was source inspection plus the direct card-matcher probe.

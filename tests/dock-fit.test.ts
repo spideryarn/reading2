@@ -322,6 +322,12 @@ describe("the stylesheet backs the ladder", () => {
         here.some((x) => x.includes(".dock-feedback") || x === `.dock.${rung} .dock-btn-label`),
         `${rung} does not hide Feedback's word`,
       ).toBe(true);
+      /* Help, beside Feedback since 2026-10-02 (261002b, R5): app-level, so
+         its word goes with theirs. */
+      expect(
+        here.some((x) => x.includes(".dock-help") || x === `.dock.${rung} .dock-btn-label`),
+        `${rung} does not hide Help's word`,
+      ).toBe(true);
     }
   });
 
