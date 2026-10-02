@@ -28,7 +28,7 @@
  * position, direction and size; a dropped section is counted separately,
  * because it is the one thing this loses that the answer contained. All of it
  * reaches `StructureRun`, the CLI at zero as well as above it, src/pipeline.ts and
- * evals/hierarchy-structure — a repair nobody is told about is the same shape as the
+ * evals/structure-whole-document — a repair nobody is told about is the same shape as the
  * bug it repaired (docs/reusable/silent-success.md).
  *
  * **What still throws**, and these are faults in what the model *said* rather

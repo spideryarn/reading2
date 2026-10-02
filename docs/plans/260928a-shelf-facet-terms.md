@@ -26,7 +26,7 @@ are in § Assumptions pending Greg.
 > — Greg, 2026-09-28
 
 And a possible later idea, which this plan does **not** build — the write-up is
-[260928b-academic-bulk-import-without-llm-processing.md](../research/260928b-academic-bulk-import-without-llm-processing.md):
+[260928b-academic-bulk-import-without-llm-processing.md](../investigations/260928b-academic-bulk-import-without-llm-processing.md):
 
 > Potential future idea: for academics with big libraries of papers, maybe we'd allow them to
 > somehow upload the PDFs (without yet triggering the expensive LLM processing?) and/or a

@@ -325,7 +325,7 @@ the index rather than in the id string.
 Blocks are the **finest** unit a reader takes in as one thing — so an `<li>` is a block and the
 `<ul>` around it is not; the list becomes a *node* in the tree instead. See
 [architecture.md § What a block is](architecture.md#what-a-block-is) for that decision and why it
-matters to the hierarchy.
+matters to the tree.
 
 Some blocks get an id but never get a gist (`gistable: false`): images, horizontal rules, and
 pull-quotes that repeat body text verbatim. They stay addressable — Hierarchy may well want to point

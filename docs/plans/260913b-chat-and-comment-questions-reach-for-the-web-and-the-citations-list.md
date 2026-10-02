@@ -1,6 +1,6 @@
 # Questions about a passage reach for the web, say which half came from where, and can look at the citations
 
-Research write-up: [docs/research/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md](../research/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md).
+Investigation write-up: [docs/investigations/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md](../investigations/261002m-chat-web-reach-faq-levels-remember-brevity-and-referee-claims-effort.md).
 
 Two feedback reports from Greg, four minutes apart, about the same thing: what the model can reach for
 when a reader asks about a passage. They are one piece of work, built in two stages.

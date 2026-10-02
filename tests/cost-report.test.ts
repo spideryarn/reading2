@@ -32,8 +32,8 @@ function group(over: Partial<SpendGroup> = {}): SpendGroup {
   return {
     ownerId: ALICE,
     scopeKind: "job_step",
-    job: "hierarchy",
-    stepName: "hierarchy",
+    job: "structure",
+    stepName: "structure",
     calls: 1,
     creditsNanos: 1_000_000_000,
     byokNanos: 0,
@@ -219,7 +219,7 @@ describe("partitioning the ledger by whose money it is", () => {
       expect(costCategoryOf({ scopeKind, job: "chat", stepName: null })).toBe("non-product");
     }
     for (const scopeKind of ["request", "job_step"]) {
-      expect(costCategoryOf({ scopeKind, job: "chat", stepName: "hierarchy" })).not.toBe(
+      expect(costCategoryOf({ scopeKind, job: "chat", stepName: "structure" })).not.toBe(
         "non-product",
       );
     }

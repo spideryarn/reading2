@@ -39,6 +39,11 @@ vi.mock("nuqs", async (importOriginal) => ({
 }));
 vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
 
+const experimental = vi.hoisted(() => ({ on: false }));
+vi.mock("../src/web/useExperimental.js", () => ({
+  useExperimental: () => ({ on: experimental.on }),
+}));
+
 const { Metadata } = await import("../src/web/Metadata.js");
 const { FLASH_MS } = await import("../src/web/flash.js");
 
@@ -47,7 +52,13 @@ const DIR = "spideryarn.article_revisions/e7efb065-b82d-4442-af7a-148d37895171/"
 
 function article(): Article {
   return {
-    meta: { slug: SLUG, title: "Temporal context reinstatement" },
+    meta: {
+      slug: SLUG,
+      title: "Temporal context reinstatement",
+      source: "pdf",
+      pages: 1,
+      authors: [{ name: "Erin Wamsley", affiliations: ["Furman University"] }],
+    },
     blocks: [
       {
         id: "spya-aaaaaa",
@@ -87,11 +98,20 @@ let host: HTMLDivElement;
 let root: Root;
 let mounted: boolean;
 
+const page = () =>
+  createElement(Metadata, {
+    slug: SLUG,
+    article: article(),
+    onRenamed: () => {},
+    onVisibility: () => {},
+  });
+
 beforeEach(async () => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  experimental.on = false;
   vi.stubGlobal("fetch", () =>
     Promise.resolve(
       new Response(
@@ -109,14 +129,7 @@ beforeEach(async () => {
     ),
   );
   await act(async () => {
-    root.render(
-      createElement(Metadata, {
-        slug: SLUG,
-        article: article(),
-        onRenamed: () => {},
-        onVisibility: () => {},
-      }),
-    );
+    root.render(page());
   });
   mounted = true;
   /* After the mount, so the page's own requests resolved on real timers; from
@@ -372,5 +385,74 @@ describe("the search box above it (83)", () => {
     await press("Escape");
     expect(searchBox()?.value).toBe("");
     expect(entries()).toEqual(all);
+  });
+});
+
+/* **The words a reader brings, against the real page** — Greg, `spya-nkjpte`,
+   2026-10-02: *"Add lots more keyword-aliases for Metadata page search to make
+   it more flexible/forgiving (e.g. I tried searching for "regenerate" to find
+   ways to regenerate the AI processing, and nothing matched)."* Run on the
+   rendered page rather than a copied list, so a section whose `keywords` drift
+   fails here. docs/plans/261002c-metadata-search-aliases-and-keeping-its-search-current.md. */
+describe("the search box finds a section by the words a reader brings (nkjpte)", () => {
+  const CASES: [string, string][] = [
+    /* A diagnostic control, not evidence for this patch: the margin search
+       already answered Greg's exact word. The reproduced miss was ⌘K. */
+    ["regenerate", "AI processing"],
+    ["reprocess", "AI processing"],
+    ["recompute", "AI processing"],
+    ["start again", "AI processing"],
+    ["update", "AI processing"],
+    ["fix", "AI processing"],
+    ["high powered", "AI processing"],
+    ["opus", "AI processing"],
+    ["better model", "AI processing"],
+    ["regenerate my glossary please", "AI processing"],
+    ["redo the quiz", "AI processing"],
+    ["thread", "AI processing"],
+    ["takeaway", "In one sentence"],
+    ["researcher", "Authors"],
+    ["garbled", "How well we read the PDF"],
+    ["share with a friend", "Access & sharing"],
+    ["resume", "Your reading"],
+    ["website", "Technical details"],
+    ["markdown", "Export"],
+    ["restore", "Archive this article"],
+    ["get rid of it forever", "Delete this article"],
+    ["wipe", "Delete this article"],
+  ];
+  for (const [query, expected] of CASES) {
+    it(`"${query}" → ${expected}`, async () => {
+      await type(query);
+      expect(entries()[0]).toBe(expected);
+    });
+  }
+});
+
+describe("whole-article search follows its experimental control", () => {
+  const WHOLE_ARTICLE_QUERIES = ["start over", "reset", "whole article", "redo the whole article"];
+
+  it("does not promise the hidden control by its own words", async () => {
+    /* *reset* and *whole* are indexed only while the row is drawn. A query
+       that also has an ordinary redo word (*start over*, *redo the whole
+       article*) still lands on AI processing, by the set-aside rule in
+       page-search.ts § searchSections — on purpose, since that is where every
+       other redo is. */
+    for (const query of ["reset", "whole article"]) {
+      await type(query);
+      expect(entries(), query).toEqual([]);
+    }
+  });
+
+  it("finds the control when the experimental switch exposes it", async () => {
+    experimental.on = true;
+    await act(async () => {
+      root.render(page());
+      await Promise.resolve();
+    });
+    for (const query of WHOLE_ARTICLE_QUERIES) {
+      await type(query);
+      expect(entries()[0], query).toBe("AI processing");
+    }
   });
 });

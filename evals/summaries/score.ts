@@ -45,7 +45,7 @@
  *    with a warning on it. `anchors.ts` § `MAX_ANCHOR_INVERSIONS`.
  * 2. **A gap no larger than the threshold is not a gap.** The honest output is
  *    *"not separable on quality"*, and the results file says so plainly rather
- *    than reaching for a winner — the rule `evals/hierarchy-structure` already
+ *    than reaching for a winner — the rule `evals/structure-whole-document` already
  *    runs under.
  * 3. **Nothing here ships a variant.** The strongest claim available is *this
  *    variant is not obviously worse and is worth rendering for Greg*, which is
@@ -155,7 +155,7 @@ export interface ArmPlan {
  * two are told apart.
  *
  * `sentTo` is the model the arms were sent to, so the misnaming half applies:
- * every arm here goes to `modelFor("hierarchy")`, and a row answered by
+ * every arm here goes to `modelFor("structure")`, and a row answered by
  * something else is a row that is not about the arm it names.
  */
 export function coverageFor(cells: readonly Cell[], plan: readonly ArmPlan[], sentTo: string): Coverage {

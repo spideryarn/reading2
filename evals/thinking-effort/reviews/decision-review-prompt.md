@@ -5,7 +5,7 @@ Read-only: do not change any file. You may run commands that need no network, e.
 (free; it unblinds and recomputes from the files on disk).
 
 **Candidate (committed):** `6c2afaf0e` on branch `worktree-thinking-effort-eval`. The write-up is
-`docs/research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`; the
+`docs/investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`; the
 plan with the rule fixed before the results (and three notes written mid-run, each dated) is
 `docs/plans/261001p-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md`. You
 reviewed the plan twice and the harness once (`evals/thinking-effort/reviews/`).
@@ -19,7 +19,7 @@ reviewed the plan twice and the harness once (`evals/thinking-effort/reviews/`).
   - `judging/illustrated-low/` (the base-vs-low round).
   - `judging/illustrated/` (the base-vs-medium round).
   - Ideas was not judged; the validity gate decided it.
-- Hierarchy's smoke: `evals/results/structure-whole-document/2026-10-01-17-*`.
+- Hierarchy's smoke: `evals/results/hierarchy-structure/2026-10-01-17-*`.
 
 **The decision:**
 - Sketch `high` → `low`.

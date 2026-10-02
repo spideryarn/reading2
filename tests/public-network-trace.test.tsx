@@ -1134,7 +1134,7 @@ describe("a signed-out browser on a shared document", () => {
     expect(host.textContent).not.toContain("Nobody has built");
     /* The slider, on the default level — so this cannot pass on a band that
        rendered its surface and nothing else. */
-    expect(band?.querySelector(".summ-slider input[type=range]")?.getAttribute("aria-valuetext")).toBe("Simple");
+    expect(band?.querySelector(".summ-slider input[type=range]")?.getAttribute("aria-valuetext")).toBe("Brief");
     expect(band?.querySelector(".summ-pill"), "no Parts | Sections").toBeNull();
     expect(outsidePublic()).toEqual([]);
   });

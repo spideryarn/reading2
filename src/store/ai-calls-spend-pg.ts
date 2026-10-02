@@ -88,7 +88,7 @@ import { aiCalls } from "../db/schema.js";
 export interface SpendGroup {
   ownerId: string;
   scopeKind: string;
-  /** `ai_calls.purpose` — `hierarchy`, `chat`, `live_conversation`, … */
+  /** `ai_calls.purpose` — `structure`, `chat`, `live_conversation`, … */
   job: string;
   stepName: string | null;
   calls: number;

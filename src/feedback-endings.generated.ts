@@ -151,6 +151,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-nca765": "shipped",
   "spya-ng89zf": "shipped",
   "spya-nhddz6": "shipped",
+  "spya-nkjpte": "shipped",
   "spya-nq6hnu": "shipped",
   "spya-nr6gqu": "shipped",
   "spya-ns2v83": "shipped",
@@ -248,6 +249,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-w2kgha": "shipped",
   "spya-w3z96b": "shipped",
   "spya-w7t24d": "shipped",
+  "spya-wdfb4h": "shipped",
   "spya-wequmw": "shipped",
   "spya-ws4765": "shipped",
   "spya-wsz0q4": "shipped",
@@ -291,4 +293,5 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-zfcp5x": "shipped",
   "spya-zhkutu": "shipped",
   "spya-zv8dc6": "shipped",
+  "spya-zw479b": "shipped",
 };

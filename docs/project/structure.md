@@ -3,7 +3,9 @@
 Up: [reading-view-overview.md](reading-view-overview.md)
 
 The article's tree, in the band, with two faces chosen by the band's width. It shares the tree with
-[granularity-zoom.md](granularity-zoom.md) rather than having a structure of its own.
+[granularity-zoom.md](granularity-zoom.md) rather than having a structure of its own. The tree comes
+from pipeline stage 4, the `structure` step (called `hierarchy` until 2026-10-02), and how it is cut
+is [structure-step.md](structure-step.md).
 
 ## What it is for
 

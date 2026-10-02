@@ -10,7 +10,7 @@
  * 2026-09-05 while `tests/a-failed-shelf-read-is-not-an-empty-shelf.test.tsx`
  * sat two directories away *mounting this very hook*. A doc that says "this
  * cannot be done here" outlives the reason it was true
- * (docs/research/260903b-facts-that-were-wrong.md).
+ * (docs/investigations/260903b-facts-that-were-wrong.md).
  *
  * So: the hook **is** tested, in the `.tsx` suites that mount the card, and what
  * is left here is the part that needs no harness at all. The three tests named

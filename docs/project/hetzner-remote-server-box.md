@@ -240,7 +240,7 @@ its answer is the checklist's starting state for a key you have not answered for
 course sent to the box, which is the whole point. The capable model was chosen over the cheap one
 knowing it costs eighteen times more, because the cheap one left a quarter of each file `unknown` and
 twice missed a token that can delete the box
-([260902b-env-key-proposal-spike.md](../research/260902b-env-key-proposal-spike.md)). **Both answers
+([260902b-env-key-proposal-spike.md](../investigations/260902b-env-key-proposal-spike.md)). **Both answers
 are remembered** in `~/.config/gjd-remote/repos/` — the file records every name you decided about and
 which of them you approved — so the next push starts from your answers, a key you unticked stays
 unticked whatever a later model thinks of it, and no model is asked about a key you have already

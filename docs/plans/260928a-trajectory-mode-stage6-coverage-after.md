@@ -1,6 +1,6 @@
 # Trajectory stage 6 — does the route that sees the Ideas cover more of them?
 
-Research write-up: [docs/research/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md](../research/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md).
+Investigation write-up: [docs/investigations/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md](../investigations/261002k-skim-trajectory-coverage-quote-spread-deeper-passes-and-diversity-evals.md).
 
 Stage 6 of [260928a](260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md), item 3 of
 "Stage 6 as it will be built": the before/after measurement Sol's F65 asked for, against the

@@ -509,7 +509,7 @@ function linksToOwner(md: string, owner: string): boolean {
  * was inside a prompt string, `src/jobs.ts:443` was a comment about `force` —
  * and the link check above was green on all of them, because it looks for the
  * file, and the file is nearly always there. A citation that cannot go red is
- * the subject of docs/research/260903b-facts-that-were-wrong.md.
+ * the subject of docs/investigations/260903b-facts-that-were-wrong.md.
  *
  * So evergreen docs cite the symbol — `src/models.ts` § `STAGE_EFFORT` — and
  * this checks the file still contains it, which a rename does break. Plans,

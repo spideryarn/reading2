@@ -1498,7 +1498,7 @@ export async function generateGlossary(opts: {
            something the code can promise. The reliable win here is cross-stage:
            the arc and the thread send related article bytes. Distinct effort,
            renderer and schema values mean none of the three currently shares
-           an entry. docs/research/260826c-prompt-caching-callsites.md. */
+           an entry. docs/investigations/260826c-prompt-caching-callsites.md. */
         system: [
           {
             type: "text" as const,

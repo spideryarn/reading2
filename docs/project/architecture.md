@@ -143,7 +143,7 @@ framing (2026-08-24):
 
 If the `<ul>` is one block, the second case is simply unreachable — no id exists to point at an
 individual item, and no later stage can recover one. Making blocks the finest unit costs nothing and
-turns that judgement into a choice the hierarchy makes per list: a node covering the whole list is one
+turns that judgement into a choice the structure step makes per list: a node covering the whole list is one
 row, the leaves beneath it are a row each. Both are just depths of a tree that already exists.
 
 The same logic applies to an `<li>` containing a nested list: the item's own text and the sub-items
@@ -158,7 +158,7 @@ of their own. See [block-ids.md § What gets an id](block-ids.md#what-gets-an-id
 **`gistable` is not the policy, and since 2026-08-28 it does not pretend to be.** It is the
 splitter's intrinsic "this block has independently describable prose" fact, and nothing else.
 The five questions the rest of the pipeline actually asks — may this be searched, may an automatic
-model call read it, may it be embedded, may the hierarchy step write a row about it, does it go on the clock —
+model call read it, may it be embedded, may the structure step write a row about it, does it go on the clock —
 are named predicates in [`src/block-policy.ts`](../../src/block-policy.ts), which is `gistable`'s
 only policy-reading consumer. They are **not** five spellings of one formula: a footnote is
 searchable and is not on the clock, and a pull-quote is on the clock and gets no row.
@@ -183,9 +183,9 @@ than the ones below are in `src/step-order.ts` § `STEP_ORDER`.
 |---|-------|-------|----------|
 | 1 | fetch — see [fetching.md](fetching.md) | **fetch agent** ([`src/fetch.ts`](../../src/fetch.ts)); run as a step of the ingest queue, [ingest-queue.md](ingest-queue.md) | `raw.html` or `raw.pdf`, plus `raw.json` |
 | 2 | extract — **two extractors, one artefact**: Readability for a page ([content-extraction.md](content-extraction.md)), a model reading the pages for a PDF ([../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md)) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
-| 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + hierarchy agent** | `blocks.json` |
-| 4 | hierarchy — the deeply-nested table of contents, see [structure-step.md](structure-step.md) | **blocks + hierarchy agent** | `tree.json` (structure), `labels.json` (**empty** — see 4b) |
-| 4b | **labels** — the `navLabel` on every paragraph ([structure-step.md § Why they are two steps](structure-step.md#two-steps)). Split out of stage 4 on 2026-09-06 because it was 79.5–92% of its wall clock, past what the job lease allows. **Not run by a plain add**: `hierarchy` writes an empty manifest and the reader sees *"Paragraph labels are still arriving"* until a free successor job runs. Forcing `hierarchy` sweeps it in, because re-cutting the tree is what makes a label wrong | **blocks + hierarchy agent** ([`src/labels.ts`](../../src/labels.ts)) | `labels.json`, `tree.json` (labels merged in) |
+| 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + structure agent** | `blocks.json` |
+| 4 | structure — the deeply-nested table of contents, see [structure-step.md](structure-step.md) | **blocks + structure agent** | `tree.json` (structure), `labels.json` (**empty** — see 4b) |
+| 4b | **labels** — the `navLabel` on every paragraph ([structure-step.md § Why they are two steps](structure-step.md#two-steps)). Split out of stage 4 on 2026-09-06 because it was 79.5–92% of its wall clock, past what the job lease allows. **Not run by a plain add**: `structure` writes an empty manifest and the reader sees *"Paragraph labels are still arriving"* until a free successor job runs. Forcing `structure` sweeps it in, because re-cutting the tree is what makes a label wrong | **blocks + structure agent** ([`src/labels.ts`](../../src/labels.ts)) | `labels.json`, `tree.json` (labels merged in) |
 | 4.5 | **assets** — fetch the article's own images and host them, so a hotlink cannot rot and no reader announces themselves to the publisher's CDN ([article-images.md](article-images.md)). The one stage that calls no model | **fetch agent** ([`src/collect-assets.ts`](../../src/collect-assets.ts)) | `assets.json`, plus objects in Storage |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
@@ -196,8 +196,8 @@ than the ones below are in `src/step-order.ts` § `STEP_ORDER`.
 | 6b | ingest queue — runs stages 1–5b on demand ([ingest-queue.md](ingest-queue.md)) | **granularity zoom** | the `jobs` table, `src/jobs.ts`, `src/pipeline.ts` |
 | 7 | reading assistant: comments — see [comments.md](comments.md) | **granularity zoom** | `comments.json`, `src/explain.ts` |
 
-Stage 3 was previously unassigned. Greg settled it on 2026-08-24: it belongs with the hierarchy,
-since the hierarchy is the first thing that has to address blocks and would otherwise be built on someone else's
+Stage 3 was previously unassigned. Greg settled it on 2026-08-24: it belongs with the structure step,
+since the structure step is the first thing that has to address blocks and would otherwise be built on someone else's
 assumptions about what a block is.
 
 Current code: stage 1 is [`src/fetch.ts`](../../src/fetch.ts) and stage 2 is
@@ -209,7 +209,7 @@ Until 2026-09-05 `src/extract.ts` also fetched the page and wrote a standalone H
 
 **The queue is stage 6's, but the stages are not.** [`src/pipeline.ts`](../../src/pipeline.ts) calls
 each stage through the function that stage exports, and the stages that still have a command line
-(`extract`, `blocks`, `hierarchy`, `labels`, `pdf`) call the same function —
+(`extract`, `blocks`, `structure`, `labels`, `pdf`) call the same function —
 one code path per stage, and no reimplementation of anybody's work. Adding a step means adding an
 entry to `STEPS` there; changing what a step *does* means changing that stage, in its own file, as
 its owner. On 2026-08-25 Greg chose in-process over spawning subprocesses, which is what made a small
@@ -314,7 +314,7 @@ is built from: a list of images to fetch, no prompt and no head.
 
 `tree.json` still carries no hash, so for it "cached" still means "the file is
 there" and it still relies on the force-cascade to notice that something upstream moved — see
-[`src/pipeline.ts`](../../src/pipeline.ts) § `hierarchy`, where a stamp was written and withdrawn because
+[`src/pipeline.ts`](../../src/pipeline.ts) § `structure`, where a stamp was written and withdrawn because
 it needs consumer invalidation first.
 
 `blocks.json` is the exception: it is a **source artefact, not a cache**. It is the only place the
@@ -452,7 +452,7 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   - `blocks` — **structural**, and it is the interesting one: `blocksMatchTheirHtml` re-splits the
     stored HTML and compares it block for block against the stored blocks. No stamp to go stale, and
     it notices a change nothing wrote a hash about.
-  - `hierarchy` — **existence**. It *writes* an `inputHash` (its labels file's own `sourceHash`), and
+  - `structure` — **existence**. It *writes* an `inputHash` (its labels file's own `sourceHash`), and
     nothing reads it back for freshness, because the step declares no `stamp()`. Its successor
     `labels` is not in this group — it has a `stamp()`, over the blocks, its prompt version and its
     model — but the thing that keeps *it* honest across a re-cut tree is not that stamp: it is

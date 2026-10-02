@@ -107,7 +107,7 @@ draws per arm, two blind judges (GPT Sol ranking, Opus scoring): no visible loss
 to $0.100 and from 176 s to 42 s on average. Validity was 1 malformed draw in 16
 at both levels. It also took the Sketch out of the `ids` cache group — see
 [prompt-caching.md](prompt-caching.md).
-[261001c](../research/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md)
+[261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md)
 has the lineups and what the judges said.
 
 **One model call, 30–101 seconds, about $0.10** — measured over sixteen draws of
@@ -155,7 +155,7 @@ taste. The old `high` measurements were 121–194 seconds and about $0.20.
   [`tests/sketch-view-drawing.test.tsx`](../../tests/sketch-view-drawing.test.tsx).
 - **It remains in `FORCE_ONLY_WHEN_NAMED`.** At `high`, its 194-second measured
   maximum supplied a third, timeout-specific reason: a positional cascade beside
-  a 320-second Hierarchy could run an invocation out of time. Moving to `low`
+  a 320-second structure step could run an invocation out of time. Moving to `low`
   removes that measured reason, not the two ordinary ones: it is a model call the
   reader asks for, and nothing except Illustrated reads what it writes.
 

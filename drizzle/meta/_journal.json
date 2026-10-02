@@ -827,6 +827,13 @@
       "when": 1790948725148,
       "tag": "20261002134525_glossary_hidden_entries",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1790950083061,
+      "tag": "20261002140803_structure_step",
+      "breakpoints": true
     }
   ]
 }

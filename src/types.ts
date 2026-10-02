@@ -2929,11 +2929,11 @@ export type StepName =
      two-step job a minimal upload queues, `["fetch", "metadata"]` — `enqueue`
      refuses it anywhere else. docs/plans/261001m-bulk-import-of-many-papers-a-stepping-stone.md. */
   | "metadata"
-  | "extract" | "blocks" | "hierarchy"
-  /* The per-paragraph navigation labels, which left the `hierarchy` step on
+  | "extract" | "blocks" | "structure"
+  /* The per-paragraph navigation labels, which left the `structure` step on
      2026-09-06 because they were 79.5–92% of its wall clock and one measured
      call took 602s of a 682s pass — past what the job lease allows.
-     `hierarchy` now writes a `PendingLabelsFile` (src/labels.ts) and this step
+     `structure` now writes a `PendingLabelsFile` (src/labels.ts) and this step
      writes the real one, later, in a free successor job. **It is deliberately
      NOT in `DEFAULT_INGEST_STEPS`**, which is the whole of the change.
      docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */

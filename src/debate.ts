@@ -265,7 +265,7 @@ export const ANSWER_TOKENS = 8_000;
  * sends `require_parameters: true`, which turns a parameter an upstream does not
  * support from a silent no-op into a **hard 404 with no endpoints left** — that
  * is not theory, it is what a `temperature: 0` did to `env-proposal`
- * (docs/research/260902b-env-key-proposal-spike.md). Neither Stage 0 nor Stage 0b
+ * (docs/investigations/260902b-env-key-proposal-spike.md). Neither Stage 0 nor Stage 0b
  * sent a schema alongside `openrouter:web_search`, so a schema here would be an
  * unmeasured field in a body whose failure mode is a 404 the feature reports as
  * "the search did not run". The one call in this repo that already does web

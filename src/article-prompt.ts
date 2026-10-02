@@ -8,7 +8,7 @@
  * src/explain.ts and src/converse.ts — and they had already drifted apart in
  * two ways, one of them fatal.
  *
- * See docs/plans/260826g-prompt-caching.md and docs/research/260826c-prompt-caching-callsites.md.
+ * See docs/plans/260826g-prompt-caching.md and docs/investigations/260826c-prompt-caching-callsites.md.
  *
  * ## The marker that was in the wrong place
  *
@@ -126,11 +126,11 @@ function head(meta: Meta, identity: ArticleIdentity): string {
  * It lives in the article rather than in each prompt so that every prompt that
  * is shown ids, including one written next year, is told in the same breath,
  * and a prompt that is shown none (the glossary, the arc) is not. The
- * hierarchy prompts render their own numbered blocks (src/structure-prompt.ts)
- * and are not told yet. No hierarchy leak has been seen. It was to ride on the
+ * structure prompts render their own numbered blocks (src/structure-prompt.ts)
+ * and are not told yet. No structure-prompt leak has been seen. It was to ride on the
  * next bump, and `toc/10` (plan 261001p) passed it by on purpose: that bump was
  * measured as one change, and this note's first line ("Each block below starts
- * with its id") is not true of the hierarchy's `[i] id <tag>:` lines, so it
+ * with its id") is not true of the structure prompt's `[i] id <tag>:` lines, so it
  * would want its own wording there, not a copy —
  * docs/plans/260928c-block-refs-shown-to-readers.md.
  */

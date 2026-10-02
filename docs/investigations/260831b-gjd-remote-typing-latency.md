@@ -10,7 +10,7 @@ Greg, 2026-08-31:
 so are the three wrong turns, because each was plausible and two of them survived a review.
 
 Connecting to the box at all is
-[260831c-remote-server-tmux-mosh.md](260831c-remote-server-tmux-mosh.md);
+[260831c-remote-server-tmux-mosh.md](../research/260831c-remote-server-tmux-mosh.md);
 the box itself is [infra/hetzner/README.md](../../infra/hetzner/README.md).
 
 ## What we measured

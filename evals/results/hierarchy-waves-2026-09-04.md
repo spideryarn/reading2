@@ -17,7 +17,7 @@
 and what does that cost? And underneath it, the one that decides whether the idea is viable at all:
 **is there a per-call reasoning floor that more calls would multiply?**
 
-`docs/research/260830a-opening-an-article-before-the-toc.md` § "The cost model was wrong by 3x"
+`docs/investigations/260830a-opening-an-article-before-the-toc.md` § "The cost model was wrong by 3x"
 measured **~6,300 reasoning tokens per call regardless of how small the question is**, and concluded
 that waves "buy latency and sell cost" — dramatically, at ~39 calls per article. That floor was
 measured when this stage ran at `effort: "high"`. It has run at `medium` since 2026-08-30 and

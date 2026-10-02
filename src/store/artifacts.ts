@@ -34,7 +34,7 @@
  * The obvious shape — `Record<ArtifactKind, path>` — cannot reproduce what the
  * pipeline writes today, and it took a review to notice. `blocks` has **two**
  * destinations: `output/<slug>.blocks.json`, written by the `blocks` step, and
- * `data/<slug>/blocks.json`, written by `hierarchy` so the tree and the blocks it was
+ * `data/<slug>/blocks.json`, written by `structure` so the tree and the blocks it was
  * built from sit together. Keyed by kind alone, one of those disappears and
  * four stages lose the file they read. So every lookup in the adapter takes a
  * step *and* a kind. The same applies to the HTML, which `extract` writes and
@@ -709,7 +709,7 @@ export const PIPELINE_RUN = "pipeline";
 export const NO_INPUT_HASH = "unstamped";
 
 /**
- * Why a `hierarchy` run is not the one we would write again today, or that it
+ * Why a `structure` run is not the one we would write again today, or that it
  * is. Ordered: a run that has not finished well has a hash that means nothing,
  * so the status arms come before the hash one.
  */
@@ -723,12 +723,12 @@ export type StructureCurrency =
   | { current: false; why: "different-blocks"; ranAgainst: string };
 
 /**
- * **Is this `hierarchy` run the one that describes these blocks?**
+ * **Is this `structure` run the one that describes these blocks?**
  *
  * One function because two inline copies of *"is this row good"* drift, and
  * nothing says so — docs/postmortems/260827d-toc-status-never-checked.md, whose
  * recommendation this is. It asked for `isTocCurrent`; the step was renamed
- * `toc` → `hierarchy` afterwards, so the name follows the step.
+ * `toc` → `hierarchy` → `structure` afterwards, so the name follows the step.
  *
  * Its two callers are `articleMetadata` (src/store/pg.ts), which draws the
  * metadata page's *"would we write this again today"* column and reads only
@@ -748,7 +748,7 @@ export type StructureCurrency =
  * crashed halfway, or one still going in another process, leaves a hash that
  * matches the blocks exactly, because nothing has touched the blocks since.
  *
- * @param run the `revision_step_runs` row for `hierarchy`, or `undefined` if
+ * @param run the `revision_step_runs` row for `structure`, or `undefined` if
  *   there is none. `(revisionId, stepName)` is the primary key, so there is at
  *   most one.
  * @param blocksHash `hashBlocks` of the blocks being asked about — **not
@@ -883,7 +883,7 @@ export interface StepStamp {
  * parsing. They are written down rather than left out so that the two cases can
  * be told apart: see the note on the table itself.
  *
- * `hierarchy` reads its stamp off **`labels.json`, not `tree.json`**, and that is
+ * `structure` reads its stamp off **`labels.json`, not `tree.json`**, and that is
  * worth stating because it looks backwards. The tree is the headline artefact,
  * but it carries only `version` and `generator`; `labels.json` is the one that
  * records `sourceHash` — the blocks it was written against — and
@@ -902,9 +902,9 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   metadata: null,
   extract: null,
   blocks: null,
-  hierarchy: "labels",
+  structure: "labels",
   /**
-   * **The same artefact as `hierarchy` above, and two steps really can read
+   * **The same artefact as `structure` above, and two steps really can read
    * their stamp off one file.**
    *
    * It looks like the clash `assertStampAgrees` exists to refuse, and it is not:
@@ -912,11 +912,11 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
    * `revision_step_runs` row before it looks at any artefact, so doneness is
    * keyed on the receipt rather than on the file. Two steps sharing a site is a
    * shape this project already had — `STORAGE` maps both `blocks`/`blocks` and
-   * `hierarchy`/`blocks` to the same rows — and
+   * `structure`/`blocks` to the same rows — and
    * tests/shared-site-run-row-gate.test.ts pins it on that existing pair.
    *
    * The difference between the two rows is what each step *declares*.
-   * `hierarchy` declares an `inputHash` alone, because the manifest it writes is
+   * `structure` declares an `inputHash` alone, because the manifest it writes is
    * a `PendingLabelsFile` with no `version` and no `generator`. This step
    * declares all three, because it bought them.
    * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md
@@ -1196,7 +1196,7 @@ export interface ArtifactStore {
    *
    * **Why the store needs this at all**, since it looks like the queue's job:
    * per-file atomic renames are not atomicity across a step. `extract` writes
-   * the HTML *and* `meta.json`; `hierarchy` writes three files. A rerun that replaces
+   * the HTML *and* `meta.json`; `structure` writes three files. A rerun that replaces
    * one of them with a perfectly valid new one and then dies leaves every path
    * present, parsing, and describing two different generations — and `has`
    * cannot tell, because each artefact is individually fine. A review found

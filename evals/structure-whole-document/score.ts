@@ -6,7 +6,7 @@
  * Everything here is mechanical, and none of it decides whether a tree is
  * *good*; each measure is a proxy for a specific way the structure pass could
  * go wrong, or a fact two arms can be compared on. See evals/README.md
- * § hierarchy-structure for what each one is a proxy for and — just as important —
+ * § structure-whole-document for what each one is a proxy for and — just as important —
  * which ones are deliberately NOT scores where higher is better.
  *
  * `contentWords` and `sameHeading` are imported from the stages themselves
@@ -177,7 +177,7 @@ export interface WholeDocumentScore {
    *   cut at, what share start some internal node.
    * - `l1OnHeadings`: the same precision question asked of depth-1 parts only
    *   (the forced first part excluded), which is the row the research table
-   *   counts (docs/research/260830a-opening-an-article-before-the-toc.md § 2).
+   *   counts (docs/investigations/260830a-opening-an-article-before-the-toc.md § 2).
    */
   headings: {
     boundaries: number;

@@ -22,7 +22,7 @@ import type { LedgerRead } from "../src/store/contracts.js";
 /** The five fields the total actually reads; the rest of a row is irrelevant. */
 const row = (over: Partial<AiCallRow>): AiCallRow =>
   ({
-    job: "hierarchy",
+    job: "structure",
     isByok: false,
     costSource: "provider",
     creditsUsedNanos: 0,

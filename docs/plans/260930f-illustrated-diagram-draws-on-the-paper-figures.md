@@ -1,6 +1,6 @@
 # The Illustrated diagram draws on the paper's own figures
 
-Research write-up: [docs/research/261002i-illustrated-diagram-model-prompt-tuning-and-paper-figures.md](../research/261002i-illustrated-diagram-model-prompt-tuning-and-paper-figures.md).
+Investigation write-up: [docs/investigations/261002i-illustrated-diagram-model-prompt-tuning-and-paper-figures.md](../investigations/261002i-illustrated-diagram-model-prompt-tuning-and-paper-figures.md).
 
 Feedback SPIDERYARN-READING2-5X (report `spya-c7807j`), from Greg (admin), on
 `dongetal25-spya-vfmvmm`, build `6d09e3cc`:

@@ -1,6 +1,6 @@
 # Estimate article ingestion and mode generation costs
 
-Research write-up: [docs/research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../research/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
+Investigation write-up: [docs/investigations/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md](../investigations/261002h-hierarchy-structure-pass-effort-cheap-models-and-waves.md).
 
 ## Goal
 

@@ -157,7 +157,7 @@ and that is what [`src/link-previews.ts`](../../src/link-previews.ts) is.
 >
 > Recorded rather than quietly edited, because a doc that says *"build it this way"* and is wrong
 > about the mechanism is precisely the trap
-> [260903b-facts-that-were-wrong.md](260903b-facts-that-were-wrong.md) is about. **Deliberately not
+> [260903b-facts-that-were-wrong.md](../investigations/260903b-facts-that-were-wrong.md) is about. **Deliberately not
 > done:** changing `fetchDocument` to return truncated text instead of throwing — a real change to a
 > shared safety-critical file, to save a few hundred KB per URL fetched once ever.
 

@@ -90,7 +90,7 @@ function labelsSaying(label: string): LabelsFile {
 }
 
 /**
- * A step that declares two artefacts, standing in for `hierarchy`.
+ * A step that declares two artefacts, standing in for `structure`.
  *
  * The name is a real one because `UNCONVERTED_STEPS` is keyed by `StepName` and
  * `fsStoreSession` consults it; the `produces` list is narrowed to two so
@@ -256,7 +256,7 @@ const heldAt = <K extends "tree" | "labels">(step: StepName, kind: K) =>
 describe("commit validates the product before it writes anything", () => {
   it("refuses a step that returned one of the two artefacts it declares", async () => {
     const session = sessionFor();
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
 
     const product: StepProduct = { detail: "one of two", parts: { tree: treeSaying("New") } };
@@ -264,8 +264,8 @@ describe("commit validates the product before it writes anything", () => {
 
     expect(watched.writes, "wrote despite an incomplete product").toBe(0);
     expect(watched.finishes, "finished a step it refused").toBe(0);
-    expect(await heldAt("hierarchy", "tree")).toBeNull();
-    expect(await heldAt("hierarchy", "labels")).toBeNull();
+    expect(await heldAt("structure", "tree")).toBeNull();
+    expect(await heldAt("structure", "labels")).toBeNull();
   });
 
   /**
@@ -281,14 +281,14 @@ describe("commit validates the product before it writes anything", () => {
    * always asked.
    */
   it("refuses over an artefact carried from a previous run, and leaves it alone", async () => {
-    carried("hierarchy", treeSaying("Old"), labelsSaying("Old"));
+    carried("structure", treeSaying("Old"), labelsSaying("Old"));
     const before = {
-      tree: await heldAt("hierarchy", "tree"),
-      labels: await heldAt("hierarchy", "labels"),
+      tree: await heldAt("structure", "tree"),
+      labels: await heldAt("structure", "labels"),
     };
 
     const session = sessionFor();
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
 
     const product: StepProduct = { detail: "one of two", parts: { tree: treeSaying("New") } };
@@ -299,18 +299,18 @@ describe("commit validates the product before it writes anything", () => {
     /* Both halves. The old `labels` surviving is what stops the postcondition
        being satisfied by a carried copy; the old `tree` surviving is what says
        validation ran *before* the write rather than after it. */
-    expect(await heldAt("hierarchy", "labels"), "the carried artefact was touched").toEqual(
+    expect(await heldAt("structure", "labels"), "the carried artefact was touched").toEqual(
       before.labels,
     );
-    expect(await heldAt("hierarchy", "tree"), "the new tree was written anyway").toEqual(before.tree);
+    expect(await heldAt("structure", "tree"), "the new tree was written anyway").toEqual(before.tree);
   });
 
   /** `{ parts: {} }` is the same hole with a truthy object in it. */
   it("refuses an empty parts object, which is not the same as no parts", async () => {
-    carried("hierarchy", treeSaying("Old"), labelsSaying("Old"));
+    carried("structure", treeSaying("Old"), labelsSaying("Old"));
 
     const session = sessionFor();
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
 
     await expect(
@@ -337,10 +337,10 @@ describe("commit validates the product before it writes anything", () => {
  */
 describe("a converted step, committed", () => {
   it("writes the new artefacts over the carried ones, and finishes the step", async () => {
-    carried("hierarchy", treeSaying("Old"), labelsSaying("Old"));
+    carried("structure", treeSaying("Old"), labelsSaying("Old"));
 
     const session = sessionFor();
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
 
     await session.commit(
@@ -361,12 +361,12 @@ describe("a converted step, committed", () => {
        leaves the carried artefacts in place, and every other assertion in this
        file still passes over them — which is exactly how the missing write
        stayed invisible. */
-    const tree = await watched.store.read(SLUG, "hierarchy", "tree");
+    const tree = await watched.store.read(SLUG, "structure", "tree");
     expect(tree?.nodes.n0000?.title).toBe("New");
-    const labels = await watched.store.read(SLUG, "hierarchy", "labels");
+    const labels = await watched.store.read(SLUG, "structure", "labels");
     expect(labels?.labels.n0000).toBe("New");
 
-    expect(await watched.store.interrupted(SLUG, "hierarchy")).toBe(false);
+    expect(await watched.store.interrupted(SLUG, "structure")).toBe(false);
   });
 });
 
@@ -374,32 +374,32 @@ describe("a step that writes its own artefacts inside run", () => {
   it("is accepted with no parts while it is marked unconverted", async () => {
     /* What an unconverted stage does today: it wrote these itself, during
        `run`, and returns a one-line detail and nothing else. */
-    carried("hierarchy", treeSaying("Mine"), labelsSaying("Mine"));
+    carried("structure", treeSaying("Mine"), labelsSaying("Mine"));
 
-    const session = sessionFor(new Set<StepName>(["hierarchy"]));
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const session = sessionFor(new Set<StepName>(["structure"]));
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
 
     await session.commit(ctx, step, attempt, { detail: "1 section" }, RELEASE);
     expect(watched.writes, "wrote for a step that writes its own").toBe(0);
     expect(watched.finishes).toBe(1);
-    expect(await watched.store.interrupted(SLUG, "hierarchy")).toBe(false);
+    expect(await watched.store.interrupted(SLUG, "structure")).toBe(false);
   });
 
   it("is refused with no parts once it is no longer marked unconverted", async () => {
-    carried("hierarchy", treeSaying("Mine"), labelsSaying("Mine"));
+    carried("structure", treeSaying("Mine"), labelsSaying("Mine"));
 
     const session = sessionFor(new Set<StepName>());
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
 
     await expect(
       session.commit(ctx, step, attempt, { detail: "1 section" }, RELEASE),
-    ).rejects.toThrow(/hierarchy/);
+    ).rejects.toThrow(/structure/);
     expect(watched.finishes, "finished a step it refused").toBe(0);
     /* And the marker is still there, so the next run re-runs the step rather
        than trusting whatever the stage left behind. */
-    expect(await watched.store.interrupted(SLUG, "hierarchy")).toBe(true);
+    expect(await watched.store.interrupted(SLUG, "structure")).toBe(true);
   });
 
   /**
@@ -424,8 +424,8 @@ describe("a step that writes its own artefacts inside run", () => {
 
 describe("assertProduced still catches a step that claims to have written and did not", () => {
   it("refuses an unconverted step whose artefacts are not there", async () => {
-    const session = sessionFor(new Set<StepName>(["hierarchy"]));
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const session = sessionFor(new Set<StepName>(["structure"]));
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
 
     /* Permitted past the product check — it is marked unconverted — and then
@@ -437,10 +437,10 @@ describe("assertProduced still catches a step that claims to have written and di
   });
 
   it("is unchanged as a function: half of what a step declares is still missing", async () => {
-    carried("hierarchy", treeSaying("Half"));
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    carried("structure", treeSaying("Half"));
+    const step = stepProducing("structure", ["tree", "labels"]);
     await expect(assertProduced(step, ctx, watched.store)).rejects.toThrow(
-      /hierarchy finished without writing labels/,
+      /structure finished without writing labels/,
     );
   });
 });
@@ -456,13 +456,13 @@ describe("the edges of what a product may be", () => {
        undefined`, is written nowhere, and then passes the postcondition against
        the `labels.json` the previous run left. The same hole as a missing part,
        through a door the obvious check does not watch. */
-    carried("hierarchy", treeSaying("Old"), labelsSaying("Old"));
+    carried("structure", treeSaying("Old"), labelsSaying("Old"));
 
     const parts = Object.create({ labels: labelsSaying("Inherited") }) as Record<string, unknown>;
     parts.tree = treeSaying("New");
 
     const session = sessionFor();
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
 
     await expect(
@@ -471,7 +471,7 @@ describe("the edges of what a product may be", () => {
     expect(watched.writes).toBe(0);
     expect(watched.finishes).toBe(0);
     // And the carried artefact that would have stood in for it is untouched.
-    expect(await watched.store.read(SLUG, "hierarchy", "labels")).toMatchObject({
+    expect(await watched.store.read(SLUG, "structure", "labels")).toMatchObject({
       labels: { n0000: "Old" },
     });
   });
@@ -482,7 +482,7 @@ describe("the edges of what a product may be", () => {
        so a product with one extra key leaves the step neither written nor
        untouched. Refused up front instead. */
     const session = sessionFor();
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
 
     await expect(
@@ -502,7 +502,7 @@ describe("the edges of what a product may be", () => {
       ),
     ).rejects.toThrow(/arc/);
     expect(watched.writes, "wrote before noticing the extra artefact").toBe(0);
-    expect(await heldAt("hierarchy", "tree"), "the declared artefacts were written anyway").toBeNull();
+    expect(await heldAt("structure", "tree"), "the declared artefacts were written anyway").toBeNull();
   });
 
   it("refuses a step that declares nothing, which could never be done", async () => {
@@ -510,7 +510,7 @@ describe("the edges of what a product may be", () => {
        never satisfy the skip check — it would be committed, marked done, and
        re-run on every job for ever with nothing to show for it. */
     const session = sessionFor();
-    const step = stepProducing("hierarchy", []);
+    const step = stepProducing("structure", []);
     const attempt = await session.beginStep(SLUG, step.name);
 
     await expect(
@@ -547,12 +547,12 @@ describe("what the run phase can reach", () => {
   it("still answers, and answers about the real store", async () => {
     /* A facade that returns undefined for everything would pass the test above.
        This is the other half: the six really delegate. */
-    carried("hierarchy", treeSaying("Real"));
+    carried("structure", treeSaying("Real"));
     const session = sessionFor();
-    const tree = await session.reads.read(SLUG, "hierarchy", "tree");
+    const tree = await session.reads.read(SLUG, "structure", "tree");
     expect(tree?.nodes.n0000?.title).toBe("Real");
-    expect(await session.reads.has(SLUG, "hierarchy", ["tree"])).toBe(true);
-    expect(await session.reads.has(SLUG, "hierarchy", ["tree", "labels"])).toBe(false);
+    expect(await session.reads.has(SLUG, "structure", ["tree"])).toBe(true);
+    expect(await session.reads.has(SLUG, "structure", ["tree", "labels"])).toBe(false);
   });
 });
 
@@ -565,10 +565,10 @@ describe("what the run phase can reach", () => {
  */
 describe("the job moves on inside the commit", () => {
   it("releases the claim once the step is committed, and not before", async () => {
-    const session = sessionFor(new Set<StepName>(["hierarchy"]));
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const session = sessionFor(new Set<StepName>(["structure"]));
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
-    carried("hierarchy", treeSaying("Mine"), labelsSaying("Mine"));
+    carried("structure", treeSaying("Mine"), labelsSaying("Mine"));
 
     const settled = await session.commit(ctx, step, attempt, { detail: "1 section" }, RELEASE);
     expect(jobs.releases).toBe(1);
@@ -585,10 +585,10 @@ describe("the job moves on inside the commit", () => {
        and a session that answered from the transition would tell the reader the
        job was still working. */
     jobs.cancelling = true;
-    const session = sessionFor(new Set<StepName>(["hierarchy"]));
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const session = sessionFor(new Set<StepName>(["structure"]));
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
-    carried("hierarchy", treeSaying("Mine"), labelsSaying("Mine"));
+    carried("structure", treeSaying("Mine"), labelsSaying("Mine"));
 
     const settled = await session.commit(ctx, step, attempt, { detail: "1 section" }, RELEASE);
     expect(settled.kind).toBe("ended");
@@ -599,7 +599,7 @@ describe("the job moves on inside the commit", () => {
 
   it("leaves the job alone when the product is refused", async () => {
     const session = sessionFor();
-    const step = stepProducing("hierarchy", ["tree", "labels"]);
+    const step = stepProducing("structure", ["tree", "labels"]);
     const attempt = await session.beginStep(SLUG, step.name);
 
     await expect(

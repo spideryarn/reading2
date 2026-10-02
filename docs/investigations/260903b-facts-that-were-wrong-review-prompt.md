@@ -8,7 +8,7 @@ inventory that was wrong". Greg asked what to do about the general problem, prop
 one source of truth per fact, docs signpost to the canonical place (the code) rather than restating,
 cite the source with a date or confidence. I trawled 97 session transcripts from the last four days
 with eight Sonnet readers. The write-up, with the evidence and the proposals, is
-docs/research/260903b-facts-that-were-wrong.md — read it first, including the appendix.
+docs/investigations/260903b-facts-that-were-wrong.md — read it first, including the appendix.
 
 ## What was built
 
@@ -71,7 +71,7 @@ D. **The proposed AGENTS.md wording** (below) — it will replace the existing "
 
 - The scoped diff: /tmp/claude-1000/-home-greg-code-spideryarn2/4445f83f-e1f3-4cbf-aae0-51f4d819c4dd/scratchpad/diff.patch
 - The test file after the change: tests/doc-links.test.ts in the worktree (the new block is at the end).
-- The research doc: docs/research/260903b-facts-that-were-wrong.md
+- The research doc: docs/investigations/260903b-facts-that-were-wrong.md
 - The recipe doc: docs/reusable/trawl-session-transcripts.md
 - You may run `npx vitest run tests/doc-links.test.ts` in the worktree; you may also mutate a doc
   to try to slip a citation past it, but restore it afterwards.

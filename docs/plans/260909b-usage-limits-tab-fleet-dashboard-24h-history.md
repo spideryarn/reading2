@@ -18,7 +18,7 @@ before/after in [260909b-seam-table-edit-for-greg.md](260909b-seam-table-edit-fo
 
 Two GPT Sol rounds, 26 findings, eleven P0, **nothing overruled**. Discovery is closed. The dead ends
 and both rulings tables are in
-[260909a-usage-history-the-dead-ends](../research/260909a-usage-history-the-dead-ends-and-how-the-plan-was-wrong-twice.md) —
+[260909a-usage-history-the-dead-ends](../investigations/260909a-usage-history-the-dead-ends-and-how-the-plan-was-wrong-twice.md) —
 this doc is the specification, and deliberately does not retell how it was reached.
 
 ## Goal
@@ -512,7 +512,7 @@ Otherwise, what a second account needs:
 
 ## References
 
-- [The dead ends](../research/260909a-usage-history-the-dead-ends-and-how-the-plan-was-wrong-twice.md)
+- [The dead ends](../investigations/260909a-usage-history-the-dead-ends-and-how-the-plan-was-wrong-twice.md)
   — the four abandoned designs, both rulings tables, and what the reviews cost and bought.
 - `260909b-usage-limits-tab-plan-review-sol-r1.md` / `-r2.md` — the reviews themselves.
 - `docs/project/overseer-direction.md` — the reading rules and the `~/.overseer/` seam table.

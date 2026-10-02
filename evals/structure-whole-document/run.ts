@@ -8,9 +8,9 @@
  * wait (labels run concurrently, the arc is deferred — the measured breakdown
  * is in the research doc), and the decisions queued against it (waves, seeding
  * the author's headings, changing model or effort — see
- * docs/research/260830a-opening-an-article-before-the-toc.md) need a number to decide
+ * docs/investigations/260830a-opening-an-article-before-the-toc.md) need a number to decide
  * against. This is the harness for that number. evals/README.md
- * § hierarchy-structure says what each measure is a proxy for.
+ * § structure-whole-document says what each measure is a proxy for.
  *
  * **The free arms run today; the model arms are declared but refuse to run**
  * until the phase-2 executor lands — loudly, so a run that produced nothing
@@ -80,7 +80,7 @@ export interface ArmResult {
    * parsing, `buildTree`, the gap between wave barriers, and final assembly —
    * and for calls that ran in parallel (a `waves` arm's later waves) it
    * double-counts concurrent seconds on top of that. See evals/README.md §
-   * hierarchy-structure. Optional because a run.json written before
+   * structure-whole-document. Optional because a run.json written before
    * 2026-09-04 has no such measurement at all — a results file that predates
    * this field should stay silent about it, not be backfilled with the
    * approximation this field replaced.
@@ -483,7 +483,7 @@ function print(r: ArmResult): void {
   if (r.elapsedMs !== undefined) {
     console.log(
       `  elapsed       ${(r.elapsedMs / 1000).toFixed(1)}s wall clock — this cell end to end` +
-        (r.calls?.length ? `, NOT the summed call time above (see evals/README.md § hierarchy-structure)` : ""),
+        (r.calls?.length ? `, NOT the summed call time above (see evals/README.md § structure-whole-document)` : ""),
     );
   }
   if (r.vsDisk) {
@@ -584,7 +584,7 @@ async function main(): Promise<void> {
     import.meta.dirname,
     "..",
     "results",
-    "hierarchy-structure",
+    "structure-whole-document",
     `${stamp}-${armNames.length > 0 ? armNames.join("+") : "sensitivity"}`,
   );
   await mkdir(path.join(runDir, "trees"), { recursive: true });

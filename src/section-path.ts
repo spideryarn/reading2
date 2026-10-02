@@ -1,5 +1,5 @@
 /**
- * A block's section path through the hierarchy tree, shared by the Skim
+ * A block's section path through the structure step's tree, shared by the Skim
  * prompt and its client band. This module is deliberately pure: browser code
  * can import it without pulling in the model runner or `node:crypto` from
  * `skim.ts`.

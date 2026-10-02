@@ -26,6 +26,7 @@ import {
 import { ChevronRight } from "lucide-react";
 import type { CitedWork, Faq, Ideas } from "../../types.js";
 import { useDebateRead } from "../useDebate.js";
+import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
 import { byLineOf } from "../CitationsPanel.js";
 import { rowWork } from "../DebatePanel.js";
@@ -466,6 +467,13 @@ export function OwnerMarginFeed({
   const ideasRead = useIdeasRead(slug);
   const faqRead = useFaqRead(slug);
   const debateRead = useDebateRead(slug);
+  /* **A list made while the margin is open reaches it** — FAQ run in the left
+     band appears here without reopening the margin. The band refreshes its own
+     read when its job finishes; this hears the same completion for the margin's
+     reads, quietly, so mounting still costs nothing. Plan 261002d. */
+  useStepFinished(slug, "ideas", ideasRead.refresh);
+  useStepFinished(slug, "faq", faqRead.refresh);
+  useStepFinished(slug, "debate", debateRead.refresh);
   const ideas = ideasRead.status === "ready" && !ideasRead.stale ? (ideasRead.ideas?.ideas ?? null) : null;
   const faq = faqRead.status === "ready" && !faqRead.stale ? (faqRead.faq?.questions ?? null) : null;
   const claims =

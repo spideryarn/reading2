@@ -21,7 +21,7 @@ Every tiling failure ever recorded in this repo — those two plus two in
 `docs/postmortems/260830a-the-article-with-one-heading.md` — is off by one block. The structure call takes
 ~163s and is 88% of the stage's wall clock, so a refusal costs the reader the whole article.
 
-The write-up is `docs/research/260830a-opening-an-article-before-the-toc.md` § 7b and § 8 (R2 and R3).
+The write-up is `docs/investigations/260830a-opening-an-article-before-the-toc.md` § 7b and § 8 (R2 and R3).
 
 ## What the diff does
 
@@ -188,7 +188,7 @@ index d6feb1e..d3e1f6b 100644
 + * checking it; it is whether a two-and-a-half-minute call that put one boundary
 + * one paragraph out should cost the reader the article. It should not, and a
 + * fifth of structure calls were costing exactly that
-+ * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
++ * (docs/investigations/260830a-opening-an-article-before-the-toc.md § 7b).
 + *
 + * **Why here, on the model's proposal, rather than in `assertChildrenPartition`.**
 + * By the time that check runs, `visit` has already walked the children and
@@ -332,7 +332,7 @@ index d6feb1e..d3e1f6b 100644
 +     * contrast, costs the reader the article: four structure calls in four made
 +     * the same wrong claim on the same document, which makes a refusal not an
 +     * occasional loss but a guaranteed failure loop for it
-+     * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
++     * (docs/investigations/260830a-opening-an-article-before-the-toc.md § 7b).
 +     *
 +     * **Read with `sameHeading`, over the same range, so this is a repair and
 +     * not a second opinion.** `checkTree` asks the identical question later,
@@ -524,7 +524,7 @@ index 8a359f6..6eef927 100644
 +     block backs up costs the node its provenance mark and costs the reader
 +     nothing; before this, four structure calls in four made the same wrong
 +     claim on one article and it was a guaranteed failure loop for that
-+     document. docs/research/260830a-opening-an-article-before-the-toc.md § 7b. */
++     document. docs/investigations/260830a-opening-an-article-before-the-toc.md § 7b. */
 +  it("writes the tree, minus the claim, when a node claims a heading it does not contain", async () => {
 +    await rm(path.join(DIR, "tree.json"), { force: true });
 +    await rm(path.join(DIR, "labels.json"), { force: true });
@@ -581,7 +581,7 @@ index 8a359f6..6eef927 100644
  *
  * A paid calibration run of stage 4 on 2026-08-30 threw on 4 of 13 structure
  * calls (31%), and the failures were bimodal by *kind* rather than spread by
- * size — see docs/research/260830a-opening-an-article-before-the-toc.md § 7b:
+ * size — see docs/investigations/260830a-opening-an-article-before-the-toc.md § 7b:
  *
  * | family | count | shape |
  * |---|---|---|

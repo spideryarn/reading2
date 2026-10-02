@@ -221,7 +221,7 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
  * them (Dock.tsx), so the two cannot land in different places.
  *
  * Parser defaults are `null` here, just as nuqs writes them: Recall, Sketch,
- * Criteria and Simple disappear from the address rather than leaving a redundant
+ * Criteria and Brief disappear from the address rather than leaving a redundant
  * explicit default in metadata-page links. Remember's Quiz also clears `thread`: Remember's rule 1
  * (ConversationModes.tsx § RememberBand) — no frame in which the URL says both,
  * and one Back undoes the whole trip.
@@ -247,7 +247,7 @@ export function subModeParams(sub: SubMode): SubModeParams {
     case "referee":
       return { mode: "referee", referee: sub.view === "criteria" ? null : sub.view };
     case "summary":
-      return { mode: "summary", summary: sub.view === "simple" ? null : sub.view };
+      return { mode: "summary", summary: sub.view === "brief" ? null : sub.view };
     case "structure":
       return { mode: "structure", structure: sub.view === "fisheye" ? null : sub.view };
     default: {

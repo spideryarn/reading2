@@ -1,5 +1,5 @@
 /**
- * **The pure half of the hierarchy cascade** — the stopping rule, the packing,
+ * **The pure half of the structure cascade** — the stopping rule, the packing,
  * the immediate normalisation, and the guard that no node was left unasked.
  *
  * Everything here is deterministic and there is no model in it, which is the

@@ -161,7 +161,7 @@ Two consequences worth stating, because they are easy to get wrong:
   rung, because nobody asked.
 
   **`pending` is the ordinary state of a newly added article, since 2026-09-06**, and that is worth
-  knowing before you read the withheld state as a fault. The label pass left the blocking `hierarchy`
+  knowing before you read the withheld state as a fault. The label pass left the blocking `structure`
   step — it was 79.5–92% of its wall clock — so pasting a URL gets you the tree and no paragraph
   labels at all, and a free successor job buys them afterwards
   ([structure-step.md § Why they are two steps](structure-step.md#two-steps)). Until it runs the tree carries
@@ -262,7 +262,7 @@ Prompt rules, derived from the [vision](vision.md#principles):
 - Never introduce a fact that isn't in the range below.
 - No meta-narration ("this section explores…", "the author then turns to…"). **In the prompt only
   since `toc/6`** — this line described a rule the prompt did not contain, which is the sort of thing
-  [260903b](../research/260903b-facts-that-were-wrong.md) is about.
+  [260903b](../investigations/260903b-facts-that-were-wrong.md) is about.
 - **Length runs the opposite way to intuition, and it has to be told to**: the root is the briefest
   line in the tree and the fine rungs are the longest. Left to itself the model does the reverse —
   measured across 1,239 stored gists, the mean ran 28.8 words at the root down to 14.9 at depth 3,

@@ -17,6 +17,19 @@ opening the column never starts a run. The owner's lists are read through each m
 can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
 read. A visitor's lists come in their payload.
 
+**So a FAQ, Debate or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
+The column keeps no copy of these lists: it reads them every time it opens, and while it is open
+it re-reads them when this tab's job engine announces a completion for them — the same feed each
+band listens to, through
+`useStepFinished` (`src/web/useStepJob.ts`), which is quiet and adds no polling. Citations comes
+through the Reader's shared read instead, which listens the same way, so an announced Citations
+completion after the reader has left its band reaches the margin too (as do Glossary's and Quotes'
+reads, for the prose marks). Greg had asked for missing modes to be run when Marginalia opens, if a later
+one would otherwise be missed; it would not be, so it is not
+([interface-vision.md § Tensions](interface-vision.md#tensions-from-the-feedback-so-far),
+[261002d](../plans/261002d-marginalia-refreshes-when-a-mode-it-reads-finishes.md),
+`tests/marginalia-live-refresh.test.tsx`).
+
 - **The head**, pinned at the top: which part and section you are in, and the arc's sentence for
   where the argument has got to. It has a rule under it so it does not read as one more note (Greg,
   spya-rczgjb).

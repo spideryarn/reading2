@@ -115,7 +115,7 @@ async function run(label: string, draws: number, slugs: string[]): Promise<void>
                 at: new Date().toISOString(),
               };
               try {
-                const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
+                const message = await streamMessage("structure", params, { power: "standard" }).finalMessage();
                 const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
                 /* Every answer is kept, including refusals and truncations. */
                 const kept = path.join(OUT, `${label}-${slug}-${i}.raw.txt`);

@@ -600,7 +600,7 @@ describe("retrying a job", () => {
    *
    * A guard that refused everything would pass all three cases above and break
    * the Retry button. So this is a refresh that really failed — forced, and
-   * dead at `hierarchy` — and it asserts two different things:
+   * dead at `structure` — and it asserts two different things:
    *
    * 1. the retry is **allowed**, and a new job is queued;
    * 2. the new job's own record carries a force flag on **every** step, read
@@ -619,11 +619,11 @@ describe("retrying a job", () => {
    */
   itAsOwner("queues the retry of a real failure with the whole forced set on the new record", async () => {
     const slug = `${SLUG_PREFIX}refresh`;
-    const names: StepName[] = ["fetch", "extract", "blocks", "hierarchy", "tweets"];
+    const names: StepName[] = ["fetch", "extract", "blocks", "structure", "tweets"];
     const failed = await runToTheEnd(slug, names, {
       force: true,
       bodies: () => ({
-        hierarchy: () => {
+        structure: () => {
           throw new Error("the model answered with a tree that does not fit");
         },
       }),
