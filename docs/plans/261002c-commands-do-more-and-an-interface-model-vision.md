@@ -76,105 +76,115 @@ money"*, chat-tools.md § Security). That is a defence, so it is written up for 
 
 ## What we'll build
 
-### Stage 1 — this article's Metadata, from the bar
+**Revised after GPT Sol's plan review** (F1–F10,
+[261002c-commands-do-more-plan-review-sol.md](261002c-commands-do-more-plan-review-sol.md)); every
+finding was checked against the code and accepted. The first draft is commit 23c084574; what
+changed and why is under § Review ledger.
 
-Rows about the article you are standing on, so they appear exactly where `articleRows` does today
-(reading view and Metadata page, owner only).
+### Stage A — re-run any mode from the bar, and `find <words>`
 
-1. **Run a mode again** — one `action` row per step in `METADATA_RERUN_STEPS`, labelled
-   `<RERUN_LABEL> › Run again` (the sub-mode rows' `›` convention), description from the step's
-   cost note or a plain sentence, aliases `rerun`, `regenerate`, `redo`, `run again`, `refresh`,
-   `again`; `generates: true`. **Shown only once the query is non-empty and matches** — fourteen
-   rows would otherwise double the empty list everybody scrolls past to reach a mode. That needs a
-   small new property on `CommandWords` (`typedOnly`), filtered in one place.
+1. **A leaf registry of re-run commands**, `src/web/rerun-commands.ts`, client-safe and importing
+   neither Metadata nor the Dock (Metadata imports the Dock, the Dock imports the bar — F8). It
+   holds, per step of `METADATA_RERUN_STEPS`, a total `Record`: the label (`RERUN_LABEL` moves here
+   from Metadata.tsx) and the static cost note (`RERUN_COST_NOTE` likewise). Metadata keeps only the
+   glossary's dynamic override. One source for the label on Metadata's row and on the bar's.
+2. **Action rows can be asynchronous and can fail visibly** (F2). `action.run` today returns `void`
+   and the bar closes regardless. It becomes a discriminated outcome — close, or stay open with a
+   reader-facing sentence — and the bar awaits it, shows a pending state, ignores a second Enter or
+   click while one is in flight, and closes only on success. The existing synchronous actions
+   (Comments, Feedback) return "close".
+3. **One row per re-run step**, `<label> › Run again`, `generates: true`, offered for **every**
+   step whatever the experimental switch says (F7: Metadata decided this already, rerun-steps.ts —
+   the switch hides clutter, not the ability to regenerate). **Shown only when the query is
+   non-empty** (`typedOnly` on `CommandWords`), so the empty list does not grow by fourteen. Words
+   (F3 — the matcher compares the whole query with one label or alias; it does not combine tokens):
+   compound aliases generated per step — `rerun <x>`, `re-run <x>`, `regenerate <x>`, `redo <x>`,
+   `refresh <x>`, `<x> again`, `run <x> again` for each name of the step (its label, and its mode's
+   name and aliases where it has one). Plain `glossary` must still put the Glossary mode first.
+4. **Enter starts the forced run** — `POST /api/jobs { slug, steps, force: [step] }`, the call
+   `useStepJob.start` makes — and awaits it. A refusal keeps the bar open with `lastFailure()` read
+   at once, before the post-action poll can clear it. **On success the reader is taken to
+   Metadata's AI processing section**, revealed and flashed, where that step's `RerunRow`
+   (watches-queue, kept mounted) shows the run. **Never to the mode itself** (F1): a mode opened
+   with no artefact arms generate-on-open, the server does not dedupe a forced job against an
+   unforced one (`force` is part of the work key, src/store/jobs.ts), and that would be a second
+   paid run. A test pins one POST. Landing in the band is the better experience and is deferred
+   until there is a seam that tells auto-run "this job satisfies you". On the Metadata page itself
+   the row starts the run and reveals the section without navigating. This needs the section
+   address, so `?section=` (below) is built in this stage.
+5. **`?section=<id>` on the Metadata page**: a validated `replace` param, classified
+   `NEVER_REMEMBERED` in last-view.ts (F5 — otherwise a URL holding only it reads as bare and the
+   remembered view is appended over it), read on arrival, **consumed only after `reveal()`
+   succeeds**, and retried while the target may still be mounting (F4). One row in url-state.md.
+6. **`find <words>`** (also `search`, `search for`, `does it mention`, `do they talk about`, a
+   trailing `?` dropped): a row *Find "<words>" in this article* opening Search in words mode,
+   `?mode=search&match=words&find=<words>`. Free and instant. Only when the query starts with one of
+   those verbs, so `No command matches.` stays the answer to a query naming nothing (260906h's
+   decision 3 was about a *guessed* fallback; here the reader typed the verb). A pure parse in
+   command-match.ts with its own tests.
 
-   Enter **awaits** the forced `POST /api/jobs` (via `useJobs("quiet").run`, the same call
-   `useStepJob.start` makes, `force: [step]`, so nothing downstream is swept in), then:
-   - **refused** (allowance, a run already in flight, offline): the bar stays open and says the
-     server's sentence on a line under the input. A refusal that closed the bar would be a press
-     that did nothing visibly — silent success.
-   - **accepted**: the bar closes and the reader is taken to where the run shows its progress —
-     on the reading view, the mode that draws that step (glossary → Glossary, simple → Summary ›
-     Simple, arc → Structure, crossrefs → none, …), opened as its Dock button would; on the
-     Metadata page, or for a step no mode draws, the *AI processing* section, revealed and flashed,
-     where `RerunRow` (watches-queue, kept mounted) picks the job up. A row for a mode the Dock
-     does not draw (experimental switch off) is not offered, matching Metadata's own filter, if
-     it has one; otherwise matching it, since the switch hides the mode and not its data.
-   - The mapping step → place is a total `Record<MetadataRerunStep, …>` beside `METADATA_RERUN_STEPS`,
-     so a fifteenth step cannot arrive unplaced.
-   - Opening the mode must not start a *second* run (generate-on-open fires only when there is no
-     artefact; when there is none, the server's duplicate guard must refuse or join). Verified by a
-     test, not assumed.
+### Stage B — Metadata's sections, Archive, Export
 
-2. **Metadata sections by name** — `page` rows *High-powered AI* (→ *AI processing*, where the
-   switch is first), *AI processing*, *Access & sharing* (aliases `share`, `public`, `publish`,
-   `private`), *Export* (aliases `download`, `json`). Needs a way to address a section:
-   **`?section=<id>` on the Metadata page**, read on arrival, revealing (open + scroll + flash) that
-   section, then removed with `replace` so a reload or Back does not re-flash. One row in
-   url-state.md. On the Metadata page itself the row reveals directly rather than navigating.
-   *What it cost* stays off: the bar has never had an admin check, and this is not the change that
-   gives it one.
-
-3. **Archive / Unarchive this article** — one `action` row whose label follows the state (this is
-   the exception to *Comments never moves with its state*: the verb *is* the command, and a row
-   called *Archive* on an archived article would do the opposite of its name), through the existing
-   `useArchive` controller, plumbed from `OwnedArticle` to the Dock and on to the bar. `generates:
-   false`. Reversible, so no confirm.
-
-4. **Export this article** — an `action` row that downloads the JSON, via `download()` extracted
-   from `ExportSection` into a shared helper both call. `generates: false`.
+1. **Section rows**: *High-powered AI* (→ AI processing, where the switch is first), *AI
+   processing*, *Access & sharing* (aliases `share`, `public`, `publish`, `private`). Not *Export* —
+   the direct action below owns that word (F4). Not *What it cost* — the bar has no admin check.
+2. **Archive / Unarchive this article**, through `useArchive`, plumbed from `OwnedArticle` to the
+   Dock and the bar. **Absent while `archive.at` is unknown** or on a fixture (F6 — the
+   controller's own rule: either label could be false), disabled while busy, and the label after
+   the press read from the controller, not assumed. The label moves with the state: *Archive* on an
+   archived article would do the opposite of its name (the fixed-label rule is Comments').
+   `generates: false`.
+3. **Export this article** — downloads the article's ZIP export (F9) via `download()` extracted
+   from `ExportSection` into a shared helper both call, keeping its busy guard, anchor flow, URL
+   revocation and server error. Aliases `download`, `zip`, `backup`. A failure keeps the bar open
+   with the sentence. `generates: false`.
 
 **Deliberately not**: Delete (irreversible; a keyboard Enter one row away is the wrong door),
-*Start this article again* (experimental and the widest press on the page), toggling High-powered AI
-from the bar (it charges an article; the switch's own copy is where that price is stated, so the
-row goes there instead).
+*Start this article again* (experimental and the widest press on the page), toggling High-powered
+AI from the bar (it charges an article; the switch's own copy is where that price is stated, so
+the row goes there instead).
 
-**Greg's own example, "reprocess a mode with more powerful AI"**, is two commands after this stage
-— *High-powered AI* (switch it on, priced as today) then *Glossary › Run again*. Doing it in one
-(Opus for *this run only*, without switching the article) is a new billing shape — what does one
-Opus re-run cost a reader? — so it is a question for Greg, below, not a build.
+**Greg's own example, "reprocess a mode with more powerful AI"**, is two commands after this —
+*High-powered AI* (switch it on, priced as today) then *Glossary › Run again*. Doing it in one
+(Opus for *this run only*) is a new billing shape, so it is a question for Greg, below.
 
-### Stage 2 — commands that take words
+### Stage C — the vision doc
 
-The bar has refused arguments since 260906h (*"it has one text box and it is the filter"*), and
-Greg's dream examples are all argument-shaped. The smallest honest step:
+[chat-llm-help-commands-vision.md](../project/chat-llm-help-commands-vision.md), under
+reading-view-overview.md beside interface-vision.md. Sol's F10 shapes its middle: the model needs
+a **serialisable command descriptor** (stable id, trusted words, argument schema, risk class,
+availability), a **trusted dispatcher** that resolves a validated id to today's closure, and a
+**confirmation gate enforced in code** for anything that writes or spends — not the React array
+as it stands.
 
-- **`find <words>`** (also `search <words>`, `search for <words>`, `does it mention <words>`,
-  `do they talk about <words>`, trailing `?` ignored): a row *Find "<words>" in this article*,
-  which opens Search in words mode with `find=<words>`. Free, instant, exhaustive — and the
-  deterministic ancestor of *"do they talk about X?"*. It appears **only** when the query starts
-  with one of those verbs, so `No command matches.` stays the answer to a query that names nothing
-  (decision 3 of 260906h is about a *guessed* fallback, and this is not one: the reader typed the
-  verb). The parse is a pure function in command-match.ts with its own tests.
+### Stage D (if there is room) — measure Jev choosing a command
 
-Considered for this stage and left out, each for the vision doc: `ask <question>` (a chat send is a
-model call; prefilling the composer is possible but half a verb), `tag <X>` (there are no tags),
-`define <term>` (the glossary's *Look up* box is a model call).
+A small paid eval, not production code: ~40 typed phrases (Greg's examples, paraphrases, a few
+with no right answer) against a serialised command catalogue, Jev's choice and confidence vs a
+capable chat model's. Answers whether Jev is right often enough and whether its confidence is a
+usable "unsure" signal. A few cents, its own declared bypass beside `shelf-topics-jev`, results in
+`docs/investigations/`.
 
-### Stage 3 — the vision doc
+## Review ledger
 
-`docs/project/chat-llm-help-commands-vision.md`, under reading-view-overview.md beside
-`interface-vision.md`: the interface model vs the content model; the command registry as its tool
-list; Jev first with a confidence threshold, a capable model on low confidence; a *Help* tool
-(the Help page, fb85, when it lands), docs and code search; what it may do without asking (navigate,
-open, find), what it must propose and the reader confirm (anything that writes or spends), and what
-it must never do (anything the article's own text asked for); the main Chat as the aspiration and
-what stands between here and there; the open questions for Greg.
-
-### Stage 4 (if there is room) — measure Jev choosing a command
-
-A small paid eval, not production code: ~40 typed phrases (Greg's examples among them, plus
-paraphrases, plus a few with no right answer) against the real command list, Jev's choice and
-confidence vs a capable chat model's. Answers: how often is Jev right, and is its confidence a
-usable "unsure" signal? A few cents. Its own declared bypass beside `shelf-topics-jev`. Results to
-`docs/investigations/` (Greg 2026-10-02: internal evals go there). Skipped without regret if the
-first three stages take the time.
+| ID | Sev | Finding | Taken |
+|---|---|---|---|
+| F1 | P1 | Opening the mode after a forced POST can enqueue a second paid unforced run; no server dedupe | Land in Metadata › AI processing; test one POST |
+| F2 | P1 | `action.run` is `void`, the bar always closes; `useJobs.error` is cleared by the next poll | Async discriminated outcome; read `lastFailure()` at once |
+| F3 | P1 | "rerun glossary" matches no row — the matcher does not combine tokens | Compound aliases per step |
+| F4 | P1 | Export twice (section + action); a section may not be mounted yet | One direct Export; consume `?section=` only after reveal succeeds |
+| F5 | P1 | `section` absent from last-view classification | `NEVER_REMEMBERED`, tested |
+| F6 | P1 | Archive's unknown state | Absent while unknown; label from the controller |
+| F7 | P1 | The plan contradicted itself on the experimental switch | Every step, as Metadata |
+| F8 | P2 | Labels private to Metadata; importing them closes a cycle | Leaf `rerun-commands.ts` |
+| F9 | P3 | Export is a ZIP | Wording |
+| F10 | P2 | "Registry = tool list" needs descriptors, a dispatcher and a gate | Into the vision doc |
 
 ## The simpler options passed over
 
-- **Rows that link to Metadata only** (no in-bar re-run): one fewer `POST` path, but a reader in
-  the glossary who types *rerun glossary* would land on another page and press again — two steps
-  for the thing he asked for.
+- **Rows that link to Metadata only** (no in-bar re-run): one fewer `POST` path, but the reader
+  would land on another page and press again — two steps for the thing he asked for. (After F1 the
+  run still lands there, but already started.)
 - **Every rerun row always listed**: no new `typedOnly` property, but fourteen rows in the empty
   list.
 - **A query-string trigger** (`/metadata?run=glossary`) so the bar only ever navigates: a URL that
@@ -192,13 +202,15 @@ first three stages take the time.
 
 ## Done looks like
 
-- Stage 1/2: tests red-first for the row lists, the `typedOnly` filter, the step→place record, the
-  refusal line, the `find` parse; `npm test`, `npm run typecheck` green; browser check at desktop
-  and 390 px (bar open on a typed `rerun`, an accepted run landing in the band, a refused one, a
-  section reveal, `find predictive`). reading-view-overview.md § The command bar and url-state.md
-  updated. GPT Sol code review per stage.
-- Stage 3: the doc, linked from its entry point, `tests/doc-links.test.ts` green.
+- Stages A/B: tests red-first for the row lists, the `typedOnly` filter, the compound aliases
+  (`rerun glossary` finds the row, `glossary` still finds the mode first), one POST per press, the
+  refusal line, `?section=` classification and late reveal, the `find` parse, Archive's unknown
+  state; `npm test`, `npm run typecheck` green; browser check at desktop and 390 px (a typed
+  `rerun glossary`, an accepted run landing in AI processing, a section reveal, `find predictive`,
+  archive and unarchive). reading-view-overview.md § The command bar and url-state.md updated. GPT
+  Sol code review per stage.
+- Stage C: the doc, linked from its entry point, `tests/doc-links.test.ts` green.
 
 ## Progress
 
-- 2026-10-02: plan written.
+- 2026-10-02: plan written; Sol's plan review (F1–F10) folded in, stages re-cut A–D.
