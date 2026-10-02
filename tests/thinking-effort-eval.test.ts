@@ -15,6 +15,7 @@ import { qualityFromRanking, uStatistic, verdictOf } from "../evals/thinking-eff
 import {
   accountingFaults,
   armEffort,
+  armFormat,
   claimRun,
   ensureModeConfig,
   modeOrderFile,
@@ -38,12 +39,25 @@ describe("armEffort", () => {
     expect(armEffort("low", null)).toEqual({ override: "low", expectedOnWire: "low" });
     expect(armEffort("medium", "high")).toEqual({ override: "medium", expectedOnWire: "medium" });
   });
+
+  it("keeps the frozen no-schema arm at production effort", () => {
+    expect(armEffort("no-schema", "low")).toEqual({ override: null, expectedOnWire: "low" });
+  });
+
+  it("requires schemas for Ideas and shipping Sketch, but not Sketch's frozen arm", () => {
+    expect(armFormat("ideas", "base")).toBe("json_schema");
+    expect(armFormat("ideas", "low")).toBe("json_schema");
+    expect(armFormat("sketch", "base")).toBe("json_schema");
+    expect(armFormat("sketch", "no-schema")).toBeNull();
+    expect(armFormat("illustrated", "base")).toBeNull();
+  });
 });
 
 describe("the arms", () => {
   it("runs two draws of base and two of low by default, and medium only when named", () => {
     expect(DEFAULT_ARMS).toEqual(["base-a", "base-b", "low-a", "low-b"]);
     expect(ARM_NAMES.filter((a) => levelOf(a) === "medium")).toEqual(["medium-a", "medium-b"]);
+    expect(ARM_NAMES.filter((a) => levelOf(a) === "no-schema")).toEqual(["no-schema-a", "no-schema-b"]);
   });
 
   it("shuffles reproducibly from one seed, differently per salt, and loses nothing", () => {

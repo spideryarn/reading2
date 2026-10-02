@@ -57,8 +57,11 @@ import type { BlockId } from "./types.js";
  * The sketch prompt's version; src/sketch.ts says why it lives here.
  *
  * `sketch/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3).
+ *
+ * `sketch/4`, 2026-10-02: the model answer is constrained by the schema in
+ * src/sketch.ts. The prompt and this reader's semantic checks are unchanged.
  */
-export const SKETCH_VERSION = "sketch/3";
+export const SKETCH_VERSION = "sketch/4";
 
 /**
  * The canvas the model draws on, in its own units.

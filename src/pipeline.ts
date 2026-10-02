@@ -65,12 +65,14 @@ import {
 } from "./glossary.js";
 import {
   generateIdeas,
+  IDEAS_OUTPUT_SCHEMA,
   inputFingerprint as ideasFingerprint,
   previousIdeasFrom,
   PROMPT_VERSION as IDEAS_PROMPT_VERSION,
 } from "./ideas.js";
 import {
   generateQuotes,
+  QUOTES_OUTPUT_SCHEMA,
   inputFingerprint as quotesFingerprint,
   previousQuotesFrom,
   PROMPT_VERSION as QUOTES_PROMPT_VERSION,
@@ -141,6 +143,7 @@ import {
   generateSketch,
   inputFingerprint as sketchFingerprint,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
+  SKETCH_OUTPUT_SCHEMA,
 } from "./sketch.js";
 import { openRouterAuthorsReader } from "./pdf-authors.js";
 import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
@@ -160,6 +163,7 @@ import {
   powerFor,
   STAGE_EFFORT,
 } from "./models.js";
+import type { AnthropicJsonSchema } from "./messages-structured-output.js";
 import { STEP_ORDER } from "./step-order.js";
 import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
@@ -311,15 +315,54 @@ export const DEFAULT_INGEST_STEPS: StepName[] = [
   "assets",
 ];
 
+export type ArticleOutputFormat = Readonly<{
+  type: "json_schema";
+  schema: AnthropicJsonSchema;
+}> | null;
+
+const jsonSchemaFormat = (schema: AnthropicJsonSchema): Exclude<ArticleOutputFormat, null> => ({
+  type: "json_schema",
+  schema,
+});
+
+/**
+ * The third cache-key dimension, using the same exported schema object each
+ * migrated stage hands to `withMessagesJsonSchema` at its request seam.
+ *
+ * `null` means the stage sends no `output_config.format`. A complete record is
+ * deliberate: adding an article stage cannot quietly acquire the same
+ * `undefined` identity as every other forgotten row.
+ */
+export const ARTICLE_OUTPUT_FORMAT: Readonly<Record<ArticleStage, ArticleOutputFormat>> = {
+  arc: null,
+  tweets: null,
+  glossary: null,
+  quotes: jsonSchemaFormat(QUOTES_OUTPUT_SCHEMA),
+  ideas: jsonSchemaFormat(IDEAS_OUTPUT_SCHEMA),
+  sketch: jsonSchemaFormat(SKETCH_OUTPUT_SCHEMA),
+  timeline: null,
+  quiz: null,
+  faq: null,
+  crossrefs: null,
+  simple: null,
+};
+
+function sameOutputFormat(a: ArticleOutputFormat, b: ArticleOutputFormat): boolean {
+  if (a === null || b === null) return a === b;
+  /* The table above points at shared schema constants, so this is normally an
+     identity comparison. Serialising states the wire contract as well: two
+     independently assembled but byte-identical format values are compatible. */
+  return a === b || JSON.stringify(a) === JSON.stringify(b);
+}
+
 /**
  * Will any of `later` read the cached article that `step` is about to write?
  *
  * Two stages share a cached article when they render it the same way **and**
- * send the same `output_config.effort`, because effort is part of the cache key
- * — measured, and the reason glossary is not in the same group as arc and
- * tweets despite sending identical bytes. See src/models.ts § `STAGE_EFFORT`,
- * which is the grouping: this reads that table rather than keeping a second
- * list beside it that could quietly disagree.
+ * send the same `output_config.effort` and `output_config.format`, because both
+ * are part of the cache key
+ * — measured. See src/models.ts for effort and rendering, and
+ * `ARTICLE_OUTPUT_FORMAT` above for the exact format value.
  *
  * Anything not in the table is not an article-reading stage and shares nothing.
  */
@@ -327,7 +370,8 @@ export function sharesArticleCache(step: StepName, later: readonly StepName[]): 
   const effort = STAGE_EFFORT[step as ArticleStage];
   if (effort === undefined) return false;
   const renderer = ARTICLE_RENDERER[step as ArticleStage];
-  /* **Both tables, not just the effort one.** Effort is part of the cache key
+  const format = ARTICLE_OUTPUT_FORMAT[step as ArticleStage];
+  /* **All three dimensions, not just effort.** Effort is part of the cache key
      and that is the surprising half, which is why it got written down first —
      but the *bytes* are the obvious half, and they stopped being uniform when
      `ideas` arrived and had to send block ids. Grouping on effort alone would
@@ -338,7 +382,8 @@ export function sharesArticleCache(step: StepName, later: readonly StepName[]): 
   return later.some(
     (s) =>
       STAGE_EFFORT[s as ArticleStage] === effort &&
-      ARTICLE_RENDERER[s as ArticleStage] === renderer,
+      ARTICLE_RENDERER[s as ArticleStage] === renderer &&
+      sameOutputFormat(ARTICLE_OUTPUT_FORMAT[s as ArticleStage], format),
   );
 }
 

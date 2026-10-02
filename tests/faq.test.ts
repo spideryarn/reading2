@@ -448,8 +448,8 @@ describe("the request", () => {
     expect(run.faq.questions).toHaveLength(1);
   });
 
-  it("is in the ids cache group with ideas, timeline, quiz, simple and tweets, and no other", () => {
-    expect(sharesArticleCache("faq", ["ideas"])).toBe(true);
+  it("shares only with the ids/high stages that still send no output schema", () => {
+    expect(sharesArticleCache("faq", ["ideas"])).toBe(false);
     expect(sharesArticleCache("quiz", ["faq"])).toBe(true);
     /* Tweets joined on 2026-09-29: `tweets/5` sends `articleWithIds` so each
        post can name its passages (plan 260929f). */

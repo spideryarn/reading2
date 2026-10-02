@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildIdeas,
   type Dropped,
+  IDEAS_OUTPUT_SCHEMA,
   idsByName,
   inputFingerprint,
   inReadingOrder,
@@ -117,6 +118,28 @@ function raw(over: Record<string, unknown> = {}): Record<string, unknown> {
     ...over,
   };
 }
+
+describe("IDEAS_OUTPUT_SCHEMA", () => {
+  it("keeps the unchanged prompt's one idea shape and optional idea fields", () => {
+    const idea = IDEAS_OUTPUT_SCHEMA.properties.ideas.items;
+
+    expect(idea).toMatchObject({
+      type: "object",
+      properties: {
+        provenance: { type: "string", enum: ["assumed", "introduced"] },
+        whyYouNeedIt: { type: "string" },
+        analogy: { type: "string" },
+        occurrences: {
+          items: {
+            required: ["blockId", "quote", "reasoning"],
+          },
+        },
+      },
+      required: ["name", "provenance", "statement", "occurrences"],
+    });
+    expect("anyOf" in idea).toBe(false);
+  });
+});
 
 describe("suggestedIdeas", () => {
   it("floors at three, because a short piece still rests on something", () => {

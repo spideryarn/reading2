@@ -35,6 +35,7 @@ import type { AiCallRow, ScopeKind } from "../../src/ai-spend.js";
 import { formatNanos } from "../../src/ai-spend.js";
 import { ARTICLE_RENDERER, STAGE_EFFORT } from "../../src/models.js";
 import type { ArticleStage } from "../../src/models.js";
+import { ARTICLE_OUTPUT_FORMAT } from "../../src/pipeline.js";
 import { totalRows } from "../../src/store/ai-calls.js";
 
 /** What a set of rows cost, in the three pockets `totalRows` keeps apart. */
@@ -719,8 +720,9 @@ const CACHE_CLAIM_TOLERANCE = 0.1;
  *
  * **Using the pipeline's own tables here is a narrower thing than it looks, and
  * the distinction is the whole reason this gate is trustworthy.** The rule below
- * takes *membership* from `STAGE_EFFORT` and `ARTICLE_RENDERER` — a symmetric
- * question ("do these two stages send the same bytes at the same effort") that
+ * takes *membership* from `STAGE_EFFORT`, `ARTICLE_RENDERER`, and
+ * `ARTICLE_OUTPUT_FORMAT` — a symmetric question ("do these two stages send
+ * the same bytes with the same request settings") that
  * the pipeline has always answered correctly — and takes the *verdict* from the
  * ledger. What it never asks is `sharesArticleCache`'s question, "should this
  * step mark", which is where the direction bug lived and which a check would
@@ -742,7 +744,10 @@ function cacheGroupOf(step: string | null): string | null {
   if (step === null) return null;
   const effort = STAGE_EFFORT[step as ArticleStage] as string | undefined;
   const renderer = ARTICLE_RENDERER[step as ArticleStage] as string | undefined;
-  return effort === undefined || renderer === undefined ? null : `${effort}+${renderer}`;
+  const format = ARTICLE_OUTPUT_FORMAT[step as ArticleStage];
+  return effort === undefined || renderer === undefined || format === undefined
+    ? null
+    : `${effort}+${renderer}+${JSON.stringify(format)}`;
 }
 
 /**

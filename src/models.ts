@@ -567,7 +567,8 @@ export type Task =
      docs/project/quotes.md. Article-reading like `glossary`, and like
      `glossary` it never names a block id: the model returns the words and
      `locate` in src/quotes.ts finds the block, so it renders with
-     `articleText` and shares its cached prefix. */
+     `articleText`. Its schema now differs from Glossary's absent format, so
+     matching article bytes no longer make the two cache-compatible. */
   | "quotes"
   /* The picture a model draws of the argument — docs/project/diagram.md
      § Sketch. Article-reading like `ideas`, and like `ideas` it names block
@@ -576,8 +577,8 @@ export type Task =
   | "sketch"
   /* When the piece says things happened, and how sure it is —
      docs/plans/260831i-timeline-mode.md. Article-reading like `ideas`, and like `ideas` it
-     names block ids, so it renders with `articleWithIds` and shares its cached
-     prefix rather than arc's. It is the one stage that never asks the model for
+     names block ids, so it renders with `articleWithIds`; Ideas' schema now
+     keeps the two in different cache groups. It is the one stage that never asks the model for
      a date: src/timeline.ts § the header. */
   | "timeline"
   /* **Writing the brief an image model draws from** — the first call of the
@@ -1657,7 +1658,7 @@ export type Effort = "low" | "medium" | "high";
  * different bytes from the bare rendering `ideas`, `sketch`, `timeline` and
  * `quiz` send, so a row here would pay the 1.25x cache-*write* premium for a
  * read that can never happen — the exact mistake `sharesArticleCache` was made
- * to read two tables to avoid, and the one tests/article-cache-group.test.ts
+ * to read explicit cache dimensions to avoid, and the one tests/article-cache-group.test.ts
  * exists for.
  *
  * `sharesArticleCache` reads `STAGE_EFFORT[step as ArticleStage]` and returns
@@ -1698,14 +1699,11 @@ export type ArticleStage =
  * and `max_tokens` do; this one does not, and nothing about "it's a generation
  * parameter" would have told you which.
  *
- * **This table is HALF the cache grouping**, and it was the whole of it until
- * 2026-08-27. Two stages share a cached article only if they share a value here
- * *and* send the same bytes — see `ARTICLE_RENDERER` below, which became a
- * second table the day `ideas` arrived and had to send block ids where the
- * other four deliberately send none. Effort alone was a correct grouping for
- * exactly as long as every article-reading stage happened to use one renderer,
- * which is the kind of true-by-accident that reads as true-by-design.
- * `sharesArticleCache` in src/pipeline.ts reads both.
+ * **This table is one of three cache dimensions.** Two stages share a cached
+ * article only if they share a value here, send the same article bytes (see
+ * `ARTICLE_RENDERER` below), and send the same `output_config.format` (see
+ * `ARTICLE_OUTPUT_FORMAT` in pipeline.ts). Effort alone was correct only while
+ * every stage happened to share the other two values.
  *
  * **The values are not aligned, on purpose.** Aligning them would let all three
  * share, and it was tested on two articles rather than assumed: arc at `medium`
@@ -1728,14 +1726,10 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      the text in front of it, not the multi-step inference `ideas` makes when it
      argues a piece collapses without an unstated premise.
 
-     **It is cache-COMPATIBLE with `glossary` and with nothing else** — same
-     model, same effort, same renderer, same bytes. Compatible is all it is, and
-     the first version of this comment claimed a saving it does not get: a cache
-     entry is only *written* when another step in the SAME job would read it
-     (`cacheArticle` in src/pipeline.ts § StepContext), and a reader pressing
-     "Find the terms" and then "Choose the quotes" makes two jobs minutes apart.
-     The saving is real for `steps: ["glossary","quotes"]` in one job and for
-     nothing else. GPT Sol, 2026-08-31.
+     It used to be cache-compatible with Glossary: same model, effort, renderer
+     and article bytes. That ended when Quotes adopted an output schema before
+     Glossary; their `output_config.format` values now differ. GPT Sol,
+     2026-08-31; plan 261001s, 2026-10-02.
 
      **And until 2026-09-03 it was not real even there**, which is worth leaving
      here because this comment was right in intent and the code did not deliver
@@ -1744,8 +1738,8 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      nothing. Measured at 25,428 wasted cached tokens on a 17,000-word article.
      docs/postmortems/260903c-the-conditional-article-cache-breakpoint-marks-the-writer-but-never-the-reader.md.
 
-     It is still a constraint: `sharesArticleCache` groups on effort AND
-     renderer, so moving either stage's effort ends the compatibility silently.
+     Quotes now sends a schema while Glossary does not, so this historical pair
+     is no longer compatible even though effort and article bytes still match.
      Untested, like every effort choice that has not been through
      evals/results/effort-vs-quality.md, and said out loud so the next person
      knows it is a guess rather than a measurement. */
@@ -1755,12 +1749,10 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      than the glossary's "is this word obvious", which is what `medium` was
      measured to be enough for.
 
-     **It buys no cache share, and an earlier version of this comment claimed
-     it did.** Matching arc and tweets on effort is necessary for a shared
-     prefix and nowhere near sufficient: ideas sends `articleWithIds` and those
-     three send `articleText`, which are different bytes for the same article.
-     See `ARTICLE_RENDERER` below, which is what stops that mistake being made
-     by the code as well as by the comment. */
+     **It buys no cache share.** Matching the other `ids` + `high` stages on
+     effort and article bytes is no longer sufficient: Ideas sends a schema and
+     they do not. `ARTICLE_OUTPUT_FORMAT` in pipeline.ts records that third
+     dimension. */
   ideas: "high",
   /* **`low`, MEASURED 2026-10-01, against the `high` it had shipped with.**
      Eight articles, two draws per arm, two blind judges — GPT Sol ranking,
@@ -1787,10 +1779,9 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      It is a constraint on plan 261001o's caching options, which assumed one
      effort per group. */
   sketch: "low",
-  /* `high`, and it joins `ideas`' group rather than starting a cache of its
-     own: same effort, same `ids` renderer, so `timeline` shares a cached
-     article with `ideas`, and with `quiz`, `faq`, `simple` and `tweets`,
-     which joined later.
+  /* `high`, and it shares the unschematized `ids` group with `quiz`, `faq`,
+     `simple` and `tweets`. It no longer shares with Ideas: Ideas sends an
+     output schema and Timeline does not.
 
      The judgment it is being paid for is the sequence — putting a piece that
      recounts the same three months three times, once per participant, back into
@@ -1802,8 +1793,8 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      been through evals/results/effort-vs-quality.md. */
   timeline: "high",
   /* `high`, and it is another member of that group rather than a cache of its
-     own: same effort, same `ids` renderer, so `quiz` shares a cached article
-     with `ideas` and `timeline`.
+     own: same effort, same `ids` renderer and no output schema, so `quiz`
+     shares a cached article with `timeline`, `faq`, `simple` and `tweets`.
 
      The judgment it is being paid for is the `hard` band — a question whose
      answer is a move the argument makes across several passages, which is
@@ -1815,8 +1806,8 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      evals/results/effort-vs-quality.md. */
   quiz: "high",
   /* `high`, a member of the `ids` group: same effort, same renderer, same
-     body-only evidence, so `faq` shares a cached article with `ideas`,
-     `timeline` and `quiz`. What it is paid for is reading the
+     body-only evidence and no output schema, so `faq` shares a cached article
+     with `timeline`, `quiz`, `simple` and `tweets`. What it is paid for is reading the
      argument closely enough to feel where a careful reader would push back.
      Untested, like every effort choice not yet through
      evals/results/effort-vs-quality.md. docs/plans/260916d-faq-mode.md. */
@@ -1838,14 +1829,15 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      `medium` runs on the paper turned its "recurrent connections" (which raise
      synergy) into "feedback loops" (which, in the same paper, lower it), and the
      `high` run kept the author's term. Evidence, not a distribution —
-     evals/simple/results-260930.md. So it IS in the `ideas` cache group now,
-     and sits beside `faq` in `STEP_ORDER` (src/step-order.ts). */
+     evals/simple/results-260930.md. It shares the unschematized `ids/high`
+     group, while schema-constrained Ideas is separate, and sits beside `faq`
+     in `STEP_ORDER` (src/step-order.ts). */
   simple: "high",
 };
 
 /**
- * **Which rendering of the article each stage sends** — and therefore the other
- * half of "can these two share a cached prefix".
+ * **Which rendering of the article each stage sends** — the second of the
+ * three cache dimensions (effort, renderer, output format).
  *
  * A cache matches a byte-exact prefix. `STAGE_EFFORT` above is one thing that
  * has to agree; this is the other, and it was invisible until `ideas` arrived,
@@ -1859,7 +1851,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
  * said "arc, tweets or glossary" until 2026-10-01; `tweets` has sent the ids too
  * since `tweets/5` on 2026-09-29, and is in `ideas`' group — see its row below.)
  * And
- * `sharesArticleCache` in src/pipeline.ts reads both tables rather than the one,
+ * `sharesArticleCache` in src/pipeline.ts reads all three values,
  * so nothing pays a 1.25x cache *write* premium for a read that cannot happen.
  *
  * The stages that send `articleWithIds` in the request path — search, explain,

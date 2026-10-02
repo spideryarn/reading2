@@ -347,3 +347,27 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
     choice `normaliseExpansion` already made on purpose. This is the one fault the end fallback
     exists for, observed only on answers that are already degenerate. It goes to Sol's stage-2
     brief to challenge.
+- **Stage 2 built (Sol), reviewed and merged with fb93's re-ask (`675aa32b2`), not yet pushed.**
+  `toc/11` is starts-only, with a three-level schema and the converter at `treeFrom`. Claude
+  checked: no range wording is left in the prompt, a `MalformedJson` with no repairs still
+  rethrows unchanged, typecheck is clean, and 538 tests are green. The merge kept both sides;
+  fb93's re-ask fixtures moved to the `toc/11` shape (the invented id is now a child's `start`,
+  because `toc/11` never reads a root range). It is **held off `dev` until the validity and
+  quality gates pass**, because `dev` feeds the next deploy. Anthropic's docs confirm the
+  validator's ceilings (24 optional and 16 union parameters, across all schemas in a request), and
+  that changing the format invalidates the prompt cache. They say nothing about thinking, so the
+  zero-thinking result at `low` is ours.
+- **Stage 3a (Sol, read-only): the survey is
+  [stage3a-survey-sol.md](261001s-reviews/stage3a-survey-sol.md)**: 38 model calls that expect
+  JSON.
+  - **Already strict:** six, all on the chat wire. Four of them parse before checking completion,
+    an audit finding.
+  - **Does not fit:** four. Referee candidates (its prose is the product), chat-tool arguments,
+    Realtime tool arguments, and Structure's own `toc/10`, now replaced.
+  - **Fits:** the rest. Some fit only after a change: Labels needs object rows (no tuple
+    keywords); Search, Referee criteria and Referee claims need proof that items still stream;
+    citation-find, source-guess and Debate need a probe that web search and a schema work
+    together.
+  - **Dig deeper** is not a JSON call at all.
+  - **Schema identity will make most of today's shared cache groups incompatible**, which is the
+    correct outcome, and a cost to measure.
