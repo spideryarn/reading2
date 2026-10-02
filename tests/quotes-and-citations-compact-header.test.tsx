@@ -54,7 +54,7 @@ afterEach(() => {
 });
 
 const head = () => host.querySelector(".band-head");
-const tip = () => document.querySelector('[role="tooltip"]')?.textContent ?? null;
+const tip = () => document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? null;
 
 /** Open the band's (i), read its card, and close it again. */
 async function quotesAbout(): Promise<string> {

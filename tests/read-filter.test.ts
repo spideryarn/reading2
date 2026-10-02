@@ -12,7 +12,7 @@ import {
   readShareLabel,
   shareRead,
 } from "../src/web/read-filter.js";
-import type { ReadLevel } from "../src/web/reading-time.js";
+import { type ReadLevel, readLevel } from "../src/web/reading-time.js";
 
 const q = (...ids: string[]): QuizQuestion => ({
   id: "spya-qqqqqq",
@@ -24,11 +24,20 @@ const q = (...ids: string[]): QuizQuestion => ({
 const levels = (entries: [string, ReadLevel][]) => new Map<string, ReadLevel>(entries);
 
 describe("isRead", () => {
-  it("is level 3 and up, and a block with no level is unread", () => {
-    expect(READ_ENOUGH).toBe(3);
+  it("is 70% of the reading time, wherever the levels put it", () => {
+    /* The threshold is a time, not a level number: 261002e moved the levels
+       and had to keep this where it was. */
+    const words = 300;
+    const at = (ratio: number) => (ratio * words * 60) / 230;
+    expect(readLevel(at(0.69), words)).toBeLessThan(READ_ENOUGH);
+    expect(readLevel(at(0.7), words)).toBeGreaterThanOrEqual(READ_ENOUGH);
+  });
+
+  it("is level 2 and up, and a block with no level is unread", () => {
+    expect(READ_ENOUGH).toBe(2);
     const l = levels([
-      ["spya-aaaaaa", 2],
-      ["spya-bbbbbb", 3],
+      ["spya-aaaaaa", 1],
+      ["spya-bbbbbb", 2],
       ["spya-cccccc", 4],
     ]);
     expect(isRead(l, "spya-aaaaaa")).toBe(false);

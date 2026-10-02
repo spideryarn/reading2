@@ -70,8 +70,8 @@ export const SHELL = "tw:mx-auto tw:w-full tw:max-w-6xl tw:px-6";
  * per copy, so no spider ever plays twice.
  * docs/plans/260929a-logo-beside-the-wordmark-beta-to-the-right-no-shelf-tagline.md.
  *
- * **All thirteen since 2026-09-29, not the spider's six.** The name was plain
- * text until then, so `lettersDrawn` found nothing and only the mark
+ * **The whole set since 2026-09-29, not only the mark animations.** The name
+ * was plain text until then, so `lettersDrawn` found nothing and only the mark
  * animations were offered; it is `LogoLetters` now, the same ten spans
  * HomeLogo draws (LogoGlyphs.tsx).
  * docs/plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md.
@@ -102,11 +102,16 @@ export function Wordmark({ className }: { className?: string }) {
     >
       <LogoMark className="tw:h-auto tw:w-[1.25em]" />
       {/* **The name is ten `.logo-letter` spans since 2026-09-29**, so the
-          host offers all thirteen animations rather than the spider's six —
+          host offers the whole set rather than the spider's six —
           Greg: *"The contact page has all the lovely logo+sitename
           animations, but the other pages don't."* A wrapper of their own,
           because the stagger is `:nth-child` over exactly these ten, and
-          "Reading" stays plain text after it. LogoGlyphs.tsx. */}
+          "Reading" stays plain text after it. LogoGlyphs.tsx.
+
+          **The weight and colour on the outer span are "Reading"'s**: the
+          letters carry their own (600, white — styles/tokens.css §
+          .logo-letter), so the name steps up from the word after it, which
+          is the right way round. Since 2026-10-02, plan 261002e. */}
       <span>
         <span>
           <LogoLetters />

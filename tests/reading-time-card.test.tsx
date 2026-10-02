@@ -15,6 +15,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockId } from "../src/types.js";
 import { BlockLinkProvider } from "../src/web/BlockLinkCard.js";
+import type { ReadingTimeFor } from "../src/web/useReadingTime.js";
 
 class FakeResizeObserver {
   observe() {}
@@ -64,6 +65,30 @@ function paint(level: number | null): HTMLElement {
     ),
   );
   return host.querySelector<HTMLElement>("span.blk-read")!;
+}
+
+/** Several rows, each with its line, and the recorder's `timeFor` handed to the card. */
+function paintRows(ids: BlockId[], timeFor: ReadingTimeFor): HTMLElement[] {
+  act(() =>
+    root.render(
+      <BlockLinkProvider index={new Map()} readingTimeFor={timeFor}>
+        <table>
+          <tbody>
+            {ids.map((id) => (
+              <tr key={id} data-block={id}>
+                <td>
+                  <div className="blk-gutter">
+                    <span className="blk-read" aria-hidden="true" />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </BlockLinkProvider>,
+    ),
+  );
+  return [...host.querySelectorAll<HTMLElement>("span.blk-read")];
 }
 
 async function hover(el: HTMLElement, clientY = 10): Promise<void> {
@@ -144,6 +169,52 @@ describe("the reading-time line", () => {
       vi.advanceTimersByTime(AFTER_THE_DELAY);
     });
     expect(card()).not.toBeNull();
+  });
+
+  it("says how long you have spent beside this passage, and keeps counting while open (261002e)", async () => {
+    let spent = 80;
+    const timeFor: ReadingTimeFor = (id) => (id === ID ? { seconds: spent, expected: 26 } : null);
+    const line = paintRows([ID], timeFor)[0]!;
+    await hover(line);
+    expect(card()?.textContent).toContain("You have spent 1 min 20 s here. It takes about 26 s to read.");
+    spent = 81;
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(card()?.textContent).toContain("You have spent 1 min 21 s here.");
+  });
+
+  it("shows the new passage's time at once when the pointer moves straight to the next line", async () => {
+    const OTHER = "spya-rdtim2" as BlockId;
+    const times: Record<string, number> = { [ID]: 80, [OTHER]: 5 };
+    const timeFor: ReadingTimeFor = (id) => ({ seconds: times[id] ?? 0, expected: 26 });
+    const [first, second] = paintRows([ID, OTHER], timeFor);
+    await hover(first!);
+    expect(card()?.textContent).toContain("1 min 20 s here");
+    times[ID] = 999; // a stale card would keep drawing the first row
+    await hover(second!);
+    expect(card()?.textContent).toContain("You have spent 5 s here.");
+  });
+
+  it("explains the line without a time when there is no recorder", async () => {
+    const line = paint(4);
+    await hover(line);
+    expect(card()?.textContent).not.toMatch(/You have spent/);
+  });
+
+  it("drops the time when an open card outlives the recorder run", async () => {
+    let running = true;
+    const timeFor: ReadingTimeFor = () => (running ? { seconds: 80, expected: 26 } : null);
+    const line = paintRows([ID], timeFor)[0]!;
+    await hover(line);
+    expect(card()?.textContent).toContain("You have spent 1 min 20 s here.");
+
+    running = false;
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(card()?.textContent).not.toMatch(/You have spent/);
+    expect(card()?.textContent).toContain("This line grows stronger");
   });
 
   it("dismisses the open card when a finger takes over — nothing yet on touch", async () => {
