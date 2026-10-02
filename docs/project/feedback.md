@@ -457,6 +457,17 @@ them twice, in opposite directions:
   half of what the buffer is for. Held at both ends, so neither trusts the other.
 - **Never the `console`.** Greg's request said "contents of web browser errors/logs/console", and
   taken literally that is a leak — see below.
+- **A failed import's *Report this* pre-fills ids and times, and never the address, the file name
+  or the error.** The words are `importProblemReport` in
+  [`src/web/import-report.ts`](../../src/web/import-report.ts): the job id, the slug, the status,
+  the failed step's name, the failure kind and the timestamps. A pasted URL can carry an access
+  token, a file name is the reader's own words, and an error sentence is open-ended, so none of them
+  fits a clause above just because it sits in the box. Greg kept it that way on 2026-10-02
+  (Q-import-report-details, *"yes"*), with the job id as the way back: **Dismiss no longer deletes
+  the job record** — it stamps `jobs.dismissed_at` and the reader stops seeing it
+  ([ingest-queue.md § The routes](ingest-queue.md#the-routes)) — so the id in a report still names a
+  row we can read in the database, until the usual fifty-finished-jobs trim retires it. Nothing
+  serves the uploaded file back by that id.
 
 ## The tick-box, and what is behind it
 

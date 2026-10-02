@@ -469,7 +469,8 @@ glossary and comments share, so a press here is never charged twice and a dig ru
 not refuse this one. The figures are `INVESTIGATE_RATE_POLICY` in
 [`citation-investigate.ts`](../../src/citation-investigate.ts): one at a time, a per-reader hourly
 and daily count, and a global daily fuse sized so that fuse × `INVESTIGATE_PRESS_BUDGET_USD` (a
-press's worst case, now on Opus with the search) stays under a $20-a-day ceiling. The comment on
+press's worst case, now on Opus with the search) stays under a $50-a-day ceiling — $20 until Greg
+raised it on 2026-10-02, when it bought only about 25 presses a day for everyone. The comment on
 that constant carries the arithmetic and says which figures are estimated and which measured. The
 lease covers every deadline in a press — the forced search, the quick check, the registry and the
 paper's 25 seconds, the passages call, the answer — plus a margin. The answer's own optional Exa tool is pinned and bounded by

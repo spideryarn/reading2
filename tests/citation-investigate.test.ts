@@ -666,20 +666,24 @@ describe("refusals before anything is spent", () => {
     expect(h.runs).toHaveLength(0);
   });
 
-  it("sets the allowance: one at a time, 8 an hour, 20 a day, 25 for everyone (plan 261001p stage 2)", () => {
+  it("sets the allowance: one at a time, 8 an hour, 20 a day, 62 for everyone (Greg, 2026-10-02)", () => {
     expect(INVESTIGATE_RATE_POLICY).toMatchObject({
       concurrency: 1,
       fills: 8,
       windowMs: 60 * 60 * 1000,
-      daily: { fills: 20, globalFills: 25, windowMs: 24 * 60 * 60 * 1000 },
+      daily: { fills: 20, globalFills: 62, windowMs: 24 * 60 * 60 * 1000 },
     });
   });
 
-  it("keeps every reader together within $20 a day, at twice a measured cold press on Opus", () => {
+  it("keeps every reader together within $50 a day, and uses most of it, at twice a measured cold press on Opus", () => {
     /* One measured cold press on a ~42k-token article, ≈ $0.42 from its token
        counts; the budget is about twice that. */
     expect(INVESTIGATE_PRESS_BUDGET_USD).toBeGreaterThanOrEqual(2 * 0.4);
-    expect((INVESTIGATE_RATE_POLICY.daily?.globalFills ?? Number.POSITIVE_INFINITY) * INVESTIGATE_PRESS_BUDGET_USD).toBeLessThanOrEqual(20);
+    const ceiling = (INVESTIGATE_RATE_POLICY.daily?.globalFills ?? Number.POSITIVE_INFINITY) * INVESTIGATE_PRESS_BUDGET_USD;
+    expect(ceiling).toBeLessThanOrEqual(50);
+    /* Greg raised it from $20 on 2026-10-02 because $20 bought about 25
+       presses; a fuse left far below $50 would undo that silently. */
+    expect(ceiling).toBeGreaterThan(50 - INVESTIGATE_PRESS_BUDGET_USD);
   });
 
   it("leases the slot for every deadline in a press — the search, the lookup, the paper, its passages, the reading — plus the margin (Sol P-5, F8)", () => {
