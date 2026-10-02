@@ -39,8 +39,9 @@ reason. The reason that has held so far is *cost per trigger*: a `Tooltip` is a 
 and the gutter has a control per block on an article of several hundred. That reason is weaker than
 it looks, because a delegated card ([§ The second implementation](#the-second-implementation-and-why-there-is-one))
 costs nothing per trigger; the reading-time line moved onto `BlockLinkCard` on 2026-10-01 for exactly
-that. The gutter's remaining `title`s — permalink, chat, bookmark, help and overflow — are the next
-candidates.
+that, and the gutter's controls — the mark, permalink, chat, bookmark, help and overflow — followed
+on 2026-10-02, when Greg asked that they *"all have tooltips"* (spya-jc0vm6;
+[261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
 
 ## What we chose
 
@@ -170,6 +171,13 @@ one per block. Same shape — many triggers, nothing to click in the card — so
 `contentFor` and a `ControlTip` rather than a fourth file. Its one difference is where the card
 points: the strip is a whole paragraph tall, so the reference is the strip at the pointer's height
 ([261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md)).
+
+**And the gutter's controls on 2026-10-02** (`GUTTER_CONTROL`): each carries its one sentence in
+`data-tip` rather than `title`, and the card draws it with `TipNote`, re-reading it while open when
+it changes (the permalink's *Copied*, the "…" turning into ✕). Mouse hover and keyboard focus open
+it; a finger does not, because a tap presses the control. It adds no `aria-describedby` there: the
+sentence is the control's own name, near enough, and would be read twice
+([261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
 
 ## `ControlTip`, which is what most of them are now
 

@@ -1106,7 +1106,9 @@
    for an artefact written without a profile and the prop cannot know that. */
 .mode-band.has-about {
   --band-corner-btn: 1.5rem;
-  --band-corner-top: 0.45rem;
+  /* `.band-head`'s own vertical padding, so the corner and a 24px control in
+     a head row share a centre line (Tweets' copy button sat 2px below it). */
+  --band-corner-top: 0.55rem;
   --band-corner-right: 0.4rem;
   --band-corner-gap: 0.2rem;
   --band-about-room: calc(var(--band-corner-btn) + var(--band-corner-right));

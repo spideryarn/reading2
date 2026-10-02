@@ -872,7 +872,7 @@
      beside a 24px (i) (spya-hf4svm). 32px clears WCAG 2.5.8's 24, and a corner
      has no neighbour to be hit by mistake. mode-band.css § the band's (i)
      sizes both from this and resets the floor for the corner's badge. */
-  .mode-band.has-about { --band-corner-btn: 2rem; --band-corner-top: 0.35rem; }
+  .mode-band.has-about { --band-corner-btn: 2rem; }
 }
 
 /* ------------------------------------------------- § a field iOS zooms into ----
