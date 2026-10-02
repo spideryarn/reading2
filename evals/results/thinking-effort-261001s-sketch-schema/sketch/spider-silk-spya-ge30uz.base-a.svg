@@ -1,0 +1,214 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2818.9" width="760" height="2818.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2818.9" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Chain with two expansions</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">A chain down the page: the article moves from what silk is and does, through how spiders make it, to how humans</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">try to copy it and finally use it.</text>
+<g transform="translate(0 97.2)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Spider silk overview</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">One spine from biology to engineering to human use; properties and artificial synthesis are the two densest links,</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">expanded below.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="40" y="140" width="680" height="170" rx="8" fill="rgba(232,112,58,0.07)" stroke="rgba(232,112,58,0.24)" stroke-width="1"/>
+<rect x="40" y="660" width="680" height="220" rx="8" fill="rgba(47,191,149,0.07)" stroke="rgba(47,191,149,0.24)" stroke-width="1"/>
+<path d="M380 100 L380 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,180 376.5,170 383.5,170" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 260 L380 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,350 376.5,340 383.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 420 L380 450" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,450 376.5,440 383.5,440" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 520 L380 550" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,550 376.5,540 383.5,540" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 630 L380 700" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,700 376.5,690 383.5,690" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 780 L380 900" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,900 376.5,890 383.5,890" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 970 L380 1010" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,1010 376.5,1000 383.5,1000" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Silk serves many spider needs — prey, shelter, mating, flight — → spya-gp4t9x</title>
+<ellipse cx="380" cy="65" rx="120" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="62.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Silk serves many spider needs</text>
+<text x="380" y="79.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">prey, shelter, mating, flight</text>
+</g>
+<g>
+<title>Structure gives strength, stretch, toughness, stickiness — → spya-py9zw6</title>
+<rect x="280" y="180" width="200" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="208.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Structure gives strength,</text>
+<text x="380" y="223.9" font-size="12" text-anchor="middle" fill="#f7f7f7">stretch, toughness,</text>
+<text x="380" y="238.9" font-size="12" text-anchor="middle" fill="#f7f7f7">stickiness</text>
+</g>
+<g>
+<title>Different silks for different jobs — capture, wrap, nest, drift, signal — → spya-rty5kb</title>
+<rect x="280" y="350" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="375.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Different silks for different</text>
+<text x="380" y="390.472" font-size="12" text-anchor="middle" fill="#f7f7f7">jobs</text>
+<text x="380" y="406.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">capture, wrap, nest, drift, signal</text>
+</g>
+<g>
+<title>Seven glands, seven silks — each tied to a use — → spya-hg7j7e</title>
+<rect x="280" y="450" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="482.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Seven glands, seven silks</text>
+<text x="380" y="499.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">each tied to a use</text>
+</g>
+<g>
+<title>Spun on demand through a tapering duct — liquid to solid fibre — → spya-g3h8qq</title>
+<polygon points="320,550 440,550 480,590 440,630 320,630 280,590" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="580.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Spun on demand through a</text>
+<text x="380" y="595.472" font-size="12" text-anchor="middle" fill="#f7f7f7">tapering duct</text>
+<text x="380" y="611.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">liquid to solid fibre</text>
+</g>
+<g>
+<title>Copying silk means copying both protein and duct — → spya-d7d7m8</title>
+<rect x="280" y="700" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="736.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Copying silk means copying</text>
+<text x="380" y="751.4" font-size="12" text-anchor="middle" fill="#f7f7f7">both protein and duct</text>
+</g>
+<g>
+<title>Decades of research map silk's chemistry and spinning — → spya-jvxbb8</title>
+<rect x="280" y="900" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="931.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Decades of research map</text>
+<text x="380" y="946.4" font-size="12" text-anchor="middle" fill="#f7f7f7">silk's chemistry and spinning</text>
+</g>
+<g>
+<title>Humans harvest and apply silk — textiles, medicine, optics — → spya-chy97m</title>
+<ellipse cx="380" cy="1050" rx="100" ry="40" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="1047.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Humans harvest and apply silk</text>
+<text x="380" y="1064.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">textiles, medicine, optics</text>
+</g>
+<text x="50" y="155" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">PROPERTIES</text>
+<text x="50" y="675" font-size="11" text-anchor="start" fill="rgba(47,191,149,0.95)" font-weight="500" letter-spacing="0.07em">ARTIFICIAL SYNTHESIS</text></g>
+</g>
+<g transform="translate(0 1371.1000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Properties of spider silk</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Three sides of one material: its molecular build, the mechanical traits that build gives it, and a separate adhesive</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">trick used only at attachment points.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-PROPERTIES</text>
+<g transform="translate(0 65.9)"><path d="M145 150 L145 200" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="145,200 141.5,190 148.5,190" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M250 105 L280 100" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M380 140 L380 200" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,200 376.5,190 383.5,190" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M480 100 L520 100" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="520,100 510,103.5 510,96.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M145 270 L145 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="145,320 141.5,310 148.5,310" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 270 L380 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M610 140 L610 200" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M145 390 C145 417 380 423 380 450" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1.5 3.5"/>
+<path d="M380 390 L380 450" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1.5 3.5"/>
+<g>
+<title>Hard crystal sheets in a stretchy amorphous matrix — → spya-p263u9</title>
+<rect x="40" y="60" width="210" height="90" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="145" y="101.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Hard crystal sheets in a</text>
+<text x="145" y="116.4" font-size="12" text-anchor="middle" fill="#f7f7f7">stretchy amorphous matrix</text>
+</g>
+<g>
+<title>Stronger than steel, tougher than Kevlar, weight for weight — → spya-nwva2u</title>
+<rect x="280" y="60" width="200" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="88.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Stronger than steel, tougher</text>
+<text x="380" y="103.9" font-size="12" text-anchor="middle" fill="#f7f7f7">than Kevlar, weight for</text>
+<text x="380" y="118.9" font-size="12" text-anchor="middle" fill="#f7f7f7">weight</text>
+</g>
+<g>
+<title>Low stiffness (Young's modulus) vs steel/Kevlar — → spya-dq9b7q</title>
+<rect x="40" y="200" width="210" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="145" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Low stiffness (Young's modulus)</text>
+<text x="145" y="246.4" font-size="12" text-anchor="middle" fill="#f7f7f7">vs steel/Kevlar</text>
+</g>
+<g>
+<title>Tensile strength rivals alloy steel — → spya-mhe2r5</title>
+<rect x="280" y="200" width="200" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Tensile strength rivals alloy</text>
+<text x="380" y="246.4" font-size="12" text-anchor="middle" fill="#f7f7f7">steel</text>
+</g>
+<g>
+<title>Extreme toughness, e.g. Darwin's bark spider — → spya-ug9bz2</title>
+<rect x="520" y="60" width="180" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="610" y="96.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Extreme toughness, e.g.</text>
+<text x="610" y="111.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Darwin's bark spider</text>
+</g>
+<g>
+<title>Stretches up to 5x length before breaking — → spya-n93h2f</title>
+<rect x="40" y="320" width="210" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="145" y="351.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Stretches up to 5x length</text>
+<text x="145" y="366.4" font-size="12" text-anchor="middle" fill="#f7f7f7">before breaking</text>
+</g>
+<g>
+<title>Shrinks 50% when wet (supercontraction) — → spya-qdjb0x</title>
+<rect x="280" y="320" width="200" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="351.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Shrinks 50% when wet</text>
+<text x="380" y="366.4" font-size="12" text-anchor="middle" fill="#f7f7f7">(supercontraction)</text>
+</g>
+<g>
+<title>Holds strength from -40°C to 220°C — → spya-v6hmg4</title>
+<rect x="520" y="200" width="180" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="610" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Holds strength from -40°C</text>
+<text x="610" y="246.4" font-size="12" text-anchor="middle" fill="#f7f7f7">to 220°C</text>
+</g>
+<g>
+<title>Separately: attachment discs glue instantly, biodegradably — → spya-m8z9e7</title>
+<polygon points="305,450 455,450 500,495 455,540 305,540 260,495" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="491.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Separately: attachment discs glue</text>
+<text x="380" y="506.4" font-size="12" text-anchor="middle" fill="#f7f7f7">instantly, biodegradably</text>
+</g></g>
+</g>
+<g transform="translate(0 2085)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Artificial synthesis</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Two separate problems must both be solved — the protein feedstock and the spinning apparatus — before they converge on</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">usable synthetic silk and its other applications.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-ARTIFICIAL</text>
+<g transform="translate(0 65.9)"><path d="M170 150 C170 181.5 380 188.5 380 220" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,220 376.5,210 383.5,210" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M590 150 C590 181.5 380 188.5 380 220" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,220 376.5,210 383.5,210" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 320 L170 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="170,380 178.6537155287674,373.88745490428335 180.57676342404903,380.61812253776907" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 320 L590 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="590,380 579.423236575951,380.61812253776907 581.3462844712326,373.88745490428335" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M170 460 C170 487 380 493 380 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="380,520 376.5,510 383.5,510" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M590 470 C590 492.5 380 497.5 380 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="380,520 376.5,510 383.5,510" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Feedstock: extract silk-like proteins from E. coli, silkworms, goats — → spya-rw0wtg</title>
+<rect x="40" y="60" width="260" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="170" y="101.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Feedstock: extract silk-like proteins</text>
+<text x="170" y="116.4" font-size="12" text-anchor="middle" fill="#f7f7f7">from E. coli, silkworms, goats</text>
+</g>
+<g>
+<title>Geometry: syringes, microfluidics, electrospinning mimic the duct — → spya-x4bwhf</title>
+<rect x="460" y="60" width="260" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="590" y="101.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Geometry: syringes, microfluidics,</text>
+<text x="590" y="116.4" font-size="12" text-anchor="middle" fill="#f7f7f7">electrospinning mimic the duct</text>
+</g>
+<g>
+<title>Both needed together for a working fibre — → spya-d7d7m8</title>
+<polygon points="380,220 510,270 380,320 250,270" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="266.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Both needed together for a</text>
+<text x="380" y="281.4" font-size="12" text-anchor="middle" fill="#f7f7f7">working fibre</text>
+</g>
+<g>
+<title>Also: capsules, nanowires, membranes for medicine — → spya-r4r9au</title>
+<path d="M40 380 L286 380 L300 394 L300 460 L40 460 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M286 380 L286 394 L300 394" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="170" y="416.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Also: capsules, nanowires, membranes</text>
+<text x="170" y="431.4" font-size="12" text-anchor="middle" fill="#f7f7f7">for medicine</text>
+</g>
+<g>
+<title>Companies/labs: AMSilk, Bolt Threads, Spiber, Kraig, Nexia — → spya-j7hems</title>
+<rect x="460" y="380" width="260" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="590" y="421.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Companies/labs: AMSilk, Bolt Threads,</text>
+<text x="590" y="436.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Spiber, Kraig, Nexia</text>
+</g>
+<g>
+<title>Still thicker, weaker than natural dragline silk — → spya-jzcepa</title>
+<rect x="250" y="520" width="260" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="556.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Still thicker, weaker than natural</text>
+<text x="380" y="571.4" font-size="12" text-anchor="middle" fill="#f7f7f7">dragline silk</text>
+</g></g>
+</g>
+</svg>

@@ -124,6 +124,32 @@ have each cost a paid call or shown a reader something wrong, and each is writte
 happened. The shared parse seam is [`src/parse-json.ts`](../../src/parse-json.ts) §
 `parseJsonAnswer`.
 
+- **Every call that expects JSON back sends a strict schema.** A model writing JSON cannot take
+  back a token, so when it decides something it wrote is wrong it patches it in place — as code
+  (`"spya-zhzzzz".replace("zhzzzz","jcpyd5")`), a stray value, or a repeated field — and the strict
+  parser fails the whole step. A schema makes those answers impossible to write. Use the shared
+  adapter and validator in [`src/messages-structured-output.ts`](../../src/messages-structured-output.ts)
+  (`withMessagesJsonSchema` on the Messages wire, the chat adapter beside it), never a hand-written
+  `output_config` or `response_format`. Five rules come with it:
+  - **The schema states the contract the prompt already states** — never looser than the prompt,
+    never stricter than the parser, and adopting it changes no prompt text.
+  - **No `enum` of the article's block ids on an id field**, ever (`assertNoBlockIdEnums`): it would
+    force a mistyped prefix to finish as *some* real id, a wrong id let through silently. Ids are
+    still resolved against the article after the parse, exactly as before — a schema makes the
+    syntax right, not the id.
+  - **No recursion**: Anthropic refuses a self-referencing `$ref`. Unroll to the depth the prompt
+    asks for (Structure's three levels).
+  - **The schema is part of the cache key**: an article stage's row in `ARTICLE_OUTPUT_FORMAT`
+    (src/pipeline.ts) names the same constant, and `tests/article-cache-output-format.test.ts`
+    checks the request agrees.
+  - **At `low` effort, check the call still thinks.** Under a schema, adaptive thinking can drop to
+    nothing; Structure did on some articles and still passed its quality panel, but that was
+    measured, not assumed.
+
+  Where a call does not fit yet (streaming partial JSON to the reader, web search on the same
+  call, tool arguments) the reason is in
+  [261001s § Stage 3a](../plans/261001s-structure-answer-writes-code-to-correct-an-id.md).
+  [261002b](../postmortems/261002b-an-unconstrained-json-answer-fails-the-step.md).
 - **The JSON is somewhere in the answer, not the whole of it.** Models wrap their JSON in prose or a
   fence despite being told not to. The shared parser now *extracts but refuses to choose*: exactly
   one candidate document, or it throws. Taking "the first JSON in the response" would accept

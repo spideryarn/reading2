@@ -130,6 +130,7 @@ import {
   PROVIDER_UNREADABLE,
 } from "./messages.js";
 import { stageFailure } from "./job-failure.js";
+import { withChatJsonSchema } from "./messages-structured-output.js";
 import { type ModelPower, modelFor } from "./models.js";
 import { collectSearchEvidence, whereSearchCountCameFrom, type Usage } from "./openrouter-stream.js";
 import { readJsonOrNull } from "./parse-json.js";
@@ -174,6 +175,7 @@ import type { ArticleBlockText, ShingleOverlap } from "./shingles.js";
 import { plainWords } from "./plain-words.js";
 import { log } from "./log.js";
 import {
+  DEBATE_SYNTHESIS_OUTPUT_SCHEMA,
   readSynthesisAnswer,
   SYNTHESIS_ANSWER_TOKENS,
   SYNTHESIS_MIN_ROWS,
@@ -1950,16 +1952,20 @@ export async function synthesiseDebate(opts: {
   try {
     call = await openRouterJson(
       "debate",
-      {
-        model: opts.model,
-        max_tokens: SYNTHESIS_ANSWER_TOKENS,
-        messages: [
-          { role: "system", content: THEMES_SYSTEM },
-          /* The cap is counted in works, not rows — two rows of one paper are
-             one candidate (src/debate-synthesis.ts § What a "work" is). */
-          { role: "user", content: themesPrompt(rows, keyCap(new Set(workIds(rows).values()).size)) },
-        ],
-      },
+      withChatJsonSchema(
+        {
+          model: opts.model,
+          max_tokens: SYNTHESIS_ANSWER_TOKENS,
+          messages: [
+            { role: "system", content: THEMES_SYSTEM },
+            /* The cap is counted in works, not rows — two rows of one paper are
+               one candidate (src/debate-synthesis.ts § What a "work" is). */
+            { role: "user", content: themesPrompt(rows, keyCap(new Set(workIds(rows).values()).size)) },
+          ],
+        },
+        "debate_synthesis",
+        DEBATE_SYNTHESIS_OUTPUT_SCHEMA,
+      ),
       ...(opts.signal ? [{ signal: opts.signal }] : []),
     );
   } catch (err) {
@@ -1979,10 +1985,9 @@ export async function synthesiseDebate(opts: {
     return { kind: "failed" };
   }
   const content: unknown = choice.message?.content;
-  const body = typeof content === "string" ? lastClosedFence(content) : null;
   let raw: unknown = null;
   try {
-    raw = body === null ? null : JSON.parse(body);
+    raw = typeof content === "string" ? JSON.parse(content) : null;
   } catch {
     /* Never rethrown: the error would carry a stranger's page. */
     raw = null;

@@ -1,0 +1,313 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2953.85" width="760" height="2953.85">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2953.85" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Funnel into convergence</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">A funnel from motivation into the PID method, then a converge of empirical findings onto one picture of synergy,</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">followed by a practical/future coda — a chain of three movements, not a single line.</text>
+<g transform="translate(0 97.2)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Overview</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">The piece narrows from a general problem to one technical tool (PID), then fans that tool out across several</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">experiments that all converge on 'synergy is concentrated and task-sensitive', before closing with limits and</text>
+<text x="16" y="60.900000000000006" font-size="11.5" fill="#b8b8b8">extensions.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 80.85)"><rect x="40" y="500" width="680" height="330" rx="8" fill="rgba(47,191,149,0.13)" stroke="rgba(47,191,149,0.62)" stroke-width="1.8"/>
+<rect x="40" y="960" width="680" height="180" rx="8" fill="rgba(240,228,66,0.13)" stroke="rgba(240,228,66,0.62)" stroke-width="1.8"/>
+<path d="M390 100 L410 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,140 402.3973688765007,132.6209756742507 408.6583592135001,129.490480505751" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M260 175 C280 175 280 175 300 175" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="300,175 290,178.5 290,171.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M520 175 L540 175" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="540,175 530,178.5 530,171.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M630 210 C630 230 400 230 400 250" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,250 396.5,240 403.5,240" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 350 C400 370 170 370 170 390" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="170,390 166.5,380 173.5,380" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 350 C400 370 590 370 590 390" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="590,390 586.5,380 593.5,380" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M170 460 C170 496 390 504 390 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,540 386.5,530 393.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M590 460 C590 496 390 504 390 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,540 386.5,530 393.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 600 L160 630" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="160,630 169.46331696762502,625.2360067201705 170.3686912560994,632.1772095984741" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 600 L380 630" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,630 379.8418861169916,619.4063698384359 386.4826692033452,621.6199642005538" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 600 L600 630" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="600,630 589.6055303165577,632.050609665441 590.595479810219,625.1209632098128" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M160 690 C160 757.5 390 772.5 390 840" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,840 386.5,830 393.5,830" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 690 C380 757.5 390 772.5 390 840" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,840 386.5,830 393.5,830" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M600 690 C600 757.5 390 772.5 390 840" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,840 386.5,830 393.5,830" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 790 C390 812.5 390 817.5 390 840" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,840 386.5,830 393.5,830" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 600 L390 660 L390 660 L390 720" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,720 386.5,710 393.5,710" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 920 C390 956 170 964 170 1000" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="170,1000 166.5,990 173.5,990" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 920 C390 956 590 964 590 1000" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="590,1000 586.5,990 593.5,990" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M170 1060 C170 1080 390 1070 390 1090" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,1090 386.5,1080 393.5,1080" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M590 1060 C590 1080 390 1070 390 1090" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,1090 386.5,1080 393.5,1080" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>How do neurons process information? — → spya-yb735k</title>
+<ellipse cx="390" cy="65" rx="110" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="60.5" font-size="15" text-anchor="middle" fill="#f7f7f7">How do neurons process</text>
+<text x="390" y="79.25" font-size="15" text-anchor="middle" fill="#f7f7f7">information?</text>
+</g>
+<g>
+<title>Old limits: too little data, no good tools — → spya-s9kmxa</title>
+<path d="M40 140 L246 140 L260 154 L260 210 L40 210 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M246 140 L246 154 L260 154" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="150" y="171.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Old limits: too little data, no</text>
+<text x="150" y="186.4" font-size="12" text-anchor="middle" fill="#f7f7f7">good tools</text>
+</g>
+<g>
+<title>Mutual info &amp; transfer entropy track flow — → spya-mx45r0</title>
+<polygon points="335,140 485,140 520,175 485,210 335,210 300,175" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="171.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Mutual info &amp; transfer entropy</text>
+<text x="410" y="186.4" font-size="12" text-anchor="middle" fill="#f7f7f7">track flow</text>
+</g>
+<g>
+<title>But flow ≠ processing — → spya-dhy39x</title>
+<path d="M540 140 L706 140 L720 154 L720 210 L540 210 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M706 140 L706 154 L720 154" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="630" y="178.9" font-size="12" text-anchor="middle" fill="#f7f7f7">But flow ≠ processing</text>
+</g>
+<g>
+<title>PID splits info into redundant / unique / synergistic — The whole can exceed or fall short of the sum of its parts. — → spya-u0wm5e</title>
+<polygon points="400,250 510,300 400,350 290,300" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="281.5" font-size="20" text-anchor="middle" fill="#f7f7f7">PID</text>
+<text x="400" y="306.5" font-size="20" text-anchor="middle" fill="#f7f7f7">splits</text>
+<text x="400" y="331.5" font-size="20" text-anchor="middle" fill="#f7f7f7">info int…</text>
+</g>
+<g>
+<title>General lattice needs a redundancy measure — → spya-k378fv</title>
+<polygon points="95,390 245,390 280,425 245,460 95,460 60,425" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="170" y="421.4" font-size="12" text-anchor="middle" fill="#f7f7f7">General lattice needs a</text>
+<text x="170" y="436.4" font-size="12" text-anchor="middle" fill="#f7f7f7">redundancy measure</text>
+</g>
+<g>
+<title>No single accepted redundancy measure — → spya-d2quz5</title>
+<path d="M480 390 L686 390 L700 404 L700 460 L480 460 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M686 390 L686 404 L700 404" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="590" y="421.4" font-size="12" text-anchor="middle" fill="#f7f7f7">No single accepted redundancy</text>
+<text x="590" y="436.4" font-size="12" text-anchor="middle" fill="#f7f7f7">measure</text>
+</g>
+<g>
+<title>Cortical cultures, thousands of triads — → spya-cc282b</title>
+<rect x="280" y="540" width="220" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="566.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Cortical cultures, thousands of</text>
+<text x="390" y="581.4" font-size="12" text-anchor="middle" fill="#f7f7f7">triads</text>
+</g>
+<g>
+<title>Synergy concentrated in rich clubs — → spya-e3ghxj</title>
+<rect x="60" y="630" width="200" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="160" y="656.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Synergy concentrated in rich</text>
+<text x="160" y="671.4" font-size="12" text-anchor="middle" fill="#f7f7f7">clubs</text>
+</g>
+<g>
+<title>Recurrent connections boost synergy — → spya-p8by2y</title>
+<rect x="280" y="630" width="200" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="656.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Recurrent connections boost</text>
+<text x="380" y="671.4" font-size="12" text-anchor="middle" fill="#f7f7f7">synergy</text>
+</g>
+<g>
+<title>Synergy peaks at moderate correlation — → spya-zfs2z7</title>
+<rect x="500" y="630" width="200" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="600" y="656.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Synergy peaks at moderate</text>
+<text x="600" y="671.4" font-size="12" text-anchor="middle" fill="#f7f7f7">correlation</text>
+</g>
+<g>
+<title>In behaving monkeys, task shifts synergy↔redundancy — → spya-aqcngt</title>
+<rect x="280" y="720" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="751.4" font-size="12" text-anchor="middle" fill="#f7f7f7">In behaving monkeys, task shifts</text>
+<text x="390" y="766.4" font-size="12" text-anchor="middle" fill="#f7f7f7">synergy↔redundancy</text>
+</g>
+<g>
+<title>Synergy marks real neural computation — → spya-b32ecw</title>
+<ellipse cx="390" cy="880" rx="110" ry="40" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="874" font-size="20" text-anchor="middle" fill="#f7f7f7">Synergy marks real</text>
+<text x="390" y="899" font-size="20" text-anchor="middle" fill="#f7f7f7">neural computation</text>
+</g>
+<g>
+<title>Tools, sampling needs, scalability limits — → spya-kmgwhs</title>
+<path d="M60 1000 L266 1000 L280 1014 L280 1060 L60 1060 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M266 1000 L266 1014 L280 1014" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="170" y="1026.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Tools, sampling needs,</text>
+<text x="170" y="1041.4" font-size="12" text-anchor="middle" fill="#f7f7f7">scalability limits</text>
+</g>
+<g>
+<title>Local &amp; multi-target PID ahead — → spya-zz5xxs</title>
+<path d="M480 1000 L686 1000 L700 1014 L700 1060 L480 1060 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M686 1000 L686 1014 L700 1014" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="590" y="1033.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Local &amp; multi-target PID ahead</text>
+</g>
+<g>
+<title>Summary: patterns, not just totals, matter — → spya-rc5z33</title>
+<rect x="280" y="1090" width="220" height="50" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="1111.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Summary: patterns, not just</text>
+<text x="390" y="1126.4" font-size="12" text-anchor="middle" fill="#f7f7f7">totals, matter</text>
+</g></g>
+</g>
+<g transform="translate(0 1386.05)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Empirical findings converge</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Independent lines of evidence from cultured cortex and behaving primates all point to the same picture: synergy is</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">concentrated, structurally driven, and task-dependent.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">EMPIRICAL-FINDINGS</text>
+<g transform="translate(0 65.9)"><path d="M400 100 L400 140" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,140 396.5,130 403.5,130" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 200 C400 227 170 233 170 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="170,260 166.5,250 173.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 200 L410 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="410,260 404.90363139353394,250.7114572172473 411.80838886035895,249.5606643061098" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 200 C400 227 640 233 640 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="640,260 636.5,250 643.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M170 330 L190 390" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,390 183.51733079665482,381.6199642005538 190.15811388300844,379.4063698384359" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M410 340 C410 362.5 510 367.5 510 390" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="510,390 506.5,380 513.5,380" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 460 C190 496 390 504 390 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,540 386.5,530 393.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M510 480 C510 507 390 513 390 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,540 386.5,530 393.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M640 350 C640 435.5 390 454.5 390 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,540 386.5,530 393.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>512-channel recordings, triads scored by PID — → spya-cc282b</title>
+<rect x="290" y="30" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="61.4" font-size="12" text-anchor="middle" fill="#f7f7f7">512-channel recordings, triads</text>
+<text x="400" y="76.4" font-size="12" text-anchor="middle" fill="#f7f7f7">scored by PID</text>
+</g>
+<g>
+<title>Synergy tracks feedforward transfer entropy — → spya-kqkb58</title>
+<rect x="290" y="140" width="220" height="60" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="166.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Synergy tracks feedforward</text>
+<text x="400" y="181.4" font-size="12" text-anchor="middle" fill="#f7f7f7">transfer entropy</text>
+</g>
+<g>
+<title>Rich club: 40% of neurons, 88% of synergy — → spya-fud8q3</title>
+<rect x="60" y="260" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="170" y="291.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Rich club: 40% of neurons, 88% of</text>
+<text x="170" y="306.4" font-size="12" text-anchor="middle" fill="#f7f7f7">synergy</text>
+</g>
+<g>
+<title>More recurrent links → more synergy; feedback links don't help — → spya-sd9fzd</title>
+<rect x="300" y="260" width="220" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="410" y="288.9" font-size="12" text-anchor="middle" fill="#f7f7f7">More recurrent links → more</text>
+<text x="410" y="303.9" font-size="12" text-anchor="middle" fill="#f7f7f7">synergy; feedback links don't</text>
+<text x="410" y="318.9" font-size="12" text-anchor="middle" fill="#f7f7f7">help</text>
+</g>
+<g>
+<title>Synergy rises then falls as source correlation grows — → spya-hkhpex</title>
+<rect x="540" y="260" width="200" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="640" y="301.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Synergy rises then falls as</text>
+<text x="640" y="316.4" font-size="12" text-anchor="middle" fill="#f7f7f7">source correlation grows</text>
+</g>
+<g>
+<title>Caveat: bivariate TE overstates edges; cultures ≠ in vivo — → spya-vjzxxm</title>
+<path d="M60 390 L306 390 L320 404 L320 460 L60 460 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M306 390 L306 404 L320 404" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="190" y="421.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Caveat: bivariate TE overstates edges;</text>
+<text x="190" y="436.4" font-size="12" text-anchor="middle" fill="#f7f7f7">cultures ≠ in vivo</text>
+</g>
+<g>
+<title>In macaques: synergy dominant generally, redundancy spikes during movement execution — → spya-t8fayf</title>
+<rect x="380" y="390" width="260" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="510" y="423.9" font-size="12" text-anchor="middle" fill="#f7f7f7">In macaques: synergy dominant</text>
+<text x="510" y="438.9" font-size="12" text-anchor="middle" fill="#f7f7f7">generally, redundancy spikes during</text>
+<text x="510" y="453.9" font-size="12" text-anchor="middle" fill="#f7f7f7">movement execution</text>
+</g>
+<g>
+<title>Computation structure follows network position and task state — → spya-b32ecw</title>
+<ellipse cx="390" cy="580" rx="130" ry="40" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="566.125" font-size="15" text-anchor="middle" fill="#f7f7f7">Computation structure follows</text>
+<text x="390" y="584.875" font-size="15" text-anchor="middle" fill="#f7f7f7">network position and task</text>
+<text x="390" y="603.625" font-size="15" text-anchor="middle" fill="#f7f7f7">state</text>
+</g></g>
+</g>
+<g transform="translate(0 2239.95)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Practice, limits, and what's next</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Side by side: the practical constraints on doing PID today, and the directions (local, multi-target) that aim past</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">those constraints.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">PRACTICE-AND-FUTURE</text>
+<g transform="translate(0 65.9)"><rect x="30" y="60" width="320" height="480" rx="8" fill="rgba(240,228,66,0.07)" stroke="rgba(240,228,66,0.24)" stroke-width="1"/>
+<rect x="400" y="60" width="320" height="480" rx="8" fill="rgba(92,143,232,0.07)" stroke="rgba(92,143,232,0.24)" stroke-width="1"/>
+<path d="M190 180 L190 200" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,200 186.5,190 193.5,190" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 270 L190 290" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,290 186.5,280 193.5,280" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 360 L190 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,380 186.5,370 193.5,370" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M190 450 L190 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="190,470 186.5,460 193.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 190 L560 220" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,220 556.5,210 563.5,210" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 290 L560 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,320 556.5,310 563.5,310" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 400 L560 430" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,430 556.5,420 563.5,420" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Choice of redundancy measure depends on data type — → spya-kmgwhs</title>
+<rect x="50" y="110" width="280" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="190" y="141.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Choice of redundancy measure depends on</text>
+<text x="190" y="156.4" font-size="12" text-anchor="middle" fill="#f7f7f7">data type</text>
+</g>
+<g>
+<title>Needs enough data to avoid undersampling bias — → spya-tz99zn</title>
+<rect x="50" y="200" width="280" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="190" y="231.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Needs enough data to avoid undersampling</text>
+<text x="190" y="246.4" font-size="12" text-anchor="middle" fill="#f7f7f7">bias</text>
+</g>
+<g>
+<title>Software: DIT, IDTxl, SxPID, MATLAB toolbox — → spya-rf4pp0</title>
+<rect x="50" y="290" width="280" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="190" y="321.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Software: DIT, IDTxl, SxPID, MATLAB</text>
+<text x="190" y="336.4" font-size="12" text-anchor="middle" fill="#f7f7f7">toolbox</text>
+</g>
+<g>
+<title>Statistical, not mechanistic, explanation — → spya-h6h922</title>
+<path d="M50 380 L316 380 L330 394 L330 450 L50 450 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M316 380 L316 394 L330 394" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="190" y="418.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Statistical, not mechanistic, explanation</text>
+</g>
+<g>
+<title>Lattice explodes with more parent neurons — → spya-djfyag</title>
+<path d="M50 470 L316 470 L330 484 L330 530 L50 530 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M316 470 L316 484 L330 484" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="190" y="503.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Lattice explodes with more parent neurons</text>
+</g>
+<g>
+<title>Local PID: time-resolved synergy per moment — → spya-z39m3x</title>
+<rect x="420" y="110" width="280" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="560" y="146.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Local PID: time-resolved synergy per</text>
+<text x="560" y="161.4" font-size="12" text-anchor="middle" fill="#f7f7f7">moment</text>
+</g>
+<g>
+<title>Found distinct profiles in neuronal avalanches — → spya-ckpq7e</title>
+<rect x="420" y="220" width="280" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="560" y="251.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Found distinct profiles in neuronal</text>
+<text x="560" y="266.4" font-size="12" text-anchor="middle" fill="#f7f7f7">avalanches</text>
+</g>
+<g>
+<title>Multi-target PID (ΦID): several targets at once — → spya-cds6mm</title>
+<rect x="420" y="320" width="280" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="560" y="356.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Multi-target PID (ΦID): several targets at</text>
+<text x="560" y="371.4" font-size="12" text-anchor="middle" fill="#f7f7f7">once</text>
+</g>
+<g>
+<title>Linked to consciousness loss and brain genetics in fMRI — → spya-xn6y4f</title>
+<rect x="420" y="430" width="280" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="560" y="466.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Linked to consciousness loss and brain</text>
+<text x="560" y="481.4" font-size="12" text-anchor="middle" fill="#f7f7f7">genetics in fMRI</text>
+</g>
+<text x="40" y="75" font-size="11" text-anchor="start" fill="rgba(240,228,66,0.95)" font-weight="500" letter-spacing="0.07em">DOING PID TODAY</text>
+<text x="410" y="75" font-size="11" text-anchor="start" fill="rgba(92,143,232,0.95)" font-weight="500" letter-spacing="0.07em">WHERE IT'S HEADED</text></g>
+</g>
+</svg>

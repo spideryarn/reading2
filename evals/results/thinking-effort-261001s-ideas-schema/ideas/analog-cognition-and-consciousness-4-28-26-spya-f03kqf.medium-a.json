@@ -1,0 +1,202 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.ce29b6cc004bedb5",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-jwruw0",
+      "name": "Geometric structure of population activity is itself functionally meaningful",
+      "provenance": "assumed",
+      "statement": "The shape of the space that population neural activity traces out — its dimensionality, its orthogonal subspaces, its smooth trajectories — is taken to reflect real computational and representational structure, not just a convenient statistical summary of noisy individual neurons.",
+      "whyYouNeedIt": "The entire argument that subspace coding segregates information and that traveling waves 'pull' trajectories along only matters if the geometry of population activity is a causally real computational object, a premise the article never argues for but constantly leans on.",
+      "occurrences": [
+        {
+          "blockId": "spya-xphb7u",
+          "quote": "population spiking tends to occupy a lower-dimensional \"subspace\" or \"manifold\" within the high-dimensional space defined by all possible population activity patterns",
+          "reasoning": "Treats the geometric manifold as a real object to be explained, assuming its functional significance rather than establishing it.",
+          "start": 275
+        },
+        {
+          "blockId": "spya-ns23sq",
+          "quote": "segregating different computations into independent (orthogonal) subspaces to minimize interference",
+          "reasoning": "Assumes orthogonality in activity-space has the functional consequence of preventing interference, without which the subspace-coding argument has no purchase.",
+          "start": 103
+        },
+        {
+          "blockId": "spya-ah94dx",
+          "quote": "population spiking traces smooth trajectories through its activity subspace, consistent with the temporal evolution of a dynamical system",
+          "reasoning": "Relies on the reader accepting that a trajectory through an abstract activity space is a meaningful dynamical object worth explaining with wave mechanics.",
+          "start": 32
+        }
+      ]
+    },
+    {
+      "id": "spya-pugygy",
+      "name": "Spikes and waves form a two-way control loop",
+      "provenance": "introduced",
+      "statement": "Neural spiking and large-scale electric-field brain waves shape each other continuously: spikes generate the fields that become waves, and those waves in turn determine when and where further spikes occur.",
+      "occurrences": [
+        {
+          "blockId": "spya-z9g2s3",
+          "quote": "Spikes shape brain waves, while the waves in turn influence when and where spikes occur.",
+          "reasoning": "Spells out the bidirectional causal loop that the rest of the argument depends on.",
+          "start": 602
+        },
+        {
+          "blockId": "spya-f0dqyd",
+          "quote": "This creates a feedback loop: Synapses shape spiking, spiking contributes to brain waves, and waves shape spiking.",
+          "reasoning": "Restates the loop as the backbone of the final hybrid framework.",
+          "start": 363
+        }
+      ]
+    },
+    {
+      "id": "spya-gqpky7",
+      "name": "Mixed selectivity means neurons are multi-purpose, not fixed specialists",
+      "provenance": "introduced",
+      "statement": "Many cortical neurons do not have one stable meaning; instead their response to a stimulus changes nonlinearly depending on context, so the same neuron can carry different information in different situations.",
+      "occurrences": [
+        {
+          "blockId": "spya-amx5qf",
+          "quote": "it was confirmed that many cortical (and subcortical) neurons do indeed multiplex different kinds of information in their activity",
+          "reasoning": "Introduces the empirical finding that neurons are not fixed specialists.",
+          "start": 802
+        },
+        {
+          "blockId": "spya-x5m34h",
+          "quote": "A neuron might spike to object A, but only when it was seen first, and to object B, but only when it is seen second.",
+          "reasoning": "Gives the concrete illustration of a neuron's meaning changing with context.",
+          "start": 319
+        },
+        {
+          "blockId": "spya-njs6ff",
+          "quote": "nonlinear mixed selectivity seems to reflect a core computational principle",
+          "reasoning": "Elevates mixed selectivity from a side observation to a principle the reader must carry forward.",
+          "start": 660
+        }
+      ]
+    },
+    {
+      "id": "spya-knuwy0",
+      "name": "Electric fields can move neurons without synapses (ephaptic coupling)",
+      "provenance": "introduced",
+      "statement": "Oscillating extracellular electric fields can directly nudge nearby neurons' membrane potentials and spike timing, allowing coordination between neurons that does not depend on synaptic connections at all.",
+      "occurrences": [
+        {
+          "blockId": "spya-mapqhv",
+          "quote": "Oscillations directly influence spiking via ephaptic coupling",
+          "reasoning": "Names the mechanism as a distinct causal channel separate from synapses.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-j7k4hu",
+          "quote": "changes in electric fields arise essentially concurrently with the underlying transmembrane currents and spread through the local tissue at the speed of electromagnetic propagation, making them effectively instantaneous",
+          "reasoning": "Establishes the speed advantage that makes field-based control plausible for fast cognition.",
+          "start": 922
+        }
+      ]
+    },
+    {
+      "id": "spya-epg6n9",
+      "name": "Spatial Computing: alpha/beta patterns gate where gamma/spiking occurs",
+      "provenance": "introduced",
+      "statement": "Spatially patterned slow (alpha/beta) waves act like stencils that suppress fast (gamma) activity and spiking in some cortical locations while leaving others open, so the same sensory input produces different spatial patterns of neural firing depending on the current context.",
+      "occurrences": [
+        {
+          "blockId": "spya-hcav4k",
+          "quote": "proposing how spatially-structured oscillations can exert flexible executive control over neural computation",
+          "reasoning": "Introduces the core claim of the theory as a control mechanism.",
+          "start": 53
+        },
+        {
+          "blockId": "spya-gkfdys",
+          "quote": "Alpha/beta rhythms thus dampen or suppress gamma and associated spiking in targeted locations, creating a push-pull dynamic that determines where feedforward signals are suppressed.",
+          "reasoning": "States the gating mechanism explicitly.",
+          "start": 473
+        },
+        {
+          "blockId": "spya-gxyg0d",
+          "quote": "This scheme allows for flexible control over the neural expression of information in spiking, without the control system needing to know the precise neurons and synapses employed for any specific information",
+          "reasoning": "Draws out why this solves the routing problem raised earlier in the piece.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-gvbrkx",
+      "name": "Traveling waves drive shifts between neural coding states",
+      "provenance": "introduced",
+      "statement": "Waves of inhibition and excitation that sweep across the cortical surface can move population activity from one organized coding pattern (subspace) to another, so representational change is a spatial wave transition rather than a simple rise or fall in oscillation strength.",
+      "occurrences": [
+        {
+          "blockId": "spya-mrsvfu",
+          "quote": "alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another",
+          "reasoning": "States the core claim that traveling waves cause representational transitions.",
+          "start": 356
+        },
+        {
+          "blockId": "spya-gbpnax",
+          "quote": "We propose this shift may be driven by alpha/beta traveling waves transitioning from one static pattern to the other.",
+          "reasoning": "Directly ties the traveling wave to the representational transition it is meant to explain.",
+          "start": 280
+        }
+      ]
+    },
+    {
+      "id": "spya-ufwya9",
+      "name": "Analog computation: overlapping waves compute by physically summing",
+      "provenance": "introduced",
+      "statement": "When multiple waves of neural activity overlap, their physical addition and interference performs a computation in parallel and continuously, rather than through step-by-step symbolic operations, producing a new pattern that encodes the combined result.",
+      "occurrences": [
+        {
+          "blockId": "spya-vp5h33",
+          "quote": "When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference",
+          "reasoning": "States the physical basis of analog computation that the rest of the section builds on.",
+          "start": 328
+        },
+        {
+          "blockId": "spya-mgnqxk",
+          "quote": "Because the wave interactions occur everywhere simultaneously, the computation is inherently parallel.",
+          "reasoning": "Explains why wave computation is efficient, a claim load-bearing for later energy arguments.",
+          "start": 330
+        },
+        {
+          "blockId": "spya-z5qnp2",
+          "quote": "As they overlap, their interactions can result in temporary excitation of some neuron groups and suppression of others. This might be employed to route and shape neural activity.",
+          "reasoning": "Applies the general analog-computing principle specifically to cortical electric fields.",
+          "start": 180
+        }
+      ]
+    },
+    {
+      "id": "spya-g7xs80",
+      "name": "Anesthesia converges on disrupted wave organization, not specific receptors",
+      "provenance": "introduced",
+      "statement": "Different anesthetic drugs acting on completely different molecular targets all end up producing the same large-scale pattern of slow, desynchronized cortical waves, suggesting that loss of consciousness tracks disrupted wave organization rather than any particular receptor or cell type.",
+      "occurrences": [
+        {
+          "blockId": "spya-wnqgmn",
+          "quote": "all converge on similar large-scale electrical effects in the cortex",
+          "reasoning": "States the convergence finding that anchors the wave-based account of unconsciousness.",
+          "start": 170
+        },
+        {
+          "blockId": "spya-k02vdw",
+          "quote": "This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.",
+          "reasoning": "Draws the explicit inference the idea requires.",
+          "start": 173
+        },
+        {
+          "blockId": "spya-m57373",
+          "quote": "Anesthetics do not simply shut off the cortex. Instead, they profoundly alter wave dynamics",
+          "reasoning": "Frames anesthesia as evidence for waves rather than mere cortical silencing.",
+          "start": 99
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:14:55.429Z",
+  "elapsedMs": 62946
+}

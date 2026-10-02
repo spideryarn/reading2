@@ -1,0 +1,136 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+  "sourceHash": "fa2d01c869c0a26f.94c19520d2431db5.893f578d23ba5f72",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-f7qvbz",
+      "name": "A bug is only a bug relative to a chosen specification",
+      "provenance": "assumed",
+      "statement": "Calling some behavior a bug presupposes a separate, simpler description of what the program 'should' do against which the actual behavior is being compared; without such a reference there is nothing to deviate from.",
+      "whyYouNeedIt": "The whole catalogue of Turing-machine and cellular-automaton examples only reads as 'bugs' because the reader implicitly accepts that the simple formula (n+1, doubling, even output) is the real intention, and the program's actual rule is not.",
+      "occurrences": [
+        {
+          "blockId": "spya-mhwnwh",
+          "quote": "To tell if a program has a bug we have to know what the program is supposed to do—or is not supposed to do. And for this we have to have some kind of precise specification.",
+          "reasoning": "Makes explicit the dependency that every later example quietly relies on.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-zw3uk7",
+      "name": "Rarity of a failure has no inherent floor",
+      "provenance": "assumed",
+      "statement": "A deviation from expected behavior can be made to occur as infrequently as one likes — at the trillionth case, the googol-th case, or beyond — there is no natural lower bound on how rare a genuine exception can be.",
+      "whyYouNeedIt": "Without this, the claim that billions or trillions of successful tests still don't guarantee correctness would seem like mere paranoia rather than a structural fact about possible bug densities.",
+      "occurrences": [
+        {
+          "blockId": "spya-tjybft",
+          "quote": "At the 23338590792th prime it flips around, and becomes negative.",
+          "reasoning": "Illustrates the extreme rarity the reader must already accept as possible in principle.",
+          "start": 31
+        }
+      ]
+    },
+    {
+      "id": "spya-v5wwwk",
+      "name": "Simple rules can produce arbitrarily sophisticated behavior",
+      "provenance": "introduced",
+      "statement": "According to the Principle of Computational Equivalence, programs with very simple structure can still perform computations as sophisticated as any other system, no matter how elaborate.",
+      "occurrences": [
+        {
+          "blockId": "spya-b9z7g9",
+          "quote": "even programs (or fragments of them) that are very simple in their structure can end up doing computation that is in a sense as sophisticated as anything",
+          "reasoning": "Directly states the principle driving the whole argument.",
+          "start": 81
+        }
+      ]
+    },
+    {
+      "id": "spya-tvhvgc",
+      "name": "Computational irreducibility blocks shortcut prediction",
+      "provenance": "introduced",
+      "statement": "Some computational processes have no shortcut description shorter than actually running them step by step; their future behavior can only be known by simulation, not derived in advance.",
+      "occurrences": [
+        {
+          "blockId": "spya-s247px",
+          "quote": "When computational irreducibility is present, it means that the behavior of a system can in general only be predicted by an irreducible amount of computational work.",
+          "reasoning": "States the core concept directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-gj554s",
+          "quote": "when there's computational irreducibility nothing short of explicitly running a computation will determine what will happen",
+          "reasoning": "Applies the concept to the bug-detection problem.",
+          "start": 340
+        }
+      ]
+    },
+    {
+      "id": "spya-s8apgk",
+      "name": "Pockets of reducibility amid irreducibility",
+      "provenance": "introduced",
+      "statement": "Even inside an irreducible system there are always some specific properties or sub-patterns that can be predicted or proven, even though the system's behavior as a whole cannot be.",
+      "whyYouNeedIt": "Explains why some cellular automata and Turing machines can be proven bug-free despite the general impossibility of foreseeing irreducible systems.",
+      "occurrences": [
+        {
+          "blockId": "spya-y9hee0",
+          "quote": "whenever it's present, there must also be pockets of computational reducibility present. In other words, even though computational irreducibility says one can't predict everything about what a system will do, there will always be certain things about a system that one will be able to predict",
+          "reasoning": "States the idea explicitly.",
+          "start": 265
+        },
+        {
+          "blockId": "spya-erqjtv",
+          "quote": "The behavior of the rind (which we can easily determine from the underlying cellular automaton rule) ensures that the complicated pattern can never expand.",
+          "reasoning": "Demonstrates using a provable sub-regularity to guarantee no bugs despite overall complexity.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-vavq8j",
+      "name": "Proof search and exhaustive simulation are computationally equivalent efforts",
+      "provenance": "introduced",
+      "statement": "Constructing a formal proof that a program behaves correctly requires an amount of computational work comparable to just running the program through all its cases; there is no fundamental shortcut proofs give you over simulation.",
+      "occurrences": [
+        {
+          "blockId": "spya-ymdpn2",
+          "quote": "we don't get any fundamental advantage by trying to make a proof rather than just running the Turing machine. In both cases we have to expend a potentially unbounded amount of computational effort.",
+          "reasoning": "States the equivalence directly.",
+          "start": 16
+        },
+        {
+          "blockId": "spya-vs44ga",
+          "quote": "because, in fact, the result we're trying to prove isn't true, so there isn't a proof. And we know that because, if we test sufficiently many cases of the Turing machine, we can explicitly find the bug.",
+          "reasoning": "Shows the symmetry between failed proof search and found bug.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-mz9abz",
+      "name": "Good primitives offload irreducibility so human-level programs stay understandable",
+      "provenance": "introduced",
+      "statement": "A well-designed programming language packs most of the messy, irreducible computational work into its built-in primitives, leaving the programmer's own short code closer to human intention and less prone to unexpected behavior.",
+      "occurrences": [
+        {
+          "blockId": "spya-x8ag2t",
+          "quote": "most of the computational irreducibility has been packed into the primitives of the language, so that what's left over is the part that's accessible to us humans, and that maps into our natural patterns of thinking.",
+          "reasoning": "States the mechanism directly.",
+          "start": 197
+        },
+        {
+          "blockId": "spya-s0e3qm",
+          "quote": "in Wolfram Language it's the short program that's the one that does what you want, without what you consider bugs.",
+          "reasoning": "Gives the practical consequence of the idea.",
+          "start": 34
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:13:06.911Z",
+  "elapsedMs": 28755
+}

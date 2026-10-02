@@ -1122,6 +1122,16 @@ consistent with each other and makes the [partition invariant](#the-partition-in
 the model can satisfy rather than something we have to stitch together. That holds up to about
 123,500 words.
 
+**Since `toc/11` (2026-10-02) the answer carries starts, not ranges, and a schema holds it.** Each
+child names only the block it starts at, as the scoped expansion call already did. The root names
+nothing, and every range is derived by the shared kernel in
+[`src/start-ranges.ts`](../../src/start-ranges.ts), through
+[`src/hierarchy-starts.ts`](../../src/hierarchy-starts.ts), before `buildTree`. The request carries
+a three-level JSON schema (`STRUCTURE_OUTPUT_SCHEMA`), so the answer cannot break its JSON. Asking
+for ends was where the model kept rewriting an id as code mid-answer.
+[261001s](../plans/261001s-structure-answer-writes-code-to-correct-an-id.md),
+[261002b](../postmortems/261002b-an-unconstrained-json-answer-fails-the-step.md).
+
 Each label batch sees: the whole article's outline, its own sections' crumbs and gists, its
 paragraphs numbered, and one block of context either side marked `CONTEXT` so it can feel the flow
 without labelling it. Blocks whose tag is a heading are marked `HEADING` — the first live run came

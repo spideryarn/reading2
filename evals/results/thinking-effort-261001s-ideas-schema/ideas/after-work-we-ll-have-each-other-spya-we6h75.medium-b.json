@@ -1,0 +1,161 @@
+{
+  "version": "ideas/4",
+  "generator": "claude-sonnet-5",
+  "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+  "sourceHash": "01f7bd1e81b8b33a.fdae19af9862492e.d4a0aca1a37cfbff",
+  "profileHash": null,
+  "ideas": [
+    {
+      "id": "spya-jx44k3",
+      "name": "Status is positional, so it must be defended against rivals",
+      "provenance": "assumed",
+      "statement": "Social standing within a relational system is a relative, scarce good — one person's rise in esteem or precedence comes at another's expense — so maintaining it requires constant vigilance against rivals rather than simple enjoyment of leisure.",
+      "whyYouNeedIt": "Without this, the obsessive gossip, intrigue, and rank-policing described in every case study (Versailles, St. Petersburg, the West End, the Junior League) would read as inexplicable neurosis rather than a predictable consequence of how status actually works.",
+      "occurrences": [
+        {
+          "blockId": "spya-x4w0zk",
+          "quote": "He despised the king, in part for elevating his bastards to positions of ceremonial precedence, in part for turning over the governance of the realm to talented commoners.",
+          "reasoning": "Saint-Simon's rage only makes sense if precedence is a fixed pool being redistributed, so that someone else's gain is his loss.",
+          "start": 431
+        },
+        {
+          "blockId": "spya-xn6rzj",
+          "quote": "The path to higher-level charity work runs through the Junior League, an exclusive upper-class service organization to which nearly all of them belong.",
+          "reasoning": "The need for an exclusive gatekeeping body only matters if status conferred by charity work is a limited good that must be rationed among insiders.",
+          "start": 556
+        },
+        {
+          "blockId": "spya-weazcy",
+          "quote": "The major criteria for ranking, differentiating, and estimating compatibility are ingroup loyalty and conformity to established standards of personal behavior",
+          "reasoning": "Ranking people against each other presumes status is comparative and finite, which is why conformity and loyalty are tracked so closely.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-g6bqew",
+      "name": "Workless abundance reverts to status by birth, not utopia",
+      "provenance": "introduced",
+      "statement": "If machines take over all economically necessary labor, society does not become a realm of leisure and equality; it reverts to an older order where one's relationships, family, and social network — not jobs — determine status and meaning.",
+      "whyYouNeedIt": "This is the piece's central claim, and every historical case study that follows is offered as evidence for what that reversion actually looks like.",
+      "occurrences": [
+        {
+          "blockId": "spya-k44gdt",
+          "quote": "When the machines can do everything else, our relationships will be what’s left.",
+          "reasoning": "States the core prediction that drives the rest of the piece.",
+          "start": 128
+        },
+        {
+          "blockId": "spya-b3re57",
+          "quote": "What is really being suggested here is less a continuation of modern work than a return to a much older cultural understanding of labor.",
+          "reasoning": "Frames the post-work future explicitly as a return to a pre-industrial social order.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-zy53n3",
+          "quote": "We were not defined by our jobs but by our participation in a densely interconnected social world. And we might be again.",
+          "reasoning": "Makes the reversion claim explicit as the natural consequence of relationalist predictions.",
+          "start": 125
+        }
+      ]
+    },
+    {
+      "id": "spya-zn07qu",
+      "name": "Relational dignity breeds exclusion and clannishness",
+      "provenance": "introduced",
+      "statement": "When a person's sense of worth comes from belonging to a group, that group inevitably polices its boundaries, deciding who may join and punishing those who deviate.",
+      "whyYouNeedIt": "This connects the otherwise disparate case studies — Versailles courtiers, Midwestern society women, Boston's West Enders — as instances of one underlying mechanism rather than three unrelated anecdotes.",
+      "occurrences": [
+        {
+          "blockId": "spya-hdbtc0",
+          "quote": "When our dignity depends on our membership in a group, we start to police who else can join and what happens when they do. When humans get relational, we get clannish.",
+          "reasoning": "States the general mechanism explaining the exclusivity seen in every case study.",
+          "start": 275
+        },
+        {
+          "blockId": "spya-tyj2mt",
+          "quote": "they all spend an enormous amount of energy policing deviant behavior.",
+          "reasoning": "Shows the same boundary-policing dynamic in the working-class peer group, confirming the pattern is general, not local to one class.",
+          "start": 9
+        }
+      ]
+    },
+    {
+      "id": "spya-h337pg",
+      "name": "Material conditions reshape what people want, not just what they have",
+      "provenance": "introduced",
+      "statement": "Changes in economic circumstances don't just alter people's options; they alter their underlying values and desires, so that as conditions shift, so do the norms people hold.",
+      "whyYouNeedIt": "This licenses the article's final move from describing what relational societies have historically valued to predicting that an AI-driven economy could durably change what people want out of life, not just what they're forced to do.",
+      "occurrences": [
+        {
+          "blockId": "spya-t4xpae",
+          "quote": "our material conditions don’t just change what we have, but what we want. We may not have a choice.",
+          "reasoning": "States the generalizable claim directly, drawing the lesson from the West End case.",
+          "start": 16
+        },
+        {
+          "blockId": "spya-b3pf45",
+          "quote": "As economic conditions improve,” Gans writes, “the ethos which Banfield calls amoral familism has begun to recede in importance.",
+          "reasoning": "Shows economic change producing a shift in values (familism), supporting the general claim.",
+          "start": 419
+        },
+        {
+          "blockId": "spya-hb8vvc",
+          "quote": "When we can all support ourselves by our own labor, these transactions are no longer necessary.",
+          "reasoning": "Illustrates how a change in material self-sufficiency alters the very nature of what friendship can be, not just its logistics.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-x85mvh",
+      "name": "Work supplies impersonal, achievement-based dignity",
+      "provenance": "introduced",
+      "statement": "Beyond money, paid work gives people a way to earn respect and self-worth through skills and accomplishments judged on their own terms, rather than through family ties or group membership.",
+      "whyYouNeedIt": "This is the payoff the article builds toward: it explains why losing work would be a real loss even in a world of abundance, not just a neutral lifestyle shift.",
+      "occurrences": [
+        {
+          "blockId": "spya-zd83ts",
+          "quote": "all of us benefit from living in a system where we can earn respect and dignity as adults from what we do, not who we know, or who we are.",
+          "reasoning": "States directly what work provides that relational societies cannot.",
+          "start": 709
+        },
+        {
+          "blockId": "spya-ms0vr5",
+          "quote": "unlike members of relational societies, the things we want respect for are impersonal: our skills, our accomplishments, our contributions to a shared goal.",
+          "reasoning": "Draws the explicit contrast between work-based and relation-based sources of dignity.",
+          "start": 74
+        },
+        {
+          "blockId": "spya-hdbtc0",
+          "quote": "Moral equality is something relational societies struggle with. They tend to be more restrictive and more exclusionary.",
+          "reasoning": "Explains why the impersonal respect of work matters by contrasting it with what relational dignity costs.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-vd93s6",
+      "name": "Commercial independence frees relationships from necessity",
+      "provenance": "introduced",
+      "statement": "Once people can support themselves economically without depending on kin or patrons, their personal relationships stop being forced transactions and can become freer, more chosen, and more universal in spirit.",
+      "whyYouNeedIt": "This is the piece's resolution: it explains why losing economic self-sufficiency to AI would risk collapsing exactly the condition that made modern, non-transactional friendship and individualism possible.",
+      "occurrences": [
+        {
+          "blockId": "spya-d6v2bb",
+          "quote": "Today, work makes our personal independence materially possible. But even if our material needs are met, relying on our personal relationships to meet all our needs for identity and belonging creates a similar kind of dependence.",
+          "reasoning": "Draws the parallel between old material dependence and a new relational dependence that could replace it.",
+          "start": 144
+        },
+        {
+          "blockId": "spya-y0xcuz",
+          "quote": "In the modern world, relationships matter less. And because they matter less, we can do much more inside them. They are freer. They have room to breathe.",
+          "reasoning": "States directly the mechanism by which reduced necessity frees relationships.",
+          "start": 125
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-10-02T01:20:50.590Z",
+  "elapsedMs": 56739
+}

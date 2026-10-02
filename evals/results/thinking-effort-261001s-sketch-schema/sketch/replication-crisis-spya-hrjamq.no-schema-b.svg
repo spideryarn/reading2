@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 3234.5" width="760" height="3234.5">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="3234.5" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Chain with two expansions</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">A chain running from definitions through the crisis's origins and evidence to its causes, then its responses and</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">reforms — each stage building on the one above it, with two crowded stages (causes, and responses/reform) expanded</text>
+<text x="16" y="77.2" font-size="12" fill="#b8b8b8">in their own views.</text>
+<g transform="translate(0 112.80000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Overview: the replication crisis</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain: define the problem, trace its outbreak, survey the evidence, diagnose two kinds of cause, then follow the</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">reactions — public, academic, and institutional — that try to fix it.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="24" y="430" width="712" height="180" rx="8" fill="rgba(232,112,58,0.13)" stroke="rgba(232,112,58,0.62)" stroke-width="1.8"/>
+<rect x="24" y="630" width="712" height="330" rx="8" fill="rgba(47,191,149,0.13)" stroke="rgba(47,191,149,0.62)" stroke-width="1.8"/>
+<path d="M380 100 L380 130" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,130 376.5,120 383.5,120" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 200 L380 230" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,230 376.5,220 383.5,220" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 300 L380 330" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,330 376.5,320 383.5,320" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 400 C380 431.5 210 438.5 210 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="210,470 206.5,460 213.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 400 C380 431.5 550 438.5 550 470" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="550,470 546.5,460 553.5,460" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M210 570 C210 615 380 625 380 670" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,670 376.5,660 383.5,660" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M550 570 C550 615 380 625 380 670" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,670 376.5,660 383.5,660" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 750 L380 770" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,770 376.5,760 383.5,760" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 850 L380 870" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,870 376.5,860 383.5,860" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Replication crisis: findings that won't reproduce — → spya-kv0w8d</title>
+<ellipse cx="380" cy="65" rx="150" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="60.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Replication crisis: findings that</text>
+<text x="380" y="79.25" font-size="15" text-anchor="middle" fill="#f7f7f7">won't reproduce</text>
+</g>
+<g>
+<title>Vocabulary: p-values, power, effect size — → spya-cxcn8h</title>
+<polygon points="265,130 495,130 530,165 495,200 265,200 230,165" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="168.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Vocabulary: p-values, power, effect size</text>
+</g>
+<g>
+<title>Early-2010s failures (priming, ESP, cancer) spark the crisis — → spya-yru28f</title>
+<rect x="230" y="230" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="261.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Early-2010s failures (priming, ESP, cancer)</text>
+<text x="380" y="276.4" font-size="12" text-anchor="middle" fill="#f7f7f7">spark the crisis</text>
+</g>
+<g>
+<title>Across fields, roughly half of findings fail to replicate — → spya-bha57y</title>
+<rect x="230" y="330" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="361.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Across fields, roughly half of findings fail</text>
+<text x="380" y="376.4" font-size="12" text-anchor="middle" fill="#f7f7f7">to replicate</text>
+</g>
+<g>
+<title>Publication system rewards flashy, positive results — → spya-d040tg</title>
+<rect x="70" y="470" width="280" height="100" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="210" y="516.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Publication system rewards flashy,</text>
+<text x="210" y="531.4" font-size="12" text-anchor="middle" fill="#f7f7f7">positive results</text>
+</g>
+<g>
+<title>Weak methods, low power, and shaky statistics — → spya-bfx638</title>
+<rect x="410" y="470" width="280" height="100" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="550" y="516.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Weak methods, low power, and shaky</text>
+<text x="550" y="531.4" font-size="12" text-anchor="middle" fill="#f7f7f7">statistics</text>
+</g>
+<g>
+<title>Public trust and academic backlash — → spya-qht6nk</title>
+<rect x="230" y="670" width="300" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="713.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Public trust and academic backlash</text>
+</g>
+<g>
+<title>Reforms: transparency, preregistration, stricter stats — → spya-h32yv9</title>
+<rect x="230" y="770" width="300" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="806.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Reforms: transparency, preregistration,</text>
+<text x="380" y="821.4" font-size="12" text-anchor="middle" fill="#f7f7f7">stricter stats</text>
+</g>
+<g>
+<title>Building infrastructure, rethinking science itself — → spya-hc3p7c</title>
+<rect x="230" y="870" width="300" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="906.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Building infrastructure, rethinking science</text>
+<text x="380" y="921.4" font-size="12" text-anchor="middle" fill="#f7f7f7">itself</text>
+</g></g>
+</g>
+<g transform="translate(0 1206.7)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Two kinds of cause</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Two parallel columns, not a sequence: failures in how science is published sit beside failures in how studies are</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">designed and analyzed, each sufficient on its own to make findings unreplicable.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-CAUSES</text>
+<g transform="translate(0 65.9)"><rect x="24" y="50" width="340" height="430" rx="8" fill="rgba(232,112,58,0.07)" stroke="rgba(232,112,58,0.24)" stroke-width="1"/>
+<rect x="396" y="50" width="340" height="740" rx="8" fill="rgba(240,228,66,0.07)" stroke="rgba(240,228,66,0.24)" stroke-width="1"/>
+<g>
+<title>Publication bias: only positive results get published — → spya-d040tg</title>
+<rect x="50" y="100" width="290" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="195" y="136.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Publication bias: only positive results get</text>
+<text x="195" y="151.4" font-size="12" text-anchor="middle" fill="#f7f7f7">published</text>
+</g>
+<g>
+<title>Even top journals contain frequent math/stats errors — → spya-xxd5as</title>
+<rect x="50" y="200" width="290" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="195" y="236.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Even top journals contain frequent</text>
+<text x="195" y="251.4" font-size="12" text-anchor="middle" fill="#f7f7f7">math/stats errors</text>
+</g>
+<g>
+<title>'Publish or perish' discourages doing replications — → spya-h2nvfj</title>
+<rect x="50" y="300" width="290" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="195" y="336.4" font-size="12" text-anchor="middle" fill="#f7f7f7">'Publish or perish' discourages doing</text>
+<text x="195" y="351.4" font-size="12" text-anchor="middle" fill="#f7f7f7">replications</text>
+</g>
+<g>
+<title>Papers often lack detail needed to redo the study — → spya-wjstmr</title>
+<rect x="50" y="400" width="290" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="195" y="436.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Papers often lack detail needed to redo the</text>
+<text x="195" y="451.4" font-size="12" text-anchor="middle" fill="#f7f7f7">study</text>
+</g>
+<g>
+<title>Flexible choices (HARKing, selective reporting) inflate false positives — → spya-bfx638</title>
+<rect x="420" y="100" width="290" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="565" y="131.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Flexible choices (HARKing, selective</text>
+<text x="565" y="146.4" font-size="12" text-anchor="middle" fill="#f7f7f7">reporting) inflate false positives</text>
+</g>
+<g>
+<title>Chronically low statistical power (~20-35%) — → spya-p7pun6</title>
+<rect x="420" y="190" width="290" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="565" y="228.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Chronically low statistical power (~20-35%)</text>
+</g>
+<g>
+<title>Underpowered studies overstate effect sizes — → spya-nqwfh4</title>
+<rect x="420" y="280" width="290" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="565" y="318.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Underpowered studies overstate effect sizes</text>
+</g>
+<g>
+<title>Meta-analysis has its own vulnerabilities — → spya-z2xbqp</title>
+<rect x="420" y="370" width="290" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="565" y="408.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Meta-analysis has its own vulnerabilities</text>
+</g>
+<g>
+<title>P-hacking via many defensible 'forking paths' — → spya-qsad7n</title>
+<rect x="420" y="460" width="290" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="565" y="491.4" font-size="12" text-anchor="middle" fill="#f7f7f7">P-hacking via many defensible 'forking</text>
+<text x="565" y="506.4" font-size="12" text-anchor="middle" fill="#f7f7f7">paths'</text>
+</g>
+<g>
+<title>High, often unexplained variation across studies — → spya-ngbkx2</title>
+<rect x="420" y="550" width="290" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="565" y="581.4" font-size="12" text-anchor="middle" fill="#f7f7f7">High, often unexplained variation across</text>
+<text x="565" y="596.4" font-size="12" text-anchor="middle" fill="#f7f7f7">studies</text>
+</g>
+<g>
+<title>Effects sensitive to hidden context replicate poorly — → spya-z4db8z</title>
+<rect x="420" y="640" width="290" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="565" y="671.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Effects sensitive to hidden context</text>
+<text x="565" y="686.4" font-size="12" text-anchor="middle" fill="#f7f7f7">replicate poorly</text>
+</g>
+<g>
+<title>Null-hypothesis testing suits 'soft sciences' badly — → spya-h9wzrk</title>
+<rect x="420" y="730" width="290" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="565" y="761.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Null-hypothesis testing suits 'soft</text>
+<text x="565" y="776.4" font-size="12" text-anchor="middle" fill="#f7f7f7">sciences' badly</text>
+</g>
+<text x="34" y="65" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">PUBLICATION SYSTEM</text>
+<text x="406" y="65" font-size="11" text-anchor="start" fill="rgba(240,228,66,0.95)" font-weight="500" letter-spacing="0.07em">RESEARCH PRACTICES &amp; STATISTICS</text></g>
+</g>
+<g transform="translate(0 2160.6)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Public reaction, then reform, then broader change</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A short chain (public reaction, academic clash, credibility revolution) opens into two grouped sets of parallel</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">efforts: concrete publishing reforms, and broader changes to how science itself is practiced.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-RESPONSES</text>
+<g transform="translate(0 65.9)"><rect x="24" y="310" width="712" height="330" rx="8" fill="rgba(47,191,149,0.07)" stroke="rgba(47,191,149,0.24)" stroke-width="1"/>
+<rect x="24" y="660" width="712" height="200" rx="8" fill="rgba(92,143,232,0.07)" stroke="rgba(92,143,232,0.24)" stroke-width="1"/>
+<path d="M380 110 L380 130" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,130 376.5,120 383.5,120" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 200 L380 220" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,220 376.5,210 383.5,210" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Public mostly unaware, sees replication as quality control — → spya-qht6nk</title>
+<rect x="230" y="40" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="71.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Public mostly unaware, sees replication as</text>
+<text x="380" y="86.4" font-size="12" text-anchor="middle" fill="#f7f7f7">quality control</text>
+</g>
+<g>
+<title>Academics clash: reformers vs 'methodological terrorists' — → spya-rx27qq</title>
+<rect x="230" y="130" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="161.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Academics clash: reformers vs 'methodological</text>
+<text x="380" y="176.4" font-size="12" text-anchor="middle" fill="#f7f7f7">terrorists'</text>
+</g>
+<g>
+<title>Framed as a 'credibility revolution' — → spya-n0zj55</title>
+<rect x="230" y="220" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="258.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Framed as a 'credibility revolution'</text>
+</g>
+<g>
+<title>Clearer reporting of methods required — → spya-bzdyqn</title>
+<rect x="50" y="350" width="200" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="150" y="382" font-size="10" text-anchor="middle" fill="#f7f7f7">Clearer reporting of methods</text>
+<text x="150" y="394.5" font-size="10" text-anchor="middle" fill="#f7f7f7">required</text>
+</g>
+<g>
+<title>Result-blind review at 140+ journals — → spya-wv05ca</title>
+<rect x="280" y="350" width="200" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="382" font-size="10" text-anchor="middle" fill="#f7f7f7">Result-blind review at 140+</text>
+<text x="380" y="394.5" font-size="10" text-anchor="middle" fill="#f7f7f7">journals</text>
+</g>
+<g>
+<title>Preregistration locks in methods early — → spya-wraexy</title>
+<rect x="510" y="350" width="200" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="610" y="382" font-size="10" text-anchor="middle" fill="#f7f7f7">Preregistration locks in methods</text>
+<text x="610" y="394.5" font-size="10" text-anchor="middle" fill="#f7f7f7">early</text>
+</g>
+<g>
+<title>Proposal: lower significance to p&lt;0.005 — → spya-pge7t0</title>
+<rect x="50" y="450" width="200" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="150" y="482" font-size="10" text-anchor="middle" fill="#f7f7f7">Proposal: lower significance to</text>
+<text x="150" y="494.5" font-size="10" text-anchor="middle" fill="#f7f7f7">p&lt;0.005</text>
+</g>
+<g>
+<title>Larger samples, cross-validation urged — → spya-vnwm97</title>
+<rect x="280" y="450" width="200" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="482" font-size="10" text-anchor="middle" fill="#f7f7f7">Larger samples, cross-validation</text>
+<text x="380" y="494.5" font-size="10" text-anchor="middle" fill="#f7f7f7">urged</text>
+</g>
+<g>
+<title>Funders back replication, metascience centers — → spya-hc3p7c</title>
+<rect x="510" y="450" width="200" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="610" y="482" font-size="10" text-anchor="middle" fill="#f7f7f7">Funders back replication,</text>
+<text x="610" y="494.5" font-size="10" text-anchor="middle" fill="#f7f7f7">metascience centers</text>
+</g>
+<g>
+<title>Triangulate across methods, not just replicate — → spya-sbakqy</title>
+<rect x="150" y="710" width="230" height="80" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="265" y="746.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Triangulate across methods, not</text>
+<text x="265" y="761.4" font-size="12" text-anchor="middle" fill="#f7f7f7">just replicate</text>
+</g>
+<g>
+<title>Replication should build revised, stronger theories — → spya-d4kvnh</title>
+<rect x="410" y="710" width="230" height="80" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="525" y="746.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Replication should build revised,</text>
+<text x="525" y="761.4" font-size="12" text-anchor="middle" fill="#f7f7f7">stronger theories</text>
+</g>
+<text x="34" y="325" font-size="11" text-anchor="start" fill="rgba(47,191,149,0.95)" font-weight="500" letter-spacing="0.07em">REFORMS IN PUBLISHING</text>
+<text x="34" y="675" font-size="11" text-anchor="start" fill="rgba(92,143,232,0.95)" font-weight="500" letter-spacing="0.07em">BROADER CHANGE</text></g>
+</g>
+</svg>

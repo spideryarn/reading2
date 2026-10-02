@@ -156,7 +156,10 @@ vi.mock("../src/ai-call.js", async (importOriginal) => {
       const reply = checkerReply(user ?? "");
       if (reply instanceof Error) throw reply;
       return {
-        json: { choices: [{ message: { content: reply } }], usage: { prompt_tokens: 100, completion_tokens: 10 } },
+        json: {
+          choices: [{ finish_reason: "stop", message: { content: reply } }],
+          usage: { prompt_tokens: 100, completion_tokens: 10 },
+        },
         answeredBy: "stub-checker",
         generationId: null,
       };

@@ -1,0 +1,83 @@
+{
+  "mode": "ideas",
+  "viewedPictures": false,
+  "articles": [
+    {
+      "slug": "replication-crisis-spya-hrjamq",
+      "ranking": [["Y"], ["X"], ["W"], ["Z"]],
+      "separations": [
+        "Y over X: Y combines the strongest coverage of the statistical mechanisms with a precisely bounded assumption, while X risks overstating the field's commitment to one context-independent true effect.",
+        "X over W: X identifies more revealing presuppositions and clearly separates publication bias from effect-size inflation, whereas W treats the article's explicit definition of metascience as an assumed idea.",
+        "W over Z: W covers the incentive and base-rate mechanisms that Z omits, while Z spends scarce space on comparatively generic claims about convergence and citations."
+      ],
+      "criterionNotes": "The candidates differ most in whether their assumed ideas expose genuine local inferential commitments or merely relabel explicit claims. Y has the best balance of precise propositions, sound anchors, and coverage without padding."
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "ranking": [["Y"], ["Z"], ["W"], ["X"]],
+      "separations": [
+        "Y over Z: Y identifies the unproven additivity of triad-level synergy and describes inferred edges more cautiously, while Z overstates their equivalence to anatomical wiring.",
+        "Z over W: Z covers the framework's combinatorial limitation and supplies more defensible assumptions, whereas W labels two concepts the article explicitly introduces as assumed.",
+        "W over X: W retains the task-dependent synergy–redundancy result and the lack of a canonical redundancy measure, both notable gaps in X."
+      ],
+      "criterionNotes": "All four capture PID's central propositions, so the main differences are the precision of assumed ideas and coverage of limitations and behavioral findings. Y's assumptions are the most locally argued and least likely to launder an interpretation."
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "ranking": [["Z"], ["X"], ["W"], ["Y"]],
+      "separations": [
+        "Z over X: Z includes the essay's distinct argument about non-algorithmic dynamics while preserving the full chain from psychological bias to biological naturalism and practical risk.",
+        "X over W: X states the moral and behavior-versus-experience presuppositions more sharply, making the ethical stakes and attack on functionalism easier to carry elsewhere.",
+        "W over Y: W includes the essay's major account of anthropomorphic bias, which Y omits in favor of narrower points about exponential change and persistent illusion."
+      ],
+      "criterionNotes": "Coverage of the four attacks on computational functionalism is the decisive criterion: only Z includes the non-algorithmic-process argument. X has the strongest pair of assumptions, but its missing argument keeps it below Z."
+    },
+    {
+      "slug": "towards-a-theory-of-bugs-the-ruliology-of-the-unexpected",
+      "ranking": [["X"], ["Z"], ["Y"], ["W"]],
+      "separations": [
+        "X over Z: X matches Z's strong core coverage while also capturing visualization, mathematics's self-selection, and a genuine underlying premise about why useful programs must contain novelty.",
+        "Z over Y: Z presents the simple-rule and arbitrarily rare-bug claims with their correct introduced provenance and ties them into a more coherent account of useful computation.",
+        "Y over W: Y's assumptions are misclassified but substantively true to the article, while W's claim that visual simplicity is treated as proof is contradicted by the article's own counterexamples."
+      ],
+      "criterionNotes": "The candidates differ most on coverage and provenance rather than proposition form. W contains the clearest anchor-level failure; X gives the most complete account of irreducibility, proof, induction, rarity, and language design."
+    },
+    {
+      "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+      "ranking": [["Z"], ["W", "Y"], ["X"]],
+      "separations": [
+        "Z over W/Y: Z uniquely makes the binding requirement for unified consciousness explicit and pairs it with a strong population-code assumption, giving the mechanisms a clearer argumentative destination.",
+        "W/Y over X: W and Y include anesthesia's convergent evidence that consciousness tracks large-scale wave organization, while X never adequately reconnects its account of cognition to consciousness."
+      ],
+      "criterionNotes": "W and Y are effectively equal in coverage, anchors, and proposition quality, differing only in how they phrase the geometric-state-space assumption. Z sacrifices the anesthesia evidence but better captures the article's culminating consciousness claim."
+    },
+    {
+      "slug": "after-work-we-ll-have-each-other-spya-we6h75",
+      "ranking": [["X"], ["Z"], ["Y"], ["W"]],
+      "separations": [
+        "X over Z: X exposes both assumptions that make the historical case studies predictive—their comparability to a post-work future and the stability of status needs—while retaining all the central conclusions.",
+        "Z over Y: Z includes the crucial claim that material conditions reshape desires, explaining how a relational future could become self-sustaining, which Y misses.",
+        "Y over W: Y accurately treats status-seeking as trans-historical without claiming it mechanically determines every relational society, whereas W's innate-primate formulation conflicts with the article's explicit qualification."
+      ],
+      "criterionNotes": "The largest difference is whether candidates justify the leap from historical case studies to an AI-mediated future. X has the best assumptions and complete coverage; W weakens otherwise good material with an overgeneralized claim the text expressly resists."
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "ranking": [["Y"], ["W"], ["X"], ["Z"]],
+      "separations": [
+        "Y over W: Y covers molecular structure, distinct material properties, specialized silk types, the spinning phase change, and synthetic production while supplying two useful background assumptions.",
+        "W over X: W's adaptation and strength-to-weight assumptions are genuinely needed to interpret the comparisons, whereas X recasts two claims the article directly states as assumptions.",
+        "X over Z: X adds the important diversity of task-specific silks and liquid-crystal organization, while Z's claim that gene transfer carries over material behavior reaches beyond what its anchors support."
+      ],
+      "criterionNotes": "Y has the best coverage without padding and the cleanest distinction between background knowledge and introduced claims. Z's second assumed idea is the main anchor problem because the article repeatedly shows that producing the protein does not by itself reproduce the fibre."
+    },
+    {
+      "slug": "cargocult-spya-rz663q",
+      "ranking": [["W", "Y"], ["X", "Z"]],
+      "separations": [
+        "W/Y over X/Z: W and Y pair the speech's central account of scientific integrity with especially precise local assumptions and complementary concrete practices—finding the real experimental cue and publishing either outcome."
+      ],
+      "criterionNotes": "All four identify cargo-cult form, active self-criticism, and self-deception, so the main distinction is the specificity of the fifth proposition and its assumed reasoning. W and Y are equally strong; X and Z remain sound but their assumptions are broader and more generic."
+    }
+  ]
+}

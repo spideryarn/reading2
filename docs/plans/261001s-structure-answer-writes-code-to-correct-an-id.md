@@ -392,3 +392,75 @@ writer/reader check that asserts non-zero cache reads (r3 H2).
   - **So it ships at `low`, as the rule says.** The think-first arm was not needed. Its
     per-article risk — no thinking at all on some articles — is written down for Greg, not
     hidden.
+- **Stage 3b part 1 (Ideas, Sketch, Quotes) built by Sol and reviewed, with one fix round.** The
+  first Ideas schema changed its prompt (reasoning made optional for introduced ideas). That
+  followed from Claude's brief ("encode what the parser accepts"), which was the wrong rule. **The
+  rule now: a schema encodes the contract the prompt already states, and no prompt text changes.**
+  A test now ties each stage's `ARTICLE_OUTPUT_FORMAT` row to the request it really sends.
+  Measured:
+  - **Quotes**: 12 of 12 valid (`evals/results/quotes-spread-2026-10-02T00-43-13*`).
+  - **Sketch, schema against no schema, both at production `low`**
+    (`evals/results/thinking-effort-261001s-sketch-schema/`): all 16 schema draws valid; 2 of
+    the 16 no-schema draws failed, one of them malformed JSON. The blind judges found no loss:
+    no-schema's mean U against the schema was 1.63 (Sol) and 2.19 (Opus), so it did not beat the
+    schema. Sketch thinks almost nothing at `low` in either arm, so the schema changes little
+    there.
+  - **Ideas under the schema: 48 of 48 valid at `high`, `medium` and `low`**, against the research
+    doc's 1 in 16 malformed at `high` and 10 in 16 at `medium` and at `low`. The quality panels
+    for `medium` and `low` against `high` follow below.
+- **Stage 3b part 2 (Arc, Tweets, Glossary, Timeline, Quiz, FAQ, Cross-references, Simple,
+  Citations, Illustrated's brief), built by Sol and reviewed.** No prompt text changed. Claude
+  checked Glossary's `kind` enum against its prompt and parser (identical) and Simple's single
+  schema across its three levels, so its within-stage cache reads survive. **Every cross-stage
+  cache group dissolves.** Production's `ai_calls` for the 14 days to 2026-10-02 show **0 cache
+  reads on every article stage except Simple**, whose reads come from its own three levels. So
+  nothing measured is lost. Claude turned the call-site "marks BOTH" test, whose pair no longer
+  exists, into a tripwire that fails the day a same-group pair forms again.
+- **Stage 4, the docs.**
+  - **The rule** lives in [prompting-guide.md § What the model writes
+    back](../project/prompting-guide.md#what-the-model-writes-back), its one home. ai-gateway.md
+    signposts it. hierarchy.md § The generation prompt says what `toc/11` changed. 261001p's ledger
+    points here.
+  - **Postmortem:**
+    [261002b](../postmortems/261002b-an-unconstrained-json-answer-fails-the-step.md). The plan's
+    "a line under postmortems.md" was wrong: individual postmortems are not indexed there.
+  - **The mode.md change, proposed for Greg and not applied**, because mode.md is an approval-gated
+    rule doc:
+    - § The words the mode puts in front of the reader. *Before:* "A new mode's prompt takes the
+      shared plain-words rule, `plainWords(...)`, naming each kind of text it writes —
+      prompting-guide.md is the rule, the trade-off and how to measure a change." *After:* the
+      same, plus "If the model answers in JSON, the request sends a strict schema through
+      `withMessagesJsonSchema` (or `withChatJsonSchema`) — no `enum` of block ids, and the ids
+      still resolved after the parse — prompting-guide.md § What the model writes back." (Both
+      links in the mode.md text are relative to docs/project/, so they are shown here unlinked.)
+    - § The artefact, if the mode shows one: `ARTICLE_OUTPUT_FORMAT`
+      ([`src/pipeline.ts`](../../src/pipeline.ts)) is added to the compile-time list beside
+      `STAGE_EFFORT` and `ARTICLE_RENDERER`. The compiler already forces it, because it is a total
+      record over `ArticleStage`.
+- **Ideas' lower-effort re-test, under the schema (Greg's question).** JSON is no longer the
+  problem: 48 of 48 draws were valid at every effort. Quality is the problem:
+  - **`medium`: possible loss.** Mean U 1.69 from Sol, 1.13 from Opus. About 40 % cheaper and
+    twice as fast.
+  - **`low`: clear loss.** Mean U 1.44 from Sol, 0.88 from Opus. At `low` it thinks 8–105 tokens,
+    in effect not at all.
+
+  So Ideas stays at `high`, and production effort is unchanged. Judging is in
+  `evals/results/thinking-effort-261001s-ideas-schema/judging/ideas-high-v-medium/` and
+  `…/judging/ideas/` (low).
+- **Stage 3b part 3 (Skim; a chat-wire adapter; Simple's checker, cited-paper passages, Debate
+  synthesis and Referee mirror), built by Sol and reviewed.** No prompt text changed. Simple's
+  checker gained the finish and refusal checks it lacked before its parse. Claude checked the
+  checker's verdict enum and the adapter.
+  - **Deferred, with the reason for each:**
+    - **Labels:** its answer is tuples, and a schema cannot express them, so it needs a change of
+      answer shape and a quality check. It already re-asks on a malformed pair (260924a).
+    - **Scoped Structure expansion:** the deepening wave is off by default.
+    - **Search, Referee criteria and Referee claims:** each streams items to the reader as they
+      arrive, and needs proof that it still does under a schema.
+    - **Citation-find, citation lookup, source-guess, and Debate passes A and B:** web search on
+      the same call is unmeasured with a schema, and the search annotations are a security
+      witness.
+    - **Referee candidates:** its prose is the product.
+    - **Chat-tool and Realtime tool arguments:** these are function-call JSON, not response JSON.
+    - **The six existing chat-wire strict users:** already strict. A move to the shared adapter is
+      cosmetic.

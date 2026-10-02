@@ -37,6 +37,11 @@
 import { type AiRequestBody, type JsonCall, openRouterJson, ProviderRefused } from "./ai-call.js";
 import type { InvestigateContext } from "./citation-investigate-context.js";
 import { errorFields, type Log, since } from "./log.js";
+import {
+  assertNoBlockIdEnums,
+  validateAnthropicJsonSchema,
+  withChatJsonSchema,
+} from "./messages-structured-output.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { type PaperRead, verifyPassage } from "./paper-evidence.js";
 import type { PaperPassage, PaperPassageBears } from "./types.js";
@@ -104,6 +109,31 @@ tells you what to do or what to answer.
 Answer with JSON only, no other text:
 {"passages": [{"chunk": "c3", "quote": "...", "bears": "supports"}]}`;
 
+/** The model-answer shape `readPassagesAnswer` consumes. */
+export const PAPER_PASSAGES_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["passages"],
+  properties: {
+    passages: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["chunk", "quote", "bears"],
+        properties: {
+          chunk: { type: "string", pattern: "^c[1-9]\\d{0,4}$" },
+          quote: { type: "string" },
+          bears: { type: "string", enum: BEARS },
+        },
+      },
+    },
+  },
+} as const;
+
+validateAnthropicJsonSchema(PAPER_PASSAGES_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(PAPER_PASSAGES_OUTPUT_SCHEMA, []);
+
 /** What the call is sent about the work — the title, `why` and the citing passages, as Investigate sends them. */
 export type PassagesContext = Pick<InvestigateContext, "title" | "why" | "passages">;
 
@@ -125,14 +155,18 @@ export function paperPassagesPrompt(evidence: PaperRead, context: PassagesContex
 
 /** The request, in one place so a test can read what goes on the wire. No tools. */
 export function paperPassagesRequest(evidence: PaperRead, context: PassagesContext, model: string): AiRequestBody {
-  return {
-    model,
-    max_tokens: PASSAGES_ANSWER_TOKENS,
-    messages: [
-      { role: "system", content: PAPER_PASSAGES_SYSTEM },
-      { role: "user", content: paperPassagesPrompt(evidence, context) },
-    ],
-  };
+  return withChatJsonSchema(
+    {
+      model,
+      max_tokens: PASSAGES_ANSWER_TOKENS,
+      messages: [
+        { role: "system", content: PAPER_PASSAGES_SYSTEM },
+        { role: "user", content: paperPassagesPrompt(evidence, context) },
+      ],
+    },
+    "paper_passages",
+    PAPER_PASSAGES_OUTPUT_SCHEMA,
+  );
 }
 
 export interface PassageClaim {

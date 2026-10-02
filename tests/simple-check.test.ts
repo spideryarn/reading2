@@ -35,7 +35,9 @@ const TEXT = new Map<string, string>([
 ]);
 
 /** What the stubbed provider does next. `hang` answers only when the request's signal fires. */
-let reply: { kind: "answer"; content: string } | { kind: "hang" } = { kind: "answer", content: "" };
+let reply:
+  | { kind: "answer"; content: string; finishReason?: string; refusal?: unknown }
+  | { kind: "hang" } = { kind: "answer", content: "" };
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -47,13 +49,24 @@ beforeEach(() => {
         init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
       });
     }
-    const content = reply.content;
+    const { content, finishReason = "stop", refusal } = reply;
     return {
       ok: true,
       status: 200,
       headers: new Headers(),
       text: async () =>
-        JSON.stringify({ choices: [{ message: { content } }], usage: { prompt_tokens: 120, completion_tokens: 9 } }),
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: finishReason,
+              message: {
+                content,
+                ...(refusal === undefined ? {} : { refusal }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 120, completion_tokens: 9 },
+        }),
     } as unknown as Response;
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -75,7 +88,7 @@ describe("the request the checker sends", () => {
     );
   });
 
-  it("sends exactly what the probe sent through link-summary's route", async () => {
+  it("keeps the measured request and adds only the strict response schema", async () => {
     await openRouterJson("link-summary", {
       model: modelFor("link-summary", "standard"),
       max_completion_tokens: 4000,
@@ -87,7 +100,35 @@ describe("the request the checker sends", () => {
     const measured = lastBody();
     await checkLevel(PARAGRAPHS, TEXT);
     const built = lastBody();
-    expect(built).toEqual(measured);
+    const { response_format: responseFormat, ...withoutFormat } = built;
+    expect(withoutFormat).toEqual(measured);
+    expect(responseFormat).toEqual({
+      type: "json_schema",
+      json_schema: {
+        name: "simple_check",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["verdicts"],
+          properties: {
+            verdicts: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["verdict"],
+                properties: {
+                  n: { type: "integer" },
+                  verdict: { type: "string", enum: ["ok", "contradicts"] },
+                  why: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
     /* And, named, the parts the gateway adds that the probe depended on. */
     expect(built.model).toBe(modelFor("simple-check", "standard"));
     /* The rates in 261001h belong to Luna, not merely to whichever model the
@@ -141,6 +182,28 @@ describe("checkLevel", () => {
     reply = { kind: "answer", content: "Both look fine." };
     await expect(checkLevel(PARAGRAPHS, TEXT)).resolves.toMatchObject({
       outcome: { kind: "failed", failure: "unreadable" },
+    });
+  });
+
+  it("refuses a non-stop finish before parsing an otherwise valid answer", async () => {
+    reply = {
+      kind: "answer",
+      finishReason: "length",
+      content: '{"verdicts":[{"n":1,"verdict":"ok"},{"n":2,"verdict":"ok"}]}',
+    };
+    await expect(checkLevel(PARAGRAPHS, TEXT)).resolves.toMatchObject({
+      outcome: { kind: "failed", failure: "call" },
+    });
+  });
+
+  it("refuses a body-level refusal before parsing an otherwise valid answer", async () => {
+    reply = {
+      kind: "answer",
+      refusal: "I cannot do that.",
+      content: '{"verdicts":[{"n":1,"verdict":"ok"},{"n":2,"verdict":"ok"}]}',
+    };
+    await expect(checkLevel(PARAGRAPHS, TEXT)).resolves.toMatchObject({
+      outcome: { kind: "failed", failure: "call" },
     });
   });
 });

@@ -1,0 +1,102 @@
+{
+  "caption": "A funnel: concrete bug examples across Turing machines, cellular automata, and proofs converge on one explanation (computational irreducibility), which then fans out into consequences for testing, mathematics, and practical programming.",
+  "title": "funnel into fan-out",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Towards a Theory of Bugs",
+      "caption": "Examples of simple programs failing unexpectedly converge on computational irreducibility as the cause, which then explains testing failures, ruliological surprises, mathematical surprises, and what can be done in practice.",
+      "height": 1180,
+      "items": [
+        {"kind":"node","id":"intro","shape":"ellipse","x":260,"y":30,"w":240,"h":70,"text":"Simple mental models vs. actual computation","size":"md","block":"spya-d46wsq","detail":"Bugs arise when a program's real behavior outruns the simple picture we have of it."},
+
+        {"kind":"region","x":30,"y":140,"w":220,"h":230,"label":"TURING MACHINES","style":"band","tone":1,"opens":"inside-tm-proofs"},
+        {"kind":"node","id":"tmbug","shape":"box","x":50,"y":175,"w":180,"h":70,"text":"n+1 machine fails at n=7","size":"sm","tone":1,"block":"spya-s7uc4u"},
+        {"kind":"node","id":"tmhidden","shape":"box","x":50,"y":265,"w":180,"h":80,"text":"Bugs can hide until huge inputs (n=15, n=63...)","size":"sm","tone":1,"block":"spya-pt0hmz"},
+
+        {"kind":"region","x":280,"y":140,"w":220,"h":230,"label":"SPECIFICATIONS & CAs","style":"band","tone":2,"opens":"inside-tm-proofs"},
+        {"kind":"node","id":"spec","shape":"box","x":300,"y":175,"w":180,"h":70,"text":"Any specification eventually gets violated","size":"sm","tone":2,"block":"spya-gjut02"},
+        {"kind":"node","id":"ca","shape":"box","x":300,"y":265,"w":180,"h":80,"text":"Doubling cellular automata fail at n=14, 24, 32","size":"sm","tone":2,"block":"spya-cy4dgs"},
+
+        {"kind":"region","x":530,"y":140,"w":200,"h":230,"label":"PROOFS","style":"band","tone":3,"opens":"inside-tm-proofs"},
+        {"kind":"node","id":"proof","shape":"hex","x":550,"y":175,"w":160,"h":70,"text":"Symbolic proofs can show a machine is bug-free","size":"sm","tone":3,"block":"spya-qr6x2h"},
+        {"kind":"node","id":"noproof","shape":"hex","x":550,"y":265,"w":160,"h":80,"text":"A buggy machine yields no proof, ever","size":"sm","tone":3,"block":"spya-ypka68"},
+
+        {"kind":"node","id":"irred","shape":"diamond","x":240,"y":420,"w":280,"h":100,"text":"Computational irreducibility: only running it reveals what it does","size":"lg","block":"spya-wcnws7","detail":"Pockets of predictability exist, but bugs always lurk at the edges."},
+
+        {"kind":"edge","from":"tmhidden","to":"irred","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"ca","to":"irred","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"noproof","to":"irred","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"intro","to":"tmbug","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"intro","to":"spec","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"intro","to":"proof","via":"curve","arrow":"end"},
+
+        {"kind":"node","id":"testing","shape":"box","x":40,"y":570,"w":200,"h":80,"text":"Testing can't rule bugs out: rare failures hide from sampling","size":"sm","block":"spya-yc9e2z"},
+        {"kind":"node","id":"ruliology","shape":"box","x":280,"y":570,"w":200,"h":80,"text":"Ruliology: surprises are the norm (rule 30, long halts...)","size":"sm","block":"spya-kjsjh5"},
+        {"kind":"node","id":"math","shape":"box","x":520,"y":570,"w":200,"h":80,"text":"Math mostly avoids bugs by staying human-graspable","size":"sm","block":"spya-bhwh4d"},
+
+        {"kind":"edge","from":"irred","to":"testing","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"irred","to":"ruliology","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"irred","to":"math","via":"curve","arrow":"end"},
+
+        {"kind":"region","x":80,"y":700,"w":560,"h":200,"label":"PRACTICE","style":"band","tone":4,"opens":"inside-practice"},
+        {"kind":"node","id":"language","shape":"box","x":110,"y":740,"w":220,"h":70,"text":"Good language design keeps bugs out","size":"sm","tone":4,"block":"spya-kdks69"},
+        {"kind":"node","id":"seeing","shape":"box","x":380,"y":740,"w":220,"h":70,"text":"Visualizing a program is the best defense","size":"sm","tone":4,"block":"spya-qexzj4"},
+        {"kind":"node","id":"discovery","shape":"ellipse","x":240,"y":840,"w":280,"h":70,"text":"A bug can be a scientific discovery","size":"md","tone":4,"block":"spya-xdwm97"},
+
+        {"kind":"edge","from":"testing","to":"language","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"ruliology","to":"seeing","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"language","to":"discovery","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"seeing","to":"discovery","via":"straight","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-tm-proofs",
+      "title": "Turing machines, specifications, and proofs",
+      "caption": "A chain: simple machines develop hidden bugs, any specification eventually gets insidiously violated, and formal proofs exist only for the machines that are genuinely bug-free.",
+      "height": 920,
+      "items": [
+        {"kind":"node","id":"z1","shape":"box","x":260,"y":30,"w":260,"h":70,"text":"Turing machine seems to compute n+1","size":"sm","block":"spya-kk6a0n"},
+        {"kind":"node","id":"z2","shape":"box","x":260,"y":130,"w":260,"h":70,"text":"Fails suddenly at n=7 with 'extra scribbling'","size":"sm","block":"spya-h3jx6h"},
+        {"kind":"node","id":"z3","shape":"box","x":260,"y":230,"w":260,"h":70,"text":"Among thousands of correct machines, first bugs appear at varied, sometimes very late, inputs","size":"sm","block":"spya-rhc6t0"},
+        {"kind":"node","id":"z4","shape":"box","x":260,"y":330,"w":260,"h":80,"text":"Larger (4-state) machines hide bugs even longer; all-1s binary inputs are riskiest","size":"sm","block":"spya-hqukdz"},
+
+        {"kind":"node","id":"z5","shape":"box","x":260,"y":450,"w":260,"h":80,"text":"Equivalence, prohibition, and parity specs all get insidiously violated eventually","size":"sm","block":"spya-gjut02"},
+
+        {"kind":"node","id":"z6","shape":"box","x":260,"y":570,"w":260,"h":70,"text":"Symbolic axioms + induction prove a machine always computes n+1","size":"sm","block":"spya-q8fg9q"},
+        {"kind":"node","id":"z7","shape":"box","x":260,"y":670,"w":260,"h":70,"text":"Proofs found as paths in a multiway graph of theorems","size":"sm","block":"spya-bn24t3"},
+        {"kind":"node","id":"z8","shape":"box","x":260,"y":770,"w":260,"h":80,"text":"For a truly buggy machine, no amount of searching ever finds a proof","size":"sm","block":"spya-ypka68"},
+
+        {"kind":"edge","from":"z1","to":"z2","arrow":"end"},
+        {"kind":"edge","from":"z2","to":"z3","arrow":"end"},
+        {"kind":"edge","from":"z3","to":"z4","arrow":"end"},
+        {"kind":"edge","from":"z4","to":"z5","arrow":"end"},
+        {"kind":"edge","from":"z5","to":"z6","arrow":"end"},
+        {"kind":"edge","from":"z6","to":"z7","arrow":"end"},
+        {"kind":"edge","from":"z7","to":"z8","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-practice",
+      "title": "What can be done in practice",
+      "caption": "A hub: the central tension (true understanding vs. the point of running a program) surrounded by the practical tactics the piece offers, and the twist that even AI systems remain exposed.",
+      "height": 760,
+      "items": [
+        {"kind":"node","id":"p0","shape":"ellipse","x":280,"y":40,"w":200,"h":80,"text":"Full understanding defeats the point of running a program","size":"md","block":"spya-uqhm5n"},
+
+        {"kind":"node","id":"p1","shape":"box","x":40,"y":220,"w":190,"h":80,"text":"Well-designed language primitives match human intent","size":"sm","block":"spya-p2f2cx"},
+        {"kind":"node","id":"p2","shape":"box","x":280,"y":360,"w":200,"h":80,"text":"Short programs in such a language tend to be bug-free","size":"sm","block":"spya-x8ag2t"},
+        {"kind":"node","id":"p3","shape":"box","x":520,"y":220,"w":190,"h":80,"text":"Visualizing full behavior builds confidence","size":"sm","block":"spya-qexzj4"},
+        {"kind":"node","id":"p4","shape":"box","x":520,"y":470,"w":190,"h":90,"text":"Trained neural nets are especially exposed: rarely understandable","size":"sm","block":"spya-sggbeh"},
+        {"kind":"node","id":"p5","shape":"box","x":40,"y":470,"w":190,"h":90,"text":"Allowing some bugs can make low-level code shorter","size":"sm","block":"spya-xdwm97"},
+
+        {"kind":"edge","from":"p0","to":"p1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p0","to":"p3","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p1","to":"p2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p3","to":"p2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p2","to":"p5","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"p3","to":"p4","via":"straight","arrow":"end"}
+      ]
+    }
+  ]
+}

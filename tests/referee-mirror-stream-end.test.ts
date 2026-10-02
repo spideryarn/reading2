@@ -142,5 +142,22 @@ describe("what the provider says about how it stopped", () => {
       if (e.type === "done") done = e;
     }
     expect(done?.remarks).toHaveLength(1);
+    const init = fetchMock.mock.calls[0]?.[1] as { body?: string } | undefined;
+    const body = JSON.parse(init?.body ?? "null") as Record<string, unknown>;
+    expect(body).toMatchObject({
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "referee_mirror",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["remarks"],
+          },
+        },
+      },
+      provider: { order: ["anthropic"], require_parameters: true },
+    });
   });
 });

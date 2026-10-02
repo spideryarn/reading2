@@ -1,0 +1,272 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 3153.85" width="760" height="3153.85">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="3153.85" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Crisis diagnosed, then addressed</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">The piece is a chain: concepts set up, a crisis is named, evidence piles up across fields, two clusters of causes</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">are diagnosed, then responses and reforms follow in turn — a funnel-then-chain shape ending in broader rethinking.</text>
+<g transform="translate(0 97.2)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Replication crisis: overview</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">Down the page follows the article's own order: define terms, name the crisis, show the evidence, diagnose two clusters</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">of causes, then trace the responses and reforms that followed.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="24" y="260" width="712" height="220" rx="8" fill="rgba(232,112,58,0.07)" stroke="rgba(232,112,58,0.24)" stroke-width="1"/>
+<path d="M390 110 L390 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,150 386.5,140 393.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M370 460 L390 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,520 383.5173307966548,511.6199642005538 390.1581138830084,509.4063698384359" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 620 L200 660" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="200,660 209.06446116619304,654.514970942048 210.50653453354192,661.3648194369553" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 620 L560 660" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,660 549.4641906486248,661.116566751912 551.0674659847037,654.3026465735769" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M200 740 L390 790" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,790 379.43852807989475,790.8398278876227 381.2199811748523,784.0703061267843" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M560 740 L390 790" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,790 398.6060728817423,783.820557504585 400.58123714968315,790.5361160155838" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 860 L390 900" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,900 386.5,890 393.5,890" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 970 L390 1010" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,1010 386.5,1000 393.5,1000" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Defining replication &amp; the statistics behind it — Reproducibility, effect size, power, p-values. — → spya-kv0w8d</title>
+<rect x="280" y="30" width="220" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="65.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Defining replication &amp; the</text>
+<text x="390" y="84.25" font-size="15" text-anchor="middle" fill="#f7f7f7">statistics behind it</text>
+</g>
+<g>
+<title>Early-2010s failures name 'the crisis' — → spya-yru28f</title>
+<rect x="280" y="150" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="180.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Early-2010s failures name</text>
+<text x="390" y="199.25" font-size="15" text-anchor="middle" fill="#f7f7f7">'the crisis'</text>
+</g>
+<g>
+<title>Psychology: 36-50% replicate — → spya-bha57y</title>
+<rect x="48" y="300" width="150" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="123" y="331.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Psychology: 36-50%</text>
+<text x="123" y="346.4" font-size="12" text-anchor="middle" fill="#f7f7f7">replicate</text>
+</g>
+<g>
+<title>Cancer biology: as low as 11% — → spya-esjmns</title>
+<rect x="220" y="300" width="150" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="295" y="331.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Cancer biology: as low</text>
+<text x="295" y="346.4" font-size="12" text-anchor="middle" fill="#f7f7f7">as 11%</text>
+</g>
+<g>
+<title>Economics, nutrition, water science shaky too — → spya-acfh3t</title>
+<rect x="392" y="300" width="150" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="467" y="323.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Economics, nutrition,</text>
+<text x="467" y="338.9" font-size="12" text-anchor="middle" fill="#f7f7f7">water science shaky</text>
+<text x="467" y="353.9" font-size="12" text-anchor="middle" fill="#f7f7f7">too</text>
+</g>
+<g>
+<title>LLM research: new reproducibility hazards — → spya-ypznph</title>
+<rect x="564" y="300" width="150" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="639" y="323.9" font-size="12" text-anchor="middle" fill="#f7f7f7">LLM research: new</text>
+<text x="639" y="338.9" font-size="12" text-anchor="middle" fill="#f7f7f7">reproducibility</text>
+<text x="639" y="353.9" font-size="12" text-anchor="middle" fill="#f7f7f7">hazards</text>
+</g>
+<g>
+<title>Surveys: most scientists fail to reproduce others' work — → spya-fuynra</title>
+<rect x="220" y="400" width="300" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="370" y="426.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Surveys: most scientists fail to reproduce</text>
+<text x="370" y="441.4" font-size="12" text-anchor="middle" fill="#f7f7f7">others' work</text>
+</g>
+<g>
+<title>Why so much fails to replicate? — → spya-sy87zk</title>
+<polygon points="390,520 500,570 390,620 280,570" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="565.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Why so much fails to</text>
+<text x="390" y="584.25" font-size="15" text-anchor="middle" fill="#f7f7f7">replicate?</text>
+</g>
+<g>
+<title>Publication system rewards flash over rigor — → spya-d040tg</title>
+<polygon points="140,660 260,660 300,700 260,740 140,740 100,700" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="200" y="696.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Publication system rewards</text>
+<text x="200" y="711.4" font-size="12" text-anchor="middle" fill="#f7f7f7">flash over rigor</text>
+</g>
+<g>
+<title>Weak power, p-hacking, shaky statistics — → spya-bfx638</title>
+<polygon points="500,660 620,660 660,700 620,740 500,740 460,700" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="560" y="696.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Weak power, p-hacking,</text>
+<text x="560" y="711.4" font-size="12" text-anchor="middle" fill="#f7f7f7">shaky statistics</text>
+</g>
+<g>
+<title>Public trust &amp; academic backlash — → spya-qht6nk</title>
+<rect x="280" y="790" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="820.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Public trust &amp; academic</text>
+<text x="390" y="839.25" font-size="15" text-anchor="middle" fill="#f7f7f7">backlash</text>
+</g>
+<g>
+<title>Reforms: preregistration, result-blind review, smaller p-values — → spya-h32yv9</title>
+<rect x="280" y="900" width="220" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="921.125" font-size="15" text-anchor="middle" fill="#f7f7f7">Reforms: preregistration,</text>
+<text x="390" y="939.875" font-size="15" text-anchor="middle" fill="#f7f7f7">result-blind review,</text>
+<text x="390" y="958.625" font-size="15" text-anchor="middle" fill="#f7f7f7">smaller p-values</text>
+</g>
+<g>
+<title>Broader change: triangulation, new theories, open science — → spya-hc3p7c</title>
+<rect x="280" y="1010" width="220" height="90" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="1041.125" font-size="15" text-anchor="middle" fill="#f7f7f7">Broader change:</text>
+<text x="390" y="1059.875" font-size="15" text-anchor="middle" fill="#f7f7f7">triangulation, new</text>
+<text x="390" y="1078.625" font-size="15" text-anchor="middle" fill="#f7f7f7">theories, open science</text>
+</g>
+<text x="34" y="275" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">EVIDENCE ACROSS FIELDS</text></g>
+</g>
+<g transform="translate(0 1371.1000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">How the crisis got its name</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain: several independent replication failures accumulated in the early 2010s, which together prompted declarations</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">of crisis, even though concerns had simmered for decades beforehand.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-ORIGINS</text>
+<g transform="translate(0 65.9)"><path d="M140 120 C140 183 390 197 390 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,260 386.5,250 393.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 120 C380 183 390 197 390 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,260 386.5,250 393.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M620 120 C620 183 390 197 390 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,260 386.5,250 393.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 220 L390 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="390,260 384.179144999128,251.14744968617384 390.9701425001453,249.44970031091952" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 340 L180 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="180,380 189.1684932866098,374.6906939386214 190.47827804183973,381.56706390357874" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M390 340 L530 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="530,380 519.423236575951,380.61812253776907 521.3462844712326,373.88745490428335" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M530 460 L380 500" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,500 388.7605301190513,494.0415512057923 390.56416867297366,500.80519578300107" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M180 460 L380 500" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,500 369.50778677010715,501.47087101353634 370.88059971607447,494.60680628369994" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Social priming studies fail to replicate — → spya-t3scy3</title>
+<rect x="40" y="40" width="200" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="140" y="76.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Social priming studies fail</text>
+<text x="140" y="91.4" font-size="12" text-anchor="middle" fill="#f7f7f7">to replicate</text>
+</g>
+<g>
+<title>Bem's ESP studies debunked — → spya-vux5b3</title>
+<rect x="280" y="40" width="200" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="83.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Bem's ESP studies debunked</text>
+</g>
+<g>
+<title>Amgen/Bayer: 11-20% of cancer findings replicate — → spya-yj72uc</title>
+<rect x="520" y="40" width="200" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="620" y="76.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Amgen/Bayer: 11-20% of cancer</text>
+<text x="620" y="91.4" font-size="12" text-anchor="middle" fill="#f7f7f7">findings replicate</text>
+</g>
+<g>
+<title>P-hacking studies expose common bad practice — → spya-t3us9w</title>
+<rect x="280" y="150" width="200" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="181.4" font-size="12" text-anchor="middle" fill="#f7f7f7">P-hacking studies expose</text>
+<text x="380" y="196.4" font-size="12" text-anchor="middle" fill="#f7f7f7">common bad practice</text>
+</g>
+<g>
+<title>'Crisis of confidence' declared — → spya-dg8j93</title>
+<ellipse cx="390" cy="300" rx="110" ry="40" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="390" y="295.5" font-size="15" text-anchor="middle" fill="#f7f7f7">'Crisis of confidence'</text>
+<text x="390" y="314.25" font-size="15" text-anchor="middle" fill="#f7f7f7">declared</text>
+</g>
+<g>
+<title>Concerns actually go back to the 1960s-90s — → spya-z3zj97</title>
+<path d="M40 380 L306 380 L320 394 L320 460 L40 460 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M306 380 L306 394 L320 394" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="180" y="423.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Concerns actually go back to the 1960s-90s</text>
+</g>
+<g>
+<title>Spellman: tech &amp; a bigger field turned old worries into full crisis — → spya-ytj90k</title>
+<rect x="380" y="380" width="300" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="530" y="416.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Spellman: tech &amp; a bigger field turned old</text>
+<text x="530" y="431.4" font-size="12" text-anchor="middle" fill="#f7f7f7">worries into full crisis</text>
+</g>
+<g>
+<title>Chronic low statistical power noted since 1962, ignored for 50 years — → spya-u3tg84</title>
+<rect x="200" y="500" width="360" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="536.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Chronic low statistical power noted since 1962, ignored</text>
+<text x="380" y="551.4" font-size="12" text-anchor="middle" fill="#f7f7f7">for 50 years</text>
+</g></g>
+</g>
+<g transform="translate(0 2225)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Statistical and practice causes</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A converge: several independent statistical weaknesses — low power, biased effect sizes, meta-analysis flaws, forking</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">paths, heterogeneity, context sensitivity, and misread p-values — all push toward the same outcome, findings that fail</text>
+<text x="16" y="60.900000000000006" font-size="11.5" fill="#b8b8b8">to replicate.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-STATISTICS</text>
+<g transform="translate(0 80.85)"><path d="M140 120 C140 210 400 450 400 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,540 396.5,530 403.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 120 C380 210 400 450 400 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,540 396.5,530 403.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M620 120 C620 210 400 450 400 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,540 396.5,530 403.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M140 240 C140 330 400 450 400 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,540 396.5,530 403.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 240 C380 330 400 450 400 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,540 396.5,530 403.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M620 240 C620 330 400 450 400 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,540 396.5,530 403.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M260 360 C260 441 400 459 400 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,540 396.5,530 403.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M500 360 L400 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,400 407.98489954161323,393.03642481836056 410.58463427609195,399.53576165455735" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 490 L400 540" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,540 396.5,530 403.5,530" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Questionable research practices inflate false positives — → spya-bfx638</title>
+<rect x="40" y="40" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="140" y="68.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Questionable research</text>
+<text x="140" y="83.9" font-size="12" text-anchor="middle" fill="#f7f7f7">practices inflate false</text>
+<text x="140" y="98.9" font-size="12" text-anchor="middle" fill="#f7f7f7">positives</text>
+</g>
+<g>
+<title>Low power (~20-35%) across fields — → spya-p7pun6</title>
+<rect x="280" y="40" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="76.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Low power (~20-35%) across</text>
+<text x="380" y="91.4" font-size="12" text-anchor="middle" fill="#f7f7f7">fields</text>
+</g>
+<g>
+<title>Underpowered studies inflate effect sizes — → spya-nqwfh4</title>
+<rect x="520" y="40" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="620" y="76.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Underpowered studies inflate</text>
+<text x="620" y="91.4" font-size="12" text-anchor="middle" fill="#f7f7f7">effect sizes</text>
+</g>
+<g>
+<title>Meta-analysis has its own flaws — → spya-z2xbqp</title>
+<rect x="40" y="160" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="140" y="196.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Meta-analysis has its own</text>
+<text x="140" y="211.4" font-size="12" text-anchor="middle" fill="#f7f7f7">flaws</text>
+</g>
+<g>
+<title>Forking paths &amp; optional stopping p-hack results — → spya-qsad7n</title>
+<rect x="280" y="160" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="196.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Forking paths &amp; optional</text>
+<text x="380" y="211.4" font-size="12" text-anchor="middle" fill="#f7f7f7">stopping p-hack results</text>
+</g>
+<g>
+<title>Statistical heterogeneity: effects genuinely vary — → spya-ngbkx2</title>
+<rect x="520" y="160" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="620" y="196.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Statistical heterogeneity:</text>
+<text x="620" y="211.4" font-size="12" text-anchor="middle" fill="#f7f7f7">effects genuinely vary</text>
+</g>
+<g>
+<title>Context sensitivity &amp; hidden moderators — → spya-z4db8z</title>
+<rect x="160" y="280" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="260" y="316.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Context sensitivity &amp; hidden</text>
+<text x="260" y="331.4" font-size="12" text-anchor="middle" fill="#f7f7f7">moderators</text>
+</g>
+<g>
+<title>Bayesian view: p&lt;0.05 implies low replication odds — → spya-pytr5c</title>
+<rect x="400" y="280" width="200" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="500" y="316.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Bayesian view: p&lt;0.05 implies</text>
+<text x="500" y="331.4" font-size="12" text-anchor="middle" fill="#f7f7f7">low replication odds</text>
+</g>
+<g>
+<title>Null hypothesis testing poorly suited to soft sciences — → spya-h9wzrk</title>
+<rect x="280" y="400" width="240" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="400" y="431.125" font-size="15" text-anchor="middle" fill="#f7f7f7">Null hypothesis testing</text>
+<text x="400" y="449.875" font-size="15" text-anchor="middle" fill="#f7f7f7">poorly suited to soft</text>
+<text x="400" y="468.625" font-size="15" text-anchor="middle" fill="#f7f7f7">sciences</text>
+</g>
+<g>
+<title>Many published effects do not actually replicate</title>
+<ellipse cx="400" cy="580" rx="120" ry="40" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="575.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Many published effects do</text>
+<text x="400" y="594.25" font-size="15" text-anchor="middle" fill="#f7f7f7">not actually replicate</text>
+</g></g>
+</g>
+</svg>

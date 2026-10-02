@@ -277,7 +277,10 @@ from chance (Fisher's exact, two-sided, p ≈ 0.3), and the old prompt does it t
 mend belongs in the shared parser or in how the hierarchy shows ids, which is every stage's
 contract, and it wants its own plan and postmortem. **It should not be lost**: it costs a reader
 a failed ingest at a few per cent of articles. Raised with Greg in the feedback note and the
-hand-off.
+hand-off. **Picked up and fixed** by
+[261001s](261001s-structure-answer-writes-code-to-correct-an-id.md): structured outputs for every
+JSON call, and Structure on `toc/11` (starts only). Postmortem
+[261002b](../postmortems/261002b-an-unconstrained-json-answer-fails-the-step.md).
 
 **One thing the measurement did not see.** A peer's work that landed the same evening
 (`ef04cfd5a`, plan name shared by the collision the plan-name tool allows) moved Simple to the

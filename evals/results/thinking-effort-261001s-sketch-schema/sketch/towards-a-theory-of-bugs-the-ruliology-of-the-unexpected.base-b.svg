@@ -1,0 +1,259 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 3114.5" width="760" height="3114.5">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="3114.5" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">spine with convergence</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">A chain running straight down the page: each part demonstrates, with a different kind of system, that the previous</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">part's exact failure also shows up here — culminating in computational irreducibility as the one explanation for</text>
+<text x="16" y="77.2" font-size="12" fill="#b8b8b8">all of it, before the final part asks what can still be done in practice.</text>
+<g transform="translate(0 112.80000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Overview</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain of mounting evidence (Turing machines, cellular automata, proofs, mathematics) converges on computational</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">irreducibility as the root cause of bugs, then diverges into practical responses.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="24" y="130" width="330" height="260" rx="8" fill="rgba(232,112,58,0.07)" stroke="rgba(232,112,58,0.24)" stroke-width="1"/>
+<rect x="390" y="130" width="330" height="200" rx="8" fill="rgba(47,191,149,0.07)" stroke="rgba(47,191,149,0.24)" stroke-width="1"/>
+<rect x="24" y="840" width="330" height="150" rx="8" fill="rgba(92,143,232,0.07)" stroke="rgba(92,143,232,0.24)" stroke-width="1"/>
+<path d="M188 380 C188 470 360 525 360 615" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="360,615 356.5,605 363.5,605" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M554 405 C554 495 360 525 360 615" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="360,615 356.5,605 363.5,605" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M330 580 L360 615" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="360,615 350.8346881571618,609.685203783443 356.14948437371885,605.1296641692512" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M360 810 L360 840 L188 840 L188 870" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="188,870 184.5,860 191.5,860" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M360 810 L360 845 L560 845 L560 880" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="560,880 556.5,870 563.5,870" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 L188 160" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="188,160 196.5008373043745,153.67657014551793 198.5887622563261,160.35792999176311" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 127 554 133 554 160" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="554,160 550.5,150 557.5,150" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M188 310 L188 325" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="188,325 184.5,315 191.5,315" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M554 225 L555 245" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="555,245 551.0049906444885,235.18725827052518 557.9962570166335,234.83769495191794" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M555 315 L554 340" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="554,340 550.9024770279625,329.868102278561 557.896883739015,330.14787854700313" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M330 510 L330 525" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="330,525 326.5,515 333.5,515" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M360 705 L360 740" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="360,740 356.5,730 363.5,730" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Why do simple programs misbehave? — → spya-d46wsq</title>
+<ellipse cx="380" cy="65" rx="120" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="60.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Why do simple programs</text>
+<text x="380" y="79.25" font-size="15" text-anchor="middle" fill="#f7f7f7">misbehave?</text>
+</g>
+<g>
+<title>n+1 machine fails at n=7 — extra scribbling on 111-endings — → spya-h3jx6h</title>
+<rect x="48" y="160" width="280" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="188" y="192.972" font-size="12" text-anchor="middle" fill="#f7f7f7">n+1 machine fails at n=7</text>
+<text x="188" y="209.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">extra scribbling on 111-endings</text>
+</g>
+<g>
+<title>Bugs can hide for arbitrarily many steps — first bug at n=15, n=63... — → spya-pt0hmz</title>
+<rect x="48" y="250" width="280" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="188" y="277.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Bugs can hide for arbitrarily many steps</text>
+<text x="188" y="294.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">first bug at n=15, n=63...</text>
+</g>
+<g>
+<title>Whatever you specify, some machine insidiously violates it — → spya-jdmx0m</title>
+<rect x="48" y="325" width="280" height="55" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="188" y="348.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Whatever you specify, some machine</text>
+<text x="188" y="363.9" font-size="12" text-anchor="middle" fill="#f7f7f7">insidiously violates it</text>
+</g>
+<g>
+<title>A doubling rule fails suddenly at n=14 — → spya-htqcgc</title>
+<rect x="414" y="160" width="280" height="65" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="554" y="196.4" font-size="12" text-anchor="middle" fill="#f7f7f7">A doubling rule fails suddenly at n=14</text>
+</g>
+<g>
+<title>Can we tell in advance? — → spya-gt6430</title>
+<polygon points="555,245 670,280 555,315 440,280" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="555" y="283.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Can we tell in advance?</text>
+</g>
+<g>
+<title>Sometimes yes: rule 122 analysis proves no bug possible — → spya-gagsuk</title>
+<polygon points="446.5,340 661.5,340 694,372.5 661.5,405 446.5,405 414,372.5" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="554" y="368.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Sometimes yes: rule 122 analysis proves</text>
+<text x="554" y="383.9" font-size="12" text-anchor="middle" fill="#f7f7f7">no bug possible</text>
+</g>
+<g>
+<title>Symbolic axioms + induction formally prove a machine bug-free — → spya-q8fg9q</title>
+<polygon points="215,440 445,440 480,475 445,510 215,510 180,475" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="330" y="471.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Symbolic axioms + induction formally prove</text>
+<text x="330" y="486.4" font-size="12" text-anchor="middle" fill="#f7f7f7">a machine bug-free</text>
+</g>
+<g>
+<title>A buggy machine yields no proof, however long you search — → spya-ypka68</title>
+<path d="M180 525 L466 525 L480 539 L480 580 L180 580 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M466 525 L466 539 L480 539" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="330" y="548.9" font-size="12" text-anchor="middle" fill="#f7f7f7">A buggy machine yields no proof, however long</text>
+<text x="330" y="563.9" font-size="12" text-anchor="middle" fill="#f7f7f7">you search</text>
+</g>
+<g>
+<title>Computational irreducibility: behavior can only be known by running it — → spya-wcnws7</title>
+<rect x="200" y="615" width="320" height="90" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="360" y="641.5" font-size="20" text-anchor="middle" fill="#f7f7f7">Computational irreducibility:</text>
+<text x="360" y="666.5" font-size="20" text-anchor="middle" fill="#f7f7f7">behavior can only be known by</text>
+<text x="360" y="691.5" font-size="20" text-anchor="middle" fill="#f7f7f7">running it</text>
+</g>
+<g>
+<title>So testing can't guarantee a bug won't surface later — → spya-yc9e2z</title>
+<rect x="200" y="740" width="320" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="360" y="771.4" font-size="12" text-anchor="middle" fill="#f7f7f7">So testing can't guarantee a bug won't surface</text>
+<text x="360" y="786.4" font-size="12" text-anchor="middle" fill="#f7f7f7">later</text>
+</g>
+<g>
+<title>Rule 30, long halts, broken symmetry — → spya-kjsjh5</title>
+<rect x="48" y="870" width="280" height="55" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="188" y="901.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Rule 30, long halts, broken symmetry</text>
+</g>
+<g>
+<title>Even mathematics finds late counterexamples — → spya-cc855a</title>
+<rect x="48" y="935" width="280" height="45" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="188" y="953.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Even mathematics finds late</text>
+<text x="188" y="968.9" font-size="12" text-anchor="middle" fill="#f7f7f7">counterexamples</text>
+</g>
+<g>
+<title>Good language design &amp; visualization push the frontier back, but never erase it — → spya-kdks69</title>
+<rect x="410" y="880" width="300" height="90" rx="4" fill="rgba(222,143,188,0.16)" stroke="rgba(222,143,188,0.62)" stroke-width="1.2"/>
+<text x="560" y="921.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Good language design &amp; visualization push the</text>
+<text x="560" y="936.4" font-size="12" text-anchor="middle" fill="#f7f7f7">frontier back, but never erase it</text>
+</g>
+<text x="34" y="145" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">TURING MACHINES</text>
+<text x="400" y="145" font-size="11" text-anchor="start" fill="rgba(47,191,149,0.95)" font-weight="500" letter-spacing="0.07em">CELLULAR AUTOMATA</text>
+<text x="34" y="855" font-size="11" text-anchor="start" fill="rgba(92,143,232,0.95)" font-weight="500" letter-spacing="0.07em">SURPRISES EVERYWHERE</text></g>
+</g>
+<g transform="translate(0 1386.7)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Bugs in Turing Machines</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain: a minimal failure, a census of when such failures first appear, an especially hidden case, and the same</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">pattern recurring at larger scale.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-TURING</text>
+<g transform="translate(0 65.9)"><path d="M380 90 L380 120" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,120 376.5,110 383.5,110" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 185 L380 215" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,215 376.5,205 383.5,205" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 275 L380 305" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,305 376.5,295 383.5,295" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 365 L380 395" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,395 376.5,385 383.5,385" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 465 L380 495" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,495 376.5,485 383.5,485" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 570 L380 600" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,600 376.5,590 383.5,590" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>3-state machine seems to compute n+1 — → spya-scjxv8</title>
+<ellipse cx="380" cy="60" rx="110" ry="30" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="55.5" font-size="15" text-anchor="middle" fill="#f7f7f7">3-state machine seems to</text>
+<text x="380" y="74.25" font-size="15" text-anchor="middle" fill="#f7f7f7">compute n+1</text>
+</g>
+<g>
+<title>Fails at n=7: outputs 9 instead of 8 — head 'scribbles' on 111-endings — → spya-h3jx6h</title>
+<rect x="250" y="120" width="260" height="65" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="150.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Fails at n=7: outputs 9 instead of 8</text>
+<text x="380" y="166.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">head 'scribbles' on 111-endings</text>
+</g>
+<g>
+<title>8934 machines correctly compute n+1 — some simple, some wildly nested — → spya-rhc6t0</title>
+<rect x="250" y="215" width="260" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="242.972" font-size="12" text-anchor="middle" fill="#f7f7f7">8934 machines correctly compute n+1</text>
+<text x="380" y="259.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">some simple, some wildly nested</text>
+</g>
+<g>
+<title>Census of where first bugs appear — → spya-y7nwnj</title>
+<rect x="250" y="305" width="260" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="338.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Census of where first bugs appear</text>
+</g>
+<g>
+<title>One machine works flawlessly for n=0..14, then fails at n=15 — → spya-pt0hmz</title>
+<rect x="250" y="395" width="260" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="426.4" font-size="12" text-anchor="middle" fill="#f7f7f7">One machine works flawlessly for</text>
+<text x="380" y="441.4" font-size="12" text-anchor="middle" fill="#f7f7f7">n=0..14, then fails at n=15</text>
+</g>
+<g>
+<title>4-state machine: correct for all n up to 62, fails at 63 — → spya-hqukdz</title>
+<rect x="250" y="495" width="260" height="75" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="528.9" font-size="12" text-anchor="middle" fill="#f7f7f7">4-state machine: correct for all n up</text>
+<text x="380" y="543.9" font-size="12" text-anchor="middle" fill="#f7f7f7">to 62, fails at 63</text>
+</g>
+<g>
+<title>Highest-risk inputs: binary numbers of all 1s (2^i - 1) — → spya-u3d2ws</title>
+<path d="M250 600 L496 600 L510 614 L510 665 L250 665 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M496 600 L496 614 L510 614" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="380" y="628.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Highest-risk inputs: binary numbers of</text>
+<text x="380" y="643.9" font-size="12" text-anchor="middle" fill="#f7f7f7">all 1s (2^i - 1)</text>
+</g></g>
+</g>
+<g transform="translate(0 2240.6)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Can Bugs Be Proved Away?</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A fork, not a settled question: one path of careful structural reasoning proves a system bug-free, while the</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">formal-proof path for Turing machines only succeeds exactly when there is in fact no bug to find.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-PROOF</text>
+<g transform="translate(0 65.9)"><path d="M380 85 L380 115" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,115 376.5,105 383.5,105" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 180 L380 210" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,210 376.5,200 383.5,200" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 275 L380 305" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,305 376.5,295 383.5,295" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 370 L380 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,400 376.5,390 383.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 455 L380 485" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,485 376.5,475 383.5,475" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 550 L380 580" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,580 376.5,570 383.5,570" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 645 L380 675" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,675 376.5,665 383.5,665" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Some patterns are visibly bug-free — → spya-rhda0x</title>
+<ellipse cx="380" cy="57.5" rx="110" ry="27.5" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="53" font-size="15" text-anchor="middle" fill="#f7f7f7">Some patterns are</text>
+<text x="380" y="71.75" font-size="15" text-anchor="middle" fill="#f7f7f7">visibly bug-free</text>
+</g>
+<g>
+<title>A complex-looking rule survives 100,000 tests — but fluctuations leave doubt — → spya-asw9eq</title>
+<rect x="250" y="115" width="260" height="65" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="137.972" font-size="12" text-anchor="middle" fill="#f7f7f7">A complex-looking rule survives 100,000</text>
+<text x="380" y="152.972" font-size="12" text-anchor="middle" fill="#f7f7f7">tests</text>
+<text x="380" y="169.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">but fluctuations leave doubt</text>
+</g>
+<g>
+<title>Studying the whole computation, not just outputs — rind always moves left or stays — → spya-r7ty6m</title>
+<rect x="250" y="210" width="260" height="65" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="232.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Studying the whole computation, not</text>
+<text x="380" y="247.972" font-size="12" text-anchor="middle" fill="#f7f7f7">just outputs</text>
+<text x="380" y="264.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">rind always moves left or stays</text>
+</g>
+<g>
+<title>Interior dynamics = known rule 122 — → spya-gagsuk</title>
+<polygon points="282.5,305 477.5,305 510,337.5 477.5,370 282.5,370 250,337.5" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="341.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Interior dynamics = known rule 122</text>
+</g>
+<g>
+<title>Rule 122 can never die out → pattern must stabilize, no bug — → spya-n5acnw</title>
+<rect x="250" y="400" width="260" height="55" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="423.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Rule 122 can never die out → pattern</text>
+<text x="380" y="438.9" font-size="12" text-anchor="middle" fill="#f7f7f7">must stabilize, no bug</text>
+</g>
+<g>
+<title>Separately: symbolic axioms + induction prove a Turing machine correct — → spya-q8fg9q</title>
+<rect x="250" y="485" width="260" height="65" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="513.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Separately: symbolic axioms + induction</text>
+<text x="380" y="528.9" font-size="12" text-anchor="middle" fill="#f7f7f7">prove a Turing machine correct</text>
+</g>
+<g>
+<title>Proof search = path through a multiway graph of theorems — → spya-bn24t3</title>
+<rect x="250" y="580" width="260" height="65" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="608.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Proof search = path through a multiway</text>
+<text x="380" y="623.9" font-size="12" text-anchor="middle" fill="#f7f7f7">graph of theorems</text>
+</g>
+<g>
+<title>For a buggy machine, no path exists — the claim is false — → spya-ypka68</title>
+<rect x="250" y="675" width="260" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="706.4" font-size="12" text-anchor="middle" fill="#f7f7f7">For a buggy machine, no path exists —</text>
+<text x="380" y="721.4" font-size="12" text-anchor="middle" fill="#f7f7f7">the claim is false</text>
+</g></g>
+</g>
+</svg>

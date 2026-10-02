@@ -1,6 +1,6 @@
 /**
- * **Strict JSON on the Anthropic Messages wire, with the request-time failures
- * caught before the request.**
+ * **Strict JSON on the Messages and chat-completions wires, with the
+ * request-time failures caught before the request.**
  *
  * Anthropic compiles `output_config.format` into a grammar. Its supported JSON
  * Schema subset is deliberately smaller than JSON Schema itself, so an ordinary
@@ -20,6 +20,7 @@
  * caller can validate at its construction seam without copying a possibly large
  * schema or changing the bytes used for cache identity.
  */
+import type { AiRequestBody } from "./ai-call.js";
 import type { MessagesBody } from "./messages-stream.js";
 
 export type AnthropicJsonSchema = Readonly<Record<string, unknown>>;
@@ -402,6 +403,22 @@ export function withMessagesJsonSchema(
     output_config: {
       ...body.output_config,
       format: { type: "json_schema", schema },
+    },
+  };
+}
+
+/** Add a validated, named strict JSON schema to a chat-completions body. */
+export function withChatJsonSchema(
+  body: AiRequestBody,
+  name: string,
+  schema: AnthropicJsonSchema,
+): AiRequestBody {
+  validateAnthropicJsonSchema(schema);
+  return {
+    ...body,
+    response_format: {
+      type: "json_schema",
+      json_schema: { name, strict: true, schema },
     },
   };
 }

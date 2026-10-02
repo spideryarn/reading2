@@ -1,0 +1,58 @@
+{"caption":"A funnel opens into three parallel case studies of relational societies, which converge on the conclusion that work supplies impersonal respect that relational life cannot.","title":"Three Cases Converging","scenes":[
+{"id":"overview","title":"After Work, We'll Have Each Other","caption":"The thesis (relationships replace work) funnels into three historical case studies of relational living, which converge on a single conclusion about what work really gives us.","height":900,"items":[
+{"kind":"node","id":"thesis","shape":"ellipse","x":230,"y":30,"w":300,"h":80,"text":"If AI ends work, relationships become status and meaning","size":"md","block":"spya-eq7rkm","detail":"The relational-sector thesis: when machines do everything else, who you know determines your worth."},
+
+{"kind":"region","x":24,"y":150,"w":220,"h":260,"label":"ARISTOCRATS","style":"band","tone":1,"opens":"inside-aristocrats"},
+{"kind":"node","id":"arist1","shape":"box","x":40,"y":190,"w":190,"h":70,"text":"Versailles court life: petty status obsession","size":"sm","tone":1,"block":"spya-y827zc"},
+{"kind":"node","id":"arist2","shape":"box","x":40,"y":280,"w":190,"h":70,"text":"Gossip and honor over ideas","size":"sm","tone":1,"block":"spya-bm2xyv"},
+{"kind":"node","id":"arist3","shape":"box","x":40,"y":370,"w":190,"h":70,"text":"Apes, not fixed regression","size":"sm","tone":1,"block":"spya-cz0cgg"},
+
+{"kind":"region","x":270,"y":150,"w":220,"h":260,"label":"UPPER-CLASS WOMEN","style":"band","tone":2,"opens":"inside-ladies"},
+{"kind":"node","id":"lady1","shape":"box","x":286,"y":190,"w":190,"h":70,"text":"Ostrander's wives: no job, no ambition","size":"sm","tone":2,"block":"spya-uum3xk"},
+{"kind":"node","id":"lady2","shape":"box","x":286,"y":280,"w":190,"h":70,"text":"Charity as 'illusion of usefulness'","size":"sm","tone":2,"block":"spya-mdncme"},
+{"kind":"node","id":"lady3","shape":"box","x":286,"y":370,"w":190,"h":70,"text":"Comfortable but narrow world","size":"sm","tone":2,"block":"spya-r7r7ap"},
+
+{"kind":"region","x":516,"y":150,"w":220,"h":260,"label":"WORKING CLASS","style":"band","tone":3},
+{"kind":"node","id":"work1","shape":"box","x":532,"y":190,"w":190,"h":70,"text":"West End peer groups over jobs","size":"sm","tone":3,"block":"spya-y02mr5"},
+{"kind":"node","id":"work2","shape":"box","x":532,"y":280,"w":190,"h":70,"text":"Conformity, exclusion of outsiders","size":"sm","tone":3,"block":"spya-j337dx"},
+{"kind":"node","id":"work3","shape":"box","x":532,"y":370,"w":190,"h":70,"text":"Amoral familism fades with opportunity","size":"sm","tone":3,"block":"spya-dma27v"},
+
+{"kind":"node","id":"conclusion","shape":"box","x":200,"y":500,"w":360,"h":90,"text":"Work gives impersonal respect; relational dignity is clannish","sub":"Smith/Hume: markets free friendship","size":"lg","block":"spya-s2680p"},
+
+{"kind":"node","id":"evidence","shape":"box","x":200,"y":630,"w":360,"h":90,"text":"Surveys, Strauss, Terkel: workers value competence and respect","size":"sm","block":"spya-t9qyhk"},
+
+{"kind":"edge","from":"thesis","to":"arist1","via":"curve","arrow":"end"},
+{"kind":"edge","from":"thesis","to":"lady1","via":"curve","arrow":"end"},
+{"kind":"edge","from":"thesis","to":"work1","via":"curve","arrow":"end"},
+
+{"kind":"edge","from":"arist3","to":"conclusion","via":"curve","arrow":"end"},
+{"kind":"edge","from":"lady3","to":"conclusion","via":"curve","arrow":"end"},
+{"kind":"edge","from":"work3","to":"conclusion","via":"curve","arrow":"end"},
+
+{"kind":"edge","from":"conclusion","to":"evidence","via":"straight","arrow":"end"}
+]},
+
+{"id":"inside-aristocrats","title":"Power and sex among apes","caption":"Aristocrats freed from work organized life around precedence, gossip, and honor — a civilizing restraint on primate instinct, not its inevitable form.","height":600,"items":[
+{"kind":"node","id":"a1","shape":"ellipse","x":260,"y":30,"w":240,"h":70,"text":"Versailles: wealthiest, most brilliant court","size":"md","block":"spya-gs52t3"},
+{"kind":"node","id":"a2","shape":"box","x":260,"y":140,"w":240,"h":80,"text":"Saint-Simon obsessed with heraldic precedence, not culture","size":"sm","block":"spya-x4w0zk"},
+{"kind":"node","id":"a3","shape":"box","x":260,"y":250,"w":240,"h":80,"text":"Salons: political gossip, not philosophy","size":"sm","block":"spya-k0yet6"},
+{"kind":"node","id":"a4","shape":"box","x":260,"y":360,"w":240,"h":80,"text":"Catherine the Great's court: same jockeying for favor","size":"sm","block":"spya-f90g2h"},
+{"kind":"node","id":"a5","shape":"hex","x":260,"y":470,"w":240,"h":90,"text":"Elias: etiquette as civilizing restraint, not inevitable primate regression","size":"sm","block":"spya-k26ath"},
+{"kind":"edge","from":"a1","to":"a2","via":"straight","arrow":"end"},
+{"kind":"edge","from":"a2","to":"a3","via":"straight","arrow":"end"},
+{"kind":"edge","from":"a3","to":"a4","via":"straight","arrow":"end"},
+{"kind":"edge","from":"a4","to":"a5","via":"straight","arrow":"end"}
+]},
+
+{"id":"inside-ladies","title":"Ladies who lunch","caption":"Ostrander's wives show a modern relational world: comfortable, status-bound, and valuing the appearance of usefulness over real results.","height":600,"items":[
+{"kind":"node","id":"l1","shape":"ellipse","x":260,"y":30,"w":260,"h":70,"text":"No job expected, none felt obligatory","size":"md","block":"spya-pjnh37"},
+{"kind":"node","id":"l2","shape":"box","x":260,"y":140,"w":260,"h":80,"text":"Life organized around keeping 'congenial' social network in order","size":"sm","block":"spya-a94czy"},
+{"kind":"node","id":"l3","shape":"box","x":260,"y":250,"w":260,"h":80,"text":"Volunteering = exclusive fundraising among the rich","size":"sm","block":"spya-xn6rzj"},
+{"kind":"node","id":"l4","shape":"box","x":260,"y":360,"w":260,"h":80,"text":"'It's that illusion of being useful that's satisfying'","size":"sm","block":"spya-mc24jb"},
+{"kind":"node","id":"l5","shape":"hex","x":260,"y":470,"w":260,"h":90,"text":"Dignity from defending inherited class position, not achievement","size":"sm","block":"spya-j3vvp7"},
+{"kind":"edge","from":"l1","to":"l2","via":"straight","arrow":"end"},
+{"kind":"edge","from":"l2","to":"l3","via":"straight","arrow":"end"},
+{"kind":"edge","from":"l3","to":"l4","via":"straight","arrow":"end"},
+{"kind":"edge","from":"l4","to":"l5","via":"straight","arrow":"end"}
+]}
+]}
