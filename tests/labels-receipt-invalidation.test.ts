@@ -172,7 +172,7 @@ function aDifferentTree(): Tree {
  * `mergeLabels(structure, …)` beside it. `structureHash` hashes id, parent,
  * range, title and gist (and `treatment`) and not `navLabel`, so the two are
  * equal — pinned as a property of `mergeLabels` in tests/labels-batching.test.ts
- * and end to end on the `hierarchy` writer in tests/hierarchy-write-guard.test.ts.
+ * and end to end on the `hierarchy` writer in tests/structure-step-write-guard.test.ts.
  * It read `"hash-of-the-tree"` until 2026-09-07, when `writeArtefacts` started
  * checking the claim.
  */
@@ -194,14 +194,14 @@ const DONE: CompletedLabelsFile = {
 };
 
 /**
- * What `generateHierarchy` writes now: the hashes it knows, and nothing a model
+ * What `generateStructure` writes now: the hashes it knows, and nothing a model
  * produced. `batches: null` is the discriminant.
  *
  * **Its `structureHash` is deliberately not the tree's**, and that is a fixture
  * rather than an oversight: the structure check `writeArtefacts` gained on
  * 2026-09-07 asks only of a `CompletedLabelsFile`. A pending manifest claims
  * nothing about currency — it *deletes* the receipt — so there is nothing for a
- * stale hash on one to falsify. Every `runHierarchyStep` below therefore writes
+ * stale hash on one to falsify. Every `runStructureStep` below therefore writes
  * a mismatched pending manifest and is accepted, which is what keeps that
  * exclusion deliberate.
  */
@@ -330,7 +330,7 @@ async function runBlocksStep(tx: Tx, claimed: JobDraftRef, blocks = BLOCKS): Pro
  * A second `hierarchy` run, exactly as the step performs it — the pending
  * manifest, the freshly cut tree and stage 4's copy of the blocks, in one write.
  */
-async function runHierarchyStep(
+async function runStructureStep(
   tx: Tx,
   claimed: JobDraftRef,
   blocks = BLOCKS,
@@ -363,7 +363,7 @@ async function runHierarchyStep(
  * blocks land here exactly as they would have.
  */
 async function reIngest(tx: Tx, claimed: JobDraftRef): Promise<void> {
-  await runHierarchyStep(tx, claimed, BLOCKS_V2);
+  await runStructureStep(tx, claimed, BLOCKS_V2);
 }
 
 async function runRow(tx: Tx, step: "labels" | "hierarchy") {
@@ -487,7 +487,7 @@ describe("a re-cut over the same blocks", () => {
       expect(await stepIsDone(STEPS.labels, ctx, reads)).toBe(true);
       /* Same blocks, so the hashes agree — the case the deletion cannot be
          credited with. */
-      await runHierarchyStep(tx, claimed);
+      await runStructureStep(tx, claimed);
       expect(await stepIsDone(STEPS.labels, ctx, reads)).toBe(false);
       expect(await statusOf(tx)).toBe("pending");
     });
@@ -498,7 +498,7 @@ describe("a completed manifest", () => {
   it("says ready, whichever step wrote it", async () => {
     await withClaim(async (tx, claimed) => {
       await runBlocksStep(tx, claimed);
-      await runHierarchyStep(tx, claimed);
+      await runStructureStep(tx, claimed);
       expect(await statusOf(tx)).toBe("pending");
       await runLabelsStep(tx, claimed);
       expect(await statusOf(tx)).toBe("ready");
@@ -571,7 +571,7 @@ describe("a completed manifest about a different tree", () => {
   it("leaves nothing behind — not the status, not the receipt", async () => {
     await withClaim(async (tx, claimed) => {
       await runBlocksStep(tx, claimed);
-      await runHierarchyStep(tx, claimed);
+      await runStructureStep(tx, claimed);
       expect(await statusOf(tx)).toBe("pending");
       const store = pgArtifactsIn(claimed, tx);
       await store.beginStep(SLUG, "labels");
@@ -602,7 +602,7 @@ describe("a completed manifest about a different tree", () => {
     expect(structureHash(treeSaying(true))).toBe(STRUCTURE_HASH);
     await withClaim(async (tx, claimed) => {
       await runBlocksStep(tx, claimed);
-      await runHierarchyStep(tx, claimed);
+      await runStructureStep(tx, claimed);
       await runLabelsStep(tx, claimed);
       expect(await statusOf(tx)).toBe("ready");
     });

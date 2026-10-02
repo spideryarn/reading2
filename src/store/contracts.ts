@@ -763,6 +763,13 @@ export interface LibrarySearch {
     limit: number,
     opts?: LibrarySearchOptions,
   ): Promise<{ hits: LibraryHit[]; capped: boolean }>;
+
+  /**
+   * How many of the reader's **archived** articles have a passage
+   * `searchLibrary` would match — counted, so uncapped. What the shelf says
+   * beside a search run with Include archived off (plan 261002b § Part D).
+   */
+  countArchivedMatches(query: string): Promise<number>;
 }
 
 /**

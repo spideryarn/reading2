@@ -82,6 +82,8 @@ export interface UseSketch {
    * else is swept in with it.
    */
   regenerate(): Promise<void>;
+  /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
+  refresh(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -217,6 +219,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     starting: queue.starting,
     ensure,
     regenerate,
+    refresh,
     cancel: queue.cancel,
   };
 }

@@ -33,7 +33,7 @@
  * and written up as a trap to document rather than a thing to fix
  * (docs/plans/260903j-illustrated-415-and-one-click-paint.md); the sentence was
  * never landed, and by 2026-09-05 the count had grown to five —
- * `evals/hierarchy-structure/run.ts` acquired one *after* that write-up, and
+ * `evals/structure-whole-document/run.ts` acquired one *after* that write-up, and
  * acquired it in `evals/` because the 2026-09-03 pass looked only at `src/`.
  *
  * So the fix is this test rather than a paragraph. Nobody has to know the rule:
@@ -130,7 +130,7 @@ describe("no authored file carries a raw NUL byte", () => {
       "src/web/styles.css",
       "tests/doc-links.test.ts",
       "scripts/deploy.ts",
-      "evals/hierarchy-structure/run.ts",
+      "evals/structure-whole-document/run.ts",
       "api/index.js",
       "package.json",
       "biome.jsonc",

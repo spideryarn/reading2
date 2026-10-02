@@ -34,7 +34,13 @@ import { type AutosavedText, useAutosavedText } from "./useAutosavedText.js";
 const HEADERS = { "Content-Type": "application/json" };
 const bodyFor = (text: string) => JSON.stringify({ profile: text === "" ? null : text });
 
-async function saveProfile(text: string): Promise<string> {
+/**
+ * Store "about you", and answer with what the server stored. Exported for the
+ * profile panel (ProfilePanel.tsx), which edits the same string in place —
+ * shared rather than copied, because a copy is a second place to forget
+ * `forgetSummaries`.
+ */
+export async function saveProfile(text: string): Promise<string> {
   const body = await readJson<{ profile: string | null }>(
     await apiFetch("/api/reader", { method: "PATCH", headers: HEADERS, body: bodyFor(text) }),
   );
@@ -54,7 +60,7 @@ async function saveProfile(text: string): Promise<string> {
    lost sentence. `leavingFetch` uses the token the SDK already holds and starts
    at once; a token that expired in the last few seconds is refused, which is
    strictly better than not sending. GPT Sol, 2026-08-26. */
-function leaveProfile(text: string): void {
+export function leaveProfile(text: string): void {
   leavingFetch("/api/reader", { method: "PATCH", headers: HEADERS, body: bodyFor(text) });
 }
 

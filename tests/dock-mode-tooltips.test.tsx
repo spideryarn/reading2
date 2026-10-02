@@ -434,8 +434,12 @@ describe("a mode a visitor cannot have", () => {
  * compared the two. `NOT_A_MODE` is one copy for both arms now, and these tests
  * read it back through the rendered card rather than by importing it, so what
  * is asserted is what a reader is shown.
+ *
+ * **Help joined on 2026-10-02** (docs/plans/261002b-help-page.md, R5): one
+ * link in both arms, whose href follows the mode — tests/dock-help-link.test.tsx
+ * holds that; this list holds its card to the same shape as its neighbours'.
  */
-const NOT_MODES = ["Comments", "Metadata"] as const;
+const NOT_MODES = ["Comments", "Metadata", "Help"] as const;
 
 /** The bar's button with this accessible name, in whichever arm is rendered. */
 function barControl(label: string): HTMLElement {

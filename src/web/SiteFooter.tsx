@@ -37,12 +37,12 @@
  * ## Where it goes, and where it does not
  *
  * Every page a reader *lands on and reads*: `LandingPage`, `FeaturesPage`,
- * `PricingPage`, `PrivacyPage`, `ContactPage`, `ChangelogPage`,
+ * `PricingPage`, `PrivacyPage`, `ContactPage`, `ChangelogPage`, `HelpPage`,
  * `PublicReadableSharingPage` and `SignInPage` signed out, and the signed-in
  * pages of the same shape — the shelf, `/profile`, and those same policy and
  * marketing pages when a signed-in reader opens them. `/pricing` arrived
  * 2026-09-03, `/contact` 2026-09-05, `/changelog` and
- * `/features/public-readable-sharing` 2026-09-06.
+ * `/features/public-readable-sharing` 2026-09-06, `/help` 2026-10-02.
  *
  * **Written without a count, deliberately, since 2026-09-08.** This paragraph
  * said "nine" while omitting `PublicReadableSharingPage` from its own list, and
@@ -125,6 +125,7 @@ import {
   CHANGELOG_LABEL,
   CONTACT_HREF,
   FEATURES_HREF,
+  HELP_HREF,
   LIBRARY_HREF,
   OPENSOURCE_HREF,
   PRICING_HREF,
@@ -160,6 +161,7 @@ type FooterPage = Extract<
   | "pricing"
   | "contact"
   | "changelog"
+  | "help"
   | "opensource"
   /* **The one member whose drop does not fire in today's page tree**, and it is
      here because this
@@ -241,6 +243,13 @@ const LINKS: readonly {
      `mailto:` is one press for a reader who is stuck; one press more, through a
      page that also tells them the Feedback button is better, is the trade Greg
      took. docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md. */
+  /* Added 2026-10-02 with `/help` — and this array is the whole edit again.
+     Greg asked for it here by name (SPIDERYARN-READING2-85: *"And include it
+     in footer"*). **First of the meta group, before Contact**, because that is
+     the order we would like a stuck reader to try them in: the answer may
+     already be written down, and the Contact page itself points at Feedback
+     rather than at an inbox. docs/plans/261002b-help-page.md. */
+  { href: HELP_HREF, label: "Help", here: "help" },
   { href: CONTACT_HREF, label: "Contact", here: "contact" },
   /* Added 2026-09-06 with `/changelog` — same claim, same array-is-the-edit.
      "What's new" rather than "Changelog": the latter is the internal name for

@@ -159,7 +159,7 @@
  * now, though **not** in the shape that sentence imagined, and the difference is
  * worth stating rather than glossing: there is no `tree.json`, and `Tree`
  * carries no `sourceHash` to this day. What carries it for the tree is the
- * **run** — `revision_step_runs.input_hash`, read by `hierarchyCurrency`, the
+ * **run** — `revision_step_runs.input_hash`, read by `structureCurrency`, the
  * very function `reasonsNotToPublish` uses — while `Arc` does carry a
  * `sourceHash` of its own. `articleMetadata` (src/store/pg.ts) puts a per-step
  * `isCurrent` over both, which is why `StageState.done` has meant *ran, and
@@ -263,7 +263,7 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
 import { WPM } from "../reading-time.js";
 import { isWebUrl } from "../urls.js";
-import { savePurpose } from "./purpose.js";
+import { leavePurpose, savePurpose } from "./purpose.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
@@ -278,7 +278,7 @@ import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { type ArchiveControl, useArchive } from "./useArchive.js";
-import { apiFetch, failure, leavingFetch, readJson, statusOf } from "./lib/api.js";
+import { apiFetch, failure, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { isAdmin } from "../admin.js";
@@ -585,12 +585,7 @@ export function Metadata({
       void refresh();
       return stored;
     },
-    leave: (text) =>
-      leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ purpose: text === "" ? null : text }),
-      }),
+    leave: (text) => leavePurpose(slug, text),
   });
   const seedPurpose = purpose.seed;
   /**
@@ -1185,7 +1180,7 @@ export function Metadata({
           error={provenanceError}
           slow={slow}
           aside={pipelineLine}
-          hierarchyGenerator={`${tree.generator} · ${tree.version}`}
+          structureGenerator={`${tree.generator} · ${tree.version}`}
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
 
@@ -1391,7 +1386,7 @@ function RerunSection({
   error,
   slow,
   aside,
-  hierarchyGenerator,
+  structureGenerator,
   arcGenerator,
 }: {
   slug: string;
@@ -1410,7 +1405,7 @@ function RerunSection({
   slow: boolean;
   /** `N of M stages · last wrote …`, kept on the heading so shutting it takes only the detail. */
   aside: string | null;
-  hierarchyGenerator: string;
+  structureGenerator: string;
   arcGenerator: string | undefined;
 }) {
   return (
@@ -1491,7 +1486,7 @@ function RerunSection({
         provenance={provenance}
         error={error}
         slow={slow}
-        hierarchyGenerator={hierarchyGenerator}
+        structureGenerator={structureGenerator}
         arcGenerator={arcGenerator}
       />
     </Section>
@@ -1512,13 +1507,13 @@ function StageRecord({
   provenance,
   error,
   slow,
-  hierarchyGenerator,
+  structureGenerator,
   arcGenerator,
 }: {
   provenance: ArticleMetadata | null;
   error: string | null;
   slow: boolean;
-  hierarchyGenerator: string;
+  structureGenerator: string;
   arcGenerator: string | undefined;
 }) {
   return (
@@ -1547,7 +1542,7 @@ function StageRecord({
                 stage={stage}
                 generator={
                   stage.step === "hierarchy"
-                    ? hierarchyGenerator
+                    ? structureGenerator
                     : stage.step === "arc"
                       ? arcGenerator
                       : undefined

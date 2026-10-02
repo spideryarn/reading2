@@ -266,7 +266,7 @@ const DIAGNOSTIC_ERROR_NAMES: ReadonlySet<string> = new Set([
      `getUserMedia` rejects with in src/web/useDictation.ts. */
   "DOMException",
   "IndexSizeError",
-  "HierarchyRequestError",
+  "StructureRequestError",
   "WrongDocumentError",
   "InvalidCharacterError",
   "NoModificationAllowedError",

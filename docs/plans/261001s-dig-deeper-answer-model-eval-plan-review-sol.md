@@ -105,7 +105,7 @@ The stage-2 tests cover a missing judge label, but not:
 
 A well-formed partial JSONL could otherwise become a confident report with the hardest failures absent.
 
-Evidence: [plan:198](/home/greg/code/spideryarn2/.claude/worktrees/dig-deeper-eval/docs/plans/261001s-dig-deeper-answer-model-eval.md:198), [plan:210](/home/greg/code/spideryarn2/.claude/worktrees/dig-deeper-eval/docs/plans/261001s-dig-deeper-answer-model-eval.md:210). The existing hierarchy eval already uses an expected-cell manifest and refuses quotation without `completedAt`: [hierarchy run:172](/home/greg/code/spideryarn2/.claude/worktrees/dig-deeper-eval/evals/hierarchy-structure/run.ts:172).
+Evidence: [plan:198](/home/greg/code/spideryarn2/.claude/worktrees/dig-deeper-eval/docs/plans/261001s-dig-deeper-answer-model-eval.md:198), [plan:210](/home/greg/code/spideryarn2/.claude/worktrees/dig-deeper-eval/docs/plans/261001s-dig-deeper-answer-model-eval.md:210). The existing hierarchy eval already uses an expected-cell manifest and refuses quotation without `completedAt`: [hierarchy run:172](/home/greg/code/spideryarn2/.claude/worktrees/dig-deeper-eval/evals/structure-whole-document/run.ts:172).
 
 Fix: write the complete expected matrix before spending and set `completedAt` only after exact equality. Key every resumable cell by hashes of the full outgoing request, frozen evidence, arm config, judge prompt/schema and source commit. Record requested model, returned model, generation ID and upstream; fail unexpected model resolution. Test shuffle encoding and decoding with sentinels, not balance alone. Mutation-test these guards so each has been seen to fail.
 

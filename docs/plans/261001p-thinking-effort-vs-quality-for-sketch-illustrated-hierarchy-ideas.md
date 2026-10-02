@@ -182,7 +182,7 @@ gets the article text with block ids.
 ### The rubric per mode
 
 Written from [sketch.md](../project/sketch.md), [illustrated.md](../project/illustrated.md),
-[ideas.md](../project/ideas.md) and [hierarchy.md](../project/hierarchy.md) as 3–5 gradeable
+[ideas.md](../project/ideas.md) and [hierarchy.md](../project/structure-step.md) as 3–5 gradeable
 criteria each, and quoted verbatim in the research write-up.
 
 ### The measure, and the decision rule — fixed before the results

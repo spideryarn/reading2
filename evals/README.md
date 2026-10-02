@@ -166,7 +166,7 @@ matches fail. `loadArticle` is the reader-facing store view, so a shelf title ov
 from the extracted metadata a pipeline draft reads; both stages still receive the same bytes, which
 is the comparison this arm makes.
 
-**This one calls a model**, unlike `hierarchy-labels.ts`, and that is the whole point of it. Everything
+**This one calls a model**, unlike `structure-labels.ts`, and that is the whole point of it. Everything
 deterministic about prompt caching is already pinned in
 [`tests/article-prompt.test.ts`](../tests/article-prompt.test.ts): that the cached prefix is
 byte-identical across two questions, two selections, two reading positions, a growing conversation.
@@ -206,7 +206,7 @@ text. Run before and after a prompt change —
 npm run eval:reorder -- data/constitution data/noema-mythology-of-conscious-ai
 ```
 
-Calls no model — it measures artefacts already on disk, like `hierarchy-labels.ts`. It exists because
+Calls no model — it measures artefacts already on disk, like `structure-labels.ts`. It exists because
 prompt caching required the arc, thread and glossary prompts to put the article *ahead* of each
 stage's instructions, and models weight recency. The direction of the move matches Anthropic's own
 long-context guidance, which is a reason to expect it to be fine rather than evidence that it is.
@@ -221,14 +221,14 @@ The incumbent numbers are committed at
 was regenerated. **They stop being obtainable once the artefacts are rebuilt**, which is why they are
 in the repo rather than left to be re-derived.
 
-## `hierarchy-labels.ts` — are batched nav labels as good as whole-pass ones?
+## `structure-labels.ts` — are batched nav labels as good as whole-pass ones?
 
 Written for [260826h-toc-scaling.md](../docs/plans/260826h-toc-scaling.md), which splits stage 4 into one
 whole-document structure call plus parallel label batches. The worry that split has to answer is
 coherence: labels written in separate calls, each blind to the others, might not read as a series.
 
 ```
-npm run eval:hierarchy -- data/constitution data/noema-mythology-of-conscious-ai
+npm run eval:structure-labels -- data/constitution data/noema-mythology-of-conscious-ai
 ```
 
 It reads `tree.json`, `blocks.json` and — when the labels were generated in batches —
@@ -320,18 +320,18 @@ distinctive terms survived. `--shuffle` prints those sets ready to hand to someo
 ## `hierarchy-structure/` — is the structure pass worth what it costs?
 
 Written for [260830a-opening-an-article-before-the-toc.md](../docs/investigations/260830a-opening-an-article-before-the-toc.md).
-`hierarchy-labels.ts` above judges stage 4's *second* pass; this judges the first — the single model call
-in [src/hierarchy.ts](../src/hierarchy.ts) that proposes the nested structure, which is 163–320 seconds and
+`structure-labels.ts` above judges stage 4's *second* pass; this judges the first — the single model call
+in [src/structure.ts](../src/structure.ts) that proposes the nested structure, which is 163–320 seconds and
 88% of the ingest wait now that the labels run concurrently and the arc is deferred. The decisions queued against it (progressive waves, seeding the
 author's headings, changing model or effort) need a number to decide against.
 
 ```
-npm run eval:hierarchy-structure -- --arm headings --arm incumbent-disk   # free: no model, no network
-npm run eval:hierarchy-structure -- --list                                # the declared arms
+npm run eval:structure-whole-document -- --arm headings --arm incumbent-disk   # free: no model, no network
+npm run eval:structure-whole-document -- --list                                # the declared arms
 ```
 
 The deterministic scoring (`score.ts`) is unit-tested in
-[`tests/hierarchy-structure-eval.test.ts`](../tests/hierarchy-structure-eval.test.ts) — the same split as
+[`tests/structure-whole-document-eval.test.ts`](../tests/structure-whole-document-eval.test.ts) — the same split as
 `extraction/`: the part that is cheap and repeatable is pinned as a test, the part that spends
 money is not one. The arms are declared as data in `arms.ts`; the ones that call a model **refuse
 to run** until their executor lands, loudly, so a results file cannot quietly mean "those arms were
@@ -386,7 +386,7 @@ trees, which is the difference between a tuned number and a discovered one. Both
 together — "fitted" alone overstates the fragility, "plateau" alone hides where it came from.
 
 (Operational note, 2026-08-30: nine test files once went red at load average 187 — several agents
-running suites concurrently — because importing src/hierarchy.js took 22 seconds and 5s-default timeouts
+running suites concurrently — because importing src/structure.js took 22 seconds and 5s-default timeouts
 fired en masse. If you see many unrelated suites time out at once, check `uptime` before
 concluding your change broke something.)
 
@@ -456,7 +456,7 @@ so a run that dies after six paid calls keeps six results, plus every produced t
 Every arm is labelled with the **kind of claim its result can support** — `isolated` (one variable
 differs from the incumbent) or `bakeoff` (several move together: it can pick a deployable recipe
 and can never explain the win) — and the label travels into the results file. `incumbent` (what
-ships: `anthropic/claude-sonnet-5`, one call, at whatever `src/hierarchy.ts` § `EFFORT` currently
+ships: `anthropic/claude-sonnet-5`, one call, at whatever `src/structure.ts` § `EFFORT` currently
 says — this line named a value and was wrong about it for five days), `incumbent-repeat` (the noise
 floor), `smart-medium` (isolated: effort, and it was `smart-low` until production moved to `low` on
 2026-09-04 — the arm points the other way now), `headings-listed` (isolated: the author's headings as an explicit
@@ -467,10 +467,10 @@ model, wire and thinking semantics move together), `waves` (bakeoff, and it must
 levels — the book-length motivation is depth the single call cannot reach, so an L1→L2 pilot would
 not test the process it argues for), `cheap-then-revise` (bakeoff).
 
-Every paid arm sends **production's own prompt** through `structureRequest` (src/hierarchy.ts) — the one
-assembly point, called by `generateHierarchy` itself, pinned byte-for-byte (and seen red under
-perturbation) by [`tests/hierarchy-structure-request-parity.test.ts`](../tests/hierarchy-structure-request-parity.test.ts)
-— and its transports are declared bypasses (`hierarchy-structure-messages` / `hierarchy-structure-chat` in
+Every paid arm sends **production's own prompt** through `wholeDocumentRequest` (src/structure.ts) — the one
+assembly point, called by `generateStructure` itself, pinned byte-for-byte (and seen red under
+perturbation) by [`tests/structure-whole-document-request-parity.test.ts`](../tests/structure-whole-document-request-parity.test.ts)
+— and its transports are declared bypasses (`structure-whole-document-messages` / `structure-whole-document-chat` in
 src/spend-declarations.ts) that refuse to run without an open ledger.
 
 **Cost accounting is loud by construction, twice.** In-process, every paid call must return token
@@ -496,7 +496,7 @@ eval's own fourth calibration call).
 > **Read the throw rate together with `repaired`, from 2026-08-30 on — and since 2026-08-31 the
 > throw rate says almost nothing about tiling at all.** `buildTree` drops an unbacked
 > `sourceHeading`, and it no longer *checks* whether an answer's children tile their parent: it
-> derives a tiling from them ([hierarchy.md](../docs/project/hierarchy.md#derived-partition)).
+> derives a tiling from them ([structure-step.md](../docs/project/structure-step.md#derived-partition)).
 > Those were the two families that produced every throw measured above, so an arm that makes either
 > mistake now scores `outcome: "ok"` with a perfectly valid tree, and the throw rate understates how
 > often an answer was wrong as written. Each result carries a `repaired` block saying what was
@@ -664,7 +664,7 @@ table (where they are a gate, not a competitor).
 point for yes/no would decide against it before the judge read a word. `tests/summaries-eval.test.ts`
 pins that.
 
-`v4` **was** the only arm that would need a change to `src/hierarchy.ts` if it won: Greg's literal
+`v4` **was** the only arm that would need a change to `src/structure.ts` if it won: Greg's literal
 reading order puts the hint after the question mark, and `questionFor` appended a second one, so the
 stored value became *"…consciousness? (4 arguments)?"*. The harness applied V4's rule to V4's lines
 only, the report named the arm, and the test asserted **production's own `questionFor` doing the
@@ -837,7 +837,7 @@ Four things in it are worth copying:
   back, the others stop before their next claim **and cancel the calls their running step has not
   yet made**. Stopping before the next claim was not enough on its own, because one claim runs the
   whole `hierarchy` step — structure call, expansion wave *and* a whole pass of labels, which
-  `generateHierarchy` starts even after the wave failed. So the fate carries an `AbortSignal` that
+  `generateStructure` starts even after the wave failed. So the fate carries an `AbortSignal` that
   `announcing` combines into the measured step's own `ctx.signal`; label batches are queued with that
   signal, and `tests/labels-batching.test.ts` already pins the property that matters — *"the callback
   must never run either, or the 'stop paying' half of fail-fast buys nothing"*. The remaining bound is

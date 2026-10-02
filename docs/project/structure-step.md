@@ -1,0 +1,1479 @@
+# Hierarchy
+
+Pipeline stage 4 — `hierarchy`, `npm run structure -- <slug> [--force]`. Builds the nested structure that Structure,
+Marginalia, the Spine and the rest render. (The step keeps its name; the Hierarchy *mode* — gist columns
+beside the prose — was removed on 2026-09-29, [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) Read
+[architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
+**one** `tree.json`, and it must not become two trees.
+
+**Since 2026-09-06 stage 4 is two pipeline steps, `hierarchy` and `labels`**, and only the first of
+them runs when somebody pastes a URL — the label pass was 79.5–92% of the wall clock, past what the
+job lease allows. [Why they are two steps](#two-steps) is the short version;
+[260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md) is the long one. Read that
+before assuming a freshly ingested tree carries any navigation labels: it carries none.
+
+The `hierarchy` step builds the *structure* — ranges, hierarchy, titles — and the `labels` step adds
+the `navLabel` on every gistable block afterwards, in batched parallel calls
+([Two passes](#two-passes)). It also writes the one-sentence
+`gist` on each internal node, which [architecture.md](architecture.md#pipeline) draws as stage 5:
+they were never split into two model calls, because a tree without gists has nothing to render at
+its coarse levels and fails validation, and both would write the same artefact. The live prompt in
+[`src/structure.ts`](../../src/structure.ts) is the authority; this line used to say stage 5 filled them, and
+had not been true for some time.
+
+**The step was called `toc` until 2026-08-31**, and this file was `table-of-contents.md`. The
+reading-view mode gave that name up on 2026-08-29 and the step deliberately kept it, which left one
+concept wearing two names across the UI, the code and the database; Greg reversed that half so all
+three say the same word —
+[260831ak-rename-the-toc-step-to-hierarchy-everywhere.md](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md).
+The rows moved in [`drizzle/0041_rename_toc_step_to_hierarchy.sql`](../../drizzle/0041_rename_toc_step_to_hierarchy.sql)
+and the filesystem store's copies in [`scripts/migrate-fs-toc-to-hierarchy.ts`](../../scripts/migrate-fs-toc-to-hierarchy.ts).
+"Table of contents" still appears below wherever it means the artefact or the ordinary English idea,
+rather than the step.
+
+## Intent
+
+Greg's description of what he wanted (2026-08-24), verbatim:
+
+> I guess the way I was imagining it was we'd have the sidecar JSON containing the table of
+> contents, and it would say for each table of contents row, it would say something like, okay,
+> **this is an H1, and the title is blah, blah, blah, and it should be positioned before Spidey on
+> ID XYZ.**
+
+And on how deep a row should go, which turns out to be the load-bearing question:
+
+> **a list of one-word bullets might only need an entry at the list level, but a list of detailed
+> discussion-entries might need a ToC for each item**
+
+Earlier, on the shape of the thing:
+
+> We generate a table of contents that's **quite deeply nested — all the way down to a paragraph
+> level.**
+
+## We store a tree and derive the flat rows
+
+Greg's row model got the important thing right: **a row is anchored to a block id**, never to a
+character offset, a CSS selector, or a scroll position. That is the whole
+[provenance principle](vision.md#principles), and everything below keeps it.
+
+Two things it doesn't carry, both of which we need:
+
+**A row has no extent.** "Positioned before `spya-k3m9qt`" says where a section *starts* and
+nothing about where it *ends*. Every consumer has to re-infer the end by scanning forward for the
+next row of equal-or-shallower depth. That inference is subtly wrong on ragged heading levels — an
+`h2` followed by an `h4`, or a level jumping up two steps at once — and it has to be reimplemented
+identically in the sidebar, the zoom view, and the summarizer. One of them will get it wrong.
+
+**The zoom view needs real extents.** To render level L2, it must know exactly which blocks each
+section owns so it can replace them with one gist. That's a range query, and a start-only row can't
+answer it.
+
+So `tree.json` stores `range: [firstBlockId, lastBlockId]` and explicit `children`. Greg's flat row
+list is then *derived* — see [`src/structure-flatten.ts`](../../src/structure-flatten.ts). This direction
+matters: **flattening a tree into document-order rows is lossless and trivial; reconstructing a tree
+from flat rows is neither.** Store the richer thing, render the simpler one.
+
+### `level: "h1"` became `depth` + `sourceHeading`
+
+The row model used one field for two jobs: how deep the row sits, and what HTML tag produced it.
+Those come apart immediately, because on a flat essay **most nodes have no tag behind them at all**.
+The test article is 8,275 words under 9 headings; every middle level of its tree is proposed by the
+model. So:
+
+- `depth` — a number, position in the tree, always present.
+- `sourceHeading` — the author's heading text, verbatim, present only when a real heading is behind
+  the node. [`validate-tree.ts`](../../src/validate-tree.ts) fails any node whose `sourceHeading`
+  doesn't match a real heading block inside its own range.
+
+## Schema
+
+Canonical definition: `Tree` and `TreeNode` in [`src/types.ts`](../../src/types.ts). What follows
+is an abridged copy for reading, and it lags: fields arrive there first (`question` and `treatment`,
+for instance, are not below), so read the type before relying on what a node can carry. The tree is
+stored as the `tree` column of the article's revision ([database.md](database.md)); it was
+`data/<slug>/tree.json` until the filesystem store went on 2026-09-05, which is why "`tree.json`"
+still names it in this doc and in code comments.
+
+```ts
+interface Tree {
+  version: string;
+  generator: string;
+  slug: string;
+  rootId: NodeId;
+  nodes: Record<NodeId, TreeNode>;   // flat map, NOT nested
+}
+
+interface TreeNode {
+  id: NodeId;                  // "n0042"
+  depth: number;               // 0 = whole article
+  parent: NodeId | null;
+  children: NodeId[];          // [] for leaves — ids, not nested objects
+  range: [BlockId, BlockId];   // inclusive; children exactly partition it
+  title: string;               // 2–6 words. Internal nodes.
+  gist?: string;               // ONE sentence, stage 5. Never on leaves.
+  navLabel?: string;           // leaves only — the paragraph row's text (Structure, Spine)
+  summary?: string;
+  sourceHeading?: string;
+}
+```
+
+### Why a flat map and not a nested tree
+
+The stored shape is a map keyed by `NodeId`, not nested objects. That looks less natural in JSON,
+and it is the right call, because of what the client actually asks it.
+
+The [anchor invariant](granularity-zoom.md#interaction) means that on every zoom change the client
+asks *"which node at depth D contains block X?"*, and on every scroll it asks it again. In a keyed
+map that is a lookup. In a nested structure it is a walk from the root. The React client
+([`src/web/tree.ts`](../../src/web/tree.ts)) was already built against the map, and the map is what
+[`src/types.ts`](../../src/types.ts) declares, so the map wins.
+
+The convenience of nesting is recovered where it's actually wanted — see
+[the generation prompt](#the-generation-prompt), where the *model* emits nested JSON and stage 4
+converts it to the map. Nesting is a good authoring format and a poor query format; the two do not
+have to be the same.
+
+### The partition invariant
+
+Inherited from [the tree](granularity-zoom.md#the-tree): **every node covers a contiguous range of
+blocks, and a node's children exactly partition its range** — no gaps, no overlaps, no reordering.
+And since 2026-09-05, **no child may cover its parent's whole range** unless it is a leaf; see
+[a rung that restates its parent](#restated-rung).
+Contiguity is in `blocks.json` **array order**, not in the id string; random ids carry no ordering
+(see [block-ids.md](block-ids.md#the-cost-we-accepted)). Never write `if (id > start && id < end)`.
+
+[`src/validate-tree.ts`](../../src/validate-tree.ts) enforces all of it. Run it on every generated
+tree — it is what stops a model quietly inventing a block id that doesn't exist.
+
+### The partition is derived, not checked <a id="derived-partition"></a>
+
+**Nothing about the tiling can refuse an answer any more.** Since 2026-08-31
+[`src/structure.ts`](../../src/structure.ts) does not check whether the model's children tile their parent; it
+**derives a tiling from them**. A child's *start* is believed, and every end is computed:
+
+- the first child starts where its parent starts, because nothing else can supply that block;
+- every later child starts where the model said it starts, clamped inside the parent and required
+  to be strictly after the previous child's start;
+- every child ends one block before the next one starts, and the last ends at its parent's end.
+
+That is the whole rule. A gap, an overlap, a last child that stops short and children that run past
+their parent were four faults to detect and mend; they are now **not expressible** — a list of
+ordered split points tiles its parent by construction. `assertChildrenPartition` still runs
+afterwards and should never fire on a planned node. It is the standing proof that the derivation is
+total, not a second chance to reject the answer.
+
+**Starts and not ends, and this decides where an orphan lands.** A start is a claim the model has a
+reason for: it is where the section begins, where its heading is, and what `sourceHeading` names. An
+end is the same boundary stated a second time from the other side — a redundant field, and redundant
+fields are where inconsistency lives. So when the two disagree, the start wins, and a gap's orphaned
+paragraph joins the section **before** it rather than the one after. The cursor walk this replaced
+did the opposite, and on the fixture in `tests/structure-step-repairs.test.ts` that filed "Body of the first
+part" under "Second".
+
+#### What this cost, and how we got here
+
+Three shapes in three days, each one bought by an article somebody lost:
+
+| | what it did | what it cost |
+|---|---|---|
+| until 2026-08-30 | refused any tiling fault | 4 structure calls in 13 |
+| 2026-08-30 | snapped boundaries; bounded by size, then by count | an article with two slips |
+| 2026-08-31 | derives the tiling; nothing about it refuses | a dropped section, rarely |
+
+A paid calibration on 2026-08-30 threw on **4 of 13** structure calls, bimodal by kind: two partition
+gaps and two `sourceHeading` claims outside their node's range. The structure call takes about 163
+seconds and most of the stage's bill, so every refusal cost a reader a whole article after the money
+was spent.
+
+The first fix snapped a boundary shut, bounded at one block. That bound was fitted to four
+observations that were **all off by one and all from HTML articles with headings** — the half of the
+corpus where the model has the author's own structure to agree with. PDF ingest reached production
+the same day, PDFs are headingless, and a 9-page arXiv paper lost its ToC to a gap of three. Greg,
+2026-08-30:
+
+> I think for now, we should allow gaps. It's not ideal, but it's not the end of the world, and
+> better than things failing fatally. Perhaps in future, it should trigger a re-run of the LLM, where
+> we feed in the previous output, with information about the gaps and ask it to adjust. But that's
+> for later.
+
+So the size bound went, leaving a count: **one distinct boundary per answer**. That was fitted to the
+same four observations, and the code comment said in as many words that a headingless PDF with two
+independent slips would still lose its whole ToC. On 2026-08-31 one did — a Princeton memory paper,
+one gap of a block at depth two and one overlap of two at depth one. Fixing that by raising the
+number would have been the third guess at a threshold nobody had evidence for, so instead the
+question it answered was removed. See
+[260831ai-hierarchy-tiling-normalisation.md](../plans/260831ai-hierarchy-tiling-normalisation.md).
+
+#### The one thing it loses, and what still throws
+
+**A child whose start is not strictly after the previous child's start is dropped**, with its whole
+subtree. There is no split point there — the model proposed two sections beginning in the same place,
+which is one section — and the alternatives are worse: refusing costs the reader the article, and
+squeezing the child into one borrowed block writes a boundary nobody proposed. This is the only way
+a tiling fault still costs anything, so it is **counted on its own** rather than as another kind of
+repair: a moved boundary keeps every section the model named, and this does not.
+
+Still refused, because it is a fault in what the model *said* rather than in how its sections line
+up: **an endpoint that is not a block id**. One unresolvable child leaves its whole sibling set
+underived, so the precise error survives instead of being buried by a tree built as though that child
+had never been proposed.
+
+**A child with no range at all stopped being a live-answer case in `toc/11`.** The earlier ranged
+answer could omit `range`; the builder derived one — pinned if first, the previous child's end + 1
+otherwise, dropped if neither — and counted it in `BuildReport.rangelessChildren`. One such answer
+cost a 1,041-block book its whole tree. The starts-only schema now requires every child's `start`,
+and `modelNodeFromStarts` derives every range before the builder runs, so that counter remains only
+for legacy and direct ranged-builder inputs and is no longer production telemetry.
+
+**And an answer that still cannot become a tree is asked for once more, inside the step** — any
+failure of `treeFrom` (parse, build, supplement, invariants) on a freshly bought answer, if the
+step's deadline leaves room for a second call as long as the first, and never after a truncation, a
+refusal or an abort. Two calls is the worst case; `wholeDocumentCalls` says which happened. Long answers
+have more places for one local fault, and the reader pressing Retry was the retry loop:
+[261001s](../plans/261001s-fb93-long-pdf-hierarchy-asks-again.md).
+
+#### A child's backwards range is a disagreement, not a lie <a id="backwards-child"></a>
+
+**That list had a second entry — a range that runs backwards — until 2026-09-04.** The refusal was
+explicit and tested, so it was a decision rather than an oversight; what was too broad was its
+premise. This whole function believes a start and computes every end, so **a child's own end is a
+redundant second statement of a boundary the derivation already discards**. A backwards pair whose
+ids both resolve is those two statements disagreeing, which is the thing the repairs exist to absorb.
+
+It is not evidence that the node's title and gist describe the wrong prose: the model wrote those
+from the whole article, not from its own range, and the repairs already keep a title and gist while
+moving that node's boundary by many blocks. ⟨GPT Sol, 2026-09-04⟩
+
+Measured, and it is why this changed: `smart-low` lost `gwern-scaling-long` to exactly this — one
+block backwards at `root > child 7 > child 1` — in the run that moved production to `low`
+([hierarchy-waves-real-corpus](../../evals/results/hierarchy-waves-real-corpus-2026-09-04.md)).
+
+**What it costs, which is the interesting half.** A backwards end is **ineligible for the fallback**.
+When two children claim the same start, `planChildRanges` falls back to the previous child's end as
+the only claim left; borrowing an end we have just called wrong would invent a split point from a bad
+number and attach *both* neighbours to the wrong prose. So a following child with no usable claim of
+its own is dropped, exactly as it always was when neither claim stood up. The raw end is still read
+for measurement, which changes nothing about what is built.
+
+**The root is the exception, and it has to be.** It has no parent to derive from, so a backwards root
+range is unmendable and still throws — and the [root clamp](#root-clamp) deliberately does not fire
+on a pair that does not run forwards, or it would turn an invented id into a silent acceptance.
+
+#### The root was the last node whose range was believed <a id="root-clamp"></a>
+
+**A root that misses the article's ends was on that list until 2026-09-04, and it should never have
+been.** Every other node's range is *computed* — `planChildRanges` believes a start and derives every
+end, so the first child begins where its parent begins and the last ends where its parent ends. The
+root has no parent, so its range came out of the answer and then met a hard equality assertion. It
+was the one node in the tree where the ordinary fault was fatal, and the section above reads as
+though the derivation covered everything.
+
+It is not a corner. `openai-huggingface` ends on an empty paragraph, a stranded footnote the prompt
+renders as `NOT-GISTABLE: (withheld)`, and a blog footer whose entire text is `No posts`; ending the
+article before those three is what a careful reader would do, and **three independent arms — Sonnet
+at `medium`, Sonnet at `low`, and glm-5.3-flash — each did, and each lost the article to the same
+sentence** ([hierarchy-cheap-models](../../evals/results/hierarchy-cheap-models-2026-09-03.md),
+recommendation 3).
+
+So the root is clamped to `[blocks[0].id, blocks.at(-1).id]` before anything descends, and the guard
+stays behind it as a post-condition rather than being deleted for having nothing left to catch.
+Three things about the shape are load-bearing:
+
+- **Widen, never shrink.** The other way to reconcile the two claims is to believe the model and drop
+  the blocks it left out. That is worse: every block gets exactly one leaf, so an uncovered block has
+  no row anywhere and no resolver in the reading view can find it.
+- **Only when both ends resolve and run forwards.** An invented id and a backwards range are faults
+  in what the model *said*, and clamping first would turn the first of those into a silent
+  acceptance.
+- **Counted at the boundary that moved.** At the closing end the coordinate is `blocks.length`, which
+  is the same boundary the last child's own stretch names, so `repairedBlockCount` folds the two into
+  one rather than charging the article twice for one slip.
+
+#### A section that starts one block below its own heading is snapped onto it <a id="heading-snap"></a>
+
+**The model was not ignoring the author. It was cutting one block late.** Measured on a 142-page
+Kuhn paper, 2026-09-04, replaying the saved structure answer: of 82 non-root nodes, **24 started on
+a heading block and 53 on the block immediately after one**, and 75 of the 82 named a
+`sourceHeading`. Every unbacked claim reproduced was at that offset — the heading fell into the
+previous section's tail, `planChildRanges` believed the start, and `buildTree` dropped the claim as
+out of range. `droppedHeadings: 59` was counting that, and it read as the author's structure being
+overruled. It was not.
+
+So the repair is code, in `snapStartsToHeadings`
+([`src/heading-snap.ts`](../../src/heading-snap.ts)): a kept child whose start is the block after a
+heading run **it names** moves back to the run's first heading. Three things about it are
+load-bearing.
+
+It sits in a file of its own because **both** derivations run it — `planChildRanges` in
+[`src/structure.ts`](../../src/structure.ts) and `normaliseExpansion` in
+[`src/structure-cascade.ts`](../../src/structure-cascade.ts) — and those two cannot import each
+other. It is the one piece of the tiling rule they literally share, because it was the one piece
+they disagreed about.
+
+- **The child's own `sourceHeading` has to match a heading in the run**, read with the same
+  `sameHeading` that decides whether a claim is backed. The unconditional rule — snap any start that
+  sits one block after a heading — takes headings the model deliberately left in the section before,
+  and the fixture for that is already in `tests/structure-step-repairs.test.ts`. Requiring the claim makes
+  this self-evidencing: it only ever honours a boundary the answer already stated, which is what
+  makes it a repair rather than a guess.
+- **The run is taken back to its first heading, but never past one the section above it names.** The
+  floor of "the previous section's own start" is not enough: a section can begin on a preamble and
+  quote an `h1` further down, and carrying that `h1` forward would strip its provenance and leave its
+  title and gist describing prose its heading had left.
+- **It is a `PartitionRepair` of its own `kind`**, not a quiet mend. This is the one fault where the
+  model's two claims about the boundary *agree* and are both wrong, so nothing else can see it.
+- **`recordBoundaryFaults` runs first, on the raw starts.** Measuring after the snap would compare
+  the answer against a value we chose ourselves — a section moved back onto its heading reports a
+  phantom `overlap` against its own correct start — and the snap would vanish from the telemetry that
+  exists to watch it.
+
+**Measured, before and after, on the real answer** (no paid calls — the saved answer replayed through
+`buildTree`; the plan has the table):
+
+| | Kuhn, 142pp | noema × 43 saved trees |
+|---|---|---|
+| backed `sourceHeading` | 24 → **74** of 75 claimed | unchanged |
+| `droppedHeadings` | 59 → **9** | 0 → 0 |
+| headings starting a node | 21 → **67** of 254 | unchanged |
+| `repairedBlocks` | 40 → 86 | 0 → 0 |
+| `checkTree` problems | 0 → 0 | 0 → 0 |
+
+`repairedBlocks` **rises**, and that is the repair being honest rather than a regression: 46 headings
+really did change hands. The no-op half is the half that matters — 43 saved trees over noema and
+`openai-huggingface` come out byte-identical, because the model already put those starts on the
+headings.
+
+**`repairedBlocks` also over-counts now, by a known and bounded amount.** A boundary the model got
+*both* misplaced and one block late is recorded twice — by `recordBoundaryFaults` at the coordinate
+the model named, and by the snap at the coordinate it ended up — and `repairedBlockCount` groups by
+coordinate, so it sums two records of one movement. Auditing Kuhn's repairs by the union of their
+intervals gives **64** rather than 86 (40 before). Fixing it means giving a repair a boundary
+identity and a `from`/`to` instead of an `at` and a `size`, here and in
+`src/structure-cascade.ts`; the error errs toward reporting more, and this number is a "go and look"
+signal rather than a gate — **but it must be fixed before anyone fits a threshold to it**, which is
+what the re-ask trigger above would be. ⟨GPT Sol's review of stage 8a, finding 1⟩
+
+**What this does not fix.** Kuhn's largest section is still 241 blocks and five are over `MAX_BATCH`.
+That is the genuine capacity conflict between the prompt's depth and fan-out numbers and an author
+who numbered three deep, and it is stage 8b of
+[260904b](../plans/260904b-a-long-pdf-finishes-without-a-retry-click.md).
+
+**The wave cascade runs the same snap**, since 2026-09-05.
+[`src/structure-cascade.ts`](../../src/structure-cascade.ts) fixes each answer's ranges before the
+next call is made, precisely so no subtree is generated against a range that later moves — and it
+tells its caller to hand the final `buildTree` a fresh report because "there is nothing left for it
+to mend". For a while the snap *was* something left for it to mend, and that mattered from wave 2
+on: a scoped call would be shown a slice `planChildRanges` had derived while its own answer was
+derived by a rule with no snap in it. Both now call
+[`src/heading-snap.ts`](../../src/heading-snap.ts), and a differential test hands a normalised answer
+to the real `buildTree` and requires it to change no range and record no repair. Nothing wires that
+module into the pipeline or the evals yet.
+
+**Where the two derivations still differ, on purpose**: a child whose start falls outside its
+parent. `planChildRanges` clamps it back inside and keeps the article — right for a whole-document
+call, which names a boundary in an article it has all of. `normaliseExpansion` refuses it as
+`ExpansionRefused("outside-parent")` and the batch is re-asked, because a scoped call is shown its
+parent's blocks and nothing else, so a start outside them is an answer about a stretch of the article
+that call never saw. **Every claimed start is checked, the first child's included**, and only then is
+the first kept child *pinned* to its parent's start — the rule that children cover their parent
+rather than a clamp of a claim. The pin used to sit above the check, which exempted the opening claim
+from it, and a first `start` naming a block in a *sibling* section therefore passed all four gates
+with that sibling's title, gist and verdict attached to this parent's prose (GPT Sol's review of
+stage 4, 2026-09-05).
+
+#### A rung that restates its parent is spliced away <a id="restated-rung"></a>
+
+**No child may cover its parent's whole range.** A node whose sole child holds the same blocks it
+does gives the reader two adjacent gist columns of identical extent, neither marked `continuation`,
+so both render in full and both are fisheye items — one rung finer buying a restatement of the same
+paragraphs, against [granularity-zoom.md](granularity-zoom.md)'s promise that level N is a
+compression of level N+1.
+
+Measured on 2026-09-05 across every saved tree under `evals/` and `data/`: **243 unary internal
+nodes, and all 243 have a child covering the parent's whole range** — not one covers only part of it.
+35 of them have an *internal* child and are the redundant rungs; the other 208 have a **leaf** child,
+which is the ordinary shape of a one-block section growing its single leaf and is not a fault. That
+is why the rule is a **range** statement rather than a count: the range form survives contact with
+the leaf-growing step, with a one-block section, and with a supplement holding exactly one note.
+
+[`collapseRestatedRungs`](../../src/structure.ts) **splices, it does not refuse** — the
+grandchildren come up, the redundant node goes, and it repeats until no child covers the whole of the
+node it hangs under (a chain of three over one paragraph is real: `waves.fowler-phrenology.r1`). The
+parent's `title` and `gist` survive and the child's are discarded, because in the nine corpus cases
+where the two names differ the parent is the coarser one every time — *"Writing at Work"* over *"The
+Pressure to Write"* — which is what that rung is for. It adopts the child's `sourceHeading` where it
+has none of its own: both held the same range, so a claim backed for one is backed for the other.
+
+**The asymmetry with `normaliseExpansion` is deliberate.** It goes on *refusing* a one-child answer
+(`ExpansionRefused`), because the disposition follows the recourse: a scoped cascade call can be
+retried and a better answer is worth asking for, and a whole-document answer cannot be retried
+mid-build. Refusing there is what cost four of thirteen articles the day `planChildRanges` learned to
+derive rather than reject.
+
+[`checkTree`](../../src/tree-invariants.ts) says the same thing about a *stored* tree, and it never
+did before 2026-09-05 — `git log -S` finds nobody adding, removing or arguing about such a rule, so
+the silence was a gap rather than a decision. Re-checked over the 103 saved trees it reports exactly
+the 35 and nothing else; rebuilt through the new `buildTree` they all collapse, none survives, and no
+tree's leaf layer changes.
+
+#### Measurement is what stands where the bounds stood
+
+Every boundary the model got wrong is recorded with its position, direction and size; dropped
+sections, unbacked heading claims and restated rungs are counted beside them. A collapsed rung is its
+own figure rather than another kind of repair, and that is arithmetic rather than tidiness: a repair
+is a *boundary that moved* and its `size` is how many blocks changed hands, while a collapse moves
+none — it would have to enter as a repair of size 0, inflating the count while contributing nothing
+to the two numbers that say what a repair cost. All of it reaches `StructureRun`, the CLI's
+`Repaired:` line **every run including at zero**, the queue's log, and `evals/hierarchy-structure` per
+result — the way `strandedSupplement` already is. A repair nobody is told about is the same shape as
+the bug it repaired ([silent-success.md](../reusable/silent-success.md)).
+
+`repairedBlocks` against `blocks` is the fraction of the article that changed hands, and it is the
+number to read first. **It is also the trigger the re-ask will use**: Greg's re-run is still the
+right long-term answer, and deriving the tiling is the step toward it rather than a detour, because
+the re-ask needs both a fallback for when the second call is also wrong and a number to decide when a
+second call is worth buying. The plan says what remains.
+
+## The tree the author's headings give us for free <a id="heading-tree"></a>
+
+[`src/heading-tree.ts`](../../src/heading-tree.ts) carves an article on its own `<h2>`/`<h3>`
+blocks. No model, no network, milliseconds — against ~163 seconds and a real bill for the model's.
+
+Measured on 2026-08-30 over seven development documents and five held out
+([the research](../investigations/260830a-opening-an-article-before-the-toc.md)):
+
+- **6 of 7** have enough headings to carve at all;
+- **4 of 7** reproduce the model's depth-one carving *exactly*;
+- and on a headingless article the model is not merely better but **unstable** — identical input
+  gave 8, 7, 8 and 3 parts across four runs.
+
+So the free tree is weakest exactly where the paid one is least trustworthy, and strongest where the
+paid one agrees with it anyway. That is the finding, and it is why this is a product module rather
+than a curiosity.
+
+**It has no gists**, because there is nowhere free to get one, and an internal node without a gist
+has nothing to render at its own zoom level. That is a rule
+([`src/tree-invariants.ts`](../../src/tree-invariants.ts)), and the exemption for this tree is
+`provisional: "headings"` **on the tree**:
+
+- **Tree-level, not per-node**, because a provisional tree is replaced whole and no node of it
+  becomes final on its own.
+- **Explicit, never inferred from the missing gists.** That is the same decision `treatment`
+  embodies: keyed on absence, a pipeline bug that drops a gist becomes indistinguishable from a
+  deliberate exception, and the dangerous outcome is acceptance.
+- It buys **the gist rule and nothing else**. Every other invariant applies in full, and a
+  *finished* tree missing a gist fails exactly as it always did.
+- It **crosses the public boundary** ([`src/public/dto.ts`](../../src/public/dto.ts)), because a
+  client that cannot tell a provisional tree from a finished one draws empty cells where it should
+  say the structure is still arriving.
+
+**One implementation, two jobs.** This file is also arm zero of the structure eval — the free
+denominator every paid arm is read against. If the eval measured one carving and the product shipped
+another, every number under `evals/results/` would describe something nobody reads.
+
+**What is not built yet.** Nothing in the pipeline produces one of these trees for a reader: the
+builder, the marker, the exemption and the public boundary are in place, and the publication
+boundary, the tree-replacement seam and the gate on paid work generated *against* a provisional tree
+are not. Those are steps 2–4 in
+[the research](../investigations/260830a-opening-an-article-before-the-toc.md).
+
+## Entry length grows with depth <a id="granularity"></a>
+
+The core editorial rule, and the one most likely to be got wrong:
+
+> **A row's only job is to distinguish itself from its siblings.**
+
+At depth 1 a node has perhaps five siblings, all about wildly different things, so three words is
+plenty. At leaf depth a node has twenty siblings that are all about the same subtopic, and three
+words ("the caching problem") is ambiguous across five of them. Length should track how much
+disambiguation the level actually demands.
+
+**This rule is unchanged. Only its mechanism changed.** It used to be one `title` field that grew
+with depth. It is now expressed by *which field a node carries*:
+
+| Node | Field | Target | Why |
+|---|---|---|---|
+| internal (chapters, sections) | `title` | **2–6 words** | Landmarks. Must be scannable at a glance. |
+| leaf (paragraph rows) | `navLabel` | **6–20 words** | A paragraph has no name of its own; it needs a claim. |
+
+Splitting the field is better than one field changing size, because the two do genuinely different
+jobs — a `title` also names the node in the spine and in the zoom view's collapsed levels, where it
+must stay short, while a `navLabel` exists only to be read once and clicked.
+
+A **heading leaf is exempt from the lower bound**: its label is the author's own title, and
+`Soul Machine` is exactly right at two words. `validate-tree.ts` skips the band check for leaves
+whose block is `kind: "heading"`.
+
+The cost is real and worth stating. 116 labelled leaf rows at ~12 words is about **1,400 words of
+ToC against 8,275 words of article — roughly a sixth of the piece**. That is why the sidebar keeps
+paragraph rows **collapsed by default**, showing the heading outline until the reader expands a
+section. An always-visible flat list of every paragraph is unusable, and it is also the thing
+[vision.md](vision.md#anti-goals) warns about: a summary satisfying enough to read *instead of* the
+article.
+
+## Every block gets a leaf; not every leaf gets a row
+
+This is the part most likely to be mis-implemented, so it is worth being exact.
+
+**Every block gets exactly one leaf node.** Not one-to-three, not merged with a neighbour — exactly
+one. `validate-tree.ts` fails a leaf that spans more than a single block, and fails any block not
+covered by some leaf. That is what keeps coverage machine-checkable: if rows could vanish or absorb
+each other, a silently dropped paragraph would be undetectable.
+
+**Selectivity lives in `navLabel`, not in the ranges.** A leaf that should not appear in the sidebar
+simply carries no `navLabel`. [`structure-flatten.ts`](../../src/structure-flatten.ts) emits a row only for
+nodes that have a label, so an unlabelled leaf is tiled by the tree, rendered verbatim in the
+reading view, addressable by its id — and invisible in Structure's paragraph rows. Nothing is lost; nothing is
+duplicated.
+
+**Never labelled:** any block `isStructural` says no to — `src/block-policy.ts`, which is
+`gistable` **and** body. Stage 3 decides both halves, not stage 4
+([architecture.md § What a block is](architecture.md#what-a-block-is)). In the test article the
+`gistable` half is 23 of 139 blocks:
+
+- **Media** — figures, bare images, horizontal rules.
+- **Pull-quotes.** All 11 in the test article are word-for-word repeats of body sentences; giving
+  them rows would print the same claim in Hierarchy twice.
+- **Figure captions** — `kind: "caption"`, matched on an explicit `^(Figure|Fig\.|Table|…)\s*\d*\s*[:.]`
+  marker and **never on length**, because `"Given all this, what should we do?"` is seven words of
+  real argument. The test article has five.
+- **Boilerplate labels** — a block whose entire text is `Credits`, `Sources`, `Notes`, `References`.
+
+**And the apparatus**, since footnotes: a block with `treatment: "supplement"` is prose, so
+`gistable` says yes to it and it was being bought a nav label like any other — 41 of gwern's 175 and
+121 of wikipedia's 335, a third of the labelling bill spent writing navigation for rows nobody
+navigates to. `isStructural` is what refuses them. The tree's **shape** is unchanged: every block
+still gets a leaf, notes included, and the supplement node that gives the apparatus one visible row
+of its own is a later stage. [260828o-footnotes.md](../plans/260828o-footnotes.md).
+
+`validate-tree.ts` turns this into a hard error: a leaf carrying a `navLabel` while anchoring a
+block `isStructural` refuses fails the tree.
+
+> [!NOTE]
+> Two of the five captions are substantial — `Figure 2` runs to 94 words and `Figure 4` to 36,
+> and both explain a diagram rather than merely name it. We accepted losing them from the paragraph rows
+> anyway, on the grounds that a caption belongs to its image and not to the argument: a reader who
+> wants it descends to the figure. This is a deliberate trade, not an oversight, and it is a
+> reasonable thing to revisit if the sidebar feels like it is hiding content.
+
+The inverse case is a warning rather than an error: a **gistable** leaf with no `navLabel` is
+flagged as "unreachable in the ToC". That is the escape hatch for a genuinely trivial transition,
+and it is deliberately noisy — skipping prose should be a decision someone made, not a default.
+
+### Absence on a node is *deliberately unlabelled*; "not written yet" is a column
+
+Everything above is about the first kind of absence, and every consumer reads it that way. The
+second kind arrives with
+[260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md), which takes the label pass
+out of the blocking `hierarchy` step — so for a minute or two after an ingest an article has a real
+tree and no labels at all, and a missing field would have meant both things at once.
+[`structure.ts`](../../src/structure.ts) had already named the problem: deferring the labels *"needs
+a state that says 'still arriving' rather than an absence that says nothing."*
+
+So it is a **revision-scoped column** — `article_revisions.nav_label_status`, `NavLabelStatus` in
+[`src/types.ts`](../../src/types.ts), one of `pending` / `ready` / `failed`. Not a field on the tree:
+a labels run that fails has to mark the revision **the reader is looking at**, and its own candidate
+tree is thrown away. Written beside the artefact by `writeArtefacts`, so it cannot disagree with the
+labels it is about; `carry` in `REVISION_CARRY_POLICY`, so it travels with `tree` and `labels`.
+
+While it is not `ready` the client withholds the **whole** paragraph-label layer rather than drawing
+what happens to exist — [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) is the one rule, and it
+says why: a column of blank cells reports our unfinished work as the article's own shape, and a
+partly-drawn outline rung is worse.
+
+Stage 1 wrote `ready` everywhere and changed nothing anybody could see. **Stage 2 landed the same day
+and `pending` is now the ordinary state of a newly added article** — `hierarchy` writes the empty
+manifest and the labels arrive later, from a free successor job
+([Why they are two steps](#two-steps)). So the withheld state is what a reader sees for the minutes
+between adding a piece and the labels landing, rather than a state nothing produces.
+
+## Headings: verbatim unless genuinely uninformative
+
+Greg's call: use the author's heading text, rewriting only when it tells the reader nothing. A row
+that says one thing and lands on a heading that says another is disorienting, so the bar for
+rewriting is high, and the test is **mechanical, not a judgment call**:
+
+> Rewrite a heading only if it (a) shares no content word with its own section body, **or** (b) is a
+> stock label — `Introduction`, `Background`, `Overview`, `Conclusion`, `Part Two`, `Chapter 3`.
+> Otherwise pass it through untouched.
+
+Worked example — the test article's four `h3`s:
+
+| Heading | Verdict |
+|---|---|
+| `1: Brains Are Not Computers` | **verbatim** — a claim, and its content words recur throughout the section |
+| `2: Other Games In Town` | **verbatim** — idiomatic, but "games in town" is Seth's own framing and the reader will recognise it on arrival |
+| `3: Life Matters` | **verbatim** — short, but "life" is the section's central term |
+| `4: Simulation Is Not Instantiation` | **verbatim** — the sharpest claim in the piece |
+
+All four pass. The numeric prefixes stay: they are the author's own enumeration and dropping them
+would break the correspondence with the page. This is the expected outcome — **rewriting should be
+rare**, and a run that rewrites more than a heading or two is a bug in the rule, not a bad article.
+
+### The apostrophe that failed eleven headings
+
+`sourceHeading` is checked against the real heading blocks, and the check is
+[`sameHeading`](../../src/validate-tree.ts) rather than `===`. That matters, and the reason is easy
+to get wrong twice:
+
+**`sourceHeading` is the author's heading quoted back by a model, and a model quoting text
+reproduces the heading, not the bytes.** Publishers emit `Claude’s Constitution` with a curly U+2019
+because their CMS does; ask a model to repeat it and a fair share of the time you get
+`Claude's Constitution`. Same heading, typewriter apostrophe.
+
+The first article to reach this check with apostrophes in its headings — the Anthropic constitution,
+36 of them — failed on **eleven**, and every one of the eleven was an apostrophe. None was a heading
+the model had actually got wrong, which is the only thing the check exists to catch. A validator
+whose errors are all false teaches whoever reads it to stop reading it, which is a slower and worse
+version of having no validator at all.
+
+So the comparison folds the characters that have both a typographic and a typewriter spelling —
+quotes, apostrophes, dashes, the ellipsis — and collapses whitespace. It deliberately does **not**
+fold case or drop words: a heading *rewritten* rather than quoted is exactly what should still fail.
+
+> [!WARNING]
+> **Rewrites are not currently auditable.** An earlier draft of this design carried a
+> `titleSource: "heading" | "rewritten" | "proposed"` field so drift could be found with one grep.
+> That field is **not** in [`src/types.ts`](../../src/types.ts) and nothing emits or checks it. Today
+> the only signal is `sourceHeading`: a node that has one but whose `title` differs from it has been
+> rewritten. That is inferable but not explicit, and it says nothing about *proposed* titles. Worth
+> adding the field if rewriting ever turns out to be more common than the rule predicts.
+
+## Building the tree over a flat article
+
+Authored headings are **hard boundaries** — they are ground truth about where the author thought the
+seams were, and readers recognise them. Where a run between headings is long and unstructured, the
+model proposes boundaries by topic shift. Target branching factor ~5–9 so each level is an even
+stride rather than one level doing all the work.
+
+Current stage-3 output for the test article: **139 blocks** — 9 heading, 108 text, 17 media, 5
+caption — of which **116 are gistable** and 23 are not.
+
+```
+  depth 0  article ......................................... 139 blocks
+  depth 1    [proposed] opening ........................... idx   1– 11   (11)
+             h2 The Temptations Of Conscious AI ........... idx  12– 33   (22)
+             h2 Consciousness & Computation ............... idx  34–111   (78)
+             h2 What (Not) To Do? ........................ idx 112–128   (17)
+             h2 Soul Machine ............................. idx 129–138   (10)
+```
+
+Five children at depth 1 — one proposed, four authored. Note the article *opens* with 11 blocks
+before its first heading, so the opening node has no heading to take a title from and must be
+proposed.
+
+`Consciousness & Computation` is a container: two blocks of its own preamble, then four `h3`s.
+
+```
+  depth 2      [preamble] .............................. idx  35– 36   (2)
+               h3 1: Brains Are Not Computers .......... idx  37– 62   (26)
+               h3 2: Other Games In Town ............... idx  63– 75   (13)
+               h3 3: Life Matters ...................... idx  76– 89   (14)
+               h3 4: Simulation Is Not Instantiation ... idx  90–111   (22)
+```
+
+Those `h3` runs are still 13–26 blocks each — far above the 5–9 target — so **a proposed level sits
+below them**, splitting each into 3–4 topic groups of ~6 blocks. Only then do leaf rows appear.
+
+The shape that falls out is roughly `1 → 5 → 20 → 139 leaves`: branching factors of about 5, 4 and
+7. That is the right answer for this piece, and it is only reachable because proposed levels are
+allowed to interleave with authored ones. A headings-only tree would give this article **two**
+levels and no zoom axis worth having.
+
+Of those 139 leaves, 116 carry a `navLabel` and 23 do not.
+
+## Two passes: the structure, then the labels <a id="two-passes"></a>
+
+Stage 4 used to ask for the whole tree in one model call, and that is what broke it. One `navLabel`
+per gistable block means a piece with three times the paragraphs asks for three times the JSON, so
+this was the only answer in the pipeline that **grew with the article without a bound** — measured at
+**73%** of the answer on a 360-block article, against 27% for the entire tree. One model response
+holds 128,000 tokens including the model's own reasoning, and nothing raises that, so past some
+length the stage simply could not work.
+
+So it is two passes — and, since 2026-09-06, **two pipeline steps**:
+
+1. **The structure**, in one whole-document call ([`src/structure.ts`](../../src/structure.ts)) — the internal
+   nodes, their titles, their gists, their ranges, `sourceHeading`. Roughly 7,000 tokens of answer on
+   a 360-block article, and it grows at about one node per seven blocks rather than one per block.
+   This is the `hierarchy` step.
+2. **The nav labels**, in parallel batches ([`src/labels.ts`](../../src/labels.ts)), cut along the
+   tree's own section boundaries once it exists. This is the `labels` step.
+
+### Why they are two steps <a id="two-steps"></a>
+
+The label pass was **79.5–92% of stage 4's wall clock**, and one measured call took 602 s of a 682 s
+pass against a claimant deadline of 740 s. So it left the blocking step:
+[260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md).
+
+What that means in practice:
+
+- **`labels` is not in `DEFAULT_INGEST_STEPS`.** Pasting a URL runs `hierarchy` and stops. The labels
+  are bought later, by a free successor job — so a freshly ingested article shows *"Paragraph labels
+  are still arriving"* until one runs.
+- **The publication is what queues that successor**, and it does it inside its own transaction:
+  `publishRevisionIn` ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) calls
+  `enqueueSuccessorIn` ([`src/store/pg-successor.ts`](../../src/store/pg-successor.ts)) whenever the revision it
+  has just published says `pending`, so the article and the job that finishes it become true
+  together. **In the primitive rather than in the pipeline's `settleIn`**, for the reason the lineage
+  guard beside it gives — a guard in one caller is a guard the next caller forgets, and the
+  standalone `publishRevision` wrapper in the same file is already a second caller. It **spends no
+  quota slot**, and by omission rather than by a guard: [billing.md § Which requests spend a
+  slot](billing.md#which-requests-spend-a-slot-and-why-the-wall-is-at-the-routes).
+  Two publications for one article collapse onto one queued successor — and the conflict that makes
+  that happen is *classified* rather than swallowed, so a successor already bound to an earlier base
+  is a warning in the log rather than a silence
+  ([ingest-queue.md](ingest-queue.md#one-job-in-the-app-was-asked-for-by-nobody)).
+  **Nothing on the server drives it** — the browser's `jobEngine` runs
+  every queued job the signed-in owner has, from any page, which is measured in the plan under
+  [Who actually runs the successor](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md#who-drives).
+- **A `labels` job that fails writes `failed` onto the revision it was based on**, not onto its own
+  discarded draft, and only while that revision is still what readers are being served —
+  `markNavLabelsFailedIn` in [`pg-revisions.ts`](../../src/store/pg-revisions.ts). Otherwise the
+  *"still arriving"* sentence would stay up for ever, since nothing reaps a queued job and nothing
+  else writes `failed`. **Two callers, and the second matters more than it looks**: the claimant's own
+  settlement, and `settleExpired` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts)) for the job whose lease
+  ran out with nobody inside it. The label pass is the slowest step in the app, so running out of
+  lease is its *ordinary* ending rather than an exotic one.
+- **`hierarchy` writes an empty manifest**, a `PendingLabelsFile` — the three hashes, `labels: {}`,
+  `batches: null`, and deliberately **no `version` and no `generator`**, because no prompt and no
+  model produced it. [`src/labels.ts`](../../src/labels.ts) has the type and the argument.
+- **The tree it hands back carries no navigation labels at all.** Not "the headings but not the
+  paragraphs" — none. `buildTree` in [`src/structure.ts`](../../src/structure.ts) sets `navLabel`
+  from the map it is given, `generateStructure` gives it an empty one, and `mergeLabels` deletes the
+  key wherever the manifest has none. The free heading labels
+  [below](#heading-tree) belong to `buildHeadingTree`, which this pipeline does not use.
+  `tests/structure-step-leaves-the-labels.test.ts` pins it, because the obvious guess is the other one.
+- **`checkCoverage` runs in the `labels` step**, after its merge and before anything can be written
+  `ready`. It asks whether every structural block carries a label, which a structure-only tree
+  guarantees to be false. `assertEveryBlockLabelled` and `assertInsideCoverageFloor` are inside
+  `generateLabels` and travelled with it.
+- **Writing a pending manifest deletes that revision's `labels` receipt**, in the same transaction as
+  the artefacts ([`writeArtefacts`](../../src/store/artifacts-pg.ts)). That deletion is this design's
+  whole structure-currency check, and it is keyed on the artefact rather than on the step's name — so
+  a `tree` written with no manifest beside it is **refused**. The reasoning, and the P0 it closes, is
+  in the plan under [Fable's arbitration](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md#fable-invalidation);
+  `tests/labels-receipt-invalidation.test.ts` is the reproduction.
+- **Forcing `hierarchy` sweeps `labels` in.** It is deliberately not in `FORCE_ONLY_WHEN_NAMED`,
+  which is the opposite call from `arc`'s in the same position: re-running `hierarchy` re-cuts the
+  tree, and that is exactly what makes a label wrong.
+
+The rule the split turns on:
+
+> **Generate siblings together; generate disjoint sibling groups in parallel.**
+
+A label's job is to tell its paragraph apart from *its neighbours*
+([entry length](#granularity)), so every pair a reader compares has to have been written in the same
+call. `planBatches` packs whole sibling sets until adding the next one would pass 60 blocks, and
+never splits one. Batching on a token window instead would break exactly that and nothing else,
+which is why it would be hard to notice.
+
+**There is a floor as well as a cap, and it is derived rather than chosen.** A batch under
+`MIN_BATCH` — 13 today — cannot both spend its drop budget and leave `detectShift` the
+`MIN_SHIFT_EVIDENCE` labels it needs to vote, so it is a batch nothing could stand behind. Rather
+than emit one and refuse it at run time, the packing keeps taking sets, and a short tail is merged
+backwards into the batch before it. That breaches the 60 by at most twelve — 71 on the widest real
+case here — which is the same give the cap already has for an oversized sibling set. Measured before
+it landed: 4 of 31 batches across the fourteen articles on Greg's machine were under the floor, on
+three of them; afterwards, 1 of 28, and that one is a ten-block article which has no neighbour to
+merge into. The residue is `acceptGap`'s to refuse.
+
+**A heading's label is taken from the block, not asked for.** The prompt says to copy the heading
+exactly; the model does not. On the two committed articles, 9 of 36 heading labels and 3 of 9
+differed — curly apostrophes flattened to straight, authored numbering ("2: Other Games In Town")
+quietly dropped. The apostrophe half is the *same failure* as
+[the one that broke `sourceHeading` validation](#the-apostrophe-that-failed-eleven-headings), which
+was patched by comparing more loosely. This one is patched by not asking: a heading's label is
+knowable without a model, so `parseLabels` overwrites it from `block.text` and a drifting prompt
+cannot bring it back. The model is still asked for one, so that a batch skipping its headings still
+fails the paragraph-number check.
+
+Two things this bought beyond the ceiling, **and both have since been reversed — read the constants,
+not this paragraph.** `effort` went back to `"high"` on the structure call, undoing a concession the
+postmortem had forced; a second production truncation (Wolfram, *Towards a Theory of Bugs*) forced it
+down again on 2026-08-30 in `fb82dc8`, and
+[`src/structure.ts`](../../src/structure.ts) § `EFFORT` is the current value with the reason beside it — including
+that `high` has still never been measured against `medium` here. And `COVERAGE_FLOOR` went from 0.95
+to 1, so that each batch was asked for an exact set of numbered paragraphs and refused any other;
+stage 1 of [260830am](../plans/260830am-faster-ingest-and-concurrency.md) took it back to 0.95 and
+renamed its job — the article-level backstop, not the per-batch bound — and
+[`src/labels.ts`](../../src/labels.ts) § `COVERAGE_FLOOR` carries that argument.
+
+*(Both lines said the opposite of the code from 2026-08-30 until 2026-08-31, which is the drift
+CLAUDE.md warns about: a doc that restates a constant is a second copy that nothing keeps in step.)*
+
+### And, behind a switch that is off, a third pass <a id="deepening"></a>
+
+There is a **deepening wave** between the two passes above, and it does not run:
+`SPIDERYARN_DEEPEN_STRUCTURE` gates it and defaults to off, so every reader today gets exactly the
+two passes described above. Whether it is ever turned on is
+[260904d](../plans/260904d-deepen-fat-sections.md)'s stage 8, and the decision is a real one — it
+costs several times more on a book.
+
+What it does, when it is on: the whole-document call is the same call it is today, and then every
+**section a mechanical bound calls unfinished** — an authored heading no boundary starts on, or more
+words than the ceiling — gets one scoped call of its own, carrying that section's blocks, its
+ancestor titles and the frozen top-level outline. Disjoint sections go in parallel. Each answer is a
+complete child set for its parent, one level deep, with a per-child verdict that stage 5
+**records and does not obey**; obeying it is the recursion, and it is conditional on those numbers.
+
+Four things about where it sits, because each of them is load-bearing:
+
+- **After the structure checkpoint's write**, so a wave that fails cannot cost the article the tree
+  it has just paid for.
+- **Before `generateLabels`**, necessarily — `labels.json` stamps `structureHash(tree)`, so a tree
+  deepened afterwards would be stale at birth with nothing to say so. It also means the labels are
+  cut along the deepened tree's boundaries, which is most of why a deepened book costs what it does.
+- **Seeded from the *built* tree, never from the answer that produced it.** `buildTree` derives
+  ranges rather than accepting them, so a scoped call handed the raw proposal could be shown one
+  stretch of prose and have its titles land on another — a tree that passes every invariant while
+  describing the wrong paragraphs. `proposalFromTree` converts the built tree back, and `buildTree`
+  runs a second time over the result, which is free and keeps every check on one road.
+- **A failed wave is not a failed article.** It is an enhancement; a throw leaves the wave-1 tree and
+  sets `deepenFailed` on the run, which is the only thing distinguishing that from an article with no
+  fat sections in it.
+
+And what it leaves behind, all decided on 2026-09-05 — the first three after a cross-family review of
+the wiring, the last two so that a paid run can answer the questions it is being paid to answer:
+
+- **A wave the deadline cuts in half publishes none of itself.** Which calls got out and which were
+  declined at the gate is settled by the dispatch jitter, so attaching whatever came back would hand
+  one reader a tree that an identical run disagrees with. The article keeps wave 1's tree and every
+  call that landed keeps its checkpoint row — `withheld` on the run says how many are waiting, and
+  `uncheckpointed` beside it says how many were paid for and whose row never landed, which is money
+  that buys the next attempt nothing. The checkpoint write stays best-effort, because instrumentation
+  must not fail the article; what changed is that the count stopped claiming rows that do not exist.
+  **Nothing schedules the retry**: the wave returns normally, the labels are written and the job is
+  committed done, so the deeper tree waits for the reader's next Retry or a re-ingest, exactly as a
+  long PDF's second lease window does ([content-extraction.md](content-extraction.md)). Automatic
+  requeueing was named and deliberately not built.
+- **An answer the model ran out of room for is refused on `stop_reason`**, not on whether it happens
+  to parse. A response cut immediately after a closing brace is valid JSON describing half a section:
+  it derives, it checkpoints, and it publishes as a finished tree with nothing to say a level went
+  missing. It fails the wave rather than being redrawn, because `max_tokens` is a property of the
+  request and an identical redraw truncates identically; the lever is `expectedChildren`.
+- **What the governor decided about each node can be written down.** `SPIDERYARN_DEEPEN_RECORDS`
+  names a directory, and each pass drops one JSON file into it: per node, the raw verdict, the
+  effective decision, which bound overruled it, the redraws, the fan-out and the node's **derived
+  block range**. Unset — every reader today — nothing is written. Repeats accumulate as separate
+  files rather than overwriting, because the questions this is for are rates across runs, and the
+  filename carries a process-local counter as well as the second and the pid: `--repeat` is two
+  passes over one slug in one process in one second, so the second used to land on the first.
+
+  **A file under its final name is always whole.** The bytes go to a temporary name and are published
+  with `link`, which is atomic and still fails on a name already taken. The reader is not
+  hypothetical: `evals/deepen/` runs three deepening jobs at once against one directory and lists it
+  as each stops, so it could otherwise open a sibling's file mid-write, fail to parse it, and mark the
+  wrong job fatal. ⟨GPT Sol reviewing the stage-5b harness, DPN-14, 2026-09-05.⟩
+
+  **The range is there because `where` is not an identity.** It is an ordinal path derived from the
+  answer's own fan-out, so two repeats that split one parent at different points both emit
+  `root > child 1` — and pairing on that reads a boundary that moved as a verdict that held, which is
+  wrong in the one direction that matters. Pairing is on the parent plus the range, and a changed
+  fan-out or an unmatched range is **structural instability**, a different finding from a verdict
+  flip. [`evals/deepen/report.ts`](../../evals/deepen/report.ts) does the counting and refuses to
+  compare a record with no range.
+
+  **A pass that threw writes a file too**, marked `failed` with the reason, carrying wave 1's
+  decisions, whatever the paid peers bought, the token accounting and what the gate did. For a run
+  whose purpose is to answer five questions, a failure nobody can read is nearly as bad as no run.
+- **A repeat over one article is free, and therefore says nothing about how stable a verdict is** —
+  so there is a second switch. The scoped calls are content-addressed, so an ordinary second run
+  reads its own rows back, makes no call, and produces identical verdicts *by construction*, which
+  looks exactly like a perfectly stable signal. `SPIDERYARN_DEEPEN_REASK` **names articles** — a
+  comma-separated list of slugs — and makes the wave **skip the checkpoint read** for those and buy
+  every scoped call again.
+
+  **It is a list rather than a boolean, and that is not cosmetic.** The variable is read on every
+  wave, so a worker started with a boolean set re-asked for *every* eligible article it later picked
+  up — and the repeats go through the queue, so the worker doing the measurement is the worker
+  serving everyone else. `1`, `true` and `yes` are read as slugs, match nothing, and produce a
+  warning saying so; there is deliberately no spelling that means "all articles".
+
+  It is not a delete, and it adds none: [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts)
+  has `read` and `write` and rules a `delete` out. The rows are still **written**, because
+  last-write-wins means the freshest answer replaces the stale one under the same key — so an
+  ordinary run after a re-asking one is still cheap.
+
+  **It touches the deepening wave only, and leaving wave 1 resumed is the point.** A resumed
+  structure call holds the seed constant, so every repeat expands the identical tree from the
+  identical frozen outline and a verdict that moves is the scoped call changing its mind rather than
+  a different tree being asked a different question. So: run the article once ordinarily, then repeat
+  with the switch set — `POST /api/jobs { slug, steps: ["hierarchy"], force: ["hierarchy"] }` is the
+  re-run. `npm run structure` is now the same thing — stage E moved it through the queue on
+  2026-09-05 ([`scripts/stage.ts`](../../scripts/stage.ts)), so it resumes like any other claim. Note
+  what that means: `--force` re-runs the *step*, not the *purchase*, and replays the structure call
+  out of its checkpoint, so on its own it changes nothing. The re-ask switch is what makes the wave
+  cost anything the second time.
+- **What a wave cost is on the run**, since 2026-09-05. Every scoped call's four token counts —
+  input, output, cache read, cache write, every draw of a redrawn call included — are summed onto
+  `DeepenStats.usage`, added into `StructureRun`'s four totals beside the structure call and the
+  label batches, and written into the records file. They were metered all along (every call goes
+  through `streamMessage`, so the money is in the AI-spend ledger under task `hierarchy`), and that
+  is the wrong shape for the cost question, which is answered by comparing one run's artefact with
+  another's. The figure is **not** conditioned on publication: a wave the deadline withheld spent the
+  money and says so. A wave that *threw* is the one gap — there is no result to add up, and
+  `deepenFailed` beside the totals says the ledger is where to look.
+
+The code is [`src/structure-cascade.ts`](../../src/structure-cascade.ts) (the arithmetic),
+[`src/structure-expand.ts`](../../src/structure-expand.ts) (the prompt and the strict read) and
+[`src/structure-deepen.ts`](../../src/structure-deepen.ts) (the checkpoint, the width, and
+`deepenTree`). Its width, its 429 handling and its deadline behaviour all have their reasoning beside
+the constants in that last file.
+
+### The path that turned out to exist anyway
+
+`COVERAGE_FLOOR` is **0.95 again** since 2026-08-30, because that last sentence was wrong. A
+production ingest of a 244-block Wolfram article died twice on *"this call asked for 58 labels and
+got 57, missing paragraph 4"* — one label, on a lead-in fragment whose entire text is the word
+"or". Stage 3 had stripped the code cell the fragment pointed at, which leaves "6–20 words that are
+a CLAIM or a MOVE" and "never introduce a fact that is not in that paragraph" **jointly
+unsatisfiable**: skipping is the compliant answer, and no retry can change it. Third recorded
+instance of the shape — [`src/labels.ts`](../../src/labels.ts) documents 41-of-42, twice, before it.
+
+So the stage now does three things instead of dying, in rising order of risk:
+
+- **Says which paragraphs.** The old message read "missing 4" and cost a day, because 58 − 57 = 1
+  and the last number looked like a count. It is a paragraph number, and it says so.
+- **Re-asks for the gap alone.** The same prompt with one more part appended, naming the ordinals
+  that came back absent — so the neighbours a label has to be told apart from are still in view, and
+  the cached prefix still matches. What it saves is the answer, not the question: fifty-seven labels
+  already paid for are kept. Re-drawing the whole batch has now failed to help three times on record,
+  byte-identically, because `batchFingerprint` excludes `max_tokens` so the retry sends the same
+  bytes.
+- **Accepts the batch with the gap, bounded — and only on all four counts.** `droppedBudget` — 2% of
+  a batch, floor of one — after the re-ask has also failed. Three further conditions, all added
+  2026-08-31 after GPT Sol's review of the stage found each of them missing: the re-ask must itself
+  have come back *short* (a truncation or a 429 says nothing about the paragraph, so it is a
+  transient to retry rather than a fragment to forgive); a displacement found on the merged set is
+  rethrown rather than re-decided on the smaller partial set, which can sit one label under the
+  evidence `detectShift` needs; and a batch too small for that check to run at all is refused rather
+  than published unchecked — which is the backstop behind `MIN_BATCH` above, for the articles
+  merging cannot reach and for a batch whose labels turn out to carry no lexical signal.
+  `COVERAGE_FLOOR` is the article-level backstop behind the per-batch
+  bound, not a second copy of it: the batching is invisible from `checkCoverage`, so small sections
+  each spending their floor of one would stay inside budget and still cost the article a fifth of its
+  rows. It now lives in [`src/labels.ts`](../../src/labels.ts) and is applied at the end of
+  `generateLabels`, so every caller gets it — it used to be enforced only by `generateStructure`,
+  while `npm run labels` (retired 2026-09-05) went round it,
+  which made the backstop depend on which command you typed.
+
+**The risk in the third one is silent success.** An unlabelled leaf renders as *nothing* — the
+outline skips the row, the spine draws an empty string, and nothing is red. So every drop is named
+and counted: `LabelRun.dropped`, the `dropped` list in `labels.json`, `labelsDropped` on the step's
+log line and on the progress card, and `evals/structure-labels.ts` reads the artefact rather than inferring
+a fault from a coverage number it can no longer interpret alone. That last one is the *"the eval had
+to be told"* lesson from the R2/R3 build, applied in advance rather than afterwards. The upstream fix
+is item **F** in [260830a-opening-an-article-before-the-toc.md](../investigations/260830a-opening-an-article-before-the-toc.md)
+— stage 3 promoting sentence fragments to blocks — and it is not this stage's to make.
+
+### Three artefacts, and what survives a failed run
+
+The `hierarchy` step produces the tree, the blocks and the labels manifest, and **hands all three
+back in one object** rather than writing them: `generateStructure` returns `StructureArtefacts`, and
+its caller stores them together in a single write ([`src/structure.ts`](../../src/structure.ts),
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 2). All three are
+required by the type, so a caller cannot store a tree and skip its labels.
+
+**Since 2026-09-06 the manifest it hands back is a `PendingLabelsFile`** — empty, `batches: null` —
+and the `labels` step writes the real one, together with the tree it merged them into. The store
+enforces the pairing from the other side as well: `writeArtefacts` **refuses** a `tree` written with
+no manifest beside it, so a future writer of the tree (the deepening wave is the one we know is
+coming) has to say what it did to the labels rather than remember a convention.
+
+It used to write the three files itself, in a fixed order with the tree last. That ordering was
+about three *separate* writes: `writeFile` truncates before it has anything to put there, and
+*existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is done", so a
+kill mid-write left a present, truncated tree that a retry skipped. One write for all three removes
+both halves of that. **The ordering survived in `npm run structure`'s own `main()` until 2026-09-05,
+and now survives nowhere**: that command goes through the queue, so there are no three files and no
+order to get right. Nothing in this repo writes stage 4's artefacts separately any more.
+
+`labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because a
+whole-or-nothing write gives us "whole or not there" and not "still true". A complete set of labels
+for an article that has since been re-extracted, or re-structured, looks exactly like a current one.
+The structure hash is the one that earns its place: boundaries can move without a single block
+changing, so it is taken over every node's range, parent, title and gist rather than over the outline
+the prompt shows the model, which is titles alone. **Nothing reads the structure hash even now**, and
+since 2026-09-06 that is a decision rather than a gap: what makes a stale tree invalidate its labels
+is the *receipt deletion* in `writeArtefacts` — a re-cut tree can only come from a tree write, and a
+tree write always carries a manifest — so no composite fingerprint is needed anywhere. It stays in
+the file as evidence.
+
+`sourceHash` is not in that category. `STAMP_SOURCE` points stage 4's stamp at `labels.json` rather
+than at the tree, which carries no such field, so that hash is what the store compares a declared
+stamp against and what `generateStructure` reports as the step's input hash. It has to be recorded: the
+publish guard compares it with the stored blocks and refuses to publish an article whose tree was
+built from something else.
+
+**The structure answer is checkpointed too, since 2026-09-04** — one row under the
+`hierarchy-structure` namespace, written only once the answer has parsed, built a tree and passed
+`assertTreeSound`, so that a malformed-but-complete answer can never be replayed for ever. This is
+the most expensive call in the pipeline (508 seconds and about two dollars on the 142-page paper),
+and until then a run that died in the label pass bought it again from nothing. The key is a digest of
+**the whole request object the call actually sends**, plus the model address and the routing
+`streamMessage` injects and `PROMPT_VERSION` — not a hand-copied list of the fields that seemed to
+matter, which is the blind spot `promptFingerprint` in [`src/pdf-read.ts`](../../src/pdf-read.ts) was
+written to remove. `StructureRun.wholeDocumentResumed` says whether a run made the call, because a
+checkpoint that silently never hits looks exactly like one that works.
+
+While the batches are running, each one's labels are **checkpointed as it lands** — one row in the
+`checkpoints` table, under the `hierarchy-labels` namespace, keyed on the batch's fingerprint
+([database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for)). That
+is working state, not an artefact, which is why it is not `labels.json`: a partial `labels.json`
+would be a finished-looking article with holes in its navigation. A later run reuses a batch only
+when a fingerprint matches over the exact bytes of its prompt **plus the sibling grouping those bytes
+never state** — never merely because the same block ids are in the same call, since the crumbs,
+gists, outline and boundaries around them may all have moved. The first unrecoverable failure aborts
+every other batch rather than letting a doomed run keep buying answers.
+
+It was `labels-progress.json` in the article's directory until 2026-09-01, and one file holding every
+batch is what made the `runId`, the serialised rewrite and `clearCheckpoint` necessary — the unit of
+deletion was larger than the unit of work. One row per batch removed all three, and nothing is
+deleted on success at all. The store is handed down by `StoreSession`; `generateStructure` and
+`generateLabels` both take a `CheckpointStore` and neither builds one.
+
+The whole design, the alternatives weighed against it, and what it does not yet do are in
+[docs/plans/260826h-toc-scaling.md](../plans/260826h-toc-scaling.md).
+
+## The budget <a id="the-budget"></a>
+
+`max_tokens` is still computed from `blocks.json` rather than typed in — the split moved the ceiling,
+it did not remove the need to know where it is. [`estimateStructureTokens`](../../src/structure.ts) does the
+structure call's estimate; [`src/labels.ts`](../../src/labels.ts) does a batch's. The arithmetic on
+top of both — and the reason most of the number is not the answer at all — is in
+[`src/token-budget.ts`](../../src/token-budget.ts):
+
+> **`max_tokens` is not an output cap. It is an output-plus-reasoning cap.**
+
+The thinking tokens come out of the same allowance as the answer, and how much thinking happens is
+not something we set — `budget_tokens` is gone, and `output_config.effort` is the only dial. So the
+budget is written as two terms that grow differently: the answer, which the stage can estimate
+exactly, and a flat reservation for reasoning, which it cannot.
+
+**And the reservation is not a fix by itself.** A 360-block article failed here on a typed-in
+`max_tokens: 32000`, of which roughly 26,000 had gone on thinking. Recomputing the budget as
+77,100 and running it again failed *too*, with about 64,000 of thinking that time: adaptive thinking
+at `effort: "high"` expands into whatever room it is given, so raising the ceiling raises the
+thinking with it and the two never converge. `max_tokens` is a ceiling; `effort` is the leash.
+[docs/postmortems/260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md) has the whole account.
+
+**The reservation is per call, not per stage.** `THINKING_HEADROOM`'s 40,000 was measured on a call
+that reads a whole article and thinks about its structure. A label batch reads one section and writes
+a dozen labels, and reserves 16,000. Inheriting the big number onto every small call would cost no
+money — an allowance the model does not spend is not billed — but it would hide a batch that had
+started thinking far more than it should, which is the failure that took two six-minute runs to find.
+
+**And the structure call reserves more, because it meets the longest inputs.** `STRUCTURE_HEADROOM`
+in [`src/structure.ts`](../../src/structure.ts) is a measured figure of its own: on 2026-09-04 a real
+call on a 142-page journal paper reported **47,289 thinking tokens** against 365,930 of input, at
+`effort: "medium"`, and came back whole. That is over the general reservation — so correcting only
+the answer estimate below, and leaving this at 40,000, would have turned a free refusal into an
+eight-minute paid truncation. Both halves moved together, and neither is a shrink to force a long
+article in: `effort` is untouched, for the reason the postmortem gives.
+
+Two failures, deliberately kept distinct, because they are not the same problem:
+
+- **Too long to attempt.** `budgetFor` throws *before* the call when the estimated answer plus the
+  reasoning reservation exceeds what one response can hold. Nothing is spent, and the message says
+  so. Clamping to the ceiling instead would be friendlier-looking and wrong: the call would run for
+  minutes, cost money, and come back truncated anyway.
+
+  **What that boundary is, and what it is not.** It used to be pinned in the tests at exactly 1,976
+  blocks, on the argument that the boundary *is* the feature. The number itself turned out to be
+  wrong by a factor: `estimateStructureTokens` charged one node per four blocks, which is a rate
+  fitted to three trees of 19, 141 and 360 blocks, and re-measured over 32 trees from 10 to 2,025
+  blocks it over-predicts monotonically with length — 1.35× → 2.2× → 3.8× → 4.0× → **8.21×**. The
+  8.21× is the paper it refused, which a real call then answered in 10,996 tokens of a 128,000
+  budget. So the estimate is now built from what the prompt asks for rather than from a rate per
+  paragraph — the tree it describes for any article at all (three levels, nine children a node, so 81
+  sections) as a **floor**, plus the sections the article's own headings and long runs force on top.
+  Measured margin over the whole corpus: 2.46× at the tightest. The boundary that leaves is around
+  **2,890 blocks** of headingless prose, roughly 180,000 words — but it is a consequence rather than
+  a pin, and it moves with an article's heading count. What `tests/token-budget.test.ts` holds is the
+  thing that matters: the paper a real call proved fits is not refused, and the estimate clears what
+  that call actually cost. It is deliberately not an asymptotic claim; `buildTree` enforces neither
+  the depth nor the fan-out the prompt asks for, so no bound here would be a bound the runtime keeps.
+  [260904b](../plans/260904b-a-long-pdf-finishes-without-a-retry-click.md).
+- **The estimate was wrong.** `stop_reason: "max_tokens"` still throws, and the message now carries
+  the budget and the estimate so the constants can be re-tuned from the failure. It does **not**
+  suggest retrying, because the Retry button makes the identical call.
+
+What must never happen is the third option: keeping whatever JSON arrived and building a tree from
+it. A table of contents that silently describes two thirds of an article is exactly the failure
+[silent-success.md](../reusable/silent-success.md) is about, and it is worse than the bug.
+
+**A third failure used to hide behind the second, and it looked identical.** On 2026-09-03 this step
+died on `dhammatalks.org/suttas/MN/MN10.html` saying *"it breaks at position 5409 of 13547
+characters"* — which reads like a truncated answer and was not one, since `ranOut` had already ruled
+truncation out. The likeliest reading is a whole tree with another 8,138 characters written after it,
+though nothing kept the response, so that stays a candidate rather than a fact. The stage assumed a
+model's answer *is* its
+JSON, and it is not — it now reads the answer with `parseJsonAnswer`
+([`src/parse-json.ts`](../../src/parse-json.ts)), which finds the document inside a preamble, a
+sign-off or a stray close fence, and `diagnose` names trailing material outright instead of quoting
+an offset that could mean either thing.
+[260903k](../plans/260903k-model-json-answer-extraction-in-the-shared-parse-seam.md).
+
+## The generation prompt
+
+The structure call sees the whole document in one pass, which is what lets it keep sibling titles
+consistent with each other and makes the [partition invariant](#the-partition-invariant) something
+the model can satisfy rather than something we have to stitch together. That holds up to about
+123,500 words.
+
+**Since `toc/11` (2026-10-02) the answer carries starts, not ranges, and a schema holds it.** Each
+child names only the block it starts at, as the scoped expansion call already did. The root names
+nothing, and every range is derived by the shared kernel in
+[`src/start-ranges.ts`](../../src/start-ranges.ts), through
+[`src/structure-starts.ts`](../../src/structure-starts.ts), before `buildTree`. The request carries
+a three-level JSON schema (`STRUCTURE_OUTPUT_SCHEMA`), so a completed, non-refusal answer cannot
+break its JSON shape. Refusals and token-limit stops are checked before parsing. Asking for ends
+was where the model kept rewriting an id as code mid-answer.
+[261001s](../plans/261001s-structure-answer-writes-code-to-correct-an-id.md),
+[261002b](../postmortems/261002b-an-unconstrained-json-answer-fails-the-step.md).
+
+Each label batch sees: the whole article's outline, its own sections' crumbs and gists, its
+paragraphs numbered, and one block of context either side marked `CONTEXT` so it can feel the flow
+without labelling it. Blocks whose tag is a heading are marked `HEADING` — the first live run came
+back with `"Title: The Mythology Of Conscious AI"`, because `<h1>` alone was not enough signal that
+the rule is *copy this exactly*.
+
+The vocabulary rule earns its example. *"Reuse the author's distinctive vocabulary verbatim"* on its
+own let the batch prompt turn the author's `technorati` into `technologists` — a synonym is not
+merely as good, it is worse, because the reader is scanning for the word they read. Naming that
+substitution in the prompt is what fixed it.
+
+### Longer pieces <a id="long-articles"></a>
+
+**A 142-page journal paper fits in one pass, and that is measured rather than hoped.** On 2026-09-04
+a real structure call on Kuhn's *A Landscape of Consciousness* — 2,025 blocks, 254 authored headings,
+365,930 input tokens — came back `end_turn` with a valid tree tiling every block, in **10,996 answer
+tokens** of a 128,000 budget. The old estimate had refused it at 90,275. So the thing that used to
+refuse a book was the arithmetic, not the model, and the fix was to re-rate it: see
+[the budget](#the-budget).
+
+Past that, the **structure** call is what no longer fits, and generating it section by section is
+**still not built**. The budget refuses those out loud rather than half-doing them. The shape it
+should take, from GPT-5.6-sol's review and written up in
+[260826h-toc-scaling.md § D](../plans/260826h-toc-scaling.md): build the authored-heading skeleton mechanically;
+make bounded, navigational section cards in parallel; run one global pass over the ordered cards to
+assign top-level boundaries and sibling titles; then generate each coarse subtree in parallel with
+the whole global outline in front of it. Never blind subtree calls with independently invented
+sibling roots — that is where four sections all end up meaning "Background".
+
+Note what is *no longer* on that list: the labels. They are already batched, and they are the half
+that scaled worst.
+
+**The model emits nested JSON; stage 4 converts it to the flat map** and assigns `NodeId`s, `parent`
+pointers and `depth`. Asking a model to emit a self-consistent map of cross-referencing ids is
+asking for dangling pointers; nesting makes the partition structurally obvious to whatever is
+writing it.
+
+**Leaves are generated mechanically, not by the model.** Since every block gets exactly one leaf,
+stage 4 creates them itself from `blocks.json`. The model never chooses leaf ranges — it proposes
+the internal grouping and writes the `navLabel` text. That removes an entire class of partition
+error from the model's job.
+
+The prompt's rules inherit from
+[granularity-zoom.md § Generation](granularity-zoom.md#generation) and
+[vision.md § Principles](vision.md#principles).
+
+**The live prompt is [`SYSTEM`](../../src/structure.ts) and it is not copied here.** A copy was, for
+a fortnight, and it went stale without a word: it still said *"Do not write a `gist` field — that is
+a later stage"* long after the gists moved back into this call, and it had never gained *"Go 3
+levels deep"*. `tests/structure-whole-document-request-parity.test.ts` pins the real bytes, so that is
+the one to read and the one that fires when they move.
+
+What it asks for, in one line each, so this page can be read without opening the source: internal
+nodes only, tiling their parent exactly; the article's own headings as hard boundaries; a proposed
+boundary inside any run of more than ~9 blocks; 5–9 children per node; three levels; a 2–6 word
+title, copied verbatim from the author's heading where there is one; and one gist sentence per
+internal node, a claim or a move rather than a topic label.
+
+**There is a second prompt beside it**, for the scoped call that deepens one section at a time —
+[`EXPAND_SYSTEM`](../../src/structure-expand.ts). `generateStructure` calls it, behind a switch that
+is off ([above](#deepening)); [260904d](../plans/260904d-deepen-fat-sections.md) is the plan. The rule it states that
+`SYSTEM` does not is the precedence between the two that collide on a book: an authored heading
+always begins a child, and the 5–9 fan-out applies only where the model is inventing the boundaries
+itself. It also asks, since `expand/2`, for the children **in document order** — which
+`normaliseExpansion` had always required, dropping any start not strictly after the previous one, and
+which the prompt had never said, so five otherwise-valid children listed out of order lost a real
+section under a valid-looking tree.
+
+**And those scoped calls checkpoint**, in [`src/structure-deepen.ts`](../../src/structure-deepen.ts)
+(2026-09-05), under a namespace of their own — see
+[database.md § Checkpoints](database.md#checkpoints-work-a-failed-attempt-already-paid-for). One row per call rather than per parent, keyed
+on a digest of the wire request plus four things a scoped call no longer carries implicitly: a hash
+of the whole body, a **frozen** hash of the wave-1 tree, the recipe, and the call's own targets.
+That body hash is `expansionBodyHash` and not `hashBlocks`: the article's shared fingerprint covers
+`[id, text, role, treatment]`, and this stage also reads `words` (the forced-open ceiling), `kind`
+(the heading rule, and `max_tokens` through it), `tag` and `gistable` (both printed to the model, and
+`gistable` is the unit the terminal-blocks floor counts in). A block reclassified `p` → `h2` with its
+text untouched kept its key while the model was shown a heading.
+Frozen is the load-bearing word — a key that carried the tree *as it stands* would move whenever a
+neighbouring parent's answer landed, so a resumed attempt would miss every row the previous one
+wrote, under exactly the load the checkpoint exists for. A stored answer is re-read through the same
+`readExpansion` a fresh one goes through, against the parent as it is now, and one that no longer
+derives is a miss the next answer overwrites. Still called by nothing: the wiring and the wave's
+concurrency are stage 5.
+
+**The nav labels are not in this response.** They were, and it is what took the stage over the
+128,000-token ceiling — one per gistable block is the only output in the pipeline that grows with the
+article without a bound. They are now a second pass with a prompt of its own, in
+[`src/labels.ts`](../../src/labels.ts): 6–20 words, a claim or a move rather than a topic label, the
+author's distinctive vocabulary verbatim, nothing for a NOT-GISTABLE block, and no meta-narration.
+See [Two passes](#two-passes) above; the live prompt is the one in the source, and the summary above
+is the structure half only.
+
+### Verify, always
+
+The prompt asks a model to emit a partition over 139 ids. It will occasionally emit an id that isn't
+in the input, or a range with a one-block gap. Never trust a generated tree:
+
+```
+npm run validate-tree -- example        # or a directory `npm run db:export` wrote for a slug
+```
+
+It takes a *directory* holding both `blocks.json` and `tree.json`, not two file paths.
+
+Structural failures exit non-zero; editorial ones (label lengths, a title ending in a full stop, a
+gistable leaf with no label) print as warnings and do not fail the run. The check is cheap and it is
+the only thing standing between a plausible-looking sidebar and one that silently drops a paragraph.
+
+## The question under the claim
+
+**Added 2026-09-05**, from SPIDERYARN-READING2-1V. Greg:
+
+> Tweak the prompt that generates the Summary mode to be a bit more in the form of Socratic
+> questions that encourage the reader to read the actual text to get the full answers
+>
+> — Greg, 2026-09-05
+
+So the root and each of its parts carry a second field beside the gist, **`TreeNode.question`**,
+written by the same stage-4 call. Summary's outline drew it in place of the gist (`question ??
+gist`) from that day until the outline was removed on 2026-10-01
+([summaries.md § History](summaries.md#history-the-outline-2026-08-26-to-2026-10-01)); Marginalia
+reads it now (the comment on `marginalia` in [`src/mode-catalog.ts`](../../src/mode-catalog.ts)),
+which is why it is still generated.
+
+### Why it is a second field rather than a different gist
+
+The request as worded could not be carried out, because the sentence Summary drew was the **`gist`**
+this stage writes, and the gist is rendered in many other places — Structure, the spine tooltips, the
+masthead, the shelf card on [the library](library.md) and [the public shelf](public-shelf.md), the
+outline rows, the diagram cards. Worse, **it is also an input**: `chainRung` in
+[`structure-expand.ts`](../../src/structure-expand.ts) feeds ancestor gists back to the later
+structure waves as context, so a gist bent towards questions would degrade the trees the cascade
+goes on to build. One prompt edit, many regressions. So the question is its own field, and a shelf
+card still says what the article claims.
+
+### The shape it has, since `toc/7`
+
+Greg drew it himself, in the same brief, and the wording that ships is the one that reproduced his
+drawing almost verbatim without being shown it:
+
+> Computational functionalism - why isn't computation sufficient for consciousness? (4 arguments)
+>
+> — Greg, 2026-09-05
+
+So a question is **`<topic> — <question>? (<shape hint>)`**: the topic in the author's own term, a
+question that **presupposes where the section lands** (*"why isn't computation sufficient"* carries
+the claim; *"is computation sufficient?"* hides it), and a bracketed hint giving the **shape** of
+the answer and never its content — a count or a kind, and never this node's child count, which is a
+different number. Where a section does not land — it weighs, describes, or leaves the matter open —
+the hint says so instead: *"(two options weighed)"*, *"(no settled answer)"*.
+
+**This replaced the first wording on 2026-09-07**, and the first wording is why. It asked for the
+question *"this node's text answers and its gist does NOT"* — an instruction to strip out everything
+the gist carried, whose only honest output is a bare why-question. Four candidate rewordings were
+built into an eval and measured over seven real articles;
+[`evals/summaries/variants.md`](../../evals/summaries/variants.md) has all four, the axes that
+separate them, and the code change this one needed. Production shipped that V4 block byte-for-byte
+at `toc/7`; `toc/8` replaced only its final plain-words bullet, and a test asserts that exact
+relationship so neither the measured block nor production can drift quietly.
+
+The cost, named rather than discovered: **these lines are nearly twice as long** — a median of 18
+words against the old 10 — while the same brief also asked for simpler language and a briefer
+top-level line. [260907d](../plans/260907d-ship-socratic-v4-repair-the-eval-gate-and-answer-q7.md)
+is where that tension sits, unresolved.
+
+### Plain words, since `toc/8`
+
+**Added 2026-09-26**, from SPIDERYARN-READING2-44. Greg:
+
+> we want the summaries to really use simpler language, because half the problem is we may not know
+> what the jargon means
+>
+> — Greg, 2026-09-26
+
+The gist kept "the article's own words for the things it names", which let every term of art through
+unexplained. It now keeps the name as a handhold but has to make the sentence understandable to a
+reader who does not know it, and plainer means equally specific —
+[prompting-guide.md](prompting-guide.md) has the rule, and
+[260926a](../plans/260926a-plainer-summaries-and-glossary.md) the measurement. The QUESTIONS block
+changed in one bullet: the topic keeps the author's term, and the question after it must make sense
+to a reader who does not know it. It was left alone at first, and a blind read found the depth-1
+questions no plainer that way; the rest of the block is still the V4 the eval measured. New articles
+only ([below](#prompt-versions)).
+
+**One line of production code moved with it.** The hint follows the question mark, so `questionFor`
+— which appends a `?` to anything not ending in one — would have stored *"…(4 arguments)?"*. It now
+treats a `?` followed by nothing but one short bracketed hint as a finished line, and `bareWords`
+strips that bracket **before** the terminal punctuation so the gist-echo check still catches a gist
+re-asked in the new shape. Both halves are held by `tests/summaries-eval.test.ts`.
+
+### Root and parts, and it is enforced rather than requested
+
+The prompt asks for a question on the root and on each depth-1 node only;
+[`questionFor`](../../src/structure.ts) drops any written deeper. One per section on a fifty-section
+article is noise, and a scope the code holds is a fact rather than a hope.
+
+### Punctuation is normalised, never read for meaning
+
+Measured on the first real toc/5 run — noema, 141 blocks, 2026-09-05: six questions, none written
+deeper than a part, and **one of the six came back with no `?`**, so a missing mark is added rather
+than treated as a fault.
+
+The first version of that rule also *dropped* anything ending in `.` as a statement, and GPT Sol
+killed it: a full stop is not evidence of mood. *"How did this affect the U.S."* is a question that
+rule discarded invisibly, while a real statement without a mark sailed through. So the rule is
+syntactic and does one thing — append the mark — and the failure the prompt actually names, *"never
+the gist with a question mark on it"*, is caught by **comparing the question with the gist**,
+ignoring case and punctuation.
+
+### Three ways a part ends up with no question
+
+All of them benign absence rather than breakage; a fourth was closed on 2026-09-07. They are not
+equally visible.
+
+- **A rung that restated its parent** is spliced away ([above](#restated-rung)) and its children come
+  up in its place carrying none. Those children were at depth 2 when the model wrote them, and
+  nothing asks a question at depth 2 — that would be the noise `MAX_QUESTION_DEPTH` exists to
+  prevent, and filling it in afterwards would be a second model call. It is **counted**:
+  `BuildReport.droppedQuestions` is every question that was *written and then discarded*, this case
+  included.
+- **An expansion was asked for a question and did not write one.** The closed fourth case is why
+  this one exists: `EXPAND_SYSTEM` has its own QUESTIONS block (V4's shape since `expand/4`, plus
+  `toc/8`'s plain-words bullet), and the request marks each target `ASK QUESTION ON CHILDREN` or
+  `OMIT QUESTION` — per target, because one call batches parents at different depths. Only the
+  children of the whole work are asked. But **the request asks; it does not insist**: an answer
+  without a question for one of its children is accepted as it stands, and that child keeps its gist
+  and no question. It is **counted, and by name**: `DeepenStats.missingQuestions` lists the
+  positions, deliberately not the same number as `droppedQuestions`, because *the model wrote one and
+  the tree threw it away* and *the model wrote none* have different fixes.
+- **Wave 1 wrote none for that part.** The structure call is asked for questions too, and a part it
+  simply left without one keeps its gist. This is the case **nothing counts** — `droppedQuestions`
+  only fires where a question existed to be dropped, and `missingQuestions` only covers children an
+  expansion request marked. So a wave-1 omission is invisible in every number we keep
+  ([silent-success.md](../reusable/silent-success.md)). If it ever matters, it needs a counter of its
+  own.
+
+So a mixed set — a question on one part, only a gist on its neighbour — is not evidence of any one of
+these. Absence is ordinary: every article whose hierarchy predates 2026-09-05 has no question
+anywhere, and the stage is cached on a content hash of the request, so **no existing article grows a
+question on its own**. Getting them means `npm run structure -- <slug> --force`, at roughly the cost
+of a structure call per article. Unlike a missing *gist*, a missing question draws nothing on screen,
+and the asymmetry is deliberate — the comment on `question` in [`types.ts`](../../src/types.ts).
+
+## A new prompt reaches new articles only, and that is the decision <a id="prompt-versions"></a>
+
+**Nothing backfills the tree.** [`src/pipeline.ts`](../../src/pipeline.ts) imports only
+`generateStructure` from [`src/structure.ts`](../../src/structure.ts) and no version constant; the
+tree has no `outdated` mechanism of the kind glossary, quotes and ideas each have; and the
+tree-version chip came off the reading view on 2026-09-05. So when the prompt changes, an article
+already on somebody's shelf keeps the gists it was built with, silently and indefinitely.
+
+That was put to Greg on 2026-09-06, after the `toc/6` gist-length change (coarse lines shorter, fine
+lines longer, plainer words) turned out to be invisible on everything he had already read:
+
+> Leave it, new articles only.
+
+**`toc/7` on 2026-09-07 is the same answer a second time, and the second one is louder**, because
+that bump changed what a Socratic question *looks like* — from a bare *"why does X?"* to
+`<topic> — <question>? (<shape hint>)`, which was then the only line a Summary row drew.
+So a reader's older articles keep questions in a shape nothing else in the library still writes, and
+**nothing on screen says so**: unlike quotes, quiz, glossary, ideas, timeline and debate, the tree
+has no `outdated` chip to show them, because it has no staleness mechanism at all.
+[§ The shape it has](#the-shape-it-has-since-toc7) is what changed.
+
+**`toc/8` on 2026-09-26 is the third** — plainer gists, from Greg's own report — and the same
+answer applies: an article already read keeps its jargon until its stage is re-run.
+
+**So this is chosen, not merely what happens.** Nothing is broken, nobody is charged for a summary
+they did not ask to be regenerated, and no reader is shown a warning about a line that reads
+perfectly well. The cost is the one that prompted the question: a change you make today is not
+visible on the articles you know best, so it is hard to judge whether it was an improvement.
+
+The escape is per-article rather than library-wide, and it is being built —
+**re-run the stage from the article's metadata page**. Greg, in the same breath:
+
+> there should be a way to re-run any of the generated modes (either within the UI for the mode, or
+> perhaps in the Metadata section)
+
+Note what that does *not* need. The re-run was blocked for days on being able to say *honestly* that
+a stage is stale, which needs the artefacts to record what they were built from — an open gap named
+in [ingest-queue.md](ingest-queue.md). A button that regenerates and claims nothing about staleness
+needs none of it, and declining the backfill is what made that the right shape.
+
+## Worked example: the derived sidebar
+
+`example/` holds a 34-block slice of the test article. Its `blocks.json` is **real** stage-3 output;
+its `tree.json` is **hand-authored** to this schema as a stand-in until stage 4 exists — it is not
+model-generated, and its labels are what we want the prompt to produce, not proof that it does.
+
+Collapsed to the heading outline, which is the sidebar's default state
+(`npx tsx src/structure-flatten.ts example/tree.json 2`):
+
+```
+▸ The Mythology Of Conscious AI  [spya-tgnssb…spya-gxdsbh]
+  ▸ Why the question matters  [spya-tgnssb…spya-sge6a2]
+    ▸ Title and credits  [spya-tgnssb…spya-rg493b]
+    ▸ When, not if  [spya-u6w37a…spya-epw4h3]
+    ▸ What is at stake  [spya-e68t9h…spya-sge6a2]
+  ▸ The Temptations Of Conscious AI  [spya-nh8mt7…spya-gxdsbh]
+    ▸ Intelligence is about doing  [spya-nh8mt7…spya-qb6xsj]
+    ▸ Consciousness is about being  [spya-hk6gha…spya-xm96be]
+    ▸ Three baked-in biases  [spya-cvaqgs…spya-nxxnrj]
+    ▸ Language pulls the strings  [spya-k6fpme…spya-cqh2pq]
+    ▸ The techno-rapture  [spya-cke6sj…spya-gxdsbh]
+
+11 rows
+```
+
+Expanded to paragraph level (`npx tsx src/structure-flatten.ts example/tree.json`), the same two sections
+become:
+
+```
+    ▸ When, not if  [spya-u6w37a…spya-epw4h3]
+        Playing God is a dream reinvented with every breaking wave of new technology
+        AI is another breaking wave, arguably already intelligent, but are these systems conscious?
+        From the Golem to Klara, synthetic minds rarely end well for the humans involved
+        Google engineer Blake Lemoine claimed LaMDA was conscious, and was dismissed for breaching confidentiality
+        Chalmers, Hinton and AI-welfare researchers: machine consciousness is a question of when, not if
+    ▸ What is at stake  [spya-e68t9h…spya-sge6a2]
+        If AI systems are conscious, moral status, suffering and perhaps rights follow
+        Believing our AI companions feel things leaves our psychological vulnerabilities open to exploitation
+        Confusing ourselves with our machine creations makes us overestimate them and underestimate ourselves
+
+40 rows
+```
+
+34 blocks produce 34 leaves, but only 40 rows in total across every depth — 11 internal plus 29
+labelled leaves. The five unlabelled leaves are `Credits`, two pull-quotes, a bare image and
+`Figure 1`, each tiled by the tree and each correctly absent from the sidebar.
+
+Note the length contrast between the two listings: `When, not if` against
+`Chalmers, Hinton and AI-welfare researchers: machine consciousness is a question of when, not if`.
+That is the entry-length rule doing its job — three words are enough to tell that section from its
+four siblings, and would be useless at telling five adjacent paragraphs apart.
+
+## See also
+
+- [block-ids.md](block-ids.md) — the id contract these ranges are built on
+- [granularity-zoom.md](granularity-zoom.md) — the same tree, rendered as text instead of navigation
+- [architecture.md](architecture.md) — where stage 4 sits in the pipeline
+- [261001c](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md) — effort vs quality for the structure call: `low` stays,
+  because with thinking off 5 of 16 trees failed (internal nodes with no gist), against 0 of 16 at `low`
+- [`src/types.ts`](../../src/types.ts) — the canonical schema
+- [`src/validate-tree.ts`](../../src/validate-tree.ts), [`src/structure-flatten.ts`](../../src/structure-flatten.ts)

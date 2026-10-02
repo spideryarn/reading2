@@ -6,7 +6,7 @@
  * looks like once the model's array has been numbered, whether a thread still
  * describes the article on disk, and how many posts we ask for.
  *
- * Same split as stage 4, and for the same reason — `buildTree` in src/hierarchy.ts is
+ * Same split as stage 4, and for the same reason — `buildTree` in src/structure.ts is
  * exported and tested precisely so that only the genuinely nondeterministic
  * part goes untested. See docs/project/testing.md.
  */

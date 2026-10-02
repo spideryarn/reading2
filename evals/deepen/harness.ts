@@ -24,9 +24,9 @@
  *   structure checkpoint" becomes an observation rather than a claim.
  * - **The estimate**, so the paid path prints what it is about to buy.
  *
- * **Nothing here may import `src/hierarchy.ts`**, and that is a rule rather than
+ * **Nothing here may import `src/structure.ts`**, and that is a rule rather than
  * an accident: this file is imported by `tests/deepen-eval.test.ts`, and
- * `src/hierarchy.ts` imports the app, which reaches the filesystem ledger
+ * `src/structure.ts` imports the app, which reaches the filesystem ledger
  * adapter — so a value import of `buildTree` here put a suite that touches no
  * store at all into `tests/store-migration-registry.ts` needing an entry to
  * excuse one. `proveTheSeam` lives in `run.ts` for that reason;
@@ -39,7 +39,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { type DeepenRecordsFile, reaskExpansions, REASK_ENV } from "../../src/hierarchy-deepen.js";
+import { type DeepenRecordsFile, reaskExpansions, REASK_ENV } from "../../src/structure-deepen.js";
 import {
   assertCheckpointRequest,
   type CheckpointArticleRef,
@@ -171,7 +171,7 @@ export function assertReaskNames(opts: {
           "A repeat that is not named reads its own checkpoint rows back, buys nothing, and " +
           "reports verdicts identical to the previous repeat BY CONSTRUCTION — which looks " +
           "exactly like a perfectly stable signal and is worth nothing. Refusing to spend " +
-          "anything until the lever works. src/hierarchy-deepen.ts § REASK_ENV.",
+          "anything until the lever works. src/structure-deepen.ts § REASK_ENV.",
       );
     }
     const over = opts.mustNotName.filter((slug) => reaskExpansions(slug));
@@ -730,7 +730,7 @@ export function requeueFinding(opts: {
  * - **Before each claim**, `lost()` refuses: no further step and no re-drive.
  * - **Inside a running claim**, `signal` cancels. One claim runs the *whole*
  *   `hierarchy` step — structure call, expansion wave **and a full pass of
- *   labels**, which `generateHierarchy` starts even after the wave failed — so
+ *   labels**, which `generateStructure` starts even after the wave failed — so
  *   "stops starting" was true of steps and false of calls, and up to ~$10.80 of
  *   phase D could still be bought after question 5 was lost.
  *
@@ -753,9 +753,9 @@ export interface PhaseFate {
    * This is the half that reaches *inside* a claim, and it exists because
    * stopping before the next claim was not enough (DPN-30). One claim runs the
    * whole `hierarchy` step, and that step buys a structure call, an expansion
-   * wave **and a whole pass of labels** — `generateHierarchy` catches a failed
+   * wave **and a whole pass of labels** — `generateStructure` catches a failed
    * wave and falls straight through to `generateLabels` regardless
-   * (src/hierarchy.ts § the `deepenFailed` catch). So a sibling could *begin* an
+   * (src/structure.ts § the `deepenFailed` catch). So a sibling could *begin* an
    * entire label pass after question 5 was already unanswerable.
    *
    * `announcing` combines this into the measured step's `ctx.signal`, and `src/`
@@ -763,7 +763,7 @@ export interface PhaseFate {
    * assumed**: label batches are queued *with* it (`src/labels.ts` §
    * `queue.add(…, { signal })`), so an abort drops the ones that have not
    * started; the wave's own calls carry it through `liveExpansionExecutor`; and
-   * `src/hierarchy-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
+   * `src/structure-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
    * wait, never a call in flight"*, which is exactly the bound to quote.
    *
    * **Only a lost fate aborts.** `ctx.signal` keeps doing its own job beside it.
@@ -907,7 +907,7 @@ export function assertSeamProof(proof: SeamProof): void {
     throw new Error(
       `The re-asking pass made ${proof.readsWhileReasking} checkpoint read(s). The lever skips ` +
         "the read rather than reading and discarding, deliberately, so that `found` cannot " +
-        "report rows nobody used. src/hierarchy-deepen.ts § REASK_ENV.",
+        "report rows nobody used. src/structure-deepen.ts § REASK_ENV.",
     );
   }
   if (proof.namespaces.some((n) => n !== "hierarchy-deepen")) {
@@ -941,7 +941,7 @@ export function parseRecordsFile(raw: string, where: string): DeepenRecordsFile 
   if (value.version !== RECORDS_VERSION) {
     throw new Error(
       `${where} says version ${JSON.stringify(value.version ?? null)}, and this harness reads ` +
-        `${JSON.stringify(RECORDS_VERSION)}. The format moved; read src/hierarchy-deepen.ts ` +
+        `${JSON.stringify(RECORDS_VERSION)}. The format moved; read src/structure-deepen.ts ` +
         "§ DeepenRecordsFile before reading any number out of it. `deepen-records/1` in " +
         "particular carries no `range` on its candidates, and pairing repeats without one is " +
         "exactly the mistake this harness refuses to make; `deepen-records/3` has no " +
@@ -969,7 +969,7 @@ export function parseRecordsFile(raw: string, where: string): DeepenRecordsFile 
  * before asking whose it was: a parse failure on a sibling's file rejected the
  * whole read, marked the *asking* job fatal and left its own `recordsFiles`
  * empty. ⟨GPT Sol, DPN-14.⟩ Both halves matter, and the name is the cheap one —
- * the writer's atomic publication (`src/hierarchy-deepen.ts § saveDeepenRecords`)
+ * the writer's atomic publication (`src/structure-deepen.ts § saveDeepenRecords`)
  * is what makes a file that IS ours whole when we open it.
  */
 export async function readRecordsDir(
@@ -1005,7 +1005,7 @@ export async function readRecordsDir(
  * A second copy of a rule about names is how a filter silently stops matching,
  * so it is one exported function with a test rather than an inline regex — and
  * it stays deliberately *loose*: it is a prefilter, and the parsed `slug` is
- * still what decides. src/hierarchy-deepen.ts § `saveDeepenRecords`.
+ * still what decides. src/structure-deepen.ts § `saveDeepenRecords`.
  */
 export function recordsFilePrefix(slug: string): string {
   return slug.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || "article";
@@ -1094,7 +1094,7 @@ export const ESTIMATE_BASIS: Readonly<Record<string, EstimateRow>> = {
       "the plan's costed table (§ It costs about eight times more on a book, 2026-09-04): $8.4 " +
       "for a 296-call four-wave cascade. Stage 5b buys ONE wave, so this is an upper bound.",
   },
-  bookHierarchyRepeat: {
+  bookStructureRepeat: {
     what: "book, forced hierarchy, structure + labels resumed",
     jobs: 0,
     usdEach: 7.4,
@@ -1114,7 +1114,7 @@ export const ESTIMATE_BASIS: Readonly<Record<string, EstimateRow>> = {
       "nothing is eligible the wave makes no call either way. That equality is the thing phase C " +
       "is measuring, so it is an assumption here and a result there.",
   },
-  articleHierarchyResumed: {
+  articleStructureResumed: {
     what: "ordinary article, forced hierarchy, everything resumed",
     jobs: 0,
     usdEach: 0.1,
@@ -1160,7 +1160,7 @@ export interface CostEstimate {
 }
 
 /** Rows whose wave is re-bought by the re-ask lever — the ones a requeue could multiply. */
-const REASKING_ROWS: readonly (keyof typeof ESTIMATE_BASIS)[] = ["bookHierarchyRepeat"];
+const REASKING_ROWS: readonly (keyof typeof ESTIMATE_BASIS)[] = ["bookStructureRepeat"];
 
 export function estimate(counts: Readonly<Record<keyof typeof ESTIMATE_BASIS, number>>): CostEstimate {
   const keys = Object.keys(ESTIMATE_BASIS) as (keyof typeof ESTIMATE_BASIS)[];

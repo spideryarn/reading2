@@ -256,7 +256,7 @@ async function runBlocksStep(tx: Tx, claimed: JobDraftRef): Promise<void> {
  * the stored blocks, so the runner has to supply it (src/pipeline.ts § the
  * `hierarchy` step).
  */
-async function runHierarchyStep(tx: Tx, claimed: JobDraftRef): Promise<void> {
+async function runStructureStep(tx: Tx, claimed: JobDraftRef): Promise<void> {
   const store = pgArtifactsIn(claimed, tx);
   const attempt = await store.beginStep(SLUG, "hierarchy");
   await store.write(
@@ -291,11 +291,11 @@ describe("two steps that share one storage site", () => {
     await withClaim(async (tx, claimed) => {
       await runBlocksStep(tx, claimed);
       const asBlocks = await readArtefact(claimed, tx, SLUG, "blocks", "blocks");
-      const asHierarchy = await readArtefact(claimed, tx, SLUG, "hierarchy", "blocks");
+      const asStructure = await readArtefact(claimed, tx, SLUG, "hierarchy", "blocks");
       expect(asBlocks?.blocks.map((b) => b.id)).toEqual([B1, B2]);
       /* One artefact, two names. This is what stops the next case being
          explicable by "hierarchy's blocks simply are not there". */
-      expect(asHierarchy).toEqual(asBlocks);
+      expect(asStructure).toEqual(asBlocks);
     });
   });
 
@@ -315,7 +315,7 @@ describe("two steps that share one storage site", () => {
     await withClaim(async (tx, claimed) => {
       await runBlocksStep(tx, claimed);
       expect(await hasArtefacts(claimed, tx, SLUG, "hierarchy", ["blocks"])).toBe(false);
-      await runHierarchyStep(tx, claimed);
+      await runStructureStep(tx, claimed);
       expect(await hasArtefacts(claimed, tx, SLUG, "hierarchy", ["blocks"])).toBe(true);
       expect(await hasArtefacts(claimed, tx, SLUG, "hierarchy", ["tree", "labels", "blocks"])).toBe(
         true,
@@ -334,7 +334,7 @@ describe("two steps that share one storage site", () => {
       const reads = readsPgArtifacts(claimed, tx);
       await runBlocksStep(tx, claimed);
       expect(await stepIsDone(STEPS.hierarchy, ctx, reads)).toBe(false);
-      await runHierarchyStep(tx, claimed);
+      await runStructureStep(tx, claimed);
       expect(await stepIsDone(STEPS.hierarchy, ctx, reads)).toBe(true);
     });
   });

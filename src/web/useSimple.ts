@@ -47,6 +47,12 @@ export interface UseSimple {
   starting: boolean;
   /** Repeat only the GET after a failed read. This never starts a model job. */
   retryRead(): Promise<void>;
+  /**
+   * Read again because something it depends on has changed — the profile
+   * panel's save, so `profileChanged` is the server's verdict on the new
+   * profile. `OrderedRead.refresh`. Never spends. ProfilePanel.tsx § Regenerate.
+   */
+  refresh(): Promise<void>;
   /** **Write it if nobody has** — unforced, the automatic run's verb and the empty state's. */
   ensure(): Promise<void>;
   /** The forced run — the stale notice's button. It replaces the paragraphs. */
@@ -141,6 +147,7 @@ export function useSimple(slug: string): UseSimple {
     stalled: queue.stalled,
     starting: queue.starting,
     retryRead,
+    refresh,
     ensure,
     regenerate,
     cancel: queue.cancel,

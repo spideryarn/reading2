@@ -103,7 +103,7 @@ import {
 import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
 import { slugIsTaken } from "./slug-is-taken.js";
-import { NO_INPUT_HASH, PIPELINE_RUN, hierarchyCurrency } from "./artifacts.js";
+import { NO_INPUT_HASH, PIPELINE_RUN, structureCurrency } from "./artifacts.js";
 import { liveAttempt } from "./job-fence.js";
 import { enqueueSuccessorIn, type SuccessorOutcome } from "./pg-successor.js";
 
@@ -1866,7 +1866,7 @@ async function reasonsNotToPublish(
    *
    * On 2026-09-05 that cost eleven hours of availability. `c8e2cc7e` added a new
    * `checkTree` rule that morning and fixed the producer in the same commit
-   * (`collapseRestatedRungs`, src/hierarchy.ts), but nothing migrated the trees
+   * (`collapseRestatedRungs`, src/structure.ts), but nothing migrated the trees
    * already stored — so roughly one article in twenty could no longer publish
    * *anything*, for ever, and each attempt completed and paid for its model call
    * before being refused at this line. Four times on `nagel-bat`, one of them
@@ -1905,11 +1905,11 @@ async function reasonsNotToPublish(
     .select()
     .from(revisionStepRuns)
     .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "hierarchy")));
-  const hierarchyRun = runs[0];
+  const structureRun = runs[0];
   const blocksHash = hashBlocks(blocks);
 
   /**
-   * **Asked of `hierarchyCurrency` (src/store/artifacts.ts) since 2026-09-07**,
+   * **Asked of `structureCurrency` (src/store/artifacts.ts) since 2026-09-07**,
    * which `articleMetadata` in src/store/pg.ts also asks — so the metadata page
    * and the publication gate cannot answer it differently.
    *
@@ -1924,7 +1924,7 @@ async function reasonsNotToPublish(
    * somebody what to do next. The `switch` is exhaustive, so a fifth reason
    * cannot be added to the shared function without landing here.
    */
-  const currency = hierarchyCurrency(hierarchyRun, blocksHash);
+  const currency = structureCurrency(structureRun, blocksHash);
   if (!currency.current) {
     /* **The status arms come before the hash one, and that ordering is the
        fix for 260827d rather than a tidy-up.** `recordStepRun`, which the
@@ -1942,7 +1942,7 @@ async function reasonsNotToPublish(
        failed.
 
        Exhaustive on purpose: a fifth reason cannot be added to
-       `hierarchyCurrency` without the compiler stopping here for a sentence. */
+       `structureCurrency` without the compiler stopping here for a sentence. */
     switch (currency.why) {
       case "no-run":
         reasons.push(

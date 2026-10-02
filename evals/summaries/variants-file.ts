@@ -116,7 +116,7 @@ export interface VariantsFile {
    * **Shipped GISTS blocks, pinned by prompt version** — `"toc/5"`, `"toc/6"`.
    *
    * These are not variants anybody is choosing between: they are copies of what
-   * `src/hierarchy.ts` sent before and after a bump, so an arm can measure the
+   * `src/structure.ts` sent before and after a bump, so an arm can measure the
    * bump itself over the same fixed trees. `productionGists()` slices the *live*
    * SYSTEM and therefore always carries the newest one — which is exactly why a
    * before/after cannot be built out of the `incumbent` arm alone.

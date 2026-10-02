@@ -82,7 +82,7 @@ cost-tracking machinery and must not modify it.
   This eval treats it as a fixed historical anomaly, and
   separately measures *stochastic* hierarchy cost under current code — where hierarchy runs at
   effort `medium` precisely because this article filled the ceiling at `high`
-  ([`src/hierarchy.ts`](../../src/hierarchy.ts)), and a truncation surfaces as a `bug` failure
+  ([`src/hierarchy.ts`](../../src/structure.ts)), and a truncation surfaces as a `bug` failure
   with no Retry button.
 - **Only five steps run at ingest** (`DEFAULT_INGEST_STEPS`, [`src/pipeline.ts`](../../src/pipeline.ts)):
   fetch, extract, blocks, hierarchy (+labels fan-out), assets. Of those, only hierarchy/labels
@@ -810,7 +810,7 @@ Write-up: [hierarchy-effort-2026-09-03.md](../../evals/results/hierarchy-effort-
       `evals/hierarchy-structure/arms.ts` declared the incumbent at `effort: "high"` while
       production has run `"medium"` since the max_tokens postmortem, so `smart-low` — the arm whose
       declared purpose is to isolate the single variable `effort` — was answering high-vs-low. Fixed
-      by importing `PRODUCTION_EFFORT` from [`src/hierarchy.ts`](../../src/hierarchy.ts), so the
+      by importing `PRODUCTION_EFFORT` from [`src/hierarchy.ts`](../../src/structure.ts), so the
       drift is unrepresentable rather than documented; pinned behind that by
       `tests/hierarchy-eval-incumbent-parity.test.ts`, seen red first.
 - [x] **A paid call reporting $0 now fails.** `assertCallAccounted`'s own docstring names "a cost

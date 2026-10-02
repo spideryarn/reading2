@@ -20,15 +20,15 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { BuildReport, ModelNode } from "../../src/hierarchy.js";
-import { parseToc10StructureAnswer } from "../hierarchy-structure/toc10-frozen.js";
-import { buildTree } from "../../src/hierarchy.js";
+import type { BuildReport, ModelNode } from "../../src/structure.js";
+import { parseToc10WholeDocumentAnswer } from "../structure-whole-document/toc10-frozen.js";
+import { buildTree } from "../../src/structure.js";
 import {
   modelNodeFromStarts,
   type StartsOnlyNode,
   type StartsOnlyRoot,
-  type StartsOnlyStructureAnswer,
-} from "../../src/hierarchy-starts.js";
+  type StartsOnlyWholeDocumentAnswer,
+} from "../../src/structure-starts.js";
 import type { Block, Tree } from "../../src/types.js";
 
 interface FlatNode {
@@ -83,7 +83,7 @@ function childWithoutEnd(node: ModelNode): StartsOnlyNode {
 }
 
 /** Mechanically delete every range end, including all nested children. */
-export function rangedAnswerWithoutEnds(answer: { root: ModelNode }): StartsOnlyStructureAnswer {
+export function rangedAnswerWithoutEnds(answer: { root: ModelNode }): StartsOnlyWholeDocumentAnswer {
   return {
     root: {
       ...fieldsWithoutRange(answer.root),
@@ -156,7 +156,7 @@ function lostAuthoredHeadingCount(before: Tree, after: Tree): number {
 }
 
 /** Build one paired replay and return only aggregate or privacy-safe evidence. */
-export function replayStructureAnswer(
+export function replayWholeDocumentAnswer(
   label: string,
   answer: { root: ModelNode },
   blocks: readonly Block[],
@@ -344,7 +344,7 @@ async function run(): Promise<void> {
     }
     let answer: { root: ModelNode };
     try {
-      answer = parseToc10StructureAnswer(source.raw);
+      answer = parseToc10WholeDocumentAnswer(source.raw);
     } catch {
       parseSkipped += 1;
       console.log(`SKIP ${source.label}: did not parse`);
@@ -355,7 +355,7 @@ async function run(): Promise<void> {
         loadArticle(source.slug),
       );
       const body = splitBlocks(article.blocks).body;
-      const result = replayStructureAnswer(source.label, answer, body);
+      const result = replayWholeDocumentAnswer(source.label, answer, body);
       results.push(result);
       console.log(
         `${result.baselineBuildable && !result.newlyUnbuildable ? "REPLAY" : "FAIL"} ${result.label}: ` +

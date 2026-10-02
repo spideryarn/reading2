@@ -168,7 +168,7 @@ Ranked by ease and value.
    the whole life of the feature. Logging `{ asked, found }` at info on every read turns *"every retry
    ever found zero"* into one log query, and costs one line per step. `generateHierarchy` has the
    same shape at the other end: `labelsResumed` is printed only when it is greater than zero
-   ([`src/hierarchy.ts`](../../src/hierarchy.ts)), so the number that would have shown the feature was
+   ([`src/hierarchy.ts`](../../src/structure.ts)), so the number that would have shown the feature was
    dead is precisely the one suppressed. **The instrumentation existed at both ends and was pointed at
    the interesting case being present rather than absent.**
 

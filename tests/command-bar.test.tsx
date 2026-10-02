@@ -1328,3 +1328,52 @@ describe("off the reading view", () => {
     expect(chord()).toBe(false);
   });
 });
+
+/**
+ * **Help, as a row in the bar** — docs/plans/261002b-help-page.md § After GPT
+ * Sol's plan review, R8: the footer, the command bar, and the Dock link are the
+ * three ways in.
+ *
+ * `help` was already one of Feedback's aliases, and it stays one: somebody who
+ * types it may well mean *something is wrong*. But the page whose name it is
+ * has to come first, or the bar answers a request for the manual with a bug
+ * report form. That falls out of the ranking rather than being forced — a label
+ * prefix outranks an alias prefix (command-match.ts § `TIERS`) — and this is
+ * what would notice if either half moved.
+ */
+describe("the help command", () => {
+  it("ranks the Help page first for `help`, with Feedback still offered", () => {
+    readingSignedIn();
+    openBar();
+    type("help");
+    const names = listed();
+    expect(names[0]).toBe("Help");
+    expect(names, "Feedback lost its `help` alias").toContain("Feedback");
+  });
+
+  it("is found by the other words a reader would type for it", () => {
+    reading();
+    openBar();
+    for (const query of ["manual", "guide", "documentation", "how do i", "faq"]) {
+      type(query);
+      expect(listed(), `typing ${JSON.stringify(query)} did not offer Help`).toContain("Help");
+    }
+  });
+
+  /* The same section the Dock's Help link opens at, because the two are built
+     from one function — a reader who learned one door has learned the other. */
+  it("goes to the section for the mode the band is in, and in Plain to the reading view", () => {
+    reading({ mode: "glossary" });
+    openBar();
+    type("help");
+    press("Enter");
+    expect(location.pathname + location.hash).toBe("/help#mode-glossary");
+
+    history.replaceState(null, "", "/read/a-piece");
+    reading({ mode: "plain" });
+    openBar();
+    type("help");
+    press("Enter");
+    expect(location.pathname + location.hash).toBe("/help#the-reading-view");
+  });
+});

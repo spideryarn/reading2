@@ -8,7 +8,7 @@
  * > later.
  *
  * Before this, four files each declared `const MODEL = "claude-opus-5"` at the
- * top — src/hierarchy.ts, src/arc.ts, src/tweets.ts and src/explain.ts — and the
+ * top — src/structure.ts, src/arc.ts, src/tweets.ts and src/explain.ts — and the
  * fourth of them spelled it differently from the other three. Changing the
  * model meant finding all four and knowing which spelling each wanted.
  *
@@ -188,7 +188,7 @@ import {
 
 /**
  * **The capable tier, in the Anthropic SDK's spelling** — the pipeline stages
- * (src/hierarchy.ts, src/labels.ts, src/arc.ts, src/tweets.ts, src/glossary.ts,
+ * (src/structure.ts, src/labels.ts, src/arc.ts, src/tweets.ts, src/glossary.ts,
  * src/glossary.ts) pass this straight to `messages.create`.
  *
  * They all ask for `thinking: { type: "adaptive" }`, which is the only on-mode

@@ -13,7 +13,7 @@
  *
  * **The arms are separated in time, not in code**, as in
  * evals/plain-words/run.ts: `generate` sends what production sends now — the
- * structure call (`structureRequest`, its gists and questions, not assembled into a tree),
+ * structure call (`wholeDocumentRequest`, its gists and questions, not assembled into a tree),
  * `generateSimpleSummary` (all three levels, no profile) and `generateTweets`
  * (no profile) — and records a hash of each prompt's source file beside the
  * answer. There is no copy of a prompt in here to drift.
@@ -35,7 +35,7 @@ import { blindCoin } from "../plain-words/run.js";
 
 const REPO = path.join(import.meta.dirname, "..", "..");
 const OUT = path.join(REPO, "evals", "results", "paperwork");
-const SOURCES = ["hierarchy.ts", "simple-summary.ts", "tweets.ts", "paperwork.ts"];
+const SOURCES = ["structure.ts", "simple-summary.ts", "tweets.ts", "paperwork.ts"];
 
 /** Words that mark a line as being about the paperwork rather than the piece. A screen. */
 export const PAPERWORK =
@@ -80,8 +80,8 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
-  const { parseStructureAnswer, structureRequest } = await import("../../src/hierarchy.js");
-  const { PROMPT_VERSION: TOC_VERSION } = await import("../../src/hierarchy-prompt.js");
+  const { parseWholeDocumentAnswer, wholeDocumentRequest } = await import("../../src/structure.js");
+  const { PROMPT_VERSION: TOC_VERSION } = await import("../../src/structure-prompt.js");
   const { splitBlocks } = await import("../../src/supplement.js");
   const { streamMessage } = await import("../../src/messages-stream.js");
   const simple = await import("../../src/simple-summary.js");
@@ -131,15 +131,15 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
             const [gists, summary, thread] = await Promise.all([
               attempt(async () => {
                 const { body } = splitBlocks(article.blocks);
-                const { params } = structureRequest(body);
+                const { params } = wholeDocumentRequest(body);
                 const message = await streamMessage("hierarchy", params, { power: "standard" }).finalMessage();
                 const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-                /* Production's own parse (src/hierarchy.ts § `parseJson`), not the
+                /* Production's own parse (src/structure.ts § `parseJson`), not the
                    strict one evals/plain-words uses: the first `after` run lost two
                    structure answers to a parse production might have mended, and
                    kept nothing to tell. So the raw answer is kept when it fails. */
                 try {
-                  const { root } = parseStructureAnswer(raw, body);
+                  const { root } = parseWholeDocumentAnswer(raw, body);
                   return flatten(root, 0, []);
                 } catch (err) {
                   fs.writeFileSync(path.join(OUT, arm, `${slug}.structure-raw.txt`), raw);

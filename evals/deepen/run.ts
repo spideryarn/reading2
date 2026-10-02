@@ -13,7 +13,7 @@
  *
  * ## Why this is not one of the tools that already exist
  *
- * - `npm run hierarchy` used to pass `nullCheckpointStore()` and resume nothing,
+ * - `npm run structure` used to pass `nullCheckpointStore()` and resume nothing,
  *   so every repeat would re-buy the ~$1.00 structure call **and hand each
  *   repeat a different seed** — precisely the confound that makes question 1
  *   unanswerable. Stage E put that command through the queue on 2026-09-05
@@ -79,7 +79,7 @@ import { withLedger } from "../../src/cli-ledger.js";
 import { getDb } from "../../src/db/client.js";
 import { articles, jobs as jobsTable } from "../../src/db/schema.js";
 import { loadEnvLocal } from "../../src/env.js";
-import { CASCADE_RECIPE } from "../../src/hierarchy-cascade.js";
+import { CASCADE_RECIPE } from "../../src/structure-cascade.js";
 import {
   DEEPEN_ENV,
   DEEPEN_RECORDS_ENV,
@@ -87,9 +87,9 @@ import {
   type DeepenStats,
   deepenTree,
   freeAnswer,
-} from "../../src/hierarchy-deepen.js";
-import type { ExpansionRequest } from "../../src/hierarchy-expand.js";
-import { buildTree, type ModelNode, structureRequest } from "../../src/hierarchy.js";
+} from "../../src/structure-deepen.js";
+import type { ExpansionRequest } from "../../src/structure-expand.js";
+import { buildTree, type ModelNode, wholeDocumentRequest } from "../../src/structure.js";
 import { isMain } from "../../src/is-main.js";
 import {
   type AdvanceParts,
@@ -326,7 +326,7 @@ interface JobRecord {
   }[];
   elapsedMs?: number;
   /** `finishedAt - startedAt` on the hierarchy step alone — question 5. */
-  hierarchyMs?: number | null;
+  structureMs?: number | null;
   /**
    * **How many times the claimant handed this job back at its own deadline**,
    * and `null` where it never did. Non-null on a re-asking pass means this run
@@ -648,7 +648,7 @@ function announcing(
            `AbortSignal.any` rather than a replacement: **`ctx.signal` keeps
            doing its own job**, and only a *lost fate* adds a second reason to
            stop. The same composition `src/labels.ts` and
-           `src/hierarchy-deepen.ts` already make. */
+           `src/structure-deepen.ts` already make. */
         if (fate === undefined) return step.run(ctx, store, checkpoints);
         const under = { ...ctx, signal: AbortSignal.any([ctx.signal, fate.signal]) };
         return step.run(under, store, checkpoints);
@@ -774,7 +774,7 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
     finishedAt: s.finishedAt ?? null,
     ms: stepMs(s),
   }));
-  record.hierarchyMs = record.stepOutcomes.find((s) => s.name === "hierarchy")?.ms ?? null;
+  record.structureMs = record.stepOutcomes.find((s) => s.name === "hierarchy")?.ms ?? null;
   record.deepenFlag = process.env[DEEPEN_ENV] === "1";
   record.reaskEnv = process.env[REASK_ENV] ?? null;
   record.observedSpend = observedSpend;
@@ -975,7 +975,7 @@ async function driveJob(ctx: RunContext, queued: QueuedJob): Promise<JobRecord> 
   console.log(
     `  spend ${record.money == null ? "NOT READ" : `$${(moneyTotalNanos(record.money) / 1e9).toFixed(4)}`}` +
       (record.money != null && record.money.unpriced > 0 ? `   (${record.money.unpriced} unpriced)` : "") +
-      `   hierarchy step ${record.hierarchyMs === null || record.hierarchyMs === undefined ? "—" : `${(record.hierarchyMs / 1000).toFixed(1)}s`}`,
+      `   hierarchy step ${record.structureMs === null || record.structureMs === undefined ? "—" : `${(record.structureMs / 1000).toFixed(1)}s`}`,
   );
   if (record.byAiJob?.length) console.log(formatStepTable(record.byAiJob));
   console.log(`  deepening ${deepeningLine(record)}`);
@@ -1013,11 +1013,11 @@ function deepeningLine(record: JobRecord): string {
  * How many input tokens a structure call on this document would carry, which is
  * the floor `checkRepeatBoughtItsWave` compares the ledger against.
  *
- * Free — `structureRequest` builds the request without sending it — and it is a
+ * Free — `wholeDocumentRequest` builds the request without sending it — and it is a
  * **conservative** floor: it is the estimated answer size, which is far smaller
  * than the prompt, so a re-bought structure call cannot slip under it.
  */
-function structureTokenFloor(blocks: number): number {
+function wholeDocumentTokenFloor(blocks: number): number {
   /* Nothing here has the blocks in hand once the job is finished, and reading
      them back to price a check would be a second definition of what a structure
      call is. So the floor is deliberately crude: a whole-document call on a book
@@ -1293,7 +1293,7 @@ export function parseArgs(argv: readonly string[]): Args {
 
 function currentMeta(databaseTarget: string): RunMeta {
   const git = (a: string[]): string => execFileSync("git", a, { encoding: "utf-8" }).trim();
-  let hierarchyEffort: string | null = null;
+  let structureEffort: string | null = null;
   let model: string | null = null;
   try {
     /* Free, and it reads the real constants rather than restating them: an empty
@@ -1301,11 +1301,11 @@ function currentMeta(databaseTarget: string): RunMeta {
        fit one response), and no call is made. The alternative was writing the
        model id and the effort down here, which is a second copy of a constant
        that has already moved once and taken a whole analysis with it —
-       evals/cost/run.ts § structureEffort. */
-    hierarchyEffort = structureRequest([]).effort;
+       evals/cost/run.ts § wholeDocumentEffort. */
+    structureEffort = wholeDocumentRequest([]).effort;
     /* `modelFor("hierarchy", "standard")`, which is the same door `recordCandidate` writes
        onto every record — so the run's metadata and the records cannot disagree
-       about which model produced them. `structureRequest`'s params leave the id
+       about which model produced them. `wholeDocumentRequest`'s params leave the id
        to `streamMessage`, so reading it there gives `undefined`. */
     model = modelFor("hierarchy", "standard");
   } catch {
@@ -1329,10 +1329,10 @@ function currentMeta(databaseTarget: string): RunMeta {
     node: process.version,
     model,
     effort: {
-      hierarchy: hierarchyEffort,
+      hierarchy: structureEffort,
       pipelineEnvOverride: process.env.SPIDERYARN_PIPELINE_EFFORT ?? null,
       note:
-        "The expansion prompt's own effort is module-private in src/hierarchy-expand.ts " +
+        "The expansion prompt's own effort is module-private in src/structure-expand.ts " +
         "(EXPAND_EFFORT = PRODUCTION_EFFORT); `commit` and `srcPatchSha256` are what pin it. " +
         "Every CandidateRecord carries the model and effort it was decided under.",
     },
@@ -1503,9 +1503,9 @@ async function main(): Promise<void> {
 
   const counts = {
     bookIngestDeepened: 1,
-    bookHierarchyRepeat: args.repeats - 1 + 1 /* the phase-D repeat */,
+    bookStructureRepeat: args.repeats - 1 + 1 /* the phase-D repeat */,
     articleIngestDeepened: articleSlugs.length,
-    articleHierarchyResumed: 1,
+    articleStructureResumed: 1,
   };
   const bill = estimate(counts);
 
@@ -1688,7 +1688,7 @@ async function main(): Promise<void> {
  * **The free proof, and it lives here rather than in `harness.ts` for a reason
  * that is about the import graph rather than about tidiness.**
  *
- * It needs `buildTree`, which is in `src/hierarchy.ts`, which imports the app —
+ * It needs `buildTree`, which is in `src/structure.ts`, which imports the app —
  * and through it `src/cli-ledger.ts` and the ledger's filesystem adapter. This
  * file already imports the world and is never loaded by a test; `harness.ts` is
  * imported by `tests/deepen-eval.test.ts`, and keeping the reach out of it is
@@ -1705,7 +1705,7 @@ async function main(): Promise<void> {
  * **Twelve synthetic paragraphs and a fake executor, and it costs nothing.**
  *
  * Two authored headings that no boundary starts on, so the heading rule forces
- * the one section open — the same construction `tests/hierarchy-deepen-wave.test.ts`
+ * the one section open — the same construction `tests/structure-step-deepen-wave.test.ts`
  * uses, because the point is to exercise `deepenTree`'s checkpoint behaviour and
  * not to be a realistic article.
  *
@@ -2066,7 +2066,7 @@ async function runPhases(opts: {
  *    **The first half alone was not enough, and the sentence that said it was is
  *    the one DPN-29's standard let through** (DPN-30). One claim runs the *whole*
  *    `hierarchy` step, and that step buys a structure call, an expansion wave and
- *    a whole pass of labels — `generateHierarchy` catches a failed wave and falls
+ *    a whole pass of labels — `generateStructure` catches a failed wave and falls
  *    straight through to `generateLabels` regardless. So "a call already in
  *    flight finishes" did not cover the calls a *running* step had not started
  *    yet. Most of phase D's spend could therefore still be bought after question
@@ -2076,7 +2076,7 @@ async function runPhases(opts: {
  *    batches are queued *with* the signal (`src/labels.ts` §
  *    `queue.add(…, { signal })`), so **the ones that have not started are
  *    dropped**; the wave's calls carry it through `liveExpansionExecutor`; and
- *    `src/hierarchy-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
+ *    `src/structure-deepen.ts` § `DeepenOptions.signal` says of it *"cuts short a
  *    wait, never a call in flight"*. So the honest bound is now **the single
  *    request already in flight**, which may still be billed, rather than a whole
  *    label pass. The claim itself cannot be aborted — its `AbortController` is
@@ -2209,7 +2209,7 @@ async function runPhaseD(opts: {
 
   /* **`allSettled`, not `all`.** `Promise.all` rejects the moment one job
      does, and the rejection travels straight out through `withLevers` —
-     which restores `SPIDERYARN_DEEPEN_HIERARCHY` and `SPIDERYARN_DEEPEN_REASK`
+     which restores `SPIDERYARN_DEEPEN_STRUCTURE` and `SPIDERYARN_DEEPEN_REASK`
      while the other two jobs are still running under them, and lets
      `reportRun` start reading half-written ledgers and deleting articles
      underneath live tasks. Draining first costs nothing and is the only way
@@ -2627,13 +2627,13 @@ async function reportRun(opts: {
   const bookRepeats = ctx.runFile.jobs.filter((j) => j.repeat !== null);
   for (const j of bookRepeats) {
     if (j.stats == null) continue;
-    const hierarchyInput =
+    const structureInput =
       j.byAiJob?.find((r) => r.step === "hierarchy")?.tokens.input ?? j.stats.usage.inputTokens;
     const own = checkRepeatBoughtItsWave({
       label: `${j.phase} ${j.label}`,
       stats: j.stats,
-      ledgerHierarchyInputTokens: hierarchyInput,
-      structureInputTokensFloor: structureTokenFloor(
+      ledgerStructureInputTokens: structureInput,
+      wholeDocumentInputTokensFloor: wholeDocumentTokenFloor(
         Number(j.stepOutcomes?.find((s) => s.name === "blocks")?.detail?.match(/^(\d+)/)?.[1] ?? 0),
       ),
       /* **Phase A buys the structure call; that is what phase A is for.** The

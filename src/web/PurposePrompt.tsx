@@ -48,9 +48,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { clearAskPurpose, peekAskPurpose } from "./ask-purpose.js";
-import { leavingFetch } from "./lib/api.js";
 import { ProfileBox } from "./ProfileBox.js";
-import { savePurpose, usePurpose } from "./purpose.js";
+import { leavePurpose, savePurpose, usePurpose } from "./purpose.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { useVisualViewport } from "./useVisualViewport.js";
 
@@ -69,12 +68,7 @@ function Ask({ slug }: { slug: string }) {
        empty box clears. Here the box was seeded empty over a purpose that is
        definitively none, so there is nothing hidden to erase. */
     save: async (text) => (await savePurpose(slug, text === "" ? null : text)) ?? "",
-    leave: (text) =>
-      leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ purpose: text === "" ? null : text }),
-      }),
+    leave: (text) => leavePurpose(slug, text),
   });
   const seed = purpose.seed;
   const [open, setOpen] = useState(false);

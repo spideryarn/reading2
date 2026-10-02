@@ -204,7 +204,7 @@ import {
   sameStamp,
   type StepStamp,
 } from "./store/artifacts.js";
-import { checkCoverage, generateHierarchy } from "./hierarchy.js";
+import { checkCoverage, generateStructure } from "./structure.js";
 import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
 import {
   generateTweets,
@@ -646,7 +646,7 @@ export interface StepContext {
    * several paid calls can decline to **start** one it cannot finish, and hand
    * back with what it has bought already banked, rather than being aborted in
    * the middle of a call nobody will ever read. The hierarchy step's deepening
-   * wave is the only reader today (src/hierarchy-deepen.ts § `runExpansionWave`).
+   * wave is the only reader today (src/structure-deepen.ts § `runExpansionWave`).
    *
    * It is `LEASE_MS - DEADLINE_MARGIN_MS` after the claim, which is the same
    * instant `src/jobs.ts` sets its own timer for — one number, passed, rather
@@ -2641,7 +2641,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * line above, so that case is one query away instead.
        */
       /* **`blocksArtefact`, not a bare `{ blocks }`.** Every writer of this
-         artefact goes through it — stage 3 here, stage 4 in src/hierarchy.ts, the
+         artefact goes through it — stage 3 here, stage 4 in src/structure.ts, the
          Postgres export — because the stamp it adds is what lets a reader tell
          blocks cleaned by the current sanitiser policy from blocks cleaned by
          nothing. A plain `{ blocks: run.blocks }` compiles, writes, and makes
@@ -2654,13 +2654,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   },
 
   /* Stages 4 + 5 — one model call writes the structure and the gists together;
-     src/hierarchy.ts says why they are not two passes. */
+     src/structure.ts says why they are not two passes. */
   hierarchy: {
     name: "hierarchy",
     label: "Building the hierarchy",
     /* `labels.json` is in here as well as the tree, because stage 4 is two model
        passes now and a directory with a tree but no labels is a half-run step,
-       not a finished one. src/hierarchy.ts writes the tree last for the same reason. */
+       not a finished one. src/structure.ts writes the tree last for the same reason. */
     produces: ["tree", "labels", "blocks"],
     /**
      * **No `stamp`, and it is not an oversight — one was written and withdrawn
@@ -2684,7 +2684,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * given, so the decision here is unchanged and only its reason is.)
      *
      * The tree's own comment in src/web/tree.ts has said as much all along:
-     * *"ids are positional and a re-run of `npm run hierarchy` renumbers them"*.
+     * *"ids are positional and a re-run of `npm run structure` renumbers them"*.
      *
      * **So a stamp here needs consumer invalidation first**, which does not
      * exist: `cascadeForce` is computed once from explicit force flags when the
@@ -2720,7 +2720,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           generic: `No blocks for "${ctx.slug}" — run the blocks step first.`,
         });
       }
-      const run = await generateHierarchy({
+      const run = await generateStructure({
         blocks: file.blocks,
         slug: ctx.slug,
         /* Where the **label batches** are kept as they land, one row each, so a
@@ -2757,7 +2757,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              prompt drift.
 
              **`repairedBlocks` and `largestRepair` are new since the tiling
-             repair stopped being bounded at one block** (src/hierarchy.ts §
+             repair stopped being bounded at one block** (src/structure.ts §
              `planChildRanges`). The count alone used to say everything,
              because every repair was the same size; it now covers both a
              boundary a paragraph out and a section handed forty blocks that
@@ -2770,20 +2770,20 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              of these that means something was lost rather than moved, and since
              2026-08-31 the only remaining way a tiling fault costs the reader
              anything at all — nothing about the tiling refuses an answer now.
-             src/hierarchy.ts § `BuildReport.droppedChildren`. */
+             src/structure.ts § `BuildReport.droppedChildren`. */
           droppedChildren: run.droppedChildren,
           droppedHeadings: run.droppedHeadings,
           /* **Socratic questions written but not kept.** Nothing on screen
              distinguishes a question the model chose not to write from one
              this stage threw away, so this is the only place a prompt that
              had drifted into writing unusable ones would show up.
-             src/hierarchy.ts § `questionFor`. */
+             src/structure.ts § `questionFor`. */
           droppedQuestions: run.droppedQuestions,
           /* **Rungs that restated their parent**, spliced away rather than
              stored — two gist columns of identical extent is a duplicated cell
              the reader sees, not a wasted column. Nothing about it moves a
              block, so it is its own figure rather than a repair.
-             src/hierarchy.ts § `collapseRestatedRungs`. */
+             src/structure.ts § `collapseRestatedRungs`. */
           collapsedRungs: run.collapsedRungs,
           /* **`labelsDropped`, `labelBatches`, `labelsResumed` and `labelCalls`
              were here until 2026-09-06** and are on the `labels` step's own log
@@ -2792,20 +2792,20 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              somewhere — it is just that this step no longer asks for a label.
              docs/reusable/silent-success.md. */
           /* **Was the tree bought or replayed?** Until 2026-09-05 this was
-             printed only by `src/hierarchy.ts`'s own `main()`, and stage E of
+             printed only by `src/structure.ts`'s own `main()`, and stage E of
              docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
              deleted that CLI — so taking the deletion whole would have dropped
              the one signal that says which. It belongs here anyway: it is the
              field that says why a forced re-run was cheap, and without it the
              only way to tell is to infer it from a token count, which is what
              evals/deepen/ was reduced to doing. */
-          structureResumed: run.structureResumed,
+          wholeDocumentResumed: run.wholeDocumentResumed,
           /* 2 is an answer that did not become a tree, asked for again —
-             src/hierarchy.ts § the re-ask. Logged at 1 too, so a rate can be read. */
-          structureCalls: run.structureCalls,
+             src/structure.ts § the re-ask. Logged at 1 too, so a rate can be read. */
+          wholeDocumentCalls: run.wholeDocumentCalls,
           /* **What the deepening wave did**, and `null` where nobody asked for
              one — which is every article until stage 8 moves the flag
-             (src/hierarchy-deepen.ts § `DEEPEN_ENV`). Nested rather than eight
+             (src/structure-deepen.ts § `DEEPEN_ENV`). Nested rather than eight
              flat fields, because it is one feature's story and it is read as
              one: how many sections were eligible, how many came back, what the
              verdicts said, and what the wave could not do — a section too large
@@ -2838,7 +2838,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * crash-safety property its comments claimed. It held because `stepIsDone`
        * reads *file exists* as *step done* and `writeFile` truncates before it
        * writes. Under one map both halves of that reasoning are gone, and
-       * `src/hierarchy.ts` now says so where it used to say the other thing.
+       * `src/structure.ts` now says so where it used to say the other thing.
        *
        * **`inputHash` and nothing else**, and the reason changed shape on
        * 2026-09-06 without changing the answer.
@@ -3001,12 +3001,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
 
       /* The artefacts, assembled once, with every check below asked of *this*
          object rather than of the locals it came from — the discipline
-         src/hierarchy.ts § `parts` explains at length, for the same reason: a
+         src/structure.ts § `parts` explains at length, for the same reason: a
          tree merged from one set of labels and returned beside another is a pair
          that looks finished and describes two different articles. */
       const parts = { labels: run.file, tree: mergeLabels(structure, run.file.labels) };
 
-      /* **`checkCoverage` moved here from `generateHierarchy` on 2026-09-06**,
+      /* **`checkCoverage` moved here from `generateStructure` on 2026-09-06**,
          and this position is the point of it: after the merge, over the tree
          about to be written, and before anything can set `nav_label_status` to
          `ready`. Its two per-batch siblings, `assertEveryBlockLabelled` and
@@ -3051,7 +3051,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         parts,
         /* Three values, and all three are read back off the manifest by
            `stampOf`. `inputHash` comes off the artefact rather than being hashed
-           again here, for the reason src/hierarchy.ts gives at its own
+           again here, for the reason src/structure.ts gives at its own
            `inputHash`: two computations of "the blocks hash" is how the two
            sides of `assertStampAgrees` come to disagree. */
         stamp: {

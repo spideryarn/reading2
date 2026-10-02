@@ -270,7 +270,7 @@ as fixed:
 | dictation: measure real speech? | **no — switch to OpenAI, rewrite `/privacy`** | overruled the evidence knowingly; see below |
 | the yellow highlighter for quotes? | **neither — a border rather than a fill**, weight carrying priority | search hits fill, quotes outline: nobody borrows a channel |
 | the quiz difficulty slider? | **declined — make the quiz adaptive instead** | removes the control rather than tuning it |
-| `toc/6` backfill? | **leave it, new articles only** — plus *"there should be a way to re-run any of the generated modes"* | recorded in [hierarchy.md](../project/hierarchy.md#prompt-versions); the re-run became its own session |
+| `toc/6` backfill? | **leave it, new articles only** — plus *"there should be a way to re-run any of the generated modes"* | recorded in [hierarchy.md](../project/structure-step.md#prompt-versions); the re-run became its own session |
 
 **The dictation one is the one to re-read later.** He was shown that we do not use Whisper, that a
 bake-off had scored the current model 78/78 on hard terms that were in the vocabulary, that OpenAI

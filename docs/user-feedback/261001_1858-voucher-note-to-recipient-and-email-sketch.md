@@ -22,3 +22,7 @@ heading, above our own words, labelled *A note from the person who gave you this
 box, a small sketch of the email updates as you type, showing the subject, the heading and where the
 note lands, with the rest of the body described. The table has a *Note to them* column you can edit;
 editing it does not re-send the email.
+
+Follow-up, 2026-10-02: the label is gone. The note is in italics in the email, and a line under the
+box reminds you to sign it ("Sign it yourself, e.g. '— Greg'") — Greg's answer to
+Q-voucher-note-label.

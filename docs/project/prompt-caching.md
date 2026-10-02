@@ -213,7 +213,7 @@ its scope covers, so batches mostly share nothing; the `repair` retry was moved 
 as the prerequisite, but the breakpoint is not in yet).
 
 **The hierarchy's other calls are a different question, and they do mark a prefix.** The deepening
-wave ([`src/hierarchy-expand.ts`](../../src/hierarchy-expand.ts) § `expansionRequest`) sends one
+wave ([`src/structure-expand.ts`](../../src/structure-expand.ts) § `expansionRequest`) sends one
 scoped call per fat section, all sharing `EXPAND_SYSTEM` plus the frozen wave-1 outline, and every
 one of them carries a breakpoint on that shared part. Two things about it that are decisions rather
 than defaults:
@@ -233,7 +233,7 @@ than defaults:
   `expand/4`; the answer is still no, with less room. The reasoning is on `runExpansionWave`, so that
   whoever changes the packing sees it.
 
-Nothing of this reaches a reader yet: the wave is behind `SPIDERYARN_DEEPEN_HIERARCHY`, which is off
+Nothing of this reaches a reader yet: the wave is behind `SPIDERYARN_DEEPEN_STRUCTURE`, which is off
 ([260904d](../plans/260904d-deepen-fat-sections.md) § stage 8).
 
 ## What production actually does

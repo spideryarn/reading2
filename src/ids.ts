@@ -80,12 +80,12 @@ export function isSpideryarnId(value: string | null | undefined): boolean {
  * and withheld — a length and a type are enough to tell a truncated id from a
  * paragraph.
  *
- * **It lives here rather than in src/hierarchy.ts**, where it was written and
- * where its only caller was, because src/hierarchy-cascade.ts throws the same
+ * **It lives here rather than in src/structure.ts**, where it was written and
+ * where its only caller was, because src/structure-cascade.ts throws the same
  * kind of message about the same kind of value. Importing it from the stage
  * module would make a pure arithmetic file load the whole of stage 4 at
  * runtime, and would become a real `hierarchy → cascade → hierarchy` cycle the
- * moment `generateHierarchy` wires the cascade in. This module imports nothing
+ * moment `generateStructure` wires the cascade in. This module imports nothing
  * at all, which is what makes it the safe home. ⟨GPT Sol, 2026-09-04⟩
  */
 export function nameValue(value: unknown): string {

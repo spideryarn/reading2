@@ -235,7 +235,7 @@ Built on 2026-08-26 from Greg's ask for *"hierarchical Summary, taking inspirati
 article, its parts and its sections, with a **Depth** control (the `?deep=` cut-off), `+N sections`
 badges that opened one node past it, a paragraph count on every row, and a panel that followed the
 reader down the page. From 2026-09-05 each part showed its Socratic question instead of its gist
-([hierarchy.md § The question under the claim](hierarchy.md#the-question-under-the-claim)). Simple
+([structure-step.md § The question under the claim](structure-step.md#the-question-under-the-claim)). Simple
 joined it as a second sub-mode on 2026-09-30, and the two shared one row as Parts | Sections beside
 the slider from 2026-10-01 morning.
 
@@ -273,7 +273,7 @@ browser's).
 
 ## See also
 
-- [hierarchy.md](hierarchy.md) — stage 4, which writes the gists and questions the outline drew
+- [structure-step.md](structure-step.md) — stage 4, which writes the gists and questions the outline drew
 - [structure.md](structure.md) — where the article's outline is drawn now
 - [block-ids.md](block-ids.md) — the contract the passage chips rest on
 - [reader-profile.md](reader-profile.md) — the profile and goal that shape every level

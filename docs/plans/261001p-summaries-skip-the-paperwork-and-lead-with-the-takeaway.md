@@ -127,7 +127,7 @@ argues"* made concrete where the byline arrives.
 
 - **Structure: `toc/9` → `toc/10`.** SYSTEM's bytes change, the structure checkpoint is keyed on
   the stamp, and a tree half-written under each would be a visible defect. New articles only, as
-  every earlier bump ([hierarchy.md § A new prompt reaches new articles only](../project/hierarchy.md#prompt-versions)). The pinned
+  every earlier bump ([hierarchy.md § A new prompt reaches new articles only](../project/structure-step.md#prompt-versions)). The pinned
   request (`tests/hierarchy-structure-request-parity.test.ts`), the hoist test and the expansion
   stamp (`toc/10+expand/6`) move with it. The GISTS block is what `evals/summaries` slices as
   production's, so that eval's live arm moves too; its pinned `toc/6` controls do not.

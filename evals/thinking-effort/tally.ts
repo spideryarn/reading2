@@ -130,7 +130,7 @@ async function keyFor(dir: string, slug: string): Promise<Key> {
   return readJson<Key>(path.join(dir, "keys", `key-${slug}.json`));
 }
 
-async function hierarchyRows(runDir: string): Promise<Row[]> {
+async function structureRows(runDir: string): Promise<Row[]> {
   const run = await readJson<{
     results: {
       arm: string;
@@ -245,10 +245,10 @@ async function main(): Promise<void> {
   lines.push(`**Combined (worse of the two)**: ${combined}`, "");
 
   // Savings and validity.
-  const hierarchyRun = argv[argv.indexOf("--hierarchy-run") + 1];
+  const structureRun = argv[argv.indexOf("--hierarchy-run") + 1];
   const rows = mode === "hierarchy"
-    ? hierarchyRun && argv.indexOf("--hierarchy-run") >= 0
-      ? await hierarchyRows(hierarchyRun)
+    ? structureRun && argv.indexOf("--hierarchy-run") >= 0
+      ? await structureRows(structureRun)
       : (() => { throw new Error("--mode hierarchy needs --hierarchy-run <dir>"); })()
     : (await readFile(path.join(results, `runs.${mode}.jsonl`), "utf-8"))
         .split("\n")
