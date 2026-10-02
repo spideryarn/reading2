@@ -15,7 +15,7 @@
  * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
  *
  * ```
- *  ▤ ○──●──○ ▤▤   ⓤ
+ *  ▤ ○──●──○ ▤▤
  *  the paragraphs, each with the passages it rests on
  * ```
  *
@@ -67,8 +67,9 @@ export function SummaryBand({ slug, onJump }: { slug: string; onJump(id: BlockId
       onJump={onJump}
       render={(body, badge, about) => (
         <SummarySurface
-          controls={<SummaryControls slug={slug} value={level} onChange={(next) => void setLevel(next)} badge={badge} />}
+          controls={<SummaryControls slug={slug} value={level} onChange={(next) => void setLevel(next)} />}
           about={about}
+          profile={badge}
         >
           {body}
         </SummarySurface>
@@ -79,8 +80,8 @@ export function SummaryBand({ slug, onJump }: { slug: string; onJump(id: BlockId
 
 /**
  * The plain-words levels' owner half: the read, the job and the press — and
- * the *written for you* badge, which belongs in the row above the paragraphs
- * and needs this hook's answer, so the band hands a `render` in rather than
+ * the *written for you* badge, which belongs in the band's corner and needs
+ * this hook's answer, so the band hands a `render` in rather than
  * the row reaching down.
  */
 function OwnerSimple({
@@ -148,7 +149,7 @@ export function VisitorSummaryBand({
   const [level, setLevel] = useQueryState("summary", summaryParam);
   return (
     <SummarySurface
-      controls={<SummaryControls slug={null} value={level} onChange={(next) => void setLevel(next)} badge={null} />}
+      controls={<SummaryControls slug={null} value={level} onChange={(next) => void setLevel(next)} />}
     >
       <SimplePanel access={{ kind: "visitor", simple: simple ?? null }} level={level} onJump={onJump} />
     </SummarySurface>
@@ -162,6 +163,7 @@ export function VisitorSummaryBand({
 function SummarySurface({
   controls,
   about = null,
+  profile = null,
   children,
 }: {
   controls: ReactNode;
@@ -170,10 +172,12 @@ function SummarySurface({
    * `about`): for the owner, who wrote the paragraphs and when.
    */
   about?: ReactNode;
+  /** The owner's *written for you* badge, for the band's corner (ModeSurface.tsx § `profile`). */
+  profile?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <ModeSurface label="Summary" feature="summ" mode="summary" about={about}>
+    <ModeSurface label="Summary" feature="summ" mode="summary" about={about} profile={profile}>
       {/* **No `head`, so there is no title row at all.** It said the mode's own
           name, which the Dock at the foot of the page is already saying — Greg,
           2026-09-05: *"I think we can rely on the bottom bar to tell us what
@@ -185,8 +189,9 @@ function SummarySurface({
           docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 5. */}
 
       {/* **One row** — Greg, 2026-09-30: *"the main thing I'm trying to do is
-          avoid wasting vertical space"* (SPIDERYARN-READING2-7A). The slider
-          and the badge, and no labels: the group is named for a screen reader
+          avoid wasting vertical space"* (SPIDERYARN-READING2-7A). The slider,
+          and no labels — the badge is in the band's corner since 2026-10-02
+          (plan 261002e): the group is named for a screen reader
           by its hidden legend, and the slider's card says what each level is. */}
       <div className="summ-controls">{controls}</div>
       {children}
@@ -221,7 +226,7 @@ const PLAIN_HOW =
   "Written by AI once, at all three levels, and kept. Each paragraph links to the passages it rests on — the article says it better.";
 
 /**
- * **The plain-words slider, and the badge** — Summary's one row. Greg,
+ * **The plain-words slider** — Summary's one row. Greg,
  * 2026-09-30 (SPIDERYARN-READING2-7J): *"let's provide a UI-slider with 3
  * level"*. A slider rather than three pills because the three are one scale —
  * shorter and plainer to the left, longer and fuller to the right — and a
@@ -254,13 +259,10 @@ export function SummaryControls({
   slug,
   value,
   onChange,
-  badge,
 }: {
   slug: string | null;
   value: SimpleLevel;
   onChange(next: SimpleLevel): void;
-  /** The owner's *written for you* badge, or null. */
-  badge?: ReactNode;
 }) {
   /* **The gesture seam.** Choosing a level with nothing stored writes all
      three — Greg's rule about opening a mode, one level down
@@ -381,7 +383,6 @@ export function SummaryControls({
           </button>
         </Tooltip>
       </fieldset>
-      {badge ? <span className="summ-badge">{badge}</span> : null}
     </>
   );
 }

@@ -47,23 +47,14 @@
    is drawn (no head then), so it clears the (i) the same way — mode-band.css §
    `.mode-band > .band-about`. Its own padding is in footnotes.css § `.gloss-ask`. */
 .mode-band.has-about .gloss-ask { padding-right: calc(0.7rem + var(--band-about-room)); }
-/* The buttons, as the named group; the trailing slot sits beside it rather
-   than in it (GlossaryPanel.tsx § SortBar). */
+/* The buttons as one named group. The profile badge that used to sit beside
+   it moved to the band's corner in plan 261002e. */
 .gloss-sort-group {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
   min-width: 0;
-}
-/* The trailing detail at the far end of a sort row: the Glossary's count and
-   profile badge, and the FAQ's (i). `margin-left: auto` pushes it right, and
-   multiple contents wrap as one piece. */
-.gloss-sort-trail {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-left: auto;
 }
 .gloss-sort-btn {
   padding: 0.1rem 0.4rem;
@@ -129,8 +120,7 @@
     margin: -3px;
   }
   .gloss-sort-group::-webkit-scrollbar { display: none; }
-  .gloss-sort-group > *,
-  .gloss-sort-trail { flex-shrink: 0; }
+  .gloss-sort-group > * { flex-shrink: 0; }
 }
 
 /* The threshold slider — the one control in this panel that sets a number
