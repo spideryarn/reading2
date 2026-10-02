@@ -22,7 +22,7 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { LibraryTermsResponse } from "../src/types.js";
+import type { LibraryEntry, LibraryTermsResponse } from "../src/types.js";
 import { ShelfTerms } from "../src/web/ShelfTerms.js";
 import { topArticles } from "../src/web/ShelfTermChip.js";
 import { topicHueStops } from "../src/web/topic-colour.js";
@@ -58,6 +58,29 @@ const countOf = (key: string) => 14 - KEYS.indexOf(key);
 let data: LibraryTermsResponse = DATA;
 let scopeSlugs: string[] = SLUGS;
 let titleOf = (slug: string): string | undefined => `Title of ${slug}`;
+
+/** A shelf entry for a slug, titled by `titleOf` — what the paper card draws. */
+function entryFor(slug: string): LibraryEntry | undefined {
+  const title = titleOf(slug);
+  if (title === undefined) return undefined;
+  return {
+    slug,
+    title,
+    byline: `Author of ${slug}`,
+    siteName: "The Example Review",
+    addedAt: "2026-08-12T09:15:00.000Z",
+    words: 2400,
+    minutes: 11,
+    blocks: 40,
+    parts: 2,
+    sections: 5,
+    comments: 0,
+    opens: 0,
+    sourceReusable: true,
+    gist: `The gist of ${slug}.`,
+    has: { arc: false, tweets: false, glossary: false },
+  };
+}
 let liveCountOf = (key: string): number =>
   KEYS.includes(key) ? countOf(key) : (data.terms.find((t) => t.key === key)?.articles.length ?? 0);
 
@@ -78,7 +101,7 @@ function Harness() {
       setSelected((s) => (s.includes(key) ? s.filter((k) => k !== key) : [...s, key]));
     },
     onClear: () => setSelected([]),
-    titleOf,
+    entryOf: entryFor,
     inScope: new Set(scopeSlugs),
     archived: false,
   });
@@ -275,6 +298,68 @@ describe("?topicsView=detail", () => {
 
 });
 
+describe("the paper card on an article link", () => {
+  /** The links in the detail row for this topic. */
+  const linksOf = (key: string) => {
+    const row = [...(detailList()?.querySelectorAll(":scope > li") ?? [])].find(
+      (li) => li.querySelector("button[aria-pressed]")?.getAttribute("aria-label")?.split(" ")[0] === key,
+    );
+    return [...(row?.querySelectorAll<HTMLAnchorElement>("a") ?? [])];
+  };
+
+  it("opens on hovering a link: title, authors and site, gist, dates, and every topic it is in", async () => {
+    await show("/?topicsView=detail");
+    /* a2 is used by topic00, topic01 and topic02 (the fixture's i, i+1, i+2). */
+    const link = linksOf("topic00").find((a) => a.getAttribute("href") === "/read/a2");
+    expect(link, "a link to a2 in topic00's row").toBeTruthy();
+    link?.dispatchEvent(new MouseEvent("mouseenter"));
+    await settle(400);
+    const cards = [...document.querySelectorAll<HTMLElement>(".tooltip")];
+    expect(cards, "exactly one card open").toHaveLength(1);
+    const text = (cards[0]?.textContent ?? "").replace(/\s+/g, " ");
+    expect(text).toContain("Title of a2");
+    expect(text).toContain("Author of a2 · The Example Review");
+    expect(text).toContain("The gist of a2.");
+    expect(text).toContain("Added");
+    expect(text).toContain("Last openednever");
+    expect(text).toContain("11 min · 2,400 words");
+    const topics = [...(cards[0]?.querySelectorAll(".tip-topics li") ?? [])].map((li) => li.textContent);
+    expect(topics).toEqual(["topic00", "topic01", "topic02"]);
+  });
+
+  it("names a topic the view is not drawing, because it has nothing left to show", async () => {
+    /* topic01 at zero is not drawn (availableTopics); a2 is still in it. */
+    liveCountOf = (key) => (key === "topic01" ? 0 : countOf(key));
+    await show("/?topicsView=detail");
+    expect(linksOf("topic01"), "topic01 is not drawn").toHaveLength(0);
+    const link = linksOf("topic00").find((a) => a.getAttribute("href") === "/read/a2");
+    link?.dispatchEvent(new MouseEvent("mouseenter"));
+    await settle(400);
+    const topics = [...document.querySelectorAll(".tooltip .tip-topics li")].map((li) => li.textContent);
+    expect(topics).toEqual(["topic00", "topic01", "topic02"]);
+  });
+
+  it("opens on keyboard focus, and its description does not read the link's title again", async () => {
+    await show("/?topicsView=detail");
+    const link = linksOf("topic00").find((a) => a.getAttribute("href") === "/read/a1");
+    expect(link, "a link to a1 in topic00's row").toBeTruthy();
+    await act(async () => link?.focus());
+    await settle(400);
+    const cards = [...document.querySelectorAll<HTMLElement>('[role="tooltip"]')];
+    expect(cards, "exactly one card open").toHaveLength(1);
+    const card = cards[0] as HTMLElement;
+    /* The card is the link's description, by id (tooltips.md § Five things, 4). */
+    expect(link?.getAttribute("aria-describedby")).toBe(card.id);
+    /* What a screen reader reads as that description: the card less anything
+       aria-hidden. The title is on screen, and is the link's name already. */
+    const read = card.cloneNode(true) as HTMLElement;
+    for (const hidden of read.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+    expect(card.textContent).toContain("Title of a1");
+    expect(read.textContent).not.toContain("Title of a1");
+    expect(read.textContent).toContain("The gist of a1.");
+  });
+});
+
 describe("copies of one article", () => {
   /* Three physical copies of one piece, saved twice over: each is its own
      slug with the same title. A row that named it three times would be a row
@@ -335,6 +420,20 @@ describe("copies of one article", () => {
     expect(links.map((a) => a.getAttribute("href"))).toEqual(["/read/ball-1", "/read/storms", "/read/sprites"]);
     // The counts stay physical: seven articles use it, copies and all.
     expect(row?.textContent).not.toContain("of 7");
+  });
+
+  it("gives the named copy its own card, looked up by slug, not by title", async () => {
+    data = COPIES;
+    titleOf = (slug) => TITLES[slug];
+    scopeSlugs = Object.keys(TITLES);
+    await show("/?topicsView=detail");
+    const link = detailList()?.querySelector<HTMLAnchorElement>('a[href="/read/ball-1"]');
+    link?.dispatchEvent(new MouseEvent("mouseenter"));
+    await settle(400);
+    const cards = [...document.querySelectorAll<HTMLElement>(".tooltip")];
+    expect(cards).toHaveLength(1);
+    // entryFor gives each copy its own gist, so this is ball-1's and no other's.
+    expect(cards[0]?.textContent).toContain("The gist of ball-1.");
   });
 
   it("names distinct titles in the tooltip too", () => {

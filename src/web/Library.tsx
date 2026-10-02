@@ -738,7 +738,7 @@ export function Library({
           selected={topics}
           onToggle={toggleTopic}
           onClear={() => pushView(() => void setTopics(null))}
-          titleOf={shelfTopics.titleOf}
+          entryOf={shelfTopics.entryOf}
           inScope={shelfTopics.inScope}
           archived={archivedOn}
         />

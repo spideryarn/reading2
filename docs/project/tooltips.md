@@ -26,6 +26,11 @@ meaning a reader has to work out deserves a card as much as a button does; the b
 is decorative and `aria-hidden`, and has one anyway
 ([261001j](../plans/261001j-five-small-feedback-tooltips-and-labels.md) § 2).
 
+Words on a card are from the viewer's side. A stranger reading a shared article is not its owner: on
+any surface a visitor can see, the owner is whoever added this article, never *you*. And a card never
+asks the reader to do something unless the control it sits on does it (Greg approved, 2026-10-02;
+[261002e](../plans/261002e-sharing-mark-tooltip-separates-state-from-action.md)).
+
 ## Prefer the rich card to a native `title`
 
 > make a note somewhere that we always prefer to use our rich tooltip machinery because they're just
@@ -112,6 +117,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | the two things said at the top of an article — where it came from, and who can read it. Both were `title` attributes or a bare sentence until 2026-09-06 and are `ControlTip`s now; the origin one is also the app's only tooltip on a line of *text* rather than on a glyph. Its trigger is the address's own anchor when there is an address, and a plain `<span>` with `cursor: help` and an `sr-only` pair of sentences when there is not — the second of those is the app's one tooltip a keyboard cannot open, which is why its content is duplicated rather than only shown |
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the line under `/read/public`'s lede — **the app's only `ControlTip` on a link to a *page* rather than on a control**, and the only one whose reader may want nothing from us at all ([public-readable-sharing.md](public-readable-sharing.md)). Greg asked for five claims in it; two of the five were false, so the card carries the idiom's two paragraphs and the page carries the claims |
 | [`src/web/library-columns.tsx`](../../src/web/library-columns.tsx) | the shelf table's **row card**, on each title — the second card defined by subtraction, after Structure's, and the first whose subtraction responds to columns the reader has chosen to hide ([library.md § The table's row card](library.md#the-tables-row-card-whole-titles-and-columns-you-can-hide)) |
+| [`src/web/PaperCard.tsx`](../../src/web/PaperCard.tsx) | **the paper card** — what a link to an article on your shelf says: title, authors and site, the gist (or a paper's abstract, cut short, before it is AI-processed), added, last opened, length or not-yet-processed status, any archive and sharing state, and up to six shelf topics it is in, followed by *+N more*. `titleIsTriggerName` keeps the title on screen but out of the description, for a link already named by it. Reusable by design (Greg, `spya-f28vqj`: *"a reusable component for paper-tooltips that we use anywhere there's a link to a paper"*): it takes a `LibraryEntry` and the topics to name, and the caller wraps its own link in a `Tooltip`. Unlike the row card it repeats the title, because it hangs off a bare link rather than a row that prints everything else. First used on the shelf topics' More-detail links ([shelf-terms.md](shelf-terms.md), plan [261002f](../plans/261002f-paper-card-on-topic-article-links.md)) |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the shelf card's five action buttons — the one row where a card also has to say *why this one does nothing* ([library.md § When a button cannot do its job](library.md#when-a-button-cannot-do-its-job)) |
 | [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
 | [`src/web/BandAbout.tsx`](../../src/web/BandAbout.tsx) | **every band's (i)**, in its top-right corner, put there by `ModeSurface`'s `mode` and `about` since 2026-10-01 (Greg: *"Move this into a tooltip for a (i) icon in the top-right"*, spya-ucu35y). Controlled, so a tap opens it on a phone. Its card opens with the mode's two `MODE_CATALOG` paragraphs — the same words as the Dock's card on that mode — then the mode's counts, caveats and `AboutMade` (who made it, when, how long). What belongs there is [mode.md](mode.md) § Every band has an (i) |
@@ -184,7 +190,11 @@ sentence is the control's own name, near enough, and would be read twice
 
 The spine's card is a *place* described. The other shape — and by count the commoner one — is a
 **control** described: `ControlTip` in [`Tooltip.tsx`](../../src/web/Tooltip.tsx), a head and two
-paragraphs, with one rule that is the whole reason it is worth a hover.
+paragraphs, and optionally a `press` line, with one rule that is the whole reason it is worth a
+hover. The two paragraphs are statements. If what pressing does is worth saying, it goes in `press`,
+never as a sentence in either paragraph (Greg approved, 2026-10-02, after spya-d886ah: *"One sentence
+is a statement of the current state. The other is a potential action. But there's no … UI
+differentiation between these two kinds of sentence."*).
 
 > The first sentence is what a reader could have guessed by pressing the control; the second is what
 > they could not — where the answer comes from, what it costs, or what the control does *not*
