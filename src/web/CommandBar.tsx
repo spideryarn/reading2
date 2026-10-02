@@ -296,7 +296,14 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
       href: readHref(slug, search, "metadata"),
       label: "Metadata",
       description: "Where this came from, how long it is, and every step that built it.",
-      aliases: ["about", "details", "source", "reading time", "stats"],
+      /* The second line is what you go there to *do* — the page has the only
+         controls for each. Greg, `spya-nkjpte`, 2026-10-02: *"I tried searching
+         for "regenerate" … and nothing matched"*. Plan 261002c. */
+      aliases: [
+        "about", "details", "source", "reading time", "stats",
+        "regenerate", "rerun", "re-run", "redo", "reprocess", "ai processing", "high-powered",
+        "cost", "price", "export", "download", "share", "archive", "delete",
+      ],
       /* The metadata page shows what the pipeline already wrote; opening it
          runs nothing. */
       generates: false,
