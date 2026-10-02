@@ -431,7 +431,7 @@ describe("Ask in chat, from the glossary's refusal", () => {
     /* A draft about the paragraph, opened from its gutter — the one kind of
        chat draft that survives a mode switch, because `Reader` holds it. */
     const chip = host.querySelector<HTMLButtonElement>(
-      'tr[data-block="spya-bbbbbb"] button[aria-label="Chat about this paragraph"]',
+      'tr[data-block="spya-bbbbbb"] button[aria-label="Chat with the AI about this paragraph"]',
     );
     expect(chip, "the paragraph offers a chat").not.toBeNull();
     await act(async () => chip?.click());

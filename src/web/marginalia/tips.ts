@@ -56,9 +56,9 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     how: "From Citations mode. The title is the work's own; the reason it is cited was written by AI from the article.",
   },
   "comment-own": {
-    head: "Your note",
-    what: "A comment you left on this passage.",
-    how: "Written by you, with the AI's answer under it if you asked for one. All your notes are in the drawer at the foot of the window.",
+    head: "Yours",
+    what: "What you left on this passage, each saying which it is: a Comment (no AI reply), a Comment + AI reply (you also asked the AI), or a Question (you asked the AI with ? or Chat about this).",
+    how: "Written by you. All of them are in the Comments drawer at the foot of the window.",
   },
   "comment-owner": {
     head: "A note",

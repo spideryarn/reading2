@@ -7,6 +7,8 @@
 import { describe, expect, it } from "vitest";
 import type { Comment } from "../src/types.js";
 import {
+  MARK_KIND_LABEL,
+  commentKind,
   commentsByBlock,
   orderComments,
   passageOf,
@@ -217,5 +219,31 @@ describe("commentsByBlock", () => {
     // dropping it; the grouping must not quietly re-introduce the drop.
     const lost = comment("spya-000005", "spya-nowhere", 0);
     expect(commentsByBlock([lost], blocks).get("spya-nowhere")).toHaveLength(1);
+  });
+});
+
+/* SPIDERYARN-READING2-9H: every comment says which of three it is.
+   docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md. */
+describe("commentKind", () => {
+  it("tells a bookmark, a plain comment and one that asked the AI apart", () => {
+    expect(commentKind({ status: "none" })).toBe("bookmark");
+    expect(commentKind({ status: "none", body: "mine" })).toBe("comment");
+    expect(commentKind({ status: "none", body: "mine", threadId: "t1" })).toBe("comment-ai");
+    expect(commentKind({ status: "none", threadId: "t1" })).toBe("comment-ai");
+    /* A comment from before 2026-08-28 carries its answer in place. */
+    expect(commentKind({ status: "done", answer: "because" })).toBe("comment-ai");
+    expect(commentKind({ status: "error" })).toBe("comment-ai");
+    /* A visitor's copy: no status, no threadId. */
+    expect(commentKind({ body: "theirs" })).toBe("comment");
+    expect(commentKind({ body: "theirs", answer: "an answer" })).toBe("comment-ai");
+  });
+
+  it("has one label per kind, the question's included", () => {
+    expect(MARK_KIND_LABEL).toEqual({
+      bookmark: "Bookmark",
+      comment: "Comment",
+      "comment-ai": "Comment + AI reply",
+      question: "Question",
+    });
   });
 });

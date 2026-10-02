@@ -1530,29 +1530,9 @@ export function Reader({
       ? (owner.citations.citations?.citations ?? null)
       : null;
   const marginRoom = marginOpen && fit.margW > 0;
-  const marginNotes = useMemo(() => {
-    if (!marginRoom) return null;
-    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
-      faq: marginaliaFaq,
-      claims: marginaliaClaims,
-      citations: marginaliaCitations,
-      comments,
-    });
-    const out = new Map<BlockId, ReactElement>();
-    for (const [blockId, notes] of byBlock)
-      out.set(blockId, <MarginNotesSlot notes={notes} viewer={capability.kind === "owner" ? "owner" : "visitor"} />);
-    return out;
-  }, [
-    marginRoom,
-    article.tree,
-    article.blocks,
-    marginaliaIdeas,
-    marginaliaFaq,
-    marginaliaClaims,
-    marginaliaCitations,
-    comments,
-  ]);
-  useMarginLayout(marginRoom, marginNotes);
+  /* `marginNotes` itself is built below `openAskedFromDrawer`, because the
+     questions the reader asked sit in the margin too and open through it
+     (plan 261002j). */
 
   /**
    * Reading order, not ask order — the panel's arrows walk you *down the
@@ -1835,6 +1815,48 @@ export function Reader({
     [askedList, openChatThread, jumpTo, mode, setMode],
   );
 
+  /**
+   * **Marginalia: the notes beside each block** — MarginaliaColumn.tsx; the
+   * inputs are gathered above, where `marginRoom` is.
+   *
+   * The owner's comments **and the questions they asked**, each stamped with
+   * its kind, open through the drawer's own press (SPIDERYARN-READING2-9H,
+   * plan 261002j). A visitor's payload has no chats, so `askedList` is empty
+   * for them and there is nothing to open.
+   */
+  const marginViewer = capability.kind === "owner" ? "owner" : "visitor";
+  const openAskedFromMargin = marginViewer === "owner" ? openAskedFromDrawer : undefined;
+  const marginNotes = useMemo(() => {
+    if (!marginRoom) return null;
+    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
+      faq: marginaliaFaq,
+      claims: marginaliaClaims,
+      citations: marginaliaCitations,
+      comments,
+      asked: marginViewer === "owner" ? askedList : null,
+    });
+    const out = new Map<BlockId, ReactElement>();
+    for (const [blockId, notes] of byBlock)
+      out.set(
+        blockId,
+        <MarginNotesSlot notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />,
+      );
+    return out;
+  }, [
+    marginRoom,
+    article.tree,
+    article.blocks,
+    marginaliaIdeas,
+    marginaliaFaq,
+    marginaliaClaims,
+    marginaliaCitations,
+    comments,
+    askedList,
+    marginViewer,
+    openAskedFromMargin,
+  ]);
+  useMarginLayout(marginRoom, marginNotes);
+
   /* **A *new* conversation anchored to the whole block** — the other half of
      what an anchor can be, and the one that draws no mark in the prose. The
      paragraph's opening words go into the composer so the reader can see which
@@ -2008,12 +2030,38 @@ export function Reader({
    *
    * Memoised on `create`, which is stable for one slug, so the retry memory and
    * callback survive renders without making memoised `TableView` redraw.
+   *
+   * **And then the comment box opens on it**, since 2026-10-02 — Greg,
+   * SPIDERYARN-READING2-9C: *"it should be possible to comment on a block
+   * without wanting an AI-chat-response."* It always was, by pressing the mark
+   * afterwards, and nobody found it. The bookmark is still stored by the one
+   * press; the dialog is the invitation to add words, which are free, and
+   * closing it leaves a bare bookmark. Only once the store has confirmed, so
+   * the dialog never opens on a row that is about to vanish. Plan 261002j.
+   *
+   * **And only if nothing else has opened since the press, and no later press
+   * has been made.** The store answers after a round trip, and in that time
+   * the reader may have opened a comment, a chat or the selection box — an
+   * answer arriving then must not replace what they chose. `surface` is what
+   * is open now; the press keeps a copy and the answer compares. GPT Sol, P1
+   * on the plan.
    */
+  const surface = useRef<readonly unknown[]>([]);
+  surface.current = [note, thread, chatDraft, annotating];
+  const bookmarkPress = useRef(0);
   const createComment = owner?.comments.create;
-  const bookmarkBlock = useMemo(
-    () => (createComment ? makeBlockBookmarker(createComment) : undefined),
-    [createComment],
-  );
+  const bookmarkBlock = useMemo(() => {
+    if (!createComment) return undefined;
+    const bookmark = makeBlockBookmarker(createComment);
+    return async (blockId: BlockId): Promise<boolean> => {
+      const mine = ++bookmarkPress.current;
+      const before = surface.current;
+      const id = await bookmark(blockId);
+      const unchanged = surface.current.every((v, i) => Object.is(v, before[i]));
+      if (id !== null && mine === bookmarkPress.current && unchanged) void setNote(id);
+      return id !== null;
+    };
+  }, [createComment, setNote]);
 
   const selectProse = useCallback(
     /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes

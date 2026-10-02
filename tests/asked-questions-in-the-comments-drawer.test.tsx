@@ -165,6 +165,20 @@ describe("the Comments drawer lists the questions the reader asked", () => {
     expect(row?.textContent).toContain("In 1998 the lab");
   });
 
+  /* SPIDERYARN-READING2-9H, plan 261002j: the comment rows say their kind too. */
+  it("labels each comment row with its kind, beside the question rows' own", () => {
+    paint({
+      comments: [
+        COMMENT,
+        { ...COMMENT, id: "cmt-ai", threadId: "thr-x" },
+        { id: "cmt-bare", blockId: FIRST, quote: "q", start: 0, createdAt: "t", status: "none" },
+      ],
+      questions: [HELP],
+    });
+    const kinds = [...host.querySelectorAll(".dock-question-kind")].map((k) => k.textContent);
+    expect(kinds.sort()).toEqual(["Bookmark", "Comment", "Comment + AI reply", "Question"]);
+  });
+
   /* No preview line: `lastLine` is not kept live, so a question minted in this
      visit would say "thinking…" under the answer the reader just read — the
      report's own sequence. GPT Sol's plan review, finding 2. */

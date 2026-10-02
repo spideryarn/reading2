@@ -54,6 +54,13 @@ one would otherwise be missed; it would not be, so it is not
   | Debate | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
   | Citations | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([citations.md](citations.md)) |
   | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |
+  | Questions | the block the chat is anchored to | **owner only** (a visitor's payload has no chats); in the same line as that block's comments |
+
+  Each comment and question is stamped with its kind (*Comment*, *Comment + AI reply*, *Question*), and
+  a line holding both counts them apart ("1 comment · 1 question"). A question opens to *Open the
+  conversation*, the Comments drawer's own press. Greg, SPIDERYARN-READING2-9H, 2026-10-01;
+  [comments.md § Every mark says which of three it is](comments.md#three-kinds) and
+  [261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
 
   The quote check is there because a visitor's payload carries no staleness flag (no "this was
   written against an older version of the article"). A list written before a block changed could

@@ -218,15 +218,28 @@ export function CommentDialog({
   const closeRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const dialogRef = useRef<HTMLElement>(null);
+  /* The block the dialog is on as it closes, for the fallback below. */
+  const blockRef = useRef(comment.blockId);
+  blockRef.current = comment.blockId;
   useEffect(() => {
     const opener = document.activeElement;
-    openerRef.current = opener instanceof HTMLElement ? opener : null;
+    openerRef.current = opener instanceof HTMLElement && opener !== document.body ? opener : null;
     closeRef.current?.focus();
     return () => {
       const back = openerRef.current;
       openerRef.current = null;
       if (back?.isConnected) {
         back.focus();
+        return;
+      }
+      /* **The gutter's bookmark button is gone by the time this opened**: the
+         press puts the mark in its place at once and the dialog waits for the
+         store, so the opener recorded is `<body>`, or nothing. The mark on the
+         same paragraph is where the reader was — GPT Sol, P1 on plan 261002j,
+         and ChatDialog's gutter fallback does the same. */
+      const mark = document.querySelector<HTMLElement>(`tr[data-block="${blockRef.current}"] .blk-cmt`);
+      if (mark) {
+        mark.focus();
         return;
       }
       document.querySelector<HTMLButtonElement>('.dock button[aria-label="Comments"]')?.focus();
@@ -563,7 +576,7 @@ export function CommentDialog({
                 setFollowUp("");
               }
             }}
-            placeholder="Ask a follow-up…"
+            placeholder="Ask the AI about this…"
             aria-label="Ask a follow-up question about this passage"
           />
           {dictate.dictation.supported && (
@@ -787,7 +800,10 @@ function CommentBody({ body, onSave }: { body: string; onSave(next: string | nul
           setDraft(saved.current);
         }
       }}
-      placeholder="Add a comment…"
+      /* **Says the box is free**, beside the follow-up box that says it is
+         the AI's: Greg, SPIDERYARN-READING2-9C, *"make a small UI tweak that
+         will make that clear to the user."* Plan 261002j. */
+      placeholder="Add a comment. It’s yours: the AI doesn’t reply"
       aria-label="Your comment on this passage"
       rows={2}
     />

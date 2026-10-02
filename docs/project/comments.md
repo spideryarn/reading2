@@ -70,6 +70,23 @@ The dialog and the drawer show *Whole paragraph —* and the paragraph's opening
 pressing the mark and deleting, as for any comment.
 [260912c](../plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md).
 
+**Since 2026-10-02 the press also opens the comment box on it**, once the store has confirmed the
+bookmark. Greg, SPIDERYARN-READING2-9C:
+
+> If I bookmark a block using the icon in the gutter, it should be a bit more visible.
+>
+> And it should be possible to comment on a block without wanting an AI-chat-response. Enable that
+> and make a small UI tweak that will make that clear to the user.
+>
+> — Greg, 2026-10-01
+
+It was possible — press the mark afterwards and type — and nobody found it. Now the dialog is the
+invitation: its box says *"It's yours: the AI doesn't reply"*, the follow-up box under it says *"Ask
+the AI about this…"*, and the gutter's speech bubble says *Chat with the AI*. Closing the dialog
+leaves a bare bookmark, so one press still bookmarks. The mark itself is drawn **filled** and at full
+strength, the one filled glyph in the column.
+[261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
+
 `status` says **how the model call went, and nothing else**. Every comment made from 2026-08-28
 carries `none`: no call was ever attempted. That is also what keeps a bookmark invisible to
 `sweepOrphaned`, which turns an abandoned `pending` row into an error — a bookmark is not an answer
@@ -840,6 +857,23 @@ loaded.
 
 The comment dialog's arrows still walk comments only.
 [260930f](../plans/260930f-gutter-questions-listed-in-the-comments-drawer.md) has what was deferred.
+
+### Every mark says which of three it is <a id="three-kinds"></a>
+
+> And perhaps indicate whether, in general, comments should indicate whether they're a comment from
+> the user that didn't want an AI chat response, or one that did want an AI chat response, or a
+> question with AI chat response.
+>
+> — Greg, 2026-10-01 (SPIDERYARN-READING2-9H)
+
+Since 2026-10-02 the drawer's rows and the margin's lines carry a label: **Comment**, **Comment + AI
+chat**, **Question** (and **Bookmark** in the drawer, for one with no words). Nothing new is stored:
+`commentKind` in [`comment-nav.ts`](../../src/web/comment-nav.ts) reads it off `threadId` (or an
+answer from before 2026-08-28), and a question is an anchored chat, which `askedQuestions` already
+keeps apart from the comments. *Save & ask* whose chat failed before it existed reads as a plain
+comment, which is what it ended up being; a visitor's copy has no `threadId`, so to them an owner's
+comment is *Comment* unless it carries an answer.
+[261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
 
 ## Where the code is
 
