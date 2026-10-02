@@ -187,7 +187,7 @@ happened. The shared parse seam is [`src/parse-json.ts`](../../src/parse-json.ts
 Reading a few outputs and finding them better is not evidence: the same prompt, run twice, reads
 differently. This is the method that worked, in `evals/plain-words/`:
 
-1. **Call production's own function** (`structureRequest`, `generateGlossary`, `explainStream`,
+1. **Call production's own function** (`wholeDocumentRequest`, `generateGlossary`, `explainStream`,
    `converse`, …), not a copy of the prompt, on a few real local articles of the difficulty the
    change is for. Record a hash of the prompt source with each run.
 2. **Run the old prompt twice.** The second run is the control, and it tells you how much two

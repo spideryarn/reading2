@@ -58,7 +58,7 @@ existed.
 **And the work was done in a worktree, where the evidence does not exist.** `.worktreeinclude` copies
 `.env.local` and `.env` and nothing else, so a worktree starts with an empty `data/` and fills it from
 its own runs — all of them post-rule, all of them clean, because `collapseRestatedRungs` in
-[`src/hierarchy.ts`](../../src/hierarchy.ts) splices this shape out at build time. The commit was
+[`src/hierarchy.ts`](../../src/structure.ts) splices this shape out at build time. The commit was
 green where it was written and red only in the primary. Greg's Mac would most likely have been green
 too.
 

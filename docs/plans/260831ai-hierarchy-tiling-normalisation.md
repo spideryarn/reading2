@@ -38,7 +38,7 @@ PDF would have arrived with three slips.
 ## What was built
 
 **The partition is derived from the answer rather than checked against it.** `planChildRanges` in
-[`src/hierarchy.ts`](../../src/hierarchy.ts) replaces the cursor walk. For a parent `[P0, P1]`:
+[`src/hierarchy.ts`](../../src/structure.ts) replaces the cursor walk. For a parent `[P0, P1]`:
 
 - the first kept child starts at `P0`;
 - every later child starts where the model said, clamped inside the parent, required to be strictly

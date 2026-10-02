@@ -85,7 +85,7 @@
 
 4. **Medium — the noise-floor eval no longer measures the tiling failures; it only measures their normalized outputs.**
 
-   The main runner does record `repaired`, which fixes the earlier review finding for successful rows. But [floor.ts](/home/greg/code/spideryarn2/evals/hierarchy-structure/floor.ts:28) does not read that field, and its scalar measures omit repairs and dropped children. Its remaining tiling instrument is `throwAnatomy`, while tiling faults no longer throw.
+   The main runner does record `repaired`, which fixes the earlier review finding for successful rows. But [floor.ts](/home/greg/code/spideryarn2/evals/structure-whole-document/floor.ts:28) does not read that field, and its scalar measures omit repairs and dropped children. Its remaining tiling instrument is `throwAnatomy`, while tiling faults no longer throw.
 
    Feed the finding-1 answer through an arm repeatedly:
 
@@ -98,7 +98,7 @@
 
 5. **Low — an eval row that ultimately throws loses repairs encountered before the fatal node.**
 
-   `ArmFailure` carries calls but not `BuildReport` ([model-arms.ts:151](/home/greg/code/spideryarn2/evals/hierarchy-structure/model-arms.ts:151)); the runner therefore returns only `threw` and `calls` ([run.ts:227](/home/greg/code/spideryarn2/evals/hierarchy-structure/run.ts:227)).
+   `ArmFailure` carries calls but not `BuildReport` ([model-arms.ts:151](/home/greg/code/spideryarn2/evals/structure-whole-document/model-arms.ts:151)); the runner therefore returns only `threw` and `calls` ([run.ts:227](/home/greg/code/spideryarn2/evals/structure-whole-document/run.ts:227)).
 
    Breaking input:
 

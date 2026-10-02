@@ -122,7 +122,9 @@ family — never pin a version number here:
 - **GPT Luna** — anything lighter; capable and cheap, and a different family, so the variety is free.
   **Never a stand-in for Sol** on a review or on important work because Sol's usage limit ran out:
   the work waits for the limit instead (Greg, 2026-09-30: *"I'd rather we stop working than risk
-  pushing lower-quality stuff."*).
+  pushing lower-quality stuff."*). So no GPT means no progress: say so to the user at once, since they
+  may be able to reset the limit (Greg, 2026-10-02: *"If GPT account does hit usage limits, I can do
+  a reset to get extra. But you need to let me know."*).
 
 The GPT models run through [codex-cli-as-subagent.md](codex-cli-as-subagent.md). Only a GPT model is
 the cross-family check; an Opus second opinion is a different mind, not a different family. Greg,
@@ -201,6 +203,9 @@ the machinery is still open now.
   doc whose wording is a rule still goes through
   [edit-important-docs.md](edit-important-docs.md) when the fix changes what the rule *says*. A fix
   that only makes the doc match the code is covered by this permission.
+- **The reader's help.** If the project has a help page for its users (in this repo, `/help` —
+  [help-page.md](../project/help-page.md)), a change to what a reader sees or can do updates it in
+  the same stage, like a doc.
 - **Tests.** Write the failing test before the fix; a test that was never red proves nothing. Then
   mutate the finished code at the end of the stage and check the suite notices — red-first only tests
   the diff ([silent-success.md](silent-success.md)).

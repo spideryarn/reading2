@@ -1,4 +1,4 @@
-You are GPT Sol doing the CODE review of plan docs/plans/261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md in the Spideryarn repo. Your plan review is docs/plans/261002b-plan-review-sol.md; check its findings were honoured.
+You are GPT Sol doing the CODE review of plan docs/plans/261002b-bring-the-signed-out-home-page-features-and-design-up-to-date.md in the Spideryarn repo. Your plan review is docs/plans/261002b-homepage-plan-review-sol.md; check its findings were honoured.
 
 Scope: `git diff 886812f5a..HEAD` (commits 7e2066dc8..HEAD on this branch). Files: src/web/LandingPage.tsx, src/web/FeaturesPage.tsx, src/web/SiteBits.tsx, src/web/styles/site.css, src/web/shots.ts, src/web/assets/*.png, src/web/DesignPage.tsx, tests/features-page-modes.test.tsx, tests/landing-page-tiles.test.tsx, tests/marketing-public-sharing.test.tsx, tests/helpers/marketing-page-render.ts, tests/annotate.test.ts, tests/eager-client-graph.test.ts, docs/project/website-text.md, docs/project/marketing-pages.md.
 

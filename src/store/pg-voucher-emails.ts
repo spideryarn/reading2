@@ -54,7 +54,6 @@ import {
   type VoucherEmailState,
   type VoucherEmailStatus,
   type VoucherEmails,
-  GIFT_NOTE_LABEL,
   freeArticles,
   giftEmailHeading,
   giftEmailSubject,
@@ -157,14 +156,17 @@ function escapeNoteHtml(note: string): string {
     .replace(/\n/g, "<br>");
 }
 
-/** The note, as a quoted block under the heading, or nothing at all. */
+/**
+ * The note, as an italic quoted block under the heading, or nothing at all.
+ * Unlabelled: Greg signs it himself — Greg, 2026-10-02: *"Maybe just italicise
+ * the note from me"* — and /admin/vouchers reminds him to.
+ */
 function noteRow(note: string | null): string {
   if (note === null) return "";
   return (
-    `<tr><td style="font-size:13px;line-height:1.5;color:#a3a3a3;padding:0 0 6px 0;">${GIFT_NOTE_LABEL}</td></tr>\n` +
     `<tr><td style="padding:0 0 20px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>` +
-    `<td style="font-size:16px;line-height:1.6;color:#f5f5f5;border-left:3px solid #DB8A45;padding:2px 0 2px 14px;">` +
-    `${escapeNoteHtml(note)}</td></tr></table></td></tr>\n`
+    `<td style="font-size:16px;line-height:1.6;color:#f5f5f5;font-style:italic;border-left:3px solid #DB8A45;padding:2px 0 2px 14px;">` +
+    `<em>${escapeNoteHtml(note)}</em></td></tr></table></td></tr>\n`
   );
 }
 
@@ -246,9 +248,9 @@ export function giftMessage(
     : inviteGiftMessage(articles, note);
 }
 
-/** The text part's note, labelled, above the intro, or nothing. */
+/** The text part's note, on its own lines between the heading and the intro, or nothing. */
 function noteLines(note: string | null): string[] {
-  return note === null ? [] : [GIFT_NOTE_LABEL, note, ""];
+  return note === null ? [] : [note, ""];
 }
 
 /** To somebody who may not know Spideryarn: what it is, and how to collect. */

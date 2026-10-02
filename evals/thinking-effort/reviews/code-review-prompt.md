@@ -19,13 +19,13 @@ the code; the eval results and docs are evidence for it:
 - **The reader-facing wait**: `src/web/sketch-cost.ts` (`SKETCH_WAIT` is now "about a minute").
   `src/web/DiagramPanel.tsx` and `src/web/ResetArticle.tsx` now use it. Its tests:
   `tests/illustrated-view.test.tsx` and `tests/metadata-rerun-section.test.tsx`.
-- **The parser**: `src/hierarchy.ts` exports `parseStructureAnswer`, and these evals now call it or
+- **The parser**: `src/structure.ts` exports `parseWholeDocumentAnswer`, and these evals now call it or
   `parseJsonAnswer`:
-  - `evals/hierarchy-structure/model-arms.ts`;
+  - `evals/structure-whole-document/model-arms.ts`;
   - `evals/plain-words/run.ts`;
   - `evals/illustrated/run.ts`.
 
-  Its test: `tests/hierarchy-structure-eval.test.ts`. Its postmortem:
+  Its test: `tests/structure-whole-document-eval.test.ts`. Its postmortem:
   `docs/postmortems/261001b-a-harness-shared-the-request-and-copied-the-parser.md`.
 - **`evals/thinking-effort/tally.ts`**: it now reads the candidate arms off the lineup keys, and
   takes `--judging <subdir>`.
@@ -48,7 +48,7 @@ the code; the eval results and docs are evidence for it:
    Grep widely.
 2. **Is every claim the comments and docs now make about the cache groups true** of the code? Read
    `sharesArticleCache` and both tables.
-3. **Does `parseStructureAnswer` keep production's behaviour byte-for-byte**, and does every eval
+3. **Does `parseWholeDocumentAnswer` keep production's behaviour byte-for-byte**, and does every eval
    that parses a structure answer now go through it? Grep `evals/` and `scripts/` for
    `parseJsonFrom(` applied to a model answer.
 4. **Reader copy**: is there anywhere else the old two-minute wait or a Sketch price still reaches a

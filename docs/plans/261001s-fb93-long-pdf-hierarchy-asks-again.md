@@ -40,7 +40,7 @@ same odds. The class is *an all-or-nothing gate on a long generated artefact*: t
 refuse a broken answer, and wrong to make the reader the retry loop.
 
 The stage already took this lesson for *boundaries*: since 2026-08-31 "the partition is derived, not
-checked" ([hierarchy.md](../project/hierarchy.md#derived-partition)) — a start is believed, every end
+checked" ([hierarchy.md](../project/structure-step.md#derived-partition)) — a start is believed, every end
 is computed, and nothing about the tiling can refuse an answer. Two kinds of fault were left outside
 that rule: a child that states no range at all, and an answer that does not parse.
 

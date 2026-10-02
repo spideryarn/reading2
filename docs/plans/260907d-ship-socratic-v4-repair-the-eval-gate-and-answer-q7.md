@@ -184,7 +184,7 @@ and the failure would show up as a null result rather than an error — the clas
 
 Existing articles keep their trees and their `toc/6` questions until somebody re-runs the stage.
 That is the accepted behaviour, decided on 2026-09-06 for `toc/6` itself and recorded in
-[hierarchy.md § A new prompt reaches new articles only](../project/hierarchy.md#prompt-versions).
+[hierarchy.md § A new prompt reaches new articles only](../project/structure-step.md#prompt-versions).
 Nothing backfills, and no backfill is proposed here.
 
 **The brief for this work said to bump `PROMPT_VERSION` "so existing articles show the quiet *chosen

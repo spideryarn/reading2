@@ -271,7 +271,7 @@ async function cloneCorpusArticle(slug: string, from: string): Promise<string> {
  * an article with no `hierarchy` stamp is refused by the publish guard anyway,
  * and it is refused with a message about the tree, which is the true one.
  */
-async function restampHierarchy(dir: string): Promise<void> {
+async function restampStructure(dir: string): Promise<void> {
   const at = path.join(dir, "labels.json");
   let labels: Record<string, unknown>;
   try {
@@ -308,7 +308,7 @@ export async function scratchArticleInPg(
       const dir = path.join(root, "data", slug);
       await mutate(dir);
       await cp(path.join(dir, "blocks.json"), path.join(root, "output", `${slug}.blocks.json`));
-      await restampHierarchy(dir);
+      await restampStructure(dir);
     }
     loaded = await loadArticleIntoPg(slug, { root, ...(ownerId ? { ownerId } : {}) });
   } catch (err) {

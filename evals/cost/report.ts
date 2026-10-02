@@ -4,7 +4,7 @@
  * tests/cost-eval.test.ts against fixture rows; run.ts does the driving and
  * calls in here for every number it prints.
  *
- * Same split as evals/hierarchy-structure/{score,run}.ts, and for the same
+ * Same split as evals/structure-whole-document/{score,run}.ts, and for the same
  * reason: the part that costs money cannot be a test, so the part that does not
  * must be one.
  *

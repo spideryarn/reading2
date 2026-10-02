@@ -230,12 +230,12 @@ export function structureHash(tree: Tree): string {
  * of a canonical request thinking it is free.
  *
  * It hashes whatever it is given and knows nothing about checkpoints, which is
- * why it is here rather than in either caller. It arrived as `structureKey` in
- * src/hierarchy.ts on 2026-09-04 and moved on 2026-09-05, when
- * src/hierarchy-deepen.ts needed the identical two lines: that file will be
- * imported by src/hierarchy.ts at stage 5, so a copy left behind there would
+ * why it is here rather than in either caller. It arrived as `wholeDocumentKey` in
+ * src/structure.ts on 2026-09-04 and moved on 2026-09-05, when
+ * src/structure-deepen.ts needed the identical two lines: that file will be
+ * imported by src/structure.ts at stage 5, so a copy left behind there would
  * have been a value import closing a cycle the `npm run cycles` gate refuses.
- * The old name is still exported from src/hierarchy.ts, aliased to this.
+ * The old name is still exported from src/structure.ts, aliased to this.
  *
  * **`JSON.stringify` can throw**, on a `BigInt` or a circular object, and it can
  * return `undefined` for a bare function or symbol — which would hash the four

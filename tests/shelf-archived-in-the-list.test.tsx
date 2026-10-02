@@ -58,6 +58,7 @@ let activeFails: boolean;
 let searchGate: Promise<void> | null;
 /** Make the held active-only passage search fail after it is released. */
 let searchFails: boolean;
+let searchCountOverride: number | null;
 /** The stale-while-revalidate first paint, when a test needs one. */
 let cached: LibraryEntry[] | null;
 
@@ -113,13 +114,17 @@ vi.mock("../src/web/lib/api.js", () => ({
       const params = new URLSearchParams(url.slice(url.indexOf("?") + 1));
       const query = params.get("q") ?? "";
       const withArchive = params.get("archived") === "1";
+      const countOverride = searchCountOverride;
       if (!withArchive && searchGate) await searchGate;
       if (!withArchive && searchFails) return json({ error: "old search failed" }, 500);
       const hits =
         withArchive && query === "zibble"
           ? [{ slug: "delta", title: "Delta", blockId: "spya-k3m9qt", text: "a zibble in Delta", rank: 1, archived: true }]
           : [];
-      return json({ query, archived: withArchive, hits, articles: hits.length, capped: false });
+      /* With the archive left out, the server also counts the archived
+         articles that would have matched (plan 261002b § Part D). */
+      const count = withArchive ? {} : { archivedArticles: countOverride ?? (query === "zibble" ? 1 : query === "alpha" && archived.some((e) => e.slug === "alpha") ? 1 : 0) };
+      return json({ query, archived: withArchive, hits, articles: hits.length, capped: false, ...count });
     }
     return json({ error: "unmocked" }, 404);
   },
@@ -165,6 +170,7 @@ Object.defineProperty(window, "matchMedia", {
 enableHistorySync();
 
 const { Library } = await import("../src/web/Library.js");
+const { useLibrarySearch } = await import("../src/web/useLibrarySearch.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -178,6 +184,7 @@ beforeEach(() => {
   cached = null;
   searchGate = null;
   searchFails = false;
+  searchCountOverride = null;
   /* Titles that interleave, so "sorted with everything else" is visible:
      by title, A (active) B (archived) C (active) D (archived). */
   active = [entry("alpha", "Alpha"), entry("charlie", "Charlie")];
@@ -240,6 +247,35 @@ function tableRows(): { title: string; archived: boolean }[] {
 function click(el: HTMLElement) {
   act(() => el.click());
 }
+
+function SearchProbe({ query }: { query: string }) {
+  const state = useLibrarySearch(query, false);
+  return createElement("output", null, JSON.stringify(state));
+}
+
+describe("superseded searches with the same query", () => {
+  it.each([false, true])("drops the old A after A → B → A (failure: %s)", async (fails) => {
+    await show("/");
+    let release!: () => void;
+    searchGate = new Promise<void>((resolve) => { release = resolve; });
+    searchCountOverride = 99;
+    act(() => root.render(createElement(SearchProbe, { query: "alpha" })));
+    await waitFor(() => asked.includes("GET /api/library/search?q=alpha"), "the held A");
+    searchGate = null;
+    searchCountOverride = 1;
+    act(() => root.render(createElement(SearchProbe, { query: "bravo" })));
+    await waitFor(() => asked.includes("GET /api/library/search?q=bravo"), "B");
+    act(() => root.render(createElement(SearchProbe, { query: "alpha" })));
+    await waitFor(() => asked.filter((s) => s === "GET /api/library/search?q=alpha").length === 2, "the new A");
+    await settle();
+    const winner = host.querySelector("output")?.textContent;
+    expect(JSON.parse(winner!).archivedArticles).toBe(1);
+    searchFails = fails;
+    release();
+    await settle();
+    expect(host.querySelector("output")?.textContent).toBe(winner);
+  });
+});
 
 describe("the Archived chip", () => {
   it("sits beside Unread, off by default, and the old foot-of-shelf toggle is gone", async () => {
@@ -525,12 +561,58 @@ describe("the Archived chip", () => {
     expect(passage()?.querySelector("[data-archived-mark]"), "marked Archived").toBeTruthy();
   });
 
-  it("says the archive was not searched when off and nothing matched", async () => {
+  it("says, beside the empty answer, how many archived articles mention it, with a button that includes them", async () => {
+    /* Greg, spya-s9fhmw: *"add an extra button right there next to that
+       empty-results-message for including archived … include a sense of how
+       many archived … results would have matched"*. Plan 261002b § Part D. */
     await show("/?q=zibble");
-    const line = () => [...host.querySelectorAll("p")].find((p) => p.textContent?.includes("Archived articles aren't searched"));
-    await waitFor(() => !!line(), "the nothing-found line");
+    const line = () => host.querySelector<HTMLElement>("[data-search-also]");
+    await waitFor(() => !!line()?.textContent?.includes("1 archived article mentions it"), "the count");
     expect(asked).toContain("GET /api/library/search?q=zibble");
-    expect(line()?.textContent).toContain("turn on Include archived");
+    const button = [...(line()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Include archived");
+    expect(button, "the button beside it").toBeTruthy();
+    if (!button) return;
+    click(button);
+    await waitFor(() => params().get("archived") === "1", "the chip on, in the URL");
+    const passage = () => [...host.querySelectorAll("section li a")].find((a) => a.textContent?.includes("zibble"));
+    await waitFor(() => !!passage(), "the archived passage after pressing it");
+  });
+
+  it("keeps the button at zero, and says zero", async () => {
+    await show("/?q=nothing");
+    const line = () => host.querySelector<HTMLElement>("[data-search-also]");
+    await waitFor(() => !!line()?.textContent?.includes("No archived article mentions it"), "the zero");
+    expect([...(line()?.querySelectorAll("button") ?? [])].map((b) => b.textContent)).toContain("Include archived");
+  });
+
+  it("hides the previous query's archived count, including below MIN_QUERY", async () => {
+    await show("/?q=zibble");
+    const line = () => host.querySelector<HTMLElement>("[data-search-also]");
+    await waitFor(() => !!line()?.textContent?.includes("1 archived article mentions it"), "the initial count");
+    const input = host.querySelector<HTMLInputElement>('[aria-label="Search the library"]')!;
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    const type = (query: string) => act(() => {
+      set.call(input, query);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    type("nothing");
+    expect(line()?.textContent).not.toContain("1 archived article mentions it");
+    await waitFor(() => !!line()?.textContent?.includes("No archived article mentions it"), "the new zero");
+    type("al");
+    await settle(300);
+    expect(line()?.textContent).not.toContain("article mentions");
+    expect(line()?.textContent).not.toContain("Checking the archive");
+    expect(asked).not.toContain("GET /api/library/search?q=al");
+    expect(line()?.textContent).toContain("Include archived");
+  });
+
+  it("refreshes the archived count when a matching article is archived with the query unchanged", async () => {
+    await show("/?q=alpha");
+    const line = () => host.querySelector<HTMLElement>("[data-search-also]");
+    await waitFor(() => !!line()?.textContent?.includes("No archived article mentions it"), "the initial zero");
+    const card = [...host.querySelectorAll("main > ul > li")].find((li) => li.querySelector("h2")?.textContent === "Alpha")!;
+    click(card.querySelector<HTMLButtonElement>('[data-action="archive"]')!);
+    await waitFor(() => !!line()?.textContent?.includes("1 archived article mentions it"), "the updated count");
   });
 
   it("asks again when the chip is pressed with the words unchanged", async () => {

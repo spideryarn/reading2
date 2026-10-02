@@ -728,7 +728,7 @@ describe("a paid failure explains its own missing rows", () => {
   /* Draw 2, in the shape report.ts sees it: the structure call was billed, the
      step errored on its output, the fan-out never happened. */
   const structure = row({ id: "structure", stepName: "hierarchy", job: "hierarchy", creditsUsedNanos: 212_414_000 });
-  const failedAtHierarchy = [
+  const failedAtStructure = [
     { name: "fetch", status: "done" },
     { name: "extract", status: "done" },
     { name: "blocks", status: "done" },
@@ -740,7 +740,7 @@ describe("a paid failure explains its own missing rows", () => {
       mustPay: ["hierarchy"],
       mustPayJobs: ["hierarchy", "labels"],
       observed: [{ step: "hierarchy", calls: 1, pending: 0, writeFailures: 0 }],
-      stepStatuses: failedAtHierarchy,
+      stepStatuses: failedAtStructure,
       aiJobStep: AI_JOB_STEP,
     });
     expect(findings.map((f) => f.kind)).toEqual(["explained-absence"]);
@@ -761,7 +761,7 @@ describe("a paid failure explains its own missing rows", () => {
       mustPay: ["hierarchy"],
       mustPayJobs: ["hierarchy", "labels"],
       observed: [{ step: "hierarchy", calls: 1, pending: 0, writeFailures: 0 }],
-      stepStatuses: failedAtHierarchy.map((s) => ({ ...s, status: "done" })),
+      stepStatuses: failedAtStructure.map((s) => ({ ...s, status: "done" })),
       aiJobStep: AI_JOB_STEP,
     });
     expect(findings.map((f) => f.kind)).toEqual(["no-spend"]);
@@ -778,7 +778,7 @@ describe("a paid failure explains its own missing rows", () => {
       mustPay: ["hierarchy"],
       mustPayJobs: ["hierarchy"],
       observed: [{ step: "hierarchy", calls: 4, pending: 0, writeFailures: 0 }],
-      stepStatuses: failedAtHierarchy.map((s) => ({ ...s, status: "done" })),
+      stepStatuses: failedAtStructure.map((s) => ({ ...s, status: "done" })),
       aiJobStep: AI_JOB_STEP,
     });
     expect(findings.map((f) => f.kind)).toEqual(["ledger-short"]);
@@ -795,7 +795,7 @@ describe("a paid failure explains its own missing rows", () => {
       mustPay: ["hierarchy"],
       mustPayJobs: ["hierarchy", "labels"],
       observed: [{ step: "hierarchy", calls: 3, pending: 0, writeFailures: 1 }],
-      stepStatuses: failedAtHierarchy,
+      stepStatuses: failedAtStructure,
       aiJobStep: AI_JOB_STEP,
     });
     expect(findings.map((f) => f.kind).sort()).toEqual(["explained-absence", "ledger-short"]);

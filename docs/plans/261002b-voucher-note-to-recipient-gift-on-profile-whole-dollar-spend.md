@@ -48,7 +48,11 @@ heading and before anything we wrote**, as a quoted block: a left rule in the HT
 they are in the text part. It is the first thing the recipient reads and is plainly a person
 talking, which is what *"it was great to meet you earlier today"* wants. No label: the email is
 already from Spideryarn and Greg can sign it. Never in the subject. *(Changed after review, F4: it
-is labelled "A note from the person who gave you this gift:", in both parts.)*
+was labelled "A note from the person who gave you this gift:", in both parts. Changed back on
+2026-10-02, after Greg answered Q-voucher-note-label: "Maybe just italicise the note from me, and
+add a tooltip or something in the interface to remind me to sign my name". So the label is gone,
+the note is in italics in the HTML and on its own lines in the text part, and the create form on
+`/admin/vouchers` has a line under the box: "Sign it yourself, e.g. '— Greg'".)*
 
 **It is untrusted on render** ([security-map.md](../project/security-map.md)): text written by one
 party and drawn in a stranger's mail client. The HTML part escapes `& < > " '` and turns newlines
@@ -151,7 +155,8 @@ should not be built unchanged."* Every finding taken:
 3. **P2 — the re-address renders the note as it stands after the patch**: the stored note, read
    under the voucher lock, overridden by the patch's. Built that way and tested (an edit alone sends
    nothing; a later re-address carries the saved note; both at once carry the new one).
-4. **P2 — provenance and control characters.** The note is labelled in both parts; `noteText`
+4. **P2 — provenance and control characters.** The note is labelled in both parts (no longer,
+   since 2026-10-02: Greg signs it instead; see **The email** above); `noteText`
    (src/email.ts, beside `oneLine`) turns CR, CRLF and the Unicode separators into one newline and
    every other control character into a space, on the way in and again at render. Tested with NUL,
    CR, U+2028/9 and tab.

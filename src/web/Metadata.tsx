@@ -159,7 +159,7 @@
  * now, though **not** in the shape that sentence imagined, and the difference is
  * worth stating rather than glossing: there is no `tree.json`, and `Tree`
  * carries no `sourceHash` to this day. What carries it for the tree is the
- * **run** — `revision_step_runs.input_hash`, read by `hierarchyCurrency`, the
+ * **run** — `revision_step_runs.input_hash`, read by `structureCurrency`, the
  * very function `reasonsNotToPublish` uses — while `Arc` does carry a
  * `sourceHash` of its own. `articleMetadata` (src/store/pg.ts) puts a per-step
  * `isCurrent` over both, which is why `StageState.done` has meant *ran, and
@@ -1185,7 +1185,7 @@ export function Metadata({
           error={provenanceError}
           slow={slow}
           aside={pipelineLine}
-          hierarchyGenerator={`${tree.generator} · ${tree.version}`}
+          structureGenerator={`${tree.generator} · ${tree.version}`}
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
 
@@ -1391,7 +1391,7 @@ function RerunSection({
   error,
   slow,
   aside,
-  hierarchyGenerator,
+  structureGenerator,
   arcGenerator,
 }: {
   slug: string;
@@ -1410,7 +1410,7 @@ function RerunSection({
   slow: boolean;
   /** `N of M stages · last wrote …`, kept on the heading so shutting it takes only the detail. */
   aside: string | null;
-  hierarchyGenerator: string;
+  structureGenerator: string;
   arcGenerator: string | undefined;
 }) {
   return (
@@ -1491,7 +1491,7 @@ function RerunSection({
         provenance={provenance}
         error={error}
         slow={slow}
-        hierarchyGenerator={hierarchyGenerator}
+        structureGenerator={structureGenerator}
         arcGenerator={arcGenerator}
       />
     </Section>
@@ -1512,13 +1512,13 @@ function StageRecord({
   provenance,
   error,
   slow,
-  hierarchyGenerator,
+  structureGenerator,
   arcGenerator,
 }: {
   provenance: ArticleMetadata | null;
   error: string | null;
   slow: boolean;
-  hierarchyGenerator: string;
+  structureGenerator: string;
   arcGenerator: string | undefined;
 }) {
   return (
@@ -1547,7 +1547,7 @@ function StageRecord({
                 stage={stage}
                 generator={
                   stage.step === "hierarchy"
-                    ? hierarchyGenerator
+                    ? structureGenerator
                     : stage.step === "arc"
                       ? arcGenerator
                       : undefined

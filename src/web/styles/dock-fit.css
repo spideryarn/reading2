@@ -183,13 +183,22 @@
 
    No padding change here. The two are at the ends of the row, where tightening
    padding buys little beside removing the words, and the rungs below change
-   the padding anyway. */
+   the padding anyway.
+
+   **Help joined the cluster on 2026-10-02** (`.dock-help`, beside Feedback —
+   docs/plans/261002b-help-page.md, R5). It is app-level for the same reason
+   Feedback is, so its word goes at the same rung rather than costing a laptop
+   its mode labels one rung sooner: rung 0 is the only rung that spells it out.
+   The glyph and its card stay on every rung. */
 .dock.dock-fit-1 .dock-home .dock-btn-label,
 .dock.dock-fit-1 .dock-feedback .dock-btn-label,
+.dock.dock-fit-1 .dock-help .dock-btn-label,
 .dock.dock-fit-2 .dock-home .dock-btn-label,
 .dock.dock-fit-2 .dock-feedback .dock-btn-label,
+.dock.dock-fit-2 .dock-help .dock-btn-label,
 .dock.dock-fit-3 .dock-home .dock-btn-label,
-.dock.dock-fit-3 .dock-feedback .dock-btn-label { display: none; }
+.dock.dock-fit-3 .dock-feedback .dock-btn-label,
+.dock.dock-fit-3 .dock-help .dock-btn-label { display: none; }
 
 /* Rung 2 — the modes go to glyphs, and what is left with a word is Commands,
    Comments and Metadata (and Tweets until it became a mode, 2026-09-29). **Not "the other three":** the app cluster's

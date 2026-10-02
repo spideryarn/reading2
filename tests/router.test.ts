@@ -22,6 +22,7 @@ import {
   canonicalAddHref,
   carriedSearch,
   CONTACT_HREF,
+  HELP_HREF,
   liftedTweetsHref,
   navigate,
   PRIVACY_HREF,
@@ -252,6 +253,25 @@ describe("the contact route", () => {
 
   it("is not a prefix: an address under it is nobody's", () => {
     expect(parseRoute("/contact/us")).toEqual({ kind: "not-found" });
+  });
+});
+
+describe("the help route", () => {
+  it("parses, with and without a trailing slash, and from its own constant", () => {
+    expect(parseRoute("/help")).toEqual({ kind: "help" });
+    expect(parseRoute("/help/")).toEqual({ kind: "help" });
+    expect(parseRoute(HELP_HREF)).toEqual({ kind: "help" });
+  });
+
+  it("is not a prefix: a section is a fragment, never a path", () => {
+    expect(parseRoute("/help/spine")).toEqual({ kind: "not-found" });
+  });
+
+  /* A link into Help is all fragment (help-anchors.ts § helpHref). Nothing
+     on the way in may rewrite it, or every `/help#spine` lands at the top. */
+  it("is left alone by settleAddress, fragment and all", () => {
+    expect(settleAddress("/help", "", "#spine")).toBeNull();
+    expect(settleAddress("/help", "", "#mode-trajectory")).toBeNull();
   });
 });
 

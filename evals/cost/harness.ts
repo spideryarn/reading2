@@ -1,7 +1,7 @@
 /**
  * The cost eval's three mechanisms, separated from the driving so they can be
  * unit-tested without a database, a network or a model — the same split
- * evals/hierarchy-structure/ makes between `model-arms.ts` and `run.ts`.
+ * evals/structure-whole-document/ makes between `model-arms.ts` and `run.ts`.
  *
  * All three are seams that already existed. **Nothing in `src/` changes for this
  * eval to work**, which was the coordination risk the feasibility stage existed

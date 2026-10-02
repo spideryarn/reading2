@@ -223,7 +223,7 @@ either eval, but it is a production change nobody asked this session to make.
 
 1. **Flip the structure pass to `low`.** Same success rate as `medium` on these draws, 45% cheaper,
    about twice as fast, and better carved in eight of eight blind judgements across two evals. One
-   line in [`src/hierarchy.ts`](../../src/hierarchy.ts) § `EFFORT`, no new vendor, no ZDR question,
+   line in [`src/hierarchy.ts`](../../src/structure.ts) § `EFFORT`, no new vendor, no ZDR question,
    no provider pin.
 2. **Add a retry at `medium` when `buildTree` throws** — now justified on its own, not as the price
    of item 1. Retries are manual today, and an automatic second attempt would cover the 3-block-tail

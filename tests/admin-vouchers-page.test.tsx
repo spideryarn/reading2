@@ -538,8 +538,21 @@ describe("/admin/vouchers", () => {
       expect(sketch()?.textContent).toContain("Your note to them goes here");
       await write("Great to meet you today.");
       expect(sketch()?.textContent).toContain("Great to meet you today.");
-      expect(sketch()?.textContent).toContain("A note from the person who gave you this gift:");
+      expect(sketch()?.textContent).not.toContain("A note from");
+      expect(sketch()?.querySelector("em")?.textContent).toBe("Great to meet you today.");
       expect(sketch()?.textContent).not.toContain("Your note to them goes here");
+    });
+
+    it("reminds you to sign the note, since the email is from Spideryarn", async () => {
+      await mount();
+      const area = form().querySelector<HTMLTextAreaElement>("#voucher-new-recipient-note");
+      expect(area?.labels?.[0]?.textContent).toContain("Note to them");
+      expect(area?.getAttribute("aria-describedby")).toBe("voucher-new-recipient-note-hint");
+      const hint = form().querySelector("#voucher-new-recipient-note-hint");
+      expect(hint?.textContent).toContain("Sign it yourself");
+      expect(hint?.textContent).toContain("— Greg");
+      expect(hint?.closest("label")).toBeNull();
+      expect(hint?.hasAttribute("hidden")).toBe(false);
     });
 
     it("says the email is on its way", async () => {

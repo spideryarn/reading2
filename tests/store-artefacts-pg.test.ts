@@ -168,7 +168,7 @@ describe("the storage map", () => {
    * green, and leaves `hierarchy` calling itself finished with a tree and no
    * labels beside it. `hierarchy` went from two to three when the nav labels
    * became a second model pass (docs/plans/260826h-toc-scaling.md), which is
-   * why src/hierarchy.ts writes the tree last of the three.
+   * why src/structure.ts writes the tree last of the three.
    */
   it("has both of extract's and all three of hierarchy's", () => {
     expect(STEPS.extract.produces).toEqual(["extractedHtml", "meta"]);

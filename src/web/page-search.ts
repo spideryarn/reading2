@@ -35,7 +35,10 @@
  * paraphrase after it. GPT Sol, plan review; plan 261001s § The search box.
  */
 
-/** One section as the search sees it — read off the DOM by PageContents. */
+/**
+ * One section as the search sees it — read off the DOM by PageContents, or
+ * built from the typed section list by the Help page (help/HelpPage.tsx).
+ */
 export interface SearchableSection {
   id: string;
   label: string;
@@ -46,11 +49,21 @@ export interface SearchableSection {
 }
 
 /**
- * Words that mean the same thing **on this page**. Not a thesaurus: each group
- * is the vocabulary a reader might bring to one of the page's questions. A word
- * may sit in only one group — `GROUP_OF` below would silently keep the last.
+ * **A page's own synonym groups.** Each inner list is one group of words that
+ * mean the same thing on that page. A word may sit in only one group —
+ * `groupsOf` below would silently keep the last.
  */
-const SYNONYMS: readonly (readonly string[])[] = [
+export type SynonymTable = readonly (readonly string[])[];
+
+/**
+ * Words that mean the same thing **on the Metadata page** — the default table,
+ * since that page is where this search began. Not a thesaurus: each group is
+ * the vocabulary a reader might bring to one of the page's questions. Another
+ * page passes its own (Help's is `HELP_SYNONYMS` in src/web/help/help-content.tsx)
+ * rather than adding its words here, where they would widen Metadata's matches
+ * with words that mean nothing on it.
+ */
+const SYNONYMS: SynonymTable = [
   ["cost", "price", "spend", "spent", "money", "dollar", "bill", "expense", "charge", "paid", "usage"],
   ["delete", "remove", "erase", "trash", "destroy", "bin", "purge"],
   ["archive", "hide", "shelve", "shelf", "unshelve"],
@@ -92,10 +105,23 @@ function words(text: string): string[] {
     .map(stem);
 }
 
-const GROUP_OF = new Map<string, readonly string[]>();
-for (const group of SYNONYMS) {
-  const stems = group.map(stem);
-  for (const s of stems) GROUP_OF.set(s, stems);
+/** Stemmed word → its stemmed group, for one table. */
+type GroupIndex = ReadonlyMap<string, readonly string[]>;
+
+/* Built once per table rather than once per query: the tables are module
+   constants, so the array's identity is a sound cache key. */
+const INDEXES = new WeakMap<SynonymTable, GroupIndex>();
+
+function groupsOf(table: SynonymTable): GroupIndex {
+  const cached = INDEXES.get(table);
+  if (cached) return cached;
+  const index = new Map<string, readonly string[]>();
+  for (const group of table) {
+    const stems = group.map(stem);
+    for (const s of stems) index.set(s, stems);
+  }
+  INDEXES.set(table, index);
+  return index;
 }
 
 /**
@@ -120,9 +146,9 @@ const STOPWORDS = new Set(
 const MIN_PREFIX_EXPAND = 3;
 
 /** The other words a query word stands for: its group's, or its prefix's groups'. */
-function synonymsOf(term: string): Set<string> {
+function synonymsOf(term: string, groups: GroupIndex): Set<string> {
   const out = new Set<string>();
-  for (const [s, group] of GROUP_OF) {
+  for (const [s, group] of groups) {
     if (s === term || (term.length >= MIN_PREFIX_EXPAND && s.startsWith(term))) {
       for (const g of group) if (g !== term) out.add(g);
     }
@@ -150,14 +176,20 @@ function hit(term: string, synonyms: Set<string>, have: readonly string[]): numb
 
 /**
  * The ids of the sections that answer `query`, best first. An empty query
- * answers nothing, and the caller shows its whole list instead.
+ * answers nothing, and the caller shows its whole list instead. `synonyms` is
+ * the page's own table; omitted, it is Metadata's.
  */
-export function searchSections(query: string, sections: readonly SearchableSection[]): string[] {
+export function searchSections(
+  query: string,
+  sections: readonly SearchableSection[],
+  synonyms: SynonymTable = SYNONYMS,
+): string[] {
   const all = words(query);
   if (all.length === 0) return [];
   const content = all.filter((t) => !STOPWORDS.has(t));
   const terms = content.length > 0 ? content : all;
-  const expanded = terms.map((t) => ({ term: t, synonyms: synonymsOf(t) }));
+  const groups = groupsOf(synonyms);
+  const expanded = terms.map((t) => ({ term: t, synonyms: synonymsOf(t, groups) }));
   const scored: { id: string; score: number; order: number }[] = [];
   sections.forEach((section, order) => {
     const fields: Record<Field, string[]> = {

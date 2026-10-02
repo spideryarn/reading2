@@ -174,7 +174,7 @@ Rewriting any existing sentence for voice; the strapline; the ten unanswered int
 ## Log
 
 - 2026-10-02 — audits done; plan written.
-- 2026-10-02 — GPT Sol plan review ([261002b-plan-review-sol.md](261002b-plan-review-sol.md)): no P0,
+- 2026-10-02 — GPT Sol plan review ([261002b-homepage-plan-review-sol.md](261002b-homepage-plan-review-sol.md)): no P0,
   four P1, four P2. All accepted; #2 was checked by looking at `search-meaning.png`, whose bar shows
   Hierarchy and Outline. The changes are marked *Sol #n* above.
 - 2026-10-02: stages 1 and 3 built in parallel, with tests red first; stage 2's shots were taken,

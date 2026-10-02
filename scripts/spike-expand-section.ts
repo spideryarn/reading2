@@ -21,13 +21,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import type Anthropic from "@anthropic-ai/sdk";
 
 import { loadEnvLocal } from "../src/env.js";
-import { PRODUCTION_EFFORT } from "../src/hierarchy.js";
+import { PRODUCTION_EFFORT } from "../src/structure.js";
 import { streamMessage } from "../src/messages-stream.js";
 import { parseJsonAnswer, parseJsonFrom } from "../src/parse-json.js";
 import type { Block, Tree, TreeNode } from "../src/types.js";
 
 /**
- * The scoped prompt. Deliberately close to `SYSTEM` in src/hierarchy.ts — same
+ * The scoped prompt. Deliberately close to `SYSTEM` in src/structure.ts — same
  * boundary rules, same title and gist contract — with three differences that
  * are the whole point of the experiment:
  *
