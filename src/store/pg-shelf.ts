@@ -372,6 +372,12 @@ const rawPgShelfStore: ShelfStore = {
     // belt-and-braces that stops a future caller producing `UPDATE … SET` with
     // nothing after it, which is a syntax error rather than a no-op.
     if (Object.keys(set).length === 0) return entryFor(slug, false);
+    /* **When the reader last changed this article's own settings** — the only
+       time a rename or a purpose edit leaves, and the only trace of an
+       un-archive, which nulls `archived_at`. After the empty check, so it never
+       turns "nothing to change" into a write. `recordOpen` below does not name
+       it: an open has `last_opened_at`. src/db/schema.ts § `articles.updatedAt`. */
+    set.updatedAt = sql`now()`;
 
     const [row] = await db().update(articles).set(set).where(ownedSlug(slug)).returning();
     if (!row) throw notFound(slug);

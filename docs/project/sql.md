@@ -133,6 +133,17 @@ insert succeeds and writes `null` — `npm run db:check` reports a lost default 
 too ([`src/db/schema-drift.ts`](../../src/db/schema-drift.ts)). The audit that started this is
 [261003j](../plans/261003j-store-when-it-happened-timestamp-audit.md).
 
+**A later event gets a column of its own, and the store writes it** — `finished_at`, `colour_at`,
+`renamed_at`, `cancel_requested_at`, `articles.updated_at`. These have no default, because no default
+can know the event happened, so each is only as good as the write sites that name it:
+[`tests/event-times.test.ts`](../../tests/event-times.test.ts) holds every one. Three rules they
+share. Name the event rather than reaching for a catch-all `updated_at`: `comments.updated_at` means
+"the words were edited" and `chat_threads.updated_at` is what the panel sorts by, so a recolour or a
+rename moving either would be a bug. Write a `finished_at` inside the attempt-fenced update, so a
+stale attempt that loses its fence stamps nothing. And null it on every path back to `pending`, or
+the last attempt's time sits under the next one's spinner. Null otherwise means "has not happened",
+or "before 2026-10-03".
+
 ## Columns, not JSON — with an exception that has to argue for itself
 
 A field you filter, sort, join or constrain on is a column. JSON is what you reach for when the

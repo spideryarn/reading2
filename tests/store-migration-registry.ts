@@ -2756,6 +2756,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/draft-sweep-on-step-start.test.ts": "private-postgres",
   "tests/enqueue-drives-what-it-queues.test.ts": "private-postgres",
   "tests/enqueue-owns-the-article.test.ts": "private-postgres",
+  "tests/event-times.test.ts": "private-postgres",
   "tests/quiz-job-carries-the-reading-goal.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",
   "tests/feedback-store.test.ts": "private-postgres",

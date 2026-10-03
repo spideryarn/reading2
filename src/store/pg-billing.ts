@@ -1515,7 +1515,10 @@ export async function switchOnHighPower(
       }
       const [updated] = await tx
         .update(articleRows)
-        .set({ highPowerSince: chargedAt })
+        /* `updated_at` with it: the reader changed this article's settings.
+           Only on this branch — the early return above is a repeat of a switch
+           already made, and moves no clock. */
+        .set({ highPowerSince: chargedAt, updatedAt: chargedAt })
         .where(eq(articleRows.id, article.id))
         .returning({ highPowerSince: articleRows.highPowerSince });
       if (!updated?.highPowerSince) {

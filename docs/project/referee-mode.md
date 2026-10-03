@@ -48,7 +48,8 @@ table landed with its entry and with a fixture that inserts a row and requires i
 
 **One run per article, and no id.** A referee writes several criteria and asks the paper what *it*
 claims exactly once, so the primary key is `article_id` alone and starting a run **replaces** what is
-there. `created_at` doubles as the sweep's clock, which is how the Postgres store gets the grace
+there. `created_at` is the run's start (`finished_at`, stored and not shown, is its end) and doubles
+as the sweep's clock, which is how the Postgres store gets the grace
 window `RefereeClaimsStore.sweep`'s one boolean cannot express — without it a second Vercel process
 loading the panel would error a run the first one is still streaming
 ([`src/store/pg-referee-claims.ts`](../../src/store/pg-referee-claims.ts)).
