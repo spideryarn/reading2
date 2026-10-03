@@ -157,7 +157,7 @@ const INDUCE_SCHEMA = {
   },
 } as const;
 
-async function induce(c: ShelfCase, out: RunOut): Promise<void> {
+export async function induce(c: ShelfCase, out: RunOut): Promise<void> {
   const n = c.articles.length;
   const system = [
     "You help a reader filter their reading shelf with a row of topic pills. Clicking a pill shows the articles in that topic; clicking two shows articles in both, so an article should be in every topic it is genuinely about.",
