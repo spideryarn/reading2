@@ -4051,11 +4051,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     name: "relations",
     label: "Reading how the paragraphs connect",
     produces: ["relations"],
-    /**
-     * FAQ's stamp exactly: `articleWithIdsFingerprint` over the blocks, the
-     * tree and the cited head, with the **real, nullable** metadata, which is
-     * what `generateRelations` hashes too. **No `profileHash`**.
-     */
+    /** The rendered article prefix and ordered eligible paragraph pairs — the
+     * exact dynamic request input `generateRelations` hashes too. No profile. */
     stamp: async (ctx, store) => {
       const article = await tryReadArticle(ctx.slug, store);
       if (!article) return null;

@@ -325,7 +325,7 @@ function groupedNotes(
       const { blockId, start } = dating.when.at;
       if (!holds(blockId, dating.when.phrase, start)) continue;
       const mention = event.occurrences.find((o) => o.blockId === blockId && holds(o.blockId, o.quote, o.start));
-      put(blockId, "timeline", { event, quote: mention?.quote ?? dating.when.phrase });
+      if (mention) put(blockId, "timeline", { event, quote: mention.quote });
     } else if (dating.kind === "words") {
       const mention = earliest(
         event.occurrences,

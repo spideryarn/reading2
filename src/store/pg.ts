@@ -80,8 +80,10 @@ import {
 } from "../faq.js";
 import {
   inputFingerprint as relationsFingerprint,
+  isOutdated as relationsAreOutdated,
   isStale as relationsIsStale,
   PROMPT_VERSION as RELATIONS_PROMPT_VERSION,
+  type RelationFingerprintBlock,
 } from "../relations.js";
 import {
   inputFingerprint as crossrefsFingerprint,
@@ -1613,6 +1615,22 @@ async function blockHashInputs(revisionId: string): Promise<BlockFingerprint[]> 
   return blockHashQuery(getDb(), revisionId);
 }
 
+/** The narrow block read for Relations' exact-request fingerprint. */
+async function relationsFingerprintInputs(
+  revisionId: string,
+): Promise<RelationFingerprintBlock[]> {
+  const rows = await relationsFingerprintQuery(getDb(), revisionId);
+  return rows.map((row) => ({
+    id: row.id as Block["id"],
+    text: row.text,
+    kind: row.kind as Block["kind"],
+    words: row.words,
+    ...(row.treatment === null
+      ? {}
+      : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
+  }));
+}
+
 /** The title fallback `loadArticle` would put in `articleWithIds`'s head. */
 async function firstHeadingTitle(revisionId: string): Promise<string | null> {
   const [row] = await getDb()
@@ -1650,6 +1668,28 @@ export function blockHashQuery(
       id: revisionBlocks.blockId,
       text: revisionBlocks.text,
       role: revisionBlocks.role,
+      treatment: revisionBlocks.treatment,
+    })
+    .from(revisionBlocks)
+    .where(eq(revisionBlocks.revisionId, revisionId))
+    .orderBy(asc(revisionBlocks.ordinal));
+}
+
+/**
+ * Relations renders the id and text, filters the article by `treatment`, and
+ * builds its user list from `kind` and `words`. These five fields are therefore
+ * its whole fingerprint input; HTML and the generated search vector stay out.
+ */
+export function relationsFingerprintQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  revisionId: string,
+) {
+  return db
+    .select({
+      id: revisionBlocks.blockId,
+      text: revisionBlocks.text,
+      kind: revisionBlocks.kind,
+      words: revisionBlocks.words,
       treatment: revisionBlocks.treatment,
     })
     .from(revisionBlocks)
@@ -3795,8 +3835,8 @@ const rawPgArticleReader: ArticleReader = {
   /**
    * The relation words on their own — the Postgres half of `loadRelations`.
    *
-   * `loadFaq`'s shape: the cited head and the tree, because the fingerprint is
-   * FAQ's. **A 404 is the ordinary case** (the step is off
+   * The cited head supplies the rendered prompt head; the tree supplies its
+   * fallback title. **A 404 is the ordinary case** (the step is off
    * `DEFAULT_INGEST_STEPS`); an EMPTY object is a 200 — an article with fewer
    * than two paragraphs — as `SHAPE.relations` decides at the store boundary.
    * **Owner only**: there is no public twin of this read.
@@ -3821,7 +3861,7 @@ const rawPgArticleReader: ArticleReader = {
         { status: 404 },
       );
     }
-    const blocks = await blockHashInputs(found.revision.id);
+    const blocks = await relationsFingerprintInputs(found.revision.id);
     const tree = found.revision.tree as Tree | null;
     return {
       relations,
@@ -3829,7 +3869,7 @@ const rawPgArticleReader: ArticleReader = {
       stale:
         !tree ||
         relationsIsStale(relations, blocks, tree, citedMetaFingerprintOf(found.revision)),
-      outdated: relations.version !== RELATIONS_PROMPT_VERSION,
+      outdated: relationsAreOutdated(relations),
     };
   },
 

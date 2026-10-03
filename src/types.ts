@@ -4945,7 +4945,7 @@ export interface Relations {
   version: string;
   generator: string;
   slug: string;
-  /** `articleWithIdsFingerprint`, as FAQ: blocks, tree and the cited head. */
+  /** Fingerprint of the rendered article prefix and ordered eligible paragraph pairs. */
   sourceHash: string;
   /**
    * One entry per paragraph the model answered: how it bears on the paragraph
@@ -4960,7 +4960,7 @@ export interface Relations {
 /** `GET /api/relations/:slug`. Two staleness facts: no profile is in this stamp. */
 export interface RelationsResponse {
   relations: Relations;
-  /** The article moved underneath this — blocks, sections or the cited head. */
+  /** The rendered body/head or eligible paragraph list moved underneath this. */
   stale: boolean;
   /** The article is the same and we would write this differently now. */
   outdated: boolean;

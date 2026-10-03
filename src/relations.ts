@@ -15,7 +15,8 @@
  * **The request is Ideas' byte for byte up to the breakpoint** —
  * `articleWithIds(meta, blocks.filter(isBodyEvidence))` first, carrying the
  * cache breakpoint, then this stage's instructions (src/models.ts §
- * `ARTICLE_RENDERER`). The fingerprint is FAQ's exactly.
+ * `ARTICLE_RENDERER`). The fingerprint covers those rendered bytes and the
+ * ordered paragraph pairs in the user message.
  *
  * What it does not share:
  *
@@ -43,7 +44,13 @@ import { isBodyEvidence } from "./block-policy.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { effortFor, generatorFor, type ModelPower } from "./models.js";
+import {
+  CAPABLE_MODEL,
+  effortFor,
+  generatorFor,
+  sameGenerator,
+  type ModelPower,
+} from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
   assertNoBlockIdEnums,
@@ -51,8 +58,7 @@ import {
   withMessagesJsonSchema,
 } from "./messages-structured-output.js";
 import {
-  articleWithIdsFingerprint,
-  type BlockFingerprint,
+  checkpointKey,
   fallbackHeadTitle,
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
@@ -72,7 +78,7 @@ import {
 export type { Relation, Relations, RelationsDropped } from "./types.js";
 
 /** Bumped whenever the prompt changes what a relation *is*, or which paragraphs are asked about. */
-export const PROMPT_VERSION = "relations/1";
+export const PROMPT_VERSION = "relations/2";
 
 /**
  * A sentence's worth: fewer words than this is a heading, a date or a byline.
@@ -102,7 +108,9 @@ export interface EligibleParagraph {
  * break still means something.
  */
 export function eligibleParagraphs(
-  blocks: readonly Pick<Block, "id" | "kind" | "words" | "treatment">[],
+  blocks: readonly (Pick<Block, "id" | "kind" | "words"> & {
+    treatment?: Block["treatment"] | null;
+  })[],
 ): EligibleParagraph[] {
   const paragraphs = blocks.filter(
     (b) => isBodyEvidence(b) && b.kind === "text" && b.words >= PARAGRAPH_MIN_WORDS,
@@ -126,26 +134,51 @@ export function answerTokens(paragraphs: number): number {
 }
 
 /**
- * What this artefact was written from — `articleWithIdsFingerprint`, FAQ's
- * exactly: the blocks, the tree and the cited metadata head. No profile,
- * because who reads does not change how one paragraph follows another.
+ * The subset of a block that can change either message sent to the model.
+ * `kind` and `words` decide whether it appears in the ordered user list;
+ * `treatment` decides whether it appears in the article prefix.
+ */
+export type RelationFingerprintBlock = Pick<Block, "id" | "text" | "kind" | "words"> & {
+  treatment?: Block["treatment"] | null;
+};
+
+/**
+ * What this artefact was written from — the exact dynamic request bytes: the
+ * body/head string and the ordered paragraph pairs. The tree matters only when
+ * it supplies the fallback title. No profile, because who reads does not change
+ * how one paragraph follows another.
  */
 export function inputFingerprint(
-  blocks: readonly BlockFingerprint[],
+  blocks: readonly RelationFingerprintBlock[],
   tree: Tree,
   meta: MetaFingerprintWithUrl | null,
 ): string {
-  return articleWithIdsFingerprint(blocks, tree, meta);
+  /* `articleWithIds`'s head reads only this fingerprint subset. `slug` is a
+     required field of `Meta` for other callers, but it is not rendered. */
+  const promptMeta = (meta ?? { title: fallbackHeadTitle(tree) }) as Meta;
+  return checkpointKey([
+    "relations-input/1",
+    articleWithIds(promptMeta, blocks.filter(isBodyEvidence)),
+    renderPrompt(eligibleParagraphs(blocks)),
+  ]);
 }
 
-/** Does this artefact still describe the article, tree and metadata? */
+/** Does this artefact still describe the request's rendered article and paragraph list? */
 export function isStale(
   relations: Relations,
-  blocks: readonly BlockFingerprint[],
+  blocks: readonly RelationFingerprintBlock[],
   tree: Tree,
   meta: MetaFingerprintWithUrl | null,
 ): boolean {
   return relations.sourceHash !== inputFingerprint(blocks, tree, meta);
+}
+
+/** Would a run today use a different prompt contract or model generation? */
+export function isOutdated(relations: Pick<Relations, "version" | "generator">): boolean {
+  return (
+    relations.version !== PROMPT_VERSION ||
+    !sameGenerator(relations.generator, CAPABLE_MODEL)
+  );
 }
 
 export function emptyDropped(): RelationsDropped {
@@ -262,10 +295,7 @@ THE RULES
   paragraph named beside it.
 - "relation" must be one of the ten words above, spelled exactly as shown.
 
-${paperwork("pick")}
-
-A listed paragraph that is only paperwork still gets its one word, like every
-other listed paragraph; "new-thread" or "and-also" will usually be right.
+${paperwork("relation")}
 
 OUTPUT
 

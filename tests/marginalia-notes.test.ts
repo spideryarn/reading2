@@ -439,6 +439,13 @@ describe("marginaliaNotes, Timeline events (plan 261003f)", () => {
     expect(marginaliaNotes(null, quoted, null, { timeline: [gone] }).size).toBe(0);
   });
 
+  it("draws nothing when the date remains but the event's quoted words no longer do", () => {
+    const e = event("e8", datedAt("spya-aaaaa5", "topic 4"), [
+      { blockId: "spya-aaaaa5", quote: "Acme launched on topic 4" },
+    ]);
+    expect(marginaliaNotes(null, quoted, null, { timeline: [e] }).size).toBe(0);
+  });
+
   it("puts the article's own phrase beside the earliest mention whose block says it; untimed and rejected stay in the band", () => {
     const words = event("e2", { kind: "words", phrase: "topic 3" }, [
       { blockId: "spya-aaaaa2", quote: say(1) },

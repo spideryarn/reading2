@@ -108,9 +108,11 @@ One model call per article, the shape of `faq`/`arc`:
   `relations` added to the `revision_step_runs_step` CHECK. **An additive migration**, written by
   copying `drizzle/20260916150539_faq.sql`; applied locally here, to production by the Overseer's
   deploy.
-- **Freshness**: FAQ's fingerprint exactly (`articleWithIdsFingerprint`: blocks, tree and the
-  metadata head, every byte the prompt is built from; no profile, because who reads does not change
-  how one paragraph follows another); `PROMPT_VERSION` `relations/1`.
+- **Freshness**: a fingerprint of the exact request: the rendered article and head, and the
+  ordered list of paragraph pairs (no profile, because who reads does not change how one paragraph
+  follows another). It began as FAQ's fingerprint; the code review found that one could not see a
+  paragraph become a heading, and re-ran on a tree change the prompt never reads. `PROMPT_VERSION`
+  `relations/2`.
 - **Model**: the `capable` tier, as every whole-article step. One call; the answer is ~10 tokens per
   paragraph, so the cost is almost all input, and that input is the cached article prefix other
   steps already write. *Quick* is the cheaper option and a fair later measurement, not a v1 guess.
@@ -184,3 +186,34 @@ add it if the gap proves confusing.
 | P2-7 | `CACHEABLE`; copy the latest CHECK, not FAQ's | **Yes** |
 | P2-8 | 43 of 108 is dense; draw `but` and `vs` only | **Partly**: `why` and `e.g.` dropped; `so` kept because Greg named it |
 | P2-9 | the diagram was off by one; the word must be focusable | **Yes** |
+
+## Status
+
+**Both stages built, 2026-10-03.** A real run on a 4,089-word local article: 75 of 75 paragraphs
+answered in 14 seconds for $0.045, and 12 words drawn (7 *so*, 3 *but*, 2 *vs*). A Sonnet browser
+check (Playwright, 1440px) read six of them against their paragraphs: four fair, two weak (a *so*
+on a paragraph that scales up rather than concludes, a *vs* on an aside). That is the quality to
+expect from v1, and the reason the card says the word is the AI's reading. The same check saw one
+`relations` POST for the press that turns the column on, none for a reload, a pasted `?margin=1`
+link or a second press, and no overlapping notes down 13,000px of article.
+
+Not checked in a browser: a Timeline stamp with a computed date (the only fresh local timelines
+date their events in the article's own words). `tests/marginalia-note-cards.test.tsx` covers it.
+
+## GPT Sol's code review, 2026-10-03
+
+[The review](261003f-marginalia-code-review-sol.md); no P0, and no route by which a visitor gets
+relations. It fixed what it found inside the stage; I read its diff and ran the gates, including
+the Postgres suites its sandbox could not reach.
+
+| # | Finding | Outcome |
+|---|---|---|
+| P1-1 | a paragraph turned into a heading kept its fingerprint, so an old *but* stayed "current" beside a heading | Fixed: the stamp hashes the rendered article and the paragraph pairs |
+| P1-2 | a visitor's dated event could keep its date phrase and lose its event quote, and still be drawn | Fixed: a dated event needs a surviving quote in the same block |
+| P1-3 | the prompt said both "choose nothing from paperwork" and "answer every paragraph" | Fixed: a `relation` paperwork rule of its own |
+| P2-1 | after a model change the GET said "current" and the pipeline said "outdated", so a press was spent on nothing | Fixed for relations: the GET uses the pipeline's comparison |
+| P2-2 | relations missing from two export inventories | Fixed, with a fixture |
+| P2-3 | the off-press and surface tests could pass while a job was posted | Fixed: they assert on POSTs |
+| P2-4 | the Timeline card said "first mention" | Fixed |
+| P2-5 | **reported, wider:** the same GET/pipeline mismatch after a model change exists for Ideas, Timeline, FAQ and others | Not changed here; in the feedback note for the Overseer |
+| P2-6 | **reported, wider:** `HOMES` in the artefact manifest test omits several older files | Not changed here; same note |

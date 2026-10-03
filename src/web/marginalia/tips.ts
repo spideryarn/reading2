@@ -50,7 +50,7 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
   timeline: {
     head: "When",
     what: "Something the article says happened, with the date it gives. Press it to see the words that mention it.",
-    how: "From Timeline mode. The short description was written by AI; the date is read out of the article's own words, never guessed, and a phrase in quotation marks is the article's own. It sits beside the first passage that mentions the event.",
+    how: "From Timeline mode. The short description was written by AI; the date is read out of the article's own words, never guessed, and a phrase in quotation marks is the article's own. A dated event sits beside the passage that dates it; the article's own relative wording sits beside its first surviving mention.",
   },
   debate: {
     head: "Debate",

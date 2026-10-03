@@ -14,9 +14,9 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Article } from "../src/article-input.js";
 import { cascadeForce } from "../src/jobs.js";
+import { HIGH_POWER_MODEL } from "../src/high-power-model.js";
 import { paperwork } from "../src/paperwork.js";
 import { DEFAULT_INGEST_STEPS, FORCE_ONLY_WHEN_NAMED, STEP_ORDER } from "../src/pipeline.js";
-import { articleWithIdsFingerprint } from "../src/source-hash.js";
 import { SHAPE } from "../src/store/artifacts.js";
 import { RELATIONS, type Block, type BlockId, type Tree } from "../src/types.js";
 import {
@@ -27,6 +27,8 @@ import {
   answerTokens,
   eligibleParagraphs,
   generateRelations,
+  inputFingerprint,
+  isOutdated,
   isStale,
   renderPrompt,
   toRelations,
@@ -277,9 +279,33 @@ describe("generateRelations", () => {
 
     expect(run.called).toBe(true);
     expect(run.relations.relations).toEqual({ "spya-bbbbbb": "but", "spya-cccccc": "therefore" });
-    expect(run.relations.sourceHash).toBe(articleWithIdsFingerprint(blocks, TREE, null));
+    expect(run.relations.sourceHash).toBe(inputFingerprint(blocks, TREE, null));
     expect(isStale(run.relations, blocks, TREE, null)).toBe(false);
     expect(isStale(run.relations, [...blocks, block("spya-dddddd")], TREE, null)).toBe(true);
+  });
+
+  it("changes the fingerprint when the same words stop or start being an eligible paragraph", () => {
+    const asText = [block("spya-aaaaaa"), block("spya-bbbbbb")];
+    const asHeading = [
+      asText[0]!,
+      block("spya-bbbbbb", { kind: "heading", tag: "h2", text: asText[1]!.text }),
+    ];
+    expect(inputFingerprint(asHeading, TREE, null)).not.toBe(
+      inputFingerprint(asText, TREE, null),
+    );
+  });
+
+  it("does not change the fingerprint for a tree-only change the request never sees", () => {
+    const changedTree = structuredClone(TREE);
+    changedTree.nodes[changedTree.rootId]!.gist = "Different generated navigation prose.";
+    expect(inputFingerprint(blocks, changedTree, null)).toBe(
+      inputFingerprint(blocks, TREE, null),
+    );
+  });
+
+  it("treats a relation from an older model generation as outdated", () => {
+    expect(isOutdated({ version: PROMPT_VERSION, generator: "an-older-model" })).toBe(true);
+    expect(isOutdated({ version: PROMPT_VERSION, generator: HIGH_POWER_MODEL })).toBe(false);
   });
 
   it("fails, storing nothing, when the model answers fewer than half", async () => {
@@ -307,8 +333,10 @@ describe("the prompt", () => {
     ]);
   });
 
-  it("carries the shared paperwork section", () => {
-    expect(RELATIONS_SYSTEM).toContain(paperwork("pick"));
+  it("classifies every listed paperwork paragraph instead of telling the model to omit it", () => {
+    expect(RELATIONS_SYSTEM).toContain(paperwork("relation"));
+    expect(RELATIONS_SYSTEM).not.toContain("Choose nothing from it alone");
+    expect(RELATIONS_SYSTEM).toContain("still gets one relation");
   });
 
   it("never makes block ids an enum", () => {
