@@ -478,6 +478,27 @@ describe("/admin/vouchers", () => {
     }
 
     const creates = () => calls.filter((c) => c.method === "POST" && c.url === "/api/admin/vouchers");
+
+    /* Greg, 2026-10-03 (spya-prv9yu): *"Make the 'Create voucher' button more
+       visible. And emphasise the public over the private message"*. jsdom has
+       no layout, so this pins what the layout is built from: the submit is the
+       filled primary button and the last control in the form, and the note
+       they will read comes before the one only the admin sees, in the form and
+       in the table. */
+    it("puts the note to them before the private note, and ends on a filled Create button", async () => {
+      await mount();
+      const controls = [...form().querySelectorAll<HTMLElement>("input, textarea, button")];
+      const at = (selector: string) => controls.indexOf(form().querySelector(selector) as HTMLElement);
+      expect(at("#voucher-new-recipient-note")).toBeGreaterThan(-1);
+      expect(at("#voucher-new-recipient-note")).toBeLessThan(at("#voucher-new-note"));
+      const create = form().querySelector('button[type="submit"]') as HTMLButtonElement;
+      expect(controls.at(-1)).toBe(create);
+      expect(create.dataset.variant).toBe("default");
+      const heads = [...host.querySelectorAll("thead th")].map((th) => th.textContent);
+      expect(heads.indexOf("Note to them")).toBeLessThan(heads.indexOf("Private note"));
+      const cells = [...(rowFor("waiting@example.test")?.querySelectorAll("td") ?? [])];
+      expect(cells[heads.indexOf("Private note")]?.textContent).toContain("met at the conference");
+    });
     const idOf = (call: Call | undefined) => (call?.body as { id?: unknown } | undefined)?.id;
 
     it("sends an id it minted, and the same one again when the same form is resubmitted", async () => {
