@@ -98,6 +98,7 @@ import { type ArchivedTally, ShelfSearchAlso } from "./ShelfSearchAlso.js";
 import { useNow } from "./useNow.js";
 import { useSession } from "./useSession.js";
 import { useShelf } from "./useShelf.js";
+import { usePreloadRecent } from "./usePreloadRecent.js";
 import { useSlow } from "./useSlow.js";
 import { useRenderCount } from "./perf.js";
 import { layoutViewportWidth } from "./reader/measure.js";
@@ -128,6 +129,9 @@ export function Library({
   const { user } = useSession();
   const shelf = useShelf(readerId);
   const { articles, error, reload } = shelf;
+  /* The five opened most recently, fetched now so that reopening one does not
+     wait on the server — report spya-j78fff, usePreloadRecent.ts. */
+  usePreloadRecent(articles);
   const slow = useSlow(articles === null);
 
   /* Every one of these is in the URL rather than in `useState`, which is the
@@ -1460,7 +1464,7 @@ function UndoStrip({ title, onUndo }: { title: string; onUndo: () => void }) {
  *
  * `.tooltip` in styles.css paints the surface and nothing else — no size, no
  * colour — because every tooltip in the reading view carries classed content
- * that sets its own (`.tip-crumb`, `.tip-search`, `.tip-soon`). This page is
+ * that sets its own (`.where-card`, `.tip-search`, `.tip-soon`). This page is
  * Tailwind, so the sizing lives here in the same way `Note` does in
  * Metadata.tsx rather than as a sixth `.tip-*` rule in the stylesheet.
  *

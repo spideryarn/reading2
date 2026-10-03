@@ -100,8 +100,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { navLabelVoice, nodeLabel, titleVoice, type OutlineEntry } from "./tree.js";
-import { type Voice, voiceClass, withVoice } from "./voice.js";
+import { navLabelVoice, titleVoice, type OutlineEntry } from "./tree.js";
+import { type Voice, voiceClass } from "./voice.js";
 import type { BlockMatch } from "./search-hits.js";
 import type { BlockId } from "../types.js";
 import {
@@ -116,6 +116,8 @@ import {
 import type { ReadLevel } from "./reading-time.js";
 import { useJumpOrigin } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { WhereCard } from "./WhereCard.js";
+import { spineLabel, type WhereRow, whereForBand } from "./where.js";
 import { useRenderCount } from "./perf.js";
 import { onFontsChanged } from "./fonts.js";
 import { isFolded } from "./fold.js";
@@ -130,12 +132,12 @@ import { isFolded } from "./fold.js";
  * two gists is a wall). A narrow value says what the card may use. GPT Sol,
  * 2026-08-28.
  *
- * `index` is 0-based; the card renders `index + 1`.
+ * Since 2026-10 the card draws its place from the outline instead
+ * (`whereForBand`, plan 261003d); this is what the band's *name* needs —
+ * `ariaFor`'s part title, and `bandLabel`'s *Section 2 of 4*. `index` is 0-based.
  */
 interface BandParent {
   title: string;
-  /** Whose words `title` is — tree.ts § `titleVoice`. */
-  voice: Voice;
   index: number;
   total: number;
 }
@@ -221,7 +223,7 @@ function measure(outline: OutlineEntry[]): Metrics | null {
   /** The children of `e` as bands, each knowing where in `e` it sits. */
   const childBands = (e: OutlineEntry): Band[] =>
     e.children.map((c, i) =>
-      bandFor(c, { title: e.node.title, voice: titleVoice(e.node), index: i, total: e.children.length }),
+      bandFor(c, { title: e.node.title, index: i, total: e.children.length }),
     );
 
   // L2s are rendered as siblings in the same track rather than nested inside
@@ -979,6 +981,20 @@ function SpineInner({
     [metrics, matches],
   );
 
+  /* Each band's place in the outline, for its card (plan 261003d). Keyed by
+     node id over every part and section, not over `hits`, because the outline
+     alone decides it — a fold or a resize changes which bands are hits, not
+     where any of them sits. */
+  const whereByBand = useMemo(
+    () =>
+      new Map(
+        outline
+          .flatMap((e) => [e, ...e.children])
+          .map((e) => [e.node.id, whereForBand(outline, e.node.id)] as const),
+      ),
+    [outline],
+  );
+
   if (!metrics || metrics.l1.length === 0) {
     // Tagged for the keyboard even while it is empty: the rail occupies its
     // width from the first paint but only measures on the next frame, and a
@@ -1329,6 +1345,7 @@ function SpineInner({
               content={
                 <BandCard
                   band={b}
+                  where={whereByBand.get(b.entry.node.id) ?? []}
                   position={Math.round((b.top / docHeight) * 100)}
                   matches={bandCounts.get(b.entry.node.id) ?? 0}
                   here={hereHitId === b.entry.node.id}
@@ -1484,16 +1501,13 @@ export function childLabel(e: OutlineEntry): { label: string; voice: Voice } {
  * from the next. The fallback is deliberately built from the crumb the reader is
  * already being shown rather than from an id: `Section 2 of 4` under
  * `REFERENCES` reads as a place in the article, and `spya-k3m9qt` does not.
+ *
+ * The rule itself is `spineLabel` in where.ts, so the card's outline and this
+ * name cannot call one band two things.
  */
 function bandLabel(band: Band): { text: string; voice: Voice } {
-  const own = nodeLabel(band.entry);
-  if (own) return own;
-  return {
-    text: band.parent
-      ? `Section ${band.parent.index + 1} of ${band.parent.total}`
-      : "Untitled section",
-    voice: "ui",
-  };
+  const label = spineLabel(band.entry, band.parent);
+  return label.text ? label : { text: "Untitled section", voice: "ui" };
 }
 
 /** The band's name for a screen reader, with the matches in it if there are any. */
@@ -1507,12 +1521,15 @@ function ariaFor(band: Band, matches: number): string {
 
 function BandCard({
   band,
+  where,
   position,
   matches,
   here = false,
   showTapHint = false,
 }: {
   band: Band;
+  /** The band's place in the outline — `whereForBand`. */
+  where: readonly WhereRow[];
   position: number;
   matches: number;
   /** The reading line is inside this band — see `hereHit` in `Spine`. */
@@ -1520,40 +1537,18 @@ function BandCard({
   showTapHint?: boolean;
 }) {
   const { node, words, children } = band.entry;
-  const { parent } = band;
   /* Filtered before it is counted, so `+ n more` is a promise about rows the
      reader would actually get. Counting first and filtering second is how a
      card ends up saying "+ 3 more" and then showing three blank bullets. */
   const kids = children
     .map((c) => ({ id: c.node.id, ...childLabel(c) }))
     .filter((c) => c.label !== "");
-  const label = bandLabel(band);
-  return (
+  /* The gist, or the nav label standing in for one — but never the nav label
+     *twice*, which is what an untitled band would otherwise show: `bandLabel`
+     has already used it as the title, and repeating it under itself in italics
+     reads as a rendering fault. */
+  const detail = (
     <>
-      {parent && (
-        <div className="tip-crumb">
-          <span className={withVoice("tip-crumb-name", parent.voice)}>{parent.title}</span>
-          {/* **Where in the part, which is the one thing a proportional rail
-              cannot show.** The rail says how far through the *article* you
-              are; nothing on it says this is the third section of seven. One
-              number pair, on a line that already exists, and it is skipped when
-              the part has a single child because "1 of 1" is noise rather than
-              orientation. */}
-          {parent.total > 1 && (
-            <span className="tip-crumb-pos">
-              {parent.index + 1} of {parent.total}
-            </span>
-          )}
-        </div>
-      )}
-      <div className="tip-title">
-        <span className={voiceClass(label.voice)}>{label.text}</span>
-        {node.sourceHeading && <span className="tip-own">§</span>}
-      </div>
-      {/* The gist, or the nav label standing in for one — but never the nav
-          label *twice*, which is what an untitled band would otherwise show:
-          `bandLabel` has already used it as the title, and repeating it under
-          itself in italics reads as a rendering fault. */}
       {node.gist ? (
         <p className="tip-gist">{node.gist}</p>
       ) : node.navLabel && node.title?.trim() ? (
@@ -1570,6 +1565,32 @@ function BandCard({
             <li className="tip-more">+ {kids.length - MAX_CHILDREN} more</li>
           )}
         </ul>
+      )}
+    </>
+  );
+  const label = bandLabel(band);
+  return (
+    <>
+      {/* **Where this section sits in the article**, which is the one thing a
+          proportional rail cannot show: the rail says how far through the
+          article a band is, not which part it belongs to or what is either side
+          of it. Greg, spya-d896sz: *"hovering over the spine to show, okay,
+          this is where I am right now relative to the wider course
+          hierarchy."* The band is the marked row, so the outline is also the
+          card's title, and its gist and sub-sections open under it. It replaced
+          a crumb line (*THE PART · 2 of 3*) and a title line; the bounded
+          version is `SPINE_LIMITS`, because this card cannot scroll. Plan
+          261003d. `where` is never empty for a hit; the title alone is the
+          fallback if the outline and the bands ever disagree. */}
+      {where.length > 0 ? (
+        <WhereCard rows={where} detail={detail} />
+      ) : (
+        <>
+          <div className="tip-title">
+            <span className={voiceClass(label.voice)}>{label.text}</span>
+          </div>
+          {detail}
+        </>
       )}
       <div className="tip-foot">
         {/* `words` is 0 for a band whose blocks carry no count, and a "0 words"

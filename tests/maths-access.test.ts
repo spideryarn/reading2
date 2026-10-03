@@ -47,7 +47,7 @@ describe("resolveAccess and rendered maths", () => {
     }));
     const load = { signal: new AbortController().signal, mint: () => "", release: () => {} };
 
-    const { access, withImages } = await resolveAccess("maths", true, load);
+    const { access, withImages } = await resolveAccess("maths", "reader-1", load);
     const given = rehostImages.mock.calls[0]?.[0] as Article;
     expect(given.blocks[0]!.html, "rehostImages was handed the rendered article").toContain("<math");
     expect(access.kind).toBe("owned");

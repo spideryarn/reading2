@@ -544,9 +544,12 @@ Four decisions worth keeping:
   word of it) with a transparent full-height button over it, because a 1px tick is not something
   anyone can click.
 - **The detail the sliver can't hold lives in a hover tooltip.** Every hit target carries one, and it
-  is the payoff of the proportional design rather than an apology for it: which part the section
-  belongs to, its gist, the sub-sections inside it, its length, and how far into the piece it sits —
-  on a band that may be two pixels tall and carry no label at all. The tooltips are *grouped*, so
+  is the payoff of the proportional design rather than an apology for it: where the section sits
+  in the article's outline (its part, its neighbours, its place in the part), its gist, the
+  sub-sections inside it, its length, and how far into the piece it sits — on a band that may be two
+  pixels tall and carry no label at all. The outline is the "where am I" card Skim uses, bounded to
+  three rows a level because this card cannot scroll —
+  [261003d](../plans/261003d-spine-hover-card-shows-where-the-section-sits-in-the-article.md). The tooltips are *grouped*, so
   once one is open the neighbours open with no second wait and running the pointer down the rail
   reads the article's sections one after another. Built on Floating UI — why that library, and what
   it is doing for us: [tooltips.md](tooltips.md).
