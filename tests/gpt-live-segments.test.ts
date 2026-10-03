@@ -543,6 +543,24 @@ describe("real traces from the spike", () => {
   });
 });
 
+describe("a typed question", () => {
+  it("does not mark the answer before it as cut into, because typing interrupts nobody", () => {
+    const s = new Segmenter();
+    const during = feed(s, [
+      ...say("reader", 1_000, "What is the main argument?"),
+      ...say("companion", 4_000, "He says writing is thinking."),
+      { type: "typed", eventId: "t1", text: "Where exactly does it say that, show me the passage" },
+      ...say("companion", 9_000, "In the part that begins yes."),
+    ]);
+    const exchanges = [...during, ...s.closing().exchanges];
+    expect(rows(exchanges)).toEqual([
+      ["What is the main argument?", "He says writing is thinking."],
+      ["Where exactly does it say that, show me the passage", "In the part that begins yes."],
+    ]);
+    expect(exchanges.map((x) => x.interrupted ?? false)).toEqual([false, false]);
+  });
+});
+
 /**
  * **Sounds the transcript writes as words.** The peer's measurement of this
  * engine (docs/investigations/261002r-gpt-live-spike.md § What surprised us):

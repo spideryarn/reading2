@@ -602,6 +602,9 @@ export class Segmenter {
 function cutInto(draft: Draft, next: Draft): boolean {
   const first = next.reader[0];
   if (!first || draft.companion.length === 0) return false;
+  /* Typing interrupts nobody, and a typed turn has no time of its own: it is
+     placed at the latest point heard, which is always hard against the answer. */
+  if (first.typed) return false;
   if (first.at - endOf(draft.companion) >= INTERRUPT_GAP_MS) return false;
   return wordsIn(textOf(next.reader)) > BACKCHANNEL_WORDS;
 }
