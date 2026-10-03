@@ -929,3 +929,59 @@ describe("generateIllustrated with the article's own figures", () => {
     expect(run.report.faults).toHaveLength(1);
   });
 });
+
+/* ------------------------------------------------------ the steering note -- */
+
+/** Plan 261002j: the reader's note reaches the brief, and only when there is one. */
+describe("generateIllustrated with the reader's steering note", () => {
+  const NOTE = 'Fewer scenes, bigger lettering — "a map", not a manuscript.';
+
+  const briefRequest = () =>
+    streamMessage.mock.calls[0]?.[1] as
+      | { system: { text: string }[]; messages: { content: string }[] }
+      | undefined;
+
+  it("puts the note in the brief's user message, quoted, after the figures and before what to write", async () => {
+    const { draw } = drawer();
+    await generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw, note: NOTE });
+    const user = briefRequest()?.messages[0]?.content ?? "";
+    expect(user).toContain("THE READER'S NOTE ON HOW THEY WANT IT TO COME OUT");
+    expect(user).toContain(JSON.stringify(NOTE));
+    expect(user.indexOf("READER'S NOTE")).toBeLessThan(user.indexOf("=== WHAT TO WRITE ==="));
+  });
+
+  it("asks exactly what it asked before when there is no note", async () => {
+    const { draw } = drawer();
+    await generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw });
+    const plain = JSON.stringify(briefRequest());
+    expect(plain).not.toContain("READER'S NOTE");
+    streamMessage.mockClear();
+    await generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw, note: NOTE });
+    const noted = briefRequest();
+    /* The system prompt is untouched: the note never moves ILLUSTRATED_VERSION. */
+    expect(JSON.stringify(noted?.system)).toBe(JSON.stringify(JSON.parse(plain).system));
+  });
+
+  it("never sends the note to the image model itself", async () => {
+    const { draw, calls } = drawer();
+    await generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw, note: NOTE });
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) expect(call.prompt).not.toContain(NOTE);
+  });
+
+  it("hashes the note into the fingerprint only when there is one", () => {
+    expect(inputFingerprint(SKETCH, PLATE_REQUEST, "", "")).toBe(inputFingerprint(SKETCH));
+    expect(inputFingerprint(SKETCH, PLATE_REQUEST, "", NOTE)).not.toBe(inputFingerprint(SKETCH));
+    expect(inputFingerprint(SKETCH, PLATE_REQUEST, "", NOTE)).not.toBe(
+      inputFingerprint(SKETCH, PLATE_REQUEST, "", "Another note."),
+    );
+  });
+
+  it("reads a noted picture as current against its own note, so a note never makes it stale", () => {
+    const sourceHash = inputFingerprint(SKETCH, PLATE_REQUEST, "", NOTE);
+    const painted = { version: "x", style: "", plates: [], sourceHash, note: NOTE };
+    expect(isStale(painted, SKETCH)).toBe(false);
+    const { note: _dropped, ...withoutNote } = painted;
+    expect(isStale(withoutNote, SKETCH)).toBe(true);
+  });
+});

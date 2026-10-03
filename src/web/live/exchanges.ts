@@ -426,6 +426,24 @@ export class ExchangeLedger {
   }
 
   /**
+   * **Which exchange an item is drawn into, and where that exchange sits in the
+   * conversation** — so the thread can show a late answer beside the question it
+   * answers, not after whatever the reader said next.
+   *
+   * The same causal attribution the write uses, and that is the point: a tail
+   * drawn in arrival order would show U1, U2, R1 while the store files R1 with
+   * U1, and the screen and the record would disagree. `null` until the ledger
+   * has heard of the item — a typed turn before its acknowledgement, or an
+   * answer with no turn to belong to.
+   */
+  ownerOf(itemId: string): { exchange: string; seq: number } | null {
+    for (const turn of this.turns.values()) {
+      if (turn.items.has(itemId)) return { exchange: turn.itemId, seq: turn.seq };
+    }
+    return null;
+  }
+
+  /**
    * The turn a piece of model output belongs to — **from its own response id**.
    *
    * Falls back to `current` only when the event carries no response id we know,

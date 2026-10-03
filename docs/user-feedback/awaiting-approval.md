@@ -29,7 +29,7 @@ in this directory records which, and the line comes off.
   [261001s § review item 6](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md) ·
   [note](261001_1035-past-imports-say-more-and-why-you-are-reading-says-if-saved.md)
 
-- 2026-10-02 · report spya-nnr8ha (Sentry event fedb11bb…; short id not found by search) · a text
+- 2026-10-02 · SPIDERYARN-READING2-A8 (report spya-nnr8ha) · a text
   size setting on /profile: body text alone follows one variable, but headings stay fixed, so it is
   either about ten CSS rules re-expressed as one scale (B, ~a day), body-only with an inverted
   hierarchy (A, not recommended), or not now, using browser zoom (C) ·

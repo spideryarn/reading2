@@ -8,6 +8,7 @@
  *   npx tsx evals/illustrated/run.ts --check <raw.json> --slug noema…    # free: no model call
  *   npx tsx evals/illustrated/run.ts --check <brief.json> --stored …    # free: read it back as the browser does
  *   npx tsx evals/illustrated/run.ts --hostile                          # the article that attacks the brief model
+ *   npx tsx evals/illustrated/run.ts --slug noema… --note "a sea chart, five scenes"  # a reader's steering note (plan 261002j)
  *
  * `<slug>.raw.json` is the model's answer saved before anything touched it, so
  * when the model fences its JSON the file is not quite JSON and the extension is
@@ -126,6 +127,8 @@ interface Options {
   checkOnly: string | null;
   /** `--check` a *stored* artefact rather than a raw model answer. */
   stored: boolean;
+  /** A reader's steering note, as the box under the picture sends it. */
+  note: string | null;
 }
 
 function parseArgs(argv: string[]): Options {
@@ -134,12 +137,14 @@ function parseArgs(argv: string[]): Options {
   let outDir = "";
   let systemFile: string | null = null;
   let checkOnly: string | null = null;
+  let note: string | null = null;
   const flags = new Set<string>();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] as string;
     if (a === "--out") outDir = argv[++i] ?? "";
     else if (a === "--system") systemFile = argv[++i] ?? null;
     else if (a === "--check") checkOnly = argv[++i] ?? null;
+    else if (a === "--note") note = argv[++i] ?? null;
     else if (a === "--stored" || a === "--hostile") flags.add(a);
     else if (a === "--sketch") sketches.push(argv[++i] ?? "");
     else if (a === "--dir" || a === "--slug") dirs.push(argv[++i] ?? "");
@@ -157,6 +162,7 @@ function parseArgs(argv: string[]): Options {
     systemFile,
     checkOnly,
     stored: flags.has("--stored"),
+    note,
   };
 }
 
@@ -297,6 +303,7 @@ async function draw(opts: Options): Promise<void> {
           article,
           sketch,
           ...(systemOverride ? { systemOverride } : {}),
+          ...(opts.note ? { note: opts.note } : {}),
           onProgress: (d) => process.stdout.write(`\r${slug}: ${d}                    `),
         }),
       {

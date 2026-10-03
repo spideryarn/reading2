@@ -94,7 +94,7 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -512,6 +512,49 @@ describe("forceForRetry", () => {
 });
 
 describe("parseJobRequest", () => {
+  /* Plan 261002j. The refusals name a length, never the note: an httpError's
+     message is logged as `reason`. */
+  it("takes an Illustrated note with a job that paints, and refuses it anywhere else", () => {
+    const parsed = parseJobRequest({
+      slug: "a-slug",
+      steps: ["illustrated"],
+      illustrationNote: "  Bigger lettering.  ",
+    });
+    expect(parsed.illustrationNote).toBe("Bigger lettering.");
+    expect(
+      parseJobRequest({ slug: "a-slug", steps: ["sketch", "illustrated"], illustrationNote: "x" })
+        .illustrationNote,
+    ).toBe("x");
+    expect(parseJobRequest({ slug: "a-slug", steps: ["illustrated"], illustrationNote: "  " })).not.toHaveProperty(
+      "illustrationNote",
+    );
+    expect(() => parseJobRequest({ slug: "a-slug", steps: ["glossary"], illustrationNote: "x" })).toThrow(
+      /illustrated step/,
+    );
+    expect(() => parseJobRequest({ slug: "a-slug", illustrationNote: "x" })).toThrow(/illustrated step/);
+    expect(() =>
+      parseJobRequest({ url: "https://a.example/piece", illustrationNote: "x" }),
+    ).toThrow(/illustrated step/);
+    expect(() => parseJobRequest({ slug: "a-slug", readThis: true, illustrationNote: "x" })).toThrow(
+      /nothing else/,
+    );
+  });
+
+  it("refuses an over-long or invisibly-formatted note without repeating it", () => {
+    const long = "secret ".repeat(100);
+    let message = "";
+    try {
+      parseJobRequest({ slug: "a-slug", steps: ["illustrated"], illustrationNote: long });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toMatch(/at most 400/);
+    expect(message).not.toContain("secret");
+    expect(() =>
+      parseJobRequest({ slug: "a-slug", steps: ["illustrated"], illustrationNote: "a\u202Eb" }),
+    ).toThrow(/invisible formatting/);
+  });
+
   it("derives the slug from the URL rather than trusting one", () => {
     const parsed = parseJobRequest({ url: "https://www.noemamag.com/the-mythology-of-conscious-ai/" });
     expect(parsed.slug).toBe("the-mythology-of-conscious-ai");
@@ -782,8 +825,15 @@ describe("the work key", () => {
     upload?: { id: string; filename: string };
     url?: string;
     reset?: JobReset;
+    illustrationNote?: string;
   }[] = [
     { names: ["fetch"], forced: [] },
+    /* **The Illustrated note** — plan 261002j. Two notes are two pieces of
+       work, and a note is not the same work as none. */
+    { names: ["illustrated"], forced: [] },
+    { names: ["illustrated"], forced: [], illustrationNote: "Bigger lettering." },
+    { names: ["illustrated"], forced: [], illustrationNote: "A map, not a manuscript." },
+    { names: ["illustrated"], forced: ["illustrated"], illustrationNote: "Bigger lettering." },
     { names: ["fetch"], forced: ["fetch"] },
     { names: ["fetch", "extract"], forced: [] },
     /* Two that differ ONLY in the intent dimension, which is what stops this
@@ -848,9 +898,13 @@ describe("the work key", () => {
     ...(g.upload ? { upload: g.upload } : {}),
     ...(g.url ? { url: g.url } : {}),
     ...(g.reset ? { reset: g.reset } : {}),
+    ...(g.illustrationNote ? { illustrationNote: g.illustrationNote } : {}),
   });
 
-  const extrasOf = (g: (typeof GRID)[number]) => (g.reset ? { reset: g.reset } : {});
+  const extrasOf = (g: (typeof GRID)[number]) => ({
+    ...(g.reset ? { reset: g.reset } : {}),
+    ...(g.illustrationNote ? { illustrationNote: g.illustrationNote } : {}),
+  });
 
   it("agrees with sameWork on every pair, both ways round", () => {
     for (const a of GRID) {
@@ -863,6 +917,7 @@ describe("the work key", () => {
           b.upload,
           b.url,
           b.reset,
+          b.illustrationNote,
         );
         const keysMatch =
           workKeyFor(a.names, new Set(a.forced), a.profile, a.upload, a.url, extrasOf(a)) ===
@@ -890,6 +945,30 @@ describe("the work key", () => {
     expect(physicist).not.toBe(historian);
     expect(physicist).not.toBe(none);
     expect(historian).not.toBe(none);
+  });
+
+  /* The direct assertion the agreement test cannot make on its own, plus the
+     two properties the plan leans on: a key minted without a note is exactly
+     the key it always was, and a successor-shaped call (extras carrying only a
+     scope) is untouched by the new field. */
+  it("counts two different Illustrated notes as two different pieces of work, and leaves old keys alone", () => {
+    const plain = workKeyFor(["illustrated"], new Set());
+    const a = workKeyFor(["illustrated"], new Set(), undefined, undefined, undefined, {
+      illustrationNote: "Bigger lettering.",
+    });
+    const b = workKeyFor(["illustrated"], new Set(), undefined, undefined, undefined, {
+      illustrationNote: "A map.",
+    });
+    expect(a).not.toBe(b);
+    expect(a).not.toBe(plain);
+    expect(workKeyFor(["illustrated"], new Set(), undefined, undefined, undefined, {})).toBe(plain);
+    /* Pinned to the shape every existing key was minted from, so a field
+       added unconditionally would move every key in the queue and go red. */
+    expect(workKeyFor(["illustrated"], new Set())).toBe(
+      createHash("sha256")
+        .update(JSON.stringify({ steps: [["illustrated", false]], upload: "", profile: "", source: "" }))
+        .digest("hex"),
+    );
   });
 
   it("reads two spellings of one address as the same work", () => {

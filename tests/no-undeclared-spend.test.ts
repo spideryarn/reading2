@@ -244,6 +244,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "Measures whether the input transcriber invents words on non-speech — the eval that reproduced Greg's vocabulary-regurgitation bug. Same OpenAI-realtime exception as src/live.ts, and it cannot go through declaredFetch for the same reason: no Declaration for a realtime call can be typed yet. Audio input only, a few cents a run.",
   "evals/live/jargon-recovery.mts":
     "The other half: whether `keywords` is honoured, which cannot be established by reading the session back — it is accepted and not echoed. Speaks a sentence and checks the terms come back spelled right. Same exception, same reason.",
+  "evals/live/gpt-live-spike.mts":
+    "Whether live conversation should move to gpt-live-1 (docs/investigations/261002r-gpt-live-spike.md). Opens realtime sessions through src/live.ts's mint, and gpt-live-1 sessions over its own WebSocket with the API key, and buys text-to-speech for the spoken questions. Same exception as its two siblings: a live session has no response body for declaredFetch to wrap. A full run is about ten dollars.",
   "src/web/live/useLiveConversation.ts":
     "The browser half. It posts an SDP offer to api.openai.com with an EPHEMERAL token our server minted — the API key is not in this bundle and cannot be. Caught because the matcher is hostname-based, which is right: this is the file to look at if that ever stops being true.",
 };

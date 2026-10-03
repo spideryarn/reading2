@@ -1,0 +1,261 @@
+{
+  "version": "illustrated/5",
+  "style": "An antique hand-drawn sea chart in ink and wash on aged parchment, its converging sea-lanes, forking channels and dashed return-courses standing in for the essay's funnels, fork and loop.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Chart Of Conscious AI",
+      "prompt": "An antique hand-drawn sea chart on aged, browned parchment, rendered in ink and faded wash — sepia, dull teal and tarnished gold, with cracked varnish and soft foxing at the edges. The page reads as a single voyage from top to bottom. At the very top, inside a round cartouche bordered with carved rope, sits a small brass clockwork automaton chained to a post on a rocky shore, wincing in evident distress; lettered beneath in large, clear capitals: A MACHINE THAT MIGHT SUFFER. From this cartouche two dotted rhumb-lines sweep downward and outward like converging sea-lanes. The left lane runs down past a small whirlpool to a shoreline scene: a round bun resting on a plate, its swirled crust forming a faint face, tiny pilgrim figures standing on the beach gazing up at it in wonder; lettered beneath: FACE IN THE BUN. The right lane runs down to a rocky headland where a brain, carved like a cut of meat, sits atop a heap of broken cogwheels that refuse to mesh; lettered beneath: MEAT, NOT A MACHINE. Below both, the lanes pass a coiled, unlettered sea-serpent marking an unnamed hazard, then one channel opens into a small harbor: a seated figure leans toward a glowing console marked only with a plain speech-bubble shape, his hand raised in astonishment; lettered beneath: LEMOINE AND THE CHATBOT. All routes then descend to a final cove at the foot of the chart, where a single figure stands half as drifting mist and breath, half as solid flesh, its outer edge dissolving into loose scattered cogwheels; lettered beneath: MORE BREATH THAN THOUGHT. A long dashed homeward course, drawn like a ship's return route, arcs from this final cove back up the right margin of the chart to the cartouche at the very top, closing the loop. A plain compass rose, soundings, and small ink-drawn sailing ships fill the empty corners of the parchment as unlettered ornament. Lettering beneath each scene is large and easy to read; nothing else on the page carries any words.",
+      "vignettes": [
+        {
+          "block": "spya-e68t9h",
+          "quote": "with consciousness comes moral status, the potential for suffering and, perhaps, rights",
+          "depicts": "A small brass clockwork automaton, chained to a post on a rocky shore, wincing as if in pain.",
+          "title": "A MACHINE THAT MIGHT SUFFER",
+          "node": "op1"
+        },
+        {
+          "block": "spya-k850tu",
+          "quote": "a face in a piece of toast or Mother Teresa in a cinnamon bun",
+          "depicts": "A round bun on a plate, its swirled crust forming a faint face, with tiny pilgrim figures on the shore gazing up at it in wonder.",
+          "title": "FACE IN THE BUN",
+          "node": "conv1"
+        },
+        {
+          "block": "spya-uwxe4h",
+          "quote": "The brain is not a Turing machine made of meat.",
+          "depicts": "A brain carved like a cut of meat sitting atop a cluster of broken cogwheels that fail to mesh or turn.",
+          "title": "MEAT, NOT A MACHINE",
+          "node": "conv2"
+        },
+        {
+          "block": "spya-cvyfqe",
+          "quote": "a chatbot called LaMDA. He claimed it was conscious, that it had feelings",
+          "depicts": "A seated engineer leaning toward a glowing console marked only with a single speech-bubble shape, his hand raised in astonishment.",
+          "title": "LEMOINE AND THE CHATBOT",
+          "node": "eth2"
+        },
+        {
+          "block": "spya-w8z40d",
+          "quote": "more breath than thought and more meat than machine",
+          "depicts": "A figure in a final cove, one side rendered as drifting mist and breath, the other as solid flesh, its edges fading into scattered cogwheels.",
+          "title": "MORE BREATH THAN THOUGHT",
+          "node": "close1"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A small brass clockwork automaton, chained to a post on a rocky shore, wincing as if in pain.",
+          "title": "A MACHINE THAT MIGHT SUFFER"
+        },
+        {
+          "where": "A round bun on a plate, its swirled crust forming a faint face, with tiny pilgrim figures on the shore gazing up at it in wonder.",
+          "title": "FACE IN THE BUN"
+        },
+        {
+          "where": "A brain carved like a cut of meat sitting atop a cluster of broken cogwheels that fail to mesh or turn.",
+          "title": "MEAT, NOT A MACHINE"
+        },
+        {
+          "where": "A seated engineer leaning toward a glowing console marked only with a single speech-bubble shape, his hand raised in astonishment.",
+          "title": "LEMOINE AND THE CHATBOT"
+        },
+        {
+          "where": "A figure in a final cove, one side rendered as drifting mist and breath, the other as solid flesh, its edges fading into scattered cogwheels.",
+          "title": "MORE BREATH THAN THOUGHT"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-temptations",
+      "title": "Why We're Tempted",
+      "prompt": "An antique hand-drawn sea chart, ink and faded wash on aged parchment — sepia, dull teal, tarnished gold — matching the style and palette of a larger chart it belongs to. At the very top of the page, inside a round rope-bordered cartouche, is the round bun on a plate with a faint face in its swirled crust, tiny pilgrim figures on the shore below gazing up at it; lettered beneath: FACE IN THE BUN. This cartouche serves as the frame for everything below it. Directly beneath, the chart proper begins with a harbor scene: a figure at a table solving a crossword, surrounded by half-assembled furniture and a shopping basket; lettered beneath: CROSSWORD, FURNITURE, SHOP. From this harbor the coastline forks into two channels running side by side down the page. The left channel passes first a large eye peering through human-shaped spectacles at the chart around it, lettered THROUGH A HUMAN LENS; then a tall wooden ladder rising into the clouds, humans partway up its rungs, winged god-like figures above, animals below, lettered THE LADDER OF NATURE; then two machines on a dock, one shaped like a folded chain and ignored, the other a glowing console admired by a small crowd, lettered ALPHAFOLD IGNORED, CHATBOTS ADORED; then a dim bedroom with a translucent ghostly figure standing at the foot of a bed, lettered A GHOST AT THE BEDSIDE. The right channel passes a steep rising wave-like contour with a tiny ship climbing it and flags planted along its length, lettered EVERY POINT AN INFLECTION; then a dockside scene of two small figures, one gesturing toward a glowing radiant shape, lettered HISTORY OF GODS. From the final scene of each channel, a dashed line climbs back up the margins of the chart to the cartouche at the top, showing both channels feeding into the same frame. A compass rose and small unlettered ink ships fill empty corners. All titles are lettered large and clear beneath their scenes; nothing else on the page carries any words.",
+      "vignettes": [
+        {
+          "block": "spya-k850tu",
+          "quote": "a face in a piece of toast or Mother Teresa in a cinnamon bun",
+          "depicts": "The same bun-with-a-face scene from the overview, set in a round cartouche at the top of the chart as a framing medallion.",
+          "title": "FACE IN THE BUN",
+          "node": "D"
+        },
+        {
+          "block": "spya-h4mwb2",
+          "quote": "to see things through the lens of being human",
+          "depicts": "A large eye peering through a pair of human-shaped spectacles at the rest of the chart.",
+          "title": "THROUGH A HUMAN LENS",
+          "node": "B1"
+        },
+        {
+          "block": "spya-cke6sj",
+          "quote": "on an exponential curve, every point is an inflection point",
+          "depicts": "A steep rising wave-like contour drawn across the chart, a tiny ship climbing it, small flags planted at every point along its length.",
+          "title": "EVERY POINT AN INFLECTION",
+          "node": "C1"
+        },
+        {
+          "block": "spya-her4zk",
+          "quote": "closer to angels and Gods than to other animals, as in the medieval Scala naturae",
+          "depicts": "A tall wooden ladder rising into clouds: humans partway up the rungs, winged figures and radiant gods above, animals clustered below.",
+          "title": "THE LADDER OF NATURE",
+          "node": "B2"
+        },
+        {
+          "block": "spya-v4sduf",
+          "quote": "“If you’ve created a conscious machine — it’s not the history of man, that’s the history of Gods.”",
+          "depicts": "Two small figures on a dockside, one gesturing grandly toward a glowing radiant shape, as if performing a god-like act of creation.",
+          "title": "HISTORY OF GODS",
+          "node": "C2"
+        },
+        {
+          "block": "spya-k6fpme",
+          "quote": "Nobody, as far as I know, has claimed that DeepMind’s AlphaFold is conscious",
+          "depicts": "Two machines side by side on a dock: a folded-chain shape ignored by passersby, and a glowing chat-console admired by a small crowd.",
+          "title": "ALPHAFOLD IGNORED, CHATBOTS ADORED",
+          "node": "B3"
+        },
+        {
+          "block": "spya-t29n67",
+          "quote": "see a dead relative standing at the foot of the bed",
+          "depicts": "A dim bedroom with a bed, a translucent ghostly figure standing at its foot.",
+          "title": "A GHOST AT THE BEDSIDE",
+          "node": "B4"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "The same bun-with-a-face scene from the overview, set in a round cartouche at the top of the chart as a framing medallion.",
+          "title": "FACE IN THE BUN"
+        },
+        {
+          "where": "A figure at a table solving a crossword, surrounded by half-built furniture and a shopping basket, a montage of ordinary busy tasks.",
+          "title": "CROSSWORD, FURNITURE, SHOP"
+        },
+        {
+          "where": "A large eye peering through a pair of human-shaped spectacles at the rest of the chart.",
+          "title": "THROUGH A HUMAN LENS"
+        },
+        {
+          "where": "A steep rising wave-like contour drawn across the chart, a tiny ship climbing it, small flags planted at every point along its length.",
+          "title": "EVERY POINT AN INFLECTION"
+        },
+        {
+          "where": "A tall wooden ladder rising into clouds: humans partway up the rungs, winged figures and radiant gods above, animals clustered below.",
+          "title": "THE LADDER OF NATURE"
+        },
+        {
+          "where": "Two small figures on a dockside, one gesturing grandly toward a glowing radiant shape, as if performing a god-like act of creation.",
+          "title": "HISTORY OF GODS"
+        },
+        {
+          "where": "Two machines side by side on a dock: a folded-chain shape ignored by passersby, and a glowing chat-console admired by a small crowd.",
+          "title": "ALPHAFOLD IGNORED, CHATBOTS ADORED"
+        },
+        {
+          "where": "A dim bedroom with a bed, a translucent ghostly figure standing at its foot.",
+          "title": "A GHOST AT THE BEDSIDE"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-computation",
+      "title": "Why It's Probably Not There",
+      "prompt": "An antique hand-drawn sea chart, ink and faded wash on aged parchment — sepia, dull teal, tarnished gold — in the same hand and palette as the larger chart it belongs to. At the very top, inside a round rope-bordered cartouche, sits the brain carved like a cut of meat resting atop a heap of broken, unmeshed cogwheels; lettered beneath: MEAT, NOT A MACHINE. This cartouche frames everything below it. Directly beneath, the chart proper opens with a wooden table at a harbor's edge, a glowing humanoid figure sliding off its rim into shadow; lettered beneath: OFF THE TABLE. From here the coastline fans into four channels running down the page side by side. The first channel shows a computer box cleanly divided into two labeled compartments beside a brain drawn as one unbroken wet, fleshy mass with no dividing line, lettered MINDWARE BLEEDS INTO WETWARE; this channel continues to a row of brain slices on a table, each one further replaced by shining silicon fragments, lettered SWAPPING NEURONS FOR SILICON. The second channel shows a steam engine fitted with a spinning governor, its two weighted balls swinging outward as a valve closes, lettered THE STEAM GOVERNOR. The third channel shows a single cell drawn as a small stone furnace glowing with fire inside, lettered FURNACES OF METABOLISM. The fourth channel shows a storm cloud rendered as a flat inked diagram above dry, cracked ground, its drawn raindrops never touching or wetting the earth, lettered A STORM THAT MAKES NOTHING WET; this channel continues to a robed philosopher figure standing before a large swirling starry orb crossed with fine grid lines, lettered BOSTROM'S SIMULATED WORLD. All four channels converge again near the foot of the chart, and from this convergence a dashed line climbs back up the margin of the page to the cartouche at the top. A plain compass rose and small unlettered ink ships occupy empty corners of the parchment. All titles are lettered large and clear beneath their scenes; nothing else on the page carries any words.",
+      "vignettes": [
+        {
+          "block": "spya-uwxe4h",
+          "quote": "The brain is not a Turing machine made of meat.",
+          "depicts": "The same meat-brain-and-broken-cogwheels scene from the overview, set in a round cartouche at the top of the chart as a framing medallion.",
+          "title": "MEAT, NOT A MACHINE",
+          "node": "H"
+        },
+        {
+          "block": "spya-wepmnr",
+          "quote": "real artificial consciousness is fully off the table",
+          "depicts": "A wooden table at the chart's harbor, a glowing humanoid figure sliding off its edge and falling away into shadow.",
+          "title": "OFF THE TABLE",
+          "node": "E"
+        },
+        {
+          "block": "spya-b0086e",
+          "quote": "no sharp separation between “mindware” and “wetware” as there is between software and hardware",
+          "depicts": "A computer box cleanly divided by a drawn line into two labeled compartments, beside a brain rendered as one unbroken wet, fleshy mass with no dividing line at all.",
+          "title": "MINDWARE BLEEDS INTO WETWARE",
+          "node": "F1"
+        },
+        {
+          "block": "spya-sq9v5k",
+          "quote": "two heavy cantilevered balls swing outwards, which in turn closes a valve",
+          "depicts": "A steam engine fitted with a spinning governor mechanism, its two weighted balls swinging outward on rods as a valve closes beside it.",
+          "title": "THE STEAM GOVERNOR",
+          "node": "F2"
+        },
+        {
+          "block": "spya-vys3vj",
+          "quote": "into the molecular furnaces of metabolism",
+          "depicts": "A single cell drawn as a small stone furnace with a glowing fire inside its chamber.",
+          "title": "FURNACES OF METABOLISM",
+          "node": "F3"
+        },
+        {
+          "block": "spya-npjt4j",
+          "quote": "A simulation of a rainstorm does not make anything actually wet.",
+          "depicts": "A storm cloud rendered as a flat inked diagram above dry, cracked ground, its drawn raindrops never reaching or wetting the earth below.",
+          "title": "A STORM THAT MAKES NOTHING WET",
+          "node": "F4"
+        },
+        {
+          "block": "spya-ahtr6e",
+          "quote": "progressively replacing brain parts with silicon equivalents that function in exactly the same way",
+          "depicts": "A row of brain slices laid out on a table, each one further along than the last in being replaced by shining silicon fragments.",
+          "title": "SWAPPING NEURONS FOR SILICON",
+          "node": "G1"
+        },
+        {
+          "block": "spya-bcnvp2",
+          "quote": "associated most closely with the philosopher Nick Bostrom",
+          "depicts": "A robed philosopher figure standing before a large swirling starry orb crossed with fine grid lines, representing a simulated cosmos.",
+          "title": "BOSTROM'S SIMULATED WORLD",
+          "node": "G2"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "The same meat-brain-and-broken-cogwheels scene from the overview, set in a round cartouche at the top of the chart as a framing medallion.",
+          "title": "MEAT, NOT A MACHINE"
+        },
+        {
+          "where": "A wooden table at the chart's harbor, a glowing humanoid figure sliding off its edge and falling away into shadow.",
+          "title": "OFF THE TABLE"
+        },
+        {
+          "where": "A computer box cleanly divided by a drawn line into two labeled compartments, beside a brain rendered as one unbroken wet, fleshy mass with no dividing line at all.",
+          "title": "MINDWARE BLEEDS INTO WETWARE"
+        },
+        {
+          "where": "A steam engine fitted with a spinning governor mechanism, its two weighted balls swinging outward on rods as a valve closes beside it.",
+          "title": "THE STEAM GOVERNOR"
+        },
+        {
+          "where": "A single cell drawn as a small stone furnace with a glowing fire inside its chamber.",
+          "title": "FURNACES OF METABOLISM"
+        },
+        {
+          "where": "A storm cloud rendered as a flat inked diagram above dry, cracked ground, its drawn raindrops never reaching or wetting the earth below.",
+          "title": "A STORM THAT MAKES NOTHING WET"
+        },
+        {
+          "where": "A row of brain slices laid out on a table, each one further along than the last in being replaced by shining silicon fragments.",
+          "title": "SWAPPING NEURONS FOR SILICON"
+        },
+        {
+          "where": "A robed philosopher figure standing before a large swirling starry orb crossed with fine grid lines, representing a simulated cosmos.",
+          "title": "BOSTROM'S SIMULATED WORLD"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "noema-mythology-of-conscious-ai",
+  "profileHash": null
+}

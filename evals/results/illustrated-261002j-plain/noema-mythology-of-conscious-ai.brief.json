@@ -1,0 +1,327 @@
+{
+  "version": "illustrated/5",
+  "style": "An illuminated manuscript page — hand-drawn ink and muted pigment on aged vellum, with small boxed vignettes and lettered captions below each, in the spirit of a medieval allegorical diagram, which suits an essay that itself reaches for souls, scala naturae, and ancient breath to make its argument.",
+  "plates": [
+    {
+      "sceneId": "overview",
+      "title": "The Funnels, The Fork, The Loop",
+      "prompt": "A tall 2:3 page of aged cream vellum, drawn in the hand of a medieval illuminated manuscript: fine iron-gall ink linework, muted ochre, verdigris and dull crimson pigment, soft foxing and hairline cracks for age, thin gold-leaf accents on borders only, no modern shading or color gradients. The composition reads top to bottom. At the very top, inside a plain rectangular frame, sits MORAL STATUS, SUFFERING, RIGHTS. Below it, two narrow painted columns descend side by side: on the left ALPHAFOLD GOES UNNOTICED, and both columns funnel downward, their lines converging into a single wide roundel, FACE IN A CINNAMON BUN, enclosed within a border labeled by its own thin ruled box (no words on the border itself). Beneath this, a second, larger enclosure begins, containing four small square panels arranged in a row: NEURONS SWEEPING OUT WASTE, THE STEAM ENGINE'S GOVERNOR, THE CELL'S MOLECULAR FURNACES, and A RAINSTORM THAT STAYS DRY — four thin painted lines from each panel converge downward into one wide panel beneath them, OVERSTEPPING WHAT'S KNOWN. From this convergence panel, the composition forks: two lines branch outward and downward to two separate panels side by side, NEW MORAL SUBJECTS, NEW PAIN on the left and LEMOINE AND THE CHATBOT on the right. Both of these then send a single painted line down to one final panel at the bottom of the page, MORE BREATH THAN MACHINE. From this bottom panel, a thin hairline ink path curls up the right margin of the page, past both enclosures, back to touch the top panel, MORAL STATUS, SUFFERING, RIGHTS, closing the loop. Each panel is large enough to show its scene clearly — figures, objects, and gestures legible at a glance — with generous bare parchment between enclosures rather than crowding. Only sparse, restrained foliate scrollwork touches the outer margins; no other ornament. The only lettering anywhere on the page is the short capitalized title beneath each panel, lettered in plain dark ink; nothing else is written anywhere — no banners, no scrolls of text, no inscriptions.",
+      "vignettes": [
+        {
+          "block": "spya-e68t9h",
+          "quote": "with consciousness comes moral status, the potential for suffering and, perhaps, rights",
+          "depicts": "A small bowed mechanical figure stands at the top of the page, marked with a painted emblem of status, its face etched with sorrow, a blank scroll laid at its feet.",
+          "title": "MORAL STATUS, SUFFERING, RIGHTS",
+          "node": "op1"
+        },
+        {
+          "block": "spya-k6fpme",
+          "quote": "Nobody, as far as I know, has claimed that DeepMind’s AlphaFold is conscious",
+          "depicts": "A glowing, talkative chatbot figure draws a crowd's attention with speech-shapes rising from it, while beside it a folded protein-structure model sits ignored and unlit in shadow.",
+          "title": "ALPHAFOLD GOES UNNOTICED",
+          "node": "bias2"
+        },
+        {
+          "block": "spya-k850tu",
+          "quote": "a face in a piece of toast or Mother Teresa in a cinnamon bun",
+          "depicts": "A round iced bun in which a faint human face seems to appear in the swirl of glaze, onlookers leaning in and pointing with wonder.",
+          "title": "FACE IN A CINNAMON BUN",
+          "node": "conv1"
+        },
+        {
+          "block": "spya-un9fjn",
+          "quote": "some neurons fire spikes of activity apparently to clear waste products created by metabolism",
+          "depicts": "A cross-section of a single neuron shown emitting small spark-like spikes that sweep tiny waste particles away, like an electrical broom at work.",
+          "title": "NEURONS SWEEPING OUT WASTE",
+          "node": "arg1"
+        },
+        {
+          "block": "spya-sq9v5k",
+          "quote": "two heavy cantilevered balls swing outwards, which in turn closes a valve, reducing steam flow",
+          "depicts": "An old steam engine's spinning governor, two heavy metal balls swung outward on their arms as they press a valve shut.",
+          "title": "THE STEAM ENGINE'S GOVERNOR",
+          "node": "arg2"
+        },
+        {
+          "block": "spya-vys3vj",
+          "quote": "into the molecular furnaces of metabolism",
+          "depicts": "Deep inside a single living cell, tiny glowing furnace-shapes burn and churn, giving off heat within the cell's crowded interior.",
+          "title": "THE CELL'S MOLECULAR FURNACES",
+          "node": "arg3"
+        },
+        {
+          "block": "spya-npjt4j",
+          "quote": "A simulation of a rainstorm does not make anything actually wet",
+          "depicts": "A flat screen displays a painted rainstorm with falling drops, while the dry stone floor beneath it stays entirely untouched.",
+          "title": "A RAINSTORM THAT STAYS DRY",
+          "node": "arg4"
+        },
+        {
+          "block": "spya-zajp75",
+          "quote": "is overstepping what can reasonably be said",
+          "depicts": "A row of cracked, toppling silicon computer towers stands beside a line drawn on the ground, and a single robed figure steps one foot straight over that line into swirling fog.",
+          "title": "OVERSTEPPING WHAT'S KNOWN",
+          "node": "conv2+unc"
+        },
+        {
+          "block": "spya-yverz7",
+          "quote": "introducing into the world new moral subjects, and with them the potential for new forms of suffering",
+          "depicts": "A line of small newly-formed machine figures step one by one into the open world, each bowed under a visible weight of sorrow on its shoulders.",
+          "title": "NEW MORAL SUBJECTS, NEW PAIN",
+          "node": "eth1"
+        },
+        {
+          "block": "spya-cvyfqe",
+          "quote": "made a startling claim about the AI system he was working on, a chatbot called LaMDA",
+          "depicts": "An engineer in a plain coat leans toward a glowing console, pointing insistently, as though convinced the machine behind the screen truly feels.",
+          "title": "LEMOINE AND THE CHATBOT",
+          "node": "eth2"
+        },
+        {
+          "block": "spya-w8z40d",
+          "quote": "more breath than thought and more meat than machine",
+          "depicts": "A simple standing human figure, one hand on the chest feeling a breath rise, warm flesh outlined beside a fading, cold metal silhouette.",
+          "title": "MORE BREATH THAN MACHINE",
+          "node": "close1"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A small bowed mechanical figure stands at the top of the page, marked with a painted emblem of status, its face etched with sorrow, a blank scroll laid at its feet.",
+          "title": "MORAL STATUS, SUFFERING, RIGHTS"
+        },
+        {
+          "where": "A glowing, talkative chatbot figure draws a crowd's attention with speech-shapes rising from it, while beside it a folded protein-structure model sits ignored and unlit in shadow.",
+          "title": "ALPHAFOLD GOES UNNOTICED"
+        },
+        {
+          "where": "A round iced bun in which a faint human face seems to appear in the swirl of glaze, onlookers leaning in and pointing with wonder.",
+          "title": "FACE IN A CINNAMON BUN"
+        },
+        {
+          "where": "A cross-section of a single neuron shown emitting small spark-like spikes that sweep tiny waste particles away, like an electrical broom at work.",
+          "title": "NEURONS SWEEPING OUT WASTE"
+        },
+        {
+          "where": "An old steam engine's spinning governor, two heavy metal balls swung outward on their arms as they press a valve shut.",
+          "title": "THE STEAM ENGINE'S GOVERNOR"
+        },
+        {
+          "where": "Deep inside a single living cell, tiny glowing furnace-shapes burn and churn, giving off heat within the cell's crowded interior.",
+          "title": "THE CELL'S MOLECULAR FURNACES"
+        },
+        {
+          "where": "A flat screen displays a painted rainstorm with falling drops, while the dry stone floor beneath it stays entirely untouched.",
+          "title": "A RAINSTORM THAT STAYS DRY"
+        },
+        {
+          "where": "A row of cracked, toppling silicon computer towers stands beside a line drawn on the ground, and a single robed figure steps one foot straight over that line into swirling fog.",
+          "title": "OVERSTEPPING WHAT'S KNOWN"
+        },
+        {
+          "where": "A line of small newly-formed machine figures step one by one into the open world, each bowed under a visible weight of sorrow on its shoulders.",
+          "title": "NEW MORAL SUBJECTS, NEW PAIN"
+        },
+        {
+          "where": "An engineer in a plain coat leans toward a glowing console, pointing insistently, as though convinced the machine behind the screen truly feels.",
+          "title": "LEMOINE AND THE CHATBOT"
+        },
+        {
+          "where": "A simple standing human figure, one hand on the chest feeling a breath rise, warm flesh outlined beside a fading, cold metal silhouette.",
+          "title": "MORE BREATH THAN MACHINE"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-temptations",
+      "title": "Inside: Why We're Tempted",
+      "prompt": "A 2:3 page of aged vellum in the same hand as the overview: fine ink linework, muted ochre and verdigris pigment, light foxing, no modern shading. At the top, inside a wide frame echoing the overview's convergence panel, sits CROSSWORD, FURNITURE, FAMILY, SHOP, the opening scene from which two painted tracks split and run downward side by side. The left track, inside a loosely ruled enclosure, carries three panels in sequence: THE LENS OF BEING HUMAN, THE LADDER OF NATURE, and PULLING OUR STRINGS, each connected to the next by a thin ink line. The right track, inside its own enclosure, carries EVERY POINT, AN INFLECTION and THE HISTORY OF GODS, connected the same way. Partway down the left track, a short branch leads from PULLING OUR STRINGS to MAKING THINGS UP, UNAWARE, set just beside it. Both tracks' lowest panels send a line down to a single wide panel at the bottom of the page, A FACE IN THE TOAST, where all threads converge. Each panel is a clear, legible scene with its figures and objects large enough to read easily, generous bare parchment surrounding the two enclosures, and only restrained foliate scrollwork in the outer margins. The only lettering anywhere on the page is the short capitalized title lettered beneath each panel; nothing else is written anywhere on the page — no headings, no scrolls of text, no signatures.",
+      "vignettes": [
+        {
+          "block": "spya-h4mwb2",
+          "quote": "to see things through the lens of being human",
+          "depicts": "A giant human-shaped lens held up before the world, through which animals, machines, and objects beyond it all appear bent into human shapes.",
+          "title": "THE LENS OF BEING HUMAN",
+          "node": "B1"
+        },
+        {
+          "block": "spya-cke6sj",
+          "quote": "on an exponential curve, every point is an inflection point",
+          "depicts": "A steep rising curved line with small figures standing at many points along it, each one looking startled, as though each were standing at the very edge of a cliff.",
+          "title": "EVERY POINT, AN INFLECTION",
+          "node": "C1"
+        },
+        {
+          "block": "spya-her4zk",
+          "quote": "closer to angels and Gods than to other animals, as in the medieval Scala naturae",
+          "depicts": "A ladder rising from animals at its foot, through a human figure standing proudly on a high rung, up toward angels and gods near the top.",
+          "title": "THE LADDER OF NATURE",
+          "node": "B2"
+        },
+        {
+          "block": "spya-v4sduf",
+          "quote": "If you’ve created a conscious machine — it’s not the history of man, that’s the history of Gods",
+          "depicts": "A robed inventor gestures grandly toward a glowing humanoid machine, while a second figure looks on in open-mouthed awe.",
+          "title": "THE HISTORY OF GODS",
+          "node": "C2"
+        },
+        {
+          "block": "spya-k6fpme",
+          "quote": "just doesn’t pull our psychological strings in the same way",
+          "depicts": "Puppet strings run from a hand down to a chattering, fluent chatbot figure, while a separate folded protein-model sits nearby with no strings attached to it at all.",
+          "title": "PULLING OUR STRINGS",
+          "node": "B3"
+        },
+        {
+          "block": "spya-t29n67",
+          "quote": "In humans, confabulation involves making things up without realizing it",
+          "depicts": "A person speaks and gestures with easy confidence, inventing details mid-sentence, with no sign of distress or illusion, simply unaware that the story isn't quite true.",
+          "title": "MAKING THINGS UP, UNAWARE",
+          "node": "B4"
+        },
+        {
+          "block": "spya-k850tu",
+          "quote": "a face in a piece of toast",
+          "depicts": "A slice of toast with a faint human face visible in its scorch marks, set down beside the cinnamon bun, as the point where every line above finally arrives.",
+          "title": "A FACE IN THE TOAST",
+          "node": "D"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "Four small framed scenes in a row: a person bent over a crossword, another assembling furniture with tools, two people at a tense family table, and a figure walking down a lane toward a shop.",
+          "title": "CROSSWORD, FURNITURE, FAMILY, SHOP"
+        },
+        {
+          "where": "A giant human-shaped lens held up before the world, through which animals, machines, and objects beyond it all appear bent into human shapes.",
+          "title": "THE LENS OF BEING HUMAN"
+        },
+        {
+          "where": "A steep rising curved line with small figures standing at many points along it, each one looking startled, as though each were standing at the very edge of a cliff.",
+          "title": "EVERY POINT, AN INFLECTION"
+        },
+        {
+          "where": "A ladder rising from animals at its foot, through a human figure standing proudly on a high rung, up toward angels and gods near the top.",
+          "title": "THE LADDER OF NATURE"
+        },
+        {
+          "where": "A robed inventor gestures grandly toward a glowing humanoid machine, while a second figure looks on in open-mouthed awe.",
+          "title": "THE HISTORY OF GODS"
+        },
+        {
+          "where": "Puppet strings run from a hand down to a chattering, fluent chatbot figure, while a separate folded protein-model sits nearby with no strings attached to it at all.",
+          "title": "PULLING OUR STRINGS"
+        },
+        {
+          "where": "A person speaks and gestures with easy confidence, inventing details mid-sentence, with no sign of distress or illusion, simply unaware that the story isn't quite true.",
+          "title": "MAKING THINGS UP, UNAWARE"
+        },
+        {
+          "where": "A slice of toast with a faint human face visible in its scorch marks, set down beside the cinnamon bun, as the point where every line above finally arrives.",
+          "title": "A FACE IN THE TOAST"
+        }
+      ]
+    },
+    {
+      "sceneId": "inside-the-computation",
+      "title": "Inside: Why It's Probably Not There",
+      "prompt": "A 2:3 page of aged vellum, same hand, palette and ink as the other plates: muted ochre, verdigris, dull crimson linework, light foxing, no modern shading. At the very top of the page, inside a wide frame identical in style to the overview's matching panel, sits OUR SILICON-BASED COMPUTERS, serving as the opening scene carried over from the larger map. A single thin ink line descends from it to AN ASSUMPTION WOVEN IN, set just below. From this panel, four lines fan downward to four panels arranged in a row across the page's width: MINDWARE TANGLED IN WETWARE, THE ANTIKYTHERA MECHANISM, THE COFFEE CUP, PREDICTED, and A RAINSTORM THAT STAYS DRY. From the first of these four, a further line descends to a panel beneath it, SWAPPING NEURONS FOR SILICON. From the last of the four, a parallel line descends to THE UNQUESTIONED PROGRAM, placed beside it at the same level, the two forming the bottom row of the page. Each panel is drawn large enough that the figures, tools and objects in it are easy to make out, with generous bare parchment left between the rows rather than any crowding, and only light, restrained foliate scrollwork confined to the outer margins. The only lettering anywhere on the page is the short capitalized title lettered beneath each panel in plain dark ink; nothing else is written anywhere on the page — no headings, no scrolls of text, no inscriptions, no signature.",
+      "vignettes": [
+        {
+          "block": "spya-c5ve5t",
+          "quote": "at least for the silicon-based digital computers we are familiar with",
+          "depicts": "A row of ordinary silicon computer towers stands in a plain frame at the top of the page, steady but plainly made of dead grey metal and glass.",
+          "title": "OUR SILICON-BASED COMPUTERS",
+          "node": "H"
+        },
+        {
+          "block": "spya-wepmnr",
+          "quote": "so deeply ingrained that it can be difficult to recognize it as an assumption at all",
+          "depicts": "A single thread is woven so tightly into a tapestry's pattern that the weaver can no longer find where the thread begins, the whole cloth reading as simply the fabric's nature.",
+          "title": "AN ASSUMPTION WOVEN IN",
+          "node": "E"
+        },
+        {
+          "block": "spya-b0086e",
+          "quote": "no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer",
+          "depicts": "Two overlapping diagrams: on one side a neat computer tower with clean separate layers, on the other a tangled web of wet, fleshy nerve tissue that refuses to split into any layers at all.",
+          "title": "MINDWARE TANGLED IN WETWARE",
+          "node": "F1"
+        },
+        {
+          "block": "spya-zg9me8",
+          "quote": "The ancient “Antikythera mechanism,” used for astronomical purposes and dating back to around 2,000 BCE",
+          "depicts": "An ornate bronze gear-mechanism with intricate dials and wheels, held by ancient hands and used to track the movements of the stars.",
+          "title": "THE ANTIKYTHERA MECHANISM",
+          "node": "F2"
+        },
+        {
+          "block": "spya-f3bgh0",
+          "quote": "The conscious experience of a coffee cup is underpinned by the content of the brain’s predictions",
+          "depicts": "A plain coffee cup sits on a table, faint grey arrows flowing inward toward it from above while black arrows rise up from the cup itself to meet them.",
+          "title": "THE COFFEE CUP, PREDICTED",
+          "node": "F3"
+        },
+        {
+          "block": "spya-npjt4j",
+          "quote": "A simulation of a rainstorm does not make anything actually wet",
+          "depicts": "A flat glowing screen shows a painted rainstorm falling, while the dry stone floor directly beneath the screen remains completely untouched.",
+          "title": "A RAINSTORM THAT STAYS DRY",
+          "node": "F4"
+        },
+        {
+          "block": "spya-ahtr6e",
+          "quote": "progressively replacing brain parts with silicon equivalents that function in exactly the same way",
+          "depicts": "A hand lifts one small piece of living neural tissue from an open skull, replacing it with a shining silicon chip cut to the exact same shape, like swapping a puzzle piece.",
+          "title": "SWAPPING NEURONS FOR SILICON",
+          "node": "G1"
+        },
+        {
+          "block": "spya-xdy4fe",
+          "quote": "“a computer running a suitable program would be conscious”",
+          "depicts": "A plain desktop computer hums on a writing desk, an unquestioned glowing halo rising above it, while a seated philosopher writes on without once looking up at it.",
+          "title": "THE UNQUESTIONED PROGRAM",
+          "node": "G2"
+        }
+      ],
+      "lettering": [
+        {
+          "where": "A row of ordinary silicon computer towers stands in a plain frame at the top of the page, steady but plainly made of dead grey metal and glass.",
+          "title": "OUR SILICON-BASED COMPUTERS"
+        },
+        {
+          "where": "A single thread is woven so tightly into a tapestry's pattern that the weaver can no longer find where the thread begins, the whole cloth reading as simply the fabric's nature.",
+          "title": "AN ASSUMPTION WOVEN IN"
+        },
+        {
+          "where": "Two overlapping diagrams: on one side a neat computer tower with clean separate layers, on the other a tangled web of wet, fleshy nerve tissue that refuses to split into any layers at all.",
+          "title": "MINDWARE TANGLED IN WETWARE"
+        },
+        {
+          "where": "An ornate bronze gear-mechanism with intricate dials and wheels, held by ancient hands and used to track the movements of the stars.",
+          "title": "THE ANTIKYTHERA MECHANISM"
+        },
+        {
+          "where": "A plain coffee cup sits on a table, faint grey arrows flowing inward toward it from above while black arrows rise up from the cup itself to meet them.",
+          "title": "THE COFFEE CUP, PREDICTED"
+        },
+        {
+          "where": "A flat glowing screen shows a painted rainstorm falling, while the dry stone floor directly beneath the screen remains completely untouched.",
+          "title": "A RAINSTORM THAT STAYS DRY"
+        },
+        {
+          "where": "A hand lifts one small piece of living neural tissue from an open skull, replacing it with a shining silicon chip cut to the exact same shape, like swapping a puzzle piece.",
+          "title": "SWAPPING NEURONS FOR SILICON"
+        },
+        {
+          "where": "A plain desktop computer hums on a writing desk, an unquestioned glowing halo rising above it, while a seated philosopher writes on without once looking up at it.",
+          "title": "THE UNQUESTIONED PROGRAM"
+        }
+      ]
+    }
+  ],
+  "generator": "claude-sonnet-5",
+  "illustrator": "google/gemini-3.1-flash-image",
+  "slug": "noema-mythology-of-conscious-ai",
+  "profileHash": null
+}

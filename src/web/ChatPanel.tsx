@@ -91,6 +91,8 @@ import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
 import { LiveStatus } from "./live/LiveStatus.js";
+import { LiveTail } from "./live/LiveTail.js";
+import { liveSize } from "./live/tail.js";
 import type { LiveApi } from "./live/useLiveConversation.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
@@ -363,9 +365,10 @@ export function ChatPanel({
   // A stopped session retains recovery text. It must never appear in a different thread.
   const shownLive: LiveApi | undefined = live && (live.threadId === open?.id || !live.threadId)
     ? live
-    : live ? { ...live, phase: "idle", error: null, lines: [], tools: [], pointers: [],
+    : live ? { ...live, phase: "idle", step: null, error: null, lines: [], tools: [], pointers: [],
       pendingTools: [], deviceLabel: null, notice: null, placement: null, playbackBlocked: false, hasUnsavedLines: false,
-      hearing: false, speaking: false, thinking: false, threadId: null } : undefined;
+      hearing: false, speaking: false, thinking: false, threadId: null, reconnecting: false,
+      measuringInput: false, quietInput: false, stall: null } : undefined;
 
   /**
    * What the reader has typed and not sent yet, per conversation.
@@ -1120,6 +1123,13 @@ export function Conversation({
    */
   const awayNow = useRef(away);
   awayNow.current = away;
+  /* **The live words are the end of the conversation too** (LiveTail, after
+     the saved turns), so they count as content — an empty thread with a first
+     spoken exchange arriving is not "empty" — and their growth is "new text
+     has been painted". GPT Sol, plan review 261002j. */
+  const liveLines = live?.lines ?? [];
+  const liveChars = liveSize(liveLines);
+  const empty = thread.messages.length === 0 && liveLines.length === 0;
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads a ref, and these are what say "new text has been painted, scroll if we were following"
   useEffect(() => {
     const el = scroller.current;
@@ -1130,7 +1140,7 @@ export function Conversation({
        landscape phone's short band (207px of scroller, 308px of suggestions)
        past the hint and the first question on mount, so they looked clipped off
        the top of the band. Plan 261001n. */
-    if (thread.messages.length === 0) el.scrollTop = 0;
+    if (empty) el.scrollTop = 0;
     else if (stick.current) el.scrollTop = el.scrollHeight;
     /* And this half **only ever clears**, which is the whole discipline.
        Content growing must never decide the reader has scrolled away — that was
@@ -1154,7 +1164,7 @@ export function Conversation({
        ever cleared in here. That is the *same* bug the note above describes,
        surviving its own fix in the dependency array. Found by a GPT-5.6 review,
        2026-08-26. */
-  }, [chars, thread.messages.length, last?.status]);
+  }, [chars, thread.messages.length, last?.status, liveChars, liveLines.length, live?.hasUnsavedLines, live?.phase]);
 
   const toBottom = () => {
     const el = scroller.current;
@@ -1181,12 +1191,12 @@ export function Conversation({
              away from, so no "Latest" pill, and the first question sent from
              halfway down them must still be followed by its answer. */
           const atBottom =
-            thread.messages.length === 0 || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+            empty || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
           stick.current = atBottom;
           setAway(!atBottom);
         }}
       >
-        {thread.messages.length === 0 &&
+        {empty &&
           (kind === "tutorial" ? (
             <TutorialInvitation />
           ) : kind === "remember" ? (
@@ -1225,6 +1235,9 @@ export function Conversation({
             discards={thread.messages.length - i - 1}
           />
         ))}
+        {/* The spoken words still on their way to being saved, as the end of
+            this same conversation. ./live/LiveTail.tsx. */}
+        {live && <LiveTail live={live} />}
       </div>
       {/* The jump button sits *outside* the scroller so it does not scroll with
           it, and only exists while the reader is somewhere else — a permanent
@@ -2300,13 +2313,6 @@ export function Composer({
         onRestart={onStartLive}
         blocks={blocks}
         onJump={onJump}
-        onType={() => {
-          void (async () => {
-            if (live.phase !== "idle" && live.phase !== "failed") await live.stop();
-            box.current?.focus();
-          })();
-        }}
-        onDictate={dictate.dictation.supported && !busy && !dictate.readOnly ? toggleDictation : undefined}
       />}
     </form>
   );
