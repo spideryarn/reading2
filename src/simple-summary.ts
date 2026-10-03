@@ -941,7 +941,13 @@ export async function generateSimpleSummary(opts: {
       }
       /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
          is what records what this call cost. src/messages-stream.ts. */
-      message = await call.finalMessage();
+      try {
+        message = await call.finalMessage();
+      } finally {
+        /* `calls` is requests, and a transport retry inside the gateway is a
+           request (src/messages-stream.ts § `attempts`). */
+        writerCalls += call.attempts() - 1;
+      }
     } catch (err) {
       if (level === FIRST_LEVEL) begun("failed");
       throw anthropicCallFailed(err);

@@ -1906,8 +1906,9 @@ async function runBatch(
      wrapper is what records what this call cost; the stream's own method works
      and records nothing. See src/messages-stream.ts. */
   let message: Anthropic.Message;
+  let requests: number;
   try {
-    message = await streamMessage(
+    const call = streamMessage(
       "labels",
       {
         max_tokens: maxTokens,
@@ -1933,7 +1934,9 @@ async function runBatch(
         ],
       },
       { power, ...(signal ? { signal } : {}) },
-    ).finalMessage();
+    );
+    message = await call.finalMessage();
+    requests = call.attempts();
   } catch (err) {
     throw anthropicCallFailed(err);
   }
@@ -1954,9 +1957,10 @@ async function runBatch(
   const record: LabelBatchRecord = {
     blocks: batch.blocks.map((b) => b.id),
     setStarts: batch.setStarts,
-    /* One request, by definition: this function makes exactly one. `sumRecords`
-       is where two of these become a two-request batch. */
-    requests: 1,
+    /* One request, unless the gateway retried a transport failure before the
+       answer began (src/messages-stream.ts § `attempts`). `sumRecords` is where
+       two of these become a two-request batch. */
+    requests,
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,

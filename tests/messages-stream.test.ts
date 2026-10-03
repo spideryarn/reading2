@@ -415,14 +415,16 @@ describe("streamMessage — the recording lifecycle", () => {
           streamMessage("ideas", A_BODY, { power: "standard" }).finalMessage(),
         ).rejects.toThrow();
       });
-      expect(report.calls).toHaveLength(1);
-      expect(report.calls[0]?.outcome).toBe("error");
+      /* Three since plan 261003m: a transport that throws is retried, and each
+         go is its own row. One row per network attempt is still the claim. */
+      expect(t.seenRequests).toHaveLength(3);
+      expect(report.calls.map((c) => c.outcome)).toEqual(["error", "error", "error"]);
     } finally {
       t.restore();
     }
   });
 
-  it("calls the transport once per streamMessage, so a record is one real call", async () => {
+  it("calls the transport once per streamMessage that works first time, so a record is one real attempt", async () => {
     const t = stubTransport(cannedStream());
     try {
       const { report } = await collectSpend(async () => {
@@ -559,5 +561,227 @@ describe("wasRefused", () => {
     expect(wasRefused({ stop_reason: "end_turn" } as unknown as Parameters<typeof wasRefused>[0])).toBe(
       false,
     );
+  });
+});
+
+/* ── A transport blip is retried, countably (plan 261003m) ───────────────────
+
+   Report spya-x4zut6: one import's Arc step failed 595 ms after it began, on a
+   connection that never produced a response, and the job failed with it. The
+   SDK's own retry is off on purpose (`messagesClient` § `maxRetries`), and the
+   replacement that comment named was never built. These are it.
+
+   What each asserts is the pair the comment protects: the answer arrives, AND
+   the ledger shows one record per network attempt. */
+
+/** One scripted answer per request, in order; the last repeats. */
+type Scripted =
+  | { throws: string }
+  | { status: number }
+  | { body: string }
+  /** A `200` whose stream carries these frames and then breaks. */
+  | { breaksAfter: string };
+
+function scriptTransport(script: Scripted[]) {
+  let sent = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    const step = script[Math.min(sent, script.length - 1)]!;
+    sent += 1;
+    if ("throws" in step) throw new TypeError(step.throws);
+    if ("status" in step) {
+      return new Response(
+        JSON.stringify({ type: "error", error: { type: "api_error", message: "upstream said no" } }),
+        { status: step.status, headers: { "content-type": "application/json" } },
+      );
+    }
+    if ("breaksAfter" in step) {
+      const encoder = new TextEncoder();
+      /* Two pulls, not `enqueue` then `error` in one: erroring a stream drops
+         whatever is still queued, and the frames have to be read first. */
+      let pulled = false;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (!pulled) {
+            pulled = true;
+            controller.enqueue(encoder.encode(step.breaksAfter));
+            return;
+          }
+          controller.error(new TypeError("terminated"));
+        },
+      });
+      return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+    }
+    return new Response(step.body, { status: 200, headers: { "content-type": "text/event-stream" } });
+  }) as typeof globalThis.fetch;
+  return { sent: () => sent, restore: () => { globalThis.fetch = original; } };
+}
+
+/** A `200` that opens with the provider's `error` event — no `message_start`. */
+const ERROR_EVENT_STREAM = sse("error", {
+  type: "error",
+  error: { type: "overloaded_error", message: "Overloaded" },
+});
+
+/** A stream that begins, says something, and never finishes. */
+const BEGUN_THEN_BROKEN =
+  sse("message_start", { type: "message_start", message: { ...MESSAGE_START.message, content: [] } }) +
+  sse("content_block_start", { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }) +
+  sse("content_block_delta", { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "half" } });
+
+describe("streamMessage — a transport blip is retried, and every attempt is counted", () => {
+  const savedKey = process.env.OPENROUTER_API_KEY;
+  beforeEach(() => { process.env.OPENROUTER_API_KEY = "sk-or-test-not-a-real-key"; });
+  afterEach(() => {
+    if (savedKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = savedKey;
+  });
+
+  /** Run one call against a script; hand back the answer or the error, and the ledger. */
+  async function drive(script: Scripted[]) {
+    const t = scriptTransport(script);
+    const texts: string[] = [];
+    let starts = 0;
+    let outcome: { ok: true; text: string } | { ok: false; err: unknown } | undefined;
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard" });
+        call.onText((delta) => texts.push(delta));
+        call.onStart(() => { starts += 1; });
+        try {
+          const message = await call.finalMessage();
+          const first = message.content[0];
+          outcome = { ok: true, text: first?.type === "text" ? first.text : "" };
+        } catch (err) {
+          outcome = { ok: false, err };
+        }
+      });
+      return { outcome: outcome!, sent: t.sent(), texts, starts, outcomes: report.calls.map((c) => c.outcome) };
+    } finally {
+      t.restore();
+    }
+  }
+
+  it("answers when the connection fails once and then works — the reported failure", async () => {
+    const run = await drive([{ throws: "fetch failed" }, { body: cannedStream() }]);
+    expect(run.outcome).toEqual({ ok: true, text: "ok" });
+    expect(run.sent).toBe(2);
+    expect(run.outcomes).toEqual(["error", "ok"]);
+  });
+
+  it("answers when a 200 opens with an error event and the next attempt works", async () => {
+    const run = await drive([{ body: ERROR_EVENT_STREAM }, { body: cannedStream() }]);
+    expect(run.outcome).toEqual({ ok: true, text: "ok" });
+    expect(run.sent).toBe(2);
+    expect(run.outcomes).toEqual(["error", "ok"]);
+  });
+
+  it("answers when a 503 is followed by a good response", async () => {
+    const run = await drive([{ status: 503 }, { body: cannedStream() }]);
+    expect(run.outcome).toEqual({ ok: true, text: "ok" });
+    expect(run.outcomes).toEqual(["error", "ok"]);
+  });
+
+  it("does not send a refused request again — a 400 is one attempt", async () => {
+    const run = await drive([{ status: 400 }, { body: cannedStream() }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(1);
+    expect(run.outcomes).toEqual(["error"]);
+  });
+
+  it("gives up after three goes, with three records", async () => {
+    const run = await drive([{ throws: "fetch failed" }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(3);
+    expect(run.outcomes).toEqual(["error", "error", "error"]);
+  });
+
+  it("does not retry once the response has begun, so no listener hears two attempts", async () => {
+    const run = await drive([{ breaksAfter: BEGUN_THEN_BROKEN }, { body: cannedStream() }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(1);
+    expect(run.texts).toEqual(["half"]);
+    expect(run.starts).toBe(1);
+  });
+
+  it("draws the line at message_start, not at the first text", async () => {
+    /* A stream that begins and breaks before saying anything. An
+       implementation that retried "until text arrived" would send a second
+       request here; the boundary is the start. */
+    const begunOnly = sse("message_start", {
+      type: "message_start",
+      message: { ...MESSAGE_START.message, content: [] },
+    });
+    const run = await drive([{ breaksAfter: begunOnly }, { body: cannedStream() }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(1);
+    expect(run.starts).toBe(1);
+    expect(run.texts).toEqual([]);
+  });
+
+  it("leaves a 429 to its caller, which has a rate-limit policy of its own", async () => {
+    const run = await drive([{ status: 429 }, { body: cannedStream() }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(1);
+  });
+
+  it("does not ask again after an error event that is a verdict", async () => {
+    const verdict = sse("error", { type: "error", error: { type: "billing_error", message: "no credit" } });
+    const run = await drive([{ body: verdict }, { body: cannedStream() }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(1);
+  });
+
+  it("asks again after an error event that names no type", async () => {
+    const untyped = sse("error", { message: "upstream hiccup" });
+    const run = await drive([{ body: untyped }, { body: cannedStream() }]);
+    expect(run.outcome).toEqual({ ok: true, text: "ok" });
+    expect(run.sent).toBe(2);
+  });
+
+  it("counts its attempts for the callers that publish a request count, and leaves nothing pending", async () => {
+    const t = scriptTransport([{ throws: "fetch failed" }, { body: cannedStream() }]);
+    try {
+      let attempts = 0;
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("labels", A_BODY, { power: "standard" });
+        expect(call.attempts()).toBe(1);
+        await call.finalMessage();
+        attempts = call.attempts();
+      });
+      expect(attempts).toBe(2);
+      expect(report.calls).toHaveLength(2);
+      /* Each attempt minted a pending call; both must have been settled, or
+         the failed one would sit in the report as a call that never returned. */
+      expect(report.pending).toEqual([]);
+    } finally {
+      t.restore();
+    }
+  });
+
+  it("fires onStart and onText once for a call that worked on its second attempt", async () => {
+    const run = await drive([{ throws: "fetch failed" }, { body: cannedStream() }]);
+    expect(run.starts).toBe(1);
+    expect(run.texts).toEqual(["ok"]);
+  });
+
+  it("stops at an abort during the wait, without another attempt", async () => {
+    const controller = new AbortController();
+    const t = scriptTransport([{ throws: "fetch failed" }, { body: cannedStream() }]);
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: controller.signal });
+        const pending = call.finalMessage();
+        /* The first attempt fails within a tick; the backoff is hundreds of
+           milliseconds, so this lands inside the wait. */
+        setTimeout(() => controller.abort(), 50);
+        await expect(pending).rejects.toThrow();
+        expect(call.aborted()).toBe(true);
+      });
+      expect(t.sent()).toBe(1);
+      expect(report.calls.map((c) => c.outcome)).toEqual(["error"]);
+    } finally {
+      t.restore();
+    }
   });
 });
