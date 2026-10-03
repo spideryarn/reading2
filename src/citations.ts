@@ -315,6 +315,8 @@ export function verifyPlace(
 
 /** A work as read and verified, before its link, its key and its id. */
 export interface Draft {
+  /** Pre-guard metadata key, only for folding; never stored or used as a displayed fact. */
+  foldKey?: string;
   title: string;
   authors?: string;
   year?: string;
@@ -466,28 +468,20 @@ function locateInEntry(
   };
 }
 
-/* The article's words and its text, once per run: `readDraft` is called per work. */
-const ARTICLE_TEXT = new WeakMap<ReadonlyMap<string, Block>, { words: Set<string>; text: string }>();
-
 /**
  * A PDF's reference list is the article's own text too, though not among its
  * blocks: a work whose entry number did not check out still took its authors
- * from there. Words are kept both with an apostrophe closed up, as `keyWords`
- * reads a name (*O'Brien*), and split at it, so *Tulving's* gives *Tulving*.
+ * from there. Strip possessives before closing apostrophes inside names, so
+ * both *Tulving's* and *O'Brien's* give the name. Built once per `toDrafts`
+ * run, rather than cached by a map that does not identify the PDF list.
  */
 function articleTextOf(
   byId: ReadonlyMap<string, Block>,
   list: NumberedReferenceList | null,
-): { words: Set<string>; text: string } {
-  let known = ARTICLE_TEXT.get(byId);
-  if (!known) {
-    const text = [...[...byId.values()].map((b) => b.text), ...(list ? list.entries.values() : [])].join("\n");
-    const words = new Set(keyWords(text).split(" "));
-    for (const w of keyWords(text.replace(/[‘’'`]/g, " ")).split(" ")) words.add(w);
-    known = { words, text };
-    ARTICLE_TEXT.set(byId, known);
-  }
-  return known;
+): { words: Set<string>; text: string; dateText: string } {
+  const text = [...[...byId.values()].map((b) => b.text), ...(list ? list.entries.values() : [])].join("\n");
+  const words = new Set(keyWords(text.replace(/[‘’'`]s(?=$|[^\p{L}\p{N}\p{M}])/giu, "")).split(" "));
+  return { words, text, dateText: ` ${keyWords(text)} ` };
 }
 
 /**
@@ -514,16 +508,28 @@ export function locateInArticle(
   list: NumberedReferenceList | null,
   drops: CitationDrops,
 ): { title: string; authors?: string; year?: string } {
-  const article = articleTextOf(byId, list);
+  return locateArticleFields(fields, articleTextOf(byId, list), drops);
+}
+
+function locateArticleFields(
+  fields: { title: string; authors?: string; year?: string },
+  article: ReturnType<typeof articleTextOf>,
+  drops: CitationDrops,
+): { title: string; authors?: string; year?: string } {
   const names = keyWords((fields.authors ?? "").replace(/\bet al\.?\s*$/i, "").replace(/\band\b/gi, " "))
     .split(" ")
     .filter(Boolean);
   const authorsHere = names.length > 0 && names.every((w) => article.words.has(w));
   if (fields.authors && !authorsHere) drops.authorsUnfound++;
-  const digits = fields.year?.match(/\d{4}/)?.[0];
-  const yearHere =
-    fields.year !== undefined &&
-    (digits ? article.text.includes(digits) : keyWords(fields.year).split(" ").every((w) => article.words.has(w)));
+  /* A bare four-digit year still tolerates the ingest's glued `196363ya`.
+     A suffix, era or date phrase must occur together, not as scattered words
+     or merely the same four digits (`2017b` is not `2017a`). */
+  const yearWords = keyWords(fields.year ?? "");
+  const yearHere = yearWords !== "" && (
+    /^\d{4}$/.test(fields.year ?? "")
+      ? article.text.includes(fields.year!)
+      : article.dateText.includes(` ${yearWords} `)
+  );
   if (fields.year && !yearHere) drops.yearUnfound++;
   return {
     title: fields.title,
@@ -550,9 +556,10 @@ export function toDrafts(
   list: NumberedReferenceList | null = null,
 ): Draft[] {
   const byId = new Map(blocks.map((b) => [b.id as string, b]));
+  const article = articleTextOf(byId, list);
   const out: Draft[] = [];
   for (const item of Array.isArray(raw) ? raw : []) {
-    const draft = readDraft(item, byId, drops, scores, list);
+    const draft = readDraft(item, byId, drops, scores, list, article);
     if (draft) out.push(draft);
   }
   /* **No cut here.** The cap counts works, and these are still rows — the
@@ -607,6 +614,7 @@ function readDraft(
   drops: CitationDrops,
   scores: CitationScoreDrops,
   list: NumberedReferenceList | null,
+  article: ReturnType<typeof articleTextOf>,
 ): Draft | null {
   if (!item || typeof item !== "object") {
     drops.malformed++;
@@ -644,12 +652,24 @@ function readDraft(
      entry; capped where the row is written (`buildCitations`). */
   const entry = located === null ? undefined : listed!;
   const identifierEntry = identifierEntryFor(list, entryNumber, entry);
-  const fields = located ?? locateInArticle(said, byId, list, drops);
+  const fields = located ?? locateArticleFields(said, article, drops);
+  /* Guarding displayed metadata must not split a shorthand from its entry,
+     or collapse different works whose unsupported by-lines both disappeared.
+     Preserve the existing fold identity, separately from the stored fields. */
+  const foldFields = located ?? said;
+  const foldKey = keysOf({
+    title: clip(foldFields.title, TITLE_CAP, emptyDrops()),
+    authors: clip(foldFields.authors ?? "", AUTHORS_CAP, emptyDrops()),
+    year: ((foldFields.year?.length ?? 0) <= 16 ? foldFields.year : "") ?? "",
+    url: "",
+    linkFrom: "search",
+  }).workKey;
   const authors = fields.authors ?? "";
   const year = fields.year ?? "";
   const relevance = scoreCounting(w.relevance, scores, "relevanceAbsent", "relevanceRejected");
   const influence = scoreCounting(w.influence, scores, "influenceAbsent", "influenceRejected");
   return withIdentifierEntry({
+    foldKey,
     title: clip(fields.title, TITLE_CAP, drops),
     ...(authors ? { authors: clip(authors, AUTHORS_CAP, drops) } : {}),
     ...(year && year.length <= 16 ? { year } : {}),
@@ -1294,6 +1314,7 @@ function mergeInto(a: Draft, b: Draft, drops: CitationDrops): Draft {
   const influence = maxOf(a.influence, b.influence);
   return {
     title: a.title,
+    ...(a.foldKey ? { foldKey: a.foldKey } : {}),
     why: a.why,
     ...(authors ? { authors } : {}),
     ...(year ? { year } : {}),
@@ -1344,16 +1365,27 @@ function mergeBy<T extends { draft: Draft }>(
  * title, author and year: the latter's primary key hides the collision, but it
  * still means a later identifier row cannot tell which old work it is.
  */
-export function idsByKey(onDisk: Citations | null): Map<string, string> {
+export function idsByKey(
+  onDisk: Citations | null,
+  grounding?: { blocks: readonly Block[]; referenceList: NumberedReferenceList | null },
+): Map<string, string> {
+  /* Old search keys contain authors/year the new guard may now remove. Apply
+     the same guard before counting owners, so a unique row keeps its id while
+     two old rows reduced to the same metadata inherit nothing. */
+  const article = grounding
+    ? articleTextOf(new Map(grounding.blocks.map((b) => [b.id as string, b])), grounding.referenceList)
+    : null;
   const seen = new Map<string, string>();
   const ambiguous = new Set<string>();
   const workClaims = new Map<string, number>();
   const workOwners = new Map<string, string>();
   for (const c of onDisk?.citations ?? []) {
     if (!c || typeof c.id !== "string" || typeof c.key !== "string") continue;
-    if (seen.has(c.key)) ambiguous.add(c.key);
-    else seen.set(c.key, c.id);
-    const { workKey } = keysOf(c);
+    const fields = article ? locateArticleFields(c, article, emptyDrops()) : c;
+    const { idKey, workKey } = keysOf({ ...fields, url: c.url, linkFrom: c.linkFrom });
+    const key = article && idKey === null ? workKey : c.key;
+    if (seen.has(key)) ambiguous.add(key);
+    else seen.set(key, c.id);
     workClaims.set(workKey, (workClaims.get(workKey) ?? 0) + 1);
     if (!workOwners.has(workKey)) workOwners.set(workKey, c.id);
   }
@@ -1435,7 +1467,7 @@ export function buildCitations(
     (a, b) => ({ draft: mergeInto(a.draft, b.draft, drops) }),
   );
   const workKeyOf = (draft: Draft) =>
-    keysOf({ ...draft, url: "", linkFrom: "search" }).workKey;
+    draft.foldKey ?? keysOf({ ...draft, url: "", linkFrom: "search" }).workKey;
   const numberedByWork = new Map<string, number>();
   for (const { draft } of byEntry) {
     if (draft.entryNumber === undefined) continue;
@@ -1545,7 +1577,7 @@ export function buildCitations(
 
   const citations: CitedWork[] = keyed.map((w) => {
     const old = inheritedBy(w);
-    const { entryNumber: _entryNumber, identifierEntry: _identifierEntry, entry, ...draft } = w.draft;
+    const { foldKey: _foldKey, entryNumber: _entryNumber, identifierEntry: _identifierEntry, entry, ...draft } = w.draft;
     return {
       id: old ?? mintUniqueId(taken),
       key: w.key,
@@ -1888,7 +1920,7 @@ export async function generateCitations(opts: {
      article stale for ever. */
   const meta: Meta = realMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
   const sourceHash = inputFingerprint(blocks, tree, realMeta);
-  const inherit = opts.previous ? idsByKey(opts.previous) : null;
+  const inherit = opts.previous ? idsByKey(opts.previous, { blocks, referenceList: opts.referenceList }) : null;
   const started = Date.now();
 
   const answerTokens = answerEstimate();

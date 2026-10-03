@@ -1,6 +1,6 @@
 /**
  * **What does a Citations row say about a work, and where did each word come
- * from?** Plan 261003k, Greg's report spya-zmdb7y: the row should say no more
+ * from?** Plan 261003j, Greg's report spya-zmdb7y: the row should say no more
  * about a paper than the article's bibliography supports.
  *
  * Free and deterministic: it reads stored lists, calls no model. For every
@@ -24,6 +24,32 @@ import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 import type { CitedWork } from "../src/types.js";
 import type { Block } from "../src/types.js";
+import { capEntry } from "../src/citation-entry.js";
+import type { NumberedReferenceList } from "../src/citation-reference-list.js";
+import { emptyDrops, noScoreDrops, toDrafts } from "../src/citations.js";
+
+/** Replay the actual draft reader, including HTML entries and the PDF list. */
+export function replayGuard(works: readonly CitedWork[], blocks: readonly Block[], list: NumberedReferenceList | null) {
+  const drops = emptyDrops();
+  const raw = works.map((w) => {
+    const entries = w.entry && list
+      ? [...list.entries].filter(([, entry]) => capEntry(entry) === w.entry)
+      : [];
+    return {
+      title: w.title,
+      authors: w.authors,
+      year: w.year,
+      why: w.why,
+      reference: w.reference ? { block: w.reference.blockId, quote: w.reference.quote } : undefined,
+      mentions: w.mentions.map((m) => ({ block: m.blockId, quote: m.quote })),
+      ...(entries.length === 1 ? { entry: entries[0]![0] } : {}),
+    };
+  });
+  const kept = toDrafts(raw, blocks, drops, noScoreDrops(), list);
+  /* A missing row is a failed replay, not evidence its metadata was grounded. */
+  if (kept.length !== works.length) throw new Error(`Guard replay anchored ${kept.length} of ${works.length} stored rows`);
+  return { drops, kept };
+}
 
 const STOP = new Set(
   "a an and are as at be by for from has have in is it its of on or that the their this to was were which with not but than into about over how what who when where why can may more most also such these those been being they them he she we our you your".split(
@@ -94,7 +120,6 @@ async function main(): Promise<void> {
   const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
   const store = await import("../src/store/index.js");
   const { closeDb } = await import("../src/db/client.js");
-  const { emptyDrops, locateInArticle } = await import("../src/citations.js");
   const { CitationsListNotFound } = await import("../src/store/citations-list-not-found.js");
   const args = process.argv.slice(2);
   const rows = Number(args.find((a) => a.startsWith("--rows="))?.slice(7) ?? 0);
@@ -117,19 +142,27 @@ async function main(): Promise<void> {
       const works = citations.citations.citations;
       if (works.length === 0) continue;
       lists++;
-      const { blocks } = await store.loadArticle(slug);
+      const { blocks, meta } = await store.loadArticle(slug);
+      let referenceList: NumberedReferenceList | null = null;
+      if (meta?.source === "pdf") {
+        const source = await store.loadSource(slug);
+        if (source === null || source.kind !== "pdf") throw new Error(`Cannot replay PDF bibliography for ${slug}`);
+        const { pass0, pageLines } = await import("../src/pdf.js");
+        const { MAX_PAGES } = await import("../src/uploads.js");
+        const { referenceListFrom } = await import("../src/citation-reference-list.js");
+        const pass = await pass0(source.bytes, { maxPages: MAX_PAGES });
+        if (!pass.isScan) referenceList = referenceListFrom(pass.pages.flatMap((p) => pageLines(pass, p.page)));
+      }
       const byId = new Map(blocks.map((b) => [b.id as string, b]));
       const articleWords = new Set(blocks.flatMap((b) => wordsOf(b.text)));
       const measured = works.map((w) => measureRow(w, byId, articleWords));
-      /* The stage's own guard, replayed over the stored rows: what a list made
-         today would drop. A row with a stored entry was checked against that
-         entry when it was made, so only the others are asked. */
-      const drops = emptyDrops();
+      /* What the same extracted rows would keep today. A fresh model run may
+         extract different fields; this is a replay, not a prediction of it. */
+      const { drops, kept } = replayGuard(works, blocks, referenceList);
       const dropped: string[] = [];
-      for (const w of works.filter((x) => !x.entry)) {
-        const kept = locateInArticle({ title: w.title, ...(w.authors ? { authors: w.authors } : {}), ...(w.year ? { year: w.year } : {}) }, byId, null, drops);
-        if (w.authors && !kept.authors) dropped.push(`authors "${w.authors}" — ${w.title}`);
-        if (w.year && !kept.year) dropped.push(`year "${w.year}" — ${w.title}`);
+      for (const [i, w] of works.entries()) {
+        if (w.authors && !kept[i]!.authors) dropped.push(`authors "${w.authors}" — ${w.title}`);
+        if (w.year && !kept[i]!.year) dropped.push(`year "${w.year}" — ${w.title}`);
       }
       console.log(
         [

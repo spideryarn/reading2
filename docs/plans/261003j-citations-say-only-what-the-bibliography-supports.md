@@ -58,7 +58,7 @@ model's gloss (*Archimedes (attributed by Pappus of Alexandria)*).
 
 1. **The band's row** no longer draws `why` by default. It draws it, with its label, only once the
    row has something it was checked against: a *Dig deeper* answer or a quick-check reading
-   (`assessedOf(work) !== null || work.investigation !== undefined`). There the sentence is the
+   (`showsWhy` asks about the assessed lookup and the displayed investigation view). There the sentence is the
    claim under test — the verdict line reads *supports what the article uses it for*, which means
    nothing if the reader cannot see what that is.
 2. **The hover card** in the prose: the same function (`showsWhy`), asked only about the quick
@@ -74,7 +74,8 @@ model's gloss (*Archimedes (attributed by Pappus of Alexandria)*).
    (`locateInArticle` in `src/citations.ts`). Added after GPT Sol's plan review (P1): the plan first
    left this as a question, and the review's point was that a known exception to the rule being
    built should not ship beside it. Every word of the authors must be a word of the article's text
-   or its PDF reference list; the year's four digits must be in it somewhere. Otherwise the field
+   or its PDF reference list; a bare four-digit year must be in it somewhere, while a suffix or
+   date phrase must occur together. Otherwise the field
    goes, the row stays, and `authorsUnfound` / `yearUnfound` count it. The check is the
    conservative one: it does not try to match a corrected spelling, so the typo row loses its
    by-line too. It cannot tell a name given to the wrong work. A list already stored keeps what it
@@ -82,8 +83,9 @@ model's gloss (*Archimedes (attributed by Pappus of Alexandria)*).
 6. **The entry's caption** loses *We have not looked the work up*, which is false on a row *Dig
    deeper* has read (P6). It now reads *…copied from the article, not from the work.*
 
-In the band the sentence also shows on the row *Dig deeper* is running on, before anything is kept:
-the quick check can find nothing while the answer still streams (P2).
+In the band the sentence also shows while an answer streams, before anything is kept: the quick
+check can find nothing while the answer still streams (P2). Progress alone does not show the
+sentence, including during a retry that temporarily replaces the kept answer.
 
 A visitor has no lookup and no investigation, so a visitor never sees `why`.
 
@@ -104,9 +106,17 @@ That is held by rendering tests, not by the script: `tests/citations-panel.test.
 first. On the 194 stored rows, none of which has a *Dig deeper* answer locally, that is 2,143 words
 before and 0 after.
 
-**The guard.** The script replays `locateInArticle` over the stored rows that have no entry: it
+**The original guard measurement.** The block-only replay called `locateInArticle` on stored rows
+with no entry: it
 drops **3 by-lines in 194 rows and no years** — exactly the three authors above. The two glued
-years are kept.
+years are kept. Code review corrected the replay to use `toDrafts` for every stored row, including
+HTML entries, and to read a PDF's reference list. Remeasured with the corrected
+replay on 2026-10-03, outside the sandbox: the same three by-lines and no years.
+
+Code review also separated the pre-guard folding key from displayed metadata and normalized old
+metadata when inheriting IDs. Removing an unsupported by-line must not merge different works,
+split a shorthand from its entry, or change an otherwise uniquely matched row's ID. Regression
+tests cover all three; ambiguous old matches inherit nothing.
 
 ## The simpler option passed over, and the larger one
 
@@ -145,6 +155,25 @@ band's (i), and it feeds the default *prioritised* order.
 | P5 | the script swallowed read failures and did not measure "after" | it now skips only a missing list and throws otherwise; "after" is the rendering tests plus the guard replay |
 | P6 | the entry caption's *We have not looked the work up* is false after a lookup | fixed, change 6 |
 | P7 | keeping `why` stored is right for a first version; no other surface draws it | agreed |
+
+## GPT Sol's code review
+
+[The review](261003j-citations-say-less-code-review-sol.md): *land*. It fixed six things in place,
+each read and re-run by me: dropping a by-line was changing how rows fold together and inherit
+their ids (C1, the serious one, now with a separate fold key and three regression tests); the band
+showed `why` during progress with no answer on screen (C2); possessives on apostrophe names and
+year suffixes (C3); the cache ignored the reference list (C4); the eval's replay differed from
+production (C5); two fixtures shared one `why` (C6). Left open, C7: the PDF-entry check, which is
+older than this plan, drops a year with no four digits (*n.d.*, *in press*). Not changed here.
+
+## Browser check
+
+Sonnet subagent, Playwright, 1440, 820 and 390 wide, on three local articles: no sentence on any
+default row (70 rows, 0 `.cite-why`), spacing even, hover and tap cards tidy with no stray gap,
+Marginalia's opened note shows title and by-line, the three local rows with a quick-check verdict
+still show the sentence, no console errors. Not seen in a browser: Marginalia's entry line (no local
+work has one; its test covers it) and a row with a *Dig deeper* answer (none locally, and pressing
+it costs money).
 
 ## Stages
 

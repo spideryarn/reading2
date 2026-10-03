@@ -47,9 +47,10 @@ beside a check made against it. The rendering tests hold that; on these 194 rows
 before and 0 after.
 
 Code now drops authors or a year the article never gives (`locateInArticle` in `src/citations.ts`).
-The script replays that function over the stored rows with no entry: **3 by-lines dropped in 194,
+The original block-only replay called that function on stored rows with no entry: **3 by-lines dropped in 194,
 no years** — the three authors above, and both glued years kept. No prompt changed, so no model was
-called.
+called. The corrected replay, run again after code review, gives the same three; see the
+[plan's measurement section](../plans/261003j-citations-say-only-what-the-bibliography-supports.md#measured-after).
 
 ## What was ruled out
 

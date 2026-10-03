@@ -1063,12 +1063,12 @@ describe("what a row says we have read", () => {
     /* The verdict says "supports what the article uses it for", and Dig
        deeper's answer opens "Does it back the claim?": each needs the claim
        beside it. */
-    const dug = work({ id: "spya-d2g3h4", title: "Dug", relevance: 0.9, influence: 0.9, investigation: INVESTIGATION });
+    const dug = work({ id: "spya-d2g3h4", title: "Dug", why: "The distinct claim checked by Dig deeper.", relevance: 0.9, influence: 0.9, investigation: INVESTIGATION });
     await draw(owner({ citations: artefact([LOOKED, dug, CENTRAL]) }));
-    for (const id of [LOOKED.id, dug.id]) {
-      const why = row(id).querySelector(".cite-why");
+    for (const w of [LOOKED, dug]) {
+      const why = row(w.id).querySelector(".cite-why");
       expect(why?.querySelector(".cite-why-label")?.textContent).toContain(CITE_WHY_LABEL);
-      expect(why?.textContent).toContain(LOOKED.why);
+      expect(why?.textContent).toContain(w.why);
     }
     expect(row(CENTRAL.id).querySelector(".cite-why")).toBeNull();
   });
@@ -1086,6 +1086,26 @@ describe("what a row says we have read", () => {
     );
     expect(row(CENTRAL.id).querySelector(".cite-why")?.textContent).toContain(CENTRAL.why);
     expect(row(FAMOUS.id).querySelector(".cite-why")).toBeNull();
+  });
+
+  it("waits for displayed evidence before showing why during a fresh run or a retry", async () => {
+    for (const w of [CENTRAL, { ...CENTRAL, investigation: INVESTIGATION }]) {
+      await draw(owner({ citations: artefact([w]), investigating: w.id, investigateStage: "searching" }));
+      expect(row(w.id).querySelector(".cite-inv-wait")).not.toBeNull();
+      expect(row(w.id).querySelector(".cite-inv-text")).toBeNull();
+      expect(row(w.id).querySelector(".cite-why")).toBeNull();
+    }
+  });
+
+  it("does not reveal why for a draft left over after a failed run", async () => {
+    await draw(owner({
+      citations: artefact([CENTRAL]),
+      investigateDraft: { id: CENTRAL.id, text: "discarded answer" },
+      investigateFailed: { id: CENTRAL.id, message: "It stopped.", previousAt: null, previousLookupAt: null, lookupKept: false },
+    }));
+    expect(row(CENTRAL.id).querySelector(".cite-inv-error")).not.toBeNull();
+    expect(row(CENTRAL.id).querySelector(".cite-inv-draft")).toBeNull();
+    expect(row(CENTRAL.id).querySelector(".cite-why")).toBeNull();
   });
 
   it("says only that a page matching the title was found, never that it is the paper", async () => {

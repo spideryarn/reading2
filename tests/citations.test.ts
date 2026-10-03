@@ -55,6 +55,7 @@ import {
   generateCitations,
   idsByKey,
   linkFor,
+  locateInArticle,
   MAX_CITATIONS,
   noScoreDrops,
   noteMarkers,
@@ -65,6 +66,7 @@ import {
 import { plainWords } from "../src/plain-words.js";
 import { type NumberedReferenceList, referenceListFrom } from "../src/citation-reference-list.js";
 import type { Block, Tree } from "../src/types.js";
+import { replayGuard } from "../evals/citations-say-less.js";
 
 function block(id: string, text: string, over: Partial<Block> = {}): Block {
   return {
@@ -147,6 +149,65 @@ describe("an author or year the article never gives is dropped", () => {
     );
     expect(rows[0]?.year).toBe("1963");
     expect(rows[0]?.authors).toBe("Anscombe");
+  });
+
+  it.each([
+    ["Porter, D.", "Porter, D. (2017)"],
+    ["van der Meer, García", "van der Meer and García (2017)"],
+    ["Smith & Jones", "Smith and Jones (2017)"],
+    ["Chen et al.", "Chen (2017)"],
+    ["Vahdat & Kautz", "Vahdat and Kautz (2017)"],
+    ["O'Brien", "O’Brien’s work (2017)"],
+    ["Jean-Paul", "Jean-Paul’s work (2017)"],
+    ["王小明", "王小明 (2017)"],
+  ])("keeps the supported by-line %s", (authors, source) => {
+    const byId = new Map([[body.id, block(body.id, source)]]);
+    expect(locateInArticle({ title: "Work", authors }, byId, null, emptyDrops()).authors).toBe(authors);
+  });
+
+  it.each([
+    ["2017b", "Chen (2017a)"],
+    ["c. 300 BC", "Chen dates it to 300 AD; BC is discussed elsewhere."],
+    ["in press", "In this work Chen studies a printing press."],
+  ])("drops the unsupported year %s even if its pieces occur elsewhere", (year, source) => {
+    const byId = new Map([[body.id, block(body.id, source)]]);
+    const drops = emptyDrops();
+    expect(locateInArticle({ title: "Work", year }, byId, null, drops).year).toBeUndefined();
+    expect(drops.yearUnfound).toBe(1);
+  });
+
+  it.each(["2017a", "n.d.", "in press", "c. 300 BC"])("keeps the supported date %s", (year) => {
+    const byId = new Map([[body.id, block(body.id, `Chen (${year})`)]]);
+    expect(locateInArticle({ title: "Work", year }, byId, null, emptyDrops()).year).toBe(year);
+  });
+
+  it("reads each supplied reference list even with the same block map", () => {
+    const byId = new Map([[body.id, body]]);
+    const fields = { title: "Work", authors: "Sutton", year: "2019" };
+    expect(locateInArticle(fields, byId, null, emptyDrops()).authors).toBeUndefined();
+    const list = { entries: new Map([[1, "1. Sutton (2019). Work."]]) };
+    expect(locateInArticle(fields, byId, list, emptyDrops())).toEqual(fields);
+    expect(locateInArticle(fields, byId, null, emptyDrops()).authors).toBeUndefined();
+  });
+
+  it("the eval replays the guard even on a stored HTML entry", () => {
+    const ref = block("spya-bib001", "The Bitter Lesson.", { role: "reference" });
+    const { rows } = build([{ ...lesson, reference: { block: ref.id, quote: ref.text } }], [body, ref]);
+    const stored = { ...rows[0]!, authors: "Sutton", year: "2019" };
+    expect(stored.entry).toBe(ref.text);
+    const replay = replayGuard([stored], [body, ref], null);
+    expect(replay.drops.authorsUnfound).toBe(1);
+    expect(replay.drops.yearUnfound).toBe(1);
+  });
+
+  it("the eval includes the PDF list for a work without a verified entry", () => {
+    const { rows } = build([lesson], [body]);
+    const stored = { ...rows[0]!, authors: "Sutton", year: "2019" };
+    const list = { entries: new Map([[1, "1. Sutton (2019). The Bitter Lesson."]]) };
+    const replay = replayGuard([stored], [body], list);
+    expect(replay.drops.authorsUnfound).toBe(0);
+    expect(replay.drops.yearUnfound).toBe(0);
+    expect(replay.kept[0]?.authors).toBe("Sutton");
   });
 });
 
@@ -504,6 +565,29 @@ describe("footnotes are expanded in code", () => {
 /* ---------------------------------------------------- dedupe and ids -- */
 
 describe("one row per work, and ids that survive a re-run", () => {
+  it("does not merge two distinct works merely because unsupported by-lines were dropped", () => {
+    const body = block("spya-b00001", "Two works called Shared title are cited here.");
+    const raw = { title: "Shared title", why: "x", ...scored, mentions: [{ block: body.id, quote: "Shared title" }] };
+    const { rows } = build([{ ...raw, authors: "Sutton" }, { ...raw, authors: "Jones" }], [body]);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((w) => w.authors)).toEqual([undefined, undefined]);
+    expect(new Set(rows.map((w) => w.id)).size).toBe(2);
+  });
+
+  it("still folds a shorthand into its entry when only the latter loses an unsupported co-author", () => {
+    const body = block("spya-b00001", "Chen (2017) used Shared title.");
+    const ref = block("spya-bib001", "Chen (2017). Shared title.", { role: "reference" });
+    const raw = { title: "Shared title", year: "2017", why: "x", ...scored };
+    const { rows } = build([
+      { ...raw, authors: "Chen", mentions: [{ block: body.id, quote: "Chen (2017)" }] },
+      { ...raw, authors: "Chen, Smith", reference: { block: ref.id, quote: ref.text } },
+    ], [body, ref]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.entry).toBe(ref.text);
+    expect(rows[0]?.authors).toBe("Chen");
+    expect(rows[0]).not.toHaveProperty("foldKey");
+  });
+
   const shorthand = {
     title: "Predicting the mechanical properties of spider silk",
     authors: "Porter",
@@ -658,6 +742,18 @@ function tree(): Tree {
 }
 
 describe("generateCitations", () => {
+  it("inherits a unique legacy search row's id after dropping its unsupported author and year", async () => {
+    const body = block("spya-b00001", "The Bitter Lesson is cited here.");
+    const raw = { title: "The Bitter Lesson", authors: "Sutton", year: "2019", why: "x", ...scored, mentions: [{ block: body.id, quote: "The Bitter Lesson" }] };
+    const previous = build([raw], [block(body.id, `${body.text} Sutton (2019).`)]).citations;
+    answer = JSON.stringify({ works: [raw] });
+    stop = "end_turn";
+    const run = await generateCitations({ power: "standard", article: { blocks: [body], tree: tree(), meta: null } as never, previous, referenceList: null });
+    expect(run.citations.citations[0]?.id).toBe(previous.citations[0]?.id);
+    expect(run.citations.citations[0]?.authors).toBeUndefined();
+    expect(run.citations.citations[0]?.year).toBeUndefined();
+  });
+
   it("writes the artefact, stamped, from a stubbed answer", async () => {
     stop = "end_turn";
     answer = JSON.stringify({

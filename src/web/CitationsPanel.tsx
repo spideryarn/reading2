@@ -64,6 +64,7 @@ import {
   type InvestigateFailureHere,
   InvestigationBlock,
   investigationViewOf,
+  type InvestigationView,
 } from "./CitationInvestigation.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -516,8 +517,9 @@ export const CITE_WHY_LABEL = "what the article uses it for";
    an answer, it is the claim under test, and the reader needs it to read
    either. Each surface asks about what IT draws: the card shows no *Dig
    deeper* answer, so it passes only the lookup. */
-export function showsWhy(work: Pick<ShownWork, "lookup" | "investigation">): boolean {
-  return assessedOf(work) !== null || work.investigation !== undefined;
+export function showsWhy(work: Pick<ShownWork, "lookup">, view?: InvestigationView): boolean {
+  return assessedOf(work) !== null || view?.kind === "arriving" || view?.kind === "kept" ||
+    (view?.kind === "failed" && view.previous !== null);
 }
 
 /** Every row, until something has read the work: nothing has. */
@@ -1030,6 +1032,13 @@ function WorkRow({
   /* The found page's own title, in the tooltip: the search result's words,
      never the model's (src/citation-find.ts). */
   const foundAs = work.found?.title ? ` — “${work.found.title}”` : "";
+  const view = investigate === null ? undefined : investigationViewOf(work.investigation, {
+    running: investigate.running === work.id,
+    stage: investigate.stage,
+    draft: investigate.draft,
+    failed: investigate.failed,
+    lookupAt: work.lookup?.at ?? null,
+  });
 
   return (
     <li
@@ -1041,9 +1050,8 @@ function WorkRow({
       {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
       {by && !byLineFolds(work, by) && <ByLine work={work} by={by} />}
       {line.conflict && <p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
-      {/* Also while this row is being dug: the quick check can find nothing and
-          the answer still streams, with no lookup and no kept answer yet. */}
-      {(showsWhy(work) || investigate?.running === work.id || (investigate?.draft ?? null) !== null) && (
+      {/* The claim accompanies exactly the verdict or answer drawn below. */}
+      {showsWhy(work, view) && (
         <p className="cite-why">
           <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
         </p>
@@ -1103,16 +1111,10 @@ function WorkRow({
           {note.message}
         </p>
       )}
-      {investigate !== null && (
+      {investigate !== null && view !== undefined && (
         <InvestigationBlock
           id={work.id}
-          view={investigationViewOf(work.investigation, {
-            running: investigate.running === work.id,
-            stage: investigate.stage,
-            draft: investigate.draft,
-            failed: investigate.failed,
-            lookupAt: work.lookup?.at ?? null,
-          })}
+          view={view}
           busy={investigate.running !== null}
           lookup={work.lookup}
           onInvestigate={investigate.onInvestigate}

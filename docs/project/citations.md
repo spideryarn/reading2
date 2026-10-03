@@ -103,8 +103,9 @@ visitor has neither a verdict nor an answer, so never sees it.
 (`locateInArticle` in [`src/citations.ts`](../../src/citations.ts)). The prompt asks for both *as the
 article gives them*; one stored row in 194 had an author from the model's memory instead (*The
 Bitter Lesson · Sutton*, in an essay that never names Sutton). Every word of the authors must be a
-word of the article's text or its PDF reference list, and the year's four digits must be in it
-somewhere, or that field goes and the row stays; `authorsUnfound` and `yearUnfound` on the step's
+word of the article's text or its PDF reference list, and a bare four-digit year must be in it
+somewhere; a suffix or date phrase must occur together. Otherwise that field goes and the row stays;
+`authorsUnfound` and `yearUnfound` on the step's
 log line count them. It asks only whether the article says the name at all, not whether it says it
 of this work, which code cannot know. A name the model corrected (the article's *Dojolonga*) goes
 too. A row with a DOI can still get its authors from the registry, marked *from Crossref*. A list
