@@ -19,7 +19,10 @@ The app has two, and which one a wait gets depends on what else is on the screen
 
 - **Nothing before 600ms.** A spinner that flashes and vanishes reads as breakage. Gate it on
   [`useSlow`](../../src/web/useSlow.ts), which owns the threshold; the loader is never a placeholder
-  for a fast fetch, which is also why it cannot delay the first paint or the article.
+  for a fast fetch, which is also why it cannot delay the first paint or the article. The one
+  exception is a model turn already on screen in a conversation
+  ([`ChatPanel.tsx`](../../src/web/ChatPanel.tsx) § `Turn`): it is not gated, because that wait is
+  never shorter than the threshold and the turn is already drawn, empty.
 - **The words are kept.** Each wait still has a sentence naming what it is waiting for. Beside
   `LoaderCircle` it is visible. In `LogoLoader` it is visually-hidden text beside an `aria-hidden`
   wordmark, and it is what a reader who asked for reduced motion sees *instead* of the wordmark

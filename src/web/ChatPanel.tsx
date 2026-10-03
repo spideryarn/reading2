@@ -1445,7 +1445,9 @@ function Suggestions({ onAsk }: { onAsk(question: string): void }) {
   );
 }
 
-function Turn({
+/** Exported for tests/chat-turn-waiting-spinner.test.tsx, which renders one
+    turn in each of its waiting states; nothing else imports it. */
+export function Turn({
   message,
   onJump,
   recovering,
@@ -1549,20 +1551,38 @@ function Turn({
       </div>
     );
   }
-  /* "thinking…" only while nothing at all is happening. Once a tool is running
-     the strip below says what, which is a better answer to the same question —
-     and both at once reads as two spinners for one wait. */
-  const thinking =
+  /* **The waiting line: whenever no word has arrived and nothing else on the
+     turn is spinning.**
+
+     Not while a tool is running: the strip below says what, which is a better
+     answer to the same question — and both at once reads as two spinners for
+     one wait.
+
+     It used to stop there, at "no tool row at all", and that left a state with
+     nothing spinning anywhere: every tool row finished and no text yet. The
+     model has its results and is writing its first word, which on a question
+     that reaches for the web is seconds long. So the test is "is a row
+     *running*", not "is there a row".
+
+     Not gated on `useSlow`. The 600ms rule is for a wait that is usually over
+     before it could be seen; a model's first word never is, and the turn is
+     already drawn with nothing in it. docs/project/loading-spinner.md. */
+  const tools = message.tools ?? [];
+  const waiting =
     message.status === "pending" &&
     message.text === "" &&
-    (message.tools?.length ?? 0) === 0 &&
-    !recovering;
+    !recovering &&
+    !tools.some((run) => run.status === "running");
+  /* The word stays "thinking…" after a tool has finished too. A finished tool
+     does not mean the answer is being written: the model may ask for another
+     (src/converse.ts runs rounds), so a line that named the next step would be
+     guessing. GPT Sol, plan 261003p F5. */
   return (
     <div className={`chat-turn model${message.status === "error" ? " failed" : ""}`}>
       <ToolStrip tools={message.tools} searches={message.searches} />
-      {thinking ? (
+      {waiting ? (
         <span className="chat-thinking">
-          <LoaderCircle className="cmt-spinner" size={13} /> thinking…
+          <LoaderCircle className="cmt-spinner" size={16} /> thinking…
         </span>
       ) : message.text === "" ? /* Stopped before a word arrived, or failed
           before one did. `Answer` splits on blank lines and would render one
