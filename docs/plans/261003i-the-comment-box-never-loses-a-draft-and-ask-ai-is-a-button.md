@@ -101,7 +101,7 @@ Mounted (`AnnotateDialog` alone, and with the Reader-shaped harness the touch te
 - Discard with words typed: nothing saved.
 - Ask AI: saved with `ask: true`, once; then an unmount does not save a second time.
 - Save then unmount: once.
-- Dictation armed with live text: the flush stores the settled text only.
+- Dictation armed: the flush stores the field as it stands (see the review section, D4).
 - The tick-box is gone; the tab order test (`tab-traversal-in-chrome`) still walks out.
 
 ## Stages
@@ -118,3 +118,50 @@ reader who only wanted to mark a word to read a quote, a colour row, a text fiel
 buttons. Option B of that question (colour dots at the selection, one press, the box only for
 *Comment…*) removes the box from the common case altogether. This plan makes the box safe; it does
 not make it light. The recommendation for B stands, and this report is evidence for it.
+
+## GPT Sol's plan review, 2026-10-03: build with changes
+
+[261003i-comment-box-plan-review-sol.md](261003i-comment-box-plan-review-sol.md). Five P1s and a P2,
+no P0. **Where this section and the text above disagree, this section wins.**
+
+- **D1 one instance, one draft. Accepted.** The whole `AnnotateDialog` is keyed on
+  `blockId:start:quote`; the anchor-reset effect goes. Each instance owns one immutable anchor, one
+  draft id and one sent-or-discarded latch, and a new selection is handled only by the old
+  instance's unmount cleanup. The cleanup reads the draft from a ref (an effect depending on the
+  draft fields would run its cleanup on every keystroke). The box passes its own anchor to `onSave`,
+  and Reader closes only the matching one:
+  `setAnnotating(cur => cur && sameAnchor(cur, saved) ? null : cur)`. The Copy test's unkeyed
+  fixture is updated.
+- **D2 leaving the page. Accepted, small.** React cleanup does not run on a reload or a closed tab.
+  A `pagehide` listener sends the create with the app's existing keepalive writer (`leavingFetch`,
+  `src/web/lib/api.ts`), same draft id, same latch. A crash or a killed browser fires nothing; that
+  limit stays and is stated.
+- **D3 a create before the list has loaded waits for it. Accepted.** `useComments.create` holds its
+  optimistic row and its POST until the opening read settles (answered, failed or timed out), so a
+  flush cannot be wiped from the tab by that read. The visible Save gate stays as it is.
+- **D4 dictation. Partly overruled.** Sol: add a settled-value API to `useDictationField` so a
+  flush never stores live recogniser text. **Overruled because** Save refuses mid-dictation only
+  since better text is about to arrive; at a flush the box is going away and nothing better will.
+  The choice is the words the reader could see, or none, and a rough note is editable where a lost
+  one is not. So a flush stores the field as it stands, and no new API is added. Accepted from D4:
+  the dirty test reads the placement structurally (`mark.criterionId !== null`), and a draft with
+  only a placement is saved.
+- **D5 Ask AI opens the conversation; it does not send. Accepted, the smaller version.** Exactly
+  what the ticked box plus Save did: the comment is stored, and the chat composer opens on those
+  words, pre-filled, for the reader to send. The button itself spends nothing, and the text above
+  that says it "costs a model call" is wrong. Save is the only submit button; Enter is a newline;
+  ⌘/Ctrl+Enter is the free Save; Ask AI is `type="button"`; one synchronous latch covers Ask–Ask and
+  Ask–Save; every automatic flush passes `ask: false`. The header of `AnnotateDialog.tsx` keeps its
+  history and records why the tick-box went.
+- **D6 a create that fails after the box has closed. Narrowed, not built.** The row is removed from
+  the tab and the words are gone, as they would be today after a pressed Save. The promise here is
+  **"no exit silently discards a draft"**, not "never loses", and a failed write is an unchanged
+  limit, named in `comments.md`. Keeping a recoverable failed draft is its own piece of work.
+
+**D4, arbitrated by Opus, 2026-10-03: the overrule stands.** A flush mid-dictation stores the box
+exactly as it stands: unmounting aborts the transcription and drops its transcript, so the
+confirmed live phrases on Chromium (never the interim tail, which is not in the field) are the best
+words this box will ever have, the recording stays on the device to be offered back in the same
+passage's box, and on Safari and Firefox the field holds only what was typed. Sol's version would
+have flushed a dictated-only Chromium draft as empty, which is the loss this plan exists to stop.
+Accepted side effect: the kept recording may be offered back beside the already-saved rough note.
