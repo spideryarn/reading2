@@ -1,0 +1,137 @@
+/**
+ * **What an argument row does when it is pressed** — one small factory per
+ * proposal id (command-proposal.ts), each closing over the controller the page
+ * already owns for that state, so the bar and the page's own controls are one
+ * state and cannot disagree. Plan 261003f, Stage 1, and GPT Sol's F3, F4 and
+ * F6 on it: the deliberate jump, the shelf row's tags controller, the
+ * memoised bookmarker — never a second copy made for the bar.
+ *
+ * No React here. The reading view (Reader.tsx) and the Metadata page build
+ * their runners from these, and tests/command-runners.test.ts presses each.
+ */
+import type { Block, BlockId } from "../types.js";
+import type { ActionOutcome } from "./command-match.js";
+import type { CommandProposal, GlossaryLookupSource, Outcome } from "./command-proposal.js";
+import { handOffGlossaryAsk } from "./glossary-ask-handoff.js";
+import { findLiteral, MIN_FIND_CHARS } from "./search-hits.js";
+
+type Runner<K extends CommandProposal["id"]> = (proposal: Extract<CommandProposal, { id: K }>) => Outcome;
+
+const CLOSE: ActionOutcome = { kind: "close" };
+
+/**
+ * **Jump to the first place the article says these words** — the first of
+ * `findLiteral`'s hits, the same matcher as Search's words mode, so *first*
+ * means the first hit that search would light up.
+ *
+ * `jump` is the reading view's deliberate jump (F3): it pushes a history entry
+ * and stamps the return chip, so Back comes home. Not `?at=`, which is the
+ * debounced replace the reader's own scrolling writes.
+ *
+ * No hit keeps the bar open and says so — the reader learns it at once rather
+ * than watching the bar shut over a press that went nowhere. Fewer characters
+ * than Search looks for is not "not there", so it says that instead.
+ */
+export function jumpFirstRunner(blocks: Block[], jump: (blockId: BlockId) => void): Runner<"jump-first"> {
+  return ({ words }) => {
+    if (words.trim().length < MIN_FIND_CHARS) {
+      return { kind: "stay", message: `Type at least ${MIN_FIND_CHARS} characters to look for.` };
+    }
+    const first = findLiteral(blocks, words)[0];
+    if (first === undefined) return { kind: "stay", message: `“${words}” isn't in this article.` };
+    jump(first.blockId);
+    return CLOSE;
+  };
+}
+
+/**
+ * **The reader's own tags on this article, as the bar may edit them** — the
+ * `TagEditor`'s save on the Metadata page (which also updates the editor on
+ * screen, F4), or a plain `editArticleTags` on the reading view. Resolves to
+ * the tags as stored; throws the server's sentence on a refusal.
+ */
+export interface TagsControl {
+  edit(change: { add?: string[]; remove?: string[] }): Promise<readonly string[]>;
+}
+
+/** Add and remove, awaited, a refusal kept in the bar with its sentence. */
+export function tagRunners(tags: TagsControl): {
+  readonly "tag-add": Runner<"tag-add">;
+  readonly "tag-remove": Runner<"tag-remove">;
+} {
+  const edit = async (change: { add?: string[]; remove?: string[] }, verb: string): Promise<ActionOutcome> => {
+    try {
+      await tags.edit(change);
+      return CLOSE;
+    } catch (err) {
+      return { kind: "stay", message: `Couldn't ${verb} that tag. ${(err as Error).message}` };
+    }
+  };
+  return {
+    "tag-add": ({ tag }) => edit({ add: [tag] }, "add"),
+    "tag-remove": ({ tag }) => edit({ remove: [tag] }, "remove"),
+  };
+}
+
+/**
+ * **Bookmark one passage** through the reading view's memoised bookmarker
+ * (F6) — `bookmarkBlock` in Reader.tsx, which keeps one comment id per block
+ * across a retry, so a press that failed and a press that retries are one
+ * comment, not two. A block id the article lacks is refused before anything is
+ * written: the id came from somewhere else (chat, Stage 2).
+ */
+export function bookmarkRunner(
+  blocks: readonly Pick<Block, "id">[],
+  bookmark: (blockId: BlockId) => Promise<boolean>,
+): Runner<"bookmark"> {
+  return async ({ blockId }) => {
+    if (!blocks.some((b) => b.id === blockId)) {
+      return { kind: "stay", message: "That passage isn't in this article." };
+    }
+    return (await bookmark(blockId))
+      ? CLOSE
+      : { kind: "stay", message: "Couldn't save that bookmark. Try again in a moment." };
+  };
+}
+
+/**
+ * **Open a term, or ask for one** — the reading view's two glossary runners.
+ *
+ * `openTerm` is Reader's `openTermInGlossary`, which lowers the threshold if
+ * the term is below it. A term no longer in the visible list is refused (it was
+ * hidden since the row was drawn; F2).
+ *
+ * The ask exists only once the read is `ready` (F1), and it neither asks nor
+ * arms: it leaves the term in the hand-off (glossary-ask-handoff.ts) and opens
+ * the band with `openGlossary`, which must be the plain mode setter, never the
+ * Dock's press — the band's *Look up a term* box takes the term and makes the
+ * one call.
+ */
+export function glossaryRunners({
+  slug,
+  terms,
+  ready,
+  openTerm,
+  openGlossary,
+}: GlossaryLookupSource & {
+  slug: string;
+  openTerm(termId: BlockId): void;
+  openGlossary(): void;
+}): { readonly "glossary-open": Runner<"glossary-open">; readonly "glossary-ask"?: Runner<"glossary-ask"> } {
+  const open: Runner<"glossary-open"> = ({ termId }) => {
+    if (!terms.some((t) => t.id === termId)) {
+      return { kind: "stay", message: "That term isn't in your glossary any more." };
+    }
+    openTerm(termId);
+    return CLOSE;
+  };
+  if (!ready) return { "glossary-open": open };
+  return {
+    "glossary-open": open,
+    "glossary-ask": ({ term }) => {
+      handOffGlossaryAsk(slug, term);
+      openGlossary();
+      return CLOSE;
+    },
+  };
+}

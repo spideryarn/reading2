@@ -440,50 +440,153 @@ function isTypedOnly(command: Command): boolean {
 }
 
 /**
- * **The verbs that make a query a search of the article**, longest first so
- * `search for X` is a search for X and not for `for X`. Greg's own example was
- * *"do they talk about X?"* (SPIDERYARN-READING2-8D); the others are what the
- * same request is usually typed as. Lower-case, compared against the query
- * lower-cased.
+ * **What a typed query can ask for with an argument** — the bar's rows whose
+ * text comes from the query rather than from a list. Since 2026-10-03 (plan
+ * 261003f, Stage 1); `find` was the only one from 2026-10-02.
+ *
+ * A parse, not a resolution: `glossary` says *look these words up*, and which
+ * term they name — or whether an ask is offered at all — is
+ * command-proposal.ts § `resolveArgument`'s, against the glossary the reader
+ * can see.
  */
-const FIND_VERBS = ["do they talk about", "does it mention", "search for", "search", "find"] as const;
+export type ArgumentQuery =
+  | { readonly kind: "find"; readonly words: string }
+  | { readonly kind: "jump-first"; readonly words: string }
+  | { readonly kind: "glossary"; readonly words: string }
+  | { readonly kind: "tag-add"; readonly words: string }
+  | { readonly kind: "tag-remove"; readonly words: string };
 
 /**
- * **The words a `find …` query asks for, or `null` when it is not one.**
+ * **One verb phrase, and the command it starts.** `endings` are phrases that
+ * may close the query and are not part of the argument — *to this paper* —
+ * and `needsEnding` makes the ending the other half of the verb, as `mean` is
+ * of *what does … mean*.
+ */
+interface Verb {
+  readonly kind: ArgumentQuery["kind"];
+  readonly verb: string;
+  readonly endings?: readonly string[];
+  readonly needsEnding?: true;
+}
+
+const TO_THIS = ["to this paper", "to this article", "to this piece", "to this"] as const;
+const FROM_THIS = ["from this paper", "from this article", "from this piece", "from this"] as const;
+
+/**
+ * **The verb table — every argument the bar takes, by the words that ask for
+ * it.** Lower-case, matched whatever the reader's case and as a whole word;
+ * where one verb starts another the longer wins, so `search for X` is a search
+ * for X and not for `for X`, and `tag this as X` tags X.
  *
- * The bar's one row whose text comes from the query, so it is parsed here, out
- * of React, where every edge can be stated (tests/command-match-rerun-and-find.test.ts).
- * It is a parse and not a ranking: a query is a find **only** when it starts
- * with one of the verbs and has words after it, so *No command matches.*
- * stays the answer to a query that names nothing. That is Greg's call 3 on
- * the bar (CommandBar.tsx § the four product calls) — an honest empty state
- * over a guessed fallback search — and it still holds, because here the
- * reader typed the verb.
+ * Greg's examples (spya-wh2xys, qi-qkjnkwce): *"do a search for X"*, *"look up
+ * some word in the glossary"*, *"jump to the first place where X"*, *"add a
+ * tag of X to this paper"*. The five `find` verbs are the 2026-10-02 set,
+ * unchanged — *"do they talk about X?"* was SPIDERYARN-READING2-8D.
  *
- * The verb is matched whatever its case and must be a whole word, so
- * `findings` is not `find ings`. The words keep the reader's spelling, minus a
- * trailing `?` and one pair of quotes round them (straight or curly), and with
- * runs of space collapsed: what is left is matched in the article as one
- * literal phrase (search-hits.ts § `findLiteral`), so a stray quote would be
+ * **What is deliberately not a verb**, each held by the collision matrix in
+ * tests/command-match-arguments.test.ts:
+ *
+ *  - `take me to`, `go to` and a bare `jump to` — how a reader names a mode or
+ *    a page, so *take me to glossary* stays the Glossary row rather than
+ *    becoming a search for the word (GPT Sol's F7 on plan 261003f). The jump
+ *    verbs say *first*, explicitly.
+ *  - `jump to the first` — *jump to the first section* names a place.
+ *  - **a bare `glossary X`**, which the plan listed and the matrix refused:
+ *    *glossary again* is a *Run again* phrasing (rerun-commands.ts) and
+ *    *Glossary › Run again* a row's own label, so either would have grown a
+ *    paid *Look up “again”* row under the one the reader meant. `look up`,
+ *    `define` and *what does … mean* ask the same without the clash.
+ */
+const VERBS: readonly Verb[] = [
+  { kind: "find", verb: "do they talk about" },
+  { kind: "find", verb: "does it mention" },
+  { kind: "find", verb: "search for" },
+  { kind: "find", verb: "search" },
+  { kind: "find", verb: "find" },
+  { kind: "jump-first", verb: "jump to first" },
+  { kind: "jump-first", verb: "first occurrence of" },
+  { kind: "jump-first", verb: "first mention of" },
+  { kind: "jump-first", verb: "where does it first say" },
+  { kind: "jump-first", verb: "where does it first mention" },
+  { kind: "glossary", verb: "look up", endings: ["in the glossary"] },
+  { kind: "glossary", verb: "define" },
+  { kind: "glossary", verb: "what does", endings: ["mean"], needsEnding: true },
+  { kind: "glossary", verb: "what is meant by" },
+  { kind: "tag-add", verb: "add a tag of", endings: TO_THIS },
+  { kind: "tag-add", verb: "add the tag", endings: TO_THIS },
+  { kind: "tag-add", verb: "add tag", endings: TO_THIS },
+  { kind: "tag-add", verb: "tag this as" },
+  { kind: "tag-add", verb: "tag this" },
+  { kind: "tag-add", verb: "tag as" },
+  { kind: "tag-add", verb: "tag" },
+  { kind: "tag-remove", verb: "remove the tag", endings: FROM_THIS },
+  { kind: "tag-remove", verb: "remove tag", endings: FROM_THIS },
+  { kind: "tag-remove", verb: "untag", endings: FROM_THIS },
+];
+
+/** Longest first, so a verb that starts another never takes its query. */
+const LONGEST_FIRST: readonly Verb[] = [...VERBS].sort((a, b) => b.verb.length - a.verb.length);
+
+/** Where a kind's first verb sits in the table — the order rows come back in. */
+const kindOrder = (kind: ArgumentQuery["kind"]): number => VERBS.findIndex((v) => v.kind === kind);
+
+/**
+ * **The argument commands a query could be** — at most one per kind, in the
+ * table's order, and for almost every query none.
+ *
+ * It is a parse and not a ranking: a query is one **only** when it starts with
+ * a verb and has words after it, so *No command matches.* stays the answer to
+ * a query that names nothing. That is Greg's call 3 on the bar (CommandBar.tsx
+ * § the four product calls) — an honest empty state over a guessed fallback —
+ * and it still holds, because here the reader typed the verb.
+ *
+ * The verb must be a whole word, so `findings` is not `find ings` and `tags`
+ * is not `tag s`. The words keep the reader's spelling, minus a trailing `?`,
+ * the verb's ending if it has one, and one pair of quotes round them (straight
+ * or curly), with runs of space collapsed — a stray quote would otherwise be
  * looked for too.
  */
-export function parseFindQuery(query: string): string | null {
-  const text = query.trim().replace(/\s+/g, " ");
+export function parseArgumentQuery(query: string): readonly ArgumentQuery[] {
+  const text = query.trim().replace(/\s+/g, " ").replace(/\?+$/, "").trim();
   const lower = text.toLowerCase();
-  /* Half-way through typing the longer verb, `search for` is not a search for
+  /* Half-way through typing a longer verb, `search for` is not a search for
      *for*: a row flickering past with that in it is a row about nothing. */
-  if ((FIND_VERBS as readonly string[]).includes(lower)) return null;
-  const verb = FIND_VERBS.find((v) => lower.startsWith(`${v} `));
-  if (verb === undefined) return null;
-  const words = text
-    .slice(verb.length)
-    .trim()
-    .replace(/\?+$/, "")
-    .trim()
+  if (VERBS.some((v) => v.verb === lower)) return [];
+  const found: ArgumentQuery[] = [];
+  for (const entry of LONGEST_FIRST) {
+    if (found.some((q) => q.kind === entry.kind)) continue;
+    if (!lower.startsWith(`${entry.verb} `)) continue;
+    const words = argumentOf(text.slice(entry.verb.length).trim(), entry);
+    if (words !== null) found.push({ kind: entry.kind, words });
+  }
+  return found.sort((a, b) => kindOrder(a.kind) - kindOrder(b.kind));
+}
+
+/** What follows a verb, as the argument — or `null` when there is none. */
+function argumentOf(rest: string, entry: Verb): string | null {
+  let words = rest;
+  const lower = rest.toLowerCase();
+  const ending = entry.endings?.find((e) => lower === e || lower.endsWith(` ${e}`));
+  if (ending !== undefined) words = words.slice(0, words.length - ending.length).trim();
+  else if (entry.needsEnding) return null;
+  words = words
     /* A function rather than the `"$1"` pattern, which
        tests/no-ai-cost-for-readers.test.ts reads — rightly, from where it
        stands — as a price in reader copy. */
     .replace(/^["'“‘](.*)["'”’]$/, (_, inner: string) => inner)
     .trim();
   return words === "" ? null : words;
+}
+
+/**
+ * **The words a `find …` query asks for, or `null` when it is not one** — the
+ * `find` entry of `parseArgumentQuery`, kept by name because it was the bar's
+ * first argument (2026-10-02) and its tests state every edge of the cleaning
+ * all the verbs now share (tests/command-match-rerun-and-find.test.ts). What
+ * it returns is matched in the article as one literal phrase (search-hits.ts §
+ * `findLiteral`).
+ */
+export function parseFindQuery(query: string): string | null {
+  const find = parseArgumentQuery(query).find((q) => q.kind === "find");
+  return find === undefined ? null : find.words;
 }

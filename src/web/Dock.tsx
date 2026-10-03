@@ -219,7 +219,8 @@ import { withSubMode, type SubMode } from "./sub-modes.js";
    file — the visible list and the one activation callback go down as props —
    because an import back the other way would close a cycle. GPT Sol, F3 on
    docs/plans/260906h-mode-catalog-and-a-command-bar.md. */
-import { CommandBar, type CommandBarArticle, type ShelfRow } from "./CommandBar.js";
+import { CommandBar, type CommandBarArticle, type CommandBarExperimental, type ShelfRow } from "./CommandBar.js";
+import type { CommandExecutor } from "./command-proposal.js";
 import { useDockFit } from "./dock-fit.js";
 /* Plain data and no React (help-anchors.ts says so on purpose), so the bar
    links into Help without pulling the page's words into its own chunk. */
@@ -456,6 +457,13 @@ interface Props {
    * and why its absence is a statement about the request.
    */
   shelfRow?: ShelfRow | undefined;
+  /**
+   * **What the bar's argument rows can do here** — jump, and open or ask the
+   * glossary — since 2026-10-03 (plan 261003f). The reading view's alone, and
+   * straight through to the bar like `shelfRow`: CommandBar.tsx §
+   * `CommandBarArticle.executor`.
+   */
+  executor?: CommandExecutor | undefined;
   drawer?: {
     /** Comments in reading order — App already sorts them, see comment-nav.ts. */
     comments: Comment[];
@@ -1645,6 +1653,7 @@ export function Dock({
   marked,
   visitor,
   shelfRow,
+  executor,
   drawer,
   experimental,
 }: Props) {
@@ -2048,14 +2057,14 @@ export function Dock({
         activateMode={activateMode}
         activateSubMode={activateSubMode}
         /* For Diagram's pictures, the one visibility `modes` cannot carry. */
-        experimentalOn={experimental.on}
+        experimental={experimental}
         diagram={diagram}
         /* The same two values the Metadata link below is built
            from, so the bar's rows and the buttons cannot go to different
            places. `search` is already through `carriedSearch`. `help` is the
            Help link's href, for the same reason. `shelfRow` is the page's,
            handed straight on (Archive and Export in the bar). */
-        article={{ slug, search, view, help: helpLink, shelfRow }}
+        article={{ slug, search, view, help: helpLink, shelfRow, executor }}
         /* **The drawer's own callback, bound to its panel**, and `undefined`
            where there is no drawer. `Comments` is the one row in the bar that
            is neither a mode nor a page — it opens the thing that is already
@@ -3373,7 +3382,7 @@ function DockCommandBar({
   modes,
   activateMode,
   activateSubMode,
-  experimentalOn,
+  experimental,
   diagram,
   article,
   openComments,
@@ -3384,7 +3393,7 @@ function DockCommandBar({
   modes: readonly ModeUi[];
   activateMode(next: Mode): void;
   activateSubMode(sub: SubMode): void;
-  experimentalOn: boolean;
+  experimental: CommandBarExperimental;
   diagram: DiagramKind;
   /**
    * **Which article the bar's Metadata row (and, until 2026-09-29, Tweets row) is about**, since
@@ -3407,7 +3416,7 @@ function DockCommandBar({
       modes={modes.map((m) => m.mode)}
       activateMode={activateMode}
       activateSubMode={activateSubMode}
-      experimentalOn={experimentalOn}
+      experimental={experimental}
       diagram={diagram}
       article={article}
       openComments={openComments}
@@ -3833,7 +3842,7 @@ function DockExperimentalSwitch({
              the offline cache — asking again is the useful act; with one, the
              useful act is moving it. */
           if (press === "retry") setting.reload();
-          else setting.set(!setting.on);
+          else void setting.set(!setting.on);
         }}
       >
         {/* **The state, for a screen reader, in the one place that does not

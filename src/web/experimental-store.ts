@@ -151,8 +151,16 @@ export interface ExperimentalSetting {
   signedIn: boolean;
   /** True when what is shown came from the offline cache rather than the server. */
   stale: boolean;
-  /** Turn it on or off. Optimistic, and reverted if the save fails. */
-  set(next: boolean): void;
+  /**
+   * Turn it on or off. Optimistic, and reverted if the save fails.
+   *
+   * **Resolves to what became of the press** — since 2026-10-03, for the
+   * command bar's row (plan 261003f, GPT Sol's F5), which must stay open with
+   * the reason when a save is refused or never sent. Never rejects. The
+   * switches ignore it: the store's own state already says everything a switch
+   * draws.
+   */
+  set(next: boolean): Promise<ExperimentalSaveOutcome>;
   saving: boolean;
   /**
    * Whether the last **save** failed, and with what — `null` when it was the
@@ -165,6 +173,18 @@ export interface ExperimentalSetting {
   /** Ask again, after a failed or offline load. */
   reload(): void;
 }
+
+/**
+ * **What one press of the switch came to.** `not-sent` is a press the store
+ * refused before any request — nobody signed in (or not known yet), or a save
+ * already out — and `abandoned` a save the account changed under, whose answer
+ * belongs to nobody on screen now.
+ */
+export type ExperimentalSaveOutcome =
+  | { readonly kind: "saved" }
+  | { readonly kind: "failed"; readonly message: string }
+  | { readonly kind: "not-sent"; readonly why: "signed-out" | "busy" }
+  | { readonly kind: "abandoned" };
 
 /** Who the store believes is reading, and whether the session has resolved. */
 let userId: string | null = null;
@@ -460,15 +480,15 @@ function reload(): void {
   load();
 }
 
-/** Turn it on or off. */
-function set(next: boolean): void {
+/** Turn it on or off — and say what became of it (`ExperimentalSaveOutcome`). */
+function set(next: boolean): Promise<ExperimentalSaveOutcome> {
   /* **A signed-out press writes nothing and changes nothing.** There is no row
      to patch, the route would 401, and the state it would move is the one we
      decided rather than one we read. And nothing is written before the session
      is known either: a `PATCH` on behalf of a reader we have not identified is
      a write to whoever the browser's token turns out to belong to. */
-  if (userId === null || !sessionKnown) return;
-  if (busy) return;
+  if (userId === null || !sessionKnown) return Promise.resolve({ kind: "not-sent", why: "signed-out" });
+  if (busy) return Promise.resolve({ kind: "not-sent", why: "busy" });
   busy = true;
   const myEpoch = epoch;
   const mine = ++saveToken;
@@ -499,7 +519,7 @@ function set(next: boolean): void {
 
   const stop = new AbortController();
   savingNow = stop;
-  apiFetch("/api/reader", {
+  return apiFetch("/api/reader", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ experimental: next }),
@@ -510,8 +530,8 @@ function set(next: boolean): void {
     signal: stop.signal,
   })
     .then((r) => readJson<unknown>(r))
-    .then((body) => {
-      if (myEpoch !== epoch || mine !== saveToken) return;
+    .then((body): ExperimentalSaveOutcome => {
+      if (myEpoch !== epoch || mine !== saveToken) return { kind: "abandoned" };
       // The stored value, not the guess — and checked, not assumed.
       const since = sinceIn(body);
       put({
@@ -532,11 +552,12 @@ function set(next: boolean): void {
         loadError: null,
         stale: false,
       });
+      return { kind: "saved" };
     })
-    .catch((e: Error) => {
+    .catch((e: Error): ExperimentalSaveOutcome => {
       /* Cancelled because the reader changed: not a failure, and the switch
          belongs to somebody else now. Nothing to put back. */
-      if (wasAborted(e) || myEpoch !== epoch || mine !== saveToken) return;
+      if (wasAborted(e) || myEpoch !== epoch || mine !== saveToken) return { kind: "abandoned" };
       /* **Put it back.** A switch left showing what the reader asked for, when
          the server never got it, is the whole hazard: every gated feature then
          disagrees with the switch that claims to control them.
@@ -548,6 +569,7 @@ function set(next: boolean): void {
          there is no render closure in a module store, and `busy` refuses the
          second click anyway.) */
       put({ ...fields(), since: before, on: before !== null, error: e.message });
+      return { kind: "failed", message: e.message };
     })
     .finally(() => {
       /* Only this epoch's save may clear the flags. A save from the previous
