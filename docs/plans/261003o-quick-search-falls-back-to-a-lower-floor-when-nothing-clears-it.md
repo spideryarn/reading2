@@ -205,4 +205,8 @@ becomes unnecessary.
   and lint on the two touched files. **The full suite had not reported**: started 22:44 on the
   pre-merge tree, still running 37 minutes later on a busy box, no failure of a search test in its
   log so far. Its verdict is in `logs/tmux-jobs/jp5nxn-suite-2244-168424.log` in this worktree.
+- 2026-10-04, 00:50: the full suite reported 28 files failed of 1,499. `dev` was merged into this
+  tree while it ran, so files changed under it. The 28 re-run alone on the pushed tree: 23 pass.
+  The 5 that do not are the fresh-worktree ones that need `npm run build` or `npm run build:fleet`
+  (`cold-start-lazy-imports`, `pdf-bundle-trace`, three `fleet-*`). None touches search.
 
