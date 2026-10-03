@@ -281,8 +281,9 @@ reads and what to say when one fails.
 - **The index of conversations is capped too**: `MAX_THREAD_ROWS` (20), titles clipped to
   `THREAD_TITLE_CHARS` (80), `THREADS_CHARS` (3,000), newest first. The first plan left it
   uncapped, and a reader can make any number of chats (GPT Sol's plan review, PR-2).
-- **One budget over both**, `READER_NOTES_CHARS` (8,000). It is smaller than the two budgets added
-  up, so a full list of notes squeezes the index and cannot starve it.
+- **One budget over the complete answer**, `READER_NOTES_CHARS` (8,000), including the escaped
+  rows, headings and fences. It is smaller than the two row budgets added up, so a full list of
+  notes squeezes the index and cannot starve it.
 - **Every cap is announced and every total is exact**:
   [§ The bug that shaped the literal search](#the-bug-that-shaped-the-literal-search). **And the
   budgets are hard ones.** `article_links` lets its first row out whatever its length; here every
@@ -296,8 +297,8 @@ reads and what to say when one fails.
   sentence an unknown id gets, word for word. The current thread's id gets its own sentence. None
   of them throws.
 - **One conversation is its finished exchanges, as whole pairs.** The newest
-  `MAX_TRANSCRIPT_EXCHANGES` (10) that fit `TRANSCRIPT_CHARS` (8,000), each turn clipped to
-  `TRANSCRIPT_TURN_CHARS` (700) and carrying its time, shown oldest first.
+  `MAX_TRANSCRIPT_EXCHANGES` (10) that fit `TRANSCRIPT_CHARS` (8,000) including headings and
+  fence, each turn clipped to `TRANSCRIPT_TURN_CHARS` (700) and carrying its time, shown oldest first.
 - **An unfinished turn is never shown as a finished one** (PR-4). A failed answer keeps its partial
   prose in storage, and an interrupted spoken one keeps words nobody heard. So failed, pending and
   interrupted exchanges are left out and counted in a sentence. An answer the reader stopped, or one

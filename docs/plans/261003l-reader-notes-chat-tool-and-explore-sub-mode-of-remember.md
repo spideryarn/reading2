@@ -237,3 +237,15 @@ mean the same thing by "what was said". The kind gate is in three places: `tools
 the offer, `runTool` asks again and fails closed when no kind is given, and Live's endpoint refuses
 the name. Not measured yet: whether Chat reaches for the tool when it should (Stage 2's eval has a
 Chat arm). Notes made in Referee mode are included, labelled.
+
+### Stage 1, the code review
+
+[261003l-stage-1-code-review-sol.md](261003l-stage-1-code-review-sol.md), on `05a1dc3f8`: two P1s,
+both fixed by Sol, red first, and both the same class: a budget measured on rows before they were
+escaped and wrapped, so a full answer ran past its stated cap (8,863 against 8,000; a transcript
+12,660 against 8,000). The whole answer is now what is measured.
+[The postmortem](../postmortems/261003f-bounding-an-intermediate-representation-while-emitting-a-larger-serialized-response.md).
+CR-10 (P2, left): chat's own store logging carries the current thread id, which is older than this
+stage and outside it. Ownership, the kind gate, exchange filtering and `recentHistory`'s
+equivalence held by inspection. One round; nothing overruled. Sol could not run the two Postgres
+files; they were run here and pass.
