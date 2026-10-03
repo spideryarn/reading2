@@ -274,7 +274,7 @@ import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
 import { TagEditor } from "./TagEditor.js";
-import { editArticleTags } from "./article-tags.js";
+import { editArticleTags, type TagChange } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { AuthorNames, AuthorSearchLinks } from "./AuthorNames.js";
 import { howLong, timeAgo } from "./relative-time.js";
@@ -684,6 +684,35 @@ export function Metadata({
    * One derivation rather than the same two terms written out at each site.
    */
   const hasShelfRow = provenance !== null && !showingFixture;
+  /* The TagEditor and command bar share `saveTags`, so their admission record
+     has to live here too. React state would update a render later and admit
+     two presses in one tick; a ref closes the gate before the request leaves. */
+  const tagSaveInFlight = useRef(false);
+  /**
+   * **The one save of this article's tags on this page** — the `TagEditor`'s,
+   * and since 2026-10-03 the command bar's *Add the tag* / *Remove the tag*
+   * rows too (`shelfRow.tags` below), so a press in the bar and the editor on
+   * the page are one state. Plan 261003f, GPT Sol's F4: the bar calling
+   * `editArticleTags` itself would have left the editor showing the old list.
+   */
+  const saveTags = useCallback(
+    async (change: TagChange): Promise<string[]> => {
+      if (tagSaveInFlight.current) throw new Error("Still saving the last tag change — a moment.");
+      tagSaveInFlight.current = true;
+      try {
+        const tags = await editArticleTags(slug, change);
+        /* A metadata GET already in flight may have read the old tags. Let it
+           finish, then repair it from the server; with no GET in flight the
+           PATCH answer already is the freshest answer. */
+        armRefresh();
+        setProvenance((p) => (p && p.slug === slug ? { ...p, tags } : p));
+        return tags;
+      } finally {
+        tagSaveInFlight.current = false;
+      }
+    },
+    [slug, armRefresh],
+  );
   /* A local controller for focused mounts; the app hands in OwnedArticle's. */
   const metadataArchive = useArchive(
     slug,
@@ -918,15 +947,7 @@ export function Metadata({
             </p>
             <TagEditor
               tags={provenance.tags ?? []}
-              save={async (change) => {
-                const tags = await editArticleTags(slug, change);
-                /* A metadata GET already in flight may have read the old tags.
-                   Let it finish, then repair it from the server; with no GET in
-                   flight the PATCH answer already is the freshest answer. */
-                armRefresh();
-                setProvenance((p) => (p && p.slug === slug ? { ...p, tags } : p));
-                return tags;
-              }}
+              save={saveTags}
             />
           </div>
         )}
@@ -1317,8 +1338,10 @@ export function Metadata({
            fixture, where there is no row and both requests would 404 — the
            rule `ArchiveArticle` and `ExportSection` follow. Not gated on
            `hasShelfRow`'s provenance wait: CommandBar.tsx §
-           `CommandBarArticle.shelfRow` says why the bar need not wait. */
-        shelfRow={showingFixture ? undefined : { archive }}
+           `CommandBarArticle.shelfRow` says why the bar need not wait.
+           `tags` is the editor's own save (`saveTags`), so a tag added from
+           the bar is on the page at once (GPT Sol's F4 on plan 261003f). */
+        shelfRow={showingFixture ? undefined : { archive, tags: { edit: saveTags } }}
       />
     </>
   );
