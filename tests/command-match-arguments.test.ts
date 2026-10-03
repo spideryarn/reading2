@@ -141,6 +141,25 @@ describe("one verb, one command", () => {
     ]);
   });
 
+  /* Found by the command-pick eval (261003e): the bar answered *find mentions
+     of dopamine* itself, and looked for `mentions of dopamine`. Every model
+     gave `dopamine`. */
+  it("looks for the thing, not for the words `mentions of` in front of it", () => {
+    for (const [query, words] of [
+      ["find mentions of dopamine", "dopamine"],
+      ["find all mentions of dopamine", "dopamine"],
+      ["find every mention of free energy", "free energy"],
+      ["find references to Friston", "Friston"],
+      ["Find Mentions Of “wet hardware”?", "wet hardware"],
+    ] as const) {
+      expect(one(query), query).toEqual([{ kind: "find", words }]);
+    }
+    /* A bare one is half a request, like every other verb. */
+    expect(one("find mentions of")).toEqual([]);
+    /* And `find` alone still takes whatever follows it. */
+    expect(one("find mentions")).toEqual([{ kind: "find", words: "mentions" }]);
+  });
+
   it("keeps `parseFindQuery` as the find entry of the table", () => {
     expect(parseFindQuery("search for priors")).toBe("priors");
     expect(parseFindQuery("look up priors")).toBeNull();

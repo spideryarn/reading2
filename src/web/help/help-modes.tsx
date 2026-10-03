@@ -518,7 +518,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   quotes: {
-    keywords: "quotations excerpts best lines highlights memorable sentences outline important striking keep",
+    keywords: "quotations excerpts best lines highlights highlighter memorable sentences purple important striking keep",
     whenToUse: (
       <p>
         When you want to carry lines out of the piece in its own words — for notes, a review, or to see
@@ -530,13 +530,14 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
       <>
         <ul>
           <li>
-            <strong>Once made, quotes are outlined in the text in every mode.</strong> A thicker, darker
-            outline means the AI judged the line more important or more striking. Search results are
-            filled with colour and quotes are only outlined, so the two never look alike. A green strip
-            down the left edge of the spine shows where they are in the whole piece.
+            <strong>Once made, quotes are highlighted in the text in every mode</strong>, in purple, like
+            a highlighter pen. A stronger highlight means the AI judged the line more important or more
+            striking. Search results are outlined and quotes are filled in, so the two never look alike,
+            and your own highlights are yellow, green, blue or pink. A purple strip down the left edge of
+            the spine shows where the quotes are in the whole piece.
           </li>
           <li>
-            Rest the pointer on an outlined quote for a moment and a card shows its two scores, why it
+            Rest the pointer on a highlighted quote for a moment and a card shows its two scores, why it
             was chosen, <kbd>‹</kbd> <kbd>›</kbd> to the quote before or after it in the text, and a
             button to open it in Quotes.
           </li>

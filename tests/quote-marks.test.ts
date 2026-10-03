@@ -128,7 +128,7 @@ describe("the quotes the prose marks", () => {
   });
 
   it("names the quote in the key, so the pressed row can get the ring", () => {
-    /* `mark.hit[data-hit-open]` is how search says *this washed phrase is the
+    /* `mark.hit[data-hit-open]` is how search says *this outlined phrase is the
        row you pressed*, and quotes did not need it while there was only ever
        one mark on the page. With all of them marked it is the only thing that
        distinguishes the reader's selection, and the key is computed in one
@@ -154,7 +154,7 @@ describe("the quotes the prose marks", () => {
 });
 
 /**
- * **The stroke, and the priority it carries** — docs/project/quotes.md § The
+ * **The fill, and the priority it carries** — docs/project/quotes.md § A
  * stroke, docs/plans/260907c-….md.
  *
  * A jsdom test can prove the attribute is on the element and can prove nothing
@@ -200,8 +200,8 @@ describe("how heavily each quote is drawn", () => {
   });
 
   it("leaves a search hit with no tier at all", () => {
-    /* `quoteStroke: null` is what the stylesheet reads as "this is a wash, not an
-       outline". A search hit that acquired one would be drawn as a quote. */
+    /* `quoteStroke: null` is what the stylesheet reads as "this is a search
+       outline, not a quote fill". A search hit that acquired one would be drawn as a quote. */
     const hits = findLiteral(BLOCKS, "thinking");
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.every((f) => f.quoteStroke === null)).toBe(true);

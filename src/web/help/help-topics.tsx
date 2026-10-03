@@ -348,7 +348,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
   keyboard: {
     title: "Keyboard shortcuts",
     keywords:
-      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define tag untag microphone dictate speak",
+      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define tag untag microphone dictate speak sentence ask did you mean natural language",
     body: (
       <>
         <ul>
@@ -367,6 +367,14 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <em>tag as methods</em> and <em>untag methods</em> change your own tags, and{" "}
             <em>experimental</em> turns experimental features on or off. Press the microphone in the
             box to say it instead of typing.
+          </li>
+          <li>
+            If you do not know the name, type or say a whole sentence — <em>what’s changed on this site</em>,{" "}
+            <em>is consciousness mentioned anywhere</em> — and, when nothing matches, press{" "}
+            <kbd>Enter</kbd> to ask what you meant. A fast AI model reads your sentence and the list
+            of commands, never the article. If it is sure and the command only takes you somewhere,
+            you go there; otherwise it shows its best guesses under <strong>Did you mean</strong> and
+            you press <kbd>Enter</kbd> on the one you want. You need to be signed in.
           </li>
           <li>
             <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the

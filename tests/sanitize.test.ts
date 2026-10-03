@@ -303,9 +303,9 @@ describe("things the first draft got wrong", () => {
     expect(out).toContain("forged"); // the words are still the author's
   });
 
-  it("does not let an article forge the quote outline or its priority", () => {
-    /* Since 2026-09-07 a quote is drawn as a stroke whose **thickness is our
-       claim about how much the passage matters** — so a forged `data-quote` is
+  it("does not let an article forge the quote fill or its priority", () => {
+    /* A quote's fill strength is **our claim about how much the passage matters**
+       — so a forged `data-quote` is
        an article printing *"Spideryarn says this is one of the most important
        lines in the piece"* on a sentence its own author chose, which is a
        stronger lie than a forged highlight. `data-wash` is here too: it is what
@@ -318,9 +318,12 @@ describe("things the first draft got wrong", () => {
        version-5 one, and these four were missing from the first draft of the
        change that introduced them. GPT Sol found all three. */
     const out = sanitizeHtml(
-      `<p><mark class="hit" data-quote="2" data-quote-start="" data-quote-end="" data-wash="">forged</mark></p>`,
+      `<p><mark class="hit" data-quote="2" data-quote-start="" data-quote-end="" data-wash="" data-wash-start="" data-wash-end="">forged</mark></p>`,
     );
-    for (const attr of ["data-quote", "data-quote-start", "data-quote-end", "data-wash"]) {
+    /* `data-wash-start` / `data-wash-end` since 2026-10-03 (plan 261003l): where
+       a search hit's outline is capped. Nothing names them in the policy; the
+       allow-list (version 8) is what removes them, and this is the check. */
+    for (const attr of ["data-quote", "data-quote-start", "data-quote-end", "data-wash", "data-wash-start", "data-wash-end"]) {
       expect(out, attr).not.toContain(attr);
     }
     expect(out).not.toMatch(/\bhit\b/);

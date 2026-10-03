@@ -1357,10 +1357,10 @@ export function Reader({
   const hitBlocks = useMemo(() => blockMatches(railFound(passages)), [passages]);
   /* **The quotes in the rail, in every mode** — their own strip down the left
      edge (spine-marks.ts § `quoteRailMarks`; Greg, 2026-09-10, spya-yd2c47).
-     From `proseMarked`, what the prose actually outlines, and not from
+     From `proseMarked`, what the prose actually fills, and not from
      `quotes.found`: Skim's stop can be a quote the bar hides from the band,
-     resolved afresh and outlined all the same (passages.ts § `proseFound`).
-     `quoteAlphaByBlock` keeps only what carries a quote stroke. */
+     resolved afresh and filled all the same (passages.ts § `proseFound`).
+     `quoteAlphaByBlock` keeps only what carries the quote-painting field. */
   const quoteRail = useMemo(() => quoteAlphaByBlock(proseMarked), [proseMarked]);
 
   /**
@@ -1435,8 +1435,8 @@ export function Reader({
      *prioritised*; under *most important* the band's order is invisible from
      the prose, and "next" jumping back up the page would be a surprise (GPT
      Sol's plan review, P2). `quoteCardQuotes` reads the actual prose marks, not
-     only the band's list: Skim may outline its current quote after the Quotes
-     bar has hidden it. Only outlined quotes enter the map, so no step lands on
+     only the band's list: Skim may fill its current quote after the Quotes bar
+     has hidden it. Only marked quotes enter the map, so no step lands on
      nothing. `jumpTo` and not `bandJump`: the reader is in the prose already.
      Opening Quotes selects the quote first, so the band opens on its row. */
   const quoteCard = useMemo<QuoteCardSource | null>(() => {

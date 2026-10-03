@@ -273,15 +273,16 @@ td.text.has-hit[data-hues].block-flash-still {
 
 /* **The same flash on a passage's own words** — Skim's stop is a quote,
    so flash.ts washes its `mark.hit` fragments instead of the cell (plan
-   260928a § 7b). `background-color`, not `box-shadow`: the quote's outline IS
-   its box-shadow (annotations.css § quotes), and the wash must sit inside it
-   rather than replace it.
+   260928a § 7b). `background-color`, not `box-shadow`: the ring a pressed
+   quote wears IS its box-shadow (annotations.css § quote fills), and the wash
+   must sit inside it rather than replace it. Since 2026-10-03 the quote has a
+   fill of its own, which this covers while it flashes and returns to.
 
    **No `100%` keyframe**, on purpose: an omitted end keyframe animates back to
-   the element's own value, which for the current stop is the rung quote's
-   0.18 tint (`mark.hit[data-quote][data-hit-open]`) — so the wash fades into
-   the ring instead of dropping to transparent and snapping back. The still
-   rule is `td.text`-scoped so it outranks that later, equal-weight rule. */
+   the element's own value, which for the current stop is the quote's priority
+   fill (`mark.hit[data-quote]`) — so the wash fades into the fill inside its
+   ring instead of dropping to transparent and snapping back. The still
+   rule is `td.text`-scoped so it outranks the later quote-fill rule. */
 @keyframes passage-flash {
   0%, 35% { background-color: var(--highlight-wash); }
 }

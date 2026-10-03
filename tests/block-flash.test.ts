@@ -346,8 +346,10 @@ describe("flashBlock with a passage", () => {
        the shorthand, `rgb(1, 2, 3)` with `background-color: transparent`). So
        `mark.hit`'s reset is spelled as the longhand it amounts to here. */
     const annotations = readFileSync("src/web/styles/annotations.css", "utf8");
-    const ring = "rgb(var(--quote-stroke-rgb) / 0.18)";
-    expect(annotations, "the rung quote's tint this test competes against").toContain(ring);
+    /* Since 2026-10-03 the background a quote brings is its resting fill (plan
+       261003l); until then it was a tint the pressed quote alone wore. */
+    const ring = "rgb(var(--quote-rgb) / calc(var(--quote-a, 0.95) * var(--quote-fill)))";
+    expect(annotations, "the quote's own fill this test competes against").toContain(ring);
     const css = `${readFileSync("src/web/styles/prose.css", "utf8")}\n${annotations}`
       .replaceAll("var(--highlight-wash)", "rgb(1, 2, 3)")
       .replaceAll(ring, "rgb(9, 9, 9)")
@@ -360,12 +362,12 @@ describe("flashBlock with a passage", () => {
       <mark id="c" class="hit" data-hit="q" data-quote="2" data-hit-open="">x</mark>
       <mark id="n" class="hit passage-flash" data-hit="q" data-quote="2">y</mark></td></tr></tbody></table>`;
     const style$ = (id: string) => getComputedStyle(document.querySelector(id) as Element);
-    expect(style$("#c").backgroundColor, "control: the ring's tint applies unwashed").toBe("rgb(9, 9, 9)");
+    expect(style$("#c").backgroundColor, "control: the quote's fill applies unwashed").toBe("rgb(9, 9, 9)");
     expect(style$("#m").backgroundColor).toBe("rgb(1, 2, 3)");
     /* jsdom does not expand the `animation` shorthand, so the moving rule is
        read from the source, beside its block twin. */
-    expect(style$("#n").backgroundColor, "the moving wash is the animation's, not a rule's").toBe(
-      "rgba(0, 0, 0, 0)",
+    expect(style$("#n").backgroundColor, "the moving wash is the animation's, not a rule's: only the quote's fill").toBe(
+      "rgb(9, 9, 9)",
     );
     expect(css).toMatch(/td\.text mark\.hit\.passage-flash\s*\{\s*animation:\s*passage-flash var\(--flash-ms\)/);
     expect(css).toMatch(/@keyframes passage-flash\s*\{[^}]*background-color: rgb\(1, 2, 3\)/);
