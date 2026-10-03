@@ -37,7 +37,14 @@
  * what that leaves unverified.
  */
 import { Highlighter } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import {
   readSelectionWithRange,
@@ -61,17 +68,34 @@ interface Shown {
   bottom: number;
 }
 
+interface ArmedPress {
+  shown: Shown;
+  /** A collapse after this press began may use the held anchor until here. */
+  fallbackUntil: number;
+}
+
 function sameAnchor(a: SelectionAnchor, b: SelectionAnchor): boolean {
   return a.blockId === b.blockId && a.start === b.start && a.quote === b.quote;
 }
 
-/** Where the saved words end on screen. jsdom has no range geometry at all. */
-function endOf(range: Range): { left: number; bottom: number } {
+/**
+ * Where the saved words end on screen, or `null` when they are not on it.
+ *
+ * **Off-screen words get no chip.** The stylesheet clamps the chip into the
+ * viewport, so a selection scrolled away used to come back with a chip pinned
+ * to the screen edge, beside words it had nothing to do with — and pressing it
+ * would open the box on a passage the reader could not see (browser check,
+ * 2026-10-03). jsdom has no range geometry at all, and there the chip is placed
+ * at the origin.
+ */
+function endOf(range: Range): { left: number; bottom: number } | null {
   const rects = typeof range.getClientRects === "function" ? range.getClientRects() : null;
   const last = rects && rects.length > 0 ? rects[rects.length - 1] : undefined;
   const box =
     last ?? (typeof range.getBoundingClientRect === "function" ? range.getBoundingClientRect() : null);
-  return box ? { left: box.left, bottom: box.bottom } : { left: 0, bottom: 0 };
+  if (!box) return { left: 0, bottom: 0 };
+  if (box.bottom < 0 || box.top > window.innerHeight) return null;
+  return { left: box.left, bottom: box.bottom };
 }
 
 function isFinger(e: Event): boolean {
@@ -90,6 +114,13 @@ export interface TouchSelectionChipProps {
 }
 
 export function TouchSelectionChip({ suppressed, onSelect }: TouchSelectionChipProps) {
+  /* A suppressed chip is an unmounted chip, not merely hidden. That makes an
+     open box a synchronous reset of its listeners, timers and kept anchor,
+     without a cleanup function setting React state after unmount. */
+  return suppressed ? null : <ActiveTouchSelectionChip onSelect={onSelect} />;
+}
+
+function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "onSelect">) {
   const [shown, setShown] = useState<Shown | null>(null);
   /** The same value, readable from listeners without re-subscribing them. */
   const shownRef = useRef<Shown | null>(null);
@@ -100,6 +131,8 @@ export function TouchSelectionChip({ suppressed, onSelect }: TouchSelectionChipP
   const grace = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** When the kept anchor stops being usable; 0 while the selection is live. */
   const graceUntil = useRef(0);
+  /** A press is valid only if its pointerdown still found this chip's words. */
+  const armedPress = useRef<ArmedPress | null>(null);
 
   const show = useCallback((next: Shown | null) => {
     shownRef.current = next;
@@ -115,8 +148,6 @@ export function TouchSelectionChip({ suppressed, onSelect }: TouchSelectionChipP
   }, []);
 
   useEffect(() => {
-    if (suppressed) return;
-
     const settled = () => {
       settle.current = null;
       if (finger.current !== true) return;
@@ -128,7 +159,9 @@ export function TouchSelectionChip({ suppressed, onSelect }: TouchSelectionChipP
       const el = range.startContainer instanceof Element
         ? range.startContainer
         : range.startContainer.parentElement;
-      show({ anchor: read.anchor, prose: el?.closest("td.text .prose") ?? null, ...endOf(range) });
+      const end = endOf(range);
+      if (!end) return;
+      show({ anchor: read.anchor, prose: el?.closest("td.text .prose") ?? null, ...end });
     };
     const schedule = () => {
       if (settle.current !== null) clearTimeout(settle.current);
@@ -136,9 +169,12 @@ export function TouchSelectionChip({ suppressed, onSelect }: TouchSelectionChipP
     };
     /** Take the chip away now; it comes back when the selection next settles. */
     const hide = () => {
+      if (settle.current !== null) clearTimeout(settle.current);
       if (grace.current !== null) clearTimeout(grace.current);
+      settle.current = null;
       grace.current = null;
       graceUntil.current = 0;
+      armedPress.current = null;
       if (shownRef.current) show(null);
     };
 
@@ -173,13 +209,12 @@ export function TouchSelectionChip({ suppressed, onSelect }: TouchSelectionChipP
       if (chip.current && e.target instanceof Node && chip.current.contains(e.target)) return;
       finger.current = isFinger(e);
       if (!finger.current) return hide();
-      /* Hidden while a finger is on the glass — unless the chip is already in
-         its grace period, where the timer owns it. **Nothing waits for the
-         finger to lift**: whether iOS sends a `pointerup` or a `pointercancel`
-         once it takes a long-press for its own is not something we have
-         measured, and a chip gated on an event that never comes is a chip that
-         never appears. The lift only brings it back sooner. */
-      if (grace.current === null) hide();
+      /* Hidden while a finger is on the glass. **Nothing waits for the finger
+         to lift**: whether iOS sends a `pointerup` or a `pointercancel` once it
+         takes a long-press for its own is not something we have measured, and
+         a chip gated on an event that never comes is a chip that never
+         appears. The lift only brings it back sooner. */
+      hide();
     };
     const onPointerEnd = (e: Event) => {
       if (!isFinger(e)) return;
@@ -209,26 +244,51 @@ export function TouchSelectionChip({ suppressed, onSelect }: TouchSelectionChipP
       window.removeEventListener("resize", onMove);
       clearTimers();
       shownRef.current = null;
-      setShown(null);
+      armedPress.current = null;
+      finger.current = null;
     };
-  }, [suppressed, show, clearTimers]);
+  }, [show, clearTimers]);
 
-  if (suppressed || !shown) return null;
+  if (!shown) return null;
+
+  const armPress = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    const held = shownRef.current;
+    if (!held?.prose?.isConnected) {
+      armedPress.current = null;
+      return;
+    }
+    const { read } = readSelectionWithRange(window.getSelection());
+    const now = Date.now();
+    const live = read.kind === "anchor" && sameAnchor(read.anchor, held.anchor);
+    const observedCollapse = read.kind === "none" && graceUntil.current > now;
+    armedPress.current = live || observedCollapse
+      ? { shown: held, fallbackUntil: live ? now + GRACE_MS : graceUntil.current }
+      : null;
+  };
 
   const press = () => {
     const held = shownRef.current;
-    const until = graceUntil.current;
+    const armed = armedPress.current;
+    armedPress.current = null;
+    if (!held) return;
     const { read } = readSelectionWithRange(window.getSelection());
     clearTimers();
     show(null);
-    if (read.kind === "anchor") return onSelect(read.anchor);
-    /* `too-short` is a selection the reader has since changed, not one the tap
-       collapsed, so only `none` may fall back — and only inside the grace
-       period (`until` is 0 if the chip had never seen the selection go, which
-       means it went as this very press landed), on a paragraph still here. */
-    if (read.kind !== "none" || !held) return;
-    if (until !== 0 && Date.now() >= until) return;
     if (!held.prose?.isConnected) return;
+    if (read.kind === "anchor") {
+      /* The chip belongs to the words it was drawn beside. A changed live
+         selection which omitted `selectionchange` must settle and earn its
+         own chip rather than borrowing this one. */
+      if (sameAnchor(read.anchor, held.anchor)) onSelect(read.anchor);
+      return;
+    }
+    /* `too-short` is a selection the reader has since changed, not one the tap
+       collapsed, so only `none` may fall back. The pointerdown must have
+       validated these exact words before the collapse; `graceUntil === 0`
+       never means unlimited grace for a silently stale selection. */
+    if (read.kind !== "none" || armed?.shown !== held) return;
+    if (Date.now() >= armed.fallbackUntil) return;
     onSelect(held.anchor);
   };
 
@@ -243,9 +303,17 @@ export function TouchSelectionChip({ suppressed, onSelect }: TouchSelectionChipP
       tabIndex={-1}
       style={{ "--chip-x": `${shown.left}px`, "--chip-y": `${shown.bottom}px` } as CSSProperties}
       /* Neither press may move focus or start a selection of its own: either
-         clears the words this is for. `click` still follows a prevented
-         `pointerdown`. */
-      onPointerDown={(e) => e.preventDefault()}
+         can clear the words this is for. The action itself is on pointerup, so
+         it does not depend on a cancelled pointerdown producing a click. */
+      onPointerDown={armPress}
+      /* Commit at the pointer's own end. WebKit is not required to synthesize
+         a click after a cancelled pointerdown; `onClick` below is only the
+         compatibility/accessibility fallback. `show(null)` makes a following
+         click a no-op. */
+      onPointerUp={press}
+      onPointerCancel={() => {
+        armedPress.current = null;
+      }}
       onMouseDown={(e) => e.preventDefault()}
       onClick={press}
     >

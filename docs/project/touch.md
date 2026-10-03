@@ -762,7 +762,13 @@ The rules it keeps:
   the *clamped* words, the ones that will be saved.
 - **Below the words**, because iOS puts its own callout above them. Clamped to the viewport, the
   safe area and the bottom bar in CSS (`annotations.css` § `.touch-select-chip`). Hidden on scroll,
-  resize, a new touch, or the handles moving, and shown again when things settle.
+  resize, a new touch, or the handles moving, and shown again when things settle. **Not shown at
+  all while the selected words are off screen**: the clamp would otherwise pin it to the screen
+  edge, beside words it has nothing to do with.
+- **The press is the finger lifting (`pointerup`), not the `click`.** The button prevents its
+  `pointerdown` so the selection survives, and Playwright's WebKit then delivers no `click` at all,
+  which made the button inert there (browser check and GPT Sol T2, 2026-10-03). `click` remains as
+  a fallback and cannot fire the action twice.
 - **It cannot open the box on stale words.** iOS may collapse the selection as the tap lands, so the
   button outlives the selection by 300ms and remembers its words for that long. A press reads the
   live selection first and uses the remembered words only inside that window, and only while their

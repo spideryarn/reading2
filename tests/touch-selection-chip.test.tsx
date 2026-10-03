@@ -75,6 +75,7 @@ afterEach(() => {
 /** `Reader.tsx` in miniature: the same three arms, the same gates. */
 function Harness({ article, owner }: { article: Article; owner: boolean }) {
   const [annotating, setAnnotating] = useState<SelectionAnchor | null>(null);
+  const [opened, setOpened] = useState<string | null>(null);
   /* Reader.tsx § `selectProse`: a visitor's selection is silent. */
   const selectProse = (anchor: SelectionAnchor) => {
     if (!owner) return;
@@ -89,18 +90,21 @@ function Harness({ article, owner }: { article: Article; owner: boolean }) {
       layout: fitView({ windowWidth: 1400 }),
       onJump: () => {},
       comments: [],
-      openComment: null,
+      openComment: opened,
       chats: [],
       chatCounts: new Map<string, number>(),
       notesBy: "you" as const,
       openChat: null,
       linkBase: "/read/x",
       onSelect: selectProse,
-      onOpenComment: () => {},
+      onOpenComment: setOpened,
       onOpenChat: () => {},
     } as never),
     owner &&
-      createElement(TouchSelectionChip, { suppressed: Boolean(annotating), onSelect: selectProse }),
+      createElement(TouchSelectionChip, {
+        suppressed: Boolean(annotating || opened),
+        onSelect: selectProse,
+      }),
     owner &&
       annotating &&
       createElement(AnnotateDialog, {
@@ -110,6 +114,7 @@ function Harness({ article, owner }: { article: Article; owner: boolean }) {
         onSave: () => {},
         onCancel: () => setAnnotating(null),
       }),
+    createElement("output", { "data-open-comment": true }, opened),
   );
 }
 
@@ -166,9 +171,24 @@ function select(text: Text, end: number): string {
   return range.toString().trim();
 }
 
+function selectSilently(text: Text, end: number): string {
+  const range = document.createRange();
+  range.setStart(text, 0);
+  range.setEnd(text, end);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return range.toString().trim();
+}
+
 function collapse(): void {
   window.getSelection()!.removeAllRanges();
   selectionChanged();
+}
+
+/** What WebKit may do as part of the button press, before notifying selectionchange. */
+function collapseSilently(): void {
+  window.getSelection()!.removeAllRanges();
 }
 
 function wait(ms: number): void {
@@ -225,6 +245,19 @@ it("moving the handles takes the chip away until they settle again", async () =>
   expect(boxQuote()).toBe(longer);
 });
 
+it("a new touch cancels a pending settle instead of resurrecting the chip under the finger", async () => {
+  const text = await mounted();
+  pointerDown(text.parentElement!, "touch");
+  select(text, 20);
+  /* Flush jsdom's own asynchronous selectionchange; the timer under test is
+     the one our explicit event already scheduled. */
+  wait(0);
+  pointerDown(text.parentElement!, "touch");
+
+  wait(SETTLE_MS);
+  expect(chip()).toBeNull();
+});
+
 it("a mouse selection never shows the chip", async () => {
   const text = await mounted();
   pointerDown(text.parentElement!, "mouse");
@@ -255,6 +288,45 @@ it("a selection the tap collapsed still opens, inside the grace period", async (
   const button = chip();
   expect(button, "the chip must outlive the collapse long enough to be pressed").not.toBeNull();
   tap(button!);
+  expect(boxQuote()).toBe(quote);
+});
+
+it("a new touch outside the chip cancels an active grace period immediately", async () => {
+  const { text } = await aSettledTouchSelection();
+  collapse();
+  expect(chip()).not.toBeNull();
+
+  pointerDown(text.parentElement!, "touch");
+  expect(chip()).toBeNull();
+});
+
+it("a selection that disappeared without an event cannot be used by a later press", async () => {
+  await aSettledTouchSelection();
+  collapseSilently();
+
+  /* `graceUntil === 0` means no collapse was observed. It must not mean an
+     unlimited grace period for a selection that may have gone away long ago. */
+  tap(chip()!);
+  expect(boxQuote()).toBeNull();
+});
+
+it("different live words that changed without an event cannot borrow the old chip", async () => {
+  const { text } = await aSettledTouchSelection();
+  selectSilently(text, 30);
+
+  tap(chip()!);
+  expect(boxQuote()).toBeNull();
+});
+
+it("a press validated before its own collapse commits on pointerup, without needing click", async () => {
+  const { quote } = await aSettledTouchSelection();
+  const button = chip()!;
+  pointerDown(button, "touch");
+  collapseSilently();
+  act(() => {
+    button.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }));
+  });
+
   expect(boxQuote()).toBe(quote);
 });
 
@@ -292,13 +364,84 @@ it("the chip is gone once the box is open, and does not come back over it", asyn
   expect(chip()).toBeNull();
 });
 
+it("a touch tap on an existing mark still opens that comment and never leaves a chip over it", async () => {
+  const text = await mounted();
+  const mark = document.createElement("mark");
+  mark.className = "cmt";
+  mark.dataset.comment = "cmt-existing";
+  text.parentNode!.insertBefore(mark, text);
+  mark.append(text);
+
+  pointerDown(mark, "touch");
+  act(() => {
+    mark.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }));
+    mark.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    mark.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+  });
+
+  expect(document.querySelector("[data-open-comment]")?.textContent).toBe("cmt-existing");
+  expect(chip()).toBeNull();
+});
+
 it("Reader.tsx mounts the chip for an owner only, off the same selectProse, and hides it behind every box", () => {
   const source = readFileSync("src/web/reader/Reader.tsx", "utf8");
   const at = source.indexOf("<TouchSelectionChip");
   expect(at, "Reader.tsx no longer mounts the chip — this test has lost its subject").toBeGreaterThan(-1);
   const tag = source.slice(at, source.indexOf("/>", at));
+  expect(tag).toMatch(/key=\{`\$\{slug\}:\$\{mode\}`\}/);
   expect(tag).toMatch(/onSelect=\{selectProse\}/);
   expect(tag).toMatch(/suppressed=\{Boolean\(annotating \|\| overlay \|\| openComment\)\}/);
   const before = source.slice(0, at).trimEnd();
   expect(before.endsWith("{owner && ("), "a visitor must not get the chip at all").toBe(true);
+});
+
+it("the fixed chip clears safe areas, the live Dock, and its install strip", () => {
+  const source = readFileSync("src/web/styles/annotations.css", "utf8");
+  const at = source.indexOf(".touch-select-chip {");
+  expect(at, "the chip's CSS rule has gone").toBeGreaterThan(-1);
+  const rule = source.slice(at, source.indexOf("}\n", at));
+  expect(rule).toContain("position: fixed");
+  expect(rule).toContain("var(--safe-left)");
+  expect(rule).toContain("var(--safe-right)");
+  expect(rule).toContain("var(--safe-top)");
+  expect(rule).toContain("max(var(--dock-bottom), var(--safe-bottom))");
+  expect(rule).toContain("var(--hint-now)");
+});
+
+/* **Off-screen words get no chip.** The CSS clamps the chip into the viewport,
+   so a selection scrolled away came back with a chip pinned to the screen edge,
+   nowhere near its words (browser check, 2026-10-03). jsdom has no range
+   geometry, so the rectangle is supplied. */
+function withRangeAt<T>(top: number, run: () => T): T {
+  const proto = Range.prototype as { getClientRects?: unknown };
+  const original = proto.getClientRects;
+  proto.getClientRects = () => [{ left: 40, right: 200, top, bottom: top + 20, width: 160, height: 20 }];
+  try {
+    return run();
+  } finally {
+    if (original) proto.getClientRects = original;
+    else delete proto.getClientRects;
+  }
+}
+
+it("shows no chip when the selected words are below the viewport, or above it", async () => {
+  const text = await mounted();
+  for (const top of [window.innerHeight + 100, -500]) {
+    withRangeAt(top, () => {
+      pointerDown(text.parentElement!, "touch");
+      select(text, 20);
+      wait(SETTLE_MS);
+      expect(chip(), `words at y=${top}`).toBeNull();
+    });
+  }
+});
+
+it("and shows it when the supplied rectangle is on screen", async () => {
+  const text = await mounted();
+  withRangeAt(100, () => {
+    pointerDown(text.parentElement!, "touch");
+    select(text, 20);
+    wait(SETTLE_MS);
+    expect(chip()).not.toBeNull();
+  });
 });

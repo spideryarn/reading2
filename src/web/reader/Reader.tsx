@@ -2961,11 +2961,14 @@ export function Reader({
           then does nothing is not silent. `suppressed`: the three conditions
           are the render conditions of the three boxes below, so it is never
           over an open one. It is not in `surface.current` and owns no Escape —
-          it is a button, not a surface. docs/project/touch.md § A finger's
-          selection gets a button; the wiring is read by
+          it is a button, not a surface. The key drops every held anchor and
+          document listener on an article or mode change, even if WebKit sends
+          no selectionchange for the old DOM. docs/project/touch.md § A
+          finger's selection gets a button; the wiring is read by
           tests/touch-selection-chip.test.tsx. */}
       {owner && (
         <TouchSelectionChip
+          key={`${slug}:${mode}`}
           suppressed={Boolean(annotating || overlay || openComment)}
           onSelect={selectProse}
         />

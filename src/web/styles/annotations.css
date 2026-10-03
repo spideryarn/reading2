@@ -1343,8 +1343,8 @@ td.text.has-hit[data-hues="8"] {
    - **Below the words**, because iOS puts its own callout above them. The gap
      is there for the selection handle, whose knob hangs under the last line.
    - **Clamped to the viewport**, inside the safe area and above the bottom bar
-     where it is showing. The width is stated so the right-hand clamp can be
-     arithmetic rather than a measurement.
+     and install hint where they are showing. The width is stated so the
+     right-hand clamp can be arithmetic rather than a measurement.
    - **44px tall at every pointer**, not only a coarse one: nothing but a finger
      ever draws it, and a hybrid's primary pointer may be the trackpad.
    - **z-index 50**: over the bars (40), the spine (45) and the mode bands
@@ -1362,7 +1362,9 @@ td.text.has-hit[data-hues="8"] {
   top: clamp(
     calc(var(--safe-top) + 0.5rem),
     calc(var(--chip-y, 0px) + var(--chip-gap)),
-    calc(100dvh - max(var(--dock-bottom), var(--safe-bottom)) - var(--control-h-lg) - 0.5rem)
+    calc(
+      100dvh - max(var(--dock-bottom), var(--safe-bottom)) - var(--hint-now) - var(--control-h-lg) - 0.5rem
+    )
   );
   box-sizing: border-box;
   inline-size: var(--chip-w);
