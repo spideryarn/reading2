@@ -561,6 +561,26 @@ export interface GlossaryEntry {
    */
   fromOutside?: boolean;
   /**
+   * When the pass that added this entry finished, ISO — **its own time, not
+   * the list's.** `Glossary.generatedAt` is re-stamped by every *Find more
+   * terms*, so without this an entry from the first pass could not be told
+   * from one the third pass added. Greg, 2026-10-03: *"Store when it
+   * happened."* The twin of `Quote.addedAt`.
+   *
+   * **Absent on every entry stored before 2026-10-03, and never backfilled.**
+   * For those the list's `generatedAt` is an upper bound, not their time, and
+   * writing the bound into the field would turn it into a claim. Kept — and
+   * its absence kept — across an append, across a merge whichever name or
+   * prose wins, and across a rewrite that inherits the id (src/glossary.ts
+   * § `merge`, § `InheritedEntry`).
+   *
+   * Stored and shown nowhere yet. It enters no hash, no freshness comparison,
+   * no dedupe and no prompt; the public projection (src/public/dto.ts) does
+   * not copy it. A term the reader added themselves is not in the document
+   * and has no `addedAt`: its time is its `glossary_lookups` row's.
+   */
+  addedAt?: string;
+  /**
    * What came back when the reader asked us to check this term on the web.
    *
    * **Absent until somebody presses the button**, and that is the design rather

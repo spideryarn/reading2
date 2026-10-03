@@ -190,6 +190,8 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
             sourceHash: decided.sourceHash ?? null,
             attemptId: attempt,
             attemptStartedAt: DB_NOW,
+            // Back to pending: the failed attempt's finish goes with its error.
+            finishedAt: null,
           })
           .where(
             and(
@@ -338,6 +340,10 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
         // never be finished.
         attemptId: null,
         attemptStartedAt: null,
+        /* **When the results landed, or the call failed** — in the fenced
+           statement, so an attempt the sweep buried stamps nothing. The guard
+           above has already refused a patch that does not end the criterion. */
+        finishedAt: DB_NOW,
       })
       .where(
         and(
@@ -385,7 +391,8 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
        says so. */
     await db
       .update(refereeCriteria)
-      .set({ colour })
+      // `colour_at` beside it, a cleared colour included; no other clock is named.
+      .set({ colour, colourAt: DB_NOW })
       .where(and(eq(refereeCriteria.articleId, articleId), eq(refereeCriteria.id, id)));
     return criteriaFor(articleId, db, slug);
   },
@@ -413,7 +420,14 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
 
     const swept = await db
       .update(refereeCriteria)
-      .set({ status: "error", error: CRITERION_SWEPT, attemptId: null, attemptStartedAt: null })
+      // `finished_at` is when the sweep ended the attempt — the only ending it had.
+      .set({
+        status: "error",
+        error: CRITERION_SWEPT,
+        attemptId: null,
+        attemptStartedAt: null,
+        finishedAt: DB_NOW,
+      })
       .where(stale)
       .returning({ id: refereeCriteria.id });
 

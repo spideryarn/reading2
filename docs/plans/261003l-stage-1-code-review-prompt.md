@@ -1,7 +1,7 @@
 # Review: stage 1 of 261003l — `reader_notes`, a Chat tool that reads the reader's own notes
 
 Repo: the current directory (Spideryarn; TypeScript, ESM, Postgres through drizzle). You reviewed
-the plan: `docs/plans/261003l-plan-review-sol.md` (PR-1..PR-7). The plan is
+the plan: `docs/plans/261003l-reader-notes-plan-review-sol.md` (PR-1..PR-7). The plan is
 `docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md`; its Reviews
 section is what was to be built, and "Stage 1, what landed" is the implementer's account.
 

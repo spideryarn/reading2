@@ -581,7 +581,7 @@
 }
 
 /* An inline code span, in any panel that draws model prose — it is Cited.tsx's,
-   not chat's, for the same reason `.cite` lost its prefix. Padded but not
+   not chat's, for the same reason `.cite-chips` lost its prefix. Padded but not
    boxed: a border on something a few characters wide inside a sentence reads as
    a button. */
 .fmt-code {
@@ -646,21 +646,27 @@
 
    Not chat's any more: Quiz and Candidates draw the same chips from the same
    component (Cited.tsx), so the class lost its `chat-` prefix rather than
-   growing a second copy under a different one. */
-.cite {
+   growing a second copy under a different one.
+
+   **`cite-chips`, not `cite`.** It was `.cite` until 2026-10-03, and so is a
+   citation's mark in the prose (`mark.cite`, annotations.css). This rule's
+   `inline-flex` reached the mark and sent every cited clause to lines of its
+   own (spya-trg9kz, docs/postmortems/261003e-…). A class a `<mark>` wears
+   belongs to marks: tests/prose-marks-stay-inline-in-chrome.test.ts. */
+.cite-chips {
   display: inline-flex;
   gap: 0.2rem;
   margin: 0 0.1rem;
   vertical-align: baseline;
 }
-.cite .block-ref {
+.cite-chips .block-ref {
   padding: 0 0.28rem;
   border: 1px solid var(--rule-strong);
   border-radius: 0.4rem;
   background: var(--surface-raised);
   font-size: 0.72em;
 }
-.cite .block-ref:hover {
+.cite-chips .block-ref:hover {
   border-color: var(--highlight);
   color: var(--highlight-ink);
 }

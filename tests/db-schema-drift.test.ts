@@ -160,6 +160,44 @@ describe("compareSchema", () => {
     expect(driftWarnings(broken).join(" ")).toContain("omit them will fail");
   });
 
+  it("goes red when a NULLABLE column's database default is gone — nothing fails, the value just stops being kept", () => {
+    /* GPT Sol's review of docs/plans/261003j, finding 5. `created_at` on
+       `glossary_hidden_entries` and four others is nullable with
+       `default now()`, and no store names it: the database default is the only
+       thing that stamps the time. Lose the default and every insert still
+       succeeds, writing null — the time silently stops being kept. The check
+       used to look only at `not null` columns, where a lost default at least
+       fails loudly. */
+    const declaredNullable = [
+      { table: "glossary_hidden_entries", columns: [dc("created_at", { notNull: false, hasDefault: true })] },
+    ];
+    const clean = compareSchema(declaredNullable, {
+      schemaUsable: true,
+      columns: [col("glossary_hidden_entries", "created_at", { nullable: true, hasDefault: true })],
+    });
+    expect(clean.defaultLost).toEqual([]);
+    expect(driftWarnings(clean)).toEqual([]);
+
+    const broken = compareSchema(declaredNullable, {
+      schemaUsable: true,
+      columns: [col("glossary_hidden_entries", "created_at", { nullable: true, hasDefault: false })],
+    });
+    expect(broken.missingOrInaccessible).toEqual([]);
+    expect(broken.nullabilityMismatch).toEqual([]);
+    expect(broken.defaultLost).toEqual(["glossary_hidden_entries.created_at"]);
+    expect(driftWarnings(broken).join(" ")).toContain("become null");
+
+    /* The exceptions stay exceptions: a generated or identity column has no
+       `column_default` and is filled in all the same. */
+    for (const how of [{ generated: true }, { identity: true }]) {
+      const exempt = compareSchema(declaredNullable, {
+        schemaUsable: true,
+        columns: [col("glossary_hidden_entries", "created_at", { nullable: true, hasDefault: false, ...how })],
+      });
+      expect(exempt.defaultLost).toEqual([]);
+    }
+  });
+
   it("treats a column it cannot SELECT as inaccessible, not as present", () => {
     /* information_schema lists a column the role holds ANY privilege on, so an
        INSERT-only grant makes an unreadable column look healthy. Finding 3. */

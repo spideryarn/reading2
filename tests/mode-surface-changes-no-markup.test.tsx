@@ -1957,13 +1957,15 @@ const DIAGRAM_VISITOR: BandShape = {
  * mode's narrow face (docs/plans/260910g-structure-mode-subsumes-outline.md):
  * the label is the mode's name, `Structure`, and `data-outline-clamp` joined
  * the rung as the second half of what the fit chose — whether titles had to
- * be cut to one line to fit (OutlinePanel.tsx § `fit`).
+ * be cut to one line to fit (OutlinePanel.tsx § `fit`). On 2026-10-03 the
+ * clamp went and `data-outline-scroll` took its place: whether the list
+ * scrolls (plan 261003k).
  */
 const OUTLINE: BandShape = {
   className: "mode-band outln has-about",
   label: "Structure",
   head: false,
-  attrs: ["aria-label", "class", "data-outline-clamp", "data-outline-rung"],
+  attrs: ["aria-label", "class", "data-outline-rung", "data-outline-scroll"],
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "ol.outln-list[aria-activedescendant,aria-label,role,tabindex]",

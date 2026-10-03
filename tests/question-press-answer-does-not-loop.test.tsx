@@ -365,7 +365,7 @@ describe("a '?' answer streaming into the floating dialog", () => {
     /* The chips share one delegated card since 2026-09-28 (BlockLinkCard.tsx),
        opened by a bubbling `pointerover` or a `focusin`, not by a per-chip
        `mouseenter`. */
-    const chips = [...host.querySelectorAll<HTMLElement>(".chat-dialog .cite [data-block-link]")];
+    const chips = [...host.querySelectorAll<HTMLElement>(".chat-dialog .cite-chips [data-block-link]")];
     expect(chips.length, "the landed answer must draw its citation chips").toBeGreaterThan(0);
     for (const chip of chips) {
       await act(async () => {

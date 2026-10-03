@@ -36,3 +36,13 @@ is [feedback.md § Ignoring a report](../project/feedback.md#ignoring-a-report-s
   `qi-943kc63h`.
 - **Linear** stays deferred, as Greg said. The mark lives on the database row, so it is there to
   be read whenever Linear is picked up.
+
+## Greg's answers, 2026-10-03
+
+> Q-addendum A is probably fine. This whole thing is low priority though, so if it's a hassle skip it.
+
+**A, one admin note per report, at low priority** (queue item qi-943kc63h). Skip it if it turns out to be a hassle.
+
+> Q-reader-sees-ignored Don't show the reader if ignored, only if shipped.
+
+**The reader sees nothing about an ignored report**: the Earlier tab tells them only when something shipped. That is how it is built today, so nothing changes.

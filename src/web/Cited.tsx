@@ -627,7 +627,7 @@ function citations(text: string, ctx: Ctx): ReactNode {
     const quotes = before?.kind === "text" ? quotesBefore(before.text) : [];
     return (
       <span
-        className={["cite", ctx.className].filter(Boolean).join(" ")}
+        className={["cite-chips", ctx.className].filter(Boolean).join(" ")}
         // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
         key={`c${i}`}
       >

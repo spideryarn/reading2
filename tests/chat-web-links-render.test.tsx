@@ -144,7 +144,7 @@ describe("what never becomes an anchor", () => {
        address in half. One anchor, no chips, the URL whole. */
     const blocks = new Map([["spya-k3m9qt", "The paragraph."]]);
     paint("Notes: https://example.com/notes/spya-k3m9qt there.", blocks);
-    expect(host.querySelectorAll(".cite")).toHaveLength(0);
+    expect(host.querySelectorAll(".cite-chips")).toHaveLength(0);
     expect(links()[0]?.getAttribute("href")).toBe("https://example.com/notes/spya-k3m9qt");
   });
 
@@ -161,7 +161,7 @@ describe("what never becomes an anchor", () => {
   it("still chips a real citation beside a link", () => {
     const blocks = new Map([["spya-k3m9qt", "The paragraph."]]);
     paint("He says so [spya-k3m9qt], and the study is [here](https://a.example/x).", blocks);
-    expect(host.querySelectorAll(".cite")).toHaveLength(1);
+    expect(host.querySelectorAll(".cite-chips")).toHaveLength(1);
     expect(links()[0]?.getAttribute("href")).toBe("https://a.example/x");
   });
 });

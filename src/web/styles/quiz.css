@@ -316,11 +316,11 @@
    the chips are punctuation in it. `white-space: normal` undoes `.quiz-reply`'s
    `pre-wrap` for the chip alone — inside a `pre-wrap` box the space between two
    ids in one bracket is preserved twice and the flex gap adds a third. */
-.quiz-reply .cite {
+.quiz-reply .cite-chips {
   white-space: normal;
   vertical-align: baseline;
 }
-.quiz-reply .cite .block-ref { font-size: 0.74rem; }
+.quiz-reply .cite-chips .block-ref { font-size: 0.74rem; }
 
 /* Status-only since plan 260929b: progress, Stop and failures stay pinned even
    though the idle redo button moved to Metadata. */

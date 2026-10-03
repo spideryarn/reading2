@@ -1,5 +1,5 @@
 {
-  "id": "a8732e65-c28b-46aa-9537-dc93c3551b11",
+  "id": "7c5ff376-d105-413d-9c1a-590d44ed0eaf",
   "prevId": "b8ee1b18-1434-4ac5-b4cc-f070c06127ca",
   "version": "7",
   "dialect": "postgresql",
@@ -1203,6 +1203,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "processing": {
           "name": "processing",
           "type": "text",
@@ -2297,6 +2303,12 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -2414,6 +2426,12 @@
           "notNull": true,
           "default": "now()"
         },
+        "renamed_at": {
+          "name": "renamed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "anchor_block_id": {
           "name": "anchor_block_id",
           "type": "text",
@@ -2469,22 +2487,6 @@
           ],
           "isUnique": true,
           "where": "\"spideryarn\".\"chat_threads\".\"kind\" = 'tutorial'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "chat_threads_one_explore": {
-          "name": "chat_threads_one_explore",
-          "columns": [
-            {
-              "expression": "article_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"spideryarn\".\"chat_threads\".\"kind\" = 'explore'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2552,7 +2554,7 @@
         },
         "chat_threads_kind": {
           "name": "chat_threads_kind",
-          "value": "\"spideryarn\".\"chat_threads\".\"kind\" in ('chat','remember','candidates','tutorial','explore')"
+          "value": "\"spideryarn\".\"chat_threads\".\"kind\" in ('chat','remember','candidates','tutorial')"
         }
       },
       "isRLSEnabled": false
@@ -2762,6 +2764,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -3002,6 +3011,13 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -3204,6 +3220,18 @@
         "colour": {
           "name": "colour",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "colour_at": {
+          "name": "colour_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         }
@@ -3626,6 +3654,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -3722,6 +3757,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -4039,6 +4081,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "cancel_requested_at": {
+          "name": "cancel_requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "attempt_id": {
           "name": "attempt_id",
@@ -4546,6 +4594,12 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -4879,6 +4933,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -5184,6 +5245,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -5319,6 +5386,18 @@
         "colour": {
           "name": "colour",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "colour_at": {
+          "name": "colour_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         }
@@ -5905,6 +5984,18 @@
         "colour": {
           "name": "colour",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "colour_at": {
+          "name": "colour_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },

@@ -162,6 +162,10 @@ plan; it is the reason the store contract now names who may write what.
 | `patchMark` | `criterionId`, `valence`, `updatedAt` | a half-named placement, and everything `tidyMark` refuses on the create path |
 | `linkThread` | `threadId`, once, from absent | a second conversation, a comment that is not free, or one about a different passage |
 
+Two more times are stored and shown nowhere ([sql.md § Store when it happened](sql.md#store-when-it-happened)):
+`patchColour` stamps `colour_at` — never `updatedAt`, which means the words were edited — and the end
+of an answer, by `patch` or by the sweep, stamps `finished_at`, which `beginAnswer` nulls again.
+
 `patchBody` refusing an absent key is a fix rather than a rule that was always there. Until
 2026-09-01 the route read `{ body }` off whatever arrived, `tidyBody(undefined)` is `null`, and the
 store writes `body` unconditionally — so `PATCH {}` answered **200 and deleted the reader's words**,

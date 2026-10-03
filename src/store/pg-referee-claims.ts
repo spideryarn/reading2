@@ -76,7 +76,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { refereeClaims } from "../db/schema.js";
@@ -230,6 +230,10 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
           sourceHash,
           // The row is this run's now; an older run's `finish` matches nothing.
           attemptId: attempt,
+          /* A run that has just begun has not finished. Named here because the
+             upsert writes over the last run's row; a first run is the insert
+             above, where the column is simply absent. */
+          finishedAt: null,
         },
       })
       .returning();
@@ -272,6 +276,10 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
         ...(patch.error === undefined ? {} : { error: patch.error }),
         // The attempt is over either way.
         attemptId: null,
+        /* **When the claims landed, or the call failed** — in the fenced
+           statement, so a run a newer `begin` replaced stamps nothing. The
+           database's clock; `created_at` stays the run's start. */
+        finishedAt: sql`clock_timestamp()`,
       })
       .where(
         and(
@@ -302,7 +310,13 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
       const cutoff = new Date(Date.now() - CLAIMS_ORPHAN_GRACE_MS);
       const swept = await db
         .update(refereeClaims)
-        .set({ status: "error", error: CLAIMS_SWEPT, attemptId: null })
+        // `finished_at` is when the sweep ended the run — the only ending it had.
+        .set({
+          status: "error",
+          error: CLAIMS_SWEPT,
+          attemptId: null,
+          finishedAt: sql`clock_timestamp()`,
+        })
         .where(
           and(
             eq(refereeClaims.articleId, articleId),

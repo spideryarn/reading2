@@ -206,7 +206,7 @@ GPT Sol on this plan (read-only), then on each stage's code (write-capable).
 
 ### The plan review, and what changed because of it
 
-[261003l-plan-review-sol.md](261003l-plan-review-sol.md), against `48f4c195`: seven findings, no
+[261003l-reader-notes-plan-review-sol.md](261003l-reader-notes-plan-review-sol.md), against `48f4c195`: seven findings, no
 P0, *build with the changes named*. It found no path by which `runTool` runs for anyone but the
 article's owner. All seven were checked and accepted. **Where this section and the stages above
 disagree, this section is what is built.**

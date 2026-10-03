@@ -19,7 +19,7 @@
  *    find. See docs/plans/260826e-postgres-storage-implementation.md § Rules.
  */
 
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articles, articleRevisions, ingestEvents, jobs, revisionBlocks } from "../db/schema.js";
@@ -358,20 +358,33 @@ const rawPgShelfStore: ShelfStore = {
     }
 
     const set: Record<string, unknown> = {};
+    const changed: SQL[] = [];
     // Whitespace-only clears the override, exactly as it does on disk.
-    if (title !== undefined) set.titleOverride = title || null;
-    if (purpose !== undefined) set.purpose = purpose || null;
+    if (title !== undefined) {
+      set.titleOverride = title || null;
+      changed.push(sql`${articles.titleOverride} is distinct from ${title || null}`);
+    }
+    if (purpose !== undefined) {
+      set.purpose = purpose || null;
+      changed.push(sql`${articles.purpose} is distinct from ${purpose || null}`);
+    }
     if (change.archived !== undefined) {
       /* `coalesce(archived_at, now())` rather than a plain `now()`: archiving
          something already archived keeps the ORIGINAL date. Undo is one click
          away and a second Delete must not quietly reset the clock — the same
          rule src/shelf.ts keeps on the filesystem side. */
       set.archivedAt = change.archived ? sql`coalesce(${articles.archivedAt}, now())` : null;
+      changed.push(sql`(${articles.archivedAt} is not null) is distinct from ${change.archived}`);
     }
     // The route refuses an empty change before it gets here; this is the
     // belt-and-braces that stops a future caller producing `UPDATE … SET` with
     // nothing after it, which is a syntax error rather than a no-op.
     if (Object.keys(set).length === 0) return entryFor(slug, false);
+    /* Compare normalized values inside the UPDATE: supplying a setting again
+       is not a transition. A separate read would race another reader change.
+       Use the database wall clock rather than the transaction's older start
+       time or an application clock read before sending the query. */
+    set.updatedAt = sql`case when ${or(...changed)} then clock_timestamp() else ${articles.updatedAt} end`;
 
     const [row] = await db().update(articles).set(set).where(ownedSlug(slug)).returning();
     if (!row) throw notFound(slug);
