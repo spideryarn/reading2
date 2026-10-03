@@ -14,6 +14,7 @@
  * record of where it used to be.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { APIUserAbortError } from "@anthropic-ai/sdk";
 import { collectSpend, totalSpend } from "../src/ai-spend.js";
 import { CAPABLE_MODEL, modelFor } from "../src/models.js";
 import {
@@ -386,6 +387,48 @@ describe("streamMessage — the recording lifecycle", () => {
         expect(second).toBe(first);
       });
       expect(report.calls).toHaveLength(1);
+    } finally {
+      t.restore();
+    }
+  });
+
+  it("does not invent an attempt or a spend row when the signal was already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const t = stubTransport(cannedStream());
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, {
+          power: "standard",
+          signal: controller.signal,
+        });
+        expect(call.attempts()).toBe(0);
+        expect(call.aborted()).toBe(true);
+        await expect(call.finalMessage()).rejects.toBeInstanceOf(APIUserAbortError);
+      });
+      expect(t.seenRequests).toHaveLength(0);
+      expect(report.calls).toEqual([]);
+      expect(report.pending).toEqual([]);
+    } finally {
+      t.restore();
+    }
+  });
+
+  it("contains an eager stream failure until finalMessage is read, leaving it visibly pending", async () => {
+    const t = stubTransport({ fail: true });
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard" });
+        expect(call.attempts()).toBe(1);
+        /* Let the SDK emit its error without calling its promise-returning
+           `finalMessage()`. The wrapper's private error listener is what keeps
+           that from becoming a process-level unhandled rejection; the spend
+           stays pending so the missing await is still observable. */
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      });
+      expect(t.seenRequests).toHaveLength(1);
+      expect(report.calls).toEqual([]);
+      expect(report.pending).toHaveLength(1);
     } finally {
       t.restore();
     }

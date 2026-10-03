@@ -185,5 +185,32 @@ findings, all accepted and built:
 - [x] GPT Sol review of this plan
 - [x] Stage 1 red tests (seven red before the fix), then the retry
 - [x] Stage 2 diagnostic
-- [ ] GPT Sol code review
-- [ ] Docs, postmortem, feedback note, queue entry for the other wire
+- [x] GPT Sol code review
+- [x] Docs, postmortem, feedback note, queue entry for the other wire (`qi-wwhdcejd`)
+
+## GPT Sol's code review
+
+[The review](261003m-a-transport-blip-code-review-sol.md), verdict *land*. It fixed five things
+itself; I read its diff and kept all of it:
+
+1. P1: a stream that failed before anyone awaited `finalMessage()` raised an unhandled rejection.
+   It now has its own `error` and `abort` listeners.
+2. P1: a signal that was already aborted wrote a spend row for a request that never went out. It
+   now makes no request, writes no row, and reports zero attempts.
+3. P1: three test doubles lacked `attempts()`. **It missed a fourth**
+   (`tests/stage-stamp-agreement.test.ts`), which the full suite found and I fixed.
+4. P2: tests that Simple and Labels publish real attempt counts.
+5. P2: two more comments that still said "one record, one call".
+
+Its sixth finding it left for me, as wider than the change: three Structure sentences
+(`src/structure.ts`, `src/structure-deepen.ts`, `structure-step.md`) said a call is never sent
+again or that two calls is the worst case, which the gateway's retry makes untrue of *network
+requests*. I corrected the three sentences. No behaviour changed there.
+
+## Gates
+
+- `npm run typecheck`: green.
+- Full suite, first run: 8 files red. One was the missing test double above; one was the feedback
+  endings map, regenerated; one was the reviewer's new test caught mid-edit; five were a fresh
+  worktree with no build (`npm run build`, `npm run build:fleet`). All 14 files re-run alone: green.
+- Full suite, second run on the final tree: green, 1491 files passed and 1 skipped.

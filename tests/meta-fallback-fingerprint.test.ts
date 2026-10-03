@@ -102,6 +102,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
         onText: () => undefined,
         onStart: () => undefined,
         aborted: () => false,
+        attempts: () => 1,
         finalMessage: () => Promise.resolve(message),
       };
     },

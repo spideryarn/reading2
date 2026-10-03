@@ -143,14 +143,14 @@ export function messagesClient(): Anthropic {
     /* **`0`, not the SDK's default of `2`, and this is an accounting decision
        rather than a reliability one.**
 
-       `streamMessage` opens exactly one meter around one SDK operation, and the
-       whole design rests on *one record, one call*. With the default the SDK
-       retries a failed request up to twice inside that operation, so a single
-       `SpendRecord` could quietly cover three HTTP attempts — and a retry after
-       a 5xx that arrived *post-generation* is an attempt that was billed. The
-       row would then be a third of the truth, with nothing to say so, which is
-       the exact shape of understatement this whole module exists to prevent.
-       Found by a GPT Sol review of the code.
+       `streamMessage` opens a fresh meter around each SDK operation, and the
+       whole design rests on *one record, one network attempt*. With the default
+       the SDK retries a failed request up to twice inside that operation, so a
+       single `SpendRecord` could quietly cover three HTTP attempts — and a
+       retry after a 5xx that arrived *post-generation* is an attempt that was
+       billed. The row would then be a third of the truth, with nothing to say
+       so, which is the exact shape of understatement this whole module exists
+       to prevent. Found by a GPT Sol review of the code.
 
        What it would cost on its own: a transport blip that the SDK used to
        paper over surfaces as a failed step. **For five weeks it did.** This
@@ -391,7 +391,7 @@ export type MessagesBody = Omit<Anthropic.MessageStreamParams, "model"> & {
 /**
  * What `streamMessage` hands back.
  *
- * **Four functions, and deliberately not the stream.** A stage used to get the
+ * **Five functions, and deliberately not the stream.** A stage used to get the
  * SDK's own `MessageStream`, which has its own `finalMessage()` on it — so the
  * ordinary-looking `await call.stream.finalMessage()` was a working call that
  * recorded nothing, and nothing counted it. That was fine while the numbers only
@@ -417,11 +417,12 @@ export interface MeteredCall {
    */
   readonly aborted: () => boolean;
   /**
-   * **How many network requests this call has made so far** — one, unless a
-   * transport retry happened (see `streamMessage`). Read it after
-   * `finalMessage()` settles. For the callers that publish a request count of
-   * their own (`SimpleRun.calls`, `LabelBatchRecord.requests`), so that their
-   * figure and the ledger's cannot disagree about a retried call.
+   * **How many network requests this call has made so far** — zero when the
+   * signal was already aborted, otherwise one unless a transport retry happened
+   * (see `streamMessage`). Read it after `finalMessage()` settles. For the
+   * callers that publish a request count of their own (`SimpleRun.calls`,
+   * `LabelBatchRecord.requests`), so that their figure and the ledger's cannot
+   * disagree about a retried call.
    */
   readonly attempts: () => number;
 }
@@ -445,7 +446,7 @@ export interface MeteredCall {
  * was a weaker guarantee than the other wire's and was written down as one.
  *
  * It is closed. The stream, the meter and `meterStream` are private; what comes
- * back is four functions. GPT Sol asked for it before the numbers became
+ * back is five functions. GPT Sol asked for it before the numbers became
  * database rows, on the grounds that a documented bypass under a ledger is a
  * ledger that looks complete.
  *
@@ -523,6 +524,25 @@ export function streamMessage(
      decides the model, and a stage that has not asked does not compile. */
   options: { power: ModelPower; signal?: AbortSignal },
 ): MeteredCall {
+  /* **No request, no row.** The SDK refuses an already-aborted signal before
+     calling `fetch`; opening a meter first would therefore write an `aborted`
+     row for a network attempt that never happened. This also has to precede
+     `messagesClient()`: a cancelled call has no need to discover whether a key
+     was configured. */
+  if (options.signal?.aborted) {
+    let rejection: Promise<Anthropic.Message> | null = null;
+    return {
+      onText: () => {},
+      onStart: () => {},
+      finalMessage: () => {
+        rejection ??= Promise.reject(new Anthropic.APIUserAbortError());
+        return rejection;
+      },
+      aborted: () => true,
+      attempts: () => 0,
+    };
+  }
+
   const client = messagesClient();
   const wire = messagesWireBody(task, body, options.power);
   const model = wire.model;
@@ -571,6 +591,14 @@ export function streamMessage(
     stream.on("text", (delta) => {
       for (const listener of textListeners) listener(delta);
     });
+    /* The SDK deliberately creates an unhandled rejection when a stream fails
+       before its caller invokes a promise-returning method and no error listener
+       exists. `MeteredCall` does not expose the SDK stream, so its caller cannot
+       install one; keep the failure on `finalMessage()` (and the pending row if
+       that method is never called) without also leaking a process-level
+       rejection. The abort event follows the same SDK rule. */
+    stream.on("error", () => {});
+    stream.on("abort", () => {});
     return attempt;
   };
   /* Opened here, not on the first `finalMessage()`: the request has always gone
