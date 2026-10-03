@@ -37,6 +37,7 @@ import {
   NO_NAMES_YET,
   SHORTLIST_FENCE,
 } from "../src/referee-candidates.js";
+import { REFEREE_CANDIDATES_REACHES_SEARCH } from "../src/messages.js";
 import { CandidatesPanel } from "../src/web/CandidatesPanel.js";
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`, so a plausible-looking
@@ -105,13 +106,16 @@ const jumped: string[] = [];
 const asked: string[] = [];
 const started: string[] = [];
 
-function paint(t: ChatThread | null, byline?: string) {
+const reloaded: string[] = [];
+
+function paint(t: ChatThread | null, byline?: string, loadFailed = false) {
   act(() => {
     root.render(
       createElement(CandidatesPanel, {
         thread: t,
         loaded: true,
-        loadFailed: false,
+        loadFailed,
+        onReload: () => reloaded.push("reload"),
         blocks: BLOCKS,
         ...(byline === undefined ? {} : { byline }),
         error: null,
@@ -390,5 +394,37 @@ describe("the cap says so", () => {
     paint(thread([answer(fence(many))]));
     expect(host.querySelectorAll(".cnd-row").length).toBe(MAX_CANDIDATES);
     expect(text()).toContain("3 more names were listed after the first 40");
+  });
+});
+
+/**
+ * **What the panel has to carry now that its chip starts nothing** — plan
+ * 261003k. Two things the chip's press used to supply from outside: the way
+ * back from a failed read, and a warning about the search engine that was on
+ * screen in every sub-mode.
+ */
+describe("Candidates without a chip that runs it", () => {
+  it("offers a way back from a failed read, which re-reads and starts nothing", () => {
+    reloaded.length = 0;
+    started.length = 0;
+    paint(null, undefined, true);
+    expect(text()).toContain("Could not load this conversation.");
+    const again = [...host.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === "Try again",
+    );
+    expect(again, "a failed read leaves no control at all").toBeDefined();
+    act(() => again?.click());
+    expect(reloaded).toEqual(["reload"]);
+    expect(started).toEqual([]);
+  });
+
+  it("says where a search sends the paper's terms, before and after the first turn", () => {
+    /* Follow-up turns go through the composer and may search too, so the
+       sentence cannot live only beside the start button, which unmounts the
+       moment a thread exists. */
+    for (const t of [null, thread([])]) {
+      paint(t);
+      expect(text()).toContain(REFEREE_CANDIDATES_REACHES_SEARCH);
+    }
   });
 });

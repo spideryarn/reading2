@@ -300,6 +300,16 @@ function forScan(scan: SourceScan): Shown {
   }
 }
 
+/**
+ * **Whether this result opens itself** — `shown(state).open`, for the band's
+ * Notices box, which the scan sits inside since 2026-10-03 and which has to
+ * open for exactly the results this panel does. One calculation, so the two
+ * cannot disagree; a labelled finding counts (rule 3), so this is not `warn`.
+ */
+export function sourceScanOpens(state: SourceScanState): boolean {
+  return shown(state).open;
+}
+
 export function SourceScanNotice({ state }: { state: SourceScanState }) {
   const view = shown(state);
   /**

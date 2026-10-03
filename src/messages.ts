@@ -4849,21 +4849,12 @@ export const REFEREE_TEXT_ALREADY_SENT =
   "confidentiality on its own, whoever writes the review. This mode is meant for public preprints, " +
   "open-review submissions, and drafts shared with you with the author's consent.";
 
-/**
- * **The same fact in one line, for the shut state of the notice.**
- *
- * The notice in Referee mode is collapsed until a referee opens it — Greg,
- * 2026-09-02 — and a collapse that took the fact away with the paragraph would
- * be a dismissal wearing a chevron. So the fact itself is the label on the
- * control: whatever the referee does, this sentence is on screen.
- *
- * It is the first clause of `REFEREE_TEXT_ALREADY_SENT` and nothing else. The
- * long sentence is left exactly as it was reviewed — what is behind the
- * disclosure is *which venues call that a breach, and which manuscripts this
- * mode is for*, which is the part somebody reads once.
- */
-export const REFEREE_TEXT_ALREADY_SENT_SHORT =
-  "This article's text has already been sent to a third-party model provider.";
+/* `REFEREE_TEXT_ALREADY_SENT_SHORT`, the sentence's first clause, was here as
+   the always-visible label of the notice's collapse (2026-09-02 to 2026-10-03).
+   The notice is behind the band's Notices button now and prints in full when
+   opened, so nothing reads it. Whether a one-line fact should stay on screen
+   is [Q-referee-notices-hidden] in
+   docs/plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md. */
 
 /**
  * **The second fact, and it applies to the venues that said yes.**
@@ -4885,29 +4876,28 @@ export const REFEREE_DECLARE_IT =
  * Candidates is the only control in the mode that reaches a **search engine**,
  * which is a different third party from the model provider, at a different time.
  *
- * **It is here, above the chips, rather than on the chip's tooltip**, and that
- * placement is the whole point. Candidates used to sit behind a labelled button
- * whose *visible words* named both parties before either was reached; on
- * 2026-09-06 the chip itself started the run, which moved the disclosure on that
- * button to after the fact. A `ControlTip` is not a replacement —
- * docs/project/referee-mode.md § Four labels changed says it outright, *"a
- * tooltip is not read by anybody in a hurry"*, which is what a referee is. So
- * the sentence moved to the one place that is on screen before any chip has been
- * pressed.
+ * **It is printed where the search is caused: at the top of the Candidates
+ * panel, on screen before the first turn and beside the composer after it.**
+ * From 2026-09-06 to 2026-10-03 the Candidates chip itself started the run, so
+ * this sentence had to be on screen before any chip was pressed and was drawn
+ * above the chips in all four sub-modes — and read *"Opening Candidates may
+ * send…"*. Greg, 2026-10-03 (`spya-vbeyse`), met that as one of *"a whole bunch
+ * of warnings"* over the mode's actions. Candidates went back behind its
+ * button (src/web/activation.ts § REFEREE_TARGET), opening it sends nothing,
+ * and the sentence moved to the panel whose controls it is about. It is also
+ * in the band's Notices box, so the list of where text goes is whole in one
+ * place.
  *
- * **Never behind the collapse, and drawn above it.** The two sentences it sits
- * over fold away into `REFEREE_TEXT_ALREADY_SENT_SHORT`; this one does not,
- * because folding a warning about something that has not happened yet is
- * dismissing it. It is *above* them rather than below because the box is a
- * 40%-height scroller, and underneath them an expanded notice pushes this out of
- * sight while the Candidates chip stays on screen.
+ * Visible text and not a tooltip, for the reason docs/project/referee-mode.md
+ * gives — *"a tooltip is not read by anybody in a hurry"* — and because a touch
+ * device has no hover at all.
  *
- * If Candidates ever goes back behind a button, this line goes with it.
- * docs/plans/260906b-opening-a-mode-starts-it-generating.md § Stage 4.
+ * If the chip ever starts the run again, this goes back above the chips with
+ * it. docs/plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md.
  */
 export const REFEREE_CANDIDATES_REACHES_SEARCH =
-  "Opening Candidates may send terms drawn from this paper to a search engine, which is a " +
-  "different third party from the model provider.";
+  "Candidates may send terms drawn from this paper to a search engine, which is a different " +
+  "third party from the model provider.";
 
 /* ------------------------------------------------------------- feedback -- */
 

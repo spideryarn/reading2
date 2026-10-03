@@ -75,6 +75,7 @@ import {
   redactNames,
   withoutShortlist,
 } from "../referee-candidates.js";
+import { REFEREE_CANDIDATES_REACHES_SEARCH } from "../messages.js";
 import { CitedMarkdown } from "./Cited.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
@@ -277,6 +278,7 @@ export function CandidatesBand({
       }}
       onStop={(messageId) => thread && stop(thread.id, messageId)}
       onStart={startBrief}
+      onReload={reload}
       onJump={onJump}
     />
   );
@@ -315,11 +317,14 @@ export function CandidatesPanel({
   onAsk,
   onStop,
   onStart,
+  onReload,
   onJump,
 }: {
   thread: ChatThread | null;
   loaded: boolean;
   loadFailed: boolean;
+  /** Read the thread list again after a failed read. Starts nothing. */
+  onReload(): void;
   blocks: Block[];
   byline?: string | undefined;
   error: string | null;
@@ -362,10 +367,14 @@ export function CandidatesPanel({
 
   return (
     <div className="cnd">
+      {/* **On screen before the first turn and after it**, because a follow-up
+          sent from the composer may search too and the start button — which
+          says this beside itself — is gone by then. What the sub-mode is for is
+          the band's lead line above this (RefereeMode.tsx), so it is not said
+          again here. */}
       <p className="cnd-what">
-        Who could review this paper, and what expertise it would take — the editor's question
-        rather than the referee's. It searches the web; every name it shows carries a link the
-        search returned.
+        Every name it shows carries a link a web search returned.{" "}
+        {REFEREE_CANDIDATES_REACHES_SEARCH}
       </p>
 
       {!loaded && !loadFailed && (
@@ -373,7 +382,18 @@ export function CandidatesPanel({
           <LoaderCircle className="cmt-spinner" size={13} aria-hidden /> opening…
         </p>
       )}
-      {loadFailed && <p className="cnd-error">Could not load this conversation.</p>}
+      {/* **The way back from a failed read**, which the chip's press used to
+          be (`useAutoRun` re-read on an error) until the chip stopped arming
+          anything on 2026-10-03. It re-reads and starts nothing: after it the
+          panel shows the stored thread or the start button. */}
+      {loadFailed && (
+        <p className="cnd-error">
+          Could not load this conversation.{" "}
+          <button type="button" className="clm-retry" onClick={onReload}>
+            Try again
+          </button>
+        </p>
+      )}
       {error && <p className="cnd-error">{error}</p>}
 
       {/* **Nothing has been asked yet, and nothing will be until this is

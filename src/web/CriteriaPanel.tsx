@@ -396,12 +396,10 @@ function CriteriaView({
       {api.loadFailed && (
         <p className="gloss-quiet">Couldn't load your criteria. Reload to try again.</p>
       )}
-      {api.loaded && !api.loadFailed && api.criteria.length === 0 && (
-        <p className="gloss-quiet">
-          Nothing yet. Write what you have been asked to judge this paper against, and it becomes a
-          pass over the prose.
-        </p>
-      )}
+      {/* The empty state said *"Nothing yet. Write what you have been asked to
+          judge this paper against…"* until 2026-10-03. The band prints that
+          instruction above the form now (RefereeMode.tsx § the lead), where it
+          is read before the box rather than after it. */}
 
       {/* **What the tick does, in visible text above the list.** Claims labels
           its identical checkbox in words — *"Mark these passages in the paper"* —
