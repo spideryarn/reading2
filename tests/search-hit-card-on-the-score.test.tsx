@@ -292,6 +292,38 @@ describe("a search result's card closes", () => {
     expect(hitCards()).toHaveLength(0);
   });
 
+  it("but not on the mouseleave a touch tap synthesises after its own click", async () => {
+    /* Measured in Chrome with touch on, 2026-10-03 (plan 261003p): a tap sent
+       `pointerdown` (touch), `click`, and then a compatibility `mouseleave`
+       some 100ms later, which shut the card about 20ms after it opened. Since
+       the legend above the list went the same day, this card is the only
+       thing on a touch screen that says what the number and the bar are, so a
+       card a tap cannot hold open is an explanation that does not exist. */
+    await mountPanel();
+    const touchDown = new MouseEvent("pointerdown", { bubbles: true });
+    Object.defineProperty(touchDown, "pointerType", { value: "touch" });
+    await act(async () => {
+      gutter().dispatchEvent(touchDown);
+      gutter().dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      gutter().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await wait(150);
+    expect(hitCards(), "the precondition: the tap opened it").toHaveLength(1);
+    gutter().dispatchEvent(new MouseEvent("mouseleave"));
+    gutter().dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+    await wait();
+    await wait();
+    expect(hitCards()).toHaveLength(1);
+    /* And a tap somewhere else still takes it away. */
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+    await wait();
+    await wait();
+    expect(hitCards()).toHaveLength(0);
+  });
+
   it("on Escape", async () => {
     await openByPress();
     await act(async () => {

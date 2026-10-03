@@ -28,7 +28,16 @@
  *    positioned in percentages and would otherwise spill), which would clip any
  *    tooltip rendered inside it to the width of the rail.
  */
-import { cloneElement, useEffect, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
+import {
+  cloneElement,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+} from "react";
 import {
   FloatingArrow,
   FloatingDelayGroup,
@@ -201,6 +210,22 @@ export function Tooltip({
     if (disabledWhileOpen) setOpen(false);
   }, [disabledWhileOpen, setOpen]);
   const arrowRef = useRef<SVGSVGElement>(null);
+  /**
+   * **Whether the last press on the trigger was a finger (or a pen) rather
+   * than a mouse.**
+   *
+   * `mouseOnly` below stops a tap's compatibility `mouseenter` *opening* a
+   * controlled card; nothing stopped its `mouseleave` *closing* one. Measured
+   * in Chrome with touch on, 2026-10-03, on a search result's score: the tap's
+   * click opened the card and a `mouseleave` synthesised about 100ms later
+   * shut it 20ms after it appeared, so on a touch screen the card could not
+   * be read at all (docs/plans/261003p-…). A card with `interactive` escaped
+   * only by accident, through `safePolygon`.
+   *
+   * A mouse press sets it back, so on a laptop with a touch screen the mouse
+   * keeps closing cards by leaving.
+   */
+  const byTouch = useRef(false);
 
   /**
    * **What an interactive card does about focus when something asks it to
@@ -217,6 +242,10 @@ export function Tooltip({
    *   moved it on.
    */
   const changeOpen = (next: boolean, _event?: Event, reason?: OpenChangeReason) => {
+    /* A controlled card a finger opened is not closed by hover: see
+       `byTouch` above. Escape, a press elsewhere and the parent still close
+       it. */
+    if (controlledOpen !== undefined && !next && reason === "hover" && byTouch.current) return;
     if (interactive && !next) {
       // Read the committed DOM refs, including a trigger replaced in this
       // commit before Floating UI's element state has rerendered.
@@ -343,7 +372,19 @@ export function Tooltip({
   const { "aria-describedby": ownDescribedBy, ...childProps } = children.props as {
     "aria-describedby"?: string | undefined;
   };
-  const merged = getReferenceProps({ ...childProps, ref });
+  const ownPointerDown = (childProps as { onPointerDown?: (event: ReactPointerEvent) => void })
+    .onPointerDown;
+  const merged = getReferenceProps({
+    ...childProps,
+    ref,
+    onPointerDown(event: ReactPointerEvent) {
+      /* A mouse says "mouse"; a finger "touch", a stylus "pen". Anything
+         else, the empty string of a pointer nobody identified included, is
+         left as a mouse, which is the behaviour there was. */
+      byTouch.current = event.pointerType === "touch" || event.pointerType === "pen";
+      ownPointerDown?.(event);
+    },
+  });
   const describedBy =
     [merged["aria-describedby"], ownDescribedBy].filter(Boolean).join(" ") || undefined;
 

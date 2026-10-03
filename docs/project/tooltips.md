@@ -595,6 +595,20 @@ Each of these is a way the obvious version fails silently.
    [`tests/tooltip-on-link.test.tsx`](../../tests/tooltip-on-link.test.tsx) hovers a real one, and
    its third case is the same test with the ref taken away.
 
+And a sixth, found on 2026-10-03, under the old heading because other docs link to it:
+
+6. **A controlled card a finger opened is not closed by hover.** `mouseOnly` stops a tap's
+   compatibility `mouseenter` *opening* a controlled card, and nothing stopped its `mouseleave`
+   *closing* one. In Chrome with touch on, a tap on a search result's score opened its card and a
+   `mouseleave` synthesised about 100ms after the click shut it 20ms later; a card with
+   `interactive` escaped only by accident, through `safePolygon`. So `Tooltip` remembers whether the
+   last press on its trigger was a finger or a pen (`byTouch`) and, for a controlled card, drops a
+   close whose reason is `hover` when it was. Escape, a press elsewhere and the parent still close
+   it, and a mouse still closes it by leaving. Reproduced in Chrome only; whether Safari on an iPad
+   sends that `mouseleave` is not known.
+   [`tests/search-hit-card-on-the-score.test.tsx`](../../tests/search-hit-card-on-the-score.test.tsx),
+   [261003p](../plans/261003p-search-results-get-the-room-on-a-landscape-ipad.md).
+
 ## Grouping, and why the delays are what they are
 
 Open 240ms, close 90ms, wrapped in a `<TooltipGroup>`. The group is the interesting half: once one
