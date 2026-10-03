@@ -178,6 +178,8 @@ describe("citationRows — the formatter, as arithmetic", () => {
     const ours = out.content.slice(0, out.content.indexOf("<<<UNTRUSTED"));
     expect(ours).toMatch(/influence unknown/);
     expect(ours).toMatch(/not confident/);
+    expect(ours).toMatch(/no usable.*score/i);
+    expect(ours).not.toMatch(/means that model was not confident|so it gave no score/);
   });
 
   it("names where each link came from, for every linkFrom", () => {

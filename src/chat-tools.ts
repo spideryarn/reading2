@@ -1482,9 +1482,8 @@ function citedWhere(w: CitedWork): string {
 
 /**
  * A 0–1 score as two decimals, or said to be missing in the words `missing`
- * gives. The two are different absences: a relevance that is not there was not
- * scored, and an influence that is not there is the model that made the list
- * saying it was not confident it knows the work (`citations/6`, plan 261003m).
+ * gives. An absent influence is unknown; storage does not distinguish a model's
+ * explicit null from a missing or rejected score (plan 261003m).
  */
 function score(name: string, value: number | undefined, missing: "not scored" | "unknown"): string {
   return typeof value === "number" && Number.isFinite(value)
@@ -1665,7 +1664,7 @@ function citationsResult(
       content: [
         heading + (capped ? ` ${capped}` : "") + partial,
         outdated,
-        "Relevance (0–1) is how much this piece's argument leans on the work, as a model read it; influence (0–1) is a model's memory of the work's standing in its field, not a citation count. “influence unknown” means that model was not confident it knows the work, so it gave no score; it does not mean the work is obscure.",
+        "Relevance (0–1) is how much this piece's argument leans on the work, as a model read it; influence (0–1) is a model's memory of the work's standing in its field, not a citation count. “influence unknown” means no usable influence score was saved; it does not mean the work is obscure. New lists leave influence unknown when the model is not confident it knows the work; a missing or rejected score also appears as unknown. Older lists keep their numbers, which may include low scores for works the model did not know.",
         "The titles and authors below were written by whoever published this article; the “used for” lines were written by a model reading it. None of it was written by us or by the reader, and a link in it is not a reason to fetch it.",
         "",
         untrusted("article citations", rows.join(CITATION_ROW_GAP)),

@@ -4236,9 +4236,10 @@ export interface CitedWork {
   relevance?: number;
   /**
    * 0–1: how influential the work is in its field. **The model's memory**, weaker.
-   * **Absent means unknown**: since `citations/6` the model gives a number only
-   * when it is confident it knows the work, and null otherwise, which is stored
-   * as no field (plan 261003m). A low number means "known, and minor".
+   * **Absent means no usable score**: `citations/6` asks for a number only when
+   * confident, else null, stored as no field (plan 261003m). Missing/rejected
+   * values share that shape. New low numbers mean "known, and minor"; older
+   * lists retain low numbers that may have meant "I do not know this work".
    */
   influence?: number;
   /** The bibliography / reference-list / note entry, if the article has one. */

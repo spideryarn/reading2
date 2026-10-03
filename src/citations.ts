@@ -231,7 +231,7 @@ function scoreCounting(
 }
 
 /**
- * **`null` is the model saying it does not know the work**, which the prompt
+ * **`null` is the model declining to score the work's standing**, which the prompt
  * asks for whenever it is in doubt (plan 261003m). It becomes an absent
  * `influence`, the shape an unscored row already has, and is counted on its
  * own: an honest unknown is not a rejected score. Only influence has this
@@ -1880,7 +1880,7 @@ export const CITATIONS_OUTPUT_SCHEMA = {
           year: citationStringSchema,
           why: citationStringSchema,
           relevance: { type: "number" },
-          /* Required and nullable: null is "I do not know this work" (plan
+          /* Required and nullable: null is "not confident enough to score" (plan
              261003m). The house shape for a required-nullable field
              (src/timeline.ts, src/paper-metadata.ts), which both providers'
              strict subsets accept. */

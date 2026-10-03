@@ -6,6 +6,9 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import { HELP_MODES } from "../src/web/help/help-modes.js";
+import { HELP_FAQ } from "../src/web/help/help-faq.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { PublicCitations } from "../src/public-types.js";
@@ -27,6 +30,9 @@ const {
   CITING_WORDS_MAX,
   CitationsPanel,
   INFLUENCE_NOTE,
+  INFLUENCE_UNKNOWN_NOTE,
+  barTop,
+  barMax,
   citingWordsOf,
   quotedCitingWords,
   byLineOf,
@@ -138,9 +144,38 @@ describe("the prioritised score", () => {
     expect(effectiveOrder(WORKS, "prioritised")).toBe("prioritised");
     expect(effectiveOrder(WORKS, "relevance")).toBe("relevance");
   });
+
+  it("falls back from an unavailable influence order, including a saved URL on an all-unknown list", () => {
+    const low = { ...UNKNOWN, relevance: 0.1 };
+    expect(effectiveOrder([low, BARE, UNKNOWN], "influence")).toBe("document");
+    expect(effectiveOrder([CENTRAL, UNKNOWN], "influence")).toBe("influence");
+    expect(effectiveOrder([], "influence")).toBe("document");
+  });
+
+  it("uses relevance for an all-unknown track, keeps a URL's high bar, and has no useful track for a flat list", () => {
+    const low = { ...UNKNOWN, relevance: 0.2 };
+    expect(barTop([low, UNKNOWN, BARE])).toBe(0.6);
+    expect(barMax([low, UNKNOWN], 0.9)).toBe(0.9);
+    expect(barMax([BARE], 0)).toBe(0.01);
+    expect(canPrioritise([UNKNOWN, { ...UNKNOWN, relevance: 0.6 }, BARE])).toBe(false);
+    expect(effectiveOrder([UNKNOWN, BARE], "prioritised")).toBe("document");
+  });
 });
 
 describe("the score orders", () => {
+  it("qualifies threshold advice by the order where a threshold applies", () => {
+    expect(INFLUENCE_UNKNOWN_NOTE).toMatch(/in (?:the )?prioritised order/i);
+    expect(INFLUENCE_NOTE).toMatch(/in (?:the )?prioritised order/i);
+  });
+
+  it("Help distinguishes new confident scores from older lists and treats absence as no usable score", () => {
+    const modes = renderToStaticMarkup(createElement("div", null, HELP_MODES.citations.reading));
+    expect(modes).toMatch(/new lists/i);
+    expect(modes).toMatch(/older lists/i);
+    expect(modes).toMatch(/relevance was scored/i);
+    const faq = renderToStaticMarkup(createElement("div", null, HELP_FAQ["faq-beyond-the-article"].body));
+    expect(faq).toMatch(/no usable.*score/i);
+  });
   it("sort descending, with a work missing that score last", () => {
     expect(titles(orderWorks([...WORKS, BARE], "relevance"))).toEqual(["Central", "Unknown", "Famous", "Passing", "Bare"]);
     expect(titles(orderWorks(WORKS, "influence"))).toEqual(["Famous", "Central", "Passing", "Unknown"]);
@@ -686,7 +721,7 @@ describe("CitationsPanel", () => {
     const card = await cardFor(unknown!);
     const said = `${card.head} ${card.body}`;
     expect(said).toMatch(/not confident/i);
-    expect(said).toMatch(/no score/i);
+    expect(said).toMatch(/no usable.*score/i);
     expect(said).not.toMatch(/dig deeper/i);
   });
 
@@ -694,6 +729,52 @@ describe("CitationsPanel", () => {
     const { key: _key, ...shared } = UNKNOWN;
     await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
     expect(row(UNKNOWN.id).querySelector(".cite-influence-unknown")?.textContent).toBe("influence unknown");
+  });
+
+  it("an all-unknown list filters and counts on relevance for owners and visitors", async () => {
+    const low = { ...UNKNOWN, id: "spya-u3k4n5", relevance: 0.2 };
+    const list = [low, UNKNOWN, BARE];
+    for (const visitor of [false, true]) {
+      if (visitor) await drawVisitor({ capped: false, citations: list } as PublicCitations);
+      else await draw(owner({ citations: artefact(list) }));
+      const slider = host.querySelector<HTMLInputElement>("#cite-bar")!;
+      expect(slider.value).toBe("0.25");
+      expect(slider.max).toBe("0.6");
+      expect(host.querySelector(".gloss-gate-value")?.textContent).toBe("0.25 · 2 of 3");
+      expect(host.querySelector(".gloss-gate-note")?.textContent).toContain("1 citation is hidden");
+      expect(host.querySelector(`[data-citation-id="${low.id}"]`)).toBeNull();
+      expect(row(BARE.id).title).toContain("Not scored");
+    }
+  });
+
+  it("a saved influence order with no known scores draws first cited, and presses its offered button", async () => {
+    const low = { ...UNKNOWN, id: "spya-u3k4n5", relevance: 0.2 };
+    const list = [low, UNKNOWN, BARE];
+    for (const visitor of [false, true]) {
+      if (visitor) await drawVisitor({ capped: false, citations: list } as PublicCitations, "influence");
+      else await draw(owner({ citations: artefact(list) }), null, undefined, "influence");
+      expect([...host.querySelectorAll(".cite-item")].map((r) => r.getAttribute("data-citation-id"))).toEqual(list.map((w) => w.id));
+      expect(host.querySelector('.gloss-sort-btn[aria-pressed="true"]')?.textContent).toBe("first cited");
+      expect(host.querySelector("#cite-bar")).toBeNull();
+    }
+  });
+
+  it("does not invent why an old or rejected score is absent, and qualifies threshold advice outside prioritised", async () => {
+    await draw(owner({ citations: { ...artefact([UNKNOWN, CENTRAL]), version: "citations/5" } }), null, undefined, "document");
+    const card = await cardFor(row(UNKNOWN.id).querySelector(".cite-influence-unknown")!);
+    expect(card.body).toMatch(/no usable.*score/i);
+    expect(card.body).not.toMatch(/The model was not confident|so it gave no score/);
+    expect(card.body).toMatch(/in (?:the )?prioritised order/i);
+  });
+
+  it("opens an unknown-influence explanation on touch, including an iPad's mouse click, and dismisses on scroll", async () => {
+    await draw(owner({ citations: artefact([UNKNOWN]) }));
+    const label = row(UNKNOWN.id).querySelector(".cite-influence-unknown")!;
+    await press(label, "touch", "mouse");
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toMatch(/no usable.*score/i);
+    await act(async () => document.dispatchEvent(new Event("scroll")));
+    for (const _ of [0, 1]) await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
   });
 
   it("draws the raw scores on a row, and not the number it was barred on", async () => {

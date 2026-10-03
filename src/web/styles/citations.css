@@ -116,8 +116,16 @@
 .cite-scores { font-variant-numeric: tabular-nums; }
 /* *influence unknown*, where the influence bar would be: the app's own words
    in the line's own faint ink and UI face, kept on one line so it wraps as a
-   piece. `cursor: help` because it carries a card and is not a control. */
-.cite-influence-unknown { white-space: nowrap; cursor: help; }
+   piece. A button so the explanation can be opened by touch or keyboard too. */
+.cite-influence-unknown {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: help;
+}
 /* A search is not the work's address, and it should not look like one: the one
    link on a searched row, in the faint ink of the line it sits on. */
 .cite-search { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }

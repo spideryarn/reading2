@@ -211,3 +211,34 @@ hides on every list. Not built; as built, only an unknown row is judged on relev
 
 Also taken: the stage-2 probe, the list's rubric reused in the new prompt, and the label *an AI
 estimate from web evidence*.
+
+
+### Stage 1: what landed, and what the measurement found
+
+Built by an Opus subagent (commit 2b2dc6b7e), each test seen red first, four mutations noticed.
+The schema field is `type: ["number", "null"]`, the shape the other required-nullable fields here
+use, not `anyOf`.
+
+**Measured** ([261003f](../investigations/261003f-citations-influence-unknown-unless-confident-before-and-after.md)):
+under the old prompt every row had a number (148 of 148, 109 of 109). Under the new one 44% to 62%
+of a long list says unknown, and all six rows of a short list of blog posts do. The numbers that
+remain are unchanged (0.044 mean difference on 32 paired rows, the old prompt's own spread). A
+web check of 36 sampled rows by a Sonnet subagent: 17 of 24 scored works about right, one too high,
+six it could not judge; 10 of 12 unknown works fair to call unknown.
+
+### GPT Sol's code review, stage 1
+
+[The review](261003m-citations-influence-code-review-1-sol.md): *land after fixes*. It fixed four
+in place, each read and re-run by me (262 tests green across the five citation and doc suites):
+
+| | finding | |
+|---|---|---|
+| F10 (P1) | `?citeby=influence` on a list with no influence at all reordered the rows while no button was selected | fixed by Sol: falls back to first cited |
+| F11 (P1) | the row and chat said *the model was not confident* of every absent influence, but a left-out or out-of-range score has the same stored shape | fixed by Sol: the words are *no usable influence score was saved*, and Help says an older list keeps its low numbers |
+| F12 (P3) | the tooltip spoke of the threshold in every order | fixed by Sol: names the prioritised order |
+| F13 (P1) | the words could not be tapped or focused | fixed by Sol: a button with the shared tap hook |
+| F14 (P1) | the same hole as F10 for `?citeby=relevance` on a list with no relevance; older than this work | reported; fixed in stage 2's commit, one line and a test |
+
+Sol also wrote [a postmortem](../postmortems/261003f-citation-influence-review-provenance-and-order-capability.md)
+naming the two classes (a cause invented for a stored absence; an order honoured that its own menu
+does not offer).

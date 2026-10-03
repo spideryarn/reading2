@@ -23,8 +23,8 @@ where the link came from, and **first cited**, a jump to the passage
 entry](#which-citation-and-whose-entry) is what the by-line and *first cited* show since
 2026-09-30.
 
-**Influence is a number only when the model is confident it knows the work; otherwise the row says
-*influence unknown*.** Influence is the model's memory of the work, not anything in the article, and
+**New lists ask for influence as a number only when the model is confident it knows the work;
+otherwise the row says *influence unknown*.** Influence is the model's memory of the work, not anything in the article, and
 until `citations/6` the prompt told it to give a low number for a work it did not know, so "I do not
 know this" and "this is obscure" were the same number. Asked whether to keep the score at all
 ([261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md)), Greg,
@@ -41,8 +41,10 @@ number means *known, and minor*. A `null` is stored as no `influence` at all, th
 row already had, and counted on the step's log line as `influenceUnknown`, apart from
 `influenceAbsent` (the field left out) and `influenceRejected` (not a number in 0–1). Two drafts of
 one work fold to the known number. On the row, a work with a relevance and no influence draws the
-relevance bar and then the words *influence unknown*, with a card saying the model was not confident
-it knows the work; never a bar at zero. A row with neither score says nothing, as before, and the
+relevance bar and then the words *influence unknown*, with a card saying no usable score was saved;
+never a bar at zero. Storage does not distinguish an explicit unknown from a missing or rejected
+score, so the card explains the new prompt's rule without claiming why this particular score is
+absent. It opens on hover, focus or tap. A row with neither score says nothing, as before, and the
 hover card in the prose draws no scores at all.
 
 **A list made by `citations/5` or earlier keeps its numbers**, low ones for unknown works included,
@@ -247,7 +249,7 @@ Five, under the glossary's order buttons ([glossary.md](glossary.md)):
 - **relevance** — descending, a work with no relevance last.
 - **influence** — known influence first, descending; then the works whose influence is unknown, by
   relevance, descending, with no relevance last. First-cited order breaks ties. Offered only when
-  some work has an influence.
+  some work has an influence; a saved `?citeby=influence` falls back to first cited otherwise.
 - **date** — publication year, oldest first, as Debate's date order is; same year in first-cited
   order, undated last. The year is the one the row draws (`workByLine`: the article's, the
   registry's only where the article gives none), read as its first four-digit year, so `2017a` is

@@ -109,7 +109,7 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom" | "registry"> & {
 /* ------------------------------------------------------------- the scores -- */
 
 /**
- * The bar's **starting** position on `(2 × relevance + influence) / 3`.
+ * The bar's **starting** position on `priorityOf` (relevance alone if influence is unknown).
  *
  * **`0.25`, lowered from `0.40` on 2026-09-15**, at Greg's request that every
  * prioritised bar let most entries in by default. `0.40` was set from stage 1's
@@ -367,6 +367,7 @@ export function canPrioritise(works: readonly ShownWork[]): boolean {
  */
 export function effectiveOrder(works: readonly ShownWork[], order: CiteOrder): CiteOrder {
   if (order === "date") return works.some((w) => publicationYear(w) !== null) ? "date" : "document";
+  if (order === "influence") return works.some((w) => influenceOf(w) !== undefined) ? "influence" : "document";
   if (order !== "prioritised") return order;
   return canPrioritise(works) ? "prioritised" : "document";
 }
@@ -535,7 +536,7 @@ export const CAPPED_NOTE = `This piece cites more than ${MAX_CITATIONS} works; t
 
 /** Under every non-empty list: the weaker of the two scores, said plainly. */
 export const INFLUENCE_NOTE =
-  "Influence is the model's own memory of how much a work mattered in its field, not a citation count. Where the model was not confident it knows a work, the row says “influence unknown” and the threshold goes by its relevance alone.";
+  "Influence is the model's own memory of how much a work mattered in its field, not a citation count. New lists give a score only when the model is confident it knows the work; older lists keep their scores. “influence unknown” means no usable influence score was saved. In prioritised order, a row with unknown influence is judged on its relevance alone when available.";
 
 /** The words on a row with no influence, in place of a bar. Never a bar at zero. */
 export const INFLUENCE_UNKNOWN = "influence unknown";
@@ -545,7 +546,7 @@ export const INFLUENCE_UNKNOWN = "influence unknown";
  * fill influence in until plan 261003m stage 2, so it is not named here yet.
  */
 export const INFLUENCE_UNKNOWN_NOTE =
-  "The model was not confident it knows this work, so it gave no score for its influence. That is not a low score: the threshold goes by this row's relevance alone.";
+  "No usable influence score was saved for this work. New lists leave influence unknown when the model is not confident it knows the work; a missing or rejected score also appears as unknown. In prioritised order, the threshold uses this row's relevance alone.";
 
 /**
  * **A piece that cites nothing is a real answer**, not an error, and no retry is
@@ -941,7 +942,7 @@ function orderOptions(works: readonly ShownWork[]): { key: CiteOrder; label: str
             key: "influence" as const,
             label: "influence",
             title:
-              "The model's memory of how influential each work is in its field — not a citation count. Works it was not confident it knows come after, by relevance",
+              "The model's memory of how influential each work is in its field — not a citation count. Works with unknown influence come after, by relevance",
           },
         ]
       : []),
@@ -1122,9 +1123,7 @@ function WorkRow({
       <p className="cite-meta">
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}
         {influenceIsUnknown(work) && (
-          <Tooltip content={INFLUENCE_UNKNOWN_NOTE} placement="left" className="score-bars-card">
-            <span className="cite-influence-unknown">{INFLUENCE_UNKNOWN}</span>
-          </Tooltip>
+          <UnknownInfluence />
         )}
         {source === null ? null : source.kind === "address" ? (
           <span className="cite-source">
@@ -1187,6 +1186,33 @@ function WorkRow({
         />
       )}
     </li>
+  );
+}
+
+/** The explanation opens on hover, focus or tap; a finger's card closes on scroll. */
+function UnknownInfluence() {
+  const reveal = useTapReveal(false);
+  return (
+    <Tooltip
+      content={INFLUENCE_UNKNOWN_NOTE}
+      placement="left"
+      className="score-bars-card"
+      open={reveal.open}
+      onOpenChange={reveal.onOpenChange}
+    >
+      <button
+        type="button"
+        className="cite-influence-unknown"
+        aria-expanded={reveal.open}
+        onPointerDown={reveal.onPointerDown}
+        onPointerCancel={reveal.onPointerCancel}
+        onClick={(e) => {
+          if (reveal.commit(e)) reveal.onOpenChange(!reveal.open);
+        }}
+      >
+        {INFLUENCE_UNKNOWN}
+      </button>
+    </Tooltip>
   );
 }
 
