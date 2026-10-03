@@ -80,6 +80,28 @@ import { priceRealtimeResponse, priceRealtimeTranscription } from "./pricing.js"
  */
 export const LIVE_MODEL = "gpt-realtime-2.1";
 
+/**
+ * **How hard the model thinks before it speaks, and the answer is "a little".**
+ *
+ * `gpt-realtime-2.1` is a reasoning model, and until 2026-10-02 nothing here
+ * set its effort, so it ran at OpenAI's default — which their own realtime
+ * prompting guide says to lower: *"Set reasoning effort to `low` instead of the
+ * default. Increase only for workflows that require deeper planning."* Greg
+ * asked for exactly that trade (report spya-f4eq7p: *"probably we want to be in
+ * instant mode … I want it to be kind of a bit more quick back and forth"*).
+ *
+ * The adaptive half — answer at once, think only when the question needs it —
+ * is in `LIVE_SYSTEM` under WHEN TO THINK, because the API setting is a ceiling
+ * and the prompt is what tells the model when to stay under it.
+ *
+ * Its place is `session.reasoning.effort`; confirmed by minting sessions on
+ * 2026-10-02: `low` and `minimal` are echoed back, and `wibble` is a 400 naming
+ * `minimal`, `low`, `medium`, `high` and `xhigh`. Not `minimal`: this companion
+ * has to pick the right paragraph to point at, and that is a judgement. The
+ * grounding comparison is in docs/investigations/261002r-gpt-live-spike.md.
+ */
+export const LIVE_REASONING_EFFORT = "low";
+
 /** The voice. `marin` is the account default; named here so it is a decision. */
 export const LIVE_VOICE = "marin";
 
@@ -187,16 +209,33 @@ HOW TO TALK
 
 This is speech, not prose. Everything below follows from that.
 
-- SHORT. Two or three sentences is a normal answer. If you have been talking for
-  more than about fifteen seconds you have stopped answering and started
-  lecturing, and the reader cannot skim you.
-- Answer the question that was asked, in the first sentence.
+- SHORT. One or two sentences is a normal answer. Quick back and forth is the
+  point: if you have been talking for more than about ten seconds you have
+  stopped answering and started lecturing, and the reader cannot skim you.
+  Say more only when they ask for more — then say it properly.
+- Answer the question that was asked, in your first words. No warm-up.
+- No pleasantries or filler. Never praise the question ("great question"),
+  never repeat it back, never announce what you are about to do, never close
+  with an offer ("let me know if…", "happy to say more"). Just answer.
 - One idea per turn. Leave the second one for when they ask.
 - No lists, no headings, no markdown, no URLs read aloud. If something really is
   three things, say "three things" and name them in a sentence.
 - Plain spoken English. Contractions are fine. You are talking, not writing.
 - It is a conversation: it is fine to ask a short question back, and fine to
   stop and let them think. Do not fill silence.
+
+WHEN TO THINK
+
+- A direct question, a follow-up, a yes or no, a correction: answer at once,
+  without deliberating.
+- Think first only when the answer really takes several steps — weighing two
+  parts of the argument against each other, or deciding to reach outside the
+  article.
+- If you did not catch what they said, ask them to say it again rather than
+  guessing.
+- Before a tool that makes them wait, a few words so the silence is not
+  mysterious ("let me look that up"). Never before show_passage, which is
+  instant — just point and talk.
 
 NEVER SAY A BLOCK ID OUT LOUD
 
@@ -505,6 +544,7 @@ export function liveSession(opts: {
     type: "realtime",
     model: LIVE_MODEL,
     instructions: liveInstructions(opts),
+    reasoning: { effort: LIVE_REASONING_EFFORT },
     tools: liveTools(),
     tool_choice: "auto",
     audio: {

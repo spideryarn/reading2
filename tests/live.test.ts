@@ -28,6 +28,7 @@ import { describe, expect, it } from "vitest";
 import {
   LIVE_MODEL,
   LIVE_SERVER_TOOLS,
+  LIVE_SYSTEM,
   LIVE_TRANSCRIBER,
   SHOW_PASSAGE_TOOL,
   liveInstructions,
@@ -196,6 +197,21 @@ describe("the session", () => {
     const s = liveSession({ meta, blocks });
     const input = (s.audio as { input: Record<string, Record<string, unknown>> }).input;
     expect(input.turn_detection?.type).toBe("semantic_vad");
+  });
+
+  /**
+   * **Low reasoning effort, and a spoken prompt that says when to use it.**
+   * Unset, the model runs at OpenAI's default, which their realtime guide says
+   * to lower for a voice agent — and Greg asked for "instant mode" (spya-f4eq7p).
+   * Nothing on screen distinguishes a session that deliberates before every
+   * "yes" from one that does not; only the wait does.
+   */
+  it("asks for low reasoning effort, and says when to think and when to just answer", () => {
+    const s = liveSession({ meta, blocks });
+    expect(s.reasoning).toEqual({ effort: "low" });
+    expect(LIVE_SYSTEM).toContain("WHEN TO THINK");
+    expect(LIVE_SYSTEM, "a preamble before the instant tool is filler").toMatch(/Never before show_passage/);
+    expect(LIVE_SYSTEM).toMatch(/No pleasantries or filler/);
   });
 });
 
