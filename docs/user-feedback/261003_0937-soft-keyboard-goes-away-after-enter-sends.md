@@ -36,3 +36,10 @@ was missing is what happens next: the message went and the keyboard stayed over 
 - **A limit**: Android Chrome reports its keyboard differently and is not detected, so it behaves
   as before.
 - **Not tried on a real iPad.** The check is automated tests against the numbers iOS reports.
+
+**Greg's answer, 2026-10-03**, to [Q-keyboard-done]: build our own Done button for the multi-line boxes, or leave them as they are?
+
+> ok go with your judgment
+
+**Left as it is.** The box's own Send or Save button ends it, and the keyboard goes away when the box
+closes. Revisit if he finds himself stuck with the keyboard up on an iPhone, which has no hide key.
