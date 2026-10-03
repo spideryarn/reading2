@@ -1,0 +1,166 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "arm": "v2-3",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "63e6d6736ae1e82c08ebf0b9d71dfb3fae211bdbc795ef200808fc9e5b3676f7",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Partial Information Decomposition",
+      "kind": "concept",
+      "aliases": [
+        "PID"
+      ],
+      "senseHere": "A mathematical framework that splits the total information two or more sources carry about a target into separate pieces: information carried redundantly by either source, information unique to each source, and information only visible when the sources are considered jointly.",
+      "background": "Introduced by Williams and Beer, it extends classical information theory, which could only measure total shared information, not break it into these distinct modes."
+    },
+    {
+      "name": "Rich club",
+      "kind": "concept",
+      "aliases": [
+        "rich clubs"
+      ],
+      "senseHere": "The set of best-connected neurons in a network that are more densely interconnected with each other than chance would predict; the article finds these neurons disproportionately carry synergistic computation."
+    },
+    {
+      "name": "Mutual information",
+      "kind": "term",
+      "aliases": [
+        "I(X;Y)"
+      ],
+      "senseHere": "A measure of how much knowing the state of one variable reduces uncertainty about another, used here as an undirected gauge of statistical dependence between neurons' activity."
+    },
+    {
+      "name": "Transfer entropy",
+      "kind": "term",
+      "aliases": [
+        "TE",
+        "TE(X→Y)"
+      ],
+      "senseHere": "A directed measure of how much knowing a source neuron's past activity reduces uncertainty about a target neuron's future activity, beyond what the target's own past already tells you."
+    },
+    {
+      "name": "Functional connectivity",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The pattern of statistical dependency between neurons' activity, as captured by undirected measures like mutual information, without implying one neuron drives the other."
+    },
+    {
+      "name": "Effective connectivity",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The pattern of directed influence between neurons, as captured by measures like transfer entropy that quantify information flow from one neuron to another."
+    },
+    {
+      "name": "Synergy",
+      "kind": "term",
+      "aliases": [
+        "synergistic information",
+        "Syn(X1,X2;Y)"
+      ],
+      "senseHere": "The portion of information about a target neuron's future that can only be learned by observing the joint pattern of its input neurons together, not from any input alone. The article treats this as the signature of genuine neural computation."
+    },
+    {
+      "name": "Redundancy",
+      "kind": "term",
+      "aliases": [
+        "redundant information",
+        "Red(X1,X2;Y)"
+      ],
+      "senseHere": "The information about a target that could be learned equally well from either of two input sources on its own, so it gets double-counted if you simply add up each source's individual information."
+    },
+    {
+      "name": "Unique information",
+      "kind": "term",
+      "aliases": [
+        "Unq(Xi;Y)"
+      ],
+      "senseHere": "The information about a target that can only be learned by observing one particular input source and no other."
+    },
+    {
+      "name": "Williams and Beer",
+      "kind": "other",
+      "aliases": [
+        "Williams",
+        "Beer"
+      ],
+      "senseHere": "Credited in the article as the researchers who first showed how to algebraically split total shared information into distinct redundant, unique, and synergistic components, founding the partial information decomposition framework."
+    },
+    {
+      "name": "Redundancy function",
+      "kind": "term",
+      "aliases": [
+        "I∩"
+      ],
+      "senseHere": "A formal rule for quantifying exactly how much information counts as redundantly shared between any combination of sources, which is needed to make the partial information lattice solvable; no single agreed-upon version exists."
+    },
+    {
+      "name": "Imin",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The original, most widely used rule for measuring redundant information in partial information decomposition, proposed by Williams and Beer, though later criticized for giving unintuitive results in some cases."
+    },
+    {
+      "name": "Computational triad",
+      "kind": "term",
+      "aliases": [
+        "triads",
+        "triad"
+      ],
+      "senseHere": "A basic unit of analysis consisting of two source neurons that both connect to a single shared target neuron, used as the standard building block for applying partial information decomposition to real neural recordings."
+    },
+    {
+      "name": "Partial information lattice",
+      "kind": "concept",
+      "aliases": [
+        "PI lattice"
+      ],
+      "senseHere": "A structured diagram of every possible combination of information sources, ordered so that simpler combinations sit below more complex ones, used to systematically calculate every redundant, unique, and synergistic piece of information in a system with any number of sources."
+    },
+    {
+      "name": "Organotypic culture",
+      "kind": "term",
+      "aliases": [
+        "organotypic cortical cultures"
+      ],
+      "senseHere": "A slice of mouse brain tissue grown in nutrient media outside the body, which preserves much of its natural cell-to-cell connectivity and is used here as a laboratory stand-in for intact cortical circuits."
+    },
+    {
+      "name": "Dedekind number",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A rapidly growing sequence of numbers that gives the count of distinct information-sharing pieces in the partial information lattice as the number of input sources increases, explaining why the full decomposition becomes computationally impossible beyond a handful of sources."
+    },
+    {
+      "name": "O-information",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A heuristic, more scalable measure used as a stand-in for full redundancy/synergy decomposition when the number of neurons is too large for the complete partial information lattice to be computed."
+    },
+    {
+      "name": "Local PID",
+      "kind": "concept",
+      "aliases": [
+        "local partial information decomposition"
+      ],
+      "senseHere": "A version of partial information decomposition applied to single specific moments or configurations of activity, rather than averaged over all possible states, allowing construction of a time-resolved trace of redundant, unique, and synergistic information."
+    },
+    {
+      "name": "Integrated information decomposition",
+      "kind": "concept",
+      "aliases": [
+        "ΦID"
+      ],
+      "senseHere": "An extension of partial information decomposition that allows for multiple target variables instead of just one, enabling analysis of how information is shared, unique, or synergistic across a system's evolution from past to future or across several outputs at once."
+    },
+    {
+      "name": "Möbius inversion",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A mathematical procedure applied to the partial information lattice that calculates the value of each unique information piece by subtracting out what is already accounted for by simpler combinations lower on the lattice."
+    }
+  ]
+}

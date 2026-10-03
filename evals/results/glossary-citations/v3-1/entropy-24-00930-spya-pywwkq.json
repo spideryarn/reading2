@@ -1,0 +1,166 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "arm": "v3-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Partial Information Decomposition",
+      "kind": "concept",
+      "aliases": [
+        "PID"
+      ],
+      "senseHere": "A mathematical method that splits the information two or more sources give about a target into separate pieces: information both sources give redundantly, information each gives uniquely, and information only visible when both are considered together.",
+      "background": "Introduced by Williams and Beer as a way to resolve the fact that total shared information among several variables cannot always be split cleanly into separate contributions from each variable alone."
+    },
+    {
+      "name": "rich club",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A core set of the best-connected neurons in a circuit, which are more densely interconnected with each other than chance would predict and which the article shows account for a disproportionate share of both information flow and synergistic computation."
+    },
+    {
+      "name": "mutual information",
+      "kind": "term",
+      "aliases": [
+        "I(X;Y)"
+      ],
+      "senseHere": "A measure of how much knowing one neuron's activity pattern reduces uncertainty about another's, treated in the article as a kind of nonlinear correlation between two spike patterns."
+    },
+    {
+      "name": "transfer entropy",
+      "kind": "term",
+      "aliases": [
+        "TE"
+      ],
+      "senseHere": "A measure of how much a source neuron's past activity reduces uncertainty about a target neuron's future activity, beyond what the target's own past already explains, used in the article as a measure of directed information flow between neurons."
+    },
+    {
+      "name": "functional connectivity",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "An undirected measure of statistical similarity between two neurons' activity patterns, as captured by mutual information, contrasted with directed effective connectivity."
+    },
+    {
+      "name": "effective connectivity",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The directed, information-flow-based connections between neurons as measured by transfer entropy, distinguished in the article from undirected statistical similarity (functional connectivity)."
+    },
+    {
+      "name": "synergy",
+      "kind": "concept",
+      "aliases": [
+        "synergistic information",
+        "Syn"
+      ],
+      "senseHere": "The portion of information about a target neuron's activity that can only be learned by looking at two or more source neurons together, not from any one source alone. The article treats this as a signature of genuine neural computation rather than simple pooling of inputs."
+    },
+    {
+      "name": "redundancy (information)",
+      "kind": "concept",
+      "aliases": [
+        "redundant information",
+        "Red"
+      ],
+      "senseHere": "The part of the information about a target that is disclosed equally well by more than one source, so it gets counted twice if you simply add up each source's individual information."
+    },
+    {
+      "name": "unique information",
+      "kind": "concept",
+      "aliases": [
+        "Unq"
+      ],
+      "senseHere": "The part of the information about a target that only one particular source can provide, with no other source able to substitute for it."
+    },
+    {
+      "name": "redundancy function",
+      "kind": "concept",
+      "aliases": [
+        "I∩",
+        "Imin"
+      ],
+      "senseHere": "A formal rule for quantifying how much information counts as redundant between a given set of sources, which is needed to make partial information decomposition produce unique numbers, since classical information theory alone does not supply one."
+    },
+    {
+      "name": "computational triad",
+      "kind": "concept",
+      "aliases": [
+        "triads"
+      ],
+      "senseHere": "A basic unit of analysis consisting of two source neurons feeding into one shared target neuron, used throughout the article as the simplest case on which partial information decomposition is applied."
+    },
+    {
+      "name": "partial information lattice",
+      "kind": "concept",
+      "aliases": [
+        "PI lattice"
+      ],
+      "senseHere": "A structured diagram of all the distinct ways several sources can share information about a target, ordered so that simpler combinations of sources sit below more complex ones, used to compute every redundant, unique, and synergistic piece at once."
+    },
+    {
+      "name": "Möbius inversion",
+      "kind": "term",
+      "aliases": [
+        "Mobius inversion"
+      ],
+      "senseHere": "A recursive calculation used on the partial information lattice to work out the exact value of each distinct information piece, by subtracting out everything already accounted for by simpler combinations of sources below it."
+    },
+    {
+      "name": "organotypic cultures",
+      "kind": "term",
+      "aliases": [
+        "organotypic cortical cultures"
+      ],
+      "senseHere": "Thin slices of mouse brain tissue kept alive and growing in a dish, which naturally re-form much of the original circuit wiring and are used in the article as a model system for recording from hundreds of real cortical neurons."
+    },
+    {
+      "name": "connectivity motif",
+      "kind": "concept",
+      "aliases": [
+        "feedforward connections",
+        "feedback connections",
+        "recurrent connections"
+      ],
+      "senseHere": "The specific pattern of wiring within a triad, categorized as feedforward (source-to-target), feedback (target-to-source), or recurrent (source-to-source), which the article shows predicts how much synergy the triad produces."
+    },
+    {
+      "name": "Dedekind number",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A rapidly growing sequence of numbers that gives the count of distinct information-sharing pieces (minus two) in a partial information decomposition as the number of source neurons increases, illustrating why the full decomposition becomes impossibly large with many sources."
+    },
+    {
+      "name": "O-information",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A simplified, more computationally practical measure meant to approximate whether a group of variables' shared information is mostly redundant or mostly synergistic, trading the completeness of full PID for the ability to scale to larger systems."
+    },
+    {
+      "name": "local PID",
+      "kind": "concept",
+      "aliases": [
+        "local partial information decomposition"
+      ],
+      "senseHere": "A version of partial information decomposition applied to single, specific moments or configurations of activity rather than averaged over all possibilities, allowing redundancy, uniqueness, and synergy to be tracked as a time series."
+    },
+    {
+      "name": "neuronal avalanches",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Cascades of neural activity that spread through a circuit, treated in the article as a common marker of complex, critical dynamics in the brain and shown to have characteristic patterns of redundancy, uniqueness, and synergy over their course."
+    },
+    {
+      "name": "integrated information decomposition",
+      "kind": "concept",
+      "aliases": [
+        "ΦID"
+      ],
+      "senseHere": "An extension of partial information decomposition that allows for multiple target variables instead of just one, making it possible to analyze how information is shared, unique, or synergistic across more complex patterns, including how past states shape future ones."
+    }
+  ]
+}

@@ -1,0 +1,152 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3-10",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A rare, still-unexplained glowing sphere seen during thunderstorms, usually lasting a few seconds before vanishing with or without leaving traces. The article treats it as a real but poorly documented atmospheric phenomenon, distinct from ordinary lightning flashes, reported mostly through eyewitness accounts rather than instruments."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "French astronomer and physicist of the early 19th century whose 1837 book on thunder first used the term now translated as ball lightning."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [
+        "Brand"
+      ],
+      "background": "German school official who wrote the only German-language monograph on ball lightning, first published in 1923."
+    },
+    {
+      "name": "Martin A. Uman",
+      "kind": "person",
+      "aliases": [
+        "Uman"
+      ],
+      "background": "American lightning researcher whose group used rockets trailing metal wire to deliberately trigger lightning strikes for controlled field experiments."
+    },
+    {
+      "name": "Fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as scattered across many unconnected small studies, theories, and lab experiments rather than building toward one agreed explanation."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "background": "A United States photographic sky-monitoring program that photographed the night sky continuously for over a decade to track meteors and fireballs."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "A network of ground sensors across Austria that detects and locates individual lightning strikes, letting researchers match reported ball lightning sightings to real strokes by time and position."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's equivalent lightning-detection network, used in the article to confirm the strength and location of a stroke tied to a ball lightning sighting at Neuruppin."
+    },
+    {
+      "name": "Cloud–ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud-ground strokes",
+        "cloud–cloud strokes"
+      ],
+      "senseHere": "A lightning discharge that travels between a cloud and the earth's surface, as opposed to a cloud-to-cloud discharge that stays aloft; the article tallies how often each type coincided with ball lightning sightings."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "19th-century Austrian geologist and mineralogist who was a member of the Imperial Academy of Sciences in Vienna."
+    },
+    {
+      "name": "Angular diameter",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The apparent size of an object as seen by an observer, measured as an angle rather than an actual physical width; Haidinger used it to record how large the glowing ball looked from his window without knowing its true distance or size."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "German physics professor renowned for the 1922 Stern-Gerlach experiment demonstrating spin quantization in a magnetic field."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "British radio astronomer who worked at the Jodrell Bank Observatory before becoming a professor of physical electronics."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "Baltic German physicist and member of the St Petersburg Academy of Sciences who was killed in 1753 while experimenting with atmospheric electricity, an accident later mythologized as a ball lightning strike."
+    },
+    {
+      "name": "Keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or numbness in a limb caused by a nearby lightning or ball lightning strike, distinguished in the article from longer-lasting nerve damage or psychological trauma from the same event."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "French physician considered the founder of modern neurology, based at the Salpêtrière Hospital in Paris, who taught Sigmund Freud."
+    },
+    {
+      "name": "Soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss soil strike theory"
+      ],
+      "senseHere": "An explanation proposing that ball lightning forms when a lightning strike vaporizes minerals in soil, producing a glowing ball whose light comes from burning metal and silicon particles in the air."
+    },
+    {
+      "name": "Slitless spectroscopy",
+      "kind": "term",
+      "aliases": [
+        "diffraction grating"
+      ],
+      "senseHere": "A camera technique using a diffraction grating instead of a narrow slit to spread an object's light into a spectrum, letting researchers identify which chemical elements were glowing in a recorded ball lightning event."
+    }
+  ]
+}

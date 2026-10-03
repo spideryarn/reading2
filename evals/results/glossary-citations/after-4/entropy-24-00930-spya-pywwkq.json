@@ -1,0 +1,165 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "arm": "after-4",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "ca281278da17c7ad6fd52995ef8c0c21f438e65eb7bb0e296fa9265b4d57e796",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Partial Information Decomposition",
+      "kind": "concept",
+      "aliases": [
+        "PID"
+      ],
+      "senseHere": "A mathematical framework that splits the total information two or more sources give about a target into separate pieces: information carried redundantly by either source, information unique to each source, and information that only appears when the sources are considered jointly.",
+      "background": "First proposed by Williams and Beer as a way to go beyond classical mutual information, which cannot distinguish these different modes of information-sharing."
+    },
+    {
+      "name": "rich club",
+      "kind": "concept",
+      "aliases": [
+        "rich club coefficient"
+      ],
+      "senseHere": "A set of highly interconnected, high-degree neurons in a network that are linked to each other far more densely than chance would predict; in cortical recordings these neurons carry a disproportionate share of both information flow and synergistic computation."
+    },
+    {
+      "name": "mutual information",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A measure of how much knowing one neuron's activity reduces uncertainty about another's, used in the article as an undirected gauge of statistical dependence between two signals, likened to a nonlinear correlation."
+    },
+    {
+      "name": "transfer entropy",
+      "kind": "concept",
+      "aliases": [
+        "TE"
+      ],
+      "senseHere": "A directional measure of how much a source neuron's past activity reduces uncertainty about a target neuron's future activity, beyond what the target's own past already explains; used in the article to infer information flow and build effective networks."
+    },
+    {
+      "name": "functional connectivity",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The undirected statistical similarity or shared dependency between two neurons' activity patterns, as captured by mutual information, without implying one caused the other."
+    },
+    {
+      "name": "effective connectivity",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The directed, time-ordered influence one neuron's past activity has on another neuron's future activity, as captured by transfer entropy, contrasted with the undirected similarity captured by functional connectivity."
+    },
+    {
+      "name": "synergy",
+      "kind": "concept",
+      "aliases": [
+        "synergistic information",
+        "Syn"
+      ],
+      "senseHere": "The portion of information about a target neuron's activity that can only be learned by observing two or more source neurons together, not from any source alone. The article treats it as a marker of genuine neural computation, since it reflects sensitivity to the pattern of inputs rather than their simple sum."
+    },
+    {
+      "name": "redundant information",
+      "kind": "concept",
+      "aliases": [
+        "redundancy",
+        "Red"
+      ],
+      "senseHere": "Information about a target that could be learned equally well from either of two source neurons individually, so it gets double-counted if their individual contributions are simply added together."
+    },
+    {
+      "name": "unique information",
+      "kind": "concept",
+      "aliases": [
+        "Unq"
+      ],
+      "senseHere": "Information about a target neuron that only one particular source neuron discloses, and which the other source does not carry at all."
+    },
+    {
+      "name": "redundancy function",
+      "kind": "concept",
+      "aliases": [
+        "I∩",
+        "Imin",
+        "Iccs",
+        "Isx"
+      ],
+      "senseHere": "A formally defined rule for quantifying exactly how much information counts as redundant among a set of sources; the article notes there is no single agreed-upon choice, and different functions suit different data types."
+    },
+    {
+      "name": "computational triad",
+      "kind": "concept",
+      "aliases": [
+        "triad"
+      ],
+      "senseHere": "The basic unit of PID analysis used throughout the article: two source neurons that both send information to a single shared target neuron, allowing redundancy, uniqueness, and synergy to be computed for that local motif."
+    },
+    {
+      "name": "partial information lattice",
+      "kind": "concept",
+      "aliases": [
+        "PI lattice"
+      ],
+      "senseHere": "A structured diagram organizing all the distinct ways that subsets of source variables can share information about a target, ordered so that simpler combinations sit below more complex ones; used to compute every redundant, unique, and synergistic piece via Mobius inversion."
+    },
+    {
+      "name": "Mobius inversion",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The recursive mathematical procedure used to calculate the exact value of each piece of the partial information lattice from the redundancy values of simpler, lower combinations of sources."
+    },
+    {
+      "name": "organotypic cultures",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Slices of mouse cortex grown in nutrient media outside the body that retain much of the brain's natural wiring pattern, used as the experimental source of the spiking data analyzed with PID in this article."
+    },
+    {
+      "name": "feedforward, feedback, and recurrent connections",
+      "kind": "concept",
+      "aliases": [
+        "recurrent connections",
+        "feedback connections"
+      ],
+      "senseHere": "Within a computational triad, feedforward links run from the two source neurons to the target, feedback links run back from the target to the sources, and recurrent links connect the two sources to each other; the article finds recurrent links boost synergy while feedback links do not."
+    },
+    {
+      "name": "Dedekind number",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A rapidly growing sequence of integers that gives the number of distinct partial-information pieces in the lattice for a given number of source neurons, explaining why PID becomes computationally intractable as the number of sources grows.",
+      "background": "Dedekind numbers are a classical combinatorial sequence counting certain monotone logical structures; only the first several are known exactly, which is why the article notes the sequence becomes unmanageable past a handful of sources."
+    },
+    {
+      "name": "O-information",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A simplified, scalable summary measure that estimates whether a group of variables is overall more redundant or more synergistic, used as a practical substitute when full PID becomes too complex to compute."
+    },
+    {
+      "name": "local information theory",
+      "kind": "concept",
+      "aliases": [
+        "local PID",
+        "local mutual information"
+      ],
+      "senseHere": "An approach that computes information-theoretic quantities, including PID's redundant, unique, and synergistic pieces, for each individual moment or configuration rather than as an average over all possibilities, enabling time-resolved tracking of information dynamics."
+    },
+    {
+      "name": "neuronal avalanches",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Cascading bursts of spiking activity in neural networks that are considered a hallmark of complex, critical dynamics, and which the article notes have distinct patterns of redundancy, uniqueness, and synergy across their course."
+    },
+    {
+      "name": "integrated information decomposition",
+      "kind": "concept",
+      "aliases": [
+        "ΦID"
+      ],
+      "senseHere": "An extension of PID that decomposes information shared between sets of variables across two or more target variables (or across time), rather than just a single target, allowing analysis of how redundant and synergistic information flows evolve."
+    }
+  ]
+}

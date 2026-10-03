@@ -1,0 +1,129 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3-6",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A rare, unexplained glowing sphere seen during thunderstorms, lasting seconds and vanishing with or without a trace. It is distinct from ordinary lightning bolts and has no agreed scientific explanation despite thousands of reports.",
+      "background": "The term was coined by French scientist François Arago in 1837 and has since generated numerous competing theories and laboratory attempts at recreation, none fully accepted."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [],
+      "background": "19th-century French astronomer and physicist who wrote an early scientific treatise on thunder and lightning, coining the term for this luminous phenomenon."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "COST Action"
+      ],
+      "background": "A European-funded research collaboration proposal on the physics of lightning, involving around 30 researchers, whose consensus statement affirmed that ball lightning is a real phenomenon worth studying."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [],
+      "background": "A US network of all-sky cameras that photographed the night sky continuously for over a decade to track meteors, incidentally capturing a vast archive later searched for ball lightning images."
+    },
+    {
+      "name": "lightning location network",
+      "kind": "term",
+      "aliases": [
+        "BLIDS",
+        "ALDIS"
+      ],
+      "senseHere": "Systems of ground sensors that detect and pinpoint the time, location, and electrical strength of lightning strokes, used here to cross-check eyewitness ball lightning reports against real lightning data.",
+      "background": "BLIDS is Germany's lightning detection service and ALDIS is Austria's equivalent network; both arose from modern lightning-location technology developed in recent decades."
+    },
+    {
+      "name": "cloud-to-ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud–ground stroke",
+        "cloud-ground flash"
+      ],
+      "senseHere": "A lightning discharge that travels between a cloud and the earth's surface, as opposed to one that stays entirely within or between clouds.",
+      "background": "This is standard atmospheric-electricity terminology distinguishing where a lightning channel terminates, used to classify the strokes correlated with ball lightning sightings."
+    },
+    {
+      "name": "positive and negative lightning strokes",
+      "kind": "term",
+      "aliases": [
+        "positive stroke",
+        "negative stroke"
+      ],
+      "senseHere": "Lightning classified by the electrical charge it carries to the ground; positive strokes are rarer and typically far more powerful than the more common negative strokes.",
+      "background": "Most ordinary lightning is negative; positive strokes make up a small percentage of strikes but tend to carry much higher peak currents, which is notable in the ball lightning correlation data discussed."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "19th-century Austrian geologist and mineralogist, a member of Vienna's Imperial Academy of Sciences, who personally witnessed and carefully documented a ball lightning sighting in 1868."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "German physics professor famous for the 1922 Stern-Gerlach experiment demonstrating quantum spin, who also witnessed and mathematically analyzed a ball lightning event in 1927."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences who died from a lightning strike while experimenting with atmospheric electricity, later mythologized as a ball lightning death."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A temporary paralysis or loss of sensation in a limb caused by a nearby lightning or ball lightning strike, distinct from lasting psychological trauma.",
+      "background": "The term describes short-term neurological effects of lightning exposure, a category of injury first carefully distinguished by neurologist Jean-Martin Charcot from long-term traumatic neurosis."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "Pioneering French neurologist at the Salpêtrière Hospital in Paris and teacher of Sigmund Freud, known for studying nervous disorders including the aftereffects of lightning-related trauma."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss soil strike theory"
+      ],
+      "senseHere": "A proposed explanation that ball lightning forms when lightning vaporizes silicon-rich soil, creating a floating ball of burning silicon particles whose glow matches observed colors and elements.",
+      "background": "This theory, associated with researchers Abrahamson and Dinniss, is one of several competing physical explanations for ball lightning and was supported by spectral evidence in at least one recorded case."
+    },
+    {
+      "name": "slitless spectroscopy",
+      "kind": "term",
+      "aliases": [
+        "diffraction grating spectroscopy"
+      ],
+      "senseHere": "A photographic technique using a grating to spread captured light into its component colors without a narrow slit, allowing the chemical makeup of a glowing object to be identified from footage.",
+      "background": "This method let researchers analyze the light from a filmed ball lightning event to detect specific chemical elements, supporting the soil strike theory."
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v2-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "63e6d6736ae1e82c08ebf0b9d71dfb3fae211bdbc795ef200808fc9e5b3676f7",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A rare, short-lived glowing sphere seen during or after thunderstorms, whose cause remains scientifically unexplained. It appears unpredictably, lasts only seconds, and may vanish silently or explode, leaving burn marks or none at all."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "COST Action"
+      ],
+      "senseHere": "A European research collaboration on the physics of lightning, whose assembled experts agreed that ball lightning is a real phenomenon despite lacking a full explanation."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "senseHere": "A US network of cameras that continuously photographed the night sky for over a decade to catch meteorites falling, incidentally searched here for rare ball lightning images."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "Austria's network of ground sensors that detects and pinpoints lightning strikes in real time, used here to match recorded strokes with reported ball lightning sightings."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's equivalent lightning-detection network, used in the article to confirm the timing and strength of strokes linked to reported ball lightning events."
+    },
+    {
+      "name": "cloud–ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud-cloud stroke",
+        "cloud–cloud strokes"
+      ],
+      "senseHere": "A lightning discharge that travels between a cloud and the ground, as opposed to a cloud–cloud stroke, which stays entirely within or between clouds. The article tallies how many ball lightning sightings coincided with each type."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "An Austrian geologist and mineralogist who was a member of the Imperial Academy of Sciences in Vienna in the 19th century."
+    },
+    {
+      "name": "Jodrell Bank Observatory",
+      "kind": "organization",
+      "aliases": [],
+      "background": "A British astronomical observatory in Cheshire known for its large radio telescope, used for radio astronomy research."
+    },
+    {
+      "name": "Cavendish Laboratory",
+      "kind": "organization",
+      "aliases": [],
+      "background": "A famous physics research institute at Cambridge University, historically associated with major discoveries in atomic and subatomic physics."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [
+        "kerauno-paralysis"
+      ],
+      "senseHere": "A temporary paralysis or numbness in a limb caused by a nearby lightning or ball lightning strike, which fades after a short time. The article distinguishes this short-lived effect from longer-lasting nerve damage or psychological trauma caused by the same event."
+    },
+    {
+      "name": "Camp Blanding",
+      "kind": "place",
+      "aliases": [],
+      "senseHere": "A US military base in Florida used by researchers to deliberately trigger lightning strikes with rocket-trailed wires, letting them study the effects of lightning hitting various ground materials under controlled conditions."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss soil strike theory"
+      ],
+      "senseHere": "An explanation proposing that ball lightning forms when a lightning strike vaporizes soil minerals, producing a glowing ball whose light spectrum matches elements found in earth like iron, calcium, and silicon."
+    }
+  ]
+}

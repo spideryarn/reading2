@@ -379,6 +379,40 @@ describe("buildGlossary", () => {
     expect(g.entries.find((e) => e.name === "Qualia")?.difficulty).toBeUndefined();
   });
 
+  it("drops an entry that is a citation, and an alias that is one", () => {
+    // Greg, 2026-10-03 (spya-zn97q5): "Saha et al." was listed as a term. Cited
+    // works belong to Citations. "et al" is only ever a citation, so the code
+    // drops it whatever the prompt managed; plan 261003o.
+    const g = buildGlossary(
+      {
+        entries: [
+          { name: "Saha et al.", kind: "work", background: "A paper on protein folding." },
+          { name: "Hill et al. (2008)", kind: "event", background: "A triggered-lightning experiment." },
+          { name: "Smith ET AL", kind: "person", background: "Authors of a survey." },
+          {
+            name: "Camp Blanding experiment",
+            kind: "event",
+            aliases: ["Hill et al. 2008 experiment", "Camp Blanding"],
+            background: "A triggered-lightning experiment.",
+          },
+          { name: "Georg Wilhelm Richmann", kind: "person", aliases: ["Richmann"], background: "A physicist killed by lightning." },
+          // The letters alone are not the mark: only the two words are.
+          { name: "Metal alloy", kind: "term", aliases: ["et alia"], background: "A mixture of metals." },
+          { name: "Étalon", kind: "term", background: "A pair of mirrors used to pick out one colour." },
+          // A piece about the abbreviation itself: with no name before it, it is a term.
+          { name: "et al.", kind: "term", background: "Latin for 'and others', used to shorten a list of authors." },
+        ],
+      },
+      opts,
+    );
+    expect(g.entries.map((e) => e.name).sort()).toEqual(
+      ["Camp Blanding experiment", "Georg Wilhelm Richmann", "Metal alloy", "Étalon", "et al."].sort(),
+    );
+    expect(g.entries.find((e) => e.name === "Camp Blanding experiment")?.aliases).toEqual(["Camp Blanding"]);
+    expect(g.entries.find((e) => e.name === "Georg Wilhelm Richmann")?.aliases).toEqual(["Richmann"]);
+    expect(g.entries.find((e) => e.name === "Metal alloy")?.aliases).toEqual(["et alia"]);
+  });
+
   it("fills in the occurrences itself", () => {
     const g = buildGlossary({ entries: [{ name: "Seth", gloss: "The author." }] }, opts);
     expect(g.entries[0]?.blocks).toEqual(["spya-aaaaaa"]);

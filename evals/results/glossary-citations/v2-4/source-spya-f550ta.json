@@ -1,0 +1,89 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v2-4",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "63e6d6736ae1e82c08ebf0b9d71dfb3fae211bdbc795ef200808fc9e5b3676f7",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "Prominent 19th-century French astronomer, physicist, and statesman known for contributions to optics and electromagnetism."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A field of study split into disconnected pockets of researchers working on separate theories, data sets, and lab experiments without a shared framework or agreement."
+    },
+    {
+      "name": "Pyotr Leonidovich Kapitsa",
+      "kind": "person",
+      "aliases": [
+        "Kapitsa"
+      ],
+      "background": "Soviet physicist and Nobel laureate renowned for his research in low-temperature physics and strong magnetic fields."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "19th-century Austrian geologist and mineralogist who helped found Austria's geological survey and was a member of the Imperial Academy of Sciences at Vienna."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "Prominent 19th-century American paleontologist famous for his fierce fossil-hunting rivalry with Edward Drinker Cope, known as the Bone Wars, which helped establish American dinosaur science."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "German physicist best known for co-discovering the quantization of electron spin in a magnetic field in 1922, a landmark experiment in the development of quantum mechanics."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "British radio astronomer who worked at the Jodrell Bank Observatory and later became a professor of physical electronics, known for pioneering work in astronomical interferometry."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "Baltic-German physicist who died in 1753 while experimenting with atmospheric electricity, becoming one of the earliest scientists killed in the study of electricity."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The short-lived nerve and muscle effects of a lightning or ball lightning strike, such as temporary paralysis or numbness, as opposed to lasting psychological or nerve damage.",
+      "background": "This is a recognized clinical term in medicine for lightning-related paralysis, still used by doctors today to describe transient post-strike symptoms."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "Pioneering 19th-century French neurologist often called the founder of modern neurology, famous for his studies of hysteria and nervous disorders, and for teaching a young Sigmund Freud."
+    }
+  ]
+}

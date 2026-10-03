@@ -114,8 +114,13 @@ import type { ArtifactStore } from "./store/artifacts.js";
  * `glossary/8`, 2026-10-03: the prompt gained the shared paperwork section,
  * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
  * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+ *
+ * `glossary/9`, 2026-10-03: a work the piece only cites is not a term, and a
+ * citation is never an alias (Greg, spya-zn97q5: *"I don't think the glossary
+ * should include citations. That's what citations are for."*
+ * docs/plans/261003o-glossary-keeps-cited-works-out-citations-are-not-terms.md).
  */
-export const PROMPT_VERSION = "glossary/8";
+export const PROMPT_VERSION = "glossary/9";
 
 /**
  * The most entries one call may return.
@@ -277,6 +282,23 @@ function text(value: unknown): string {
 }
 
 /**
+ * Is this name or alias a citation written with "et al."?
+ *
+ * **A cited work is not a term**: Citations lists those (Greg, 2026-10-03,
+ * spya-zn97q5, on an entry named "Saha et al."). The prompt is what tells a
+ * citation from a work the piece discusses, and it is only a request. This is
+ * the one shape that needs no judgment, because nothing is *called* "et al.",
+ * so `toEntries` drops it whatever the model did. Author-and-year forms
+ * ("Stenhoff (1999)") are left to the prompt: in code they cannot be told from
+ * "Blade Runner (1982)". docs/project/glossary.md § A cited work is not a term.
+ */
+export function citesByEtAl(value: string): boolean {
+  /* A name before it, so a piece about the abbreviation itself, or a work
+     titled "Et Al.", keeps its entry (GPT Sol's plan review, finding 1). */
+  return /\S\s+et\s+al\b/i.test(value);
+}
+
+/**
  * Turn what the model said into entries, believing as little of it as possible.
  *
  * **The drop rule is a name and at least one line of prose.** It used to be a
@@ -322,6 +344,7 @@ function toEntries(
       .filter(Boolean)
       .join(" ");
     if (!name || (!senseHere && !background)) continue;
+    if (citesByEtAl(name)) continue;
 
     const kindText = text(item.kind).toLowerCase();
     const kind = (KINDS.has(kindText) ? kindText : "other") as GlossaryKind;
@@ -335,7 +358,7 @@ function toEntries(
     for (const alias of Array.isArray(item.aliases) ? item.aliases : []) {
       const value = text(alias);
       const key = normaliseTerm(value);
-      if (!key || seen.has(key)) continue;
+      if (!key || seen.has(key) || citesByEtAl(value)) continue;
       seen.add(key);
       aliases.push(value);
     }
@@ -1030,6 +1053,16 @@ WHAT DOES NOT
 - terms you can define only from general knowledge and which the piece does not
   actually depend on. This is a glossary FOR this article, not an encyclopaedia
   entry that happens to be adjacent to it.
+- a work the piece only cites as a source: a paper, book or report pointed at
+  by its authors and a year, by "et al.", or by a number in brackets ("Saha et
+  al.", "Kahneman and Tversky (1979)", "[12]"). Nor its authors, where the
+  piece names them only as that citation. The reader has a separate list of
+  every work the piece cites. The test is the name's job in the piece. If it
+  is only there to say where a claim came from ("Saha et al. found that ...",
+  "(Okafor, 2011)"), it is a citation. If the reader needs to know who or what
+  it is to follow the piece — a person the piece tells about, a work it
+  examines rather than points at — it earns an entry under its own name. A
+  person the piece both tells about and cites keeps their entry.
 
 WHAT AN ENTRY SUPPLIES
 
@@ -1137,6 +1170,22 @@ though working together leaves both better off."
 There is no "senseHere": once the reader knows the game, the article's ordinary
 comparison is already in front of them.
 
+A psychology paper writes "losses loom larger than gains (Kahneman and Tversky,
+1979)", calls that "loss aversion" from then on, and spends a section on what
+Stanley Milgram did in his obedience experiments, citing "Milgram (1963)".
+
+BAD — an entry named "Kahneman and Tversky", or "loss aversion" with the alias
+"Kahneman and Tversky (1979)".
+Those names are only there to say where a claim came from. They are citations,
+and the reader has them in a separate list.
+
+GOOD — "loss aversion" has an entry, because the paper uses that phrase, and no
+citation is among its aliases. "Stanley Milgram" has one, with the alias
+"Milgram": the paper tells what he did, so the reader needs to know who he is,
+and being cited as well does not take that away. The cited papers have none.
+If the paper had never named "loss aversion", there would be no entry for it:
+do not make up a name the piece does not use.
+
 NAMES AND ALIASES
 
 "name" is the canonical and unambiguous way to refer to it (usually the longest
@@ -1156,6 +1205,12 @@ full name. Try to make the aliases distinctive, so that a regex using the
 aliases finds all and only references to the entity (if possible). A one- or
 two-letter alias, or a common English word, will match half the article: leave
 it out.
+
+An alias is never a citation. "Kuhn (1962)" is not another name for an idea
+that book introduced, and "the Okafor et al. 2011 study" is not another name
+for an experiment. Leave such forms out even where the article uses them:
+every alias is marked in the article as the term, and a citation is not the
+term.
 
 SCORES
 

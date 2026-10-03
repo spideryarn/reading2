@@ -642,6 +642,41 @@ the article**, and those two entries only found their blocks because `JFK` and `
 aliases. The prompt now names both as examples of what not to do, and the re-run gave
 *John F. Kennedy* and *Martin Luther King Jr.*
 
+### A cited work is not a term
+
+> It looks as though there is at least one glossary item in this article that's actually a paper,
+> Saha et al. I don't think the glossary should include citations. That's what citations are for.
+>
+> — Greg, 2026-10-03, spya-zn97q5
+
+The prompt invited it: *"works … named without introduction"* earn entries, and a paper cited as
+"Saha et al." is one. Since `glossary/9` the prompt draws the line at **cited against discussed**. A
+work the piece only points at as a source, and its authors where they are named only as that
+citation, get no entry and may not be an alias; [Citations](citations.md) lists them. The test the
+prompt gives is the name's job in the piece: only there to say where a claim came from, or
+something the reader needs to know to follow it. A person the piece tells about, and a work it
+examines, still get entries, and a person it both tells about and cites keeps theirs. An idea a
+cited paper introduced gets an entry only under a name the piece itself uses for it.
+
+The alias half matters as much as the entry half: an alias is what the prose underlines, so
+`Turner (2001)` as an alias of a real term put a glossary underline on a citation.
+
+Behind the prompt, `citesByEtAl` in [`src/glossary.ts`](../../src/glossary.ts) drops any model
+entry whose name is a name followed by "et al", and any such alias. That shape needs no judgment:
+nothing is called "Saha et al." but a citation. Author-and-year forms are left to the prompt: code
+cannot tell "Stenhoff (1999)" from "Blade Runner (1982)".
+
+**What it does and costs**, measured in
+[261003g](../investigations/261003g-glossary-citation-entries-before-and-after-the-rule.md): on a
+review paper dense with citations, entries named for a cited book went from three runs in five to
+none in ten, and citation aliases from five to two. The list is two or three entries shorter there,
+and now and then much shorter. Essays were unchanged.
+
+A term the reader [looks up themselves](#looking-a-term-up) is not filtered: that is their request.
+A list written before `glossary/9` keeps its citation entries until its step next runs
+([Staleness](#staleness-and-the-force-cascade)); **Hide** removes one meanwhile. Plan:
+[261003o](../plans/261003o-glossary-keeps-cited-works-out-citations-are-not-terms.md).
+
 <a id="checking-a-term-on-the-web"></a>
 
 ### Digging deeper into a term

@@ -1,0 +1,157 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "after-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "ca281278da17c7ad6fd52995ef8c0c21f438e65eb7bb0e296fa9265b4d57e796",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "scaling hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "strong scaling hypothesis"
+      ],
+      "senseHere": "The idea that intelligence does not require special new algorithms but emerges automatically once a simple, uniform neural network architecture is trained on enough data with enough compute. On this view, bigger is simply smarter."
+    },
+    {
+      "name": "GPT-3",
+      "kind": "work",
+      "aliases": [
+        "GPT-3's"
+      ],
+      "senseHere": "A 175-billion-parameter text-prediction neural network from OpenAI that, despite no special training for it, can follow instructions and learn new tasks from just a few examples given in its prompt.",
+      "background": "Released by OpenAI in May 2020, it was at the time by far the largest language model ever trained, built on the same basic Transformer architecture as its much smaller predecessor GPT-2."
+    },
+    {
+      "name": "meta-learning",
+      "kind": "concept",
+      "aliases": [
+        "learning to learn"
+      ],
+      "senseHere": "A model's acquired ability to figure out and perform a brand-new task on the fly just from a description or a few examples, rather than needing to be separately trained on that task. GPT-3 displays this even though it was never deliberately designed to."
+    },
+    {
+      "name": "GPT-2",
+      "kind": "work",
+      "aliases": [
+        "GPT-2-1.5b"
+      ],
+      "background": "OpenAI's earlier, much smaller language model (1.5 billion parameters), which had already surprised researchers with its text generation and summarization abilities before GPT-3 scaled the same approach up over a hundredfold."
+    },
+    {
+      "name": "blessings of scale",
+      "kind": "concept",
+      "aliases": [
+        "blessings of dimensionality"
+      ],
+      "senseHere": "The surprising pattern that, unlike most engineering problems, neural networks get easier to train and perform better the bigger they and their data and compute get, often acquiring generalization and meta-learning as side effects of sheer size."
+    },
+    {
+      "name": "Transformer",
+      "kind": "concept",
+      "aliases": [
+        "self-attention"
+      ],
+      "background": "A neural network architecture built around an 'attention' mechanism that lets it weigh relationships between all parts of an input sequence at once; it underlies GPT-3 and most modern large language models."
+    },
+    {
+      "name": "scaling laws",
+      "kind": "concept",
+      "aliases": [
+        "scaling curves",
+        "power-law scaling"
+      ],
+      "senseHere": "Smooth, predictable mathematical relationships showing that a model's prediction error keeps falling in a consistent, graphable way as its size, training data, and compute increase, with no sign of flattening out even at GPT-3's scale."
+    },
+    {
+      "name": "Hans Moravec",
+      "kind": "person",
+      "aliases": [
+        "Moravec"
+      ],
+      "background": "A robotics researcher who, decades before deep learning's success, argued from trends in computing hardware that affordable human-level computing power would arrive around the 2020s, and that AI progress had been held back mainly by lack of cheap compute rather than lack of ideas."
+    },
+    {
+      "name": "OpenAI",
+      "kind": "organization",
+      "aliases": [
+        "OA",
+        "OA LP"
+      ],
+      "background": "The AI research company that created GPT-2 and GPT-3, structured as a nonprofit controlling a for-profit subsidiary so it could raise the large sums of investment needed to keep scaling up its models."
+    },
+    {
+      "name": "AlphaGo Zero",
+      "kind": "work",
+      "aliases": [],
+      "background": "A DeepMind game-playing system that learned to play Go at superhuman level purely through self-play, with no human game data, using a large neural network trained via reinforcement learning."
+    },
+    {
+      "name": "bitter lesson",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A widely cited observation in AI research that approaches relying on massive computation have repeatedly beaten approaches built on cleverly encoded human knowledge, a lesson many researchers accept in principle but resist in practice."
+    },
+    {
+      "name": "AlphaZero",
+      "kind": "work",
+      "aliases": [],
+      "background": "DeepMind's generalization of AlphaGo Zero's self-play approach to chess and other games, reaching superhuman play without built-in human strategic knowledge or heavy reliance on search."
+    },
+    {
+      "name": "MuZero",
+      "kind": "work",
+      "aliases": [],
+      "background": "A DeepMind system that matched or beat AlphaZero's game-playing performance by learning to predict rewards and plan from raw experience, without being told the rules of the game in advance."
+    },
+    {
+      "name": "DeepMind",
+      "kind": "organization",
+      "aliases": [
+        "DM"
+      ],
+      "background": "A Google-owned AI research lab known for game-playing systems like AlphaGo, which the article contrasts with OpenAI as favoring piecemeal, neuroscience-inspired module-building over simply scaling one architecture to enormous size."
+    },
+    {
+      "name": "OpenAI Five",
+      "kind": "work",
+      "aliases": [
+        "OA5"
+      ],
+      "background": "An OpenAI reinforcement learning system that learned to play the team video game Dota 2 at a high level, trained with extremely large batches of self-play experience."
+    },
+    {
+      "name": "double descent",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A puzzling observed pattern where a model's test error first falls, then rises, then falls again as the model or dataset is made larger, contradicting the simple expectation that bigger models always overfit more."
+    },
+    {
+      "name": "lottery ticket hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "background": "An idea in deep learning research that a large trained network contains many smaller sub-networks ('winning tickets'), one of which could have achieved similar performance on its own if trained in isolation."
+    },
+    {
+      "name": "hardware overhang",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A situation where computing hardware powerful enough to run a breakthrough AI approach already exists and is affordable, but is not yet being applied to that approach because no one has the funding, access, or will to try it at scale."
+    },
+    {
+      "name": "intentional stance",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A way of explaining a system's behavior by treating it as if it has goals and beliefs, even when it is really just physical mechanism, because this is often the simplest and most useful way to predict what it will do."
+    },
+    {
+      "name": "Occam's razor",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Here, a bias built into large neural networks themselves: because many small overfit sub-models inside a big network average out, the network ends up preferring the simplest solution that still fits the data, rather than memorizing superficial shortcuts."
+    }
+  ]
+}
