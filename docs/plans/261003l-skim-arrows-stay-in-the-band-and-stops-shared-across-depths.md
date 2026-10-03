@@ -163,11 +163,15 @@ production's `generateSkim` (the old module from the commit before, as
 2. **Did the rest move?** First-depth allocation (pass sizes) and Idea coverage per pass, new
    against old, compared with old-against-old. Asking for `again` should not change which quotes
    go where beyond run-to-run noise.
-3. **Does More read less disjointed?** A blind judge in a fresh subagent, pairs file only: for each
-   article, the More walk as the old rule draws it and as the new route draws it (sides shuffled
-   with `blindCoin`, key in its own file, balance checked), plus an old-against-old control. Two
-   questions per pair: which reads as one connected walk to somebody who has just read Gist, and
-   which to somebody starting at More. Read against the control's spread.
+3. **Does More read less disjointed, and are the carried stops the right ones?** A blind judge in
+   a fresh subagent, pairs file only. For each article the file shows **the Gist walk first**, each
+   stop with its whole paragraph (Sol F2 — the judge cannot answer "after Gist" without it, and
+   260929b's eval did the same), then the More walk as the old rule draws it and as the new route
+   draws it (sides shuffled with `blindCoin`, key in its own file, balance checked), plus an
+   old-against-old control. Per pair: which reads as one connected walk to somebody who has just
+   read that Gist, and which to somebody starting at More. And per carried stop, unblinded by
+   necessity: a useful bridge or main point, a redundant repeat, or superseded by finer stops in
+   the same pass. Read against the control's spread.
 4. **Validity.** No failed route, `badAgain` counts, no truncation.
 
 Written up in `docs/investigations/` before the stage is called done.
@@ -177,11 +181,18 @@ Written up in `docs/investigations/` before the stage is called done.
 All of it is in [`skim-route.ts`](../../src/web/skim-route.ts), which is pure and pinned by
 `tests/skim-route.test.ts`:
 
-- `walkedIn(stop, d)` — the one definition. `passRoute`, `passCount`, `offeredDepths`,
-  `firstStopOf` use it.
+- `walkedIn(stop, d)` — the one definition. `passRoute`, `passCount` and `firstStopOf` use it.
+- **`offeredDepths` does not** (Sol F1): a depth is offered only when some stop is *first placed*
+  there, as today. Otherwise a short route — one Gist stop with `again: [2]` — would offer a More
+  that is the same one stop again. `walkedIn` therefore also ignores an `again` naming a depth the
+  route does not offer, and `validateRoute` drops such an entry (`badAgain`) before it is stored.
 - `locate`: a `?stop=` still wins, and draws **the asked depth when the stop is walked there**,
   else the stop's own `depth`. (Today a stop has exactly one pass, so the asked depth never
   mattered once a stop was named.)
+- `src/web/params.ts` and [url-state.md](../project/url-state.md) say a stop has one "own pass";
+  both are updated, and the tests cover the four cases (Sol F5): asked depth walks the stop, asked
+  depth does not, no depth asked, and a depth change that stays on the same stop (one pushed entry,
+  restored by Back).
 - A depth change still lands on stop 1 of the new pass. That can now be the stop the reader is on;
   `changeDepth` already handles "did not move" by updating the address without scrolling.
 - `doorAfter`: unchanged in shape. *More detail ›* can land on the stop you are standing at when it
@@ -204,8 +215,13 @@ position line, so it costs no width.
   more than one says "also in Gist" — probably read already, which is the use Greg names.
 - Not drawn at all on a route with only one offered depth, or where no stop on the whole route has
   `again` (every old route): three pips that never vary would be noise.
-- Its words are in a tooltip on hover or focus and in `sr-only` text (*"Also in Gist"*,
-  *"In More and Most"*), per [tooltips.md](../project/tooltips.md); nothing is printed on the row.
+- **Not interactive** (Sol F3): the number column is inside the row's own button, and the "where
+  am I" button already lies over the position line, so a third trigger would nest or collide. The
+  pips are plain marks inside the row button, above the position line (which, with its overlay,
+  moves down by their height). Their words (*"Also in Gist"*, *"In More and Most"*) are `sr-only`
+  text in the row, so the row's accessible name carries them; nothing is printed.
+- **The legend is in the band's (i)** — one sentence, shown only when the pips are — and on
+  `/help`, because hover does not exist on the phone this was asked from.
 - The prose's door does not carry it in v1.
 
 ### Docs, in the same stage
@@ -217,7 +233,9 @@ stops* section marked as amended, the `skim/9` line; `src/skim.ts`'s `PROMPT_VER
 reader's `/help` page if it describes either behaviour.
 
 **Done when:** `tests/skim.test.ts` and `tests/skim-route.test.ts` pin the validation and the walk
-(red first), a panel test pins the mark and its absence on an old route, the investigation is
+(red first), including F1's one-stop fixture; `tests/public-dto.test.ts` carries `again` on its
+route fixture and asserts it crosses while `profileHash` and provenance still do not (Sol F4); a
+panel test pins the mark and its absence on an old route, the investigation is
 written with its numbers, `npm test` and `npm run typecheck` are green, and the browser check at
 desktop, iPad and phone-portrait shows a re-planned route with a carried stop marked.
 
@@ -241,6 +259,27 @@ desktop, iPad and phone-portrait shows a re-planned route with a carried stop ma
   and disappear down the list. Built: every row.
 - **[Q-read-mark]** Whether to also build the reading-time version of the mark.
 
+## GPT Sol's plan review (2026-10-03)
+
+[The review](261003l-skim-plan-review-sol.md) of commit `df200c954`: *do not build* unchanged, on
+F1. All five accepted, and the sections above now carry them.
+
+| | | what changed |
+|---|---|---|
+| F1 | P1 | `offeredDepths` stays on first-placed stops; an `again` to an unoffered depth is dropped and ignored |
+| F2 | P2 | the judge sees Gist and whole paragraphs, and classifies each carried stop |
+| F3 | P2 | pips are not interactive; words in the row's name; legend in the (i) and `/help` |
+| F4 | P2 | `public-dto` test pins `again` crossing |
+| F5 | P2 | `params.ts`, url-state.md and four URL cases |
+
+No second plan round: the fixes are the reviewer's own, and the stage's code review is asked to
+check each by id.
+
 ## Progress
+
+- 2026-10-03: stage 1 built and committed (`6236d0957`). The plan missed two things the build
+  found: `tests/skim-panel.test.tsx` already pinned the old stepping-aside (rewritten there), and a
+  flash can now stay held for a whole walk, so `Reader` drops it on a change to another covering
+  mode. That effect has no test — there is no Reader-level harness — and is in the browser check.
 
 - 2026-10-03: plan written; prior-work check clean.
