@@ -471,9 +471,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           passage behind it is the model’s opinion; weigh it as one.
         </p>
         <p>
-          <strong>A different typeface for each voice</strong> is being tried — the author in a
-          serif, the AI in a typewriter face, what you typed in a plain sans. It is{" "}
-          <HelpRef to="experimental-features">experimental</HelpRef>.
+          <strong>Each voice has its own typeface</strong>: the author in a serif, the AI in a
+          typewriter face, what you typed in a plain sans.
         </p>
       </>
     ),
@@ -728,10 +727,6 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             <strong>Reading time on the spine</strong>: grey shading where you have spent longer.
             Only you see it.
-          </li>
-          <li>
-            <strong>A typeface for each voice</strong>, so you can tell at a glance whether the
-            author, the AI or you wrote something.
           </li>
           <li>
             <strong>Start the whole article again</strong>, on an article’s Metadata page.
