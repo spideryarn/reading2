@@ -4585,9 +4585,12 @@ export interface CitationDrops {
   entryMismatch: number;
   /** An entry whose text does not contain the model's title — the entry is dropped (plan 260930i, Sol F3). */
   entryDisagrees: number;
-  /** Authors not all found as words of the work's entry — dropped, the entry kept. */
+  /**
+   * Authors not all found as words of the work's entry — dropped, the entry
+   * kept. With no entry, authors the article names nowhere (plan 261003j).
+   */
   authorsUnfound: number;
-  /** A year the work's entry does not carry — dropped, the entry kept. */
+  /** A year the work's entry does not carry, or with no entry, the article — dropped. */
   yearUnfound: number;
 }
 

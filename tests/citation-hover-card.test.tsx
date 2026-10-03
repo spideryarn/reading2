@@ -282,7 +282,7 @@ const card = () => document.querySelector(".prose-card");
 const cite = (n: number) => host.querySelectorAll("mark.cite")[n] as HTMLElement;
 
 describe("resting on a citation", () => {
-  it("draws the work: its title, who wrote it and when, and what the piece uses it for", () => {
+  it("draws the work: its title, who wrote it and when, and nothing of ours about it", () => {
     paint();
     expect(card()).toBe(null);
     hover(cite(0));
@@ -290,9 +290,11 @@ describe("resting on a citation", () => {
     expect(text).toContain("Elements of Episodic Memory");
     expect(text).toContain("Tulving");
     expect(text).toContain("1983");
-    /* The one line that is ours rather than the author's — Fable, 2026-09-16:
-       "That is the augmentation; the citation itself is the author's." */
-    expect(text).toContain("The piece takes its account of retrieval cues from it.");
+    /* Until 2026-10-03 the card also drew `why`, the one line that was ours
+       rather than the author's. Greg, spya-zmdb7y: it restates the citing
+       paragraph and reads as what the paper says, so it waits for a check
+       (plan 261003j; "what the card says after Look it up" has that half). */
+    expect(text).not.toContain("The piece takes its account of retrieval cues from it.");
   });
 
   it("links a work the article gave an address for, and says where the address came from", () => {
@@ -407,7 +409,10 @@ describe("what the card says we have read", () => {
     paint();
     hover(cite(0));
     expect(read()).toBe(CITE_NOT_READ);
-    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")?.textContent).toBe(CITE_WHY_LABEL);
+    /* Nothing the model wrote about the work, until something was checked
+       against it (Greg, spya-zmdb7y, plan 261003j). */
+    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")).toBeNull();
+    expect(card()?.textContent).not.toContain(TULVING.why);
     /* A searched row too: a Scholar search is not the work either. */
     hover(cite(1));
     expect(read()).toBe(CITE_NOT_READ);
@@ -459,6 +464,9 @@ describe("what the card says after Look it up", () => {
     paint([looked, KAPLAN, BROADBENT]);
     hover(cite(0));
     expect(read()).toBe(citeReadAssessed(310, "arxiv.org"));
+    /* The claim the verdict is about, labelled as the article's. */
+    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")?.textContent).toBe(CITE_WHY_LABEL);
+    expect(card()?.querySelector(".prose-card-part-why .prose-card-text")?.textContent).toBe(TULVING.why);
     const verdict = card()?.querySelector(".prose-card-cite-verdict");
     expect(verdict?.querySelector(".prose-card-label")?.textContent).toBe(CITE_VERDICT_LABEL);
     expect(verdict?.querySelector(".prose-card-cite-verdict-text")?.textContent).toBe(verdictText("partly"));
@@ -526,6 +534,8 @@ describe("what the card says after Look it up", () => {
     hover(cite(0));
     expect(card()).not.toBeNull();
     expect(card()?.textContent).not.toMatch(/DISTINCTIVE INVESTIGATION|Investigat/);
+    /* So no claim either: the card draws nothing that was checked against it. */
+    expect(card()?.textContent).not.toContain(TULVING.why);
     expect(card()?.querySelector(".cite-investigate, .cite-inv")).toBeNull();
   });
 });

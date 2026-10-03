@@ -213,6 +213,10 @@ p.marg-shut {
 .marg-open-by {
   color: var(--ink-faint);
 }
+/* The article's own reference entry for a cited work (plan 261003j). */
+.marg-cite-entry {
+  color: var(--ink-faint);
+}
 .marg-open-answer {
   color: var(--ink-faint);
   display: -webkit-box;
