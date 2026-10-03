@@ -161,7 +161,7 @@ export interface QuickSearchRequest {
 export interface QuickDropped {
   /** Answers naming a block that was not asked about. */
   unknownIds: number;
-  /** Hits beyond `MAX_HITS`. */
+  /** Hits beyond whichever cap applied: `MAX_HITS` or `QUICK_FALLBACK_HITS`. */
   truncated: number;
 }
 
@@ -263,8 +263,9 @@ export function hitsFrom(
   }
   const hits = kept.map(({ block, p }) => ({
     blockId: block.id,
-    /* The block's own text, so `findQuote` places it at 0 and the wash covers
-       the paragraph — the honest extent of what was judged. */
+    /* The block's own text, so the client resolves the whole-paragraph hit at
+       0. A quick run then renders it as a bare paragraph bar and spine mark,
+       without washing the words (src/web/search-hits.ts § `Found.bare`). */
     quote: block.text,
     confidence: Math.round(p * 100),
     reasoning: "",

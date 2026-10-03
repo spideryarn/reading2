@@ -60,8 +60,8 @@ if kept is empty:
 ```
 
 What the reader sees: where a quick search said "nothing", it now shows a few paragraphs, each with
-its own score (55, 62…), lower than a normal quick hit's and printed as it is today. A topic the
-article does not contain still shows nothing.
+its own score (55, 62…), printed as it is today. Most tested absent and near-miss searches still
+show nothing; four of 75 show wrong paragraphs, as the measurement below says.
 
 Measured, with two blind judges (the stricter one's numbers):
 
@@ -95,7 +95,8 @@ Why this shape and not another:
 - **12 of the 62 stay empty** ("result", "example", "Philosophy", "Statistics": best under 0.5).
 - **A jump at 0.7.** Three of 37 queries cross it between runs. "methods" shows 4, 0 and 2 today
   and would show 4, 8 and 2.
-- **Nothing on the row says "these are weaker".** The score is the only signal. See Q2.
+- **Nothing on the row says "these are weaker".** Usually the lower score is the only signal, but
+  the displayed score is rounded: a value just under 0.7 can print as 70. See Q2.
 
 ## What is not being done, and where each went
 
@@ -141,7 +142,7 @@ is 30).
 
 | | finding | what was done |
 |---|---|---|
-| F1 | four of five absent topics were too easy | 20 near-miss topics written by a subagent from the article text alone. 59 of 60 searches stay empty. Per-list outcomes reported. |
+| F1 | four of five absent topics were too easy | 20 near-miss topics written by a subagent from the article text alone. 59 of 60 searches stay empty. Per-list outcomes reported. No acceptance threshold was set before the scores were read. |
 | F2 | one judge, no heading context, wordings unjudged | a second independent judge with each paragraph's heading; 88% agreement; the stricter is used. Wordings are reported as counts and not ranked. |
 | F3 | one thorough search is not a yardstick | it is now reported only as overlap; the judged labels are the yardstick. |
 | F4 | caps 1 and 3 missing; the jump unmeasured | both added; mode flips and list-size spread reported. |
@@ -152,8 +153,9 @@ is 30).
 Not done from F2: showing the judge a paragraph's neighbours, and adjudicating the 15 disagreements.
 Not done from F5: a natural-language control for every query (8 were run).
 
-There was no second plan review. The findings were all about the evidence, each is answered by a
-measurement that is in the candidate, and the code review reads both.
+There was no second plan review. The second round materially answers the review's questions, but it
+did not predeclare what outcome would justify shipping (F1), and the two F2 limitations above
+remain. The code review reads both rounds.
 
 ## Questions for Greg
 
@@ -164,13 +166,15 @@ more often:
 - **A (built): 0.5.** Of 62 searches that found nothing, 50 now show something. About 7 in 10 of
   the paragraphs shown are right. "human memory" on the forgetting paper shows up to 4 wrong ones.
 - **B: 0.55.** 34 of the 62 show something. 8 in 10 are right. "results" on your paper would still
-  come back empty about one time in three.
+  have come back empty on two of the five measured runs (one of the three runs in the 111-search
+  comparison).
 
 Pick B if a wrong paragraph in a list bothers you more than an empty list does.
 
 **Q2. Should a fallback list say that it is one?**
 
-- **A (built): say nothing.** Each result already prints its score, and a 55 reads as a 55.
+- **A (built): say nothing.** Each result already prints its score, although a value just under 0.7
+  can round to 70 and therefore does not always distinguish a fallback hit.
 - **B: one line on the row**, such as *"nothing scored highly; these are the closest"*. It needs a
   flag stored with the search (a database column, so it survives a reload and reaches the public
   reader). About half a day.
@@ -187,3 +191,12 @@ becomes unnecessary.
 - 2026-10-03: plan written after the reproduction and the first Jev run. GPT Sol's plan review:
   seven findings on the evidence, no P0 or P1. Stage A's second round answers them. Constants
   settled: 0.5 and 8.
+- 2026-10-03: Stage B built red-first and committed (`2dac08de6`). GPT Sol's code review
+  ([prompt](261003o-quick-search-fallback-code-review-prompt.md),
+  [answer](261003o-quick-search-fallback-code-review-sol.md)): **land**. It recomputed the headline
+  numbers from the saved files and they matched (62 of 111, 50, 144 of 202, 36 of 50, 13; 3 of 15
+  and 1 of 60; 0 of 150 changed), with no unjudged hit in the 50 lists. Four findings, no P0 or P1:
+  CR-1 (P2) no acceptance threshold was set before the scores were read, now said in the limits;
+  CR-2 (P2) nothing stores that a list is a fallback, and a score just under 0.7 prints as 70, which
+  is Q2; CR-3 and CR-4 (P3) wrong counts in the prose and two stale comments, fixed by the reviewer.
+  It would keep 0.5 over 0.55.

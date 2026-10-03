@@ -35,9 +35,9 @@ four articles, more than half came back empty.
 ## What changed
 
 When a quick search finds nothing at 0.7 or more, it now shows the best paragraphs at 0.5 or more,
-at most eight, each with its own score. "results" on that paper now shows three or four, all judged
-right. A search that already finds something is unchanged, and a topic the article does not contain
-still shows nothing.
+at most eight, each with its own score. "results" on that paper now shows two to four, all judged
+right. A search that already finds something is unchanged. Most tested absent and near-miss searches
+still showed nothing; four of 75 showed wrong paragraphs.
 
 What it costs: a word with no clear meaning in a given article, or a neighbouring topic the article
 does not cover, can now show a few wrong paragraphs where it showed none. About 7 in 10 of the
@@ -58,6 +58,7 @@ paragraphs on that paper where "results" found none.
 ## Questions for Greg (in the plan)
 
 - Q1: should the fallback cut-off be 0.5 (built: finds more, 7 in 10 right) or 0.55 (finds less,
-  8 in 10 right, and "results" would still come back empty one time in three)?
-- Q2: should a fallback list say that it is one? Built: no, the score is the signal.
+  8 in 10 right, and "results" stayed empty on two of the five measured runs)?
+- Q2: should a fallback list say that it is one? Built: no; its usually lower score is the only
+  signal, and a value just under 0.7 can round to 70.
 - Q3: should the search box or the help page say that a question works better than a bare word?

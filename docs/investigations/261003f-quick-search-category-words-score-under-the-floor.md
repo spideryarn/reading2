@@ -111,7 +111,7 @@ never asks about, it is not exhaustive, and on the Agents article it returned no
 
 One request, one chunk, about 410 ms. Nothing in the chunking or the cap is involved.
 
-Across the nine intents that come back empty, the request form found something on 24 runs of 24.
+Across the eight intents with a request form, it found something on 24 runs of 24.
 `summary2.json` § `typed` has every form of every query.
 
 ### What a fallback list holds (`summary2.json`, `perlist2.ts.txt`)
@@ -240,6 +240,8 @@ nothing and both judges marked every candidate wrong. Jev gives the forgetting p
 ## Limits
 
 - The bare and variant queries were written by the person with the hypothesis.
+- No acceptance threshold was set before the scores were read; "worth shipping" is a product
+  judgement from the reported trade-off, not a result the evaluation can prove.
 - Two judges, both Opus, each one pass; disagreements were not adjudicated, the stricter was used.
 - Only fallback lists were judged. Ordinary lists on these queries, and anything a different
   wording or framing keeps, were not.

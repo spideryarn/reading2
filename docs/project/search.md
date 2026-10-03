@@ -207,10 +207,11 @@ from that shape:
   kind of passage or a field ("results", "examples", "linear algebra") scores the paragraphs that
   are instances of it under the floor: 62 of 111 such searches came back empty. The fallback
   fills 50 of them, with 71% of what it shows judged right, and it cannot change a search that
-  finds anything, because it is read only when the list is empty. Its hits print their own lower
-  scores and nothing else marks them. What it costs: a word with no clear referent in the piece,
+  finds anything, because it is read only when the list is empty. Its hits print their own scores
+  and nothing else marks them; because the score is rounded to an integer, a value just under 0.7
+  can print as 70. What it costs: a word with no clear referent in the piece,
   or a neighbouring topic the piece does not cover, can now show a few wrong paragraphs where it
-  showed none (13 of 50 new lists held nothing right; 4 of 75 absent-topic searches showed
+  showed none (13 of 50 new lists held nothing right; 4 of 75 absent and near-miss searches showed
   something). The same thing typed as a question already scores far higher ("what were the
   results?": 0.93). All of it, with the rules passed over, is in
   [261003f](../investigations/261003f-quick-search-category-words-score-under-the-floor.md); the
