@@ -35,7 +35,8 @@ import { captureClientFailure } from "../monitoring.js";
 import { useRenderCount } from "../perf.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
-import { type HeadStep, type MarginClaim, type MarginComment, type MarginaliaNote, layoutNotes } from "./notes.js";
+import { type HeadStep, type MarginClaim, type MarginEntry, type MarginaliaNote, layoutNotes } from "./notes.js";
+import { MARK_KIND_LABEL } from "../comment-nav.js";
 import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN } from "./tips.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
 
@@ -58,14 +59,17 @@ const PROVENANCE_TIP = {
 export function MarginNotesSlot({
   notes,
   viewer,
+  onOpenAsked,
 }: {
   notes: readonly MarginaliaNote[];
   /** Whose comments these are, for their card: the reader's own, or the owner's to a visitor. */
   viewer: "owner" | "visitor";
+  /** Open a question's conversation — the Comments drawer's own press. Owner only. */
+  onOpenAsked?: ((id: string) => void) | undefined;
 }) {
   return (
     <NoteBoundary>
-      <MarginNotes notes={notes} viewer={viewer} />
+      <MarginNotes notes={notes} viewer={viewer} onOpenAsked={onOpenAsked} />
     </NoteBoundary>
   );
 }
@@ -128,7 +132,15 @@ function QuestionNote({ depth, text }: { depth: number; text: string }) {
 
 /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
     prose never carries them. */
-function MarginNotes({ notes, viewer }: { notes: readonly MarginaliaNote[]; viewer: "owner" | "visitor" }) {
+function MarginNotes({
+  notes,
+  viewer,
+  onOpenAsked,
+}: {
+  notes: readonly MarginaliaNote[];
+  viewer: "owner" | "visitor";
+  onOpenAsked?: ((id: string) => void) | undefined;
+}) {
   useRenderCount("MarginNotes");
   return (
     <div className="marg-note" data-marg-note="">
@@ -145,7 +157,7 @@ function MarginNotes({ notes, viewer }: { notes: readonly MarginaliaNote[]; view
           case "citation":
             return <CitationNote key="citation" items={note.items} />;
           case "comment":
-            return <CommentNote key="comment" items={note.items} viewer={viewer} />;
+            return <CommentNote key="comment" items={note.items} viewer={viewer} onOpenAsked={onOpenAsked} />;
           default: {
             const never: never = note;
             return never;
@@ -311,26 +323,84 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
   );
 }
 
-/** The reader's comments. Bare bookmarks never reach here: notes.ts leaves
-    them to the gutter's mark. */
-function CommentNote({ items, viewer }: { items: readonly MarginComment[]; viewer: "owner" | "visitor" }) {
+/**
+ * The reader's comments and the questions they asked here, **each stamped with
+ * its kind** — Greg, SPIDERYARN-READING2-9H: a comment that didn't want an AI
+ * reply, one that did, or a question. One shut line however many there are; a
+ * mixed line counts the two apart. Bare bookmarks never reach here: notes.ts
+ * leaves them to the gutter's mark. Plan 261002j.
+ */
+function CommentNote({
+  items,
+  viewer,
+  onOpenAsked,
+}: {
+  items: readonly MarginEntry[];
+  viewer: "owner" | "visitor";
+  onOpenAsked?: ((id: string) => void) | undefined;
+}) {
   const only = items.length === 1 ? items[0] : undefined;
+  const questions = items.filter((e) => e.as === "question").length;
+  const comments = items.length - questions;
+  const count = [
+    comments > 0 ? plural(comments, "comment", "comments") : null,
+    questions > 0 ? plural(questions, "question", "questions") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <ShutNote
       kind="comment"
-      stamp="Note"
+      stamp={only ? MARK_KIND_LABEL[only.as] : "Yours"}
       tip={viewer === "owner" ? "comment-own" : "comment-owner"}
-      line={only ? (only.body ?? "AI answer") : plural(items.length, "note", "notes")}
-      lineVoice={only?.body ? "reader" : "ui"}
+      line={only ? entryLine(only) : count}
+      lineVoice={only ? entryVoice(only) : "ui"}
     >
-      {items.map((c) => (
-        <div key={c.id} className="marg-open-item">
-          {c.body && <p className="marg-cmt-body">{c.body}</p>}
-          {c.answer && <p className="marg-open-answer">{c.answer}</p>}
-        </div>
-      ))}
+      {items.map((e) =>
+        e.as === "question" ? (
+          <div key={`q:${e.asked.id}`} className="marg-open-item">
+            <p className="marg-open-head">
+              <span className="marg-stamp">{MARK_KIND_LABEL.question}</span>{" "}
+              {e.asked.quote !== undefined ? (
+                <span className={voiceClass("author")}>“{e.asked.quote}”</span>
+              ) : (
+                "About this paragraph"
+              )}
+            </p>
+            {onOpenAsked && (
+              <button type="button" className="linky marg-open-asked" onClick={() => onOpenAsked(e.asked.id)}>
+                Open the conversation
+              </button>
+            )}
+          </div>
+        ) : (
+          <div key={e.comment.id} className="marg-open-item">
+            {!only && (
+              <p className="marg-open-head">
+                <span className="marg-stamp">{MARK_KIND_LABEL[e.as]}</span>
+              </p>
+            )}
+            {e.comment.body && <p className="marg-cmt-body">{e.comment.body}</p>}
+            {e.comment.answer && <p className="marg-open-answer">{e.comment.answer}</p>}
+          </div>
+        ),
+      )}
     </ShutNote>
   );
+}
+
+/** The shut line for one entry: the reader's words, or what it is about. */
+function entryLine(e: MarginEntry): string {
+  if (e.as === "question") return e.asked.quote ?? "About this paragraph";
+  return e.comment.body ?? (e.comment.answer ? "AI answer" : "Asked the AI about this passage");
+}
+
+/** Whose words `entryLine` is (fonts.md): a question's passage is the
+    article's, a comment's body the reader's, and our stand-ins are ours.
+    SPIDERYARN-READING2-9A, plan 261003b. */
+function entryVoice(e: MarginEntry): Voice {
+  if (e.as === "question") return e.asked.quote !== undefined ? "author" : "ui";
+  return e.comment.body ? "reader" : "ui";
 }
 
 /**

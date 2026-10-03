@@ -565,6 +565,13 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         entryId: sentinel("glossary_hidden_entries"),
       });
     },
+    /* Straight into the table, for the same reason. Plan 261003d. */
+    article_tags: async () => {
+      await db.insert(schema.articleTags).values({
+        articleId: ARTICLE_ID,
+        tag: sentinel("article_tags"),
+      });
+    },
   };
 }
 
@@ -667,6 +674,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   citation_investigations: {},
   reading_time: {},
   glossary_hidden_entries: {},
+  article_tags: {},
 };
 
 /** A property of `value`, or `undefined` if it is not an object. */
@@ -706,6 +714,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   citation_investigations: (parsed) => listAt(parsed, "investigations"),
   reading_time: (parsed) => listAt(parsed, "blocks"),
   glossary_hidden_entries: (parsed) => listAt(parsed, "entries"),
+  article_tags: (parsed) => listAt(parsed, "tags"),
 };
 
 /** Every key any of these rows carries. */
@@ -747,6 +756,7 @@ await pgReady({
     "spideryarn.citation_investigations",
     "spideryarn.reading_time",
     "spideryarn.glossary_hidden_entries",
+    "spideryarn.article_tags",
   ],
 });
 

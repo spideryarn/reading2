@@ -16,6 +16,7 @@
  * measured in a real browser and the numbers are in
  * docs/plans/prose-gutter-icons.md.
  */
+import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -261,6 +262,18 @@ describe("the comment marker", () => {
     expect(host.querySelector(".blk-gutter")?.hasAttribute("data-marked")).toBe(false);
   });
 
+  /* SPIDERYARN-READING2-9C, Greg, 2026-10-01: *"If I bookmark a block using
+     the icon in the gutter, it should be a bit more visible."* The mark is the
+     one filled glyph in the column, at full strength. Plan 261002j. */
+  it("is drawn filled, and at full strength, so a bookmark is easy to see", () => {
+    paint([comment("c1", 5)]);
+    expect(host.querySelector(".blk-cmt svg")?.getAttribute("fill")).toBe("currentColor");
+    const css = readFileSync("src/web/styles/gutter.css", "utf8");
+    const rule = css.match(/^\.blk-cmt \{([^}]*)\}/m)?.[1] ?? "";
+    expect(rule).toContain("color: var(--highlight-text)");
+    expect(rule).not.toMatch(/opacity: 0\.\d/);
+  });
+
   it("is absent on a block with no comments", () => {
     paint();
     expect(host.querySelector(".blk-cmt")).toBeNull();
@@ -334,7 +347,7 @@ describe("the chat button", () => {
 
   it("offers to open one of them, rather than promising a new one", () => {
     /* **This assertion has been red once on purpose**, the way the "?" copy
-       below was. Until 2026-09-05 the chip said *"Chat about this paragraph (2
+       below was. Until 2026-09-05 the chip said *"Chat with the AI about this paragraph (2
        already)"* over a press that started a third — it advertised state it
        would not show, which is the report that produced the fix
        (docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md).
@@ -345,13 +358,13 @@ describe("the chat button", () => {
        the button reporting more than it does. GPT Sol, F-05. */
     paint(undefined, 2);
     const b = host.querySelector(".block-chat") as HTMLButtonElement;
-    expect(b.getAttribute("data-tip")).toBe("Open a conversation about this paragraph (2 total)");
+    expect(b.getAttribute("data-tip")).toBe("Open a conversation with the AI about this paragraph (2 total)");
     /* **The same sentence, and that is the fix** — unlike the permalink and the
        "?", whose two names diverge on purpose. The accessible name here used to
        be the bare singular, so the number on screen was the one thing a screen
        reader could not hear. */
     expect(b.getAttribute("aria-label")).toBe(
-      "Open a conversation about this paragraph (2 total)",
+      "Open a conversation with the AI about this paragraph (2 total)",
     );
   });
 
@@ -360,8 +373,8 @@ describe("the chat button", () => {
     // count, and the press really does begin a conversation.
     paint();
     const b = host.querySelector(".block-chat") as HTMLButtonElement;
-    expect(b.getAttribute("data-tip")).toBe("Chat about this paragraph");
-    expect(b.getAttribute("aria-label")).toBe("Chat about this paragraph");
+    expect(b.getAttribute("data-tip")).toBe("Chat with the AI about this paragraph");
+    expect(b.getAttribute("aria-label")).toBe("Chat with the AI about this paragraph");
   });
 });
 
@@ -625,6 +638,14 @@ describe("the bookmark button", () => {
     return { asked, fn };
   };
   const button = () => host.querySelector<HTMLButtonElement>(".blk-bookmark");
+
+  /* SPIDERYARN-READING2-9C: *"it should be possible to comment on a block
+     without wanting an AI-chat-response … make a small UI tweak that will make
+     that clear"*. The free door says it is free. Plan 261002j. */
+  it("says a comment can go with the bookmark, and that the AI does not answer it", () => {
+    paint(undefined, 0, { bookmark: stored(true).fn });
+    expect(button()?.getAttribute("data-tip")).toBe("Bookmark this paragraph, and comment if you like (no AI)");
+  });
 
   it("is drawn only where the callback is — a visitor gets none", () => {
     paint();

@@ -44,7 +44,7 @@ The bad part: **search, glossary and semantic highlighting all use the same oran
 by opacity. Three meanings on one hue, at a time when only one set could be shown at once anyway. If
 we ever have two kinds of mark on the page together, they need to differ by more than alpha — and on
 our dark ground the failure is worse, because a low-alpha orange on near-black is nearly invisible
-rather than merely subtle ([web-client.md § Dark mode](../web-client.md#dark-mode)).
+rather than merely subtle ([web-client.md § Appearance](../web-client.md#appearance-light-dark-and-system)).
 
 Note also a genuine inconsistency they left behind: the API documents `confidence` as 0–1, and the
 highlighting code takes it as 0–100. Somewhere between fetch and render there is a conversion. A

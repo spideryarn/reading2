@@ -49,6 +49,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryEntry, LibraryResponse } from "../types.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
+import { editArticleTags, type TagChange } from "./article-tags.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { readCachedShelf } from "./lib/cached-shelf.js";
 
@@ -81,6 +82,13 @@ export interface Shelf {
   archive: (slug: string) => Promise<void>;
   undo: () => Promise<void>;
   rename: (slug: string, title: string | null) => Promise<void>;
+  /**
+   * Add and remove the reader's own tags on one article, and put the server's
+   * answer on its card in whichever list holds it (plan 261003d). Resolves to
+   * the tags after; **rejects** on failure, so the editor can say so where the
+   * reader is looking rather than in the shelf's strip.
+   */
+  editTags: (slug: string, change: TagChange) => Promise<string[]>;
   /** Whatever last went wrong with a button, for the strip to say. Cleared on the next try. */
   actionError: string | null;
   /** The archived articles, once somebody has asked to see them. */
@@ -123,6 +131,14 @@ export interface Shelf {
   renaming: string | null;
   beginRename: (slug: string) => void;
   cancelRename: () => void;
+  /**
+   * Which article's tag popover is open, if any (ShelfTags.tsx) — up here for
+   * `renaming`'s reason: a tag edit re-renders the table, whose cells remount,
+   * and a popover holding its own `useState` closed after every tag added
+   * (found by the browser check of plan 261003d).
+   */
+  tagging: string | null;
+  setTagging: (slug: string | null) => void;
   /**
    * Say that something a button tried to do did not happen.
    *
@@ -167,6 +183,7 @@ export function useShelf(readerId: string): Shelf {
    */
   const loadingArchived = useRef(false);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [tagging, setTagging] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
    * Slugs with an archive already in flight.
@@ -496,6 +513,31 @@ export function useShelf(readerId: string): Shelf {
     [patch, recordArchivedEdit, stillOurs, supersedeEarlierReads],
   );
 
+  const editTags = useCallback(
+    async (slug: string, change: TagChange): Promise<string[]> => {
+      const asked = reader.current;
+      const tags = await editArticleTags(slug, change);
+      if (!stillOurs(asked)) return tags;
+      /* `rename`'s bookkeeping, for `rename`'s reasons: a read that started
+         before this write must not paint the old tags back, and an archived
+         card edited while the archived list is still loading keeps its edit. */
+      supersedeEarlierReads();
+      const swap = (list: LibraryEntry[] | null) =>
+        list?.map((a) => (a.slug === slug ? { ...a, tags } : a)) ?? null;
+      /* `null` is a value here: a restore that completed while this request was
+         out says the article is known not to be archived. Do not fall through
+         from that sentinel to the stale `archived` array captured at launch. */
+      const edited = archivedEditsRef.current.has(slug)
+        ? archivedEditsRef.current.get(slug)
+        : archived?.find((a) => a.slug === slug);
+      if (edited) recordArchivedEdit(slug, { ...edited, tags });
+      setArticles(swap);
+      setArchived(swap);
+      return tags;
+    },
+    [archived, recordArchivedEdit, stillOurs, supersedeEarlierReads],
+  );
+
   const beginRename = useCallback((slug: string) => setRenaming(slug), []);
   const cancelRename = useCallback(() => setRenaming(null), []);
 
@@ -583,6 +625,7 @@ export function useShelf(readerId: string): Shelf {
       archive,
       undo,
       rename,
+      editTags,
       actionError,
       report,
       archived,
@@ -591,6 +634,8 @@ export function useShelf(readerId: string): Shelf {
       loadArchived,
       restore,
       renaming,
+      tagging,
+      setTagging,
       beginRename,
       cancelRename,
     }),
@@ -603,6 +648,7 @@ export function useShelf(readerId: string): Shelf {
       archive,
       undo,
       rename,
+      editTags,
       actionError,
       report,
       archived,
@@ -611,6 +657,8 @@ export function useShelf(readerId: string): Shelf {
       loadArchived,
       restore,
       renaming,
+      tagging,
+      setTagging,
       beginRename,
       cancelRename,
     ],

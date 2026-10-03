@@ -251,7 +251,7 @@ not merely the writing of frames, and gets no `done` at all.
 
 ## On screen
 
-`?remember=quiz`, and the Recall | Quiz toggle at the top of the band —
+`?remember=quiz`, and the Recall | Tutorial | Quiz toggle at the top of the band —
 [url-state.md](url-state.md) has the parameter and its defined collision with `?thread=`.
 
 **The step row is icons, their words in tooltips** (Greg, 2026-09-30, SPIDERYARN-READING2-71:
@@ -259,7 +259,7 @@ not merely the writing of frames, and gets no `done` at all.
 [icons.md § Navigation](icons.md)): Previous, Next and *Show all N questions* are `ChevronLeft`,
 `ChevronRight` and `List`. **Three things keep their words.** *Answer* is the one real action and
 the mark's note names it; *Show a reference answer*'s indefinite article is the point (§ A reference
-answer is not an answer key); and the Recall | Quiz toggle, because on a touch screen a hover card
+answer is not an answer key); and the Recall | Tutorial | Quiz toggle, because on a touch screen a hover card
 never opens, and "say what you took from it" versus "the article asks" is not something a glyph
 carries on its own (GPT Sol's plan review; Greg's *"maybe remember mode as well"* left it open). **← / → step the questions** as Previous and Next do —
 [keyboard.md § ← / → in Quiz](keyboard.md), which also has the one rule the keys add.
@@ -336,7 +336,9 @@ Greg, 2026-09-30 (SPIDERYARN-READING2-61):
 > questions for the stuff that the user has read.
 
 With [reading time](reading-time.md) on, the band has a tick-box, **Only what I've read**, on by
-default, and beside it how much of the piece you have read ("about 40% of the piece read so far").
+default, and beside it a small pie of how much of the piece you have read, with the figure on its
+card ("About 40% of the piece read so far";
+[261003e](../plans/261003e-quiz-read-so-far-as-a-small-pie-chart.md), spya-mafmm6).
 The batch is still written over the whole article; the filter is the panel's, computed in the
 browser from the levels the page already has. The plan and GPT Sol's six changes to it are
 [260930e](../plans/260930e-quiz-only-asks-about-what-you-have-read.md).

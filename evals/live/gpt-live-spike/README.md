@@ -4,6 +4,11 @@ The throwaway that proved GPT-Live's tool loop can be relayed by the browser alo
 server sideband. What it found is Stage 0 of
 [261003a](../../../docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md).
 
+Not to be confused with the file beside this directory, `evals/live/gpt-live-spike.mts`: that one is
+the measurement (cost, latency and grounding against Realtime,
+[261002r](../../../docs/investigations/261002r-gpt-live-spike.md)); this one is the WebRTC and
+browser-relay probe that its fourth condition asks for.
+
 ```
 npx tsx evals/live/gpt-live-spike/spike-server.ts     # 127.0.0.1:5398, needs OPENAI_API_KEY; spends money
 npx tsx evals/live/gpt-live-spike/spike-drive.ts --name=typed --audio=tone --ask="What does the article say about the lighthouse?" --seconds=25

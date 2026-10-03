@@ -667,6 +667,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "already, because `comments.criterion_id` and `comments.valence` are columns; the seeder is " +
       "its only filesystem reach.",
   },
+  "tests/comment-colour.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    /* Written after the instrumented witness run, so nothing watched it. */
+    evidence: "static-only",
+    reason:
+      "A highlight's colour must cross `handleApi` → `pgCommentStore` → `commentStore.load` and " +
+      "the rollback exporter, and be refused on a whole-block row by the route and by SQL (plan " +
+      "261003e). Postgres-only, because `comments.colour` is a column; the seeder is its only " +
+      "filesystem reach, and the export writes to its own temp directory.",
+  },
   /* **`tests/data-root.test.ts` is deleted**, 2026-09-05, in stage G's last
      adapter group, with `src/store/data-root.ts`, `src/store/artifacts-fs.ts`
      and `src/job-scope.ts`. Its entry said the prediction that held: *"its
@@ -2712,6 +2723,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      Storage the way its neighbour above does, through `scratchArticleInPg`. */
   "tests/comment-answer-stream-lifetime.test.ts": "private-postgres",
   "tests/comment-referee-mark.test.ts": "private-postgres",
+  /* Plan 261003e. A highlight's colour through the route, the store, raw SQL
+     and the rollback exporter, on its own scratch slug; no model is called. It
+     reaches Storage the way its neighbours do, through `scratchArticleInPg`. */
+  "tests/comment-colour.test.ts": "private-postgres",
   /* Plan 261001p. Seeds one article and one answered comment, and reads the
      row back after a refused Dig deeper to show it was left alone — a read
      a neighbour answering the same slug could falsify. No model is called. */
@@ -3114,6 +3129,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-export-raw.test.ts": "private-postgres",
   "tests/store-export-referee.test.ts": "private-postgres",
   "tests/store-export-search-kind.test.ts": "private-postgres",
+  "tests/store-export-thread-kind.test.ts": "private-postgres",
   "tests/store-glossary-delete-pg.test.ts": "private-postgres",
   "tests/store-glossary-run-kind-pg.test.ts": "private-postgres",
   "tests/store-job-draft.test.ts": "private-postgres",
@@ -3135,6 +3151,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-shelf-reads.test.ts": "private-postgres",
   "tests/store-slug-guard.test.ts": "private-postgres",
   "tests/store-step-fence.test.ts": "private-postgres",
+  "tests/store-tags-pg.test.ts": "private-postgres",
   "tests/store-transaction-isolation.test.ts": "private-postgres",
   /* Added 2026-09-29 with `tweets/5` (plan 260929f): `loadTweets` must select
      the final URL and judge a thread the way it was written. Its own

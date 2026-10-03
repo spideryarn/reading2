@@ -63,46 +63,33 @@
    and paints a seam across the arrow's mouth. */
 .tooltip-arrow { z-index: 1; }
 
-/* The band card. Reads top to bottom: which part, which section, what it says,
-   what is inside it, how big it is. See BandCard in Spine.tsx. */
-.tip-crumb {
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--highlight-ink);
-  margin-bottom: 0.2rem;
-  /* One line: a long part title must not push the section title out of view.
-     A flex row rather than plain text since 2026-08-28, because the position
-     pair sits at the far end of it — `gap` and `justify-content` are what keep
-     "3 of 7" pinned right however long the part's name is. */
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-
-/* The part's name. It is the half that yields: `min-width: 0` is what lets a
-   flex item shrink below its content, without which the ellipsis never appears
-   and the position pair is pushed out of the panel instead. */
-.tip-crumb-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* `3 of 7` — how far through this *part*, as opposed to the footer's how far
-   through the article. Dimmer than the part's name and never wrapped: it is
-   orientation you take in without reading, and it must not be what your eye
-   lands on first. */
-.tip-crumb-pos {
+/* **Where am I** — WhereCard.tsx over where.ts: Skim's position marks, and the
+   spine's band card, which reads top to bottom as an outline of the article
+   with the band marked, its gist and sub-sections under it, then how big it is
+   (BandCard in Spine.tsx, plan 261003d). Here rather than in skim.css since
+   the spine began using it. */
+.where-card { margin: 0; padding: 0; list-style: none; font-size: 0.8rem; line-height: 1.45; }
+.where-node { color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Keep a trimmed level's count visible when its title is long. Scoped to the
+   counted spine rows so moving these shared rules does not alter Skim's rows. */
+.where-node.with-of { display: flex; min-width: 0; }
+.where-node.with-of .where-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.where-node.on-path { color: var(--ink-soft); }
+.where-node.here { color: var(--ink); font-weight: 600; }
+.where-node.here::before { content: "▸ "; color: var(--highlight-text); }
+.where-node.here.with-of::before { content: "▸"; flex: none; margin-right: 0.25em; }
+.where-more { color: var(--ink-faint); font-style: italic; }
+/* `3 of 8` on a trimmed level's row, in place of the rows it left out
+   (SPINE_LIMITS). Orientation taken in without reading: dim, and never what
+   the eye lands on first. */
+.where-of {
   flex: none;
+  margin-left: 0.5rem;
+  font-size: 0.85em;
   font-weight: 400;
-  letter-spacing: 0.03em;
   color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
 }
-
 .tip-title {
   font-size: 0.86rem;
   font-weight: 600;
@@ -135,13 +122,6 @@
   font-size: 0.82em;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-}
-
-/* Matches the § in the gist cells: the author's own heading, not a generated one. */
-.tip-own {
-  margin-left: 0.3rem;
-  font-weight: 400;
-  color: var(--highlight);
 }
 
 .tip-gist {
@@ -229,6 +209,22 @@
    from the gist the way `.tip-kids` rules off a band's children, in the same
    faint-label, soft-value pair the band card's footer and list use. */
 .tip-gist:first-child { margin-top: 0; }
+
+/* The band's gist and sub-sections, under its row. Its own row, so it wraps
+   where `.where-node` must not (GPT Sol, 261003d F3). This follows the shared
+   gist rules, including `:first-child`, so the spine's spacing wins cleanly. */
+.where-detail { white-space: normal; padding-bottom: 0.3rem; }
+.where-detail > .tip-gist { margin-top: 0.1rem; }
+/* **Three lines of gist at most**, because this card cannot scroll and the
+   outline above it already costs up to six lines: in a 400px window the band's
+   row, the footer and the tap hint must all still show. 261003d F1. */
+.tip-band .where-detail > .tip-gist {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
 
 .tip-facts {
   display: grid;

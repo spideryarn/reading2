@@ -419,6 +419,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/library/terms"],
   },
   {
+    /* The reader's tag vocabulary, 261003d — `terms`' overlap again. */
+    match: { kind: "literal", path: "/api/library/tags" },
+    methods: ["GET"],
+    witnesses: ["/api/library/tags"],
+  },
+  {
     /* **`DELETE` joined `PATCH` on 2026-09-06**, and they are one matcher with
        two arms rather than two matchers: the same `shelfEntry` regex, branching
        on the method. The permanent delete —
@@ -431,6 +437,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/library\\/([\\w.%-]+)\\/open$", flags: "" },
     methods: ["POST"],
     witnesses: ["/api/library/w1/open"],
+  },
+  {
+    /* One article's tags, 261003d. */
+    match: { kind: "regex", source: "^\\/api\\/library\\/([\\w.%-]+)\\/tags$", flags: "" },
+    methods: ["PATCH"],
+    witnesses: ["/api/library/w1/tags"],
   },
   // ----------------------------------------------------- reader and the misc
   {
@@ -697,6 +709,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["PATCH"],
     witnesses: ["/api/comments/w1/w2/mark"],
   },
+  /* A highlight's colour, plan 261003e. */
+  {
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/colour$",
+      flags: "",
+    },
+    methods: ["PATCH"],
+    witnesses: ["/api/comments/w1/w2/colour"],
+  },
   // ------------------------------------------------------- chat, and live
   {
     match: { kind: "regex", source: "^\\/api\\/chat\\/([\\w.%-]+)$", flags: "" },
@@ -876,8 +898,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 85;
-const EXPECTED_GUARD_COUNT = 104;
+const EXPECTED_MATCHER_COUNT = 88;
+const EXPECTED_GUARD_COUNT = 107;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1846,6 +1868,8 @@ const OVERLAP_PROBES = [
   "/api/library/search",
   /* GET is the shelf's topics; PATCH is the shelf entry for a slug `terms`. */
   "/api/library/terms",
+  /* GET is the reader's tags; PATCH is the shelf entry for a slug `tags`. */
+  "/api/library/tags",
   /* POST is the live tool; PATCH and DELETE are the thread whose id happens to
      read `live-tool`. */
   "/api/chat/w1/live-tool",
@@ -2020,6 +2044,9 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/library",
         "GET literal /api/library/search",
         "GET literal /api/library/terms",
+        // the reader's tags, 261003d — beside the PATCH it serves
+        "GET literal /api/library/tags",
+        "PATCH regex /^\\/api\\/library\\/([\\w.%-]+)\\/tags$/",
         "PATCH regex /^\\/api\\/library\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/library\\/([\\w.%-]+)$/",
         "GET literal /api/models",
@@ -2083,6 +2110,7 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/answer$/",
         "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/mark$/",
+        "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/colour$/",
         "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         // chat and the live sessions, 260908a
@@ -2629,8 +2657,9 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
 
   /**
    * Which happens first — reading the body or decoding the slug — differs per
-   * route, and the difference is visible from outside as two different status
-   * codes for the same two malformed inputs.
+   * route, and the difference is visible from outside as two different answers
+   * to the same two malformed inputs — two status codes until 2026-10-03, two
+   * sentences under one 400 since.
    *
    * The plan's § [DECODE], and GPT Sol reproduced both without Postgres. It is
    * not a policy anybody chose; it is what argument evaluation order does with
@@ -2658,29 +2687,40 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
       expect(reply.body.error).toBe("Request body is not valid JSON");
     });
 
-    it("decodes the slug first on PATCH /api/library/:slug, so it is a 500", async () => {
-      /* A 500 for a malformed request, and it stays one on purpose: the plan's
-         § [DECODE] again — authenticated `part` lets `decodeURIComponent`
-         throw, while the public dispatcher's `slugFrom` turns the same throw
-         into a 400 (src/public/routes.ts). Copying the public helper here would
-         be a behaviour change, so this asserts what is, not what is tidy. */
+    it("decodes the slug first on PATCH /api/library/:slug, so it is the decode's 400", async () => {
+      /* **A 400 since 2026-10-03, and a 500 until then.** Authenticated `part`
+         let `decodeURIComponent` throw, `serveApi`'s catch found no status on a
+         `URIError`, and a mistyped address became *we are broken* and a Sentry
+         report. The public dispatcher's `slugFrom` had turned the same throw
+         into a 400 since 2026-08-28; this pinned the 500 only while the route
+         table was being moved and no behaviour was allowed to change. Sweep
+         item SR-R1, plan 261003g § 1. */
       const reply = await call("PATCH", "/api/library/%", acceptAny, MALFORMED_BODY);
-      expect(reply.status).toBe(500);
-      /* **The status stays; the words do not.** "URI malformed" is the JS
-         engine's sentence, and until 2026-09-24 `handleApi` sent it to the
-         reader as the failure. A 5xx now carries only a sentence written for a
-         reader — plan 260924a § Stage 2c. */
-      expect(reply.body.error).not.toContain("URI malformed");
-      expect(reply.body.error).toBe(UNEXPECTED_FAILURE.message);
+      expect(reply.status).toBe(400);
+      /* Fixed words, and none of them the request's: an `httpError` message is
+         logged as `reason` (docs/project/logging.md). */
+      expect(reply.body.error).toBe("That is not a path we can read.");
     });
+
+    it.each(["%E0", "%GG", "article%", "%C0%AF"])(
+      "answers 400 for the undecodable capture %s, not just a bare percent",
+      async (capture) => {
+        const reply = await call("PATCH", `/api/library/${capture}`, acceptAny, "{}");
+        expect(reply.status).toBe(400);
+        expect(reply.body.error).toBe("That is not a path we can read.");
+      },
+    );
 
     it("sends the two different answers to the same two malformed inputs", async () => {
       /* The pair, asserted as a pair. Either case alone could go green because
          both routes started answering the same way — which is precisely the
-         regression this is here for. */
+         regression this is here for. Both are a 400 now, so it is the
+         **sentence** that says which check ran first. */
       const visibility = await call("PUT", "/api/article/%/visibility", acceptAny, MALFORMED_BODY);
       const shelf = await call("PATCH", "/api/library/%", acceptAny, MALFORMED_BODY);
-      expect(visibility.status).not.toBe(shelf.status);
+      expect(visibility.status).toBe(400);
+      expect(shelf.status).toBe(400);
+      expect(visibility.body.error).not.toBe(shelf.body.error);
     });
   });
 

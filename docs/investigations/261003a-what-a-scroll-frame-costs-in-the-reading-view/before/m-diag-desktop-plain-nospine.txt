@@ -1,0 +1,324 @@
+signed in locally (referee-test-260901@example.com)
+carried 2 storage keys to http://localhost:5391
+device desktop 1280x800@1; settling 20s…
+page: 551 rows, 22797 nodes, 77031px tall — "Replication crisis en.wikipedia.org /wiki/Replication_crisis Contribut"
+bundle: index-usnuRyqZ.js
+scroll/touch/wheel listeners on window/document/html/body:
+  window resize NOT-passive src/web/useHoverCard.ts:731
+  window resize NOT-passive src/web/DockQuickSearch.tsx:157
+  window resize NOT-passive src/web/reader/measure.ts:51
+  window resize NOT-passive src/web/reader/measure.ts:161
+  window resize NOT-passive src/web/Spine.tsx:610
+  window scroll passive src/web/scroll.ts:516
+  window scroll passive src/web/reader/useReadingPosition.ts:190
+  window scroll passive src/web/Spine.tsx:716
+  window wheel passive src/web/keynav.ts:464
+  window pointerdown passive src/web/keynav.ts:464
+  document scroll passive capture src/web/useHoverCard.ts:731
+  document pointerdown NOT-passive src/web/useHoverCard.ts:532
+  document pointermove passive src/web/useHoverCard.ts:606
+⚠ DIAGNOSTIC: injected CSS ".spine{display:none!important}" — not the product
+
+gesture: {"kind":"wheel 120px/60ms","events":180,"requestedPx":21600,"movedPx":21600,"reversals":3,"wallMs":10958,"target":"figure < span.zoomable < div.prose < td.text.pin-right < tr"}
+composited layers (LayerTree): 7
+/proc CPU during scroll, % of one core: {"byType":{"renderer":78.8,"gpu-process":19.2,"browser":10.1,"utility":1,"zygote":0.1},"byThread":{"renderer:chrome":64.9,"gpu-process:VizCompositorTh":17.3,"renderer:Compositor":8,"renderer:ThreadPoolForeg":4.6,"gpu-process:Chrome_ChildIOT":1.5,"renderer:Chrome_ChildIOT":0.5,"gpu-process:chrome":0.4}}
+/proc CPU at rest (30s): {"byType":{"browser":6.2,"renderer":2.1,"utility":1,"zygote":0.2,"gpu-process":0.1},"byThread":{"renderer:ThreadPoolForeg":1.5,"renderer:chrome":0.4,"renderer:PerfettoTrace":0.1}}
+running animations after rest: 0
+nodes: {"39":"#document","54":"html","175":"div.masthead-inner","214":"div.reader.spine-on.text-alone.band-covers","216":"div.masthead","735":"svg","736":"defs","737":"path#E1-MJMATHI-48","738":"path#E1-MJMAIN-30","739":"g","740":"use","741":"path#E1-MJMATHI-48","742":"use","743":"path#E1-MJMAIN-30","746":"svg","747":"defs","748":"path#E1-MJMATHI-48","749":"path#E1-MJMAIN-31","750":"g","751":"use","752":"path#E1-MJMATHI-48","753":"use","754":"path#E1-MJMAIN-31","807":"span.zoomable","809":"span.zoomable","945":"span.zoomable","1804":"span.zoomable","1816":"span.zoomable","1828":"span.zoomable","1891":"span.zoomable","1916":"span.zoomable","1994":"span.zoomable","2018":"span.zoomable","2032":"a.blk-permalink","18763":"button.spine-hit","18793":"div.spine-part.active","18794":"button.spine-hit"}
+
+=== SCROLL: 29164ms traced, renderer pid 1013783
+frames: {"BeginFrame":668,"DrawFrame":194,"BeginMainThreadFrame":375,"Commit":413,"ActivateLayerTree":38,"DroppedFrame":0,"NeedsBeginFrameChanged":4,"FireAnimationFrame":424,"UpdateLayoutTree":62,"Layout":48,"PrePaint":702,"Paint":56,"Layerize":375,"UpdateLayer":314,"ScrollLayer":140,"HitTest":189}
+frame states: {"?":891}
+paint: 56 Paint events in 39 main-thread tasks; area per painting task / viewport: median 10.871, p90 10.871; total 516,524,800 px²
+  by layer (layerId, paints, viewports): [["0",56,504.42]]
+  by node (nodeId, paints, viewports): [[39,39,394.23],[2032,1,10.87],[1804,1,7.41],[1816,1,7.41],[1828,1,7.41],[1891,1,7.41],[1916,1,7.41],[1994,1,7.41],[2018,1,7.41],[807,1,5.93],[809,1,5.93],[945,1,5.93]]
+raster: 461 RasterTasks, 340ms; 13 image decodes
+style recalcs by cause (cause, count, ms, elements):
+  ["data-bars flip",4,1390.3,63384]
+  [":has() re-match on html/.reader",42,1374.3,221]
+  ["other invalidation",16,6.5,463]
+paints by cause (cause, count, ms):
+  [":has() re-match on html/.reader",28,437]
+  ["no tracked invalidation",24,137]
+  ["data-bars flip",4,71.3]
+HitTest by caller (caller, count, ms): [["script or other",1,10.6],["Chrome ad heuristics (headless artefact?)",22,175.3],["input event targeting",166,1163.8]]
+thread renderer:CrRendererMain: busy 7723ms (26.5% of window)
+      2600.9ms self      62×  Document::recalcStyle
+      1349.7ms self     189×  HitTest
+      1180.5ms self    1746×  FunctionCall
+       594.4ms self      56×  Paint
+       225.7ms self     493×  CullRectUpdate
+       161.5ms self      42×  Document::updateStyleInvalidationIfNeeded
+       154.3ms self     544×  Blink.PrePaint.UpdateTime
+       104.9ms self     415×  PageAnimator::serviceScriptedAnimations
+        95.6ms self     375×  WebFrameWidgetImpl::UpdateLifecycle
+        94.9ms self    2187×  ThreadControllerImpl::RunTask
+        91.8ms self    2187×  RunTask
+        70.1ms self      42×  Receive mojo message
+        68.6ms self    2045×  BlinkScheduler_PerformMicrotaskCheckpoint
+        64.2ms self    8854×  Document::UpdateStyleAndLayout
+        63.3ms self      36×  PaintArtifactCompositor::Update
+        49.6ms self      14×  Document::SetURL
+        48.6ms self     375×  Blink.Paint.UpdateTime
+        45.3ms self       3×  V8.GC_SCAVENGER_SCAVENGE_PARALLEL
+        44.0ms self    8854×  Blink.ForcedStyleAndLayout.UpdateTime
+        41.2ms self     337×  MainFrameAborted
+        40.9ms self     375×  Commit
+        39.4ms self    9556×  LocalFrameView::UpdateStyleAndLayout
+        35.6ms self     457×  EventDispatch
+        34.3ms self     493×  LocalFrameView::RunPaintLifecyclePhase
+        25.9ms self     375×  ProxyMain::BeginMainFrame
+        22.3ms self     759×  AsyncTask Run
+        22.0ms self     752×  IntersectionObserverController::computeIntersections
+        19.2ms self     544×  Blink.CompositingInputs.UpdateTime
+        16.5ms self     788×  LocalFrameView::ScheduleAnimation
+        16.4ms self     321×  LatencyInfo.Flow
+thread pid1013704:VizCompositorThread: busy 2385.5ms (8.2% of window)
+      1727.6ms self    5698×  SoftwareRenderer::DoDrawQuad
+       252.5ms self    2953×  Graphics.Pipeline
+       166.3ms self     220×  DirectRenderer::DrawRenderPass
+        49.7ms self    2399×  ThreadControllerImpl::RunTask
+        34.8ms self    2399×  RunTask
+        29.4ms self     902×  SimpleWatcher::OnHandleReady
+        28.9ms self     932×  Receive mojo message
+        18.3ms self     665×  DelayBasedBeginFrameSource::OnTimerTick
+        15.4ms self     587×  DisplayScheduler::BeginFrame
+        12.6ms self    1218×  DisplayScheduler::ScheduleBeginFrameDeadline
+thread renderer:Compositor: busy 1148.4ms (3.9% of window)
+       180.1ms self    1633×  Graphics.Pipeline
+       131.5ms self    1765×  LatencyInfo.Flow
+        99.7ms self    3579×  ThreadControllerImpl::RunTask
+        71.3ms self     215×  TileManager::AssignGpuMemoryToTiles
+        71.1ms self    1425×  EpollEvent
+        54.6ms self    2094×  SimpleWatcher::OnHandleReady
+        43.1ms self    2100×  Receive mojo message
+        42.6ms self    3579×  RunTask
+        40.5ms self     337×  ProxyImpl::BeginMainFrameAbortedOnImplThread
+        38.4ms self     664×  Scheduler::BeginImplFrame
+thread renderer:ThreadPoolForegroundWorker: busy 813.2ms (2.8% of window)
+       289.8ms self      16×  V8.GC_SCAVENGER_BACKGROUND_SCAVENGE_PARALLEL
+       263.5ms self     349×  DisplayItemList::Raster
+       173.9ms self     406×  ThreadPool_RunTask
+        34.9ms self     349×  ZeroCopyRasterBuffer::Playback
+        10.6ms self       2×  DecodingImageGenerator::getPixels - apply xform
+         9.0ms self       3×  Decode Image
+         9.0ms self     349×  RasterizerTaskImpl::RunOnWorkerThread
+         8.4ms self     543×  TaskGraphRunner::RunTask
+         4.1ms self     349×  RasterTask
+         3.3ms self      60×  DidFinishRunningAllTilesTask::RunOnWorkerThread
+thread pid1013656:CrBrowserMain: busy 774.6ms (2.7% of window)
+       174.1ms self    4659×  ThreadControllerImpl::RunTask
+       172.6ms self     717×  Receive mojo message
+        59.6ms self    4659×  RunTask
+        57.8ms self    1443×  LatencyInfo.Flow
+        39.4ms self     799×  InputRouterImpl::FilterAndSendWebInputEvent
+        33.9ms self     839×  Receive mojo reply
+        25.3ms self     192×  Graphics.Pipeline
+        25.0ms self    1128×  SimpleWatcher::OnHandleReady
+        23.4ms self     168×  UpdateLayer
+        14.2ms self     322×  MouseWheelEventQueue::ProcessMouseWheelAck
+thread pid1013704:Chrome_ChildIOThread: busy 181.4ms (0.6% of window)
+       122.1ms self    1312×  EpollEvent
+        29.5ms self     434×  Receive mojo message
+        16.0ms self     172×  ThreadControllerImpl::RunTask
+         9.1ms self     435×  SimpleWatcher::OnHandleReady
+         1.9ms self      96×  Scheduler::ScheduleTask
+         1.5ms self     172×  RunTask
+         1.2ms self      93×  GpuChannelMessageFilter::FlushDeferredRequests
+thread pid1013656:ThreadPoolForegroundWorker: busy 169.1ms (0.6% of window)
+       168.9ms self    4011×  ThreadPool_RunTask
+thread pid1013656:Chrome_IOThread: busy 137.4ms (0.5% of window)
+       106.1ms self    1587×  EpollEvent
+        13.2ms self     319×  SimpleWatcher::OnHandleReady
+         9.8ms self     666×  ThreadControllerImpl::RunTask
+         5.2ms self     666×  RunTask
+         2.7ms self      38×  Receive mojo message
+thread renderer:Chrome_ChildIOThread: busy 108ms (0.4% of window)
+        71.8ms self     426×  ThreadControllerImpl::RunTask
+        28.2ms self     267×  EpollEvent
+         6.4ms self     426×  RunTask
+         1.3ms self      23×  SimpleWatcher::OnHandleReady
+thread pid1013656:Chrome_DevToolsHandlerThread: busy 90.1ms (0.3% of window)
+        63.5ms self     387×  ThreadControllerImpl::RunTask
+        21.3ms self     184×  EpollEvent
+         5.2ms self     387×  RunTask
+thread pid1013656:CompositorTileWorker: busy 51.2ms (0.2% of window)
+        33.2ms self     112×  DisplayItemList::Raster
+         6.3ms self      56×  TaskSetFinishedTaskImpl::RunOnWorkerThread
+         3.3ms self     196×  cc::SingleThreadTaskGraphRunner::RunTask
+         3.2ms self     112×  ZeroCopyRasterBuffer::Playback
+         2.5ms self     224×  SingleThreadTaskGraphRunner::RunTaskWithLockAcquired
+         1.4ms self     112×  RasterizerTaskImpl::RunOnWorkerThread
+         1.1ms self     112×  RasterTask
+thread pid1013704:CrGpuMain: busy 51.1ms (0.2% of window)
+        28.1ms self     435×  ThreadControllerImpl::RunTask
+        13.0ms self     435×  RunTask
+         6.4ms self      90×  SharedImageStub::CreateSharedImage
+         1.0ms self      96×  Scheduler::RunTask
+         1.0ms self      90×  SharedImageStub::OnCreateSharedImageWithBuffer
+invalidations: {"LayoutInvalidationTracking":806,"ScheduleStyleInvalidationTracking":162,"StyleInvalidatorInvalidationTracking":212,"StyleRecalcInvalidationTracking":283}
+     219  Layout | use | SVG changed
+      86  StyleRecalc | DIV class='reader spine-on text-alone band-covers' | Affected by :has()
+      86  ScheduleStyle | DIV class='reader spine-on text-alone band-covers' | has
+      86  StyleRecalc | HTML | Affected by :has()
+      73  Layout | g | SVG changed
+      65  Layout | path id='E1-MJMATHI-48' | SVG changed
+      54  ScheduleStyle | BUTTON class='spine-hit' | aria-current
+      54  StyleInvalidator | BUTTON class='spine-hit' | Invalidation set invalidates self
+      45  Layout | defs | SVG changed
+      42  Layout | path id='E1-MJMAIN-30' | SVG changed
+      42  StyleInvalidator | DIV class='reader spine-on text-alone band-covers' | Element has pending invalidation list
+      42  StyleInvalidator | DIV class='masthead' | Invalidation set matched class
+      42  StyleRecalc | DIV class='masthead' | Related style rule
+      42  StyleInvalidator | DIV class='masthead-inner' | Invalidation set matched class
+      42  StyleRecalc | DIV class='masthead-inner' | Related style rule
+      35  Layout | path id='E1-MJMAIN-31' | SVG changed
+      24  Layout | svg | SVG changed
+      22  Layout | path id='E1-MJMATHI-44' | SVG changed
+      21  Layout | svg | Size changed
+      20  Layout | path id='E1-MJMATHI-3B1' | SVG changed
+      15  Layout | path id='E1-MJMAIN-3D' | SVG changed
+      14  Layout | path id='E1-MJMAIN-5B' | SVG changed
+      14  Layout | path id='E1-MJMAIN-5D' | SVG changed
+      13  Layout | path id='E1-MJMAIN-28' | SVG changed
+      13  Layout | path id='E1-MJMAIN-29' | SVG changed
+      12  Layout | path id='E1-MJMATHI-74' | SVG changed
+      11  StyleRecalc | svg | PlatformColorChange
+      11  Layout | #document | Unknown
+      10  Layout | path id='E1-MJMATHI-50' | SVG changed
+      10  Layout | path id='E1-MJMATHI-72' | SVG changed
+EventDispatch (type, count, ms): [["scroll",140,45.4],["wheel",166,44.4],["scrollend",137,0.8],["load",3,0.5],["resize",11,0.1]]
+FunctionCall (count, inclusive ms):
+     140×   1844.0ms  r @ src/web/reader/useReadingPosition.ts:154
+     134×    487.5ms  (anon) @ node_modules/react-dom/cjs/react-dom-client.production.js:12089
+      90×    383.1ms  D @ node_modules/scheduler/cjs/scheduler.production.js:121
+      28×     80.5ms  r @ node_modules/nuqs/dist/debounce-Ynq26WfO.js:77
+     140×     51.5ms  l @ src/web/scroll.ts:484
+       2×     40.3ms  (anon) @ src/web/Spine.tsx:615
+     332×     21.1ms  up @ node_modules/react-dom/cjs/react-dom-client.production.js:15280
+     140×     15.4ms  s @ src/web/Spine.tsx:688
+     140×     13.7ms  u @ src/web/scroll.ts:516
+     140×      6.8ms  j @ src/web/useHoverCard.ts:731
+     140×      6.4ms  s @ src/web/reader/useReadingPosition.ts:190
+     140×      5.1ms  c @ src/web/Spine.tsx:716
+     166×      2.1ms  f @ src/web/keynav.ts:464
+       4×      0.6ms  a @ src/web/scroll.ts:437
+       3×      0.3ms  dp @ node_modules/react-dom/cjs/react-dom-client.production.js:15297
+       2×      0.3ms  i @ src/web/reader/measure.ts:59
+       2×      0.3ms  t @ src/web/reader/measure.ts:51
+       1×      0.2ms  (anon) @ node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:4445
+       2×      0.1ms  n @ src/web/Spine.tsx:610
+timers: fired 33, rAF fired 424, rAF requested 424
+  install   24× once 300ms Ce @ node_modules/nuqs/dist/debounce-Ynq26WfO.js:81
+  install   14× once 0ms Ce @ node_modules/nuqs/dist/debounce-Ynq26WfO.js:81
+  install    4× once 400ms s @ src/web/scroll.ts:468
+scroll-named events:
+     702  RootScrollerController::PerformRootScrollerSelection [CrRendererMain]
+     675  ScrollTree::SetScrollOffset [CrRendererMain]
+     375  ScrollTree::CollectScrollDeltas [Compositor]
+     339  InputHandler::ClearCurrentlyScrollingNode [Compositor]
+     334  ScrollNodeWithLocalDelta [Compositor]
+     334  ScrollTree::ScrollBy [Compositor]
+     334  ScrollTree::SetScrollOffset [Compositor]
+     334  InputLatency::GestureScrollUpdate [CrBrowserMain]
+     310  InputLatency::GestureScrollBegin [CrBrowserMain]
+     310  ScrollJankV4 [Compositor]
+     310  InputLatency::GestureScrollEnd [CrBrowserMain]
+     277  NotifyDidScroll [CrRendererMain]
+     194  Scroll Delta This Frame [Compositor]
+     167  InputHandlerProxy::HandleGestureScrollUpdate [Compositor]
+     167  InputHandler::ScrollUpdate [Compositor]
+     167  InputHandler::ScrollLatchedScroller [Compositor]
+     167  InputHandlerProxy::HandleGestureScrollUpdate_Result [Compositor]
+     155  InputHandlerProxy::HandleGestureScrollBegin [Compositor]
+     155  InputHandler::ScrollBegin [Compositor]
+     155  Hit Testing for ScrollNode [Compositor]
+     155  InputHandlerProxy::HandleGestureScrollEnd [Compositor]
+     155  Real scroll update input generation [Compositor]
+     140  CollectScrollDeltas [Compositor]
+     140  ScrollableArea::SetScrollOffset [CrRendererMain]
+     140  ScrollableArea::scrollOffsetChanged [CrRendererMain]
+     140  PaintLayerScrollableArea::UpdateScrollOffset [CrRendererMain]
+     140  ScrollLayer [CrRendererMain]
+      28  Scroll Delta This Frame [CrBrowserMain]
+       7  CalculateStagesBasedOnScrollId: Multiple scrolls overlap in a single frame [Compositor]
+       3  ScrollAnchor::FindAnchor [CrRendererMain]
+main-thread scroll hints: 
+  Scheduler::BeginImplFrame: "main_thread_missed_last_deadline":false
+  Scheduler::BeginImplFrame: "main_thread_missed_last_deadline":true
+
+=== REST: 30099ms traced, renderer pid 1013783
+frames: {"BeginFrame":0,"DrawFrame":0,"BeginMainThreadFrame":0,"Commit":0,"ActivateLayerTree":0,"DroppedFrame":0,"NeedsBeginFrameChanged":0,"FireAnimationFrame":0,"UpdateLayoutTree":0,"Layout":0,"PrePaint":0,"Paint":0,"Layerize":0,"UpdateLayer":0,"ScrollLayer":0,"HitTest":0}
+frame states: {}
+paint: 0 Paint events in 0 main-thread tasks; area per painting task / viewport: median 0, p90 0; total 0 px²
+  by layer (layerId, paints, viewports): []
+  by node (nodeId, paints, viewports): []
+raster: 0 RasterTasks, 0ms; 0 image decodes
+style recalcs by cause (cause, count, ms, elements):
+paints by cause (cause, count, ms):
+HitTest by caller (caller, count, ms): []
+thread pid1013656:ThreadPoolForegroundWorker: busy 1290.4ms (4.3% of window)
+      1215.0ms self    1436×  ThreadPool_RunTask
+        29.2ms self     174×  SimpleURLLoader_BodyReader mojo callback
+        28.4ms self     447×  Receive mojo message
+        11.0ms self     684×  SimpleWatcher::OnHandleReady
+         6.3ms self      25×  Receive mojo reply
+thread renderer:ThreadPoolForegroundWorker: busy 723.3ms (2.4% of window)
+       332.6ms self      12×  V8.GC_MC_BACKGROUND_MARKING
+       218.3ms self      82×  ThreadPool_RunTask
+       120.4ms self      14×  V8.GC_MC_BACKGROUND_EVACUATE_COPY
+        29.9ms self     132×  V8.GC_MC_BACKGROUND_SWEEPING
+        18.6ms self       7×  V8.GC_MC_BACKGROUND_EVACUATE_UPDATE_POINTERS
+         1.6ms self       8×  V8.GC_MC_CLEAR_STRING_TABLE
+thread pid1013656:CrBrowserMain: busy 366.1ms (1.2% of window)
+       214.8ms self    2501×  ThreadControllerImpl::RunTask
+        48.3ms self     280×  Closed mojo endpoint
+        46.2ms self     286×  Receive mojo message
+        39.9ms self    2501×  RunTask
+        13.6ms self     555×  SimpleWatcher::OnHandleReady
+         2.7ms self       8×  SimpleURLLoader_BodyReader mojo callback
+thread renderer:CrRendererMain: busy 146.7ms (0.5% of window)
+        21.0ms self     907×  ThreadControllerImpl::RunTask
+        20.8ms self     111×  V8.GC_MC_INCREMENTAL_EMBEDDER_TRACING
+        17.7ms self     111×  V8.GC_MC_INCREMENTAL
+        15.0ms self     906×  BlinkScheduler_PerformMicrotaskCheckpoint
+        14.1ms self     907×  RunTask
+        10.9ms self       1×  V8.GC_HEAP_EPILOGUE_SAFEPOINT
+        10.6ms self       1×  V8.GC_MC_EVACUATE_COPY_PARALLEL
+         6.2ms self       2×  SimpleWatcher::OnHandleReady
+         3.8ms self       3×  Receive mojo message
+         3.6ms self       2×  V8.GC_MC_MARK_EMBEDDER_PROLOGUE
+         3.2ms self       1×  V8.GC_MC_EVACUATE_UPDATE_POINTERS_PARALLEL
+         2.8ms self       1×  V8.GC_MARK_COMPACTOR
+         2.4ms self       1×  V8.GC_MC_EVACUATE_UPDATE_POINTERS_TO_NEW_ROOTS
+         1.8ms self      16×  V8.GC_MC_SWEEP
+         1.7ms self       1×  V8.GC_MC_EVACUATE_EPILOGUE
+         1.4ms self       1×  V8.GC_MC_INCREMENTAL_START
+         1.4ms self       1×  V8.GC_MC_EVACUATE_COPY
+thread pid1013656:ThreadPoolSingleThreadForegroundBlocking: busy 137.1ms (0.5% of window)
+       137.1ms self      80×  ThreadPool_RunTask
+thread pid1013656:Chrome_IOThread: busy 111.7ms (0.4% of window)
+       101.3ms self    1457×  EpollEvent
+         8.0ms self     120×  ThreadControllerImpl::RunTask
+         1.7ms self     120×  RunTask
+thread pid1013656:MemoryInfra: busy 45ms (0.1% of window)
+        23.1ms self       4×  Receive mojo message
+        10.0ms self       5×  Receive mojo reply
+         6.3ms self      25×  Closed mojo endpoint
+         2.4ms self      63×  RunTask
+         2.1ms self      63×  ThreadControllerImpl::RunTask
+         1.0ms self      34×  SimpleWatcher::OnHandleReady
+thread pid1013656:PerfettoTrace: busy 30ms (0.1% of window)
+        12.9ms self      62×  Receive mojo message
+         7.2ms self      93×  SimpleWatcher::OnHandleReady
+         6.2ms self     177×  ThreadControllerImpl::RunTask
+         2.8ms self     177×  RunTask
+invalidations: {}
+EventDispatch (type, count, ms): []
+FunctionCall (count, inclusive ms):
+       1×      0.2ms  (anon) @ node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:4445
+timers: fired 1, rAF fired 0, rAF requested 0
+scroll-named events:
+main-thread scroll hints: none found in args
+
+wrote /tmp/claude-1000/-home-greg-code-spideryarn2/2ad69e0b-306d-4c33-9b25-1e596d2ed4ca/scratchpad/m-diag-desktop-plain-nospine.scroll.trace.json, /tmp/claude-1000/-home-greg-code-spideryarn2/2ad69e0b-306d-4c33-9b25-1e596d2ed4ca/scratchpad/m-diag-desktop-plain-nospine.rest.trace.json, /tmp/claude-1000/-home-greg-code-spideryarn2/2ad69e0b-306d-4c33-9b25-1e596d2ed4ca/scratchpad/m-diag-desktop-plain-nospine.summary.json

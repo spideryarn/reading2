@@ -1,0 +1,99 @@
+/* dock-quick-search.css — the quick-search control in the bottom bar
+   (src/web/DockQuickSearch.tsx; plan 261002h stage 3).
+
+   **Both of its shapes are always in the DOM, and this file picks one.** The
+   fit ladder (src/web/dock-fit.ts) measures the row by putting each rung's
+   class on `.dock` and asking whether it overflows; a React swap of box for
+   button would happen a render after the measurement it should have been part
+   of (Sol F9). So the rungs are selectors here:
+
+     rung 0           a 14rem box
+     rungs 1 and 2    a 9rem box
+     rung 3           a 7rem box, no `/` hint — every label has gone first
+     rung 4           the ⚡ button (added 2026-10-02: an owner's reading view
+                      is on rung 3 at 1440×900, and while rung 3 drew the ⚡ a
+                      laptop never saw a search bar at all)
+     under 732px      the ⚡ button (narrow-window.css's width)
+     pointer: coarse  the ⚡ button, at any width — a text box in a fixed bar
+                      at the foot of an iPad is where the on-screen keyboard
+                      misbehaves (Opus, plan review)
+     .dock-qs--bolt   the ⚡ button: Search mode is open and the box does not
+                      have focus, so there is one box to type in, not two
+
+   Loaded straight after dock-fit.css, whose `.dock.dock-fit-3`/`-4` rules it
+   extends, and before narrow-window.css, which does not touch these classes. */
+
+.dock-qs {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.dock-qs-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-block: 0.3rem;
+  padding-inline: 0.5rem 0.4rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink-faint);
+}
+.dock-qs-field:focus-within {
+  border-color: var(--highlight);
+  color: var(--highlight-text);
+}
+
+.dock-qs-input {
+  width: 14rem;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+}
+/* The field's border carries focus; a second ring inside it would be two. */
+.dock-qs-input:focus,
+.dock-qs-input:focus-visible { outline: none; }
+.dock-qs-input::placeholder { color: var(--ink-faint); }
+/* Ours is Escape — the same reason as `.srch-input` in search.css. */
+.dock-qs-input::-webkit-search-cancel-button { display: none; }
+
+.dock-qs-icon { flex: none; }
+
+/* The key that gets you here, while there is nothing typed to show instead. */
+.dock-qs-key {
+  flex: none;
+  padding: 0 0.3rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: var(--ink-faint);
+}
+
+.dock-qs-bolt { display: none; }
+
+.dock.dock-fit-1 .dock-qs-input,
+.dock.dock-fit-2 .dock-qs-input { width: 9rem; }
+/* Rung 3: every label is gone and the box is still here, compact and without
+   its `/` hint — the hint is a nicety, the box is the point. Rung 4 is listed
+   so it stays a strict superset of rung 3 (dock-fit.css), though the box is
+   hidden there anyway. */
+.dock.dock-fit-3 .dock-qs-input,
+.dock.dock-fit-4 .dock-qs-input { width: 7rem; }
+.dock.dock-fit-3 .dock-qs-key,
+.dock.dock-fit-4 .dock-qs-key { display: none; }
+
+.dock.dock-fit-4 .dock-qs-field,
+.dock-qs--bolt .dock-qs-field { display: none; }
+.dock.dock-fit-4 .dock-qs-bolt,
+.dock-qs--bolt .dock-qs-bolt { display: inline-flex; }
+
+@media (max-width: 731px), (pointer: coarse) {
+  .dock .dock-qs-field { display: none; }
+  .dock .dock-qs-bolt { display: inline-flex; }
+}

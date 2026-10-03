@@ -153,6 +153,13 @@ Then the residue, which is why this page exists:
   bar to tell us what mode we're in"*). Add the row only if you have something else for it — a
   count, a sub-mode switch, a control that cannot wrap. Summary and Search have none at all.
   [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Stage 5. *Nothing.*
+- **A second way into a mode from the bar is a view of the mode's state, never a copy of it.** One
+  mode has one so far: Search's quick-search box (a ⚡ on touch screens), beside its button since
+  2026-10-02. It shares the panel's draft through a small per-article store and hands its words to
+  the band, which does all the asking — so there is still one request, one list and one set of
+  marks. Its gate is `hasQuickSearch` in [`Dock.tsx`](../../src/web/Dock.tsx): only where the band
+  that can answer would mount. [search.md § Search as you
+  type](search.md#search-as-you-type-and-the-box-in-the-bottom-bar). *`tests/dock-quick-search.test.tsx`.*
 - **No description line in the band.** A sentence saying what the mode is, how it was made or how
   to read it — *"Written by AI in plain words to help you get your bearings…"* — is not wanted, at
   the top, in a foot, or under the controls:
@@ -445,7 +452,10 @@ Then the residue nothing refuses at compile time:
 
 A new mode's prompt takes the shared plain-words rule, `plainWords(...)`, naming each kind of text
 it writes — [prompting-guide.md](prompting-guide.md) is the rule, the trade-off and how to measure a
-change. If the model answers in JSON, the request sends a strict schema through
+change. If it is handed the whole article, it also takes `paperwork(kind)`, so the authors' list,
+the acknowledgements and the funding stay out of what it writes, or it is listed in
+`PAPERWORK_EXEMPT` with the reason (`tests/paperwork-coverage.test.ts` holds both) —
+[prompting-guide.md](prompting-guide.md). If the model answers in JSON, the request sends a strict schema through
 `withMessagesJsonSchema` (or `withChatJsonSchema`) — no `enum` of block ids, and the ids still
 resolved after the parse — [prompting-guide.md § What the model writes back](prompting-guide.md).
 

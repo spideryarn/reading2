@@ -252,6 +252,25 @@ is not among the topics is **never applied while they load** — so a stale link
 shelf — and is **dropped, with `replace`, once an answer arrives with nothing pending**. Not before:
 while articles are still being read, a topic can be absent from one answer and present in the next.
 
+## Your own tags, in the row above
+
+The reader's own tags ([library.md § Your own tags](library.md#your-own-tags)) are a **second row
+above this one**, not chips mixed into it. Everything this doc says about colour, More detail, the
+paper card and "picked by a program" is about phrases chosen *for* the reader; a tag is the reader's
+own word, and mixing them would have tags shift every topic's hue (GPT Sol's plan review of 261003d,
+finding 4).
+
+What the two rows share is the narrowing. `tagFacets` in
+[`shelf-narrow.ts`](../../src/web/shelf-narrow.ts) shapes each tag like a topic, so the same
+`topicMembers` → `withTopics` → `topicCountsForVisible` serve both: **one AND across every chip in
+either row, and one count formula**, so a chosen tag's number is the shelf's number exactly as a
+topic's is. Tags come from the entries already loaded, so there is no request, no pending state, and
+no eight-work minimum.
+
+`?tags=<tag>,<tag>` (push), its own key. **Unlike `?topics=`, it is never rewritten by the page**: a
+chosen tag no article in scope carries narrows nothing and draws no chip, but stays in the URL, so a
+tag edit in flight or an archive still loading cannot eat the reader's filter.
+
 ## Where the code is
 
 | What | Where |
@@ -280,6 +299,13 @@ it Greg runs it with his owner uuid and the production `DATABASE_URL` in the she
 `.env.local`), and reads the `Target:` line before the numbers.
 
 ## What v1 does not do
+
+**Proposed, not built, waiting on Greg**: letting the model name the topics as concepts (*Buddhism*,
+*Writing*) and file the articles, rather than only score phrases the articles use, which is why
+*principles* and *writers* can be pills. Plan
+[261003f](../plans/261003f-shelf-topics-named-by-a-model-as-concepts-not-phrases.md), with its eval
+in [investigation 261003b](../investigations/261003b-shelf-topics-as-concepts-not-phrases.md).
+
 
 - No embeddings, no clustering library (the colours' clustering is thirty lines of our own); the
   one model call judges candidates and never writes one.

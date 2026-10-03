@@ -66,6 +66,7 @@ import type {
   ChatMessage,
   ChatThread,
   Comment,
+  HighlightColour,
   FeedbackCursor,
   FeedbackFrom,
   FeedbackDiagnostics,
@@ -427,6 +428,7 @@ export interface GlossaryStore {
  * | `blockId`, `quote`, `start`, `createdAt` | `create` only       |
  * | `body`                               | `create`, `patchBody`  |
  * | `criterionId`, `valence`             | `create`, `patchMark`  |
+ * | `colour`                             | `create`, `patchColour` |
  * | `updatedAt`                          | `patchBody`, `patchMark`, server-set |
  * | `threadId`                           | `linkThread`, once, from absent |
  * | `status`, `answer`, `citations`, `searches`, `model`, `error` | `beginAnswer` and `patch` |
@@ -540,6 +542,17 @@ export interface CommentStore {
    * does, which src/routes.ts answers with a 404.
    */
   patchMark(slug: string, id: string, mark: MarkPatch): Promise<Comment>;
+
+  /**
+   * The reader recoloured a highlight, or removed its colour (`null`). Writes
+   * `colour`, nothing else — a recolour is not an edit of the words, so
+   * `updatedAt` is left alone.
+   *
+   * Throws `NotAnExplanation(id, "missing")` for an unknown id (404), and
+   * `ColourNeedsWords` for a whole-block comment (409): a colour needs words to
+   * paint. docs/plans/261003e-span-highlights-with-a-colour.md, review S4.
+   */
+  patchColour(slug: string, id: string, colour: HighlightColour | null): Promise<Comment>;
 
   /**
    * Point a comment at the conversation it started. Compare-and-set from absent.
@@ -1132,6 +1145,13 @@ export interface SearchStore {
    * status is the one this codebase carries a postmortem for. `kind` is
    * required rather than defaulted: a caller that forgot it would otherwise
    * store a quick search as a meaning one, and nothing would say so.
+   *
+   * **`revises`** (plan 261002h, search-as-you-type): a `wantedId` naming an
+   * existing **quick** row, asked as quick, is re-asked in place with the new
+   * criterion whatever its status — same id, `createdAt` and colour, a new
+   * attempt. Anything else mints, always under a **new** id — an absent id
+   * is a row deleted elsewhere, and must not be recreated. `withRun` in
+   * src/searches.ts decides.
    */
   begin(
     slug: string,
@@ -1139,6 +1159,7 @@ export interface SearchStore {
     kind: SearchKind,
     wantedId?: string,
     now?: () => string,
+    options?: { revises?: boolean },
   ): Promise<{ run: SearchRun; attempt: string | undefined }>;
 
   /**
@@ -2033,12 +2054,20 @@ export type MyFeedback = Omit<EarlierFeedback, "shipped">;
 export interface MyFeedbackPage {
   reports: MyFeedback[];
   more: boolean;
+  /** Uncapped, unfiltered, and of the same snapshot as `reports`. */
+  counts: MyFeedbackCounts;
 }
 
 /** Keep only these report ids (`in`), or everything but them (`out`). */
 export interface FeedbackIdFilter {
   ids: readonly string[];
   keep: "in" | "out";
+}
+
+/** How many reports this reader has filed, and how many of them are among `countIds`. */
+export interface MyFeedbackCounts {
+  all: number;
+  in: number;
 }
 
 /**
@@ -2301,17 +2330,26 @@ export interface FeedbackStore {
    * whether there were more — the Feedback dialog's Earlier tab.
    * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
    *
-   * Owner-scoped like `read`, and the owner is never an argument. Four fields a
+   * Owner-scoped like `read`, and the owner is never an argument. Five fields a
    * report and no more: see `EarlierFeedback` in src/types.ts for why the email,
-   * the address, the diagnostics and the screenshot are not among them.
+   * the address, the diagnostics and the screenshot are not among them. `page`
+   * is made from the address here, in the store, by src/feedback-page.ts, so
+   * the address itself is never part of the answer.
    *
    * `filter` narrows by report id — kept `in` or left `out` of the list —
    * **beside** the owner predicate, never instead of it; the Earlier tab's
    * shipped/unshipped filter. The store knows nothing of what the ids mean.
    * `shipped` is not the store's to say: the route adds it.
    * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
+   *
+   * `counts` is **how many of this reader's reports there are, and how many are
+   * among `countIds`** — the numbers on the Earlier tab's pills — read in the
+   * same read-only snapshot as the list, so "50 most recent of N" cannot
+   * contradict `more`. `in` is the same predicate as `keep: "in"`, so
+   * `all - in` is what `keep: "out"` would list with no cap.
+   * docs/plans/261003b-earlier-tab-counts-on-the-pills.md.
    */
-  listMine(limit: number, filter?: FeedbackIdFilter): Promise<MyFeedbackPage>;
+  listMine(limit: number, countIds: readonly string[], filter?: FeedbackIdFilter): Promise<MyFeedbackPage>;
   /**
    * **We handed it over.** Written the moment `captureFeedback` returns an
    * event id, which is a thing we know.
@@ -2513,7 +2551,11 @@ export type RateBucket =
      an answer on the high-power model over the whole article, per press
      (src/dig-deeper.ts § `DIG_DEEPER_RATE_POLICY`). One bucket for both
      buttons, because it is one action. */
-  | "dig-deeper";
+  | "dig-deeper"
+  /* The mail to the admin about a reader's feedback — not a fetch and not
+     money, but the shared Resend quota auth mail also needs
+     (src/feedback-notice.ts § `FEEDBACK_NOTICE_POLICY`, plan 261002j). */
+  | "feedback-notice";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

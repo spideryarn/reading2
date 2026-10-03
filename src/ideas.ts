@@ -81,6 +81,7 @@ import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 import type {
   Block,
   BlockId,
@@ -104,8 +105,12 @@ import type { ArtifactStore } from "./store/artifacts.js";
  *
  * `ideas/4`, 2026-10-02: the request gained `IDEAS_OUTPUT_SCHEMA`; the prompt
  * text is unchanged.
+ *
+ * `ideas/5`, 2026-10-03: the prompt gained the shared paperwork section,
+ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
+ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
  */
-export const PROMPT_VERSION = "ideas/4";
+export const PROMPT_VERSION = "ideas/5";
 
 /** The most ideas one call may return. A piece does not have forty. */
 export const MAX_IDEAS = 10;
@@ -776,6 +781,8 @@ Fewer, better ideas beat a list padded to a number. If the piece genuinely has
 two, return two.
 
 ${plainWords("explain")}
+
+${paperwork("pick")}
 
 ${PROFILE_RULES}`;
 

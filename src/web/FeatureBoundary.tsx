@@ -306,14 +306,14 @@ class FeatureErrorBoundary extends Component<BoundaryProps, BoundaryState> {
             <button
               type="button"
               onClick={this.retry}
-              className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-highlight tw:underline"
+              className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-highlight-text tw:underline"
             >
               Try {name} again
             </button>
             <button
               type="button"
               onClick={this.props.onPlain}
-              className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-highlight tw:underline"
+              className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-highlight-text tw:underline"
             >
               Back to the article
             </button>

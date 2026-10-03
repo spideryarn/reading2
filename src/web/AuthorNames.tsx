@@ -13,6 +13,9 @@
  * narrowing the shelf. One person spelt two ways on two articles is two
  * searches — plan 260929d § Not in this plan.
  *
+ * The card also carries two outside searches for the author, Scholar and the
+ * web, so it is a card the pointer can enter (`interactive`) — plan 261003f.
+ *
  * Only drawn from `meta.authors`. With no list the byline is shown as the
  * string it always was, because splitting a free-text byline into people is a
  * guess this component is not entitled to make.
@@ -49,6 +52,88 @@ export function shelfHrefFor(name: string): string {
   return `${LIBRARY_HREF}?q=${encodeURIComponent(query || name)}`;
 }
 
+/** The longest affiliation hint a web search carries, in Unicode code points. */
+const AFFILIATION_HINT = 80;
+
+/** Text fit for a search: no quote marks of its own (they would close the
+    quotes around a name), one line. */
+function unquoted(text: string): string {
+  return text
+    .replace(/["“”„‟«»]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * The first affiliation, short enough to be a hint. Cut at the last whole word
+ * where there is one; an unspaced string still gets a hard, code-point-safe
+ * ceiling. Search punctuation dangling at the end carries no useful identity.
+ */
+function affiliationHint(author: Author): string {
+  const first = [...unquoted(author.affiliations[0] ?? "")];
+  let hint = first.join("");
+  if (first.length > AFFILIATION_HINT) {
+    const cut = first.slice(0, AFFILIATION_HINT + 1).join("");
+    const space = cut.lastIndexOf(" ");
+    hint = space > 0 ? cut.slice(0, space) : first.slice(0, AFFILIATION_HINT).join("");
+  }
+  return hint.replace(/[\s,;:.]+$/, "");
+}
+
+/**
+ * **Where to find out more about one author, off the site** — Greg, 2026-09-12
+ * (spya-uvxq8e): *"something I could click on or expand that would take me to
+ * the top few links for them."*
+ *
+ * Two searches, never a guessed address. Scholar's `author:` operator lists
+ * their papers and may surface a matching public profile; the web search adds
+ * the first affiliation, unquoted, to tell them from someone else of the same
+ * name. Plan 261003f.
+ */
+export function authorSearchLinks(author: Author): { scholar: string; web: string } {
+  const name = unquoted(author.name);
+  const hint = affiliationHint(author);
+  const web = hint ? `"${name}" ${hint}` : `"${name}"`;
+  return {
+    scholar: `https://scholar.google.com/scholar?q=${encodeURIComponent(`author:"${name}"`)}`,
+    web: `https://www.google.com/search?q=${encodeURIComponent(web)}`,
+  };
+}
+
+/**
+ * The two searches, inline: in the masthead's card, and under each name on the
+ * Metadata page. A new tab, and `noreferrer`, so Google is told the name and
+ * not which article the reader is in.
+ */
+export function AuthorSearchLinks({ author }: { author: Author }) {
+  const links = authorSearchLinks(author);
+  const linkClass = "tw:text-highlight-text tw:underline tw:underline-offset-2 tw:hover:text-foreground";
+  return (
+    <span className="tw:mt-1 tw:block tw:text-xs tw:text-ink-faint" data-testid="author-out">
+      Find out more:{" "}
+      <a
+        href={links.scholar}
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label={`${author.name} on Google Scholar`}
+        className={linkClass}
+      >
+        Google Scholar
+      </a>
+      {" · "}
+      <a
+        href={links.web}
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label={`Search the web for ${author.name}`}
+        className={linkClass}
+      >
+        Web search
+      </a>
+    </span>
+  );
+}
+
 interface Props {
   authors: readonly Author[];
   /**
@@ -82,7 +167,7 @@ export function AuthorNames({ authors, linkToShelf, all = false }: Props) {
           {" "}
           <button
             type="button"
-            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-[inherit] tw:text-[inherit] tw:text-ink-faint tw:underline tw:decoration-dotted tw:hover:text-highlight"
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-[inherit] tw:text-[inherit] tw:text-ink-faint tw:underline tw:decoration-dotted tw:hover:text-highlight-text"
             aria-expanded={expanded}
             aria-label={expanded ? "Show fewer authors" : `Show ${hidden} more authors`}
             onClick={() => setExpanded((open) => !open)}
@@ -104,6 +189,7 @@ function AuthorName({ author, linkToShelf }: { author: Author; linkToShelf: bool
         // biome-ignore lint/suspicious/noArrayIndexKey: static list, order is the identity
         <TipNote key={i}>{a}</TipNote>
       ))}
+      <AuthorSearchLinks author={author} />
       {linkToShelf && (
         <span className="tw:mt-1 tw:block tw:text-xs tw:text-ink-faint">
           Click for everything on your shelf by {author.name}.
@@ -123,7 +209,7 @@ function AuthorName({ author, linkToShelf }: { author: Author; linkToShelf: bool
     </span>
   );
   return (
-    <Tooltip placement="bottom" keepSide content={card}>
+    <Tooltip placement="bottom" keepSide content={card} interactive={{ label: `About ${author.name}` }}>
       {trigger}
     </Tooltip>
   );

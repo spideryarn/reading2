@@ -89,6 +89,7 @@ import { horizontalInset, safeAreaInsets } from "../safe-area.js";
 import type { ArchiveControl } from "../useArchive.js";
 import { Spine } from "../Spine.js";
 import { AnnotateDialog } from "../AnnotateDialog.js";
+import { TouchSelectionChip } from "../TouchSelectionChip.js";
 import { CommentDialog } from "../CommentDialog.js";
 import { Masthead } from "../Masthead.js";
 import { Dock } from "../Dock.js";
@@ -826,7 +827,7 @@ export function Reader({
      band mounts on the old sub-mode for a frame. Which keys, and that Quiz
      clears `thread`, is `subModeParams` in sub-modes.ts — the same answer the
      metadata page builds its href from. */
-  const [, setSubNav] = useQueryStates({
+  const [subNav, setSubNav] = useQueryStates({
     mode: modeParam,
     remember: rememberParam,
     thread: threadParam,
@@ -1530,29 +1531,9 @@ export function Reader({
       ? (owner.citations.citations?.citations ?? null)
       : null;
   const marginRoom = marginOpen && fit.margW > 0;
-  const marginNotes = useMemo(() => {
-    if (!marginRoom) return null;
-    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
-      faq: marginaliaFaq,
-      claims: marginaliaClaims,
-      citations: marginaliaCitations,
-      comments,
-    });
-    const out = new Map<BlockId, ReactElement>();
-    for (const [blockId, notes] of byBlock)
-      out.set(blockId, <MarginNotesSlot notes={notes} viewer={capability.kind === "owner" ? "owner" : "visitor"} />);
-    return out;
-  }, [
-    marginRoom,
-    article.tree,
-    article.blocks,
-    marginaliaIdeas,
-    marginaliaFaq,
-    marginaliaClaims,
-    marginaliaCitations,
-    comments,
-  ]);
-  useMarginLayout(marginRoom, marginNotes);
+  /* `marginNotes` itself is built below `openAskedFromDrawer`, because the
+     questions the reader asked sit in the margin too and open through it
+     (plan 261002j). */
 
   /**
    * Reading order, not ask order — the panel's arrows walk you *down the
@@ -1835,6 +1816,48 @@ export function Reader({
     [askedList, openChatThread, jumpTo, mode, setMode],
   );
 
+  /**
+   * **Marginalia: the notes beside each block** — MarginaliaColumn.tsx; the
+   * inputs are gathered above, where `marginRoom` is.
+   *
+   * The owner's comments **and the questions they asked**, each stamped with
+   * its kind, open through the drawer's own press (SPIDERYARN-READING2-9H,
+   * plan 261002j). A visitor's payload has no chats, so `askedList` is empty
+   * for them and there is nothing to open.
+   */
+  const marginViewer = capability.kind === "owner" ? "owner" : "visitor";
+  const openAskedFromMargin = marginViewer === "owner" ? openAskedFromDrawer : undefined;
+  const marginNotes = useMemo(() => {
+    if (!marginRoom) return null;
+    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
+      faq: marginaliaFaq,
+      claims: marginaliaClaims,
+      citations: marginaliaCitations,
+      comments,
+      asked: marginViewer === "owner" ? askedList : null,
+    });
+    const out = new Map<BlockId, ReactElement>();
+    for (const [blockId, notes] of byBlock)
+      out.set(
+        blockId,
+        <MarginNotesSlot notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />,
+      );
+    return out;
+  }, [
+    marginRoom,
+    article.tree,
+    article.blocks,
+    marginaliaIdeas,
+    marginaliaFaq,
+    marginaliaClaims,
+    marginaliaCitations,
+    comments,
+    askedList,
+    marginViewer,
+    openAskedFromMargin,
+  ]);
+  useMarginLayout(marginRoom, marginNotes);
+
   /* **A *new* conversation anchored to the whole block** — the other half of
      what an anchor can be, and the one that draws no mark in the prose. The
      paragraph's opening words go into the composer so the reader can see which
@@ -2008,12 +2031,81 @@ export function Reader({
    *
    * Memoised on `create`, which is stable for one slug, so the retry memory and
    * callback survive renders without making memoised `TableView` redraw.
+   *
+   * **And then the comment box opens on it**, since 2026-10-02 — Greg,
+   * SPIDERYARN-READING2-9C: *"it should be possible to comment on a block
+   * without wanting an AI-chat-response."* It always was, by pressing the mark
+   * afterwards, and nobody found it. The bookmark is still stored by the one
+   * press; the dialog is the invitation to add words, which are free, and
+   * closing it leaves a bare bookmark. Only once the store has confirmed, so
+   * the dialog never opens on a row that is about to vanish. Plan 261002j.
+   *
+   * **And only if nothing else has opened since the press, and no later press
+   * has been made.** The store answers after a round trip, and in that time
+   * the reader may have opened a comment, a chat, the selection box, a drawer,
+   * Marginalia or a mode band — an answer arriving then must not replace what
+   * they chose. The mode-specific parameters are included too: moving from
+   * Recall to Quiz is a new foreground choice even though `mode` stays
+   * `remember`. GPT Sol, P1 on the plan and code review of 261002j.
+   *
+   * **Hover cards and modals are deliberately not in it.** Sol's code review
+   * also checked the DOM for any new `role="dialog"`; that was taken out,
+   * because the prose's hover cards are dialogs too, so a pointer drifting
+   * over a glossary term during the round trip would silently cancel the box.
+   * Nor does the comment box replace either: it sits beside a card or under a
+   * modal, and the reader's choice is still on screen.
+   *
+   * **Published in a layout effect, never during render.** A concurrent render
+   * may be abandoned; writing a ref from it would let an uncommitted surface
+   * cancel (or authorise) the async result. The effect runs only for a committed
+   * view, before the browser can accept another press.
    */
+  const surface = useRef<readonly unknown[]>([]);
+  useLayoutEffect(() => {
+    surface.current = [
+      note,
+      thread,
+      chatDraft,
+      annotating,
+      panel,
+      mode,
+      margin,
+      bandAway,
+      subNav.remember,
+      subNav.diagram,
+      subNav.referee,
+      subNav.summary,
+      subNav.structure,
+    ];
+  }, [
+    note,
+    thread,
+    chatDraft,
+    annotating,
+    panel,
+    mode,
+    margin,
+    bandAway,
+    subNav.remember,
+    subNav.diagram,
+    subNav.referee,
+    subNav.summary,
+    subNav.structure,
+  ]);
+  const bookmarkPress = useRef(0);
   const createComment = owner?.comments.create;
-  const bookmarkBlock = useMemo(
-    () => (createComment ? makeBlockBookmarker(createComment) : undefined),
-    [createComment],
-  );
+  const bookmarkBlock = useMemo(() => {
+    if (!createComment) return undefined;
+    const bookmark = makeBlockBookmarker(createComment);
+    return async (blockId: BlockId): Promise<boolean> => {
+      const mine = ++bookmarkPress.current;
+      const before = surface.current;
+      const id = await bookmark(blockId);
+      const unchanged = surface.current.every((v, i) => Object.is(v, before[i]));
+      if (id !== null && mine === bookmarkPress.current && unchanged) void setNote(id);
+      return id !== null;
+    };
+  }, [createComment, setNote]);
 
   const selectProse = useCallback(
     /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes
@@ -2861,6 +2953,26 @@ export function Reader({
         onSelect={selectProse}
         onOpenComment={openCommentDialog}
       />
+      {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
+          never hears of it on an iPad; this is the button it gets instead, and
+          it calls the same `selectProse`. Two gates, both decided here because
+          here is where they are known. `owner &&`: a visitor's selection is
+          silent (`selectProse`'s early return), and a chip that appears and
+          then does nothing is not silent. `suppressed`: the three conditions
+          are the render conditions of the three boxes below, so it is never
+          over an open one. It is not in `surface.current` and owns no Escape —
+          it is a button, not a surface. The key drops every held anchor and
+          document listener on an article or mode change, even if WebKit sends
+          no selectionchange for the old DOM. docs/project/touch.md § A
+          finger's selection gets a button; the wiring is read by
+          tests/touch-selection-chip.test.tsx. */}
+      {owner && (
+        <TouchSelectionChip
+          key={`${slug}:${mode}`}
+          suppressed={Boolean(annotating || overlay || openComment)}
+          onSelect={selectProse}
+        />
+      )}
       {owner && annotating && (
         <AnnotateDialog
           anchor={annotating}
@@ -2890,7 +3002,7 @@ export function Reader({
              tests/opening-read-gates-writes.test.tsx reads this line. */
           loaded={owner.comments.loaded}
           onCancel={() => setAnnotating(null)}
-          onSave={(id, body, ask, mark) => {
+          onSave={(id, body, ask, mark, colour) => {
             const anchor = annotating;
             setAnnotating(null);
             /* **The free thing is stored first, and the paid thing waits for
@@ -2907,6 +3019,8 @@ export function Reader({
               /* The referee's placement rides along with the free save, so a
                  placement is never a second request that can fail on its own. */
               mark,
+              /* And the highlight colour, for the same reason. */
+              ...(colour ? { colour } : {}),
             }).then((stored) => {
               if (!ask || !stored) return;
               /* The conversation opens on the same words, pre-filled with what
@@ -3012,6 +3126,7 @@ export function Reader({
             onEdit: (body) => void owner.comments.edit(openComment.id, body),
             placing: mode === "referee",
             onPlace: (mark) => void owner.comments.place(openComment.id, mark),
+            onRecolour: (colour) => void owner.comments.recolour(openComment.id, colour),
             error: owner.comments.error,
           /* **Offered only when the conversation is really there.** The link on
              a comment is advisory — a reader can delete the chat and keep the

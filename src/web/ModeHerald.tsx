@@ -25,7 +25,7 @@
  * The top was the band's first row — Search's box, Glossary's controls, the
  * first items of every list — which is what a reader who has just opened a mode
  * looks at first. But the band's literal bottom is no freer: eleven modes can
- * end in pinned furniture (*Find more*, Chat's composer, Diagram's step row and
+ * end in pinned furniture (Quotes' *Find more*, Chat's composer, Diagram's step row and
  * card). So the card stands **on** it, at the bottom-left of the scroller, and
  * `footRoom` below is how it knows how much room it takes.
  * docs/plans/260928a-the-mode-herald-moves-to-the-foot-of-the-band.md.
@@ -144,8 +144,8 @@ function scrolls(el: Element): boolean {
 function Card({ mode, onDone }: { mode: BandMode; onDone(): void }) {
   const card = useRef<HTMLDivElement>(null);
   /* **Measured on arrival and again whenever the band changes shape**, because
-     a foot can arrive after the card does: Glossary's *Find more* renders once
-     its list has loaded, which can be inside the three seconds. A child added
+     a foot can arrive after the card does: a panel's foot often renders once
+     its artefact has loaded, which can be inside the three seconds. A child added
      or removed is a mutation; a composer growing a line is a resize. Written
      onto the slot as `--herald-foot`, which mode-band.css § the herald turns
      into the room under the card, and taken off again when the card goes. */

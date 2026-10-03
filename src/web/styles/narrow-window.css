@@ -101,8 +101,12 @@
      is one more focusable element per block on the narrow layout, which is said
      out loud in docs/plans/prose-gutter-icons.md rather than glossed. */
 
-  /* Trailing padding still shrinks: 1.4rem of right margin is generous when the
-     measure is 366px. The left is § text's now.
+  /* The plain padding still shrinks: 1.4rem of margin is generous when the
+     measure is 366px. It is the LEFT one since 2026-10-03, when the gutter
+     moved to the right of the block and took the right pad with it (shell.css,
+     docs/plans/261003c-…); the phone's title and controls bar read
+     `--text-pad-l`, so they come in with it and still start on the same pixel
+     as the prose.
 
      **The token, not the padding, and that is a fix rather than a tidy-up.**
      This was `td.text { padding-right: 0.9rem }` until 2026-09-05, which left
@@ -111,10 +115,10 @@
      wrong the moment something did. Three rules now do: `.blk-gutter` and both
      mastheads compute *half the room the centring divides* from it (§ the
      gutter, § plain, centred), and each was quietly 0.25rem out below 731px.
-     Set here rather than in the `:root` block above because `--text-pad-r` is
+     Set here rather than in the `:root` block above because the pad tokens are
      declared on `.reader`, which would win. GPT Sol found it while reviewing
      the merge that introduced the second and third readers, 2026-09-05. */
-  .reader { --text-pad-r: 0.9rem; }
+  .reader { --text-pad-l: 0.9rem; }
 
   /* ------------------------------------------------------------------------
      The two bars that were silently eating their own controls.
@@ -216,13 +220,15 @@
      room held for the corner wordmark — which came to 37.6px against a prose
      inset of 35.2px, so the two edges lined up to within about two pixels *by
      accident*. Taking the reservation away took the alignment with it. Naming
-     `--text-pad-l` makes it deliberate and makes it track: the inset is a
-     `--blk-slot` of icons plus its padding (§ text), and it has moved twice
-     already this month.
+     `--text-pad-l` makes it deliberate and makes it track: the inset was a
+     `--blk-slot` of icons plus its padding (§ text) until 2026-10-03, and is
+     the plain 0.9rem since the icons moved to the right (261003c) — the third
+     time it has moved, and the first this rule did not have to hear about.
 
      The right side stays a plain gutter. The prose's own right inset is
-     `--text-pad-r`, 0.9rem here, and matching it would be symmetry for its own
-     sake — nothing lines up against that edge, because the title wraps. */
+     `--text-pad-r`, the icons' column now, and matching it would be symmetry
+     for its own sake — nothing lines up against that edge, because the title
+     wraps. */
   .masthead {
     --masthead-pad-l: var(--text-pad-l);
     --masthead-pad-r: 1rem;
@@ -237,8 +243,9 @@
      A floor that only exists on a phone is not a floor. */
 
   /* **The labels are not dropped here any more.** Every button losing its text,
-     and the 0.45rem that goes with it, is the ladder's last rung — rung 3
-     since 2026-09-06, rung 2 before it —
+     and the 0.45rem that goes with it, is the ladder's bottom rungs — 3 and 4
+     since 2026-10-02 (rung 4 only adds the search box going to the ⚡), rung 3
+     alone from 2026-09-06, rung 2 before that —
      measured rather than keyed to this width, because at thirteen modes the row
      stops fitting a long way above 731px and did so silently. This query used to
      carry a second copy of those three rules, and a second copy is a thing
@@ -968,10 +975,11 @@
    with a phone would be confirming or overturning it, not re-deriving it.
 
    `:not([hidden])` earns its place here for a second reason beyond matching the
-   textarea half. Rules hold a select under 1rem — `.chat-live-mic select`
-   (mode-band.css) and `.place-pick select` (dialogs.css); `.chat-stance select`
-   was a third until Remember's stance picker went on 2026-10-02, and the
-   measurements below were taken on it — and each is (0,1,1). A bare `:root select` is **also**
+   textarea half. A rule holds a select under 1rem — `.place-pick select`
+   (dialogs.css); `.chat-stance select` was another until Remember's stance
+   picker went on 2026-10-02, and the measurements below were taken on it, and
+   `.chat-live-mic select` a third until the noise-reduction picker moved into
+   Live's Advanced disclosure the same day (261002j) — and each is (0,1,1). A bare `:root select` is **also**
    (0,1,1): a tie, settled only by narrow-window.css being imported after both
    files, which is exactly the source-order dependence that made this rule ship
    applying to nothing twice. The attribute selector takes it to (0,2,1) and
@@ -979,7 +987,8 @@
    order, before it was written.
 
    Two more selects are styled `font: inherit` rather than with a size of their
-   own — `.chat-live-device-picker select` (mode-band.css) and
+   own — `.chat-live-device-picker select` (mode-band.css; both of Live's
+   pickers, microphone and noise reduction) and
    `.prof-mic-picker select` (profile.css). Both are (0,1,1) and both lose to
    this too, so the shorthand's font-size component does not survive on a touch
    device. Neither is in the test's competitor search, which looks for an
@@ -1011,9 +1020,9 @@
    arrive as an overlap rather than a wrap.
 
    `checkbox`, `radio` and `range` take no height from `font-size` at all, and a
-   `date` input would cost 4px; there are none. The live-conversation mic picker
-   (`.chat-live-mic select`) was **not** measured — it renders only once a live
-   session is open, which needs a microphone this box does not have.
+   `date` input would cost 4px; there are none. The live conversation's pickers
+   (`.chat-live-device-picker select`) were **not** measured — they render only
+   once a live session is open, which needs a microphone this box does not have.
 
    **The utilities layer is out of reach from here**, whatever the specificity:
    `@layer theme, base, app, utilities` in tailwind.css puts every `tw:` class
@@ -1142,7 +1151,7 @@
    reason this is one declaration rather than a section. Four things are drawn
    against the cell's own edges and would every one of them be left behind by
    text that moved on its own: the gutter is absolutely positioned at the
-   cell's left (§ the gutter), a search hit paints an inset shadow at x=0
+   cell's right (§ the gutter; its left until 261003c), a search hit paints an inset shadow at x=0
    (§ has-hit), `row-active` fills the cell, and the hover target *is* the
    cell. Moving the column moves all four, and no rule above has to learn that
    a mode exists.
@@ -1205,22 +1214,38 @@
    dock are chrome that spans the window in every mode, and the masthead is the
    one piece of *the article* above the fold. */
 .reader.text-alone .masthead-inner {
-  /* `65ch` measured in the article's face rather than the chrome's, for the
-     reason the sibling rule below gives at length and `.blk-gutter` gives again
-     (§ the gutter). Size and not weight, also for the sibling's reason: every
+  /* This box measures the same `65ch` as the article: the prose's face and
+     size (the face since 261003c, below). Size and not
+     weight, for the sibling rule's reason: every
      child of this box inherits its weight, so matching the prose's 450 would
      embolden the byline and the source note.
 
-     **That leaves 2.8px, the same 2.8px the sibling ships and says so.** It is
+     **That left 2.8px before the prose moved to Source Serif.** It was
      not halved by arriving here through a width rather than a margin: the
      weight axis makes this box's `65ch` 5.524px short of the prose's — measured,
      732.614 against 738.138 at a 16px root — and the term reaches the left edge
      through `W / 2` either way. An earlier comment here claimed 1.4px, from
-     halving the sibling's residual a second time — GPT Sol, 2026-09-05. */
+     halving the sibling's residual a second time — GPT Sol, 2026-09-05.
+
+     Since 2026-10-02 `.prose` measures in Source Serif while this box still
+     measures in the UI face. The gutter's 88px gap at a 1440px window included
+     its intended 5.6px inset; the remaining roughly 82px is the same
+     half-measure error here, not a few-pixel residual.
+
+     **So the family is the prose's too, since 2026-10-03 (261003c).** The
+     title carries its voice class, origin, facts and source note set the UI
+     face, the root gist is AI-voiced, the title editor is reader-voiced, and
+     the rest are icons or portalled tooltips — so this changes where the box
+     sits and no word's face, which the browser check in the plan confirms.
+     Measured then: the title 9.7px right of the first line at 1440 and 1024
+     (72px LEFT of it under the old rule). Not explained; the weight axis above
+     is the likeliest cause, and it is left as measured. */
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   /* **A box whose CENTRE sits where the prose's centre sits**, because the two
      are centred in boxes that share an axis and the reading cell's padding is
-     not symmetric. The prose sits `(--text-pad-l − --text-pad-r) / 2` right of
+     not symmetric. The prose sits the signed distance
+     `(--text-pad-l − --text-pad-r) / 2` right of
      the table's centre, so a box centred on the same axis has to lose twice
      that to start on the same pixel: `measure + padR − padL`. Exact, not an
      approximation — 295.33px against the prose's 295.33px at a 1280 window,
@@ -1237,7 +1262,7 @@
      assumed. At the default root it holds — 705px against a bar with 696 to
      give at a 1000px window and 596 at 900, so the rule is inert and the title
      stays where it has always been while the prose slides towards it. **At a
-     small root it does not.** `--blk-slot`'s px floor stops `--text-pad-l`
+     small root it does not.** `--blk-slot`'s px floor stops `--text-pad-r`
      shrinking with the type while `--reading-measure` goes on shrinking, so at
      a 9px root this width is 365.2px and at 12px it is 503.8px — **the same at
      600, 700 and 731px of window**, measured, where the old one would have
@@ -1281,9 +1306,10 @@
    **Not `margin-inline: auto`**, which is what the alone rule can afford, and
    the reason survives the bar becoming symmetric. Auto margins would centre
    this box in the bar, but the prose is *not* centred in the reading cell — the
-   cell's own padding is lopsided (`--text-pad-l` is a gutter of icons,
-   `--text-pad-r` is trailing space), so the prose sits half that difference
-   right of centre. So the left margin is stated: the prose's own inset
+   cell's own padding is lopsided (`--text-pad-r` is a gutter of icons since
+   261003c, `--text-pad-l` is plain space), so the prose sits half that
+   difference off centre — left of it now, right of it until 2026-10-03, and
+   the expression below is true either way. So the left margin is stated: the prose's own inset
    (`--text-pad-l` plus half the room the centring divides) measured from the
    bar's content edge, which is where a margin starts.
 
@@ -1313,19 +1339,25 @@
    before it) the question does not arise anyway — a mode band with no room
    hides this bar outright (§ a band with no room). */
 .reader:has(table.only-prose):not(.text-alone) .masthead-inner {
-  /* `65ch` measured in the article's face rather than the chrome's — the same
-     line, and the same reason, as `font-size` on `.blk-gutter` (§ the gutter).
+  /* This box measures the article's `65ch`, for the same reason as
+     `.blk-gutter` (§ the gutter): the prose's face and size.
      Inert: every child of this box sets its own size (h1 1.45rem, `.facts` and
      `.source-note` 0.82rem, `.root-gist` 0.95rem, the back link `text-xs`).
 
-     **Size and not weight, and that is what the last 2.8px is.** The gutter
+     **Size and not weight, and before the voice split that left 2.8px.** The gutter
      matches `--reading-weight` too, because nothing in it is text; here the
      byline, the source note and the whole-article gist all inherit their weight
      from this box, so matching the prose's 450 would embolden four pieces of
-     small print nobody asked to change. Measured: the title lands 2.8px right
-     of the first line of the article. The sibling rule above ships 4px of the
-     same kind of slippage and says so; this is that, from the variable font's
-     weight axis rather than from a bar's padding. GPT Sol, 2026-09-04. */
+     small print nobody asked to change. Measured then: the title landed 2.8px
+     right of the first line of the article, from the variable font's weight
+     axis rather than from a bar's padding. Since 2026-10-02 the prose instead
+     measures `65ch` in Source Serif while this box keeps Geist. The gutter's
+     261003c gutter measurement (88px including the intended 5.6px inset) shows
+     that family mismatch is roughly 82px at a 1440px window.
+
+     As in the text-alone rule, the visible descendants all own their face, so
+     the family is the prose's here too, since 2026-10-03 (261003c). */
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   max-width: var(--reading-measure);
   margin-left: max(

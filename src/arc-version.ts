@@ -7,7 +7,7 @@
  * an older prompt wrote stays on screen while the owner's open writes a new
  * one. docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
  */
-export const ARC_PROMPT_VERSION = "arc/6";
+export const ARC_PROMPT_VERSION = "arc/7";
 
 const numberOf = (version: string | undefined): number | null => {
   const m = /^arc\/(\d+)$/.exec(version ?? "");

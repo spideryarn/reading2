@@ -53,15 +53,36 @@
    the app the marketing page's background as well. */
 .site,
 .plan-cards {
-  --site-hairline: rgb(255 255 255 / 0.10);
-  --site-hairline-strong: rgb(255 255 255 / 0.16);
-  --site-surface: rgb(255 255 255 / 0.028);
-  --site-surface-raised: rgb(255 255 255 / 0.05);
+  /* `--toward-ink-rgb` is white on the dark page and black on the light one
+     (src/web/styles/tokens.css), so the ladder lifts on dark and sinks on
+     light — on a light ground a panel recedes. The light alphas are below. */
+  --site-hairline: rgb(var(--toward-ink-rgb) / 0.10);
+  --site-hairline-strong: rgb(var(--toward-ink-rgb) / 0.16);
+  --site-hairline-hover: rgb(var(--toward-ink-rgb) / 0.24);
+  --site-surface: rgb(var(--toward-ink-rgb) / 0.028);
+  --site-surface-raised: rgb(var(--toward-ink-rgb) / 0.05);
+  --site-grid-line: rgb(var(--toward-ink-rgb) / 0.028);
   /* The lift under a framed screenshot. Black on near-black does almost
      nothing, so the shadow is mostly there to darken the few pixels directly
      under the bottom edge; the top-edge inset highlight in .site-frame is what
      actually separates the object from the page. */
   --site-lift: 0 24px 60px -18px rgb(0 0 0 / 0.75), 0 2px 8px rgb(0 0 0 / 0.4);
+}
+/* **The light ladder: the same steps, at about one and a half times the
+   alpha.** Black over a near-white page separates less than the same alpha of
+   white over a near-black one — composited in sRGB, 10% white lifts the dark
+   page by about 0.12 of lightness and 10% black sinks the light one by about
+   0.07 — so equal alphas would give a light page whose panels barely exist.
+   And the lift: 0.75 of black under a frame is depth on near-black and a smear
+   on near-white, where a shadow is all of the effect rather than none of it. */
+:root[data-theme="light"] :is(.site, .plan-cards) {
+  --site-hairline: rgb(var(--toward-ink-rgb) / 0.15);
+  --site-hairline-strong: rgb(var(--toward-ink-rgb) / 0.22);
+  --site-hairline-hover: rgb(var(--toward-ink-rgb) / 0.32);
+  --site-surface: rgb(var(--toward-ink-rgb) / 0.045);
+  --site-surface-raised: rgb(var(--toward-ink-rgb) / 0.075);
+  --site-grid-line: rgb(var(--toward-ink-rgb) / 0.05);
+  --site-lift: 0 24px 60px -18px rgb(0 0 0 / 0.28), 0 2px 8px rgb(0 0 0 / 0.12);
 }
 
 /* Split out of the rule above when `.plan-cards` joined it: the tokens travel,
@@ -101,8 +122,8 @@
   pointer-events: none;
   z-index: 0;
   background-image:
-    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.028) 0 1px, transparent 1px 5.5rem),
-    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.028) 0 1px, transparent 1px 5.5rem);
+    repeating-linear-gradient(0deg, var(--site-grid-line) 0 1px, transparent 1px 5.5rem),
+    repeating-linear-gradient(90deg, var(--site-grid-line) 0 1px, transparent 1px 5.5rem);
   mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), transparent 78%);
 }
 
@@ -155,8 +176,20 @@
      last line is short, stops in the 80-100% band land on empty space to the
      right of the words and the orange never appears at all. Measured on the
      first build of this page: the heading rendered entirely white. Anything
-     added here should be checked against a screenshot, not against the swatch. */
+     added here should be checked against a screenshot, not against the swatch.
+
+     The two orange stops are variables because they are the half of the
+     gradient that has to change with the ground: on dark the middle stop is a
+     paler orange, lifting into the page's white; on light that same pale
+     orange is about 2:1 against the page, so the light theme runs from the
+     brand orange into `--highlight-ink`, the orange darkened for text. */
+  --site-display-mid: #eda86e;
+  --site-display-end: var(--spideryarn-orange);
   color: var(--foreground);
+}
+:root[data-theme="light"] .site-display {
+  --site-display-mid: var(--spideryarn-orange);
+  --site-display-end: var(--highlight-ink);
 }
 /* The gradient itself is behind a `@supports` that names BOTH halves, and the
    transparent fill is inside it.
@@ -170,7 +203,7 @@
    Cross-family review, 2026-09-03, finding 8. */
 @supports ((background-clip: text) or (-webkit-background-clip: text)) {
   .site-display {
-    background: linear-gradient(102deg, var(--foreground) 0%, var(--foreground) 26%, #eda86e 62%, var(--spideryarn-orange) 88%);
+    background: linear-gradient(102deg, var(--foreground) 0%, var(--foreground) 26%, var(--site-display-mid) 62%, var(--site-display-end) 88%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -215,7 +248,7 @@
 }
 .site-cta-primary {
   background: var(--spideryarn-orange);
-  color: oklch(0.16 0.02 60);
+  color: var(--primary-foreground);
   box-shadow: 0 8px 28px -8px rgb(219 138 69 / 0.55);
 }
 .site-cta-primary:hover {
@@ -230,7 +263,7 @@
 }
 .site-cta-ghost:hover {
   background: var(--site-surface-raised);
-  border-color: rgb(255 255 255 / 0.24);
+  border-color: var(--site-hairline-hover);
   transform: translateY(-1px);
 }
 
@@ -435,7 +468,7 @@
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--spideryarn-orange);
+  color: var(--highlight-text);
 }
 
 /* ---- the Experimental tag over a mode's title ----

@@ -81,6 +81,7 @@ async function deepenOffered(status: ClientComment["status"]): Promise<boolean> 
           onDiscuss: () => {},
           onEdit: () => {},
           onPlace: () => {},
+          onRecolour: () => {},
           error: null,
         },
       }),

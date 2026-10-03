@@ -60,13 +60,11 @@
    this file. There is one, globally, and it already covers everything here.
    GPT Astra corrected this section, 2026-09-07.
 
-   **Tokens, never hex.** `--wordmark-ink` is the name's white at rest,
+   **Tokens, never hex.** `--wordmark-ink` is the name's resting ink,
    `--highlight` the spider's orange, and `--highlight-ink` that orange lifted
-   with white; `--ink`, `--panel` and `--rule` are the surfaces around it. The
-   app is dark only and unconditionally so (styles/tokens.css:9), which means a
-   glow or an additive blend can be used freely here — but it is still a token
-   that has to say so, because a hex would survive a palette change looking
-   exactly as wrong as it did before.
+   or darkened for the page; `--ink`, `--panel` and `--rule` are the surfaces
+   around it. A token has to say what a colour means because a literal would
+   survive an appearance change looking exactly as wrong as it did before.
 
    **`animation-fill-mode: forwards` only where the 100% frame is a wordmark you
    would be happy to ship as a still.** This file said "never `forwards`" for an
@@ -544,7 +542,7 @@
    § resting colour. */
 @keyframes spya-strain-hold {
   0%, 56%, 100% { color: var(--wordmark-ink); }
-  68%, 82% { color: var(--highlight); }
+  68%, 82% { color: var(--highlight-text); }
 }
 
 /* -- 8. Only the i -------------------------------------------------------
@@ -567,7 +565,7 @@
    A soft edge sweeps right to left across the whole control and everything
    behind it is gone — mark and word both eaten — and at once a second edge
    sweeps left to right and puts it back, the word arriving in the spider's
-   orange and cooling to its usual white. Eaten one way, respun the other. Once.
+   orange and cooling to its resting ink. Eaten one way, respun the other. Once.
 
    An orb weaver eats its web at dawn and builds a new one the same day, which
    is the least sentimental available statement of what re-reading something is.
@@ -616,7 +614,7 @@
    `--highlight` and snapped on every white copy. */
 @keyframes spya-dawn-glow {
   0%, 50% { color: var(--wordmark-ink); }
-  62% { color: var(--highlight); }
+  62% { color: var(--highlight-text); }
   100% { color: var(--wordmark-ink); }
 }
 
@@ -922,7 +920,7 @@
 /* -- 14. Dew on the Thread -----------------------------------------------
    A bead of the spider's orange runs once along the word, left to right: each
    letter warms and glows as it passes and cools behind it, and the word is
-   white again when it has gone by. Nothing moves; the light travels.
+   resting ink again when it has gone by. Nothing moves; the light travels.
 
    The first animation here that is *about* the colours rather than in spite of
    them. It became possible on 2026-10-02, when every copy's name went white
@@ -943,7 +941,7 @@
    `--logo-px`, so it grows with the shelf's 30px heading.
 
    Reduced motion: the guard flattens each letter's run to nothing and leaves
-   the delays, so the word sits white throughout — base style. */
+   the delays, so the word keeps its resting ink throughout — base style. */
 .spya-dew .logo-letter {
   animation: spya-dew 900ms ease-in-out 1;
   /* 70ms × 9 = 630ms across the word: slow enough that the bead is one or two
@@ -953,7 +951,7 @@
 }
 @keyframes spya-dew {
   45% {
-    color: var(--highlight);
+    color: var(--highlight-text);
     text-shadow: 0 0 calc(var(--logo-px) * 5) color-mix(in oklab, var(--highlight) 60%, transparent);
   }
 }

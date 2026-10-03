@@ -55,7 +55,7 @@
   background: var(--surface-raised);
   color: var(--highlight-ink);
 }
-.quotes-rank-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.quotes-rank-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* One line on a touch screen, after the base rule so it wins — glossary.css §
    a touch screen has the decision and the rest of the treatment. */
 @media (pointer: coarse) {
@@ -97,15 +97,15 @@
   cursor: pointer;
 }
 .quotes-bar-reset:hover { color: var(--ink); }
-.quotes-bar-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.quotes-bar-reset:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .quotes-bar-range {
   display: block;
   width: 100%;
   margin: 0.3rem 0 0;
-  accent-color: var(--highlight);
+  accent-color: var(--highlight-text);
   cursor: pointer;
 }
-.quotes-bar-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.quotes-bar-range:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 .quotes-bar-note {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
@@ -176,7 +176,7 @@
   text-align: left;
   cursor: pointer;
 }
-.quotes-quote:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+.quotes-quote:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: -2px; }
 
 /* The author's words, and the only thing on this panel styled as prose. The
    left rule is the glossary's `in this piece` rule and it means the same thing
@@ -223,7 +223,7 @@
 }
 .quotes-why:hover { color: var(--ink); background: var(--surface-raised); }
 .quotes-why.on { color: var(--highlight-ink); background: var(--surface-raised); }
-.quotes-why:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.quotes-why:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* Wider than a spine tooltip, because this holds a sentence rather than a
    label. */
 .quotes-why-card { max-width: 16rem; }
@@ -271,7 +271,7 @@
 }
 .quotes-arrow:disabled { opacity: 0.4; cursor: default; }
 .quotes-arrow:not(:disabled):hover { border-color: var(--highlight); }
-.quotes-arrow:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.quotes-arrow:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .quotes-step-at {
   min-width: 4.5rem;
   text-align: center;

@@ -191,22 +191,37 @@ type Entry = SearchableSection;
 /**
  * How far below the top of the viewport a heading counts as reached.
  *
- * **A few pixels BELOW the sections' `scroll-mt`, not equal to it.** The
- * sections carry `scroll-mt-24` (96px) and `scrollIntoView` honours it, so a
- * clicked section lands with its top at *about* 96 — and "about" is the whole
- * problem. Measured in a browser on 2026-09-03, clicking an entry scrolled
- * correctly and then left the highlight on the entry above: the heading came to
- * rest a fraction over 96, `top <= 96` was false, and the section you had just
- * asked for was the one section not counted as reached. Subpixel layout,
- * fractional device pixel ratios and smooth-scroll rounding all land on that
- * boundary, and a test in jsdom cannot see any of it — every rect there is
- * zero.
+ * **A few pixels BELOW the section's own `scroll-margin-top`, not equal to
+ * it.** `scrollIntoView` honours the margin, so a clicked section lands with
+ * its top at *about* the margin — and "about" is the whole problem. Measured in
+ * a browser on 2026-09-03, clicking an entry scrolled correctly and then left
+ * the highlight on the entry above: the heading came to rest a fraction over
+ * the margin, `top <= margin` was false, and the section you had just asked for
+ * was the one section not counted as reached. Subpixel layout, fractional
+ * device pixel ratios and smooth-scroll rounding all land on that boundary.
+ * The slack costs nothing: a heading 4px above the fold is one the reader is
+ * plainly in.
  *
- * So this must stay strictly greater than the `scroll-mt` in Metadata.tsx
- * § Section. The slack costs nothing: a heading 4px above the fold is one the
- * reader is plainly in.
+ * **Read off the element, not written here as a number.** It was `100`, beside
+ * a note that it had to stay above the `scroll-mt-24` in Metadata.tsx
+ * § Section — and that class is **6rem, not 96px**. The app sets no root font
+ * size, so a reader whose browser is set to large text (20px) has a 120px
+ * margin, the note was false for them, and the list marked the section above
+ * the one they had clicked. A computed length is always in pixels, whatever
+ * unit the stylesheet used, so there is no rem to convert. Sweep item XZ-X12,
+ * docs/plans/261003g-sweep-clusters-2-and-3-scan-decoding-and-four-one-file-fixes.md § 4.
+ *
+ * `FALLBACK_REACHED_PX` is for a section with no margin to read: jsdom, which
+ * applies no stylesheet, and a page that mounts this list without giving its
+ * sections one.
  */
-const REACHED_PX = 100;
+const REACHED_SLACK_PX = 4;
+const FALLBACK_REACHED_PX = 100;
+
+function reachedPx(section: HTMLElement): number {
+  const margin = Number.parseFloat(getComputedStyle(section).scrollMarginTop);
+  return Number.isFinite(margin) && margin > 0 ? margin + REACHED_SLACK_PX : FALLBACK_REACHED_PX;
+}
 
 export function PageContents({
   containerRef,
@@ -302,7 +317,7 @@ export function PageContents({
       /* **At the bottom of the document, the last entry — unconditionally.**
          The rule below cannot reach it: a short last section stops scrolling
          while its heading is still near the *bottom* of the viewport, never
-         crossing 96px, so clicking "Archive this article" left "Technical
+         crossing the margin, so clicking "Archive this article" left "Technical
          details" marked. This component's own docstring claimed the scroll
          handler avoided the bottom-of-page problem an IntersectionObserver has;
          it had the same problem, by a different route. GPT Sol, 2026-09-03. */
@@ -339,7 +354,7 @@ export function PageContents({
            second page's list the first page's sections. The scan is already
            scoped; this is the half that was not. */
         const el = sectionIn(root, entry.id);
-        if (el && el.getBoundingClientRect().top <= REACHED_PX) current = entry.id;
+        if (el && el.getBoundingClientRect().top <= reachedPx(el)) current = entry.id;
       }
       /* Above the first heading, the first entry is still the honest answer —
          `null` would leave the list with nothing marked for the top screenful
@@ -449,7 +464,7 @@ export function PageContents({
         placeholder="Search this page"
         enterKeyHint="search"
         aria-label="Search this page's sections"
-        className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-foreground tw:placeholder:text-ink-faint tw:focus-visible:border-highlight tw:focus-visible:outline-none"
+        className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-foreground tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none"
       />
       {/* Kept mounted before the first keystroke: a live region inserted with
           its first message is not announced consistently. Sighted readers only
@@ -501,7 +516,7 @@ export function PageContents({
                  would have drawn in Arial beside a page of Geist, which is the
                  exact bug this component was shipped alongside a fix for. GPT
                  Sol, 2026-09-03. */
-              className={`tw:block tw:w-full tw:cursor-pointer tw:border-0 tw:border-l-2 tw:bg-transparent tw:py-1 tw:pl-3 tw:text-left tw:font-sans tw:text-xs tw:leading-snug tw:transition-colors tw:hover:text-highlight tw:focus-visible:outline-none tw:focus-visible:text-highlight ${
+              className={`tw:block tw:w-full tw:cursor-pointer tw:border-0 tw:border-l-2 tw:bg-transparent tw:py-1 tw:pl-3 tw:text-left tw:font-sans tw:text-xs tw:leading-snug tw:transition-colors tw:hover:text-highlight-text tw:focus-visible:outline-none tw:focus-visible:text-highlight-text ${
                 here === entry.id
                   ? "tw:border-highlight tw:text-foreground"
                   : "tw:border-border tw:text-ink-faint"

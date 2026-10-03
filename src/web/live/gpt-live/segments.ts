@@ -103,6 +103,9 @@ import type { LiveLine } from "../useLiveConversation.js";
 /** Who was speaking. The same two names the live transcript uses. */
 export type Speaker = LiveLine["role"];
 
+/** A line as this reducer knows it: everything in `LiveLine` but which call it was. */
+export type SegmentLine = Omit<LiveLine, "session">;
+
 /** How long the reader must pause, with the companion speaking in the pause, to begin a new segment. */
 export const READER_PAUSE_MS = 1_000;
 /** The reader began this soon after the companion's last fragment (or over it): the companion was cut into. */
@@ -191,6 +194,8 @@ export class Segmenter {
   private readonly seen = new Set<string>();
   private open: Fragment[] = [];
   private readonly frozen: SpeakerSegment[] = [];
+  /** Which emitted exchange each frozen segment went out in. For `lines()`. */
+  private readonly frozenIn = new Map<string, number>();
   /** Nothing may be placed before this: the edge of what has been emitted. */
   private floor = 0;
   /** The furthest point heard, for `closing()` to move the floor to. */
@@ -267,15 +272,31 @@ export class Segmenter {
    * A line is `done` when its segment is frozen, or when its speaker has begun
    * a later segment. The caller takes a line off the screen when the exchange
    * naming it in `itemIds` has been written.
+   *
+   * `exchange` and `seq` are what the thread groups and orders by
+   * (../tail.ts): the exchange the segment is, or will be, emitted in. For a
+   * frozen segment that is settled. For an open one it is the number its draft
+   * gets if the open drafts freeze as they now stand, so it can move while the
+   * words are still arriving — as a Realtime line's does when the ledger first
+   * places it. `session` is the hook's to add; this class knows one call.
    */
-  lines(): LiveLine[] {
+  lines(): SegmentLine[] {
+    const owner = new Map(this.frozenIn);
+    this.project().forEach((draft, i) => {
+      for (const segment of segmentsOf(draft, false)) owner.set(segment.id, this.emitted + i);
+    });
     const all = this.segments();
-    return all.map((segment, i) => ({
-      id: segment.id,
-      role: segment.role,
-      text: segment.text,
-      done: segment.frozen || all.slice(i + 1).some((later) => later.role === segment.role),
-    }));
+    return all.map((segment, i) => {
+      const seq = owner.get(segment.id) ?? Number.POSITIVE_INFINITY;
+      return {
+        id: segment.id,
+        role: segment.role,
+        text: segment.text,
+        done: segment.frozen || all.slice(i + 1).some((later) => later.role === segment.role),
+        exchange: Number.isFinite(seq) ? `gpt-live-${seq}` : segment.id,
+        seq,
+      };
+    });
   }
 
   /** Record a fragment. False when it changes nothing: a repeat, or only whitespace. */
@@ -352,6 +373,7 @@ export class Segmenter {
     if (Number.isFinite(boundary)) this.floor = Math.max(this.floor, boundary);
 
     const seq = this.emitted++;
+    for (const segment of segments) this.frozenIn.set(segment.id, seq);
     return {
       seq,
       id: `gpt-live-${seq}`,

@@ -777,6 +777,17 @@ export interface GlossaryResponse {
    * src/profile.ts is the one place those two rules live.
    */
   profileChanged: boolean;
+  /**
+   * **What the panel's own run button will do with this list** — `panelRunKind`
+   * in src/glossary.ts, for the label: *Find more* when it appends, *Find terms
+   * again* when it rewrites. The route adds it, beside `profileChanged`,
+   * because the profile half needs the reader's current profile. Plan 261003c.
+   *
+   * Optional only so a hand-built response in a test need not carry it; the
+   * route always sends it. The panel reads absent as `rewrite` when the list is
+   * stale or outdated and `append` otherwise (useGlossary.ts).
+   */
+  panelRun?: "append" | "rewrite";
 }
 
 /**
@@ -792,7 +803,7 @@ export interface GlossaryResponse {
  */
 export type ThreadFound = Omit<ThreadResponse, "profileChanged">;
 /** As `ThreadFound`, for the glossary. */
-export type GlossaryFound = Omit<GlossaryResponse, "profileChanged">;
+export type GlossaryFound = Omit<GlossaryResponse, "profileChanged" | "panelRun">;
 /** As `ThreadFound`, for the ideas. */
 export type IdeasFound = Omit<IdeasResponse, "profileChanged">;
 export type SketchFound = Omit<SketchResponse, "profileChanged">;
@@ -2059,6 +2070,13 @@ export interface LibraryEntry {
    * missing value reads as `'full'`.
    */
   processing?: "minimal" | "full";
+  /**
+   * **The reader's own tags on this article**, lowercase and sorted
+   * (src/tags.ts). Private: the owner's shelf listing carries them, the public
+   * shelf never does (src/public/dto.ts builds its own rows). Optional only for
+   * a shelf row cached before tags existed; read absent as none. Plan 261003d.
+   */
+  tags?: string[];
   /** A minimal paper's abstract and DOI, as the `metadata` step read them. Absent otherwise. */
   abstract?: string;
   doi?: string;
@@ -2117,6 +2135,16 @@ export interface LibraryResponse {
  * cards and a count of six. The coverage statistics are deliberately not here:
  * they live in `npm run shelf-terms:report`.
  */
+/** `GET /api/library/tags` — every tag the reader uses, sorted, with counts. Plan 261003d. */
+export interface LibraryTagsResponse {
+  tags: { tag: string; count: number }[];
+}
+
+/** `PATCH /api/library/:slug/tags` — the article's tags after the edit, sorted. */
+export interface ArticleTagsResponse {
+  tags: string[];
+}
+
 export interface LibraryTermsResponse {
   /** Best first. Empty below 8 distinct works, or while everything is pending. */
   terms: {
@@ -2615,6 +2643,12 @@ export interface ArticleMetadata {
   archivedAt: string | null;
 
   /**
+   * **The reader's own tags on this article**, lowercase and sorted
+   * (src/tags.ts) — the editor near the top of the page. Plan 261003d.
+   */
+  tags: string[];
+
+  /**
    * **When High-powered AI was switched on for this article, or `null`** —
    * `articles.high_power_since`, off the row already in hand.
    * docs/plans/260930f-high-powered-ai-per-article.md. The column, not the
@@ -2886,6 +2920,27 @@ export interface ToolRun {
 export type Comment = CommentFields & CommentAnchor;
 
 /**
+ * **A highlight's colour, by name.** Stored as the name, never a hex value, so
+ * the palette can be retuned for dark mode or contrast without a migration;
+ * the washes are `--hl-*` in src/web/styles/tokens.css. The database's
+ * `comments_colour` CHECK lists the same four by hand.
+ */
+export type HighlightColour = "yellow" | "green" | "blue" | "pink";
+
+/** The four, as a value, in the order the swatch rows show them. */
+export const HIGHLIGHT_COLOURS = [
+  "yellow",
+  "green",
+  "blue",
+  "pink",
+] as const satisfies readonly HighlightColour[];
+
+/** Is this value off the wire one of ours? */
+export function isHighlightColour(x: unknown): x is HighlightColour {
+  return typeof x === "string" && (HIGHLIGHT_COLOURS as readonly string[]).includes(x);
+}
+
+/**
  * Where a comment is anchored: some words in the block, or the whole block.
  *
  * **The whole-block arm is a bookmark made from the gutter** — Greg,
@@ -2998,6 +3053,18 @@ interface CommentFields {
    * the database as well.
    */
   valence?: number;
+
+  /**
+   * **The highlight's colour** — absent on every comment made without one,
+   * which draws the plain underline. A highlight is a comment with a colour
+   * (docs/plans/261003e-span-highlights-with-a-colour.md): with no `body` it is
+   * a wordless highlight, with one it is a highlighted note.
+   *
+   * **Only on a selection-anchored comment.** A whole-block row has no words to
+   * paint, so the route refuses a colour on one and
+   * `comments_colour_needs_quote` refuses it again in the database.
+   */
+  colour?: HighlightColour;
 
   /**
    * How the *model call* went, and only that.
@@ -3310,6 +3377,17 @@ export interface Job {
    */
   profile?: string;
   /**
+   * **The reader's note on how the Illustrated picture should come out** —
+   * present only on a job naming `illustrated` whose reader typed or dictated
+   * one in the box under the picture. Checked once at the route
+   * (`checkIllustrationNote`, src/illustrated-plate.ts), frozen here for the
+   * reasons `profile` gives above (a restart, a Retry), and compared by
+   * `sameWork`. Stripped from the wire by `publicJob`, like the profile: it is
+   * the reader's own words, and the panel reads it off the picture instead.
+   * docs/plans/261002j-illustrated-steering-note.md.
+   */
+  illustrationNote?: string;
+  /**
    * **Present exactly when this job is a reset** — "as if just imported", with
    * the extras dropped. `jobs.reset` in src/db/schema.ts; src/reset.ts says
    * what an extra is. Absent on every other job.
@@ -3565,10 +3643,10 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  * so drizzle/0050_candidates_thread_kind.sql is a drop and a re-add with no data
  * movement between them. docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
  */
-export type ThreadKind = "chat" | "remember" | "candidates";
+export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial";
 
 /**
- * The three, as a value, and the predicate both ends validate with.
+ * The thread kinds, as a value, and the predicate both ends validate with.
  *
  * **One list**, for the reason `REMEMBER_STANCES` below gives about itself and
  * for one more that is specific to this field: the default lives in *two*
@@ -3580,7 +3658,25 @@ export type ThreadKind = "chat" | "remember" | "candidates";
  * introduced to prevent. Since both call `isThreadKind`, adding a member is one
  * edit rather than four.
  */
-export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates"];
+export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates", "tutorial"];
+
+/**
+ * **The kinds an article has at most one of** — Remember's Recall and Tutorial,
+ * each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
+ * and Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md).
+ * A partial unique index per kind holds it in the database
+ * (`chat_threads_one_remember`, `chat_threads_one_tutorial`); this is the list
+ * `targetOf` in src/chat.ts and `ConversationBand` read, so the two ends agree.
+ *
+ * Single-thread is ONE property. It does not say what a kind is called, what
+ * its empty box says, or whether it offers Live — those are decided per kind.
+ */
+export const SINGLE_THREAD_KINDS = ["remember", "tutorial"] as const satisfies readonly ThreadKind[];
+export type SingleThreadKind = (typeof SINGLE_THREAD_KINDS)[number];
+
+export function isSingleThreadKind(kind: ThreadKind | undefined): kind is SingleThreadKind {
+  return kind !== undefined && (SINGLE_THREAD_KINDS as readonly string[]).includes(kind);
+}
 
 /**
  * The most block ids one chat question may say were on screen. A screenful is a
@@ -6210,13 +6306,13 @@ export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
  * tab shows it** — `GET /api/feedback`.
  * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
  *
- * **Five fields, written out.** Not a `Pick` of
+ * **Six fields, written out.** Not a `Pick` of
  * `FeedbackReport` or of the admin row: a field added to either of those must
  * not widen what this response carries by itself. The email, the address, the
  * diagnostics and the screenshot stay behind — a list whose job is "what did I
  * say" has no use for them, and the address can carry the reader's own search
  * terms or a credential in an `/add/` URL (docs/project/feedback.md § The one
- * rule). Four come from the store; the route derives `shipped` from this build's
+ * rule). Five come from the store; the route derives `shipped` from this build's
  * note map. Here rather than in src/store/contracts.ts because the dialog reads
  * it, and nothing under src/web/ may import the store.
  */
@@ -6226,6 +6322,14 @@ export interface EarlierFeedback {
   createdAt: string;
   kind: FeedbackKind | null;
   body: string;
+  /**
+   * **Which page the report was filed from — a label, not the address.** The
+   * path alone, with an import collapsed to `/add`: src/feedback-page.ts has
+   * the rule, and it is what lets this field exist beside the sentence above.
+   * `null` for a report with no stored address (one, from before 2026-09-02).
+   * docs/plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md.
+   */
+  page: string | null;
   /**
    * **A change for this report has shipped, and is in the build answering.**
    * Derived from the report's note in docs/user-feedback/, compiled into the
@@ -6237,11 +6341,20 @@ export interface EarlierFeedback {
   shipped: boolean;
 }
 
-/** The whole answer: the newest reports, and whether there were more than the cap. */
+/**
+ * The whole answer: the newest reports, whether there were more than the cap,
+ * and how many there are under each filter.
+ */
 export interface EarlierFeedbackPage {
   reports: EarlierFeedback[];
   /** `true` when the reader has filed more than `EARLIER_FEEDBACK_LIMIT`, so the list says so. */
   more: boolean;
+  /**
+   * **How many under each filter**, uncapped, on every answer whatever `?show=`
+   * asked for, so the first read labels all three pills.
+   * docs/plans/261003b-earlier-tab-counts-on-the-pills.md.
+   */
+  counts: Record<EarlierFeedbackShow, number>;
 }
 
 /**

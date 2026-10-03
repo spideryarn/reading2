@@ -6,12 +6,13 @@
  * `docs/reference/RESEARCH_ON_OPTIMAL_TEXT_FORMATTING.md` (the reading measure/typography numbers).
  * See docs/project/original-version/overview.md for what was and wasn't carried over, and why.
  *
- * DARK ONLY, unconditionally — no toggle, no `prefers-color-scheme`, no light fallback.
- * Greg, 2026-08-24: "I'm happy to go with the dumb version where we just switched to always being
- * in dark mode." One theme is one thing to get right. The surface values below are the neutral set
- * inverted, under the *same variable names* as before, so nothing downstream had to be rewired; the
- * brand orange is unchanged, and reads better on black than it ever did on white (~7.8:1 vs ~2.6:1).
- * The reasoning, and what to do if light mode ever comes back: docs/project/web-client.md § Dark mode.
+ * DARK BY DEFAULT, LIGHT BY CHOICE. The `:root` block below is the dark palette, and was the only
+ * one from 2026-08-24 (Greg: "I'm happy to go with the dumb version where we just switched to always
+ * being in dark mode") to 2026-10-03, when a reader could choose Light, Dark or System on /profile
+ * (Greg, 2026-09-05, spya-nv5bzx). The light values are the `:root[data-theme="light"]` block at the
+ * end of this file, under the *same variable names*, so nothing downstream picks a theme. The brand
+ * orange is unchanged in both, and reads better on black than on white (~7.8:1 vs ~2.6:1).
+ * The mechanism and the reasoning: docs/project/web-client.md § Appearance.
  *
  * Plain CSS custom properties, and the single source of truth for colour. Since 2026-08-25 they are
  * ALSO the shadcn palette: src/web/tailwind.css has an `@theme inline` block that points Tailwind's
@@ -115,8 +116,8 @@
        invalid-declaration trap that makes it worth writing out. */
     --quote-stroke-color: rgb(var(--quote-stroke-rgb) / 0.95);
 
-    /* The sheet an article's pictures are printed on, and the one deliberately
-       LIGHT surface in a dark-only app.
+    /* The sheet an article's pictures are printed on, deliberately light in
+       either appearance.
 
        Article images are routinely PNGs with an alpha channel carrying
        near-black ink — equations, line diagrams, and data tables rendered as
@@ -138,7 +139,7 @@
        rectangle on a near-black page glares. */
     --figure-sheet: #f4f3f0;
 
-    /* ---- surfaces and text (dark only; see the header) ---------------- */
+    /* ---- surfaces and text (Dark; Light overrides follow below) ------- */
     /* Not literally #000 on #fff inverted: the page is all-but-black and the text is off-white,
        because pure white on pure black haloes at reading sizes. That was first noticed in Georgia,
        and it did not go away when the reading face became Geist — light-on-dark bloom is about the
@@ -168,6 +169,10 @@
     --popover: oklch(0.26 0 0);
     --popover-foreground: oklch(0.97 0 0);
     --destructive-foreground: oklch(0.97 0 0);
+    /* The destructive Button used literal white before appearance themes.
+       This semantic name preserves that Dark rendering without fixing Light
+       to a colour keyword. */
+    --destructive-button-foreground: oklch(1 0 0);
 
     --border: oklch(0.27 0 0);
     --input: oklch(0.3 0 0);
@@ -175,7 +180,7 @@
        purpose. Two reasons, and the second is the real one.
 
        First, consistency: this app already had a focus convention before any
-       shadcn arrived — `outline: 1px solid var(--highlight)`, on .spine-hit and
+       shadcn arrived — `outline: 1px solid var(--highlight-text)`, on .spine-hit and
        on .cmt-search in styles.css. A second, greyer convention arriving with
        the components would have been a split, not an addition.
 
@@ -240,8 +245,10 @@
     --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
     --font-id: 'Courier New', Courier, var(--font-mono);   /* block ids, and only block ids */
 
-    /* One face per voice — the author's, the model's, the reader's — read ONLY by
-       src/web/styles/voices.css, for every reader since 2026-10-02. Greg, 2026-10-01:
+    /* One face per voice — the author's, the model's, the reader's — applied to
+       visible words by src/web/styles/voices.css, for every reader since 2026-10-02.
+       Geometry-only boxes that resolve the prose's `ch` measure also read
+       `--font-author`; their visible children set their own face. Greg, 2026-10-01:
        Courier for AI, a serif for the author, Arial for the reader. Geist stays the chrome, so it
        becomes the fourth voice by being left alone. Courier became IBM Plex Mono on 2026-10-02 —
        "Courier is really ugly" — still monospaced, so still machine-made. docs/project/fonts.md. */
@@ -260,8 +267,8 @@
     /* Geist is a VARIABLE face (weight axis 100-900), so body weight need not be a round 400.
        Light text on a dark ground optically thins — the same bloom that made us pull --foreground
        back off pure white. The original app's own wishlist named the fix and could not use it,
-       having no variable face: "add ~50 to the weight axis in dark mode". We are dark-only and now
-       have one, so we take it. 450, not 400. Drop this to 400 the day a light theme appears. */
+       having no variable face: "add ~50 to the weight axis in dark mode". Dark takes it at 450;
+       the Light block below returns to 400. */
     --reading-weight: 450;
 
     /* ---- vertical rhythm (the article column only) --------------------- */
@@ -333,4 +340,63 @@
     font-weight: 600;
     letter-spacing: 0.02em;
     color: var(--wordmark-ink);
+}
+
+/* ------------------------------------------------------------------ light --
+   **The light palette, since 2026-10-03** — the same names as the `:root` block
+   above, redefined for a reader who chose Light, or System on a light OS
+   (src/web/appearance.ts sets `data-theme`). `:root` stays the dark palette and
+   the default, so a page whose before-paint script never ran is the page
+   everyone had before. Greg, 2026-09-05 (spya-nv5bzx): *"Allow me to switch
+   between Light, Dark, and System modes (in my Profile page)."*
+
+   **The same intent, not an inversion.** The page is a very light grey rather
+   than white, for the reason the dark page is not black. Panels sit *below*
+   the page in lightness and cards and popovers above it — on a light ground a
+   panel recedes and a card lifts. The orange is unchanged as a fill; orange as
+   *text* is a different colour (`--highlight-ink`, src/web/styles/tokens.css),
+   because #DB8A45 on white is about 2.6:1.
+
+   **Every colour token set in the dark block must be set here too**, or be on
+   the theme-neutral list in tests/appearance-palette.test.ts — that test is
+   what stops a token added next month from being dark-only by accident.
+   docs/project/web-client.md § Appearance. */
+:root[data-theme="light"] {
+    color-scheme: light;
+
+    --hit-rgb: 0 114 178;
+    --hit-wash-rgb: 112 122 134;
+    --quote-stroke-rgb: 0 138 98;
+
+    --background: oklch(0.985 0 0);
+    --foreground: oklch(0.2 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.2 0 0);
+    --primary-foreground: oklch(0.16 0.02 45);
+    --secondary: oklch(0.94 0 0);
+    --secondary-foreground: oklch(0.2 0 0);
+    --muted: oklch(0.945 0 0);
+    --muted-foreground: oklch(0.48 0 0);
+    --accent: oklch(0.93 0 0);
+    --accent-foreground: oklch(0.2 0 0);
+    --destructive: oklch(0.55 0.2 27.325);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.2 0 0);
+    --destructive-foreground: oklch(0.985 0 0);
+    --destructive-button-foreground: var(--destructive-foreground);
+    --border: oklch(0.885 0 0);
+    --input: oklch(0.85 0 0);
+    --sidebar: oklch(0.96 0 0);
+    --sidebar-foreground: oklch(0.2 0 0);
+    --sidebar-accent: oklch(0.92 0 0);
+    --sidebar-border: oklch(0.885 0 0);
+    /* The focus ring, darkened with the orange-as-a-line token: the raw orange is
+       ~2.6:1 on this page, under the 3:1 a focus indicator needs (WCAG 1.4.11).
+       Every hand-written focus outline and native `accent-color` reads
+       --highlight-text for the same reason (GPT Sol, code review of 261003e). */
+    --ring: var(--highlight-ink);
+
+    /* Dark text on a light ground does not bloom, so the extra weight the dark
+       page needs (--reading-weight, above) would read as bold here. */
+    --reading-weight: 400;
 }

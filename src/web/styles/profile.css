@@ -78,7 +78,7 @@
 /* Over the cap. The box does NOT stop accepting text — the server refuses and
    says the limit, and a cap you can see and go past is a cap you can decide
    about. This is the warning, not the wall. */
-.prof-count.over { color: var(--highlight); }
+.prof-count.over { color: var(--highlight-text); }
 
 /* Where the save stands — `SaveStatus` in ProfileBox.tsx. A fixed height, so
    the line changing from "Saving…" to "Saved" does not move anything below it.
@@ -97,14 +97,14 @@
 }
 .prof-save svg { flex: none; }
 .prof-save.is-saved { color: rgb(var(--cat-2-rgb)); }
-.prof-save.is-error { color: var(--highlight); }
+.prof-save.is-error { color: var(--highlight-text); }
 
 .prof-box-error {
   display: flex;
   align-items: center;
   gap: 0.3rem;
   margin: 0.35rem 0 0;
-  color: var(--highlight);
+  color: var(--highlight-text);
   font-family: var(--font-ui);
   font-size: 0.79rem;
 }
@@ -320,7 +320,7 @@
   text-underline-offset: 2px;
   cursor: pointer;
 }
-.prof-mic-change:hover { color: var(--highlight); }
+.prof-mic-change:hover { color: var(--highlight-text); }
 
 .prof-mic-picker {
   display: flex;
@@ -415,7 +415,7 @@
 .prof-mic.on {
   border-color: var(--highlight);
   background: var(--highlight);
-  color: var(--page);
+  color: var(--highlight-foreground);
 }
 @media (prefers-reduced-motion: no-preference) {
   .prof-mic.opening { animation: prof-mic-pulse 1s ease-in-out infinite; }
@@ -462,7 +462,7 @@
   color: var(--ink);
 }
 .prof-badge:focus-visible {
-  outline: 2px solid var(--highlight);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 1px;
 }
 /* Written for a profile the reader has since changed. Warmer, and still not a
@@ -638,4 +638,3 @@
   align-items: center;
   gap: 0.5rem 0.75rem;
 }
-

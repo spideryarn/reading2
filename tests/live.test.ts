@@ -28,6 +28,7 @@ import { describe, expect, it } from "vitest";
 import {
   LIVE_MODEL,
   LIVE_SERVER_TOOLS,
+  LIVE_SYSTEM,
   LIVE_TRANSCRIBER,
   SHOW_PASSAGE_TOOL,
   liveInstructions,
@@ -112,23 +113,23 @@ describe("what the model is told", () => {
   });
 
   it("fills the wait before a slow tool, and does not answer noise", () => {
-    /* Three rules that pull against each other, so they are pinned together
-       (docs/plans/261003a § Stage 1). A sentence before a slow tool turns a
-       second of dead air into "let me check"; the unclear-audio rule stops a
-       cough becoming a web search; and neither may loosen the one rule this
-       prompt exists for. Phrases, not paragraphs — the wording will move. */
-    expect(flat).toContain("say one short sentence");
-    expect(flat).toContain("show_passage needs no such sentence");
-    expect(flat).toContain("unintelligible");
-    expect(flat).toContain("Never guess");
-    expect(flat).toContain("never call a tool on");
+    /* Three rules that pull against each other, so they are pinned together.
+       A few words before a slow tool turn a second of dead air into "let me
+       look that up"; the did-not-catch rule stops a cough becoming a web
+       search; and neither may loosen the one rule this prompt exists for.
+       The wording is dev's (plan 261002j, WHEN TO THINK), which replaced plan
+       261003a Stage 1's longer version of the same two rules at the merge.
+       Phrases, not paragraphs — the wording will move. */
+    expect(flat).toContain("Before a tool that makes them wait, a few words");
+    expect(flat).toContain("Never before show_passage");
+    expect(flat).toContain("If you did not catch what they said, ask them to say it again rather than guessing");
     expect(flat).toContain("NEVER SAY A BLOCK ID OUT LOUD");
-    expect(flat).toContain("first sentence after any tool preamble");
-    expect(flat).not.toContain("Answer the question that was asked, in the first sentence.");
   });
 
   it("does not change language on an accent", () => {
-    expect(flat).toContain("An accent, a filler word or a single foreign term is not");
+    expect(flat).toContain("English, unless the reader is clearly speaking another language");
+    expect(flat).toContain("An accent or one foreign word is not a change of language");
+    expect(flat, "the old line pinned English with no way out").not.toContain("Plain spoken English");
   });
 
   it("puts the rules before the article", () => {
@@ -219,6 +220,21 @@ describe("the session", () => {
     const s = liveSession({ meta, blocks });
     const input = (s.audio as { input: Record<string, Record<string, unknown>> }).input;
     expect(input.turn_detection?.type).toBe("semantic_vad");
+  });
+
+  /**
+   * **Low reasoning effort, and a spoken prompt that says when to use it.**
+   * Unset, the model runs at OpenAI's default, which their realtime guide says
+   * to lower for a voice agent — and Greg asked for "instant mode" (spya-f4eq7p).
+   * Nothing on screen distinguishes a session that deliberates before every
+   * "yes" from one that does not; only the wait does.
+   */
+  it("asks for low reasoning effort, and says when to think and when to just answer", () => {
+    const s = liveSession({ meta, blocks });
+    expect(s.reasoning).toEqual({ effort: "low" });
+    expect(LIVE_SYSTEM).toContain("WHEN TO THINK");
+    expect(LIVE_SYSTEM, "a preamble before the instant tool is filler").toMatch(/Never before show_passage/);
+    expect(LIVE_SYSTEM).toMatch(/No pleasantries or filler/);
   });
 });
 

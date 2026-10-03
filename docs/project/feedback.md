@@ -166,11 +166,21 @@ first `await`, so a large pasted screenshot is stringified before React gets to 
 > — Greg, 2026-09-12 (SPIDERYARN-READING2-3R)
 
 The dialog has two tabs, **Write** and **Earlier**. Earlier is the signed-in reader's own reports,
-newest first — the date, problem or suggestion, and what they wrote — read by `GET /api/feedback`,
-which is owner-scoped in the store like every other read and sends **four fields a report and
-nothing else**: not the email, the address, the diagnostics or the screenshot (`EarlierFeedback` in
-[`src/types.ts`](../../src/types.ts) says why). Fifty at most, and the list says so when there were
-more.
+newest first — the date, problem or suggestion, the page it was filed from, and what they wrote —
+read by `GET /api/feedback`, which is owner-scoped in the store like every other read and sends
+**those fields, whether it shipped, and nothing else**: not the email, the address, the diagnostics
+or the screenshot (`EarlierFeedback` in [`src/types.ts`](../../src/types.ts) says why). Fifty at
+most, and the list says so when there were more.
+
+**The page is a label, not the address**, since 2026-10-03. Greg asked that a report carry the page
+he was on (`spya-y4upzw`); it had since 2026-09-02, to the row, Sentry, `/admin/feedback` and the
+admin's mail, and the dialog was the one place that never showed it. So each row now says
+*on /admin/vouchers*. The label is the path alone, with no origin, query string or fragment, and
+anything under `/add/` is just `/add`, because that is where a search term or somebody else's
+credentialled URL would be. The store makes it, so the address never leaves `listMine`:
+[`src/feedback-page.ts`](../../src/feedback-page.ts), and
+[the plan](../plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md) has the
+surface-by-surface check.
 
 ### Shipped or not, since 2026-09-30
 
@@ -193,6 +203,11 @@ header, reads as not shipped: the label is never claimed without a note saying s
 say is "on `dev`, not yet live"; declined and awaiting both read as *not shipped*. The header format,
 split reports (`parts:`), the accepted limits, and why this beat a status column are in
 [260930e](../plans/260930e-earlier-tab-filters-by-done-from-the-notes.md).
+
+**Each pill says how many, since 2026-10-03**: every answer carries `counts` for all three
+filters, uncapped, counted over the same ids the filter uses and in the same snapshot as the list,
+and the cap line reads "Showing the 50 most recent of your N not-shipped reports" —
+[261003b](../plans/261003b-earlier-tab-counts-on-the-pills.md).
 `tests/feedback-endings.test.ts` goes red when a header does not parse or the committed map is stale.
 **The same flip emails the reader**, since 2026-10-02, if they are not an admin: the deploy that
 carries the note sends it once that deploy is live —
@@ -344,13 +359,25 @@ The design work, the options weighed and the two reviews that changed it are in
 
 ```
 FeedbackDialog.tsx  ──POST /api/feedback──▶  routes.ts  ──▶  Postgres `feedback`   (authoritative)
-                                                        └──▶  Sentry               (best effort)
+                                                        ├──▶  Sentry               (best effort)
+                                                        └──▶  an email to us       (best effort, readers only)
 ```
 
 **The row is written first and it is the report.** The reader is told the report landed because the
 row landed; the Sentry item is a mirror for the sake of the tools that already watch Sentry, and it
 cannot fail the request. Only a *newly created* row is mirrored — Sentry does not dedupe feedback
 events, so a retry would otherwise file the same bug twice there while filing it once here.
+
+**A reader's report is also mailed to us, since 2026-10-02**, at Greg's request (report
+`spya-wwx6ks`): *"Anytime someone submits feedback that isn't from me, the admin, please send me an
+email with their feedback."* Same rules as the mirror — a newly created row only, after the reader
+has been answered, unable to fail the request — plus two of its own: never an admin's report
+(`isAdmin`), and at most 20 a day across every reader and 5 from any one, because Resend's free
+quota is shared with auth mail. The mail carries the words, kind, page address, slug and the reader's email address
+(`/admin/feedback` already shows that address), as plain text with the words quoted and their links
+defanged. [`src/feedback-notice.ts`](../../src/feedback-notice.ts); the mail side is
+[email.md § Mail the server sends itself](email.md#mail-the-server-sends-itself); the plan is
+[261002j](../plans/261002j-email-the-admin-each-reader-s-feedback.md).
 
 **The browser posts to us rather than to Sentry directly**, which is the load-bearing architectural
 choice and the plan argues it at length. In one line: it is the only arrangement where the
@@ -390,6 +417,7 @@ which *is* the verified account id.
 | the route | [`src/routes.ts`](../../src/routes.ts), § feedback |
 | the store, the idempotency and the rate cap | [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts) |
 | the Sentry mirror | [`src/feedback.ts`](../../src/feedback.ts) |
+| the email to us about a reader's report | [`src/feedback-notice.ts`](../../src/feedback-notice.ts) |
 | the guard on the final Sentry envelope | [`src/feedback-envelope.ts`](../../src/feedback-envelope.ts) |
 | the reader's own article — source file and `article.json` — gathered for a consented report | [`src/feedback-article.ts`](../../src/feedback-article.ts) |
 | the screenshot, taken apart and written again | [`src/feedback-image.ts`](../../src/feedback-image.ts) |

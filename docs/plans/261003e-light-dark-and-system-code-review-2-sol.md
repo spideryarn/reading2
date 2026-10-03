@@ -1,0 +1,3 @@
+1. **P2 — [tests/appearance-fixed-colours.test.ts:301](/home/greg/code/spideryarn2/.claude/worktrees/fbnv5bzx-light-dark-system/tests/appearance-fixed-colours.test.ts:301):** The guard omits `border-highlight`, so reverting any of the new `focus:border-highlight-text`, `focus-visible:border-highlight-text`, or `focus-within:border-highlight-text` utilities would pass unnoticed.
+
+Verdict: One P2; all replacements are otherwise valid focus/selection indicators, Dark remains unchanged through the root alias, `--color-highlight-text` exists at `tailwind.css:202`, and the 68 focused tests pass.

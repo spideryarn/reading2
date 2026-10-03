@@ -15,6 +15,8 @@
  *   DELETE /api/library/:slug    destroy it, for good → { destroyed: slug }. 409 while an
  *                                 import is running; no body, and nothing to undo
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
+ *   GET    /api/library/tags     every tag the reader uses → { tags: [{ tag, count }] }
+ *   PATCH  /api/library/:slug/tags   { add?: string[], remove?: string[] } → { tags }
  *   GET    /api/models           which model writes what
  *                                 → { tasks: [{ task, model, id, provider, source, effort? }] }
  *   GET    /api/reader           `?slug=` → { profile, purpose, hasProfile, experimentalSince }
@@ -52,15 +54,18 @@
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
  *   GET    /api/comments/:slug   selection-anchored comments for compatibility;
  *                                `?anchors=whole-block` opts the current client into every comment
- *   POST   /api/comments/:slug   { blockId, quote, start, body?, criterionId?, valence? }, or
- *                                { blockId } for a whole-block bookmark
+ *   POST   /api/comments/:slug   { blockId, quote, start, body?, criterionId?, valence?, colour? },
+ *                                or { blockId } for a whole-block bookmark
  *                                → the stored comment. `criterionId` + `valence` are the referee's
- *                                  own placement of the passage — `tidyMark`
+ *                                  own placement of the passage — `tidyMark`; `colour` is a
+ *                                  highlight's, refused on a whole-block bookmark — `tidyColour`
  *   PATCH  /api/comments/:slug/:id        { body } — the reader's words, `null` clears them.
  *                                  The key is required: a patch that never mentions the body
  *                                  is a 400, not a silent wipe
  *   PATCH  /api/comments/:slug/:id/mark   { criterionId, valence } — both keys, always, each a
  *                                  value or `null`; both `null` clears the placement
+ *   PATCH  /api/comments/:slug/:id/colour { colour } — a highlight colour, or `null` to
+ *                                  remove it; the key is required. 409 on a whole-block comment
  *   DELETE /api/comments/:slug/:id
  *   GET    /api/chat/:slug       every stored conversation for the article
  *   POST   /api/chat/:slug       → **a stream**, see `streamChat`. Three bodies:
@@ -145,6 +150,7 @@ import {
   refereeCriteriaStore,
   searchStore,
   shelfStore,
+  tagStore,
   readingTimeStore,
   glossaryHiddenStore,
   loadArticle,
@@ -239,7 +245,7 @@ import { isStorableColour } from "./searches.js";
 /* The one media type this route serves, from the file that names it for the
    writer too — so what goes into the bucket and what comes out of it cannot be
    described two different ways. */
-import type { IllustratedImage } from "./illustrated-plate.js";
+import { checkIllustrationNote, type IllustratedImage } from "./illustrated-plate.js";
 import { blobStore, CONTENT_TYPE } from "./store/blobs.js";
 /* The download's two halves: the zip itself, and the one error a route has to
    turn into a 404 rather than let travel to the catch-all as a 500. Both come
@@ -281,6 +287,7 @@ import {
    header before calling it from anywhere else, because the scope handling in it
    is the part that is easy to get wrong and impossible to see wrong. */
 import { mirrorFeedback } from "./feedback.js";
+import { noticeFeedback } from "./feedback-notice.js";
 import { isFeedbackShipped, shippedFeedbackIds } from "./feedback-ending.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
@@ -436,6 +443,7 @@ import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
+import { panelRunKind } from "./glossary.js";
 import { routeProfileIsStale } from "./skim.js";
 import {
   type ArticleStage,
@@ -480,6 +488,8 @@ import type {
   SketchResponse,
   LibraryResponse,
   LibraryTermsResponse,
+  LibraryTagsResponse,
+  ArticleTagsResponse,
   RememberStance,
   ThreadKind,
   ThreadResponse,
@@ -492,6 +502,8 @@ import type {
    needs the same union and cannot import src/live.ts. */
 import {
   type GptLiveTicket,
+  HIGHLIGHT_COLOURS,
+  isHighlightColour,
   isLiveEngine,
   isMicPlacement,
   LIVE_ENGINES,
@@ -521,7 +533,7 @@ import {
    (`streamChat` says why one is still accepted at all).
    src/types.ts § REMEMBER_STANCES. */
 import { REMEMBER_STANCES } from "./types.js";
-import type { Article, CommentAnchor, ResetResponse } from "./types.js";
+import type { Article, CommentAnchor, HighlightColour, ResetResponse } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -1541,6 +1553,21 @@ async function tidyMark(slug: string, raw: Record<string, unknown>): Promise<Mar
 }
 
 /**
+ * **A highlight's colour off the wire**: one of `HIGHLIGHT_COLOURS`, or `null`
+ * (and, on the create path, absent) for none. Anything else is a 400 rather
+ * than "no colour" — a mistyped name silently drawing an underline is the
+ * failure a refusal makes visible. `comments_colour` refuses it again.
+ * docs/plans/261003e-span-highlights-with-a-colour.md.
+ */
+function tidyColour(colour: unknown): HighlightColour | null {
+  if (colour === undefined || colour === null) return null;
+  if (!isHighlightColour(colour)) {
+    throw httpError(400, `colour must be one of ${HIGHLIGHT_COLOURS.join(", ")}, or null [cmt-colour]`);
+  }
+  return colour;
+}
+
+/**
  * The same placement, in the shape `create` takes: absent keys, not `null`s.
  *
  * **One validator, two shapes, and the two shapes are not interchangeable.**
@@ -1616,6 +1643,13 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
     }
   }
   const tidied = tidyBody(text);
+  const colour = tidyColour(raw.colour);
+  /* A colour needs words to paint: a whole-block bookmark draws nothing in the
+     prose, so a coloured one would be a "highlight" that shows nothing (plan
+     261003e, review S4). `comments_colour_needs_quote` refuses it again. */
+  if (colour !== null && anchor.quote === undefined) {
+    throw httpError(400, "A whole-paragraph bookmark cannot have a colour [cmt-colour-block]");
+  }
 
   // Before anything is written, so a slug that is not an article is a clean 404
   // with nothing left behind.
@@ -1643,6 +1677,7 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
     ...(tidied === null ? {} : { body: tidied }),
     ...(typeof id === "string" ? { id } : {}),
     ...mark,
+    ...(colour === null ? {} : { colour }),
   });
 }
 
@@ -2904,6 +2939,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
   const askingRemember = (storedKind ?? wantedKind) === "remember";
+  /* Tutorial is dictated too, so it shares Remember's long cap rather than
+     chat's 4,000 — the same mistake `MAX_REMEMBER_CHARS` exists to avoid. */
+  const longInput = askingRemember || (storedKind ?? wantedKind) === "tutorial";
   /* **Chat only.** Remember's prompt tells the model not to guess how far the
      reader has got, and a screenful is exactly that guess; Candidates sends no
      position at all. The thread's kind decides, as it does for the cap below. */
@@ -2920,11 +2958,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   const beginKind = !wantsRetry && !wantsEdit
     ? (wantedKind ?? (visible !== undefined ? "chat" : undefined))
     : undefined;
-  const cap = askingRemember ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
+  const cap = longInput ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
       413,
-      askingRemember
+      longInput
         ? `What you wrote may be at most ${MAX_REMEMBER_CHARS} characters`
         : `A question may be at most ${MAX_QUESTION_CHARS} characters`,
     );
@@ -4455,7 +4493,13 @@ async function checkAnchor(anchor: ChatAnchor, blocks: Block[]): Promise<void> {
  * running process can tell a search in flight from one that died with the
  * process that was writing it.
  */
-const searching = new Set<string>();
+/* **A map to the attempt holding the key, not a set** (plan 261002h, Sol F7).
+   A revision re-asks the same run id while the superseded attempt may still be
+   unwinding, so two requests can hold one key at once. With a set, the old
+   attempt's `finally` deleted the key out from under the newer one, and a sweep
+   could then bury a run this process is still answering. Each request releases
+   the key only if it is still the holder. */
+const searching = new Map<string, symbol>();
 
 /**
  * What this process is searching *in this article*, as bare run ids.
@@ -4463,11 +4507,13 @@ const searching = new Set<string>();
  * The same conversion `liveMessages` does, and for the same two reasons: the
  * set's key has to stay unique across articles, and the store's `keep` is a
  * set of row ids rather than of composites it would have to take apart.
+ * Exported for tests/routes.test.ts, which checks a superseded attempt cannot
+ * release a newer one's hold.
  */
-function liveRuns(slug: string): Set<string> {
+export function liveRuns(slug: string): Set<string> {
   const prefix = `${slug}/`;
   const ids = new Set<string>();
-  for (const key of searching) {
+  for (const key of searching.keys()) {
     if (key.startsWith(prefix)) ids.add(key.slice(prefix.length));
   }
   return ids;
@@ -4542,9 +4588,18 @@ async function refuseAPaperNotReadYet(slug: string): Promise<void> {
 }
 
 async function search(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { id, criterion, kind = "meaning" } = (body ?? {}) as Record<string, unknown>;
+  const { id, criterion, kind = "meaning", revises = false } = (body ?? {}) as Record<
+    string,
+    unknown
+  >;
   if (typeof criterion !== "string" || criterion.trim() === "") {
     throw httpError(400, "Expected { criterion }");
+  }
+  /* Search-as-you-type (plan 261002h): `revises` re-asks the quick row named by
+     `id` with these words, in place. What it does to anything else is
+     `withRun`'s to decide (src/searches.ts). */
+  if (typeof revises !== "boolean") {
+    throw httpError(400, "revises must be true or false");
   }
   /* Which matcher (plan 261002e): absent is a meaning search, which is every
      client that predates the quick one; anything else named is refused rather
@@ -4570,11 +4625,14 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     criterion.trim(),
     kind,
     typeof id === "string" ? id : undefined,
+    undefined,
+    { revises },
   );
   const key = `${slug}/${run.id}`;
-  searching.add(key);
+  const holder = Symbol(run.id);
+  searching.set(key, holder);
   try {
-    const { frame } = sse(res);
+    const { frame, gone } = sse(res);
     frame("begin", run);
 
     let patch: Partial<SearchRun>;
@@ -4586,12 +4644,18 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
          `withRun` resets only a row of the same kind — but the row is what the
          answer is written onto, so it is the one that decides which matcher
          writes it. */
+      /* **`gone` for quick only** (plan 261002h, Sol F7). Search-as-you-type
+         abandons a quick attempt every time the reader keeps typing, and a
+         superseded Jev call left running is money for an answer nobody will
+         see. Meaning keeps running when the tab closes, as it always has:
+         changing that is a product call this plan did not need to make. */
       const events =
         run.kind === "quick"
           ? quickPassagesStream({
               meta: article.meta,
               blocks: article.blocks,
               criterion: run.criterion,
+              signal: gone,
             })
           : findPassagesStream({
               power: powerOf(article),
@@ -4609,7 +4673,13 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
       }
       patch = { status: "done", hits, model };
     } catch (err) {
-      captureFailure(err, { route: "search", slug, id: run.id });
+      /* A reader who left — or a typing session that moved on to newer words —
+         is expected, not a fault. It still finishes as an error below, through
+         the attempt fence: a superseded attempt's write updates nothing, and an
+         abandoned one does not sit `pending` where the trim cannot reach it. */
+      if (run.kind !== "quick" || !gone.aborted) {
+        captureFailure(err, { route: "search", slug, id: run.id });
+      }
       patch = { status: "error", error: sayToReader(err, { route: "search", slug }) };
     }
 
@@ -4640,8 +4710,9 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     /* Held from the moment the pending row exists until the answer is stored.
        Releasing it straight after the model call let a GET sweep the row before
        `finish`; registering it outside this finally let a failed SSE setup pin
-       it for the life of the process. */
-    searching.delete(key);
+       it for the life of the process. Only by the holder: a revision may have
+       taken the key since (see `searching`). */
+    if (searching.get(key) === holder) searching.delete(key);
   }
 }
 
@@ -5162,9 +5233,20 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
  * empty value would 404 rather than reach a lookup as "undefined".
  *
  * **Not for anything that becomes a path.** See `slugPart`.
+ *
+ * **A capture that will not decode is a 400.** Slug patterns admit `%`, and
+ * `decodeURIComponent("%E0")` raises `URIError`, which names no status — so
+ * until 2026-10-03 `serveApi`'s catch made a mistyped address a 500 and a
+ * Sentry report. `slugFrom` in src/public/routes.ts has caught the same throw
+ * since 2026-08-28 and says why at length. Fixed words, and nothing of the
+ * request's in them: an `httpError` message is logged as `reason`.
  */
 function part(m: RegExpExecArray, group: number): string {
-  return decodeURIComponent(m[group] ?? "");
+  try {
+    return decodeURIComponent(m[group] ?? "");
+  } catch {
+    throw httpError(400, "That is not a path we can read.");
+  }
 }
 
 /**
@@ -5343,6 +5425,29 @@ async function patchShelf(
 }
 
 /**
+ * **A tag edit's body, checked for shape** — `{ add?: string[], remove?: string[] }`.
+ *
+ * Shape only. The spelling, the per-edit limit, a tag named on both sides and
+ * an empty edit are refused by `normaliseChange` (src/store/pg-tags.ts), which
+ * the later command-bar "add a tag" reaches through the same route, so there
+ * is one rule and one place for it. Plan 261003d.
+ */
+function tagChangeOf(body: unknown): { add?: string[]; remove?: string[] } {
+  const patch = objectBody(body);
+  const side = (key: "add" | "remove"): string[] | undefined => {
+    if (!(key in patch)) return undefined;
+    const value = patch[key];
+    if (!Array.isArray(value) || !value.every((t) => typeof t === "string")) {
+      throw httpError(400, `${key} must be a list of strings`);
+    }
+    return value;
+  };
+  const add = side("add");
+  const remove = side("remove");
+  return { ...(add ? { add } : {}), ...(remove ? { remove } : {}) };
+}
+
+/**
  * Turn a POST body into a job request, or explain what was wrong with it.
  *
  * Two shapes, and they are **mutually exclusive**. `{ url }` means "add this
@@ -5471,6 +5576,24 @@ export function parseVisibilityRequest(body: unknown): {
 }
 
 /**
+ * **The Illustrated note on a job request**, checked — or `undefined` for none.
+ *
+ * **Refused, never cut**, and the message names a length rather than the
+ * text: an `httpError`'s message is logged as `reason`, and the note is the
+ * reader's own words. A note on a job that does not paint is refused too —
+ * nothing else reads it, and a field that does nothing is a request that meant
+ * something else. Plan 261002j.
+ */
+function parseIllustrationNote(raw: unknown, steps: StepName[] | undefined): string | undefined {
+  const note = checkIllustrationNote(raw);
+  if ("bad" in note) throw httpError(400, note.bad);
+  if (note.ok !== undefined && !steps?.includes("illustrated")) {
+    throw httpError(400, "illustrationNote goes with a job that names the illustrated step");
+  }
+  return note.ok;
+}
+
+/**
  * The body of `POST /api/article/:slug/reset`: `{ regenerate: boolean }`, and
  * nothing else. A boolean and not a list on purpose — which extras to make
  * again is the server's to read off the revision, not the client's to name
@@ -5524,18 +5647,31 @@ export function parseJobRequest(body: unknown): {
    * the stored file, admitted like an ingest (plan 261001m).
    */
   readThis?: true;
+  /**
+   * **The reader's note on how the Illustrated picture should come out** —
+   * only with `steps` naming `illustrated`, checked by `checkIllustrationNote`
+   * (src/illustrated-plate.ts) and frozen onto the job. Unlike the profile this
+   * *is* the caller's to say: it is the reader's own instruction about their
+   * own picture, on an article `enqueue` has already checked is theirs.
+   * docs/plans/261002j-illustrated-steering-note.md.
+   */
+  illustrationNote?: string;
 } {
-  const { url, slug, steps, force, useProfile, uploadId, readThis } = (body ?? {}) as Record<
-    string,
-    unknown
-  >;
+  const { url, slug, steps, force, useProfile, uploadId, readThis, illustrationNote } = (body ??
+    {}) as Record<string, unknown>;
   const level = parseUploadLevel(body);
   if (level !== undefined && uploadId === undefined) {
     throw httpError(400, "level goes with an uploadId");
   }
   if (readThis !== undefined) {
     if (readThis !== true) throw httpError(400, "readThis must be true, or left out");
-    if (url !== undefined || uploadId !== undefined || steps !== undefined || force !== undefined) {
+    if (
+      url !== undefined ||
+      uploadId !== undefined ||
+      steps !== undefined ||
+      force !== undefined ||
+      illustrationNote !== undefined
+    ) {
       throw httpError(400, "readThis goes with a slug and nothing else");
     }
     if (!isSlug(slug)) throw httpError(400, "readThis needs the slug of the paper to read");
@@ -5559,6 +5695,7 @@ export function parseJobRequest(body: unknown): {
     throw httpError(400, "useProfile must be true or false");
   }
   const parsedUseProfile = useProfile;
+  const note = parseIllustrationNote(illustrationNote, parsedSteps);
 
   /* The three optional fields, spelled once. They were written out at each of
      the three `return`s, which is three chances for one of them to be quietly
@@ -5576,6 +5713,7 @@ export function parseJobRequest(body: unknown): {
     ...(parsedSteps ? { steps: parsedSteps } : {}),
     ...(parsedForce ? { force: parsedForce } : {}),
     ...(parsedUseProfile !== undefined ? { useProfile: parsedUseProfile } : {}),
+    ...(note !== undefined ? { illustrationNote: note } : {}),
   };
 
   /* Before the URL branch. `checkUploadOrigin` refuses every combination rather
@@ -6170,6 +6308,13 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
    * replace still treats deletion as no reason to rewrite them.
    */
   clearedCountsAsChanged = false,
+  /**
+   * Anything else the route answers from the current profile — the glossary's
+   * `panelRun` alone, plan 261003c. Here rather than a second
+   * `resolveProfile` in the route, which would be two more queries for a hash
+   * this function already has.
+   */
+  alsoFrom?: (found: Omit<R, "profileChanged">, nowHash: string | null) => Partial<R>,
 ): Promise<R> {
   /* Both started before either is awaited — that is the point of the thunk. */
   const artefact = load();
@@ -6184,6 +6329,7 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
   const nowHash = now ? hashProfile(now) : null;
   return {
     ...found,
+    ...alsoFrom?.(found, nowHash),
     profileChanged:
       profileIsStale(recorded, nowHash) ||
       (clearedCountsAsChanged && recorded != null && nowHash === null),
@@ -6207,11 +6353,20 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
  * GPT Sol's review of the built code, 2026-08-26.
  *
  */
-function publicJob(job: Job): Omit<Job, "profile" | "ownerId"> {
+function publicJob(job: Job): Omit<Job, "profile" | "ownerId" | "illustrationNote"> {
   /* `ownerId` goes too. The client never needs it — it can only ever be looking
      at its own jobs now — and an `auth.users` uuid on the wire is one more
      thing that has to not end up in a log, a bug report or a screenshot. */
-  const { profile: _hidden, ownerId: _whose, reset, ...rest } = job;
+  /* The Illustrated note too, for the profile's reason: the reader's own
+     words, polled every eight seconds, and nothing on the client reads it off
+     a job — the panel reads it off the picture. */
+  const {
+    profile: _hidden,
+    ownerId: _whose,
+    illustrationNote: _note,
+    reset,
+    ...rest
+  } = job;
   /* A reset's profile snapshot is the same text as `profile`, so it goes for
      the same reason; which extras it will make again stays, because that is a
      fact about the job a card can say. */
@@ -7062,7 +7217,22 @@ async function fileFeedback(
     createdAt: answer.report.createdAt,
     status: answer.kind,
   });
-  if (mirror) await mirror;
+  /* **The third destination: a mail to the admin**, for a newly created report
+     only — a retry must not mail twice. `noticeFeedback` skips an admin's own
+     report and anything past its allowance itself (src/feedback-notice.ts,
+     plan 261002j).
+
+     Started **after** `send`, so the reader is never waiting on Resend, and
+     **beside** the mirror rather than behind it: `afterResponse` would start
+     it only once this function returned, which is after Sentry's
+     acknowledgement — so a slow Sentry would hold the mail. Like the mirror it
+     cannot throw. Started here rather than queued also keeps it inside the
+     reader's owner scope, which its allowance counts by. */
+  const notice =
+    answer.kind === "created"
+      ? noticeFeedback(answer.report, user.id, { allowance: fetchAllowanceStore })
+      : null;
+  await Promise.all([mirror, notice]);
 }
 
 
@@ -7546,8 +7716,9 @@ interface ExactAuthRoute {
  * The handler is handed the **raw `RegExpExecArray`**, not a decoded tuple, and
  * that is the point of the discriminated union: dispatch does no decoding. Which
  * happens first — reading the body or decoding the slug — differs per route and
- * is observable from outside as two different status codes for the same two
- * malformed inputs (§ [DECODE] in
+ * is observable from outside as two different answers to the same two
+ * malformed inputs — two status codes until 2026-10-03, two sentences under one
+ * 400 since `part` began catching its own `URIError` (§ [DECODE] in
  * docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md, and two
  * cases in tests/authenticated-api-route-contract.test.ts pin both). A dispatcher
  * that decoded captures for its handlers would have to pick one order for all of
@@ -7648,6 +7819,8 @@ const ONE_THREAD_PATTERN = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/;
 const COMMENTS_PATTERN = /^\/api\/comments\/([\w.%-]+)$/;
 const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
 const SHELF_ENTRY_PATTERN = /^\/api\/library\/([\w.%-]+)$/;
+/* The reader's own tags on one article — plan 261003d. */
+const SHELF_TAGS_PATTERN = /^\/api\/library\/([\w.%-]+)\/tags$/;
 /* Reading time: GET reads the totals, POST adds to them — two rows, one path. */
 const READING_TIME_PATTERN = /^\/api\/reading-time\/([\w.%-]+)$/;
 /* Hiding a glossary entry: PUT hides, DELETE shows it again — two rows, one path. */
@@ -8047,6 +8220,41 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* Every tag the reader uses, with counts, for the tag editor's suggestions.
+     Exact, like /api/library/terms above, and GET where the slug pattern below
+     is PATCH and DELETE. Plan 261003d. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/library/tags",
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      const tags: LibraryTagsResponse = { tags: await tagStore.readerTags() };
+      /* The reader's own words: never a shared cache's, as the terms route. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, tags);
+    },
+  },
+
+  /* **Add and remove the reader's tags on one article**; answers the tags
+     after. Additive rather than a PUT of the whole set, so two tabs cannot
+     clobber each other and the command bar's later "add a tag of X" is
+     `{ add: [X] }`. Ownership is `ownedSlug` inside the store: a stranger's
+     slug is a 404. */
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: SHELF_TAGS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const tags: ArticleTagsResponse = {
+        tags: await tagStore.edit(slug, tagChangeOf(await readBody(req))),
+      };
+      send(res, 200, tags);
+    },
+  },
+
   /* PATCH rather than PUT: both fields are optional and the client sends
      whichever the reader changed. A PUT would mean "here is the whole shelf
      record", and a client that forgot one field would silently clear it. */
@@ -8140,7 +8348,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      query parameter. `private, no-store` before the await, as
      `/api/admin/feedback` does, because the body is what a reader wrote to us.
      **Picked field by field** rather than passed through, so a store that one
-     day hands back more than four fields still sends four — and a fifth,
+     day hands back more than five fields still sends five — `page` among them
+     since 261003g, the store's label for where the report was filed and never
+     the address it was made from — and a sixth,
      `shipped`, which is ours: whether this build carries a note saying a change
      for the report shipped. `?show=shipped|unshipped` narrows by the same map,
      in the query, so the cap applies after the filter; any other value is a
@@ -8157,21 +8367,28 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (!EARLIER_FEEDBACK_SHOWS.some((known) => known === show)) {
         throw httpError(400, `show must be one of ${EARLIER_FEEDBACK_SHOWS.join(", ")}`);
       }
+      const shippedIds = shippedFeedbackIds();
+      /* The counts ride on every answer, whatever `show` is, so the first read
+         labels all three pills; `unshipped` is the remainder, which is what the
+         `out` filter lists (the store says why).
+         docs/plans/261003b-earlier-tab-counts-on-the-pills.md. */
       const page = await feedbackStore.listMine(
         EARLIER_FEEDBACK_LIMIT,
-        show === "all"
-          ? undefined
-          : { ids: shippedFeedbackIds(), keep: show === "shipped" ? "in" : "out" },
+        shippedIds,
+        show === "all" ? undefined : { ids: shippedIds, keep: show === "shipped" ? "in" : "out" },
       );
+      const counted = page.counts;
       const answer: EarlierFeedbackPage = {
-        reports: page.reports.map(({ id, createdAt, kind, body }) => ({
+        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom }) => ({
           id,
           createdAt,
           kind,
           body,
+          page: filedFrom,
           shipped: isFeedbackShipped(id),
         })),
         more: page.more,
+        counts: { all: counted.all, shipped: counted.in, unshipped: counted.all - counted.in },
       };
       send(res, 200, answer);
     },
@@ -8587,7 +8804,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
-        send(res, 200, await withProfileChanged<GlossaryResponse>(at, () => loadGlossary(at), (found) => found.glossary));
+        send(
+          res,
+          200,
+          await withProfileChanged<GlossaryResponse>(
+            at,
+            () => loadGlossary(at),
+            (found) => found.glossary,
+            false,
+            (found, nowHash) => ({ panelRun: panelRunKind(found, nowHash) }),
+          ),
+        );
       }
     },
   },
@@ -9387,6 +9614,28 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       }
       const mark = await tidyMark(slug, raw);
       send(res, 200, { comment: await commentStore.patchMark(slug, id, mark) });
+    },
+  },
+
+  /* **A highlight recoloured, or its colour removed** — its own sub-path, for
+     the reason the placement has one above: a patch carrying more than one
+     thing has to decide what an absent key means. The key is required, and
+     `{ colour: null }` is how a colour is removed, in writing. Ownership is the
+     slug's, as for every route here (`article: "first-capture"`); the store
+     refuses a whole-block comment with a 409 (plan 261003e, review S4). */
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/colour$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      const raw = fields(await readBody(req));
+      if (!("colour" in raw)) {
+        throw httpError(400, "A colour patch has to say what the colour is, or null [cmt-colour-missing]");
+      }
+      const colour = tidyColour(raw.colour);
+      send(res, 200, { comment: await commentStore.patchColour(slug, id, colour) });
     },
   },
 

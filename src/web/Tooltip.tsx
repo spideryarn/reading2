@@ -457,7 +457,8 @@ function FocusReach({
  * button would not move should not have to read two paragraphs first.
  *
  * Four callers, and the second generalised it. The fourth is the live
- * conversation's **microphone setup** card (LiveButton.tsx), which reports the
+ * conversation's **noise reduction** card (LiveStatus.tsx, under Advanced since
+ * 261002j), which reports the
  * placement actually resolved while the selector beside it may still read
  * `Auto` — not the mid-flight sense, and it was already here when this said
  * three. The bar's **experimental
@@ -576,7 +577,7 @@ export function ControlTip({
  *
  * `.tooltip` styles the panel and deliberately sets no font-size, so a bare
  * string inherits `body`'s 1rem — noticeably bigger than every other tooltip in
- * the app, all of which are on classed content (`.tip-crumb`, `.tip-search`,
+ * the app, all of which are on classed content (`.where-card`, `.tip-search`,
  * `.tip-soon`). Sized here rather than by adding a rule to styles.css, which
  * would be a fifth spelling of the same thing.
  *

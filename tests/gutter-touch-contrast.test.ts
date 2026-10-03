@@ -28,12 +28,17 @@
  */
 import { describe, expect, it } from "vitest";
 import { allSheets, mediaBlock, readerCssNoComments, stripComments } from "./helpers/stylesheets.js";
+import { PALETTE, luminance as linearLuminance, over, resolve } from "./helpers/theme-palette.js";
 
+/* **The dark declarations alone.** Since 2026-10-03 the token files also carry
+   a `:root[data-theme="light"]` block of the same names, which the agreement
+   check in `token` below would read as two files disagreeing. Light is
+   measured separately, through tests/helpers/theme-palette.ts. */
 const tokens = stripComments(
   allSheets()
     .map((s) => s.css)
     .join("\n"),
-);
+).replace(/:root\[data-theme="light"\]\s*\{[^}]*\}/g, "");
 const css = readerCssNoComments();
 
 /**
@@ -133,6 +138,18 @@ describe("the gutter's touch reveal is legible on every row it can appear on", (
     const bg = Array(3).fill(grey(greyL(source)));
     const ink = Array(3).fill(grey(greyL("muted-foreground")));
     const drawn = ratio(luminance(composite(ink, bg, touchOpacity())), luminance(bg));
+    /* The same question on the light page, where the grounds and the ink are
+       the light block's — through the shared resolver rather than the grey
+       shortcut, so it stays right if a light grey is ever tinted. */
+    const lightBg = resolve(`--${source}`, PALETTE.light);
+    const lightDrawn = ratio(
+      linearLuminance(over(resolve("--muted-foreground", PALETTE.light), lightBg, touchOpacity())),
+      linearLuminance(lightBg),
+    );
+    expect(
+      lightDrawn,
+      `in Light, the gutter's affordances draw at ${lightDrawn.toFixed(3)}:1 over --${name}, short of 3:1`,
+    ).toBeGreaterThanOrEqual(3);
     /* **The unrounded number.** This asserted `Number(drawn.toFixed(3))` for one
        commit, which is a check that answers a weaker question than it states: at
        `0.705` the `--muted` ratio is 3.0049, and an opacity of `0.7039` gives
@@ -148,14 +165,18 @@ describe("the gutter's touch reveal is legible on every row it can appear on", (
   it("stays under the ceiling, where the reader's own mark stops leading", () => {
     /* **Not "round it up to be safe".** The gutter's grammar is that the
        reader's mark carries the weight and the affordances do not, so there is a
-       maximum here as well as a minimum: `.blk-cmt` is `--highlight` at 0.75,
-       and above about 0.87 the buttons out-shine the bookmark and the column
-       starts reading as a toolbar. The lead is 1.35:1 at 0.705 — plus a hue,
-       which the affordances have none of. */
+       maximum here as well as a minimum: the buttons must not out-shine the
+       bookmark, or the column starts reading as a toolbar. The mark was
+       `--highlight` at 0.75 until 2026-10-02, when it went to full strength and
+       filled (Greg's 9C, plan 261002j) — so it declares no opacity now, which
+       means 1, and an opacity added back is read and held to the same rule. */
     const bg = Array(3).fill(grey(greyL("background")));
     const ink = Array(3).fill(grey(greyL("muted-foreground")));
-    const markOpacity = Number(/opacity:\s*([\d.]+)/.exec(/^\.blk-cmt\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "")?.[1]);
-    expect(markOpacity, "`.blk-cmt` declares no opacity").toBeGreaterThan(0);
+    const rule = /^\.blk-cmt\s*\{([^}]*)\}/m.exec(css)?.[1];
+    expect(rule, "`.blk-cmt` has a rule of its own").toBeDefined();
+    const declared = /opacity:\s*([\d.]+)/.exec(rule ?? "")?.[1];
+    const markOpacity = declared === undefined ? 1 : Number(declared);
+    expect(markOpacity).toBeGreaterThan(0);
 
     const mark = luminance(composite(hex(token("spideryarn-orange")), bg, markOpacity));
     const affordance = luminance(composite(ink, bg, touchOpacity()));
@@ -163,5 +184,19 @@ describe("the gutter's touch reveal is legible on every row it can appear on", (
       mark,
       "the gutter's affordances are now brighter than the reader's own bookmark — state is supposed to lead",
     ).toBeGreaterThan(affordance);
+
+    /* **On the light page, leading means standing further off the page**, not
+       being brighter — so contrast against the ground, and the mark as
+       `.blk-cmt` actually draws it there: `--highlight-text`. */
+    const p = PALETTE.light;
+    const ground = resolve("--background", p);
+    const standsOff = (c: ReturnType<typeof resolve>, alpha: number) =>
+      ratio(linearLuminance(over(c, ground, alpha)), linearLuminance(ground));
+    const markC = standsOff(resolve("--highlight-text", p), markOpacity);
+    const affordanceC = standsOff(resolve("--muted-foreground", p), touchOpacity());
+    expect(
+      markC,
+      `in Light, the affordances (${affordanceC.toFixed(2)}:1) stand further off the page than the bookmark (${markC.toFixed(2)}:1) — state is supposed to lead`,
+    ).toBeGreaterThan(affordanceC);
   });
 });

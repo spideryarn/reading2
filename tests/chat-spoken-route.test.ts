@@ -473,7 +473,7 @@ describe("the kind of conversation it creates", () => {
   });
 
   it("refuses a kind a live session cannot have, and a word that is not a kind", async () => {
-    for (const kind of ["candidates", "review", 7]) {
+    for (const kind of ["tutorial", "candidates", "review", 7]) {
       const out = await post("spya-vaaacc", exchange({ kind }));
       expect(out.status, String(kind)).toBe(400);
     }

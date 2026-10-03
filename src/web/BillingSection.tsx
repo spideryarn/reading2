@@ -74,7 +74,7 @@ export function BillingSection() {
     return (
       <p className="tw:m-0 tw:text-sm tw:text-muted-foreground" role="status">
         {billing.error ? (
-          <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
+          <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight-text">
             <TriangleAlert size={12} /> Couldn't read your plan — {billing.error}{" "}
             {/* **Not `className="linky"`, which styled nothing here.** That
                 class is scoped in styles.css to `.cmt-dialog`, `.chat-dialog`
@@ -179,7 +179,7 @@ export function BillingSection() {
           above may be out of date rather than replacing a true answer with an
           empty one. */}
       {billing.error && (
-        <p className="tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-highlight">
+        <p className="tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-highlight-text">
           <TriangleAlert size={12} /> This may be out of date — {billing.error}
         </p>
       )}
@@ -299,7 +299,7 @@ export function BillingSection() {
       )}
 
       {billing.actionError && (
-        <p className="tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-highlight">
+        <p className="tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-highlight-text">
           <TriangleAlert size={12} /> {billing.actionError}
         </p>
       )}

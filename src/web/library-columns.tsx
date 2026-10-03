@@ -40,6 +40,7 @@ import { exactly, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
+import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
 import { articleTitleVoice, gistVoice, type Voice, voiceClass, withVoice } from "./voice.js";
@@ -339,7 +340,7 @@ function TitleCell({
     <Link
       href={readHref(entry.slug)}
       className={withVoice(
-        "tw:block tw:wrap-anywhere tw:text-foreground tw:no-underline tw:hover:text-highlight",
+        "tw:block tw:wrap-anywhere tw:text-foreground tw:no-underline tw:hover:text-highlight-text",
         articleTitleVoice(Boolean(entry.titleOverridden)),
       )}
     >
@@ -407,7 +408,11 @@ function TitleCell({
             <span className="tw:ml-1.5 tw:rounded tw:border tw:border-border tw:px-1 tw:py-0.5">
               fixture
             </span>
-          )}
+          )}{" "}
+          {/* The reader's own tags, and the way to add one — the card's
+              control (ShelfTags.tsx), at the end of this line, which is always
+              drawn: `sub` always carries the minutes. Plan 261003d. */}
+          <ShelfTags entry={entry} shelf={shelf} />
         </span>
       )}
     </>
@@ -581,7 +586,7 @@ function Count({ value, highlight }: { value: number; highlight?: boolean }) {
   return (
     <span
       className={`${value === 0 ? "tw:opacity-40" : ""} ${
-        highlight && value > 0 ? "tw:text-highlight" : ""
+        highlight && value > 0 ? "tw:text-highlight-text" : ""
       }`}
     >
       {value.toLocaleString()}

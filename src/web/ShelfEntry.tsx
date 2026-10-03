@@ -43,6 +43,7 @@ import { IconButton } from "./IconButton.js";
 import { Link } from "./Link.js";
 import { exactly } from "./relative-time.js";
 import { readHref } from "./router.js";
+import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { useShelf } from "./useShelf.js";
@@ -95,7 +96,7 @@ export function SharedBadge({
 }: { titled?: boolean } = {}) {
   return (
     <span
-      className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight"
+      className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight-text"
       title={titled ? SHARING_ON : undefined}
     >
       <Globe size={11} />
@@ -211,7 +212,7 @@ export function ShelfCard({
     /* `@container`: the card's own width decides whether a finger gets the
        icons or the "⋯" (`Actions` § `fingerRow`), because the shelf's column,
        not the window, is what has to fit them. */
-    <article className="tw:@container tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
+    <article className="tw:@container tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight-text">
       <div className="tw:flex tw:items-start tw:gap-3">
         {editing ? (
           <TitleEditor
@@ -272,6 +273,8 @@ export function ShelfCard({
             fixture
           </span>
         )}
+        {/* The reader's own tags, and the way to add one — plan 261003d. */}
+        <ShelfTags entry={entry} shelf={shelf} />
       </p>
 
       {/* The whole piece in one sentence: a model's gist, or the article's own
@@ -332,7 +335,7 @@ export function ShelfCard({
         )}
         {entry.comments > 0 && (
           <span
-            className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-highlight"
+            className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-highlight-text"
             title={`${entry.comments} question${entry.comments === 1 ? "" : "s"} asked about this article`}
           >
             <MessageCircle size={13} />
@@ -360,7 +363,7 @@ export function ShelfCard({
           <button
             type="button"
             aria-label={`${note} — details of ${entry.title}`}
-            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight"
+            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight-text"
           >
             {note}
           </button>
@@ -1041,7 +1044,7 @@ export function Actions({
             titled={false}
             onClick={copy}
           >
-            {copied ? <Check size={14} className="tw:text-highlight" /> : <Copy size={14} />}
+            {copied ? <Check size={14} className="tw:text-highlight-text" /> : <Copy size={14} />}
           </IconButton>
         </ActionTip>
 
@@ -1341,7 +1344,7 @@ function ShelfActionsMenu({
               }}
             >
               {copied ? (
-                <Check size={16} aria-hidden="true" className="tw:shrink-0 tw:text-highlight" />
+                <Check size={16} aria-hidden="true" className="tw:shrink-0 tw:text-highlight-text" />
               ) : (
                 <Copy size={16} aria-hidden="true" className="tw:shrink-0" />
               )}

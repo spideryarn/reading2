@@ -485,24 +485,25 @@ which is why the bar also has a button in the Dock.
 >
 > — Greg, 2026-09-29
 
-**⌘-Enter on a Mac, Ctrl-Enter everywhere else, goes to `/read/<slug>/metadata`** — the Metadata
-button's own href, `?at=` and all, so the two cannot disagree (`useMetadataChord` in
+**⌘-Enter on a Mac, Ctrl-Enter everywhere else, toggles Metadata** — it opens
+`/read/<slug>/metadata` from the article and returns to the article from Metadata. It follows the
+Metadata button's own href, `?at=` and all, so the two cannot disagree (`useMetadataChord` in
 [`Dock.tsx`](../../src/web/Dock.tsx)). Ctrl rather than the Alt-Enter Greg guessed at: it is the
 pairing ⌘-K already uses, and Alt-Enter on a link is a download
 ([260929a](../research/260929a-keyboard-shortcut-libraries.md), which also says why no library).
 
 It keeps ⌘-K's rules — no repeat, no Shift or Alt, no IME composition, nothing over an open
 `<dialog>`, nothing once another handler has `preventDefault`ed, and `preventDefault()` only when
-claimed — and adds three where it does not fire:
+claimed — and adds two where it does not fire:
 
-- **Off the reading view.** On the metadata page itself there is nothing to toggle back to.
 - **While typing.** ⌘/Ctrl-Enter already means *send* in five text boxes — Feedback, Comment,
   Annotate, Quiz and Profile — each scoped to its own field; skipping text fields keeps them working.
 - **On a focused link**, or inside one. There it is a modified click, a new tab, on every link in
   the prose. A focused *button* is app policy rather than a browser fact: no button here binds a
   modified Enter, so the chord wins there.
 
-The Metadata button's card says so: *"⌘Enter / Ctrl-Enter opens it from the article"*. Tests: `tests/metadata-chord.test.tsx`.
+The Metadata button's card says the chord opens it and a second press returns to the article.
+Tests: `tests/metadata-chord.test.tsx`.
 
 ### ⌘⌥T folds or unfolds every section
 
@@ -596,6 +597,30 @@ native modal.
 [§ Tab](#tab-and-the-surfaces-it-walks-through) — the card's own controls are still skipped by Tab;
 G reaches the term half of what the card holds by another road. Nothing on screen advertises the
 key, and there is no way to switch it off or remap it.
+
+## Quick search: the slash key
+
+**`/` jumps to quick search** — it focuses the quick-search box in the bottom bar, or, where the
+bar shows the ⚡ instead (a coarse pointer, fit rung 4, a window under 732px, or Search mode open
+with the bar box unfocused), opens Search mode on *quick* with the panel's box focused.
+Built 2026-10-02 with the box itself
+([search.md § Search as you type](search.md#search-as-you-type-and-the-box-in-the-bottom-bar),
+[261002h](../plans/261002h-quick-search-bar-in-the-dock.md)); the code is `isQuickSearchKey` in
+[`DockQuickSearch.tsx`](../../src/web/DockQuickSearch.tsx).
+
+Why `/`: it is the web's usual key for "jump to search" (GitHub, YouTube, Gmail), and nothing here
+used it. ⌘K stays the command bar; **⌘F stays the browser's find**, because taking it would take a
+feature every reader already relies on.
+
+**It does override one browser feature, and knowingly:** Firefox's Quick Find, which `/` opens. It
+is a second way into what ⌘F/Ctrl-F already does, and GitHub makes the same trade. Raised by GPT Sol
+in the plan review.
+
+The guards are G's (above), less one: no auto-repeat, no IME composition, not while typing, nothing
+over an open `<dialog>`, nothing once another handler has `preventDefault`ed, no Ctrl, ⌘ or Alt —
+but **Shift is allowed**, because some keyboard layouts need it to type `/` at all. It
+`preventDefault`s, so the `/` is not typed into the box it focuses. It exists only on an owner's
+reading view, where the box does. *`tests/dock-quick-search.test.tsx`.*
 
 ## What we gave up
 

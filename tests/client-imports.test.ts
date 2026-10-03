@@ -58,6 +58,10 @@ const SHARED = new Set([
      `titleVoice`), so the two cannot disagree about an apostrophe. Imports
      nothing. Plan 261002f § 3. */
   "heading-text.js",
+  /* What counts as one of the reader's own tags — the server's store and the
+     tag editor refuse the same spellings, so a reader never types a tag that
+     comes back as a 400. Imports nothing. Plan 261003d. */
+  "tags.js",
   "urls.js", // the http(s) allowlist, used by the server and the panel
   "reading-time.js",
   /* The five questions the machinery may ask about a block, and the word count

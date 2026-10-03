@@ -69,6 +69,7 @@ import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 import {
   type DifficultyCentralityDrops,
   noDifficultyCentralityDrops,
@@ -109,8 +110,12 @@ import type { ArtifactStore } from "./store/artifacts.js";
  *
  * `glossary/7`, 2026-10-02: the request gained `GLOSSARY_OUTPUT_SCHEMA`; the
  * prompt text is unchanged.
+ *
+ * `glossary/8`, 2026-10-03: the prompt gained the shared paperwork section,
+ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
+ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
  */
-export const PROMPT_VERSION = "glossary/7";
+export const PROMPT_VERSION = "glossary/8";
 
 /**
  * The most entries one call may return.
@@ -460,6 +465,32 @@ export function glossaryRunKind(
   if (!onDisk) return "first";
   if (sourceHash === null) return null;
   return existingFor(onDisk, sourceHash, runProfileHash(profile)) ? "append" : "rewrite";
+}
+
+/**
+ * **What the glossary panel's own run button will do** — append or rewrite —
+ * for its label: *Find more* or *Find terms again*. Plan 261003c § 1.
+ *
+ * The same three tests as `existingFor`, read off what the glossary read
+ * already has: `stale` is the source test (`isStale` compares the same
+ * fingerprint `existingFor` does), `outdated` is the prompt test, and the
+ * profile test is against **the press's** profile, which is not Metadata's.
+ * The panel's press keeps the list's own setting (`more(profiled)` in
+ * src/web/GlossaryPanel.tsx): a plain list is run plainly, so it matches; a
+ * list written for a profile is run with today's, so it matches only if today's
+ * hashes the same — and not if the reader has changed it **or cleared it**,
+ * which `profileChanged` deliberately does not count (src/profile.ts §
+ * `profileIsStale`). GPT Sol's plan review of 261003c, P1.
+ *
+ * `nowHash` is the hash of the reader's current profile, or null for none.
+ */
+export function panelRunKind(
+  found: { glossary: Glossary; stale: boolean; outdated: boolean },
+  nowHash: string | null,
+): "append" | "rewrite" {
+  const recorded = found.glossary.profileHash ?? null;
+  const pressHash = recorded === null ? null : nowHash;
+  return found.stale || found.outdated || recorded !== pressHash ? "rewrite" : "append";
 }
 
 /**
@@ -1134,6 +1165,8 @@ neither "senseHere" nor "background" says nothing and will be thrown away.
 Nothing else may be omitted.
 
 ${plainWords()}
+
+${paperwork("pick")}
 
 ${PROFILE_RULES}`;
 

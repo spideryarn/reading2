@@ -125,6 +125,7 @@ vi.mock("../src/web/useShelf.js", async () => {
           archive: async () => {},
           undo: async () => {},
           rename: async () => {},
+          editTags: async () => [],
           actionError: null,
           report: () => {},
           archived,
@@ -711,6 +712,32 @@ describe("the archive in scope", () => {
     await show("/?archived=1");
     await waitFor(() => archivedRows().length === 8, "the archived list");
     expect(chipCount("memory")).toBe(1);
+  });
+});
+
+describe("Tags and Topics on the real shelf", () => {
+  it("ANDs both URL filters and gives both chosen chips the same visible count", async () => {
+    activeArticles = [
+      entry("mem-brain", "Memory and the brain", { tags: ["research", "read"], opens: 0 }),
+      entry("neurons", "Neurons firing", { tags: ["research"] }),
+      entry("palaces", "Memory palaces", { tags: ["read"], opens: 0 }),
+      entry("startups", "Startups and founders", { tags: ["research", "read"] }),
+    ];
+    archivedArticles = [
+      entry("old-memory", "An old piece on memory", { ...GONE, tags: ["research", "read"] }),
+      entry("old-other", "Something else archived", { ...GONE, tags: ["read"] }),
+    ];
+
+    await show("/?archived=1&tags=research&topics=memory");
+    await waitFor(() => archivedRows().length > 0, "the tagged archived row");
+
+    expect(cards().sort()).toEqual(["Memory and the brain", "Neurons firing"]);
+    expect(archivedRows()).toEqual(["An old piece on memory"]);
+    expect(chipCount("research")).toBe(3);
+    expect(chipCount("memory")).toBe(3);
+    expect(chip("research").getAttribute("aria-pressed")).toBe("true");
+    expect(chip("memory").getAttribute("aria-pressed")).toBe("true");
+    expect(countLine()).toMatch(/^3 of 6 articles \(2 active \+ 1 archived\)/);
   });
 });
 

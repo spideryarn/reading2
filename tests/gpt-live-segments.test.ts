@@ -395,11 +395,35 @@ describe("the live transcript", () => {
     const s = new Segmenter();
     feed(s, say("reader", 1_000, "Why does he"));
     const before = s.lines();
-    expect(before).toEqual([{ id: "seg-0", role: "reader", text: "Why does he", done: false }]);
+    expect(before).toEqual([
+      { id: "seg-0", role: "reader", text: "Why does he", done: false, exchange: "gpt-live-0", seq: 0 },
+    ]);
     feed(s, [...say("reader", 1_600, "think that?"), ...say("companion", 2_400, "Because")]);
     expect(s.lines()).toEqual([
-      { id: "seg-0", role: "reader", text: "Why does he think that?", done: false },
-      { id: "seg-1", role: "companion", text: "Because", done: false },
+      { id: "seg-0", role: "reader", text: "Why does he think that?", done: false, exchange: "gpt-live-0", seq: 0 },
+      { id: "seg-1", role: "companion", text: "Because", done: false, exchange: "gpt-live-0", seq: 0 },
+    ]);
+  });
+
+  /* What the thread groups by (src/web/live/tail.ts, which arrived with dev's
+     261002j): a question and its answer are one group, and the group a frozen
+     line is in is the exchange it was emitted as. Without this every line is
+     its own group and the thread still reads in order, so nothing else here
+     would notice the pairing was lost. */
+  it("says which exchange each line belongs to, frozen or still open", () => {
+    const s = new Segmenter();
+    const out = feed(s, [
+      ...say("reader", 1_000, "Why does he think that?"),
+      ...say("companion", 2_400, "Because he says so."),
+      ...say("reader", 8_000, "And where is that?"),
+      ...say("companion", 11_000, "In the second section."),
+    ]);
+    expect(out[0]?.id).toBe("gpt-live-0");
+    expect(s.lines().map((l) => [l.id, l.exchange, l.seq])).toEqual([
+      ["seg-0", "gpt-live-0", 0],
+      ["seg-1", "gpt-live-0", 0],
+      ["seg-2", "gpt-live-1", 1],
+      ["seg-3", "gpt-live-1", 1],
     ]);
   });
 

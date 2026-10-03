@@ -56,6 +56,36 @@
   --cite-flash-ms: 2400ms;
   --flash-wash-strong: color-mix(in oklab, var(--spideryarn-orange) 45%, var(--page));
   --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 85%, white);
+  /* **The orange as TEXT, or as a thin line or glyph** — a hover colour, an
+     icon, a "you are here" rule. On the dark page it is the orange itself, so
+     nothing there changed when this arrived; on the light page it is
+     `--highlight-ink`, because the orange on white is ~2.6:1. **Focus outlines
+     and native `accent-color` use it too**: a focus indicator needs 3:1
+     (GPT Sol, code review). Fills, borders and washes stay `--highlight`: an
+     area of orange is legible at any contrast. Tailwind: `text-highlight-text`,
+     `ring-highlight-text`, `outline-highlight-text`. Since 2026-10-03. */
+  --highlight-text: var(--highlight);
+  /* Ink on a solid orange fill. Keep the old near-black page colour in Dark;
+     Light needs the warmer, higher-contrast primary foreground. */
+  --highlight-foreground: var(--page);
+
+  /* **Which way is "more contrast", and which way is "quieter"**, as colours to
+     mix towards. On the dark page lifting a colour means mixing in white; on
+     the light page it means mixing in black. A stylesheet that writes
+     `color-mix(…, white)` is right in one theme and backwards in the other, so
+     it writes `var(--toward-ink)` instead, and the light block below flips
+     both. Keywords rather than --foreground/--page on purpose: an achromatic
+     keyword has a *missing* hue, so even a polar mix cannot drag the result
+     round (the --highlight-wash note above). Since 2026-10-03. */
+  --toward-ink: white;
+  --toward-page: black;
+  /* The same direction as bare channels, for a *translucent* lift written
+     `rgb(var(--toward-ink-rgb) / 0.1)` — the marketing pages' hairlines and
+     surfaces (site.css § the ladder), the site footer's rule. Channels rather
+     than a `color-mix(… transparent)` because a browser without `color-mix`
+     drops that declaration and paints `currentColor` instead, a solid line;
+     `--hit-rgb` is the same shape for the same reason. */
+  --toward-ink-rgb: 255 255 255;
 
   /* **A conversation's mark, and it is a different HUE from a comment's rather
      than a different alpha** — the rule docs/project/search.md sets out for its
@@ -70,6 +100,26 @@
      note on --highlight-wash above has the diagnosis. */
   --chat-mark: oklch(0.72 0.12 235);
   --chat-mark-wash: color-mix(in oklab, var(--chat-mark) 18%, var(--page));
+
+  /* **A highlight's four washes** — the reader's own colours, stored by name on
+     the comment (`HighlightColour`, src/types.ts) so they can be retuned here
+     without a migration. docs/plans/261003e-span-highlights-with-a-colour.md.
+
+     One set, because the app is dark only (styles/tokens.css § DARK ONLY); if
+     light mode ever comes back these need a light twin like everything else.
+
+     Kept clear of the three washes already in the prose — "don't put three
+     meanings on one hue" (original-version/highlighting.md): the yellow sits
+     at 100°, well round from the orange (58°) that `--highlight-wash` and the
+     gist's active cell mean; the blue at 270°, away from a chat's 235°; and
+     all four are chromatic, where a search's `--hit-wash-rgb` is a deliberately
+     grey slate. Tinted into the page in oklab, for the reason the long note on
+     `--highlight-wash` gives, and at a strength that keeps the light prose
+     comfortably legible on top. */
+  --hl-yellow: color-mix(in oklab, oklch(0.88 0.16 100) 30%, var(--page));
+  --hl-green: color-mix(in oklab, oklch(0.80 0.15 150) 28%, var(--page));
+  --hl-blue: color-mix(in oklab, oklch(0.72 0.14 270) 32%, var(--page));
+  --hl-pink: color-mix(in oklab, oklch(0.76 0.16 350) 30%, var(--page));
 
   /* Left-edge tints that distinguish the granularity columns at a glance.
      One hue family, so the columns read as one system rather than as a rainbow —
@@ -357,3 +407,42 @@
 
 * { box-sizing: border-box; }
 
+
+/* ----------------------------------------------------------- light tokens --
+   The semantic layer's light values — the same names as the `:root` block at
+   the top, for `data-theme="light"` (src/web/appearance.ts). The brand
+   palette's light block, and why the page is not simply inverted, are in
+   styles/tokens.css § light. Anything above written as a mix with `--page`
+   (the washes) follows on its own and is not repeated here. */
+:root[data-theme="light"] {
+  /* Soft and faint ascend from --ink again, as they did before the dark page. */
+  --ink-soft: oklch(0.36 0 0);
+  /* On a light ground a raised surface is the lightest thing there. */
+  --surface-raised: oklch(1 0 0);
+  --rule-strong: oklch(0.78 0 0);
+  /* Orange as text, darkened rather than lifted: #DB8A45 on white is ~2.6:1. */
+  --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 72%, black);
+  --highlight-text: var(--highlight-ink);
+  --highlight-foreground: var(--primary-foreground);
+  --toward-ink: black;
+  --toward-page: white;
+  --toward-ink-rgb: 0 0 0;
+  --chat-mark: oklch(0.52 0.13 235);
+
+  /* The reader's four highlighter washes (span highlights, plan 261003e-span-highlights): the
+     same bases, mixed into the light page a little harder, because a share
+     of a pale colour over near-white is fainter than the same share over
+     near-black. Dark ink on any of them stays far above 7:1. */
+  --hl-yellow: color-mix(in oklab, oklch(0.88 0.17 100) 45%, var(--page));
+  --hl-green: color-mix(in oklab, oklch(0.80 0.15 150) 36%, var(--page));
+  --hl-blue: color-mix(in oklab, oklch(0.72 0.14 270) 30%, var(--page));
+  --hl-pink: color-mix(in oklab, oklch(0.76 0.16 350) 32%, var(--page));
+
+  /* The depth ramp runs coarse to fine in lightness *away from the page*, so on
+     a light page it runs dark to light: the coarsest column is the most
+     visible one, as it is on dark. */
+  --depth-0: oklch(0.55 0.155 52);
+  --depth-1: oklch(0.64 0.120 50);
+  --depth-2: oklch(0.73 0.080 46);
+  --depth-3: oklch(0.82 0.045 40);
+}

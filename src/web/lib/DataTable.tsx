@@ -314,7 +314,7 @@ export function chipClass(pressed: boolean): string {
   return [
     "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-full tw:border tw:px-3 tw:text-xs tw:transition-colors",
     pressed
-      ? "tw:border-highlight/70 tw:bg-highlight/10 tw:text-highlight"
+      ? "tw:border-highlight/70 tw:bg-highlight/10 tw:text-highlight-text"
       : "tw:border-border tw:bg-transparent tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:bg-highlight/5 tw:hover:text-foreground",
   ].join(" ");
 }
@@ -755,7 +755,7 @@ function HeaderCell<T>({ table, header }: { table: Table<T>; header: Header<T, u
           }
           title={meta.hint}
           className={`tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:bg-transparent tw:p-0 tw:text-xs tw:font-medium ${
-            sorted ? "tw:text-highlight" : "tw:text-muted-foreground tw:hover:text-foreground"
+            sorted ? "tw:text-highlight-text" : "tw:text-muted-foreground tw:hover:text-foreground"
           }`}
         >
           {head}

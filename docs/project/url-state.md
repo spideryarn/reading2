@@ -75,7 +75,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `debateby` | how debate mode's list is ordered: `prioritised` (the default, and absent), `claim` (*by claim* — grouped under the claim in the piece each row answers, in article order), `date` or `stance` (most critical first). An order the rows cannot support — `prioritised` and `date` on any debate from before stage 2 of [260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md), and on every visitor's — draws *by claim* instead, and the bar presses the order actually drawn ([`debate-order.ts`](../../src/web/debate-order.ts) § `effectiveDebateOrder`). Its own key for `citeby`'s reason. Independent of `name`: the bar filters, the order arranges | push | `?debateby=stance` |
 | `bears` | debate mode's **relevance bar**, shown only while `prioritised` is the order drawn: how directly the AI judged a claim row bears on its claim — **the word, not a number**: `loosely`, `partly` or `directly`. **Absent means nobody has touched it**, which the panel reads as `RELEVANCE_DEFAULT` — `loosely`, which hides nothing ([`debate-order.ts`](../../src/web/debate-order.ts)). Claim rows only, so it and `name` never hide the same row; a row the AI did not judge is never hidden | **replace** | `?bears=partly` |
 | `debatethread` | which of debate's threads narrows its list: a theme's id, or `key` for the key sources; absent is no filter, and an id this debate does not have reads as no filter — [debate.md](debate.md). **Not `thread`**, which is the open conversation ([`params.ts`](../../src/web/params.ts) § `debateThreadParam`) | **replace** | `?debatethread=key` |
-| `citeby` | how the citations list is ordered: `prioritised` (the default, and absent), `document` (first cited), `relevance` or `influence` — [citations.md](citations.md). **Not the glossary's `sort`**: every parameter survives a mode switch, and a shared key would carry one mode's order into the other | push | `?citeby=relevance` |
+| `citeby` | how the citations list is ordered: `prioritised` (the default, and absent), `document` (first cited), `relevance`, `influence` or `date` (oldest first; a list with no year draws first cited) — [citations.md](citations.md). **Not the glossary's `sort`**: every parameter survives a mode switch, and a shared key would carry one mode's order into the other | push | `?citeby=relevance` |
 | `citebar` | the bar the citations' prioritised order hides under — `(2 × relevance + influence) / 3`. **Absent means nobody has touched it**, which the panel reads as `CITATION_BAR_DEFAULT` ([`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx)). Not the glossary's `gate`, which `Reader` reads in every mode | **replace**, debounced | `?citebar=0.55` |
 | `faqby` | how the FAQ is ordered: `prioritised` (the default, and absent), `document` (reading order), `centrality` (most central) or `difficulty` (hardest); one the list has nothing for falls back to `document` — [faq.md](faq.md). Its own key for `citeby`'s reason | push | `?faqby=document` |
 | `faqbar` | the bar the FAQ's prioritised order hides under — `centrality × (1 − difficulty)`. **Absent means nobody has touched it**, which the panel reads as `FAQ_BAR_DEFAULT` ([`faq-order.ts`](../../src/web/faq-order.ts)) | **replace**, debounced | `?faqbar=0.35` |
@@ -88,7 +88,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `referee` | which of Referee's four sub-modes is open: `criteria` (the default), `claims`, `mirror` or `candidates` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
 | `crits` | which Referee criteria are painting the prose, as a comma list of ids, `none` for the empty set. **Absent is the empty set**: the article is not marked until the reader asks — [referee-mode.md](referee-mode.md) ([`params.ts`](../../src/web/params.ts) § `critsParam`) | **replace** | `?crits=spya-k3m9qt` |
 | `refscale` | which diverging colour ramp the whole of Referee mode is drawn with: `rg` (the default, omitted) or `br`. A URL param rather than a column, so it applies to criteria already run; [`params.ts`](../../src/web/params.ts) § `refScaleParam` says whether a control writes it yet | **replace** | `?refscale=br` |
-| `remember` | which half of Remember is open: `recall` (the default) or `quiz` — [remember-mode.md](remember-mode.md). **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
+| `remember` | which part of Remember is open: `recall` (the default), `tutorial` or `quiz` — [remember-mode.md](remember-mode.md). Recall and Tutorial each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
 
 **`referee` and `remember` are `diagram`'s shape, deliberately** — *which thing, within this mode* —
 so all three push, and all three land an unrecognised value on the default rather than on an error
@@ -131,6 +131,7 @@ sent to anybody. Now:
 | `view` | `cards` (the default) or `table` — the same list, painted the other way | push | `?view=table` |
 | `show` | `all` (the default) or `unread`, which is "never opened" | push | `?show=unread` |
 | `topics` | the chosen topics' keys, ANDed. A key not among the shelf's topics is never applied while they load, and is dropped — with `replace` — once they have — [shelf-terms.md](shelf-terms.md) | push | `?topics=memory,neural network` |
+| `tags` | the reader's own tags chosen in the Tags row, ANDed with each other and with `topics`. A tag no article in scope carries is ignored, and never rewritten away — [shelf-terms.md § Your own tags, in the row above](shelf-terms.md#your-own-tags-in-the-row-above) | push | `?tags=ai,memory` |
 | `archived` | `1` when the **Include archived** chip is on: the archived articles join the shelf's one list — sorted, narrowed, searched (passages too) and counted with it, each marked — and the topics' scope — [shelf-terms.md](shelf-terms.md) | push | `?archived=1` |
 | `topicsView` | `detail` for one row per topic; absent is the row of pills — [shelf-terms.md](shelf-terms.md) | push | `?topicsView=detail` |
 
@@ -359,7 +360,10 @@ doing it pushed the parameter. See [search.md § The URL](search.md#the-url).
 same article, and which page you are on is not something you would want to reset by changing a
 parameter. An unknown third segment is the shelf too. The query string travels between all three, so
 stepping out to the metadata page and back returns you to the paragraph you left; `?panel=` is the
-one thing left behind, because a drawer is not a place you were. See `carriedSearch` in
+one thing left behind, because a drawer is not a place you were. The way back is the bar's own
+Metadata button, pressed again (or ⌘-Enter): on the metadata page it points at the article with the
+same query string, so a second press closes Metadata the way it closes a band — Greg, 2026-10-02,
+spya-bpczdx ([261003c](../plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md)). See `carriedSearch` in
 [`router.ts`](../../src/web/router.ts) and
 [library.md § The routes](library.md#the-routes).
 

@@ -24,7 +24,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ChatMessage, ChatThread } from "../src/types.js";
-import type { LiveApi } from "../src/web/live/useLiveConversation.js";
+import type { LiveApi, LiveLine } from "../src/web/live/useLiveConversation.js";
+import { liveGroups } from "../src/web/live/tail.js";
 
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 
@@ -86,8 +87,19 @@ function fakeLive(phase: LiveApi["phase"]): { api: LiveApi; finish: () => void }
     say: () => {},
     stall: null,
     reconnect: () => { events.push("reconnect"); },
+    step: null,
+    reconnecting: false,
+    talkMode: "hands-free" as LiveApi["talkMode"],
+    enterTapToTalk: () => { events.push("tap-to-talk"); },
+    talk: () => { events.push("talk"); },
+    doneTalking: () => { events.push("done"); },
   } satisfies LiveApi;
   return { api, finish: () => release() };
+}
+
+/** One live line, placed in an exchange the way the hook places it. */
+function line(id: string, role: LiveLine["role"], text: string, done: boolean, exchange = id, seq = 0): LiveLine {
+  return { id, role, text, done, exchange, session: 1, seq };
 }
 
 function paint(live?: LiveApi, threadId: string | null = THREAD.id, threads = [THREAD], blocks = new Map<string, string>()): void {
@@ -297,23 +309,46 @@ describe("what the button says", () => {
 });
 
 describe("the live session in the shipping chat composer", () => {
-  it("keeps Continue typing available while a reconnect teardown can still be cancelled", async () => {
+  const button = (text: string) => [...host.querySelectorAll("button")].find((b) => b.textContent === text);
+
+  it("offers to cancel a reconnect while its hang-up runs, because Live is disabled then", async () => {
+    /* GPT Sol, plan review 261002j: "Continue typing" was the only control
+       that could cancel a pending reconnect during its teardown. It went, so
+       this has to be here instead — and only during a reconnect. */
     const { api } = fakeLive("closing");
     paint(api);
-    const type = [...host.querySelectorAll("button")].find((button) => button.textContent === "Continue typing");
-    expect(type, "the cancel action is absent").toBeDefined();
-    expect(type?.disabled, "the hook can cancel the reconnect, but the rendered action cannot call it").toBe(false);
-    act(() => type!.click());
+    expect(button("Cancel reconnect"), "an ordinary hang-up has nothing to cancel").toBeUndefined();
+    paint({ ...api, reconnecting: true });
+    expect(host.querySelector<HTMLButtonElement>(".chat-live-btn")?.disabled).toBe(true);
+    const cancel = button("Cancel reconnect");
+    expect(cancel, "a reader who changed their mind is put back into a call").toBeDefined();
+    act(() => cancel!.click());
     await act(async () => { await Promise.resolve(); });
     expect(events).toEqual(["stop"]);
   });
 
-  it("shows an actionable failure and allows typing in the same conversation", async () => {
+  it("offers neither dictation nor 'Continue typing' inside the live panel", () => {
+    /* Greg, spya-f4eq7p: "there was a button to sort of switch from live to
+       voice dictation. I don't think we need that." The composer's own
+       microphone is still there, and Send or Hang up ends the call. */
+    for (const phase of ["connecting", "live", "closing", "failed"] as const) {
+      const { api } = fakeLive(phase);
+      paint({ ...api, error: phase === "failed" ? "It stopped." : null });
+      expect(button("Use dictation"), phase).toBeUndefined();
+      expect(button("Continue typing"), phase).toBeUndefined();
+    }
+  });
+
+  it("shows a failure as an error with Try again, not a grey line, and allows typing", async () => {
     const { api } = fakeLive("failed");
     api.error = "Microphone permission was denied. Allow access in your browser, then retry.";
     paint(api);
-    expect(host.textContent).toContain("Microphone permission was denied");
-    const retry = [...host.querySelectorAll("button")].find((b) => b.textContent === "Retry live");
+    const failure = host.querySelector(".chat-live-failure");
+    expect(failure?.getAttribute("role")).toBe("alert");
+    expect(failure?.textContent).toContain("Microphone permission was denied");
+    expect(host.querySelector(".chat-live-status")?.classList.contains("is-error")).toBe(true);
+    expect(host.querySelector(".chat-live-state")?.textContent).toBe("Error");
+    const retry = button("Try again");
     expect(retry).toBeDefined();
     act(() => retry!.click());
     expect(events).toEqual([`startLive:${THREAD.id}`]);
@@ -322,19 +357,188 @@ describe("the live session in the shipping chat composer", () => {
     expect(events.at(-1)).toBe("send:continue by typing");
   });
 
-  it("shows streaming words by default, and hiding them does not stop the session", () => {
+  it.each([
+    ["ticket", "Starting…"],
+    ["microphone", "Opening your microphone…"],
+    ["transport", "Connecting to the voice service…"],
+    ["seeding", "Loading this conversation…"],
+  ] as const)("names the connecting step it is on: %s", (step, sentence) => {
+    const { api } = fakeLive("connecting");
+    paint({ ...api, step });
+    expect(host.querySelector(".chat-live-state")?.textContent).toBe("Connecting");
+    expect(host.querySelector(".chat-live-sentence")?.textContent).toBe(sentence);
+    expect(host.querySelector('.chat-live-steps [aria-current="step"]')?.textContent).toBe(sentence.replace("…", ""));
+  });
+
+  it("shows the meter while connecting, and says the conversation is not hearing it yet", () => {
+    const { api } = fakeLive("connecting");
+    paint({ ...api, step: "transport" });
+    expect(host.querySelector(".chat-live-status .mic-level"), "nothing moves while it connects").not.toBeNull();
+    expect(host.textContent).toContain("The conversation will hear you once it has loaded");
+    paint({ ...api, phase: "live" });
+    expect(host.textContent).not.toContain("will hear you once");
+    expect(host.querySelector(".chat-live-state")?.textContent).toBe("Listening");
+    expect(host.querySelector(".chat-live-sentence")?.textContent).toBe("Listening — go ahead");
+  });
+
+  it("is one button, and keeps the settings in an Advanced disclosure that starts closed", async () => {
+    const previous = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        enumerateDevices: async () => [{ kind: "audioinput", deviceId: "usb", label: "USB Headphones" }],
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+    });
+    try {
+      const { api } = fakeLive("live");
+      paint(api);
+      await act(async () => { await Promise.resolve(); });
+      expect(host.querySelectorAll(".chat-live select"), "a setting is still beside the Live button").toHaveLength(0);
+      const advanced = host.querySelector<HTMLDetailsElement>(".chat-live-advanced");
+      expect(advanced?.open, "Advanced should start closed").toBe(false);
+      expect(advanced?.querySelector('select[aria-label="Microphone device"]')).not.toBeNull();
+      const noise = advanced?.querySelector<HTMLSelectElement>('select[aria-label="Noise reduction"]');
+      expect([...(noise?.options ?? [])].map((o) => o.text)).toEqual(["Auto", "Headphones", "Laptop mic"]);
+      expect([...(advanced?.querySelectorAll("button") ?? [])].map((b) => b.textContent)).toEqual(["Reconnect"]);
+    } finally {
+      if (previous) Object.defineProperty(navigator, "mediaDevices", previous);
+      else Reflect.deleteProperty(navigator, "mediaDevices");
+    }
+  });
+
+  it("changing noise reduction during a call saves and reconnects, and is remembered", async () => {
+    const { api } = fakeLive("live");
+    paint(api);
+    const noise = host.querySelector<HTMLSelectElement>('select[aria-label="Noise reduction"]');
+    act(() => {
+      noise!.value = "headset";
+      noise!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    /* Go through the hook's reconnect intent rather than assembling a stop and
+       start here. That path can be cancelled and refuses to restart after a
+       failed save. */
+    expect(events).toEqual(["reconnect"]);
+    expect(window.localStorage.getItem("spya.live.micPlacement")).toBe("headset");
+  });
+
+  it("shows the live words in the thread itself, as chat turns, with no separate transcript", () => {
     const { api } = fakeLive("live");
     api.lines = [
-      { id: "u1", role: "reader", text: "What is the argument?", done: true },
-      { id: "a1", role: "companion", text: "It begins with", done: false },
+      line("u1", "reader", "What is the argument?", true),
+      line("a1", "companion", "It begins with", false, "u1"),
     ];
     paint(api);
-    expect(host.querySelector(".chat-live-transcript")?.textContent).toContain("It begins with");
-    const toggle = host.querySelector<HTMLInputElement>('input[aria-label="Show live transcript"]');
-    expect(toggle?.checked).toBe(true);
-    act(() => toggle!.click());
+    const scroll = host.querySelector(".chat-scroll");
+    expect(scroll?.querySelector(".chat-live-tail .chat-turn.you")?.textContent).toBe("What is the argument?");
+    expect(scroll?.querySelector(".chat-live-tail .chat-turn.model")?.textContent).toContain("It begins with");
+    expect(scroll?.querySelector(".chat-live-tail .chat-cursor"), "no still-arriving mark").not.toBeNull();
     expect(host.querySelector(".chat-live-transcript")).toBeNull();
+    expect(host.querySelector('input[aria-label="Show live transcript"]')).toBeNull();
+    expect(host.querySelector(".chat-live-status")?.textContent).not.toContain("It begins with");
+    /* After the saved turns: the end of this same conversation. */
+    const turns = [...(scroll?.querySelectorAll(".chat-turn") ?? [])].map((t) => t.textContent);
+    expect(turns.slice(0, 2)).toEqual(["typed", expect.stringContaining("answered")]);
     expect(events).toEqual([]);
+  });
+
+  it("treats the first live line as conversation content and follows its growth", () => {
+    const { api } = fakeLive("live");
+    const emptyThread = { ...THREAD, messages: [] };
+    paint(api, THREAD.id, [emptyThread]);
+    const scroll = host.querySelector<HTMLElement>(".chat-scroll")!;
+    let top = 0;
+    let height = 400;
+    Object.defineProperties(scroll, {
+      clientHeight: { configurable: true, get: () => 100 },
+      scrollHeight: { configurable: true, get: () => height },
+      scrollTop: {
+        configurable: true,
+        get: () => top,
+        set: (value: number) => { top = value; },
+      },
+    });
+
+    api.lines = [line("u1", "reader", "The first spoken words", false)];
+    height = 700;
+    paint(api, THREAD.id, [emptyThread]);
+    expect(host.querySelector(".chat-suggest"), "the empty-thread suggestions stayed over the live turn").toBeNull();
+    expect(top, "the first spoken line was treated as an empty thread and scrolled to the top").toBe(700);
+
+    api.lines = [{ ...api.lines[0]!, text: "The first spoken words, still growing" }];
+    height = 900;
+    paint(api, THREAD.id, [emptyThread]);
+    expect(top, "live transcript growth was absent from the follow-scroll dependencies").toBe(900);
+
+    /* And growth still respects a reader who deliberately scrolled away. */
+    act(() => {
+      scroll.scrollTop = 0;
+      scroll.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    api.lines = [{ ...api.lines[0]!, text: "The first spoken words, still growing after the reader scrolled up" }];
+    height = 1_100;
+    paint(api, THREAD.id, [emptyThread]);
+    expect(top).toBe(0);
+    expect(host.querySelector(".chat-to-bottom")?.textContent).toContain("Latest");
+  });
+
+  it("puts a late answer under the question it answers, not after the next one", () => {
+    /* Rule 1: U1, U2, then R1's words. The ledger files R1 with U1, so the
+       thread shows it there — arrival order would show U1, U2, R1. */
+    const { api } = fakeLive("live");
+    api.lines = [
+      line("u1", "reader", "First question", true, "u1", 0),
+      line("u2", "reader", "Second question", false, "u2", 1),
+      line("r1", "companion", "Answer to the first", false, "u1", 0),
+    ];
+    paint(api);
+    const order = [...host.querySelectorAll(".chat-live-tail .chat-live-words")].map((w) => w.textContent);
+    expect(order).toEqual(["First question", "Answer to the first", "Second question"]);
+  });
+
+  it("orders exchanges by the ledger, and a retried session's kept words first, whatever order the lines are held in", () => {
+    /* The hook holds lines in arrival order; the thread must not depend on
+       that. Kept words from an earlier session (1) stay above the new
+       session's (2), whose ledger counts from zero again. */
+    const held = [
+      { ...line("n1", "reader", "New session question", true, "n1", 0), session: 2 },
+      line("r2", "companion", "Second answer", true, "u2", 1),
+      line("u2", "reader", "Second question", true, "u2", 1),
+      line("u1", "reader", "First question", true, "u1", 0),
+    ];
+    expect(liveGroups(held).map((g) => [...g.reader, ...g.companion].map((l) => l.text))).toEqual([
+      ["First question"], ["Second question", "Second answer"], ["New session question"],
+    ]);
+  });
+
+  it("stops blinking at an unfinished line once the session is no longer live", () => {
+    /* An answer cut off by a hang-up or a failure never gets its final
+       transcript. A cursor on it after the call has ended says more is coming,
+       which is the one thing that is not true. GPT Sol, plan review 261002j. */
+    const { api } = fakeLive("failed");
+    api.error = "The live connection was lost.";
+    api.hasUnsavedLines = true;
+    api.lines = [
+      line("u1", "reader", "Kept question", true),
+      line("a1", "companion", "Cut off mid", false, "u1"),
+      line("u9", "reader", "", false, "u9", 1),
+    ];
+    paint(api);
+    const tail = host.querySelector(".chat-live-tail");
+    expect(tail?.textContent).toContain("Cut off mid");
+    expect(tail?.querySelector(".chat-cursor"), "still blinking after the call ended").toBeNull();
+    expect(tail?.textContent).not.toContain("still arriving");
+    expect(tail?.querySelectorAll(".chat-turn"), "an empty placeholder outlived the call").toHaveLength(2);
+  });
+
+  it("labels retained ownerless words as Stopped after the call ends", () => {
+    const { api } = fakeLive("idle");
+    api.lines = [line("unowned", "reader", "A typed probe with no acknowledgement", true, "unowned", Number.POSITIVE_INFINITY)];
+    paint(api);
+    expect(host.querySelector(".chat-live-tail")?.textContent).toContain("A typed probe with no acknowledgement");
+    expect(host.querySelector(".chat-live-state")?.textContent).toBe("Stopped");
+    expect(host.querySelector(".chat-live-sentence")?.textContent).toBe("Live conversation ended");
   });
 
   it("shows the acquired microphone, input meter and playback recovery action", async () => {
@@ -379,7 +583,7 @@ describe("the live session in the shipping chat composer", () => {
     expect(host.querySelector(".chat-live-status")?.textContent).not.toContain("Earlier pointer");
   });
 
-  it("remembers a replacement microphone and flushes before reconnecting", async () => {
+  it("remembers a replacement microphone and uses the cancellable reconnect", async () => {
     const previous = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
@@ -392,7 +596,7 @@ describe("the live session in the shipping chat composer", () => {
       },
     });
     try {
-      const { api, finish } = fakeLive("live");
+      const { api } = fakeLive("live");
       paint(api);
       await act(async () => { await Promise.resolve(); });
       const picker = host.querySelector<HTMLSelectElement>('select[aria-label="Microphone device"]');
@@ -402,9 +606,7 @@ describe("the live session in the shipping chat composer", () => {
         picker!.dispatchEvent(new Event("change", { bubbles: true }));
       });
       expect(window.localStorage.getItem("spya.dictation.deviceId")).toBe("headphones");
-      expect(events).toEqual(["stop"]);
-      await act(async () => { finish(); });
-      expect(events).toEqual(["stop", `startLive:${THREAD.id}`]);
+      expect(events).toEqual(["reconnect"]);
     } finally {
       if (previous) Object.defineProperty(navigator, "mediaDevices", previous);
       else Reflect.deleteProperty(navigator, "mediaDevices");
@@ -427,7 +629,7 @@ describe("the live session in the shipping chat composer", () => {
   it("does not show another conversation's live words or error", () => {
     const { api } = fakeLive("live");
     api.threadId = "spya-other1";
-    api.lines = [{ id: "u1", role: "reader", text: "Private words in another thread", done: false }];
+    api.lines = [line("u1", "reader", "Private words in another thread", false)];
     api.error = "Error from another thread";
     paint(api);
     expect(host.textContent).not.toContain("Private words in another thread");
@@ -447,6 +649,46 @@ describe("the live session in the shipping chat composer", () => {
     expect(host.textContent).toMatch(/paused the microphone/);
     act(() => reconnect()?.click());
     expect(events).toContain("reconnect");
+  });
+
+  it("offers tap to talk when noise holds the turn open, and then Talk, Done and Hands-free", () => {
+    /* spya-kzdmhb, plan 261003d: Reconnect alone sends a reader in a street
+       back into the same street. */
+    const { api } = fakeLive("live");
+    const button = (label: string) => [...host.querySelectorAll("button")].find((b) => b.textContent === label);
+    paint(api);
+    expect(button("Tap to talk"), "offered before anything went wrong").toBeUndefined();
+    expect(host.querySelector(".mic-level"), "the meter this test later expects gone was never here").not.toBeNull();
+    paint({ ...api, stall: "no-reply" });
+    expect(button("Tap to talk"), "offered for a stall noise does not cause").toBeUndefined();
+    paint({ ...api, stall: "open-turn" });
+    act(() => button("Tap to talk")?.click());
+    expect(events).toContain("tap-to-talk");
+    paint({ ...api, talkMode: "tap-idle" });
+    expect(host.querySelector(".chat-live-state")?.textContent).toBe("Ready");
+    expect(host.textContent).toMatch(/isn’t listening/);
+    expect(host.querySelector(".mic-level, [class*='mic-level']"), "a meter showing a street nobody hears").toBeNull();
+    act(() => button("Talk")?.click());
+    expect(events).toContain("talk");
+    paint({ ...api, talkMode: "tap-idle", quietInput: true });
+    expect(host.textContent, "the meter's clone is still capturing, but nothing is being sent").not.toMatch(/No sound detected/);
+    paint({ ...api, talkMode: "tap-idle", speaking: true });
+    expect(button("Talk")?.disabled, "Talk over a reply that cannot be interrupted").toBe(true);
+    paint({ ...api, talkMode: "tap-sending" });
+    expect(button("Talk")?.disabled, "Talk before the last turn's reply began").toBe(true);
+    expect(host.querySelector(".mic-level, [class*='mic-level']"), "the meter returned while no audio was being sent").toBeNull();
+    paint({ ...api, talkMode: "tap-sending", quietInput: true });
+    expect(host.textContent, "Sending showed a microphone warning for audio the conversation cannot hear").not.toMatch(/No sound detected/);
+    paint({ ...api, talkMode: "tap-talking" });
+    expect(host.textContent).toMatch(/tap Done/);
+    act(() => button("Done")?.click());
+    expect(events).toContain("done");
+  });
+
+  it("does not say a reconnecting tap session will hear the microphone after loading", () => {
+    const { api } = fakeLive("connecting");
+    paint({ ...api, talkMode: "tap-idle" });
+    expect(host.textContent).not.toMatch(/will hear you once it has loaded/i);
   });
 
   it("does not offer Reconnect, or a stall, when the call is not live", () => {
@@ -478,7 +720,7 @@ describe("the live session in the shipping chat composer", () => {
   it("keeps a failed new conversation that still holds unsaved spoken words", () => {
     const { api } = fakeLive("failed");
     api.error = "Could not save the spoken turn.";
-    api.lines = [{ id: "u1", role: "reader", text: "Words still worth keeping", done: true }];
+    api.lines = [line("u1", "reader", "Words still worth keeping", true)];
     paint(api, THREAD.id, [{ ...THREAD, messages: [] }]);
     act(() => host.querySelector<HTMLButtonElement>('button[title="All conversations"]')!.click());
     expect(events, "discard made the only unsaved transcript unreachable").toEqual(["thread:null"]);
@@ -487,10 +729,14 @@ describe("the live session in the shipping chat composer", () => {
   it("labels retained unsaved words after a retry has cleared the connection error", () => {
     const { api } = fakeLive("live");
     api.hasUnsavedLines = true;
-    api.lines = [{ id: "u1", role: "reader", text: "Earlier words worth keeping", done: true }];
+    api.lines = [line("u1", "reader", "Earlier words worth keeping", true)];
     paint(api);
-    expect(host.querySelector(".chat-live-transcript")?.textContent).toContain("Earlier words worth keeping");
-    expect(host.querySelector(".chat-live-transcript")?.textContent).toContain("Couldn’t confirm whether these earlier words were saved");
+    /* In the thread, with the notice beside the words it is about — and saying
+       that where they belong is uncertain too (GPT Sol, plan review 261002j). */
+    const tail = host.querySelector(".chat-scroll .chat-live-tail");
+    expect(tail?.textContent).toContain("Earlier words worth keeping");
+    expect(tail?.querySelector(".chat-live-unsaved")?.textContent).toMatch(/Couldn’t confirm whether these words were saved, or where they belong/);
+    expect(tail?.textContent, "settled words from the failed session are labelled as still arriving").not.toContain("still arriving");
   });
 
   it("explains voice and thread continuity in a keyboard-reachable tooltip", async () => {

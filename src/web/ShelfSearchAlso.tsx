@@ -130,7 +130,7 @@ function Act({ onClick, children }: { onClick: () => void; children: ReactNode }
     <button
       type="button"
       onClick={onClick}
-      className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline"
+      className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight-text tw:underline"
     >
       {children}
     </button>

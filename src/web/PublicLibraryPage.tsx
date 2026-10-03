@@ -193,7 +193,7 @@ export function PublicLibraryPage({
             >
               <Link
                 href={PUBLIC_SHARING_HREF}
-                className="tw:text-highlight tw:no-underline tw:hover:underline"
+                className="tw:text-highlight-text tw:no-underline tw:hover:underline"
               >
                 {PUBLIC_SHELF_TAKEDOWN}
               </Link>
@@ -231,7 +231,7 @@ export function PublicLibraryPage({
               <button
                 type="button"
                 onClick={again}
-                className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline"
+                className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight-text tw:underline"
               >
                 {PUBLIC_SHELF_RETRY}
               </button>
@@ -315,7 +315,7 @@ export function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
   ].filter(Boolean) as string[];
 
   return (
-    <article className="tw:relative tw:h-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
+    <article className="tw:relative tw:h-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight-text">
       <h2 className={withVoice("tw:m-0 tw:text-xl tw:leading-snug", articleTitleVoice(false))}>
         {/* The stretched link: a real `<a href>` whose ::after covers the card,
             so the whole card is a click target and ⌘-click still opens a tab.

@@ -341,7 +341,9 @@ export function SiteFooter({
   const anim = useLogoAnimation({ tap: true });
 
   return (
-    /* **A literal translucent white, not `border-border`.** `--border` is
+    /* **A translucent white, not `border-border`** — white on the dark page;
+       `--toward-ink-rgb` makes it the same translucent *black* on the light
+       one, where white would be no line at all (since 2026-10-03). `--border` is
        `oklch(0.27 0 0)` — a solid grey line, and on a `oklch(0.145 0 0)` page it
        was the heaviest edge anywhere on it, sitting under the least important
        content. The marketing language builds its edges from translucent white
@@ -350,7 +352,8 @@ export function SiteFooter({
        on the shelf and `/profile`, and neither of those may become a `.site`
        page.
 
-       **`border-[rgb(255_255_255/0.16)]` and not `border-white/[0.16]`**, which
+       **`border-[rgb(var(--toward-ink-rgb)/0.16)]` and not
+       `border-white/[0.16]`**, which
        is what a Tailwind opacity modifier would normally be for. Read the CSS
        v4.3.3 actually emits for it:
 
@@ -395,7 +398,7 @@ export function SiteFooter({
        the page rather than to the footer: the short pages carry a `tw:flex-1`
        element above this one, which grows into the free space and leaves this
        margin alone. ContactPage.tsx has the shape. */
-    <footer className={`${SPACING} tw:border-t tw:border-[rgb(255_255_255/0.16)]`}>
+    <footer className={`${SPACING} tw:border-t tw:border-[rgb(var(--toward-ink-rgb)/0.16)]`}>
       {/* Two ends rather than one huddle. On `/` and `/pricing` the row is
           1104px wide and used to hold about 370px of text hard against its left
           edge, leaving roughly 70% of the rule with nothing under it.

@@ -77,7 +77,7 @@ export const REMEMBERED = [
   "referee", // which referee sub-mode
   "crits", // which criteria are selected
   "refscale", // which diverging ramp
-  "remember", // recall or quiz
+  "remember", // recall, tutorial or quiz
   "sort", // glossary order
   "gate", // glossary threshold
   "rank", // quotes order

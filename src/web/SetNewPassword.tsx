@@ -24,7 +24,7 @@ import { LIBRARY_HREF, navigate } from "./router.js";
 const MIN_LENGTH = 8;
 
 const FIELD =
-  "tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight";
+  "tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight-text";
 
 export function SetNewPassword() {
   const [password, setPassword] = useState("");
@@ -124,7 +124,7 @@ export function SetNewPassword() {
             type="button"
             onClick={() => navigate(LIBRARY_HREF, { replace: true })}
             disabled={busy}
-            className="tw:text-xs tw:text-ink-faint tw:hover:text-highlight"
+            className="tw:text-xs tw:text-ink-faint tw:hover:text-highlight-text"
           >
             not now
           </button>

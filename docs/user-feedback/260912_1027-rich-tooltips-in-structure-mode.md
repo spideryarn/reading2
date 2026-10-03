@@ -41,3 +41,7 @@ in August ([260828g](../postmortems/260828g-spine-hover-cards.md)) — and becau
 than on the rail: a spine band is two pixels tall and tapping one blind is a coin flip, whereas a
 Structure row is a legible line of text you can already read. Say the word and it is an afternoon,
 for both faces at once.
+
+**2026-10-03: built.** A finger's first tap on a row opens its card, and the second goes there, in
+both faces. Each row owns its own state, which is how it avoids the 260828g trap.
+[261001_1029](261001_1029-a-tap-opens-structure-row-cards-and-the-reading-time-card.md).

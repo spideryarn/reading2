@@ -53,7 +53,7 @@
 }
 .skim-spark:hover,
 .skim-spark[aria-expanded="true"] { background: var(--surface-raised); }
-.skim-spark:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.skim-spark:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .skim-spark-line { fill: none; stroke: var(--rule-strong); stroke-width: 1; }
 .skim-spark-dot { fill: var(--page); stroke: var(--ink-faint); stroke-width: 1; }
 .skim-spark-dot.done { fill: var(--ink-faint); }
@@ -253,7 +253,7 @@
   text-overflow: ellipsis;
   border-radius: var(--radius);
 }
-.skim-purpose-said:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.skim-purpose-said:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .skim-purpose-label { color: var(--ink-soft); font-weight: 500; }
 .skim-purpose-edit { flex: none; color: var(--ink-soft); }
 .skim-purpose-tip p { margin: 0; max-width: 24em; }
@@ -271,7 +271,7 @@
   font-size: 0.86rem;
   resize: vertical;
 }
-.skim-purpose-input:focus-visible { outline: none; border-color: var(--highlight); }
+.skim-purpose-input:focus-visible { outline: none; border-color: var(--highlight-text); }
 .skim-purpose-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; }
 .skim-purpose-ask .gloss-error { margin: 0; }
 
@@ -385,7 +385,7 @@
   cursor: pointer;
 }
 .skim-open:hover { background: var(--page); }
-.skim-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.skim-open:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 /* **Where am I**: a button laid over the row's position mark, beside the row's
    own button rather than in it (Sol, plan 260929f F5). Invisible — the mark
@@ -414,15 +414,9 @@
 }
 .skim-where:hover,
 .skim-where[aria-expanded="true"] { background: var(--highlight-wash); }
-.skim-where:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.skim-where:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
-/* The card itself — WhereCard.tsx, where.ts. */
-.where-card { margin: 0; padding: 0; list-style: none; font-size: 0.8rem; line-height: 1.45; }
-.where-node { color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.where-node.on-path { color: var(--ink-soft); }
-.where-node.here { color: var(--ink); font-weight: 600; }
-.where-node.here::before { content: "▸ "; color: var(--highlight); }
-.where-more { color: var(--ink-faint); font-style: italic; }
+/* The card itself is shared with the spine, so its rules are in tooltip.css. */
 .where-tip { max-width: min(18rem, calc(100vw - 1.75rem)); }
 /* A link's look on a real button: these open another mode or move the prose. */
 .skim-link {

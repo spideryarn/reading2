@@ -153,7 +153,7 @@ export function PublicShowcase() {
       <p className="tw:mt-6 tw:mb-0 tw:text-sm">
         <Link
           href={PUBLIC_LIBRARY_HREF}
-          className="tw:text-highlight tw:no-underline tw:hover:underline"
+          className="tw:text-highlight-text tw:no-underline tw:hover:underline"
         >
           {PUBLIC_SHELF_BROWSE_LINK}
         </Link>
@@ -196,7 +196,7 @@ function ShowcaseArticle({ entry }: { entry: PublicLibraryEntry }) {
         /* `readHref`, so this page, the shelf and the owner's library cannot
            come to disagree about where an article lives. */
         className={withVoice(
-          "tw:text-base tw:text-foreground tw:no-underline tw:hover:text-highlight",
+          "tw:text-base tw:text-foreground tw:no-underline tw:hover:text-highlight-text",
           articleTitleVoice(false),
         )}
       >

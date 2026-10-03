@@ -128,7 +128,7 @@ export function QuotaNotice({
           button that only works with a plain click — and the client router
           handles it without a reload. The label says what is on the other end
           rather than "click here". */}
-      <Link href={out.href} className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
+      <Link href={out.href} className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight-text">
         {out.label}
         <ArrowRight size={12} />
       </Link>

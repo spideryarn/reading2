@@ -64,6 +64,10 @@ let listFilters: unknown[] = [];
 let listOwners: string[] = [];
 /** What the fake `listMine` answers with — deliberately loose, see § GET. */
 let listAnswer: unknown = { reports: [], more: false };
+/** The ids each `listMine` was asked to count, and the owner in force. */
+let counted: { ids: readonly string[]; owner: string }[] = [];
+/** The counts the fake `listMine` adds to its answer. */
+let countAnswer: unknown = { all: 0, in: 0 };
 /** What the fake store answers with. Set per test. */
 let answer: FeedbackSubmission;
 /** What `captureFeedback` does. A test makes it throw. */
@@ -86,6 +90,22 @@ function storedReport(input: NewFeedback): FeedbackReport {
   };
 }
 
+/**
+ * Every admin notice the route asked for (plan 261002j), and whether the
+ * reader's response had already ended when it was asked — the notice must
+ * never sit in front of the reader.
+ */
+let notices: { id: string; ownerId: string; afterResponse: boolean; mirroredYet: boolean }[] = [];
+/** Set by the fake response's `end`, read by the fake notice. */
+let responseEnded = false;
+
+vi.mock("../src/feedback-notice.js", () => ({
+  noticeFeedback: async (report: FeedbackReport, ownerId: string) => {
+    notices.push({ id: report.id, ownerId, afterResponse: responseEnded, mirroredYet: mirrored.length > 0 });
+    return { kind: "sent" };
+  },
+}));
+
 /* The notes' endings, fixed here rather than read from docs/user-feedback/, so
    a note's header changing cannot move this file's answers. */
 vi.mock("../src/feedback-endings.generated.js", () => ({
@@ -107,15 +127,16 @@ vi.mock("../src/store/index.js", async (importActual) => {
         return answer ?? { kind: "created", report: storedReport(input) };
       },
       read: async () => null,
-      listMine: async (limit: number, filter?: unknown) => {
+      listMine: async (limit: number, countIds: readonly string[], filter?: unknown) => {
         listed.push(limit);
         listFilters.push(filter);
         /* The real store resolves this at the start of its query. Doing the
            same here proves this route reached it only after the gate installed
            the signed-in reader's owner. */
         listOwners.push(currentOwnerId());
+        counted.push({ ids: countIds, owner: currentOwnerId() });
         if (listAnswer instanceof Error) throw listAnswer;
-        return listAnswer;
+        return { counts: countAnswer, ...(listAnswer as object) };
       },
       markMirrorAttempted: async (id: string) => {
         attempted.push(id);
@@ -230,6 +251,7 @@ async function call(
     },
     end(chunk: string) {
       text = chunk;
+      responseEnded = true;
     },
   } as unknown as ServerResponse;
 
@@ -328,10 +350,14 @@ beforeEach(() => {
   listFilters = [];
   listOwners = [];
   listAnswer = { reports: [], more: false };
+  counted = [];
+  countAnswer = { all: 0, in: 0 };
   hooks.clear();
   answer = undefined as unknown as FeedbackSubmission;
   captureBehaviour = () => "sentry-event-id";
   sendResponse = { statusCode: 200 };
+  notices = [];
+  responseEnded = false;
 });
 
 afterEach(() => {
@@ -339,10 +365,10 @@ afterEach(() => {
 });
 
 /**
- * **The Earlier tab's read** — the reader's own reports, and only four fields
- * of each. docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+ * **The Earlier tab's read** — the reader's own reports, and only five fields
+ * of each from the store. docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
  *
- * The fake store hands back rows carrying *more* than the four — an email, an
+ * The fake store hands back rows carrying *more* than the five — an email, an
  * address, diagnostics — which is what makes "the route picks, it does not
  * spread" a thing this file can see rather than a thing the store happens to do.
  */
@@ -355,6 +381,7 @@ describe("GET /api/feedback", () => {
           createdAt: "2026-09-12T10:45:00.000Z",
           kind: "suggestion",
           body: "A tab of what I sent before",
+          page: "/add",
           reporterEmail: "someone@example.invalid",
           url: "https://www.spideryarn.com/add/https://user:secret@example.com/",
           diagnostics: { version: 2, payload: {} },
@@ -362,6 +389,7 @@ describe("GET /api/feedback", () => {
       ],
       more: true,
     };
+    countAnswer = { all: 115, in: 70 };
     const reply = await call(undefined, { method: "GET" });
     expect(reply.status).toBe(200);
     expect(reply.headers["cache-control"]).toBe("private, no-store");
@@ -372,10 +400,13 @@ describe("GET /api/feedback", () => {
           createdAt: "2026-09-12T10:45:00.000Z",
           kind: "suggestion",
           body: "A tab of what I sent before",
+          /* The store's label, passed on. The `url` beside it in the row is not. */
+          page: "/add",
           shipped: true,
         },
       ],
       more: true,
+      counts: { all: 115, shipped: 70, unshipped: 45 },
     });
     /* The cap is the server's, not a query parameter somebody can raise. */
     expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
@@ -383,7 +414,7 @@ describe("GET /api/feedback", () => {
   });
 
   it("says shipped only for a report whose note says shipped — not declined, not waiting, not unknown", async () => {
-    const row = (id: string) => ({ id, createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x" });
+    const row = (id: string) => ({ id, createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x", page: null });
     listAnswer = {
       reports: [row("spya-k3m9qt"), row("spya-dec1ne"), row("spya-wa1t00"), row("spya-unkn0w")],
       more: false,
@@ -413,6 +444,20 @@ describe("GET /api/feedback", () => {
       EARLIER_FEEDBACK_LIMIT,
     ]);
     expect(listOwners).toEqual([TEST_OWNER, TEST_OWNER, TEST_OWNER]);
+  });
+
+  it("counts every filter on every answer, by the same shipped ids the filter uses", async () => {
+    countAnswer = { all: 9, in: 4 };
+    for (const show of ["shipped", "unshipped", "all"]) {
+      const reply = await call(undefined, { method: "GET", path: `/api/feedback?show=${show}` });
+      expect((reply.body as { counts: unknown }).counts, show).toEqual({ all: 9, shipped: 4, unshipped: 5 });
+    }
+    const shipped = ["spya-k3m9qt", "spya-sh1pd2"];
+    expect(counted).toEqual([
+      { ids: shipped, owner: TEST_OWNER },
+      { ids: shipped, owner: TEST_OWNER },
+      { ids: shipped, owner: TEST_OWNER },
+    ]);
   });
 
   it("refuses a show it does not know, rather than passing the whole list off as filtered", async () => {
@@ -533,6 +578,7 @@ describe("POST /api/feedback", () => {
     const reply = await call(body);
     expect(reply.status).toBe(200);
     expect(reply.body.status).toBe("duplicate");
+    expect(notices).toEqual([]);
     /* Not mirrored. Feedback is not deduped by Sentry, so a retry that filed a
        second copy is a bug nobody would ever see. */
     expect(mirrored).toHaveLength(0);
@@ -545,6 +591,7 @@ describe("POST /api/feedback", () => {
     expect(reply.headers["retry-after"]).toBe("90");
     expect(String(reply.body.error)).toMatch(/\[fb-often\]/);
     expect(mirrored).toHaveLength(0);
+    expect(notices).toEqual([]);
   });
 
   it("answers 413 for a body past its own limit", async () => {
@@ -973,6 +1020,16 @@ describe("POST /api/feedback", () => {
     const calls = payload.api;
     /* Which endpoint, and not which article. The slug is a column already. */
     expect(calls[0]?.path).toBe("/api/chat/:x/live");
+  });
+
+  it("tells the admin about a newly created report, after the reader is answered", async () => {
+    const body = minimal();
+    const reply = await call(body);
+    expect(reply.status).toBe(201);
+    /* Started beside the Sentry mirror, not behind its acknowledgement. */
+    expect(notices).toEqual([
+      { id: body.id, ownerId: TEST_OWNER, afterResponse: true, mirroredYet: false },
+    ]);
   });
 
   it("mirrors a newly created report and records the event id", async () => {

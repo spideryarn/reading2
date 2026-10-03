@@ -1,5 +1,5 @@
 /* quiz.css — the Quiz sub-mode of Remember (QuizPanel.tsx), and the
-   Recall | Quiz switch that sits in the band's head beside the title.
+   Recall | Tutorial | Quiz switch that sits in the band's head beside the title.
 
    Its structural classes are the glossary band's rather than a second
    vocabulary for the same things, so **it must stay after glossary.css**. */
@@ -17,7 +17,7 @@
    follows the theme without a second palette to keep in step — /design and
    docs/project/design-css-overview.md. */
 
-/* Recall | Quiz, in the band's head beside the title. Two toggle buttons, and
+/* Recall | Tutorial | Quiz, in the band's head beside the title. Two toggle buttons, and
    the pressed one is filled — a pair where one is always on, so an outline-only
    treatment would leave a reader guessing which half they are looking at. */
 .remember-submode {
@@ -311,17 +311,19 @@
    centred 65ch box inside a wider cell whenever a band is open (prose.css §
    `.prose`), so a line drawn against the cell hung 36px left of the text, under
    the gutter's icons — the 260930i browser check. The same `max-width` and
-   `margin-inline: auto`, and the reading face, size **and weight** so that `ch`
-   means the same width here as there — Geist is variable and its weight axis
-   moves the zero's advance, which was the last 2.8px at 1280 (gutter.css says
-   the same of the gutter). The button sets its own type, weight included. */
+   `margin-inline: auto`, and the prose's face, size **and weight** so that `ch`
+   means the same width here as there. The face matters since 2026-10-02: the
+   prose is Source Serif while the UI base is Geist, a much larger difference
+   than the variable weight axis's old last 2.8px at 1280 (gutter.css says the
+   same of the gutter). The button sets its own UI face, size and weight, so
+   this geometry-only family changes no visible question text. */
 td.text .quiz-in-prose {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
   max-width: clamp(45ch, 90vw, var(--reading-measure));
   margin: 0.35rem auto 0.1rem;
-  font-family: var(--font-reading);
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   font-weight: var(--reading-weight);
   user-select: none;
@@ -350,4 +352,48 @@ td.text .quiz-in-prose-icon {
   flex: none;
   position: relative;
   top: 0.15em;
+}
+
+/* ------------------------------------------------------------ § share-pie ----
+   SharePie.tsx: a share of a whole as a small pie, the figure on its card.
+   Generic, but the quiz is its only user so far, so it lives here; move it to
+   its own sheet when a second mode draws one. Plan 261003e. */
+/* A 24px button round a 14px pie: the hit area a finger needs, with the
+   margin taking the extra 10px back so the row is no taller than the pie. */
+.share-pie {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -5px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-soft);
+  cursor: default;
+}
+.share-pie:focus-visible {
+  outline: 1px solid var(--highlight-text);
+  outline-offset: -2px;
+}
+.share-pie svg {
+  display: block;
+}
+/* The slice is the ink's soft grey rather than the row's faint one: at 14px
+   a faint slice on a faint track read as nearly nothing in the browser look. */
+.share-pie-whole {
+  fill: color-mix(in oklab, var(--ink-faint) 30%, transparent);
+}
+.share-pie-part {
+  fill: currentColor;
+}
+/* The tick-box and its pie wrap as one, so the pie never sits alone on a
+   line with nothing to say what it is a share of. */
+.quiz-only-read-what {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
 }

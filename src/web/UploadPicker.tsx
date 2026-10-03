@@ -374,7 +374,7 @@ export function UploadPicker({
                  be able to get to it without remembering where they were. */
               <a
                 href={transfer?.uploadId ? addUploadHref(transfer.uploadId) : undefined}
-                className="tw:text-foreground tw:hover:text-highlight"
+                className="tw:text-foreground tw:hover:text-highlight-text"
                 onClick={(e) => {
                   if (!transfer?.uploadId) return;
                   e.preventDefault();

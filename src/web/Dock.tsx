@@ -211,7 +211,8 @@ import {
 import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { BlockId, Comment } from "../types.js";
-import { type AskedQuestion, type DrawerEntry, orderDrawer, passageOf } from "./comment-nav.js";
+import { type AskedQuestion, type DrawerEntry, MARK_KIND_LABEL, commentKind, orderDrawer, passageOf } from "./comment-nav.js";
+import { HighlightDot } from "./HighlightSwatches.js";
 import { armActivationForMode, armActivationForSubMode } from "./activation.js";
 import { withSubMode, type SubMode } from "./sub-modes.js";
 /* **This direction only.** `CommandBar` deliberately imports nothing from this
@@ -274,6 +275,7 @@ import { isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
+import { DockQuickSearch } from "./DockQuickSearch.js";
 
 /**
  * **The experimental-features switch, as the bar sees it.**
@@ -1296,6 +1298,16 @@ export function fitSignature(
    * the reason `active` below is in the string, for the second axis.
    */
   margin = false,
+  /**
+   * **Whether the quick-search control is drawn** (plan 261002h,
+   * DockQuickSearch.tsx) — a 14rem box at rung 0 is the widest thing in the
+   * row. Which of its box and its ⚡ shows follows the rung (CSS) and `mode`
+   * (already here). The one thing this string cannot see is the box keeping
+   * its width while it has focus in Search mode; that only ever makes the row
+   * narrower when focus leaves, so the cost is a label dropped with room to
+   * spare until the next measure, never an overflow.
+   */
+  quickSearch = false,
 ): string {
   const shape = mode !== undefined && onMode ? "seg" : "links";
   const modes = visible.map((m) => m.mode).join(",");
@@ -1340,7 +1352,22 @@ export function fitSignature(
   const active = mode ?? "";
   return `${modes}|${shape}|${active}|${drawer ? "drawer" : "link"}|${count}|${
     variant ?? "none"
-  }|${feedback ? "fb" : "no-fb"}|${margin ? "margin" : "no-margin"}`;
+  }|${feedback ? "fb" : "no-fb"}|${margin ? "margin" : "no-margin"}|${quickSearch ? "qs" : "no-qs"}`;
+}
+
+/**
+ * **Does this bar get the quick-search control?** Only where `SearchBand` —
+ * the owner's band, which can ask — would answer it (plan 261002h, Sol F8): the
+ * reading view (`onMode`, so a band to open) of an article whose drawer is the
+ * owner's arm. A visitor's band is read-only, and the metadata page has no
+ * band at all. Reader.tsx § `case "search"` makes the same owner/visitor cut.
+ */
+export function hasQuickSearch(
+  view: Props["view"],
+  own: unknown,
+  onMode: Props["onMode"],
+): boolean {
+  return view === "article" && own !== null && onMode !== undefined;
 }
 
 /**
@@ -1457,13 +1484,13 @@ function useCommandBarChord(
  *  - Not over an open native `<dialog>`, and not once a handler nearer the
  *    press has `preventDefault`ed it.
  *
- * `preventDefault()` only when claimed. Reading view only (`enabled`): on the
- * metadata page there is nothing to toggle back to — plan 260929g,
- * assumption 3.
+ * `preventDefault()` only when claimed. **On the metadata page it goes back to
+ * the article**, as the button does there (`metadataHref`), since 2026-10-03;
+ * until then it stood down, "nothing to toggle back to" (plan 260929g,
+ * assumption 3).
  */
-function useMetadataChord(enabled: boolean, href: string): void {
+function useMetadataChord(href: string): void {
   useEffect(() => {
-    if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
       if (!isModChord(e, "Enter") || e.defaultPrevented) return;
       const focused = document.activeElement;
@@ -1474,7 +1501,7 @@ function useMetadataChord(enabled: boolean, href: string): void {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled, href]);
+  }, [href]);
 }
 
 /**
@@ -1757,6 +1784,7 @@ export function Dock({
       toggle,
       feedback,
       margin,
+      hasQuickSearch(view, isVisitor ? null : own, onMode),
     ),
   );
 
@@ -1837,9 +1865,18 @@ export function Dock({
   const commandBar = useCommandBarChord(!isVisitor, onPanel);
   /* One value for the Metadata button and its chord, so the two cannot send
      the reader to different places. Keyed on `view` rather than `onMode`, unlike
-     ⌘-K: a visitor's reading view draws the Metadata button too. */
-  const metadataHref = readHref(slug, search, "metadata");
-  useMetadataChord(view === "article", metadataHref);
+     ⌘-K: a visitor's reading view draws the Metadata button too.
+
+     **On the metadata page it points back at the article**, since 2026-10-03 —
+     Greg, spya-bpczdx: *"Tapping on Metadata mode in bottom bar when active
+     should close it"*, the feel a second press on a band has had since
+     261002g (`modePress`). The carried string already holds `?mode=`,
+     `?margin=` and `?at=`, so the reader lands where they were, in the mode
+     they came from. Not `history.back()`: arriving from a pasted link or the
+     shelf, that would leave the article altogether.
+     docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 2. */
+  const metadataHref = readHref(slug, search, view === "metadata" ? "article" : "metadata");
+  useMetadataChord(metadataHref);
   /* One value for the Help link and the command bar's Help row, for the same
      reason: two doors that open on different sections teach the reader that
      neither can be trusted. */
@@ -2062,7 +2099,7 @@ export function Dock({
             measures the row's scroll width against its client width and steps
             down by class (dock-fit.ts), so DOM order is not an input. What does
             change is which label is second on a narrow bar: rungs 1 and 2 drop
-            `.dock-home` and `.dock-feedback`, and only rung 3 sweeps every
+            `.dock-home` and `.dock-feedback`, and only rungs 3 and 4 sweep every
             `.dock-btn-label` — so `Commands` keeps its word **two rungs longer
             than the wordmark beside it**, and on a middling window the row
             begins with a wordless mark and the word *Commands*. Read off
@@ -2106,6 +2143,17 @@ export function Dock({
           />
         ) : (
           <DockModeLinks slug={slug} search={search} modes={visible} marked={marked} />
+        )}
+
+        {/* **Quick search, from anywhere** (plan 261002h): a box, or a ⚡ where
+            a box does not fit or is not wanted — DockQuickSearch.tsx. In the
+            bar's slack, between the modes and the article's other views. */}
+        {hasQuickSearch(view, isVisitor ? null : own, onMode) && (
+          <DockQuickSearch
+            slug={slug}
+            searching={mode === "search"}
+            onOpen={() => activateMode("search")}
+          />
         )}
 
         {/* **The three that are not modes, in one group**, so that running
@@ -2431,9 +2479,9 @@ const NOT_A_MODE = {
     how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
   },
   metadata: {
-    /* The chord in the Commands card's own format. Said on the metadata page
-       too, where it does not fire — hence "from the article". */
-    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it from the article",
+    /* The chord in the Commands card's own format. The same card on both
+       pages, so it says both directions (since 2026-10-03, plan 261003c). */
+    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it; either, pressed again, goes back to the article",
     /* **"Opening it spends nothing" — and the two wider claims that came
        before it were each false, a few hours apart.**
 
@@ -3818,7 +3866,7 @@ function DockExperimentalSwitch({
         {/* Visible, and one of three carriers — see the header. `aria-hidden`
             because the sentence it stands for is already in the description. */}
         {broken && (
-          <TriangleAlert className="tw:text-highlight" size={12} aria-hidden="true" />
+          <TriangleAlert className="tw:text-highlight-text" size={12} aria-hidden="true" />
         )}
       </button>
     </Tooltip>
@@ -4096,6 +4144,13 @@ function Questions({
           return (
           <li key={c.id}>
             <button type="button" className="dock-question" onClick={() => onOpen(c.id)}>
+              {/* Which of three it is, as the question rows above say theirs —
+                  SPIDERYARN-READING2-9H, plan 261002j. `commentKind`. */}
+              <span className="dock-question-kind">
+                {/* A coloured comment's colour, beside its kind — plan 261003e. */}
+                {c.colour && <HighlightDot colour={c.colour} />}
+                {MARK_KIND_LABEL[commentKind(c)]}
+              </span>
               {passage}
               {/* **The reader's own words beat the model's**, which is the whole
                   ordering principle of this feature — and the list read as broken

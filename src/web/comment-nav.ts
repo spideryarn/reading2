@@ -187,3 +187,75 @@ export function commentsByBlock(
   }
   return byBlock;
 }
+
+/**
+ * **What kind of mark a comment is**, in the reader's terms — Greg,
+ * SPIDERYARN-READING2-9H: *"a comment from the user that didn't want an AI chat
+ * response, or one that did want an AI chat response, or a question with AI chat
+ * response."*
+ *
+ * **What happened, not what was wanted.** Read off what is already stored,
+ * not a field of its own: *Also ask the AI* links the chat the reader then
+ * sends as `threadId`, and a comment from before 2026-08-28 carries the
+ * model's explanation attempt in place (`status` other than `none`) — so the
+ * label is the deliberately broad "+ AI", true whether the AI is answering,
+ * answered, failed, or replied in a chat rather than in place. A reader who
+ * ticked the box and closed the chat draft unsent, or whose chat failed before
+ * it existed, gets `comment`: that is what they ended up with. Storing the
+ * tick itself would be a column, and is deferred in the plan (GPT Sol, P1 on
+ * the plan). A `threadId` outlives a deleted conversation, so the label may
+ * name AI involvement whose conversation is gone; it still happened.
+ *
+ * A visitor's copy carries no `threadId` or `status` (public-types.ts), so an
+ * owner's comment reads to them as `comment-ai` only when it carries a legacy
+ * answer, as `comment` when it has words, and as `bookmark` when it has neither
+ * — less than the owner sees, never more.
+ *
+ * The question — the gutter's "?" or *Chat about this* — is not a comment at
+ * all but an `AskedQuestion`, and `askedQuestions` already leaves out the chats
+ * a comment points at, so the three never overlap.
+ * docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md.
+ */
+export type CommentKind = "bookmark" | "highlight" | "comment" | "comment-ai";
+export type MarkKind = CommentKind | "question";
+
+/**
+ * **`highlight`, since 2026-10-03**, is a wordless comment with a colour and no
+ * AI involvement (docs/plans/261003e-span-highlights-with-a-colour.md). The
+ * precedence is the order of the checks below, and it is deliberate (plan
+ * review S9): `comment-ai` > `comment` > `highlight` > `bookmark`. A coloured
+ * comment with words is a `comment`, and a coloured one that asked the AI is a
+ * `comment-ai` — the colour is how it looks, the words and the answer are what
+ * it says.
+ */
+export function commentKind(c: {
+  readonly body?: string | null | undefined;
+  readonly answer?: string | undefined;
+  readonly threadId?: string | undefined;
+  readonly status?: string | undefined;
+  readonly colour?: string | undefined;
+}): CommentKind {
+  if (c.threadId || c.answer || (c.status !== undefined && c.status !== "none")) return "comment-ai";
+  if (c.body) return "comment";
+  return c.colour ? "highlight" : "bookmark";
+}
+
+/**
+ * **Does this comment's mark carry the ✳?** Every kind but a highlight. The ✳
+ * marks *words* — something to open and read — and a wordless highlight has
+ * only its wash to show; anything with a note or an answer keeps it, as does an
+ * uncoloured bookmark, whose underline would otherwise be easy to miss. One
+ * rule with `commentKind`, so the margin, the drawer and the prose agree.
+ */
+export function earnsMarker(c: Parameters<typeof commentKind>[0]): boolean {
+  return commentKind(c) !== "highlight";
+}
+
+/** One label per kind, for the drawer and the margin alike. */
+export const MARK_KIND_LABEL: Record<MarkKind, string> = {
+  bookmark: "Bookmark",
+  highlight: "Highlight",
+  comment: "Comment",
+  "comment-ai": "Comment + AI",
+  question: "Question",
+};

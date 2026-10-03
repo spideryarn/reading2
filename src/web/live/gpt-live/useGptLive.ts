@@ -74,6 +74,7 @@
  *   asks a question.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { claimMicrophone, releaseMicrophone, type MicClaim } from "../../mic-lock.js";
 import { audioConstraint, defaultInputListed, deviceMissing, labelled, rememberedDevice } from "../../mic-devices.js";
@@ -93,7 +94,7 @@ import {
   startupMessage,
 } from "../session-shared.js";
 import { stallOf, type LiveStall } from "../stall.js";
-import type { LiveApi, LiveLine, LiveOptions, LivePhase, LivePointer, LiveToolRun } from "../useLiveConversation.js";
+import type { LiveApi, LiveLine, LiveOptions, LivePhase, LivePointer, LiveStep, LiveToolRun } from "../useLiveConversation.js";
 import { apiWiring } from "../wiring.js";
 import { DelegationLoop, type DelegationEffect } from "./delegations.js";
 import { GptLiveMeter, backendReport, voiceReport, type GptLiveUsageReport } from "./meter.js";
@@ -163,8 +164,29 @@ type RunTool = Extract<DelegationEffect, { type: "runTool" }>;
 
 const wordsIn = (text: string): number => text.split(/\s+/).filter(Boolean).length;
 
+/**
+ * **Tap to talk is not offered on this engine**, so its three actions do
+ * nothing and `talkMode` is always `hands-free`.
+ *
+ * It is OpenAI Realtime's push-to-talk: the browser turns that session's voice
+ * detector off and commits the audio buffer itself (plan 261003d). A GPT-Live
+ * session has no such events, and no detector this page can switch. Nothing
+ * shows the control either: it is offered beside the `open-turn` stall, which
+ * this hook never reports (`turnOpenSince: null` in `checkStall`).
+ */
+const notOffered = (): void => {};
+
 export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
   const [phase, setPhase] = useState<LivePhase>("idle");
+  /**
+   * Which connecting step this call is on, for LiveStatus. This engine's order
+   * is not Realtime's: the microphone comes first, and one request to our
+   * server is both the ticket and the connection — so there is no `ticket`
+   * step, and `transport` is that request.
+   */
+  const [step, setStep] = useState<LiveStep | null>(null);
+  /** A reconnect is waiting for its hang-up, so the panel can offer to cancel it. */
+  const [reconnectPending, setReconnectPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lines, setLines] = useState<LiveLine[]>([]);
   const [hasUnsavedLines, setHasUnsavedLines] = useState(false);
@@ -231,6 +253,12 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
   const handedOff = useRef(new Set<string>());
   /** Lines kept from an earlier call on this thread whose words could not be saved. */
   const kept = useRef<LiveLine[]>([]);
+  /**
+   * Which start of this hook the segmenter's lines belong to — `LiveLine.session`.
+   * A kept line carries the number of the call it was said in, so the thread
+   * shows it before this call's words (../tail.ts).
+   */
+  const sessionNo = useRef(0);
   const shown = useRef<LiveLine[]>([]);
   const unsaved = useRef(false);
 
@@ -285,13 +313,26 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     }
   }, []);
 
-  /** The transcript on screen: words kept from a failed save, then every segment not yet handed over. */
-  const refreshLines = useCallback(() => {
+  /**
+   * The transcript on screen: words kept from a failed save, then every segment not yet handed over.
+   *
+   * `now` is for the handoff and its undo only, and is the Realtime hook's
+   * `flushLines`: the live words are drawn in the thread (../LiveTail.tsx), so
+   * taking an exchange's lines out must render in the same commit as the chat
+   * controller's provisional rows for it going in, or there is a frame with
+   * both copies or neither. The rule at both call sites is the same as there:
+   * change the controller, then this.
+   */
+  const refreshLines = useCallback((now = false) => {
     shown.current = [
       ...kept.current,
-      ...segmenter.current.lines().filter((line) => !handedOff.current.has(line.id)),
+      ...segmenter.current.lines()
+        .filter((line) => !handedOff.current.has(line.id))
+        .map((line) => ({ ...line, session: sessionNo.current })),
     ];
-    setLines(shown.current);
+    const next = shown.current;
+    if (now) flushSync(() => setLines(next));
+    else setLines(next);
   }, []);
 
   const send = useCallback((msg: unknown) => {
@@ -388,8 +429,9 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
         const thread = boundThread.current;
         if (!thread) return;
         for (const id of exchange.itemIds) handedOff.current.add(id);
-        refreshLines();
-        const landed = await speak({
+        /* `speak` installs its provisional rows before any network wait; the
+           live copy then leaves in the same commit. See `refreshLines`. */
+        const landing = speak({
           threadId: thread,
           question: exchange.question,
           answer: exchange.answer,
@@ -401,11 +443,14 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
           ...(exchange.interrupted ? { interrupted: true } : {}),
           engine: "gpt-live",
         });
+        refreshLines(true);
+        const landed = await landing;
         if (!landed.ok) {
           /* Back on screen. The segmenter keeps every segment for the life of
-             the call, so un-hiding them is all it takes. */
+             the call, so un-hiding them is all it takes. The controller has
+             already taken its provisional rows out by the time it says so. */
           for (const id of exchange.itemIds) handedOff.current.delete(id);
-          refreshLines();
+          refreshLines(true);
           unsaved.current = true;
           setHasUnsavedLines(true);
           setError(landed.error);
@@ -796,6 +841,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     const mine = epoch.current;
 
     setPhase("connecting");
+    setStep("microphone");
     setError(null);
     setSeen({});
     /* Words a failed save left on screen stay, if this is the same thread. */
@@ -809,6 +855,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     setHasUnsavedLines(preserve);
     handedOff.current = new Set();
     startedThread.current = o.threadId;
+    sessionNo.current += 1;
     segmenter.current = new Segmenter();
     loop.current = new DelegationLoop();
     refreshLines();
@@ -1049,6 +1096,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
 
         /* **Three: our server opens the session** and returns OpenAI's answer.
            Last, because this is the step that is billed. */
+        setStep("transport");
         const ticket = await wiring.session(slug, o.threadId, { sdp: offer.sdp }, abort.signal);
         const transport = {
           liveConnected: (id: string, keepalive: boolean) => wiring.liveConnected(id, keepalive),
@@ -1093,6 +1141,8 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
 
         await conn.setRemoteDescription({ type: "answer", sdp: ticket.sdp });
         if (stale()) return abandon();
+        /* Until `session.started` and the tail check let the microphone open. */
+        setStep("seeding");
       } catch (err) {
         /* A stale attempt reports nothing and tears down nothing shared. */
         if (stale()) return abandon();
@@ -1203,16 +1253,19 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     void stop().then(() => {
       if (reconnecting.current !== mine) return;
       reconnecting.current = 0;
+      setReconnectPending(false);
       if (failed.current) return;
       start({ threadId: thread, microphone });
     });
     reconnecting.current = mine;
+    setReconnectPending(true);
   }, [stop, start]);
 
   /** The hang-up callers see: the reader's own stop also cancels a waiting reconnect. */
   const hangUp = useCallback((): Promise<void> => {
     if (reconnecting.current !== 0) {
       reconnecting.current = 0;
+      setReconnectPending(false);
       endedBecause.current = "reader";
     }
     return stop();
@@ -1220,6 +1273,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
 
   return {
     phase,
+    step: phase === "connecting" ? step : null,
     error,
     lines,
     hasUnsavedLines,
@@ -1244,5 +1298,10 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     say,
     stall,
     reconnect,
+    reconnecting: reconnectPending,
+    talkMode: "hands-free",
+    enterTapToTalk: notOffered,
+    talk: notOffered,
+    doneTalking: notOffered,
   };
 }

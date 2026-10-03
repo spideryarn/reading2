@@ -328,13 +328,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   remember: {
     description:
-      "Say what you took from this and find out where it holds up — not saved notes or flashcards",
-    how: "Its Recall half waits on you: nothing runs until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. Its replies point back to the passages they use.",
+      "Work the piece into memory through Recall, a short Tutorial or a Quiz — not saved notes or flashcards",
+    how: "Recall waits on you: nothing runs until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. Its replies point back to the passages they use. Tutorial waits on you too, then takes short turns: a little of the piece, then a question for you to answer in your own words.",
     /* `recall` is this mode's own default sub-mode, so the word lands where the
        reader expects.
 
        **`quiz` is deliberately absent**, and it is the clearest example of the
-       rule these aliases follow. Quiz is Remember's *other* sub-mode, and
+       rule these aliases follow. Quiz is one of Remember's *other* sub-modes, and
        opening the mode lands on Recall (`params.ts`), so `quiz` here would name
        a destination and then not go there. GPT Sol found this, 2026-09-07.
        Since 2026-10-01 a command *can* encode `{ mode: "remember", remember:

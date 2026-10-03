@@ -329,12 +329,36 @@ describe("opening the call", () => {
     /* The channel is open and the answer is set, and still nothing may be heard. */
     expect(mic?.enabled).toBe(false);
     expect(h.get().phase).toBe("connecting");
+    /* What LiveStatus's step list reads. The answer is set, so the wait left is
+       for `session.started`. */
+    expect(h.get().step).toBe("seeding");
     expect(kinds()).toEqual(["connected"]);
 
     await deliver(STARTED);
     expect(mic?.enabled).toBe(true);
     expect(h.get().phase).toBe("live");
+    expect(h.get().step).toBeNull();
     expect(h.get().threadId).toBe(THREAD);
+    h.unmount();
+  });
+
+  /* `LiveApi` is shared with the Realtime hook, whose tap to talk is OpenAI
+     Realtime's push-to-talk. This engine has no such thing, so the fields must
+     say "not offered" rather than be missing, and the actions must do nothing —
+     LiveStatus draws Talk and Done from `talkMode` alone. */
+  it("does not offer tap to talk, and its actions change nothing", async () => {
+    const h = await live({ wiring: wiringFor(ticketWith()), tailNow: () => TAIL });
+    const before = sent.length;
+    act(() => {
+      h.get().enterTapToTalk();
+      h.get().talk();
+      h.get().doneTalking();
+    });
+    await pass();
+    expect(h.get().talkMode).toBe("hands-free");
+    expect(h.get().reconnecting).toBe(false);
+    expect(sent.length).toBe(before);
+    expect(mic?.enabled).toBe(true);
     h.unmount();
   });
 
@@ -640,6 +664,13 @@ describe("a write that is refused", () => {
       "The keeper left in 1987.",
       "Second question, about the lamp.",
       "The lamp is original.",
+    ]);
+    /* The thread groups by these (src/web/live/tail.ts): two exchanges of one call. */
+    expect(h.get().lines.map((l) => [l.exchange, l.seq, l.session])).toEqual([
+      ["gpt-live-0", 0, 1],
+      ["gpt-live-0", 0, 1],
+      ["gpt-live-1", 1, 1],
+      ["gpt-live-1", 1, 1],
     ]);
     expect(metered.at(-1)).toMatchObject({ kind: "close", reason: "append-refused" });
     h.unmount();

@@ -29,7 +29,8 @@ the longer you have read there), which he asked about on 2026-09-29 (`spya-qdjds
 tooltip then — that nobody could reach: the line was drawn 2px outside the box that carries the
 tooltip, so pointing at the line itself found nothing. Measured in the browser, then fixed: the line
 now sits inside it. The one other new line beside some blocks, Annotations' question rule, now has a
-tooltip too. Still nothing on a tap (deferred, as before). If he meant a third line, which side of
+tooltip too. Still nothing on a tap (deferred, as before; built on 2026-10-03, in
+[261001_1029](261001_1029-a-tap-opens-structure-row-cards-and-the-reading-time-card.md)). If he meant a third line, which side of
 the text it was on would find it.
 
 **SPIDERYARN-READING2-87** (`spya-b23bqq`), build `4de26073`, on `/admin/feedback`:

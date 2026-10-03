@@ -202,6 +202,7 @@ function toJob(row: Row): Job {
     ...(row.url !== null && { url: row.url }),
     ...(row.title !== null && { title: row.title }),
     ...(row.profile !== null && { profile: row.profile }),
+    ...(row.illustrationNote !== null && { illustrationNote: row.illustrationNote }),
     ...(row.reset !== null && {
       reset: { ...row.reset, regenerate: row.reset.regenerate.map((n) => currentStepName(n) as StepName) },
     }),
@@ -617,6 +618,7 @@ async function enqueueIn(
       url: job.url ?? null,
       title: job.title ?? null,
       profile: job.profile ?? null,
+      illustrationNote: job.illustrationNote ?? null,
       reset: job.reset ?? null,
       uploadId: job.upload?.id ?? null,
       uploadFilename: job.upload?.filename ?? null,

@@ -13,7 +13,10 @@ import {
   arcAt,
   headPath,
   layoutNotes,
+  type MarginEntry,
 } from "../src/web/marginalia/notes.js";
+
+const entryId = (e: MarginEntry) => (e.as === "question" ? e.asked.id : e.comment.id);
 
 const ids = ["spya-aaaaa1", "spya-aaaaa2", "spya-aaaaa3", "spya-aaaaa4", "spya-aaaaa5", "spya-aaaaa6"];
 /* The first block is a heading, as a part's first block usually is. */
@@ -312,7 +315,63 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
       { id: "m3", blockId: "spya-aaaaa2", createdAt: "t", body: "a referee note", status: "none", criterionId: "k" },
     ] as unknown as MarginComment[];
     const here = marginaliaNotes(null, quoted, null, { comments }).get("spya-aaaaa2") ?? [];
-    expect(here[0]?.kind === "comment" && here[0].items.map((c) => c.id)).toEqual(["m1"]);
+    expect(here[0]?.kind === "comment" && here[0].items.map(entryId)).toEqual(["m1"]);
+  });
+
+  /* Plan 261003e, review S9: a wordless highlight has nothing to say in the
+     margin, as a bare bookmark has not — but a coloured comment with words, or
+     a coloured one that asked the AI, still does. */
+  it("leaves a wordless highlight out, and keeps coloured comments that say something", () => {
+    const comments = [
+      { id: "h1", blockId: "spya-aaaaa2", createdAt: "t", status: "none", colour: "yellow" },
+      { id: "h2", blockId: "spya-aaaaa2", createdAt: "t", body: "why", status: "none", colour: "green" },
+      { id: "h3", blockId: "spya-aaaaa2", createdAt: "t", status: "none", colour: "pink", threadId: "t7" },
+    ] as unknown as MarginComment[];
+    const here = marginaliaNotes(null, quoted, null, { comments }).get("spya-aaaaa2") ?? [];
+    expect(here[0]?.kind === "comment" && here[0].items.map((e) => [e.as, entryId(e)])).toEqual([
+      ["comment", "h2"],
+      ["comment-ai", "h3"],
+    ]);
+  });
+
+  /* *Save & ask* with an empty box is allowed (AnnotateDialog): no words, no
+     answer, but a conversation. It is not a bare bookmark. GPT Sol, plan 261002j. */
+  it("keeps a wordless comment that asked the AI", () => {
+    const comments = [
+      { id: "m4", blockId: "spya-aaaaa2", createdAt: "t", status: "none", threadId: "t4" },
+    ] as unknown as MarginComment[];
+    const here = marginaliaNotes(null, quoted, null, { comments }).get("spya-aaaaa2") ?? [];
+    expect(here[0]?.kind === "comment" && here[0].items.map((e) => [e.as, entryId(e)])).toEqual([
+      ["comment-ai", "m4"],
+    ]);
+  });
+
+  /* SPIDERYARN-READING2-9H: each says which of three it is, and the questions
+     the reader asked from a passage sit with the comments on it. Plan 261002j. */
+  it("marks each comment's kind, and puts the questions asked here in the same line", () => {
+    const comments = [
+      { id: "m1", blockId: "spya-aaaaa2", createdAt: "t", body: "mine", status: "none" },
+      { id: "m2", blockId: "spya-aaaaa2", createdAt: "t", body: "and ask", status: "none", threadId: "t9" },
+    ] as unknown as MarginComment[];
+    const asked = [
+      { id: "t1", blockId: "spya-aaaaa2", createdAt: "t" },
+      { id: "t2", blockId: "spya-aaaaa4", createdAt: "t", quote: "q", start: 0 },
+      { id: "t3", blockId: "spya-zzzzzz", createdAt: "t" },
+    ];
+    const notes = marginaliaNotes(null, quoted, null, { comments, asked });
+    const here = notes.get("spya-aaaaa2") ?? [];
+    expect(here).toHaveLength(1);
+    expect(here[0]?.kind === "comment" && here[0].items.map((e) => [e.as, entryId(e)])).toEqual([
+      ["comment", "m1"],
+      ["comment-ai", "m2"],
+      ["question", "t1"],
+    ]);
+    const there = notes.get("spya-aaaaa4") ?? [];
+    expect(there[0]?.kind === "comment" && there[0].items.map((e) => [e.as, entryId(e)])).toEqual([
+      ["question", "t2"],
+    ]);
+    /* A question about a block this version no longer has is not drawn. */
+    expect([...notes.keys()].sort()).toEqual(["spya-aaaaa2", "spya-aaaaa4"]);
   });
 
   it("orders the kinds on one block: question, idea, FAQ, Debate, citations, the reader's own", () => {

@@ -29,6 +29,22 @@ in this directory records which, and the line comes off.
   [261001s § review item 6](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md) ·
   [note](261001_1035-past-imports-say-more-and-why-you-are-reading-says-if-saved.md)
 
+- 2026-10-02 · SPIDERYARN-READING2-A8 (report spya-nnr8ha) · a text
+  size setting on /profile: body text alone follows one variable, but headings stay fixed, so it is
+  either about ten CSS rules re-expressed as one scale (B, ~a day), body-only with an inverted
+  hierarchy (A, not recommended), or not now, using browser zoom (C) ·
+  [261003a § The question for Greg](../plans/261003a-reading-text-size-setting.md) ·
+  [note](261002_2036-a-reading-text-size-setting.md)
+
+- 2026-09-30 · report spya-ntyes8 (no Sentry sign-in on this run; short id to be added by the next
+  sweep) · better shelf topic pills: let GPT-6 Luna name the topics and file the articles, instead
+  of only scoring phrases the articles use. It won all six synthetic shelves against today's list;
+  about a thirtieth of a penny per article if the topics are re-thought each time the shelf grows
+  by a tenth. Three questions: try it on your own shelf first? replace the pills or sit in front of
+  them? and when a newly added article gets its topics ·
+  [261003f § The questions for Greg](../plans/261003f-shelf-topics-named-by-a-model-as-concepts-not-phrases.md) ·
+  [note](260930_0715-shelf-topics-as-concepts-topic-model-or-clustering.md)
+
 ## Attempted abuse, not yet seen by Greg
 
 A different thing from the list above: reports that tried to get something nefarious out of an agent,
@@ -132,7 +148,7 @@ fine; the notes carry what would change each one.
 |---|---|
 | [30](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-30) — maths in PDFs | **Build it** (`qi-njx3xh37`): Greg asked for the maths, and this is the half that reaches most PDFs. [260924b](../plans/260924b-pdf-transcriber-writes-maths-as-tex.md) — on `dev` at `42cb3bf5`. Greg, 2026-09-24: *"ideally we would have some general way of representing LaTeX that might also be useful for HTML imports too"* — delimited TeX in block text is that representation, and HTML imports are its next stage in the same plan |
 | [3J](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3J) — Tweets writes on open | **Keep writing on open**: it is what Greg asked for, and the unasked cases are one run per article per page load on the reader's own article. **No spend cap for now** — Greg, 2026-09-24, on that recommendation: *"yes, approved"*. |
-| [42](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-42) — street noise in the live conversation | **Wait for data**: each of the three changes alters every live conversation, and the first Sentry `LiveStall-*` events will say whether noise is the stall that happens. Nothing built. |
+| [42](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-42) — street noise in the live conversation | **Wait for data**: each of the three changes alters every live conversation, and the first Sentry `LiveStall-*` events will say whether noise is the stall that happens. Nothing built. **The data came, 2026-10-03:** the one event was `open-turn`, and background voices reproduced it against OpenAI's server, so the `open-turn` notice now offers Tap to talk for that call only. [261003d](../plans/261003d-tap-to-talk-when-noise-holds-the-live-turn-open.md) |
 | [3D](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3D) + [3F](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3F) — enforcing provenance | **Leave it**: enforcing would end streaming and add a model call per turn for a case the evals show rarely, and the logging step would write to logs nobody reads. Nothing built. |
 | [3C](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-3C) — an outdated quote list | **Offer *Choose them again* on an outdated list**: it is the one state where Find more provably cannot help, and Greg's 2026-09-11 removal was about current lists. [260924d](../plans/260924d-choose-them-again-on-an-outdated-quote-list.md) — on `dev` at `8029714d` |
 | 3Y follow-up — chat links on an iPad | **Leave them opening on the first tap**: they are tapped on purpose, print their real host, and their card has no fetched preview. [note](260912_1209-ipad-link-tap-opens-the-page-instead-of-the-card.md) |

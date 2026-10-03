@@ -2,14 +2,12 @@
  * Reading view styles.
  *
  * The palette is NOT defined here — it comes from ../../styles/tokens.css,
- * lifted from the original Spideryarn app. Spideryarn orange, and — since
- * 2026-08-24, Greg's call — dark only: an all-but-black page, off-white text,
- * the orange untouched. No toggle. See
- * docs/project/original-version/overview.md § "Decision: the palette" and
- * docs/project/web-client.md § "Dark mode".
+ * lifted from the original Spideryarn app. Spideryarn orange remains the
+ * brand; the profile's Light / Dark / System setting chooses the surfaces.
+ * See docs/project/web-client.md § "Appearance".
  *
  * This file previously carried an independently-grown warm-brown palette with a
- * dark mode of its own. Both are gone: one palette, one source, one theme.
+ * dark mode of its own. Both are gone: one palette source, two appearances.
  *
  * WHERE THIS FILE SITS IN THE CASCADE. It is not imported by main.tsx. It is
  * imported by tailwind.css, as `@import "./styles.css" layer(app)`, so every
@@ -42,6 +40,7 @@
 @import "./styles/prose-hover-card.css";
 @import "./styles/footnotes.css";
 @import "./styles/dock-fit.css";
+@import "./styles/dock-quick-search.css";
 @import "./styles/search.css";
 @import "./styles/referee.css";
 @import "./styles/summary.css";

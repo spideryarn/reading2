@@ -313,3 +313,27 @@ Experimental off, nothing a reader sees has changed except the Realtime prompt.
 - 2026-10-03 — Sol plan review: build with the P0–P1 changes. F1–F9 all taken, except that pairs
   stay the stored shape (see "Passed over" under fragments). R2 receipts and R8 acoustics: Sol
   agrees neither costs a stage.
+- 2026-10-03 — merged `origin/dev`, which had landed
+  [261002j](261002j-live-voice-chat-cleanup.md) (low reasoning effort, a terser `LIVE_SYSTEM`, live
+  words in the thread, one status line, fewer controls) and
+  [261003d](261003d-tap-to-talk-when-noise-holds-the-live-turn-open.md) (tap to talk). What was
+  decided at each conflict:
+  - **`LIVE_SYSTEM` is dev's.** It is newer and was measured. Stage 1's preamble paragraph and
+    unclear-audio section are dropped: dev's WHEN TO THINK already says both, in fewer words. The
+    one Stage 1 rule kept is the language bullet, reworded to dev's length. Sol's C7 qualification
+    ("first sentence after any tool preamble") went with the paragraph it qualified.
+  - **`useLiveConversation.ts` is dev's behaviour**, with the lift into `session-shared.ts` kept;
+    dev had changed none of the lifted constants or helpers. Tap to talk's constants stay in the
+    Realtime hook.
+  - **`LiveApi` grew six fields on dev**, and `useGptLive` answers each: `step` (microphone, then
+    transport, then seeding — this engine has no ticket step), `reconnecting`, and tap to talk as
+    not offered (`talkMode` is always `hands-free`; it is Realtime's push-to-talk, and the
+    `open-turn` stall that offers it is one this hook never reports). `LiveLine` grew `exchange`,
+    `session` and `seq`; the `Segmenter` now says which exchange a line is in, and the hook hands
+    lines over in one commit with the chat rows, as the Realtime hook does.
+  - **`LiveButton` is dev's one button.** The microphone-setup select moved to LiveStatus's
+    Advanced on dev. The engine choice stays beside the button, because Advanced exists only
+    during and after a call and the engine is chosen before one.
+  - **Migrations**: dev's five, then ours as `idx` 127. Disjoint tables, so our snapshot was
+    hand-merged onto dev's last one (database.md § When both are applied and disjoint), keeping its
+    `id`; `db:generate -- --allow-empty` reports no schema changes. The `.sql` is untouched.

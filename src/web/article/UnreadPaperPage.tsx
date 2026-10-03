@@ -141,7 +141,7 @@ export function UnreadPaperPage({
           {doi && (
             <li className="tw:break-words">
               DOI{" "}
-              <a href={doi} target="_blank" rel="noreferrer noopener" className="tw:text-highlight">
+              <a href={doi} target="_blank" rel="noreferrer noopener" className="tw:text-highlight-text">
                 {paper.doi}
               </a>
             </li>
@@ -151,7 +151,7 @@ export function UnreadPaperPage({
               origin would be stored XSS — so a web page gets no link. */}
           {paper.kind === "pdf" && (
             <li>
-              <SourceLink slug={paper.slug} className="tw:cursor-pointer tw:bg-transparent tw:border-0 tw:p-0 tw:text-highlight tw:underline">
+              <SourceLink slug={paper.slug} className="tw:cursor-pointer tw:bg-transparent tw:border-0 tw:p-0 tw:text-highlight-text tw:underline">
                 Open the PDF
               </SourceLink>
               {paper.filename && (
@@ -177,7 +177,7 @@ function Steps({ job }: { job: Job }) {
           {step.status === "running" ? (
             <LoaderCircle size={12} className="cmt-spinner" aria-hidden="true" />
           ) : step.status === "done" || step.status === "skipped" ? (
-            <Check size={12} aria-hidden="true" className="tw:text-highlight" />
+            <Check size={12} aria-hidden="true" className="tw:text-highlight-text" />
           ) : (
             <Circle size={12} aria-hidden="true" />
           )}

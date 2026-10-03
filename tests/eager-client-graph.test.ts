@@ -472,6 +472,12 @@ const SHARED_WITH_READER = [
      it in. */
   "src/billing-plan.ts",
   "src/block-policy.ts",
+  /* Arrived 2026-10-03 with the Light / Dark / System choice (plan 261003e).
+     It is eager on purpose: main.tsx starts it before the first render, so the
+     page follows the OS and other tabs from the start. /design reaches it for
+     `useTheme`, to remeasure its swatches when the theme changes. It imports
+     only React, which the reader already has, so the shared edge costs nothing. */
+  "src/web/appearance.ts",
   "src/feedback-payload.ts",
   "src/html.ts",
   "src/ids.ts",
@@ -527,6 +533,15 @@ const SHARED_WITH_READER = [
   "src/web/ModeSurface.tsx",
   "src/web/SettingsSection.tsx",
   "src/web/ShelfEntry.tsx",
+  /* Arrived 2026-10-03 with the reader's own tags (plan 261003d), by the
+     second zero-cost route: `ShelfEntry.tsx` (already here) draws every card's
+     tags and their editor, so the editor, its API module and the spelling rules
+     are in the reader's shelf closure whatever the admin routes do. Small, and
+     importing nothing the reader lacks. */
+  "src/web/ShelfTags.tsx",
+  "src/web/TagEditor.tsx",
+  "src/web/article-tags.ts",
+  "src/tags.ts",
   "src/web/TitleEditor.tsx",
   "src/web/Tooltip.tsx",
   "src/web/build-stamp.ts",
@@ -564,6 +579,11 @@ const SHARED_WITH_READER = [
      follows it in for `StreamStalled`. Plan 260924a § Stage 2c. */
   "src/web/lib/describe-failure.ts",
   "src/web/lib/api.ts",
+  /* Arrived 2026-10-03 the same way: `lib/api.ts` counts every write it sends
+     (the article preload's staleness check, plan 261003d), and the count is
+     a forty-line module of its own so that api.ts and the preload do not
+     import each other. Nothing in it is admin-only. */
+  "src/web/lib/writes.ts",
   "src/web/lib/offline-store.ts",
   /* Arrived 2026-09-24 as the second predicted case: `lib/api.ts`, already
      here, gained an import of it — `HttpError` extends its `ReaderFacingError`.

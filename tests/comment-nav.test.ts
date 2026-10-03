@@ -7,7 +7,10 @@
 import { describe, expect, it } from "vitest";
 import type { Comment } from "../src/types.js";
 import {
+  MARK_KIND_LABEL,
+  commentKind,
   commentsByBlock,
+  earnsMarker,
   orderComments,
   passageOf,
   positionOf,
@@ -217,5 +220,54 @@ describe("commentsByBlock", () => {
     // dropping it; the grouping must not quietly re-introduce the drop.
     const lost = comment("spya-000005", "spya-nowhere", 0);
     expect(commentsByBlock([lost], blocks).get("spya-nowhere")).toHaveLength(1);
+  });
+});
+
+/* SPIDERYARN-READING2-9H: every comment says which of three it is.
+   docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md. */
+describe("commentKind", () => {
+  it("tells a bookmark, a plain comment and one that asked the AI apart", () => {
+    expect(commentKind({ status: "none" })).toBe("bookmark");
+    expect(commentKind({ status: "none", body: "mine" })).toBe("comment");
+    expect(commentKind({ status: "none", body: "mine", threadId: "t1" })).toBe("comment-ai");
+    expect(commentKind({ status: "none", threadId: "t1" })).toBe("comment-ai");
+    /* A comment from before 2026-08-28 carries its answer in place. */
+    expect(commentKind({ status: "done", answer: "because" })).toBe("comment-ai");
+    expect(commentKind({ status: "error" })).toBe("comment-ai");
+    /* A visitor's copy: no status, no threadId. */
+    expect(commentKind({})).toBe("bookmark");
+    expect(commentKind({ body: "theirs" })).toBe("comment");
+    expect(commentKind({ body: "theirs", answer: "an answer" })).toBe("comment-ai");
+  });
+
+  /* Plan 261003e, review S9: comment-ai > comment > highlight > bookmark. A
+     colour is how a comment looks; the words and the answer are what it says. */
+  it("calls a wordless coloured comment a highlight, and nothing else one", () => {
+    expect(commentKind({ status: "none", colour: "yellow" })).toBe("highlight");
+    expect(commentKind({ status: "none", colour: "yellow", body: "mine" })).toBe("comment");
+    expect(commentKind({ status: "none", colour: "yellow", threadId: "t1" })).toBe("comment-ai");
+    expect(commentKind({ status: "none", colour: "yellow", body: "mine", threadId: "t1" })).toBe(
+      "comment-ai",
+    );
+    expect(commentKind({ colour: "pink", answer: "an answer" })).toBe("comment-ai");
+    /* A visitor's copy: no status, but a colour crosses. */
+    expect(commentKind({ colour: "green" })).toBe("highlight");
+  });
+
+  it("gives every kind but a wordless highlight the ✳", () => {
+    expect(earnsMarker({ status: "none", colour: "yellow" })).toBe(false);
+    expect(earnsMarker({ status: "none" })).toBe(true);
+    expect(earnsMarker({ status: "none", colour: "yellow", body: "mine" })).toBe(true);
+    expect(earnsMarker({ status: "none", colour: "yellow", threadId: "t1" })).toBe(true);
+  });
+
+  it("has one label per kind, the question's included", () => {
+    expect(MARK_KIND_LABEL).toEqual({
+      bookmark: "Bookmark",
+      highlight: "Highlight",
+      comment: "Comment",
+      "comment-ai": "Comment + AI",
+      question: "Question",
+    });
   });
 });

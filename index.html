@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <!-- `viewport-fit=cover` lets the document use the whole physical screen —
@@ -126,9 +126,32 @@
          product name today and a page title tomorrow — see page-titles.md. -->
     <meta name="apple-mobile-web-app-title" content="Spideryarn" />
     <meta name="theme-color" content="#0a0a0a" />
-    <!-- Dark only, and said here as well as in tokens.css so the browser paints its
-         canvas dark before the stylesheet loads — otherwise a white flash. -->
+    <!-- Said here as well as in tokens.css so the browser paints its canvas in
+         the right colour before the stylesheet loads — otherwise a flash. Dark
+         is the default; the script below rewrites both metas and `data-theme`
+         for a reader who chose Light, or System on a light OS. -->
     <meta name="color-scheme" content="dark" />
+    <!-- **The reader's appearance, before first paint.** A second copy of
+         src/web/appearance.ts § resolveTheme, because it has to run before any
+         module does; tests/appearance.test.ts runs this exact script and checks
+         the two agree. Same key, same default (dark), same theme colours. -->
+    <script id="appearance-boot">
+      (function () {
+        var choice = null;
+        try { choice = localStorage.getItem("spya.appearance"); } catch (e) {}
+        if (choice !== "system" && choice !== "light" && choice !== "dark") choice = "dark";
+        var theme = choice;
+        if (choice === "system") {
+          var dark = typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches;
+          theme = dark ? "dark" : "light";
+        }
+        document.documentElement.setAttribute("data-theme", theme);
+        var scheme = document.querySelector('meta[name="color-scheme"]');
+        if (scheme) scheme.setAttribute("content", theme);
+        var tc = document.querySelector('meta[name="theme-color"]');
+        if (tc) tc.setAttribute("content", theme === "light" ? "#fafafa" : "#0a0a0a");
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

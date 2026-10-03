@@ -15,7 +15,12 @@
  *
  * Three rules hold across all of them.
  *
- * **Dark ground, unconditionally.** Every value here is picked against
+ * **Each palette against its own ground.** The `:root` block is the dark theme
+ * and the default; the `:root[data-theme="light"]` block at the end is the same
+ * names for the light one (since 2026-10-03 — docs/project/web-client.md
+ * § Appearance), and tests/colour-scales.test.ts holds each to its own page.
+ * What follows is the dark block's rule, and the light block's note says how it
+ * turns over. Every value here is picked against
  * `--background` (`oklch(0.145 0 0)`), which is near-black, and several of them
  * are lifted well above their published lightness because of it. A scale
  * designed for paper puts its quietest colour at white; here the quietest
@@ -469,4 +474,199 @@
     --hue-29: rgb(var(--hue-29-rgb));
     --hue-30: rgb(var(--hue-30-rgb));
     --hue-31: rgb(var(--hue-31-rgb));
+}
+
+/* ======================================================================
+   LIGHT — the same names, for `data-theme="light"` (src/web/appearance.ts),
+   since 2026-10-03. The ground is `oklch(0.985 0 0)`, about #fafafa.
+
+   **"Dark ground, unconditionally" at the top of this file is the rule for
+   the block above, and this block is the same rule turned over.** Every value
+   here is picked against the light page, and the property that matters is the
+   same one: the quietest value sits nearest the page and the loudest furthest
+   from it. On paper that means quiet is *light*, so two of the ramps run the
+   other way up here, and the diverging scales pivot on a light neutral — which
+   is what their published sources did all along.
+
+   Only the `-rgb` triplets and the plain `--heat-*` hexes are redefined. The
+   `--cat-N`, `--vir-N`, `--div-N` and `--hue-N` aliases above are written as
+   `rgb(var(--…-rgb))` and follow on their own; repeating them here would be
+   sixty chances to drift. `tests/colour-scales.test.ts` reads this block
+   separately from the dark one and measures each against its own page.
+   ====================================================================== */
+:root[data-theme="light"] {
+    /* ------------------------------------------------------------------
+       CATEGORICAL. **Back towards the published Okabe–Ito**, which was drawn
+       for paper. The rule is one line: the published colour wherever it
+       reaches 3:1 against the page (WCAG's floor for a mark that is not
+       text), and otherwise the same OKLCH hue and chroma darkened to the
+       lightest value that does. Three survive unchanged; four do not, and
+       of those yellow pays most — #F0E442 is 1.3:1 on this page, a mark
+       nobody can see, and at 3:1 it is an olive. That is the published
+       palette's own weakness on white rather than a choice made here.
+
+       What that costs: Okabe–Ito's lightness spread, the dichromat's second
+       channel, is narrower here (L 0.53–0.66 against 0.66–0.90 on dark),
+       because 3:1 caps how light any of them can be. The criterion printed
+       beside every dot is still the real carrier.
+
+       The extended eight keep their hues and their lightness *relative to
+       each other*: all eight move down by the same 0.142 in OKLCH L, the
+       smallest shift that takes the lightest of them (yellow-green) to 3.1:1,
+       with chroma clamped to sRGB. A per-colour floor would have put all
+       eight at one lightness, and teal and cyan-blue 0.042 apart in OKLab;
+       the even shift keeps the closest pair in all sixteen at 0.057, against
+       0.059 on dark.
+
+       The neutral (slot 7) was a light grey standing in for Okabe–Ito's
+       black; on paper it is a mid-dark grey, still not the ink, so a mark
+       in slot 7 is not mistaken for text.
+       ------------------------------------------------------------------ */
+    --cat-0-rgb: 54 151 203;    /* sky blue      — from #56B4E9 (2.2:1), darkened to 3.1:1 */
+    --cat-1-rgb: 213 94 0;      /* vermilion     — Okabe–Ito #D55E00, unchanged (3.7:1) */
+    --cat-2-rgb: 0 158 115;     /* bluish green  — Okabe–Ito #009E73, unchanged (3.3:1) */
+    --cat-3-rgb: 155 145 2;     /* yellow        — from #F0E442 (1.3:1), darkened to 3.1:1 */
+    --cat-4-rgb: 0 114 178;     /* blue          — Okabe–Ito #0072B2, unchanged (5.0:1) */
+    --cat-5-rgb: 199 116 162;   /* reddish purple— from #CC79A7 (2.9:1), darkened to 3.1:1 */
+    --cat-6-rgb: 191 131 2;     /* orange        — from #E69F00 (2.2:1), darkened to 3.1:1 */
+    --cat-7-rgb: 113 113 113;   /* mid neutral   — L 0.55, 4.7:1; replaces the light neutral */
+
+    --cat-8-rgb:  190 66 87;    /* crimson       — L 0.558 C 0.159 h  14 */
+    --cat-9-rgb:  115 156 11;   /* yellow-green  — L 0.639 C 0.160 h 126 */
+    --cat-10-rgb: 37 151 63;    /* green         — L 0.595 C 0.161 h 147 */
+    --cat-11-rgb: 0 152 147;    /* teal          — L 0.614 C 0.106 h 191 */
+    --cat-12-rgb: 1 131 150;    /* cyan-blue     — L 0.560 C 0.098 h 212 */
+    --cat-13-rgb: 101 96 202;   /* violet        — L 0.548 C 0.160 h 282 */
+    --cat-14-rgb: 141 93 198;   /* purple        — L 0.577 C 0.160 h 303 */
+    --cat-15-rgb: 181 94 184;   /* magenta       — L 0.617 C 0.160 h 326 */
+
+    /* ------------------------------------------------------------------
+       SEQUENTIAL — inferno, **the same nine published stops in the other
+       order.** On the dark page the low end is the dark end; here it is the
+       light end, so `--heat-0` is the pale yellow and `--heat-8` the black.
+       That is matplotlib's own `inferno_r`, not a new ramp. "This much of it"
+       still means "further from the page", which is the reading that has to
+       survive a theme change; the hue names do not.
+
+       The **start at `--heat-2`** advice above holds here too, and for a
+       mirrored reason: `--heat-0` (#fcffa4) is 1.01:1 against this page, a
+       hole. `--heat-1` is clear here (2.1:1), so the advice is conservative
+       on paper rather than necessary. Both pinned in the test.
+       ------------------------------------------------------------------ */
+    --heat-0: #fcffa4;
+    --heat-1: #fb9a06;
+    --heat-2: #ed6925;
+    --heat-3: #cf4446;
+    --heat-4: #a52c60;
+    --heat-5: #781c6d;
+    --heat-6: #4a0c6b;
+    --heat-7: #1b0c41;
+    --heat-8: #000004;
+
+    /* ------------------------------------------------------------------
+       VIRIDIS — **reversed, and stopped short of its yellow end.** In use in
+       one place, the Drift and Trail pictures' "how far through the article"
+       (DiagramPanel.tsx § rampStyle), where every one of the nine steps is a
+       paragraph's dot and has to be visible. Reversed for the reason inferno
+       is; but reversing alone would put #fde725 (1.2:1 on this page) at step
+       0, and the ramp's whole claim over inferno is that it has no stop the
+       page swallows. So this is the published ramp from its start to 85% of
+       the way along, the steps interpolated in OKLab between the published
+       stops, then turned over. Step 0 is 1.6:1 here, a little clearer than
+       dark's step 0 is on dark (1.3:1). Departs from the published values
+       everywhere but step 8.
+       ------------------------------------------------------------------ */
+    --vir-0-rgb: 159 216 63;    /* #9fd83f — viridis at 0.850 */
+    --vir-1-rgb: 92 200 100;    /* #5cc864 — 0.744 */
+    --vir-2-rgb: 47 177 126;    /* #2fb17e — 0.637 */
+    --vir-3-rgb: 34 152 137;    /* #229889 — 0.531 */
+    --vir-4-rgb: 41 126 142;    /* #297e8e — 0.425 */
+    --vir-5-rgb: 53 100 141;    /* #35648d — 0.319 */
+    --vir-6-rgb: 64 71 134;     /* #404786 — 0.212 */
+    --vir-7-rgb: 71 40 117;     /* #472875 — 0.106 */
+    --vir-8-rgb: 68 1 84;       /* #440154 — 0.000, the published first stop */
+
+    /* ------------------------------------------------------------------
+       DIVERGING — **the light pivot, which is to say the published shape.**
+       Same generator, same hues and same chroma taper as the dark pair,
+       stop for stop; only the lightnesses are mirrored about a light
+       neutral instead of a dark one, with the same 0.115 step —
+
+           L  0.425  0.54  0.655  0.77  0.885  0.77  0.655  0.54  0.425
+
+       — so the arms are still luminance-symmetric, which is the property
+       that makes them colour-blind safe. The pivot sits 0.10 below the page
+       rather than on it, so "neither" is still distinguishable from "no
+       data", as on dark.
+
+       One call site reads a step as **text**: debate.css § `.dbt-lean-for`
+       and `-against` paint the lean word in `--div-rg-7` and `--div-rg-1`.
+       Those land at 4.6:1 and 5.1:1 here, above WCAG's 4.5:1 for text.
+       ------------------------------------------------------------------ */
+    --div-0-rgb: 41 79 128;
+    --div-1-rgb: 66 112 170;
+    --div-2-rgb: 109 147 196;
+    --div-3-rgb: 157 183 215;
+    --div-4-rgb: 215 217 221;
+    --div-5-rgb: 213 167 161;
+    --div-6-rgb: 191 124 117;
+    --div-7-rgb: 163 84 76;
+    --div-8-rgb: 124 53 47;
+
+    --div-rg-0-rgb: 124 53 47;
+    --div-rg-1-rgb: 163 84 76;
+    --div-rg-2-rgb: 191 124 117;
+    --div-rg-3-rgb: 213 167 161;
+    --div-rg-4-rgb: 221 216 214;
+    --div-rg-5-rgb: 157 190 161;
+    --div-rg-6-rgb: 108 159 115;
+    --div-rg-7-rgb: 63 127 74;
+    --div-rg-8-rgb: 14 95 39;
+
+    /* ------------------------------------------------------------------
+       HUE RING — the same generator at **OKLCH L 0.62** instead of 0.76.
+       At 0.76 the ring is about 2:1 against this page, and a topic's dot is
+       a few pixels wide; at 0.62 the faintest stop is 3.2:1. The same hue
+       arc and the same 0.16 chroma cap, so the ring is the same ring,
+       darker. Its teals lose the most chroma (down to 0.105 at h 196),
+       because sRGB holds less of them at this lightness.
+       `scripts/generate-hue-ring.ts` prints these with its `L` set to 0.62
+       (it has no flag for it yet; it is one constant) — with one exception.
+       At this chroma, rounding to whole bytes moves a hue further than it
+       does at 0.76, and the generator's `--hue-19` came out 0.6° short,
+       which put the step after it outside the even-steps test. It is the
+       neighbouring byte triplet nearest the intended hue, one unit away.
+       ------------------------------------------------------------------ */
+    --hue-0-rgb: 213 87 83;       /* h 25.0  C 0.160 */
+    --hue-1-rgb: 213 90 65;       /* h 33.5  C 0.160 */
+    --hue-2-rgb: 210 94 43;       /* h 42.1  C 0.160 */
+    --hue-3-rgb: 207 99 8;        /* h 50.6  C 0.160 */
+    --hue-4-rgb: 197 108 0;       /* h 59.2  C 0.146 */
+    --hue-5-rgb: 187 116 1;       /* h 67.7  C 0.136 */
+    --hue-6-rgb: 178 121 0;       /* h 76.3  C 0.130 */
+    --hue-7-rgb: 169 127 0;       /* h 84.8  C 0.127 */
+    --hue-8-rgb: 160 131 0;       /* h 93.4  C 0.127 */
+    --hue-9-rgb: 150 136 1;       /* h 101.9  C 0.129 */
+    --hue-10-rgb: 139 141 1;      /* h 110.5  C 0.135 */
+    --hue-11-rgb: 125 145 1;      /* h 119.0  C 0.145 */
+    --hue-12-rgb: 107 151 4;      /* h 127.6  C 0.160 */
+    --hue-13-rgb: 85 155 43;      /* h 136.1  C 0.160 */
+    --hue-14-rgb: 58 158 66;      /* h 144.7  C 0.160 */
+    --hue-15-rgb: 2 160 86;       /* h 153.2  C 0.159 */
+    --hue-16-rgb: 2 159 108;      /* h 161.8  C 0.136 */
+    --hue-17-rgb: 2 157 123;      /* h 170.3  C 0.122 */
+    --hue-18-rgb: 2 156 135;      /* h 178.9  C 0.113 */
+    --hue-19-rgb: 2 154 145;      /* h 187.4  C 0.107 — hand-nudged, see above */
+    --hue-20-rgb: 1 153 155;      /* h 196.0  C 0.105 */
+    --hue-21-rgb: 2 152 164;      /* h 204.5  C 0.105 */
+    --hue-22-rgb: 0 151 173;      /* h 213.1  C 0.108 */
+    --hue-23-rgb: 1 149 183;      /* h 221.6  C 0.114 */
+    --hue-24-rgb: 2 147 194;      /* h 230.2  C 0.123 */
+    --hue-25-rgb: 0 144 208;      /* h 238.7  C 0.139 */
+    --hue-26-rgb: 15 139 224;     /* h 247.3  C 0.160 */
+    --hue-27-rgb: 60 134 228;     /* h 255.8  C 0.160 */
+    --hue-28-rgb: 84 129 230;     /* h 264.4  C 0.160 */
+    --hue-29-rgb: 104 123 229;    /* h 272.9  C 0.160 */
+    --hue-30-rgb: 120 118 227;    /* h 281.5  C 0.160 */
+    --hue-31-rgb: 135 113 222;    /* h 290.0  C 0.160 */
 }

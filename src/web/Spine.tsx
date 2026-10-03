@@ -100,8 +100,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { navLabelVoice, nodeLabel, titleVoice, type OutlineEntry } from "./tree.js";
-import { type Voice, voiceClass, withVoice } from "./voice.js";
+import { navLabelVoice, titleVoice, type OutlineEntry } from "./tree.js";
+import { type Voice, voiceClass } from "./voice.js";
 import type { BlockMatch } from "./search-hits.js";
 import type { BlockId } from "../types.js";
 import {
@@ -116,6 +116,8 @@ import {
 import type { ReadLevel } from "./reading-time.js";
 import { useJumpOrigin } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { WhereCard } from "./WhereCard.js";
+import { spineLabel, type WhereRow, whereForBand } from "./where.js";
 import { useRenderCount } from "./perf.js";
 import { onFontsChanged } from "./fonts.js";
 import { isFolded } from "./fold.js";
@@ -130,12 +132,12 @@ import { isFolded } from "./fold.js";
  * two gists is a wall). A narrow value says what the card may use. GPT Sol,
  * 2026-08-28.
  *
- * `index` is 0-based; the card renders `index + 1`.
+ * Since 2026-10 the card draws its place from the outline instead
+ * (`whereForBand`, plan 261003d); this is what the band's *name* needs —
+ * `ariaFor`'s part title, and `bandLabel`'s *Section 2 of 4*. `index` is 0-based.
  */
 interface BandParent {
   title: string;
-  /** Whose words `title` is — tree.ts § `titleVoice`. */
-  voice: Voice;
   index: number;
   total: number;
 }
@@ -221,7 +223,7 @@ function measure(outline: OutlineEntry[]): Metrics | null {
   /** The children of `e` as bands, each knowing where in `e` it sits. */
   const childBands = (e: OutlineEntry): Band[] =>
     e.children.map((c, i) =>
-      bandFor(c, { title: e.node.title, voice: titleVoice(e.node), index: i, total: e.children.length }),
+      bandFor(c, { title: e.node.title, index: i, total: e.children.length }),
     );
 
   // L2s are rendered as siblings in the same track rather than nested inside
@@ -580,8 +582,9 @@ function SpineInner({
   const [hereHit, setHereHit] = useState<{ id: string; metrics: Metrics } | null>(
     null,
   );
-  /** The moving viewport band, written to directly rather than re-rendered. */
-  const viewportBand = useRef<HTMLDivElement>(null);
+  /** The track-height wrapper the viewport band rides in, moved directly by
+      `transform` rather than re-rendered (§ scroll position). */
+  const viewportMover = useRef<HTMLDivElement>(null);
   /**
    * The presses begun on the rail whose clicks have not arrived yet, oldest
    * first — see `bandClick`. A queue rather than one slot because clicks may
@@ -668,8 +671,36 @@ function SpineInner({
    * could not have seen this at all: both its parts had `children: []`, which
    * makes `hits` and `l1` the same array.
    *
-   * React does not clobber the imperative `top`: the element's `style` prop
-   * never contains it, so the diff has nothing to say about it.
+   * **The band moves by `transform`, not `top`, and that is a battery fix.**
+   * It was `band.style.top = …%`, and a `top` write is layout + paint + raster
+   * on every frame of every scroll: a Chrome trace on 2026-10-03, iPad
+   * emulation, found it written ~480 times a gesture and the only tracked
+   * invalidation in ~460 of ~550 paints, with the spine's layer repainted ~500
+   * times and the page's ~330. With the transform: 53 paints, the spine's
+   * layer 17, the page's 26, and the main thread's CPU per scrolled pixel
+   * about halved (docs/investigations/261003a-what-a-scroll-frame-costs-in-the-reading-view.md,
+   * from an iPad battery report, spya-m0mcqb). A `translateY` on an element
+   * the browser is asked to give its own layer (spine.css §
+   * `.spine-viewport-track`) is a compositor update and none of those — in
+   * Chromium, measured; elsewhere expected, because `will-change` is a hint a
+   * browser may decline.
+   *
+   * **What moves is a wrapper the track's height, not the band.** A
+   * `translateY(%)` is a percentage of the element's *own* height, so on the
+   * band itself it would be a fraction of the viewport's share of the article
+   * — exact until the band's `min-height: 2px` takes over on a very long piece,
+   * and then hundreds of pixels wrong. On a wrapper that is `inset: 0` over
+   * the track, its own height *is* the track's, so the same fraction `top`
+   * used, times 100%, lands exactly where `top` did. That is also why there is
+   * no ResizeObserver here: the track changes height with no scroll at all —
+   * on a resize, and through the bar flip's 180ms `top` transition on `.spine`
+   * (shell.css) — and a percentage follows it for free, where a pixel
+   * transform would need a measurement and an observer to keep it fresh. The
+   * pixel version was built first and dropped on GPT Sol's review, F6:
+   * docs/plans/261003a-ipad-battery-scroll-repaint-review-sol.md.
+   *
+   * React does not clobber the imperative `transform`: the wrapper's `style`
+   * prop never contains it, so the diff has nothing to say about it.
    *
    * Depends on `metrics` and `viewportH` rather than reading them from refs.
    * Both change rarely (a resize, a font swap), so re-subscribing then is
@@ -689,8 +720,8 @@ function SpineInner({
       raf = 0;
       const sy = window.scrollY;
 
-      const band = viewportBand.current;
-      if (band) band.style.top = `${((sy - docTop) / docHeight) * 100}%`;
+      const mover = viewportMover.current;
+      if (mover) mover.style.transform = `translateY(${((sy - docTop) / docHeight) * 100}%)`;
 
       const pos = sy + viewportH * READING_LINE - docTop;
       const inBand = (b: Band) => pos >= b.top && pos < b.top + b.height;
@@ -948,6 +979,20 @@ function SpineInner({
           )
         : new Map<string, number>(),
     [metrics, matches],
+  );
+
+  /* Each band's place in the outline, for its card (plan 261003d). Keyed by
+     node id over every part and section, not over `hits`, because the outline
+     alone decides it — a fold or a resize changes which bands are hits, not
+     where any of them sits. */
+  const whereByBand = useMemo(
+    () =>
+      new Map(
+        outline
+          .flatMap((e) => [e, ...e.children])
+          .map((e) => [e.node.id, whereForBand(outline, e.node.id)] as const),
+      ),
+    [outline],
   );
 
   if (!metrics || metrics.l1.length === 0) {
@@ -1300,6 +1345,7 @@ function SpineInner({
               content={
                 <BandCard
                   band={b}
+                  where={whereByBand.get(b.entry.node.id) ?? []}
                   position={Math.round((b.top / docHeight) * 100)}
                   matches={bandCounts.get(b.entry.node.id) ?? 0}
                   here={hereHitId === b.entry.node.id}
@@ -1382,12 +1428,15 @@ function SpineInner({
 
         {/* The viewport band: how much of the article is on screen right now,
             and where. This is the "where am I" the whole rail exists for. */}
-        <div
-          ref={viewportBand}
-          className="spine-viewport"
-          /* `top` is deliberately absent — the scroll effect above owns it. */
-          style={{ height: pct(viewportH) }}
-        />
+        {/* Two elements, and the outer one is the one that moves: a
+            track-height wrapper the scroll effect slides by `translateY(%)`,
+            because a per-frame `top` repainted the page and a percentage
+            translate of the band itself would be a percentage of the wrong
+            height (§ scroll position). It has no `style` prop at all, so React
+            never touches the transform; the band sits at its `top: 0`. */}
+        <div ref={viewportMover} className="spine-viewport-track">
+          <div className="spine-viewport" style={{ height: pct(viewportH) }} />
+        </div>
       </div>
     </aside>
   );
@@ -1452,16 +1501,13 @@ export function childLabel(e: OutlineEntry): { label: string; voice: Voice } {
  * from the next. The fallback is deliberately built from the crumb the reader is
  * already being shown rather than from an id: `Section 2 of 4` under
  * `REFERENCES` reads as a place in the article, and `spya-k3m9qt` does not.
+ *
+ * The rule itself is `spineLabel` in where.ts, so the card's outline and this
+ * name cannot call one band two things.
  */
 function bandLabel(band: Band): { text: string; voice: Voice } {
-  const own = nodeLabel(band.entry);
-  if (own) return own;
-  return {
-    text: band.parent
-      ? `Section ${band.parent.index + 1} of ${band.parent.total}`
-      : "Untitled section",
-    voice: "ui",
-  };
+  const label = spineLabel(band.entry, band.parent);
+  return label.text ? label : { text: "Untitled section", voice: "ui" };
 }
 
 /** The band's name for a screen reader, with the matches in it if there are any. */
@@ -1475,12 +1521,15 @@ function ariaFor(band: Band, matches: number): string {
 
 function BandCard({
   band,
+  where,
   position,
   matches,
   here = false,
   showTapHint = false,
 }: {
   band: Band;
+  /** The band's place in the outline — `whereForBand`. */
+  where: readonly WhereRow[];
   position: number;
   matches: number;
   /** The reading line is inside this band — see `hereHit` in `Spine`. */
@@ -1488,40 +1537,36 @@ function BandCard({
   showTapHint?: boolean;
 }) {
   const { node, words, children } = band.entry;
-  const { parent } = band;
   /* Filtered before it is counted, so `+ n more` is a promise about rows the
      reader would actually get. Counting first and filtering second is how a
-     card ends up saying "+ 3 more" and then showing three blank bullets. */
+     card ends up saying "+ 3 more" and then showing three blank bullets.
+
+     **And not a bullet the outline above has already said.** A heading is a
+     block, so it is a leaf: the section's own heading is its first child, and
+     a part's heading lands in its first section, because a part's children
+     partition its range. A heading leaf's label is the author's heading
+     verbatim (`navLabelVoice`), so the first bullet repeated the row two lines
+     above it — on about a quarter of all cards.
+
+     Both halves of the test are needed. Only a **heading** leaf is dropped: a
+     model's label for a paragraph that happens to read the same as the title
+     is still a line about that paragraph. And only against the rows on **this
+     band's own path**: `where` also lists the neighbouring sections, and a
+     sub-heading called *Methods* is not a repeat because a part two rows down
+     is too. "Skip every heading leaf" would be simpler and would drop each
+     real sub-heading with it. Sweep item WC-W1, plan 261003g § 3. */
+  const said = new Set(
+    where.flatMap((r) => (r.kind === "node" && (r.onPath || r.here) ? [r.title.trim()] : [])),
+  );
   const kids = children
-    .map((c) => ({ id: c.node.id, ...childLabel(c) }))
-    .filter((c) => c.label !== "");
-  const label = bandLabel(band);
-  return (
+    .map((c) => ({ id: c.node.id, repeat: c.startsAtHeading === true, ...childLabel(c) }))
+    .filter((c) => c.label !== "" && !(c.repeat && said.has(c.label)));
+  /* The gist, or the nav label standing in for one — but never the nav label
+     *twice*, which is what an untitled band would otherwise show: `bandLabel`
+     has already used it as the title, and repeating it under itself in italics
+     reads as a rendering fault. */
+  const detail = (
     <>
-      {parent && (
-        <div className="tip-crumb">
-          <span className={withVoice("tip-crumb-name", parent.voice)}>{parent.title}</span>
-          {/* **Where in the part, which is the one thing a proportional rail
-              cannot show.** The rail says how far through the *article* you
-              are; nothing on it says this is the third section of seven. One
-              number pair, on a line that already exists, and it is skipped when
-              the part has a single child because "1 of 1" is noise rather than
-              orientation. */}
-          {parent.total > 1 && (
-            <span className="tip-crumb-pos">
-              {parent.index + 1} of {parent.total}
-            </span>
-          )}
-        </div>
-      )}
-      <div className="tip-title">
-        <span className={voiceClass(label.voice)}>{label.text}</span>
-        {node.sourceHeading && <span className="tip-own">§</span>}
-      </div>
-      {/* The gist, or the nav label standing in for one — but never the nav
-          label *twice*, which is what an untitled band would otherwise show:
-          `bandLabel` has already used it as the title, and repeating it under
-          itself in italics reads as a rendering fault. */}
       {node.gist ? (
         <p className="tip-gist">{node.gist}</p>
       ) : node.navLabel && node.title?.trim() ? (
@@ -1538,6 +1583,32 @@ function BandCard({
             <li className="tip-more">+ {kids.length - MAX_CHILDREN} more</li>
           )}
         </ul>
+      )}
+    </>
+  );
+  const label = bandLabel(band);
+  return (
+    <>
+      {/* **Where this section sits in the article**, which is the one thing a
+          proportional rail cannot show: the rail says how far through the
+          article a band is, not which part it belongs to or what is either side
+          of it. Greg, spya-d896sz: *"hovering over the spine to show, okay,
+          this is where I am right now relative to the wider course
+          hierarchy."* The band is the marked row, so the outline is also the
+          card's title, and its gist and sub-sections open under it. It replaced
+          a crumb line (*THE PART · 2 of 3*) and a title line; the bounded
+          version is `SPINE_LIMITS`, because this card cannot scroll. Plan
+          261003d. `where` is never empty for a hit; the title alone is the
+          fallback if the outline and the bands ever disagree. */}
+      {where.length > 0 ? (
+        <WhereCard rows={where} detail={detail} />
+      ) : (
+        <>
+          <div className="tip-title">
+            <span className={voiceClass(label.voice)}>{label.text}</span>
+          </div>
+          {detail}
+        </>
       )}
       <div className="tip-foot">
         {/* `words` is 0 for a band whose blocks carry no count, and a "0 words"

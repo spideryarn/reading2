@@ -285,7 +285,7 @@ it, not by reasoning about it. The file itself carries the long version; this is
 | `prefix(tw)` on both imports | Tailwind's scanner is a plain **text** scanner — it pulls bare words out of source and emits a utility for any that matches a utility name. It found 18 in `src/web/`, two of which collide with live class names, and `.outline` drew a 1px border round the whole table in outline mode (`/?text=0`) |
 | `@layer app` on the `styles.css` import | Unlayered declarations beat layered ones whatever the order. Every place a shadcn component goes is already covered by a descendant rule (`.cmt-nav button`, `.cmt-dialog header`, `.cmt-dialog button.linky`), so a utility you deliberately wrote would lose twice over and say nothing |
 | `source(none)` + an explicit `@source "../../src/web"` | v4 auto-detects sources from the project root. It scanned `docs/`, found the `tw:flex` and `tw:rounded-md` written as **examples in the migration plan's prose**, and compiled them into the production bundle — seven utilities no component used. It then happened again from a doc comment inside [`lib/utils.ts`](../../src/web/lib/utils.ts) |
-| `@custom-variant dark (&)` | Tailwind compiles `dark:` to `@media (prefers-color-scheme: dark)`, and this page is dark with no media query — see [§ Dark mode](#dark-mode) |
+| `@custom-variant dark` on `data-theme` | Tailwind compiles `dark:` to `@media (prefers-color-scheme: dark)`, and the theme here is the reader's choice, not the OS's — see [§ Appearance](#appearance-light-dark-and-system) |
 
 Two of these are worth stating in full, because the lesson outruns the fix.
 
@@ -398,7 +398,8 @@ the element, and it only exists while Tab is held. It is also not a misconfigura
 Two fixes, both in [tokens.css](../../styles/tokens.css) and
 [`toggle.tsx`](../../src/web/components/ui/toggle.tsx):
 
-- `--ring` is the app's orange, 7.3:1, matching the focus convention the hand-written CSS already
+- `--ring` is the app's orange, 7.3:1 on the dark page (on the light one it is `--highlight-ink`
+  instead — [§ Appearance](#appearance-light-dark-and-system)), matching the focus convention the hand-written CSS already
   had in `.spine-hit` ([`styles/spine.css`](../../src/web/styles/spine.css)) and `.cmt-search`
   ([`styles/annotations.css`](../../src/web/styles/annotations.css)). The token alone could not fix it — halved, even the orange is
   2.6:1 — so the `/50` came off.
@@ -410,70 +411,115 @@ Two fixes, both in [tokens.css](../../styles/tokens.css) and
 Those are hand edits to generated files, which is the shadcn model rather than a workaround — but
 `shadcn add` would silently undo them, so both files carry a header saying so.
 
-## Dark mode
+## Appearance: Light, Dark and System
 
-The reading view is **dark only** — an all-but-black page, off-white text, Spideryarn orange
-unchanged. There is no toggle, no `prefers-color-scheme` branch and no light fallback. Greg,
-2026-08-24:
+**Dark is the default, and since 2026-10-03 a reader can choose Light, Dark or System** on
+[/profile](reader-profile.md). The app was dark only from 2026-08-24, by Greg's call:
 
 > actually, it's night, and I'd quite like to be in dark mode. I don't want to add too much
 > complexity, so I'm happy just to switch over and say we're going to make it always be in dark mode
 > … which means the CSS is going to need a black background, white text, but keep the orange where
 > possible.
 
-This reverses the "light mode only" inherited from the original app — see
-[original-version/overview.md § Decision: the palette](original-version/overview.md#decision-the-palette), which now
-records the reversal. What made it cheap: the palette had already been collapsed into one source, so
-switching themes meant changing values, not chasing colours through the stylesheet.
+and he reversed it on 2026-09-05 (report `spya-nv5bzx`):
 
-How it's put together, and what to know before touching it:
+> Allow me to switch between Light, Dark, and System modes (in my Profile page).
 
-- **The variable *names* did not change.** [`styles/tokens.css`](../../styles/tokens.css) still
-  defines `--background`, `--foreground`, `--muted`, `--sidebar` and friends; only their values
-  flipped. Nothing downstream needed rewiring, and anything copied from the original codebase still
-  resolves.
-- **The orange is untouched — `#DB8A45`, unconditionally.** It's the one colour that needed no
-  adjusting, and it works *better* here: `#DB8A45` on the near-black page is about 7.8:1, against
-  about 2.6:1 on white. Orange text was borderline in light mode and is comfortable now, so the
-  highlight can carry more work than it used to.
-- **Not literally black-on-white inverted.** The page is `oklch(0.145 0 0)` and the text
-  `oklch(0.97 0 0)`, because pure white on pure black haloes at reading sizes. First noticed in
-  Georgia, and it did not go away when the reading face became Geist in 2026-08-25 —
-  light-on-dark bloom is about the contrast, not the face. The other half of the same fix is
-  `--reading-weight: 450`; see
-  [typography.md](typography.md).
-- **Soft and faint greys run the other way.** In [`src/web/styles/tokens.css`](../../src/web/styles/tokens.css),
-  `--ink-soft` / `--ink-faint` now *descend* in lightness from `--ink` instead of ascending. Anything
-  that read `color-mix(…, black)` to darken the orange became `color-mix(…, white)` to lift it — that
-  one lives in `--highlight-ink` now, so it's stated once.
-- **Panels are lighter than the page, not darker.** `--sidebar` sits above `--background`; on a dark
-  ground a raised surface reads as forward. The same inversion catches `--accent`, which is still
-  shadcn's "hover surface" meaning and is now a dark grey — the trap described in
-  [original-version/overview.md](original-version/overview.md#brand-facts-now-load-bearing) is unchanged in kind, only
-  the failure mode flipped: a highlight that goes near-white becomes one that vanishes into the page.
-- **`color-scheme: dark` is declared twice on purpose** — on `:root` in `tokens.css` for scrollbars
-  and form controls, and again as a `<meta>` in [`index.html`](../../index.html) so the browser
-  paints its canvas dark *before* the stylesheet loads. Without the meta there's a white flash on
-  first paint. `theme-color` is the page black rather than the orange for the same reason.
+The dark-only call had itself reversed the "light mode only" inherited from the original app — see
+[original-version/overview.md § Decision: the palette](original-version/overview.md#decision-the-palette).
+What made both reversals cheap: the palette is one source, so a theme is a set of values, not a hunt
+through the stylesheets. The plan and its review are
+[261003e-light-dark-and-system-appearance-on-profile.md](../plans/261003e-light-dark-and-system-appearance-on-profile.md).
 
-If a light mode is ever wanted back, the shape of the change is a `[data-theme]` attribute on
-`:root` and a second block of the same variable names — not a `prefers-color-scheme` media query,
-which would give the reader no way to override it.
+### How the choice reaches the page
+
+- **One attribute: `<html data-theme="light|dark">`**, always one of the two. System is resolved to
+  one of them, never written. CSS keys on `:root[data-theme="light"]` alone, and `:root` *is* the
+  dark palette — so a page whose script never ran is the dark page everybody had before.
+- **The choice is kept in `localStorage` (`spya.appearance`), per device**, not on the profile row,
+  because it has to be known before first paint: an inline script in [`index.html`](../../index.html)'s
+  `<head>` reads it and sets the attribute and both metas (`color-scheme`, `theme-color`) before the
+  stylesheet loads. A server value would arrive after the page had been drawn in the other colour.
+  The cost is that it does not follow the reader to another device.
+- **Unset is Dark**, not System, so nobody's page changed on the day Light arrived.
+  `DEFAULT_APPEARANCE` in [`appearance.ts`](../../src/web/appearance.ts) is the one constant, and the
+  inline script repeats it.
+- **The inline script is a second copy of `resolveTheme`**, because it runs before any module.
+  [`tests/appearance.test.ts`](../../tests/appearance.test.ts) runs it out of `index.html` against
+  every stored value and both OS settings and checks the two agree.
+- **After that, [`appearance.ts`](../../src/web/appearance.ts) keeps it right**: the choice changing
+  on /profile, the OS changing under System (`matchMedia` change), another tab (`storage`), and a
+  page back from the back-forward cache (`pageshow`). `useTheme()` is the resolved theme for
+  anything that measures colours — `/design` remeasures on it.
+- **Feedback diagnostics carry the choice and the resolved theme** beside the OS's
+  `prefers-color-scheme`, because a reader who chose Light on a dark OS is the case a theme bug needs
+  all three facts for.
+
+### The two palettes
+
+Each of the three token files — [`styles/tokens.css`](../../styles/tokens.css),
+[`styles/colourscales.css`](../../styles/colourscales.css) and
+[`src/web/styles/tokens.css`](../../src/web/styles/tokens.css) — ends with a
+`:root[data-theme="light"]` block of the **same variable names**. Nothing downstream picks a theme;
+it reads a token. [`tests/appearance-palette.test.ts`](../../tests/appearance-palette.test.ts) fails
+when a token written as a literal colour in a dark block has no light value (a tripwire for a
+forgotten name, no more), and measures the core text pairs in both themes;
+[`tests/appearance-fixed-colours.test.ts`](../../tests/appearance-fixed-colours.test.ts) fails on a
+bare white or black in a component stylesheet or class string.
+
+What is true of the dark palette, and still worth knowing before touching it:
+
+- **The orange is `#DB8A45` as a fill in both themes**, and better on dark: about 7.8:1 on the
+  near-black page, about 2.6:1 on white. So orange *as text*, or as a thin line or glyph, is
+  `--highlight-text` (`tw:text-highlight-text`): the plain orange on dark, `--highlight-ink` — the
+  orange taken towards black — on light. Focus outlines, `--ring` and native `accent-color` use it
+  too, because a focus indicator needs 3:1. Fills, borders and washes stay `--highlight`. Text
+  *on* an orange fill is `--primary-foreground`.
+- **Neither page is pure.** Dark is `oklch(0.145 0 0)` with text at `oklch(0.97 0 0)`, because pure
+  white on pure black haloes at reading sizes; the other half of that fix is `--reading-weight: 450`
+  ([typography.md](typography.md)), which the light block puts back to 400. Light is
+  `oklch(0.985 0 0)` with text at `oklch(0.2 0 0)`.
+- **Soft and faint greys run away from the ink**, so on dark they descend in lightness and on light
+  they ascend. A stylesheet that lifts or sinks a colour mixes towards `--toward-ink` /
+  `--toward-page`, never towards a literal `white` or `black`, which is right in one theme and
+  backwards in the other.
+- **On dark, panels are lighter than the page; on light, darker**, with cards and popovers the
+  lightest thing there. `--accent` is still shadcn's "hover surface" in both — the trap in
+  [original-version/overview.md](original-version/overview.md#brand-facts-now-load-bearing) — so the
+  orange is `--highlight`, always.
+- **`color-scheme` is declared in CSS as well as in the `<meta>`**, and the light block sets
+  `color-scheme: light`: author CSS beats the meta, so without it Light would keep dark scrollbars
+  and form controls.
+
+### What it does not do yet
+
+- **No cross-device sync.** Set it on each device; a profile column would need a migration and still
+  a local copy to avoid the flash.
+- **The only picker is on /profile.** Signed-out pages obey a choice saved on that device, but offer
+  none.
+- **The installed iPhone app's status bar stays `black-translucent`** — white clock text over the
+  page, which on a light page is pale on pale. iOS reads the meta at launch, so it cannot follow a
+  runtime switch, and nothing on the box can show it. A known gap.
+- **The fleet dashboard** (`tools/fleet/`) is a separate app and is still dark only.
+- **Pictures with colour baked in** — model-painted Illustrated images, screenshots on the marketing
+  and changelog pages — stay as they were made. Article figures sit on `--figure-sheet` in both.
 
 ### What Tailwind and shadcn assume instead, and the bug it caused
 
-Both of them assume `dark:` means *the OS is in dark mode*. Here it means nothing of the kind, and
-that mismatch shipped a bug that nobody working on it could see.
+Both of them assume `dark:` means *the OS is in dark mode*. Here it means *the page is in its dark
+theme*, which a reader can now choose against their OS — and the mismatch had already shipped a bug
+once that nobody working on it could see.
 
-- **`@custom-variant dark (&)` in [`tailwind.css`](../../src/web/tailwind.css).** Tailwind compiles
-  `dark:` to `@media (prefers-color-scheme: dark)`, and shadcn's components lean on it — `Button`
-  alone has `dark:bg-input/30`, `dark:border-input`, `dark:hover:bg-accent/50`. This app has no media
-  query anywhere, so **on a machine whose OS was in light mode none of those rules would have
-  applied, and the components would have rendered their light-mode branch on our permanently dark
-  page.** The failure depended on the OS setting of whoever *viewed* it: perfect on a dark-mode Mac,
-  subtly wrong on a light-mode one, invisible to the author and to every test. Redefining the variant
-  as always-matching makes `dark:x` mean exactly `x`, which is the truth here. If light mode returns,
-  this line is the first thing to change.
+- **`@custom-variant dark` in [`tailwind.css`](../../src/web/tailwind.css) keys on `data-theme`.**
+  Tailwind compiles `dark:` to `@media (prefers-color-scheme: dark)`, and shadcn's components lean on
+  it — `Button` alone has `dark:bg-input/30`, `dark:border-input`, `dark:hover:bg-accent/50`. While
+  the app was dark only, **on a machine whose OS was in light mode none of those rules applied, and
+  the components rendered their light-mode branch on our dark page** — perfect on a dark-mode Mac,
+  subtly wrong on a light-mode one, invisible to the author and to every test. The variant was
+  `(&)`, always matching, from 2026-08-25. Since 2026-10-03 it is
+  `:root:not([data-theme="light"])` and its descendants: shadcn's `dark:` branch in the dark theme
+  and its base branch in the light one, which is what shadcn was written for — and still never the
+  OS's say.
 - **`shadcn init` writes a light palette, so we never run it.** It emits a light `:root` block plus a
   `.dark` block, and loaded after `tokens.css` its `--background: oklch(1 0 0)` wins: white page,
   near-invisible orange. [`components.json`](../../components.json) is hand-written for that reason

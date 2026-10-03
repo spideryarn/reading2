@@ -97,7 +97,7 @@ function TopicsLabel() {
       <span
         // biome-ignore lint/a11y/noNoninteractiveTabindex: focus opens the card
         tabIndex={0}
-        className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:text-xs tw:font-medium tw:text-muted-foreground tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+        className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:text-xs tw:font-medium tw:text-muted-foreground tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
       >
         Topics
       </span>

@@ -110,10 +110,11 @@ adopted, what never will be, and the four guards Tailwind needed to go in safely
 
 - **Spideryarn orange is `#DB8A45`** — `oklch(0.65 0.15 45)`. Primary, focus ring, accent. Don't
   invent a second accent colour.
-- **We are dark-only** (Greg, 2026-08-24): *"I'm happy to go with the dumb version where we just
-  switched to always being in dark mode."* No toggle, no `prefers-color-scheme`, no light fallback.
-  This reverses the light-only inheritance below, and the original app is **not** a useful source for
-  it: `lib/config.ts` forces light via `UI_CONFIG.FORCE_LIGHT_MODE`, and although `app/globals.css`
+- **Dark is the default** (Greg, 2026-08-24): *"I'm happy to go with the dumb version where we just
+  switched to always being in dark mode."* Light, Dark and System became a reader choice on
+  2026-10-03; [web-client.md § Appearance](../web-client.md#appearance-light-dark-and-system) owns the current contract.
+  The original app is **not** a useful source for the Dark palette: `lib/config.ts` forces light via
+  `UI_CONFIG.FORCE_LIGHT_MODE`, and although `app/globals.css`
   carries a complete `.dark` OKLCH block, it never redefines `--spideryarn-orange` and lets
   `--primary` go near-white — so the brand orange is simply not carried into dark there. We answered
   that ourselves: **the orange is unchanged at `#DB8A45`**, which reads better on the dark ground
@@ -122,7 +123,7 @@ adopted, what never will be, and the four guards Tailwind needed to go in safely
 
   Worth knowing that their dark mode was **scaffolded and then disabled**, not merely unfinished —
   `FORCE_LIGHT_MODE = true` with the dark CSS commented out "prepared for future". A theme is real
-  work, not a toggle; ours is cheap only because there is exactly one of it.
+  work, not a toggle; ours remains tractable because both appearances share one token vocabulary.
 - The header markup pairs `<img class="logo-image">` with a `<span class="logo-text">` of per-letter
   `<span class="logo-letter">` (`components/app-header.tsx`). `tokens.css` preserves those class
   names, so the original's 15 CSS-only hover animations can be dropped in later as one file. See
@@ -136,14 +137,14 @@ adopted, what never will be, and the four guards Tailwind needed to go in safely
 `--accent: #8a5a2b` warm brown on `#fbfaf8`, with dark-mode support — while independently landing on
 a serif for the article, which was the agreement that mattered. It now `@import`s
 [`styles/tokens.css`](../../../styles/tokens.css) and defines a thin semantic layer over it rather than
-restating any values; the warm palette and the dark-mode block are gone. One palette, one source.
+restating any values; the warm palette and the dark-mode block are gone. One token vocabulary, one source.
 `index.html` links the favicons and manifest from [`public/`](../../../public/). (Its `theme-color` was
 `#DB8A45` until the dark switch moved it to the page black, so mobile browser chrome matches the page
 rather than announcing the brand.)
 
-**Superseded in part, same day.** The single-palette half of that decision stands and is why any of
-this was cheap; the light-only half is gone — see the dark-only decision above. `styles/tokens.css`
-now holds dark surface values under the *same variable names*, so nothing downstream needed rewiring,
+**Superseded in part, first that day and again on 2026-10-03.** The single-source half of that
+decision stands; the one-appearance half is gone — see the appearance pointer above.
+`styles/tokens.css` holds both surface palettes under the *same variable names*, so nothing downstream needed rewiring,
 and the `--accent` trap noted above still applies (in dark it fails the other way — a highlight that
 takes `--accent` by mistake goes near-black and vanishes into the page).
 

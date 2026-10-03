@@ -47,6 +47,10 @@
    is drawn (no head then), so it clears the (i) the same way — mode-band.css §
    `.mode-band > .band-about`. Its own padding is in footnotes.css § `.gloss-ask`. */
 .mode-band.has-about .gloss-ask { padding-right: calc(0.7rem + var(--band-about-room)); }
+/* The run row, *Find more* or *Find terms again*, above the Look up box since
+   2026-10-03 (Greg, spya-s660yh; plan 261003c), so it is the owner's top row
+   now and clears the (i) too. Its own padding is in footnotes.css § `.gloss-more`. */
+.mode-band.has-about .gloss-more { padding-right: calc(0.7rem + var(--band-about-room)); }
 /* The buttons as one named group. The profile badge that used to sit beside
    it moved to the band's corner in plan 261002e. */
 .gloss-sort-group {
@@ -84,7 +88,7 @@
   background: var(--surface-raised);
   color: var(--highlight-ink);
 }
-.gloss-sort-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.gloss-sort-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 /* **§ a touch screen: one line that scrolls sideways.** Greg, 2026-10-01
    (Q-landscape-orders, option B): *"On touch screens only, keep it to one line
@@ -165,15 +169,15 @@
   cursor: pointer;
 }
 .gloss-gate-reset:hover { color: var(--ink); }
-.gloss-gate-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.gloss-gate-reset:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .gloss-gate-range {
   display: block;
   width: 100%;
   margin: 0.3rem 0 0;
-  accent-color: var(--highlight);
+  accent-color: var(--highlight-text);
   cursor: pointer;
 }
-.gloss-gate-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.gloss-gate-range:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 /* Said in words, because a bar that is holding rows back looks exactly like a
    glossary that never had them. Until 2026-09-03 this said when the bar had
    *divided* nothing; the bar hides rather than groups now, so what it reports
@@ -228,15 +232,15 @@
   cursor: pointer;
 }
 .srch-gate-reset:hover { color: var(--ink); }
-.srch-gate-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.srch-gate-reset:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .srch-gate-range {
   display: block;
   width: 100%;
   margin: 0.3rem 0 0;
-  accent-color: var(--highlight);
+  accent-color: var(--highlight-text);
   cursor: pointer;
 }
-.srch-gate-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.srch-gate-range:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 /* Said in words, because a bar that is hiding everything looks exactly like a
    search that found nothing. The clause that used to end this — *and unlike the
    glossary's, this one really does take rows away* — went on 2026-09-03, when
@@ -289,7 +293,7 @@
   font-size: 0.88rem;
   line-height: 1.4;
 }
-.gloss-stale svg { flex: none; color: var(--highlight); }
+.gloss-stale svg { flex: none; color: var(--highlight-text); }
 
 /* ---- the list ---- */
 
@@ -335,7 +339,7 @@
   cursor: pointer;
 }
 .gloss-term-btn:hover { background: var(--surface-raised); }
-.gloss-term-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+.gloss-term-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: -2px; }
 
 /* **The owner's row is a grid**, so the Hide button can sit beside the row's
    button rather than inside it (a button in a button is invalid, and the press
@@ -364,7 +368,7 @@
   cursor: pointer;
 }
 .gloss-hide:hover { background: var(--surface-raised); color: var(--ink); }
-.gloss-hide:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+.gloss-hide:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: -2px; }
 .gloss-hide:disabled { opacity: 0.45; cursor: default; }
 
 /* *Hidden (n)* at the foot of the list — collapsed, quiet, names only. */
@@ -374,7 +378,7 @@
   font-size: 0.86rem;
 }
 .gloss-hidden > summary { cursor: pointer; padding: 0.25rem 0; }
-.gloss-hidden > summary:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.gloss-hidden > summary:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 .gloss-hidden ul { margin: 0.2rem 0 0; padding: 0; list-style: none; }
 .gloss-hidden li {
   display: flex;
@@ -492,7 +496,7 @@
   color: var(--ink-faint);
   cursor: help;
 }
-.gloss-part-hint:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.gloss-part-hint:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 
 /* The web's answer for one term, and the button that asks for it. Set apart
    from the two prose sections above by a filled ground rather than a rule,
@@ -521,8 +525,8 @@
   color: var(--ink-faint);
   cursor: help;
 }
-.gloss-globe.on { color: var(--highlight); }
-.gloss-globe:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.gloss-globe.on { color: var(--highlight-text); }
+.gloss-globe:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 /* Host names, one per line. The page title is the useful thing to read and the
    wrong thing to lay out in an 18rem band, so it lives in the hover tooltip. */
 .gloss-sources {
@@ -540,7 +544,7 @@
   text-decoration: none;
 }
 .gloss-sources a:hover { color: var(--highlight-ink); text-decoration: underline; }
-.gloss-sources a:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.gloss-sources a:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 
 .gloss-open { padding: 0 0.7rem 0.65rem; }
 .gloss-open p { margin: 0 0 0.4rem; font-size: 0.86rem; line-height: 1.45; }

@@ -1061,6 +1061,7 @@ async function runStep(
       job.steps.indexOf(step),
     ),
     ...(job.profile !== undefined && { profile: job.profile }),
+    ...(job.illustrationNote !== undefined && { illustrationNote: job.illustrationNote }),
     power: powerRead.ok ? powerRead.power : "standard",
   };
 
@@ -3048,6 +3049,14 @@ export interface EnqueueRequest {
    */
   profile?: string;
   /**
+   * **The reader's note on how the Illustrated picture should come out**,
+   * already checked by the route (`checkIllustrationNote`,
+   * src/illustrated-plate.ts) and only on a request naming `illustrated`.
+   * Frozen onto the job as `Job.illustrationNote`, and part of the work key, so
+   * two presses with different notes are two jobs.
+   */
+  illustrationNote?: string;
+  /**
    * **The quota slot this ingest is spending**, from `reserveIngest`.
    *
    * Carried through to the `EnqueueTicket` (src/store/jobs.ts) so that the
@@ -3273,7 +3282,10 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
     request.profile,
     request.upload,
     request.url,
-    request.reset ? { reset: request.reset } : {},
+    {
+      ...(request.reset ? { reset: request.reset } : {}),
+      ...(request.illustrationNote ? { illustrationNote: request.illustrationNote } : {}),
+    },
   );
   /* **Every exit from this function honours it**, including the two that hand
      back somebody else's job — a caller driving its own loop does not want a
@@ -3440,6 +3452,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       status: "queued",
       createdAt: new Date().toISOString(),
       ...(request.profile ? { profile: request.profile } : {}),
+      ...(request.illustrationNote ? { illustrationNote: request.illustrationNote } : {}),
       ...(request.reset ? { reset: request.reset } : {}),
     };
 
@@ -3771,6 +3784,8 @@ export function sameWork(
   upload?: JobUpload,
   url?: string,
   reset?: JobReset,
+  /** Last, so adding it shifted nothing before it. */
+  illustrationNote?: string,
 ): boolean {
   if (job.steps.length !== names.length) return false;
   /* **A reset is not a re-read**, though its steps and forcing are exactly
@@ -3812,6 +3827,10 @@ export function sameWork(
      Without this line it is handed the profiled job, which succeeds, and the
      panel shows a list stamped with a profile it was asked not to use. */
   if ((job.profile ?? "") !== (profile ?? "")) return false;
+  /* **And the Illustrated note**, for the profile's reason: a press with a
+     different note is asking for a different picture, and being handed the
+     running one would paint the note it replaced. Plan 261002j. */
+  if ((job.illustrationNote ?? "") !== (illustrationNote ?? "")) return false;
   return job.steps.every(
     (s, i) => s.name === names[i] && (s.force === true) === forced.has(s.name),
   );
@@ -4391,6 +4410,8 @@ export async function retryJob(
     // Copied, unlike force. The steer is not a thing the first attempt used up
     // — a retry of a summary run that was steered is still that run.
     ...(old.profile ? { profile: old.profile } : {}),
+    /* The note goes with it, or a retried paint would quietly be a plain one. */
+    ...(old.illustrationNote ? { illustrationNote: old.illustrationNote } : {}),
     /* **A retried reset still resets**, with the same list and the same profile
        snapshot. Without this the retry is a plain re-read: it mints a fresh
        draft copied from the published revision, extras and all, and publishes

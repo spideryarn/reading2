@@ -307,7 +307,8 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
             Type or talk about what you remember of the piece. Short replies correct what comes apart
             from it, link the passage, and usually nudge you to remember a little more — filling the
             gap when you are stuck rather than making you fail. Written not to be annoying,
-            patronising or superior.
+            patronising or superior. Or choose Tutorial: short turns that teach a little of the piece
+            at a time and ask you to put it in your own words.
           </Portrait>
           {/* Greg, 2026-08-31, the quiz request; and 2026-09-29
               (SPIDERYARN-READING2-5W, quoted in src/quiz.ts's header), which
@@ -445,7 +446,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           <p className="tw:mt-6 tw:text-sm">
             <Link
               href={PRICING_HREF}
-              className="tw:text-highlight tw:no-underline tw:hover:underline"
+              className="tw:text-highlight-text tw:no-underline tw:hover:underline"
             >
               Pricing, and what a month’s allowance means →
             </Link>

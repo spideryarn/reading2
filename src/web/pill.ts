@@ -53,6 +53,6 @@ export const PILL =
   // border are the two properties that actually say "on" here, so without
   // this they snap while the text fades — the old rule animated all three.
   "tw:transition-[color,background-color,border-color] tw:duration-[120ms] " +
-  "tw:hover:bg-transparent tw:hover:border-highlight tw:hover:text-highlight " +
+  "tw:hover:bg-transparent tw:hover:border-highlight tw:hover:text-highlight-text " +
   "tw:data-[state=on]:bg-highlight-wash tw:data-[state=on]:border-highlight " +
   "tw:data-[state=on]:text-highlight-ink tw:data-[state=on]:font-semibold";

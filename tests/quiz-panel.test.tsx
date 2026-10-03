@@ -1056,10 +1056,14 @@ describe("only what you have read", () => {
     expect(host.textContent).toContain("Question 1 of 2");
   });
 
-  it("says how much of the piece is read, by body words", () => {
+  it("says how much of the piece is read, by body words, as a pie named by the figure", () => {
     paintRead(owner({ quiz: PATH }), read([THIRD]));
-    /* 200 of 400 words. By blocks it would have been a third. */
-    expect(host.textContent).toContain("about 50% of the piece read so far");
+    /* 200 of 400 words. By blocks it would have been a third. Drawn, not
+       printed (spya-mafmm6, plan 261003e): the figure is the pie's name. */
+    expect(host.querySelector("button.share-pie")?.getAttribute("aria-label")).toBe(
+      "About 50% of the piece read so far",
+    );
+    expect(host.textContent).not.toContain("of the piece read so far");
   });
 
   it("says nothing has been read yet rather than showing an unread question, and unticking brings them back", () => {
@@ -1084,7 +1088,7 @@ describe("only what you have read", () => {
     expect(stem()).toBe(first.question);
     expect(host.textContent).toContain("Question 1 of 3");
     expect(host.textContent).toContain("couldn’t load what you have read");
-    expect(host.textContent).not.toContain("of the piece read so far");
+    expect(host.querySelector("button.share-pie")).toBeNull();
   });
 
   it("counts a passage the article no longer has as unread, however long it was on screen", () => {

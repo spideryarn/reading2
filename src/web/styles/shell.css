@@ -31,7 +31,7 @@
   /* **One cell of the prose gutter, square** — § the gutter, and
      `BlockGutter.tsx` for what goes in it. Everything else about the gutter's
      size is arithmetic on this one number: the grid's one column is one of
-     these, the row floor is one of these, the cell's left padding below is one
+     these, the row floor is one of these, the cell's gutter padding below is one
      plus its inset, and the container queries in § the gutter are written in
      multiples of it (twice over, since a query cannot read a custom property).
 
@@ -58,16 +58,26 @@
      side of the text to be minimal, to maximise the space we have for the
      text."* */
   --blk-gutter-w: var(--blk-slot);
-  /* How far the gutter sits from each edge of the cell's left padding. */
+  /* How far the gutter sits from each edge of the cell's right padding (the
+     left until 261003c). */
   --blk-gutter-x: 0.35rem;
-  /* The reading cell's own horizontal padding — the gutter's column on the left
-     (§ the gutter) and an ordinary breathing space on the right. Named because
+  /* The reading cell's own horizontal padding — an ordinary breathing space on
+     the left and the gutter's column on the right (§ the gutter).
+
+     **The gutter has been on the right since 2026-10-03**, when Greg asked to
+     *"try moving them to the right-hand-side of the block"* (spya-kd5dk5,
+     docs/plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md).
+     The two values swapped sides and nothing else had to: every rule that
+     places something against the prose reads both tokens, and most were
+     written to be true for any pair. Marginalia's notes start past the cell's
+     right edge, so the column sits between the prose and them. Named because
      two rules need the same two numbers: `td.text` sets them as padding, and
      the centred masthead (§ plain, centred) insets itself by them so the title
      starts on the same pixel as the first line of the article under it.
 
-     **The left one is the gutter's column and nothing else, so it is computed
-     from it rather than restated.** It was `2.1rem` for a one-icon-wide column
+     **The right one is the gutter's column and nothing else, so it is computed
+     from it rather than restated.** (It was the left one until 2026-10-03, and
+     the history below is that side's.) It was `2.1rem` for a one-icon-wide column
      until 2026-09-04 and then `3.7rem` for the pad, which was correct and was
      three numbers that had to be kept in step by hand — the same trap `--blk-top`
      below exists to close. Written as `calc()`, the icons cannot touch the prose
@@ -78,8 +88,8 @@
      multiplication, 2026-09-05.) That is the prose's half of the day.
      **`proseAloneMaxPx` in layout.ts is a fact about this number**, and goes
      stale the moment it moves. */
-  --text-pad-l: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2);
-  --text-pad-r: 1.4rem;
+  --text-pad-l: 1.4rem;
+  --text-pad-r: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2);
   /* **How much horizontal room the mode band takes from the table**, set inline
      in pixels by App from `fit.modeW`. Declared here so every rule below can
      add it unconditionally: `+ 0px` is a no-op, which is what makes the default
@@ -319,7 +329,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   max-width: 100%;
 }
 .origin-link { color: var(--ink-soft); text-decoration: none; }
-.origin-link:hover { color: var(--highlight); text-decoration: underline; }
+.origin-link:hover { color: var(--highlight-text); text-decoration: underline; }
 /* Not a control and not a link — the tooltip is the only thing here, so the
    cursor is what says there is one. Masthead.tsx says why this is not a button. */
 .origin-said { color: var(--ink-faint); cursor: help; }
@@ -361,7 +371,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    it is a guess, and the same hover. */
 .origin-with-guess { flex-wrap: wrap; column-gap: 0.6rem; }
 .origin-guess { color: var(--ink-faint); }
-.origin-guess:hover { color: var(--highlight); }
+.origin-guess:hover { color: var(--highlight-text); }
 /* The **?** is the part of the link that says *guess*, so it is never faded or
    cut with the path: `flex: none`, full strength. */
 .origin-guess-mark { flex: none; }
@@ -412,7 +422,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   cursor: pointer;
 }
 .facts > .fold-all:hover,
-.facts > .fold-all:focus-visible { color: var(--highlight); }
+.facts > .fold-all:focus-visible { color: var(--highlight-text); }
 
 /* One author in the masthead or on the Metadata page: a name first, a link
    second, so it keeps the line's colour until you point at it. AuthorNames.tsx. */
@@ -423,7 +433,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 }
 .author-name:hover,
 .author-name:focus-visible {
-  color: var(--highlight);
+  color: var(--highlight-text);
 }
 
 /* `.about` was here: the provenance list, first behind the masthead's ▾ and

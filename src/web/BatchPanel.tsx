@@ -200,7 +200,7 @@ function BatchRowLine({ row, onRetry }: { row: BatchRow; onRetry: () => void }) 
         <FileText size={12} aria-hidden="true" className="tw:shrink-0 tw:self-center tw:text-muted-foreground" />
         <span className="tw:min-w-0 tw:max-w-full tw:flex-1 tw:basis-40 tw:truncate tw:text-foreground">
           {slug ? (
-            <Link href={readHref(slug)} className="tw:text-foreground tw:hover:text-highlight">
+            <Link href={readHref(slug)} className="tw:text-foreground tw:hover:text-highlight-text">
               {row.filename}
             </Link>
           ) : (

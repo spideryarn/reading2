@@ -35,7 +35,13 @@
    already mean, and three overlapping meanings of "orange background" is one
    too many. The words themselves must not change colour — this is the verbatim
    column, and recolouring the author's prose to advertise our annotation is the
-   small version of the thing vision.md § Principles refuses. */
+   small version of the thing vision.md § Principles refuses.
+
+   **A fill is used in one case: the reader chose a colour** (a highlight,
+   2026-10-03, `mark.cmt[data-colour]` below). Then the wash is theirs, in one
+   of four hues none of which is the orange, and it is the point — they asked
+   for these words to stand out. An uncoloured comment keeps this underline
+   exactly. docs/plans/261003e-span-highlights-with-a-colour.md. */
 mark.cmt {
   background: none;
   color: inherit;
@@ -54,8 +60,49 @@ mark.cmt[data-cmt-open] {
   border-bottom-color: var(--highlight);
 }
 
+/* **A highlight: the reader's colour, as a wash behind the words.** The words
+   keep their colour (the rule above). `data-colour` is the colour of the comment
+   a click on this run opens — annotate.ts § `commentOrder` — so the wash and the
+   dialog always agree. `background-color` and never the `background` shorthand,
+   so a search's stripes (a `background-image`) survive underneath. The
+   underline goes: the wash already says something is here. */
+mark.cmt[data-colour] {
+  border-bottom-color: transparent;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  /* Square corners: a highlight is cut into one <mark> per text node (around a
+     glossary term, an <em>), and rounded corners on each piece notch the wash
+     between them. Seen in the browser check, 2026-10-03. */
+}
+mark.cmt[data-colour="yellow"] { --hl: var(--hl-yellow); }
+mark.cmt[data-colour="green"] { --hl: var(--hl-green); }
+mark.cmt[data-colour="blue"] { --hl: var(--hl-blue); }
+mark.cmt[data-colour="pink"] { --hl: var(--hl-pink); }
+/* Written at a specificity that beats `mark.cmt:hover`, `mark.hit[data-wash]`
+   and `mark.hit[data-wash][data-hit-open]` alike: **on the exact words a
+   highlight covers, its wash wins over a search's** (plan review S6). The
+   search keeps its other cues — the hue stripes under the words and the bar
+   down the paragraph — so nothing it found is hidden. */
+mark.cmt[data-colour][data-colour],
+mark.cmt.hit[data-colour][data-wash],
+mark.cmt.hit[data-colour][data-wash][data-hit-open] {
+  background-color: var(--hl);
+}
+mark.cmt[data-colour][data-colour]:hover {
+  background-color: color-mix(in oklab, var(--hl) 80%, var(--ink));
+}
+/* The open one gets an outline rather than the orange wash, which would
+   replace the reader's chosen colour with ours at exactly the moment they are
+   looking at it. */
+mark.cmt[data-colour][data-cmt-open] {
+  outline: 1px solid var(--highlight-text);
+  outline-offset: 1px;
+}
+
 /* The marker proper. On the final run only (annotate.ts sets data-mark-end), so
-   a mark broken across an <em> still shows exactly one asterisk. */
+   a mark broken across an <em> still shows exactly one asterisk — and only for
+   a comment that earns one: a wordless highlight shows its wash alone
+   (`earnsMarker`, comment-nav.ts). */
 mark.cmt[data-mark-end]::after {
   content: "✳";
   font-family: var(--font-ui);
@@ -63,7 +110,7 @@ mark.cmt[data-mark-end]::after {
   line-height: 1;
   vertical-align: super;
   margin-left: 0.15em;
-  color: var(--highlight);
+  color: var(--highlight-text);
 }
 
 /* A glossary term's occurrences. **Standing, since 2026-08-26**, and the
@@ -271,7 +318,7 @@ mark.xref:hover {
    ring rather than the hover wash, so a keyboard reader can see which of the
    page's stops they are on; `:focus-visible` so a click does not leave one. */
 mark.xref:focus-visible {
-  outline: 2px solid var(--highlight);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
   border-radius: 2px;
   text-decoration-color: var(--highlight-ink);
@@ -692,7 +739,7 @@ mark.hit[data-dir="mixed"]::after {
 mark.cmt.hit[data-mark-end][data-dir]::after {
   content: "−✳";
   content: "−✳" / "counts against";
-  color: var(--highlight);
+  color: var(--highlight-text);
   opacity: 1;
 }
 mark.cmt.hit[data-mark-end][data-dir="for"]::after {
@@ -738,15 +785,22 @@ mark.hit[data-wash][data-hit-open] {
    **The wash here does not undo "quotes outline, search fills".** It is a
    button's `:active` background: momentary, tied to the one row the reader is
    pointing at, gone when they move on. The resting state of every quote on the
-   page is still an outline and nothing else. Judged in Chrome, 2026-09-07. */
+   page is still an outline and nothing else. Judged in Chrome, 2026-09-07.
+
+   "White" means *the most contrast the page has*, so it is `--toward-ink`:
+   white on the dark page, black on the light one, where a white stroke would
+   vanish. Since 2026-10-03. */
 mark.hit[data-quote][data-hit-open] {
-  --quote-stroke-color: #ffffff;
+  --quote-stroke-color: var(--toward-ink);
   background-color: rgb(var(--quote-stroke-rgb) / 0.18);
 }
-/* A comment over a hit keeps its underline: it is the one you can click, and
-   losing the affordance to a wash would make it look inert. Same call
+/* An uncoloured comment over a hit keeps its underline: it is the one you can
+   click, and losing the affordance to a wash would make it look inert. A
+   coloured highlight already has its own wash and deliberately keeps no orange
+   line (the rule near the top); `[data-colour]` must therefore stay excluded
+   here despite this rule appearing later in the cascade. Same call
    `mark.cmt.term` makes, for the same reason. */
-mark.cmt.hit {
+mark.cmt.hit:not([data-colour]) {
   border-bottom-color: var(--highlight);
 }
 
@@ -976,7 +1030,7 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-faint);
   cursor: pointer;
 }
-.cmt-close:hover { color: var(--highlight); }
+.cmt-close:hover { color: var(--highlight-text); }
 
 /* The author's quoted words — the only article text in this panel. */
 .cmt-quote {
@@ -1006,7 +1060,7 @@ td.text.has-hit[data-hues="8"] {
    the call site, so there is nothing here to keep in sync with it. */
 .cmt-spinner {
   flex: none;
-  color: var(--highlight);
+  color: var(--highlight-text);
   animation: cmt-spin 0.7s linear infinite;
 }
 @keyframes cmt-spin { to { transform: rotate(360deg); } }
@@ -1078,7 +1132,7 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.88rem;
 }
 .cmt-followup input::placeholder { color: var(--ink-faint); }
-.cmt-followup input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cmt-followup input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .cmt-followup button { font-size: 0.81rem; white-space: nowrap; }
 .cmt-followup button:disabled { opacity: 0.4; cursor: default; }
 
@@ -1104,7 +1158,7 @@ td.text.has-hit[data-hues="8"] {
   resize: vertical;
 }
 .cmt-note::placeholder { color: var(--ink-faint); }
-.cmt-note:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cmt-note:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .cmt-open-thread {
   display: block;
@@ -1193,7 +1247,7 @@ td.text.has-hit[data-hues="8"] {
   text-underline-offset: 2px;
   cursor: pointer;
 }
-.cmt-dialog button.linky:hover { color: var(--highlight); }
+.cmt-dialog button.linky:hover { color: var(--highlight-text); }
 
 /* Delete is the one button here that destroys something, so it hovers red.
    This used to be written as `.cmt-delete:hover` next to the rule that puts it
@@ -1210,7 +1264,7 @@ td.text.has-hit[data-hues="8"] {
    .cmt-search below), and a third, browser-blue one inside the panel is a
    split rather than an addition. Covers close, both arrows, retry and delete. */
 .cmt-dialog button:focus-visible {
-  outline: 1px solid var(--highlight);
+  outline: 1px solid var(--highlight-text);
   outline-offset: 2px;
 }
 
@@ -1235,7 +1289,7 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-soft);
   cursor: pointer;
 }
-.cmt-nav button:hover:not(:disabled) { color: var(--highlight); }
+.cmt-nav button:hover:not(:disabled) { color: var(--highlight-text); }
 /* Disabled rather than wrapped: the arrows stop at the ends, and a live arrow
    that goes nowhere reads as "there is more this way" when there isn't. */
 .cmt-nav button:disabled { color: var(--ink-faint); opacity: 0.35; cursor: default; }
@@ -1258,8 +1312,8 @@ td.text.has-hit[data-hues="8"] {
   cursor: default;
   border-radius: 3px;
 }
-.cmt-search:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
-.cmt-search.on { color: var(--highlight); }
+.cmt-search:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 2px; }
+.cmt-search.on { color: var(--highlight-text); }
 .cmt-search.off { color: var(--ink-faint); opacity: 0.65; }
 .cmt-search svg { display: block; }
 .cmt-search-n { font-size: 0.74rem; font-variant-numeric: tabular-nums; }
@@ -1278,3 +1332,64 @@ td.text.has-hit[data-hues="8"] {
    over the prose column, which is exactly where the next sentence is. */
 .cmt-dialog { transition: opacity 0.1s; }
 .cmt-dialog.dodging { opacity: 0.1; pointer-events: none; }
+
+/* **What a finger's selection gets** — TouchSelectionChip.tsx, and
+   docs/project/touch.md § A finger's selection gets a button.
+
+   `--chip-x` / `--chip-y` are the viewport coordinates of the end of the words
+   that will be saved; everything else is here, so the clamping is the
+   stylesheet's and reads the same notch and bar tokens everything else does.
+
+   - **Below the words**, because iOS puts its own callout above them. The gap
+     is there for the selection handle, whose knob hangs under the last line.
+   - **Clamped to the viewport**, inside the safe area and above the bottom bar
+     and install hint where they are showing. The width is stated so the
+     right-hand clamp can be arithmetic rather than a measurement.
+   - **44px tall at every pointer**, not only a coarse one: nothing but a finger
+     ever draws it, and a hybrid's primary pointer may be the trackpad.
+   - **z-index 50**: over the bars (40), the spine (45) and the mode bands
+     (44–46); under every dialog (70) and the bottom bar (96). */
+.touch-select-chip {
+  --chip-w: 13rem;
+  --chip-gap: 1.25rem;
+  position: fixed;
+  z-index: 50;
+  left: clamp(
+    calc(var(--safe-left) + 0.5rem),
+    var(--chip-x, 0px),
+    calc(100vw - var(--safe-right) - var(--chip-w) - 0.5rem)
+  );
+  top: clamp(
+    calc(var(--safe-top) + 0.5rem),
+    calc(var(--chip-y, 0px) + var(--chip-gap)),
+    calc(
+      100dvh - max(var(--dock-bottom), var(--safe-bottom)) - var(--hint-now) - var(--control-h-lg) - 0.5rem
+    )
+  );
+  box-sizing: border-box;
+  inline-size: var(--chip-w);
+  block-size: var(--control-h-lg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0 0.9rem;
+  background: var(--surface-raised);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  /* A press on it must not select its label, raise the iOS callout over it, or
+     wait 300ms to find out whether it was a double-tap. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+.touch-select-chip svg { flex: none; color: var(--highlight-text); }
+.touch-select-chip:active { background: var(--highlight-wash); }

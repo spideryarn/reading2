@@ -51,7 +51,7 @@ sharpen it. They apply to most ideas below, so they are stated once here.
 
 4. **Dark only, unconditionally.** The brief says "light and dark themes both"; the codebase says
    otherwise — `color-scheme: dark`, no toggle, no `prefers-color-scheme`, Greg's call 2026-08-24
-   ([design-css-overview.md § Colour](../project/design-css-overview.md#colour-one-source-dark-only)).
+   ([design-css-overview.md § Colour](../project/design-css-overview.md#colour-one-source-two-themes)).
    That is a *simplification*, and it matters to this lane: additive/`plus-lighter` blend modes,
    glows and `screen` compositing all work on a near-black ground and would need rethinking on white.
    Use them freely; just do not write a hex.

@@ -90,7 +90,14 @@ export interface FeedbackDevice {
   language: string | null;
   online: boolean | null;
   timezone: string | null;
+  /** The OS's `prefers-color-scheme` — not necessarily what the page showed. */
   colorScheme: string | null;
+  /** The reader's choice on /profile (src/web/appearance.ts), and the theme it
+      resolved to. Beside `colorScheme` rather than instead of it, because a
+      reader who chose Light on a dark OS is exactly the case a theme bug needs
+      all three facts for. `null` on reports from before 2026-10-03. */
+  appearance: string | null;
+  theme: string | null;
   reducedMotion: boolean | null;
 }
 
@@ -173,6 +180,10 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as 
 
 /** `prefers-color-scheme` has three answers and this is all of them. */
 const COLOUR_SCHEMES = ["light", "dark", "no-preference"] as const;
+/* src/web/appearance.ts's two unions, spelled out rather than imported: this
+   file is the server's, and the client module pulls in React. */
+const APPEARANCES = ["system", "light", "dark"] as const;
+const THEMES = ["light", "dark"] as const;
 
 /**
  * `STEP_ORDER` in src/step-order.ts, copied. See the header for why it is copied
@@ -479,6 +490,8 @@ function device(value: unknown): FeedbackDevice | null {
     online: bool(source.online),
     timezone: shaped(source.timezone, TIMEZONE),
     colorScheme: oneOf(source.colorScheme, COLOUR_SCHEMES),
+    appearance: oneOf(source.appearance, APPEARANCES),
+    theme: oneOf(source.theme, THEMES),
     reducedMotion: bool(source.reducedMotion),
   };
 }

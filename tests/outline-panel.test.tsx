@@ -118,6 +118,8 @@ const REAL_COMPUTED = window.getComputedStyle.bind(window);
 
 let host: HTMLDivElement;
 let reactRoot: Root;
+/** How many times `render`'s panel asked to jump. */
+let jumps = 0;
 
 /**
  * Stub the two numbers the fit reads.
@@ -224,7 +226,9 @@ function render(
         focusRow={focusRow}
         proseBeside={proseBeside}
         paragraphLabels={paragraphLabels}
-        onJump={() => {}}
+        onJump={() => {
+          jumps += 1;
+        }}
         head={headHeight > 0 ? <div>Fisheye / Expanded</div> : null}
       />,
     );
@@ -233,6 +237,7 @@ function render(
 }
 
 beforeEach(() => {
+  jumps = 0;
   host = document.createElement("div");
   document.body.appendChild(host);
   reactRoot = createRoot(host);
@@ -613,5 +618,74 @@ describe("Expanded follow-along", () => {
        installed by the component. */
     observers.at(-1)!([], {} as ResizeObserver);
     expect(list.scrollTop).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * **A finger's first tap on a row opens its card; the second goes there** —
+ * docs/project/touch.md, for the list face as for the two-column one (Greg,
+ * spya-a868zs; plan 261003c). The click says `mouse` on iOS 18.2 and later
+ * (WebKit bug 282988), so only the `pointerdown` says it was a finger. The
+ * touch hover/lift and compatibility mouse events are included because those
+ * are the events that have closed touch-opened cards before their click.
+ */
+describe("a tap on a row", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function fire(el: Element, type: string, pointerType: string, detail = 1) {
+    el.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: type !== "pointerleave",
+        cancelable: true,
+        detail,
+        pointerType,
+        pointerId: 1,
+      }),
+    );
+  }
+  function tap(el: Element, down: "touch" | "mouse") {
+    act(() => {
+      if (down === "touch") {
+        fire(el, "pointerover", "touch");
+        fire(el, "pointerdown", "touch");
+        fire(el, "pointerup", "touch");
+        fire(el, "pointerout", "touch");
+        fire(el, "pointerleave", "touch");
+        el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+        el.dispatchEvent(new MouseEvent("mouseenter"));
+        el.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+        el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      } else {
+        fire(el, "pointerdown", "mouse");
+        fire(el, "pointerup", "mouse");
+      }
+      fire(el, "click", "mouse");
+    });
+    act(() => {
+      /* Let the group's delayed hover open/close and the exit transition land;
+         an immediate assertion would miss a card that closes itself just after
+         the click. */
+      vi.advanceTimersByTime(1_000);
+    });
+  }
+  const firstRow = (panel: HTMLElement) =>
+    panel.querySelector<HTMLElement>(".outln-list:not([data-rung]) .outln-row")!;
+  const card = () => document.querySelector('[role="tooltip"]');
+
+  it("on a finger, the first tap opens the card and the second goes there", () => {
+    const row = firstRow(render(10_000));
+    tap(row, "touch");
+    expect(jumps, "the first tap reads the row").toBe(0);
+    expect(card()?.textContent).toContain("Tap again to go here");
+    tap(row, "touch");
+    expect(jumps).toBe(1);
+  });
+
+  it("a mouse click goes there at once", () => {
+    tap(firstRow(render(10_000)), "mouse");
+    expect(jumps).toBe(1);
+    expect(card()?.textContent ?? "").not.toContain("Tap again");
   });
 });

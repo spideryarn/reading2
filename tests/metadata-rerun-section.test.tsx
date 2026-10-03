@@ -172,6 +172,8 @@ let holdMetadata = false;
 let metadataReads: number;
 /** The server's verdict on a glossary run, or absent as an older server sends it. */
 let glossaryRun: ArticleMetadata["glossaryRun"];
+/** The article's tags as the metadata endpoint currently sees them. */
+let articleTags: string[];
 
 let host: HTMLDivElement;
 let root: Root;
@@ -205,6 +207,7 @@ function metadataBody() {
     profile: null,
     purpose: null,
     archivedAt: null,
+    tags: [...articleTags],
     ...(glossaryRun !== undefined ? { glossaryRun } : {}),
   };
 }
@@ -218,6 +221,22 @@ function madeJob(id: string, step: StepName, status: Job["status"] = "queued"): 
     status,
     createdAt: "2026-09-07T00:00:00.000Z",
   };
+}
+
+function tagResponse(url: string, method: string, body: BodyInit | null | undefined): Response | null {
+  if (url === `/api/library/${SLUG}/tags` && method === "PATCH") {
+    const change = JSON.parse(String(body ?? "{}")) as {
+      add?: string[];
+      remove?: string[];
+    };
+    articleTags = articleTags.filter((tag) => !change.remove?.includes(tag));
+    articleTags = [...new Set([...articleTags, ...(change.add ?? [])])].sort();
+    return json({ tags: articleTags });
+  }
+  if (url === "/api/library/tags") {
+    return json({ tags: articleTags.map((tag) => ({ tag, count: 1 })) });
+  }
+  return null;
 }
 
 beforeEach(() => {
@@ -234,12 +253,15 @@ beforeEach(() => {
   heldMetadata = [];
   holdMetadata = false;
   glossaryRun = undefined;
+  articleTags = [];
   metadataReads = 0;
   jobEngine.reset();
 
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
+    const tags = tagResponse(url, method, init?.body);
+    if (tags) return Promise.resolve(tags);
     if (url.startsWith("/api/metadata/")) {
       metadataReads++;
       /* Snapshotted at ask-time, not at answer-time. A read that went out
@@ -677,6 +699,46 @@ describe("the AI processing section", () => {
     /* And the page ends on what the run wrote, not on what the older read
        carried. */
     expect(button("quiz", "Run it again"), "the stale read won").toBeTruthy();
+  });
+
+  it("does not let a stale metadata read overwrite a successful tag edit", async () => {
+    articleTags = ["old"];
+    await open();
+
+    holdMetadata = true;
+    await act(async () => jobEngine.receive([]));
+    await act(async () => {
+      jobEngine.receive([madeJob("job-before-tag-edit", "quiz", "done")]);
+    });
+    expect(heldMetadata).toHaveLength(1);
+    expect(metadataReads).toBe(2);
+
+    const input = host.querySelector<HTMLInputElement>('[aria-label="Add a tag"]')!;
+    await act(async () => {
+      input.focus();
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      set.call(input, "new");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    await settle();
+    expect(host.querySelector('[aria-label="Remove the tag new"]')).not.toBeNull();
+
+    /* The old answer cannot commit as the final word. It is allowed to land,
+       but the write arms one read behind it. */
+    await act(async () => heldMetadata[0]?.());
+    await settle();
+    expect(metadataReads).toBe(3);
+    expect(heldMetadata).toHaveLength(2);
+
+    await act(async () => heldMetadata[1]?.());
+    await settle();
+    expect(host.querySelector('[aria-label="Remove the tag new"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Remove the tag old"]')).not.toBeNull();
   });
 
   /**

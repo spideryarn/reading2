@@ -527,9 +527,9 @@ export interface UnmeteredSpend {
 
 export const UNMETERED_SPEND: readonly UnmeteredSpend[] = [
   {
-    file: "evals/live/hallucination-on-noise.mts, evals/live/jargon-recovery.mts",
+    file: "evals/live/hallucination-on-noise.mts, evals/live/jargon-recovery.mts, evals/live/gpt-live-spike.mts, scripts/spike-live-push-to-talk.ts",
     account: "OPENAI_API_KEY — a separate bill, and outside the OpenRouter spend cap",
-    what: "The live-mode evals. Realtime sessions on gpt-realtime-2.1 plus transcription arms, and jargon-recovery also buys text-to-speech from /v1/audio/speech to say the test sentences. A few cents a run, on a key nothing else in this report can see.",
+    what: "The live-mode evals. Realtime sessions on gpt-realtime-2.1 plus transcription arms, and jargon-recovery also buys text-to-speech from /v1/audio/speech to say the test sentences. A few cents a run, on a key nothing else in this report can see. gpt-live-spike also opens gpt-live-1 sessions with a gpt-6-luna backend, and a full run of it is about ten dollars. spike-live-push-to-talk is one gpt-realtime-2.1 session plus two TTS sentences, a few cents.",
     why: "An eval opens its own realtime session and talks over it, with no server of ours in the middle and no browser to report from — so neither seam applies: declaredFetch wraps a fetch and reads a response body, and the acceptance endpoints that meter the app’s own live conversation (Stage 2B, 2026-09-02) are authenticated and expect a session this server journalled.",
     since: "2026-09-02",
   },

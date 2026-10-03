@@ -248,15 +248,67 @@ describe("assignSlots", () => {
   });
 });
 
-describe("the palette the slots index into", () => {
-  const css = readFileSync(path.join(root, "styles/colourscales.css"), "utf8");
+/**
+ * The stylesheet's two palettes, read separately: the dark `:root` block and
+ * the `:root[data-theme="light"]` block that redefines the same names (since
+ * 2026-10-03). Reading the file as one list would count every hue twice, or —
+ * through a Map — let the light value silently replace the dark one, and then
+ * hold a colour drawn for paper to the near-black page's rules.
+ */
+const paletteCss = readFileSync(path.join(root, "styles/colourscales.css"), "utf8");
+const tokenCss = readFileSync(path.join(root, "styles/tokens.css"), "utf8");
+const PALETTE_BLOCKS = {
+  dark: [...paletteCss.matchAll(/^:root\s*\{([\s\S]*?)^\}/gm)].map((m) => m[1] ?? ""),
+  light: [...paletteCss.matchAll(/^:root\[data-theme="light"\]\s*\{([\s\S]*?)^\}/gm)].map(
+    (m) => m[1] ?? "",
+  ),
+};
+
+/** The actual neutral page lightness in each token block, not a copied value. */
+function pageLightness(theme: "dark" | "light"): number {
+  const selector = theme === "dark" ? ":root" : ':root[data-theme="light"]';
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const body = new RegExp(`^${escaped}\\s*\\{([\\s\\S]*?)^\\}`, "gm").exec(tokenCss)?.[1] ?? "";
+  const match = /--background\s*:\s*oklch\(\s*([\d.]+)\s+0\s+0\s*\)/.exec(body);
+  if (!match?.[1]) throw new Error(`no neutral --background in the ${theme} token block`);
+  return Number(match[1]);
+}
+
+describe("the stylesheet holds one dark palette and one light one", () => {
+  it("has exactly one block of each, and every --cat-N-rgb lives in one of them", () => {
+    /* A third block — a second `:root`, a media query — would be a palette the
+       per-theme checks below cannot see. */
+    expect(PALETTE_BLOCKS.dark).toHaveLength(1);
+    expect(PALETTE_BLOCKS.light).toHaveLength(1);
+    const count = (text: string) => [...text.matchAll(/--cat-\d+-rgb\s*:/g)].length;
+    expect(count(PALETTE_BLOCKS.dark[0] ?? "") + count(PALETTE_BLOCKS.light[0] ?? "")).toBe(
+      count(paletteCss),
+    );
+  });
+});
+
+/** WCAG 2 relative luminance of an `r g b` triplet. */
+function luminance(triplet: string): number {
+  const [r, g, b] = triplet.split(/\s+/).map(Number) as [number, number, number];
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+describe.each(["dark", "light"] as const)("the palette the slots index into, %s", (theme) => {
+  const css = PALETTE_BLOCKS[theme][0] ?? "";
 
   it("defines exactly PALETTE_SLOTS hues", () => {
     /* Both directions matter and only one is loud. A stylesheet with *more*
        entries wastes them silently; with fewer, every mark belonging to a
        search past the end refers to an undefined custom property, which is an
        invalid value — so the wash and the rule paint nothing and the search
-       looks like it found nothing. */
+       looks like it found nothing. In the light block a missing slot is
+       quieter still: it falls back to the dark value, which renders, in a
+       colour tuned for the other page. Exactly one definition per slot per
+       block: a duplicate is two values of which only the last counts. */
     const defined = [...css.matchAll(/^\s*--cat-(\d+)-rgb\s*:/gm)].map((m) => Number(m[1]));
     /* `PALETTE_SLOTS`, not `CATEGORICAL_SLOTS` — the stylesheet holds every
        hue that exists, and the hash only reaches the first eight of them. */
@@ -271,7 +323,9 @@ describe("the palette the slots index into", () => {
        `--hit-rgb` is written that way, and the same failure if it is not: the
        colour resolves, the alpha is dropped, and every mark paints at full
        strength with the confidence silently gone. */
-    for (const m of css.matchAll(/--cat-(\d+)-rgb\s*:\s*([^;]+);/g)) {
+    const found = [...css.matchAll(/--cat-(\d+)-rgb\s*:\s*([^;]+);/g)];
+    expect(found).toHaveLength(PALETTE_SLOTS);
+    for (const m of found) {
       expect(m[2]?.trim()).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
     }
   });
@@ -312,40 +366,44 @@ describe("the palette the slots index into", () => {
        is recomputed. Achromatic slots sort last, which is where the neutral
        belongs and is why `hueOf` returns Infinity rather than an angle for it —
        a hue angle for a colourless colour is arbitrary, and sorting on one
-       would put the grey somewhere in the middle of the spectrum. */
+       would put the grey somewhere in the middle of the spectrum.
+
+       **Once per theme, against one array.** There is one picker and one
+       `PALETTE_BY_HUE`, so a light retune that moved a hue past its neighbour
+       would shuffle the grid in light only. */
     const angles = PALETTE_BY_HUE.map((slot) => {
       const triplet = triplets.get(slot);
-      if (triplet === undefined) throw new Error(`no --cat-${slot}-rgb in the stylesheet`);
+      if (triplet === undefined) throw new Error(`no --cat-${slot}-rgb in the ${theme} block`);
       return hueOf(triplet);
     });
     expect(angles).toEqual([...angles].sort((a, b) => a - b));
   });
+
+  it("keeps every hue clear of the page it is painted on", () => {
+    /* The failure the section header in colourscales.css is about: a colour
+       too close to `--page` is a mark nobody can see, and it renders
+       perfectly. Measured rather than trusted, because eight of these were
+       generated and a generator is exactly the thing that can be wrong the
+       same way sixteen times. WCAG's 3:1 for a mark that is not text, against
+       each theme's own `--background` in styles/tokens.css; for a neutral,
+       relative luminance is OKLab L cubed. */
+    const page = pageLightness(theme) ** 3;
+    for (const [slot, triplet] of triplets) {
+      const y = luminance(triplet);
+      const ratio = (Math.max(y, page) + 0.05) / (Math.min(y, page) + 0.05);
+      expect(ratio, `--cat-${slot}-rgb is too faint on the ${theme} page`).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
+describe("the palette the slots index into", () => {
+  const css = PALETTE_BLOCKS.dark[0] ?? "";
 
   it("puts every slot in the grid exactly once", () => {
     // A permutation, so no hue is unreachable and none is offered twice.
     expect([...PALETTE_BY_HUE].sort((a, b) => a - b)).toEqual(
       Array.from({ length: PALETTE_SLOTS }, (_, i) => i),
     );
-  });
-
-  it("keeps every hue clear of the page it is painted on", () => {
-    /* The failure the section header in colourscales.css is about: a colour
-       darker than `--page` (L 0.145) is a mark nobody can see, and it renders
-       perfectly. Measured rather than trusted, because eight of these were
-       generated and a generator is exactly the thing that can be wrong the
-       same way sixteen times. */
-    for (const [slot, triplet] of triplets) {
-      const [r, g, b] = triplet.split(/\s+/).map(Number) as [number, number, number];
-      const lin = (c: number) => {
-        const v = c / 255;
-        return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-      };
-      const L =
-        0.2104542553 * Math.cbrt(0.4122214708 * lin(r) + 0.5363325363 * lin(g) + 0.0514459929 * lin(b)) +
-        0.793617785 * Math.cbrt(0.2119034982 * lin(r) + 0.6806995451 * lin(g) + 0.1073969566 * lin(b)) -
-        0.0040720468 * Math.cbrt(0.0883024619 * lin(r) + 0.2817188376 * lin(g) + 0.6299787005 * lin(b));
-      expect(L, `--cat-${slot}-rgb is too dark for the page`).toBeGreaterThan(0.55);
-    }
   });
 
   it("lets a reader choose a hue the hash will never hand out", () => {
@@ -358,7 +416,9 @@ describe("the palette the slots index into", () => {
     expect(assignSlots([{ ...runs(1)[0]!, colour: 11 }]).get(runs(1)[0]!.id)).toBe(11);
   });
 
-  it("gives every categorical hue a plain-colour alias beside it", () => {
+  it("gives every categorical hue a plain-colour alias beside it, in the dark block", () => {
+    /* The light block redefines only the triplets, and these aliases follow
+       them; tests/colour-scales.test.ts checks the light block has none. */
     for (let i = 0; i < PALETTE_SLOTS; i++) {
       expect(css).toMatch(new RegExp(`--cat-${i}\\s*:\\s*rgb\\(var\\(--cat-${i}-rgb\\)\\)`));
     }

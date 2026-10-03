@@ -35,7 +35,7 @@ export interface HelpModeExtra {
 }
 
 /** The link style the plain-prose pages use for a cross-reference. */
-export const HELP_LINK_CLASS = "tw:text-highlight tw:no-underline tw:hover:underline";
+export const HELP_LINK_CLASS = "tw:text-highlight-text tw:no-underline tw:hover:underline";
 
 /**
  * **A link from one section to another.** A plain fragment link — never

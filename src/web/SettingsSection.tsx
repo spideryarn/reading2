@@ -70,7 +70,7 @@ export function SettingsSection() {
                a class, because this page is written in `tw:` throughout and a
                one-property rule in the stylesheet would be the only thing on
                `/profile` that is not. */
-            className="tw:[accent-color:var(--highlight)]"
+            className="tw:[accent-color:var(--highlight-text)]"
             checked={experimental.on}
             /* **Until the server has answered, there is nothing to toggle.** An
                enabled switch drawn from a default would let the reader send
@@ -111,7 +111,7 @@ export function SettingsSection() {
              to read "Not saved — …" for it, which is a sentence about a save
              nobody attempted, and it left the reader with nothing to press.
              GPT Sol, 2026-08-31. */
-          <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
+          <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight-text">
             <TriangleAlert size={12} /> Couldn't load this setting — {experimental.loadError}{" "}
             {/* **Not while a save is in flight**, because `reload()` refuses
                 then — a read started mid-save carries the value the row held
@@ -144,7 +144,7 @@ export function SettingsSection() {
              was — see experimental-store.ts. A control that keeps the
              position the reader put it in while the server never heard is the
              failure this line exists to prevent. */
-          <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
+          <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight-text">
             <TriangleAlert size={12} /> Not saved — {experimental.error}
           </span>
         ) : experimental.saving ? (

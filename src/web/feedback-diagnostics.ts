@@ -61,6 +61,7 @@ import type {
   FeedbackDiagnosticsV1,
   FeedbackJobState,
 } from "../feedback-payload.js";
+import { currentTheme, readAppearance } from "./appearance.js";
 import { readFeedbackArticleContext, readFeedbackJobContext } from "./feedback-context.js";
 import { readLogBuffer, type ApiLogEntry, type ClientErrorLogEntry } from "./log-buffer.js";
 
@@ -185,6 +186,8 @@ function device(): FeedbackDevice | null {
     online: safely(() => navigator.onLine),
     timezone: safely(() => Intl.DateTimeFormat().resolvedOptions().timeZone),
     colorScheme: colourScheme(),
+    appearance: safely(() => readAppearance()),
+    theme: safely(() => currentTheme()),
     reducedMotion: matches("(prefers-reduced-motion: reduce)"),
   };
 }

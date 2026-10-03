@@ -49,6 +49,7 @@ import { and, asc, desc, eq, isNull, type SQL, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { feedback as feedbackTable } from "../db/schema.js";
+import { feedbackPageLabel } from "../feedback-page.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type {
@@ -80,9 +81,17 @@ const logger = log("store");
  */
 function idFilter(filter: FeedbackIdFilter | undefined): SQL | undefined {
   if (!filter) return undefined;
-  const literal = `{${filter.ids.map((id) => `"${id.replace(/["\\]/g, "\\$&")}"`).join(",")}}`;
-  const member = sql`${feedbackTable.id} = any(${literal}::text[])`;
+  const member = idMember(filter.ids);
   return filter.keep === "in" ? member : sql`not (${member})`;
+}
+
+/** A read that must see one moment: `listMine`'s page and its counts. */
+const SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } as const;
+
+/** `id = any(ids)`: what `in` keeps and `listMine`'s counts count. */
+function idMember(ids: readonly string[]): SQL {
+  const literal = `{${ids.map((id) => `"${id.replace(/["\\]/g, "\\$&")}"`).join(",")}}`;
+  return sql`${feedbackTable.id} = any(${literal}::text[])`;
 }
 
 /**
@@ -345,34 +354,60 @@ const rawPgFeedbackStore: FeedbackStore = {
     return row ? toReport(row) : null;
   },
 
-  async listMine(limit: number, filter?: FeedbackIdFilter): Promise<MyFeedbackPage> {
-    /* **Four columns, named here**, not `REPORT_COLUMNS` narrowed afterwards:
-       what is never selected cannot be handed on by a later spread. One row past
-       the limit is how `more` is known without a second, counting query; the
-       `(owner_id, created_at)` index the cap uses serves this too, and `id`
-       breaks a tie between two reports filed in the same instant so the order
-       is stable across reads. */
-    const rows = await getDb()
-      .select({
-        id: feedbackTable.id,
-        createdAt: feedbackTable.createdAt,
-        kind: feedbackTable.kind,
-        body: feedbackTable.body,
-      })
-      .from(feedbackTable)
-      .where(and(eq(feedbackTable.ownerId, currentOwnerId()), idFilter(filter)))
-      .orderBy(desc(feedbackTable.createdAt), desc(feedbackTable.id))
-      .limit(limit + 1);
-    return {
-      reports: rows.slice(0, limit).map((row) => ({
-        id: row.id,
-        createdAt: row.createdAt.toISOString(),
-        /* The same honest cast `toReport` makes: a CHECK holds the column to the union. */
-        kind: row.kind === null ? null : (row.kind as FeedbackKind),
-        body: row.body,
-      })),
-      more: rows.length > limit,
-    };
+  async listMine(
+    limit: number,
+    countIds: readonly string[],
+    filter?: FeedbackIdFilter,
+  ): Promise<MyFeedbackPage> {
+    const owner = currentOwnerId();
+    /* **One read-only snapshot for both statements** (GPT Sol's plan review,
+       261003b): two pool reads could see a report filed between them, and print
+       "50 most recent of 50". Sequential, not `Promise.all`, inside it —
+       src/store/article-rows.ts § `walk` says why. */
+    return getDb().transaction(async (tx) => {
+      /* **Five columns, named here**, not `REPORT_COLUMNS` narrowed afterwards:
+         what is never selected cannot be handed on by a later spread. `url` is
+         the fifth, and it is selected only to be turned into `page` below — the
+         address itself goes no further than this function
+         (src/feedback-page.ts). One row past
+         the limit is how `more` is known; the `(owner_id, created_at)` index the
+         cap uses serves this too, and `id` breaks a tie between two reports filed
+         in the same instant so the order is stable across reads. */
+      const rows = await tx
+        .select({
+          id: feedbackTable.id,
+          createdAt: feedbackTable.createdAt,
+          kind: feedbackTable.kind,
+          body: feedbackTable.body,
+          url: feedbackTable.url,
+        })
+        .from(feedbackTable)
+        .where(and(eq(feedbackTable.ownerId, owner), idFilter(filter)))
+        .orderBy(desc(feedbackTable.createdAt), desc(feedbackTable.id))
+        .limit(limit + 1);
+      /* `in` is `idFilter`'s own predicate, so it cannot drift from the list it
+         counts; `id` is half the primary key and never null, so
+         `not (id = any(…))` is exactly `all - in`. */
+      const [counted] = await tx
+        .select({
+          all: sql<number>`count(*)::int`,
+          in: sql<number>`(count(*) filter (where ${idMember(countIds)}))::int`,
+        })
+        .from(feedbackTable)
+        .where(eq(feedbackTable.ownerId, owner));
+      return {
+        reports: rows.slice(0, limit).map((row) => ({
+          id: row.id,
+          createdAt: row.createdAt.toISOString(),
+          /* The same honest cast `toReport` makes: a CHECK holds the column to the union. */
+          kind: row.kind === null ? null : (row.kind as FeedbackKind),
+          body: row.body,
+          page: feedbackPageLabel(row.url),
+        })),
+        more: rows.length > limit,
+        counts: { all: counted?.all ?? 0, in: counted?.in ?? 0 },
+      };
+    }, SNAPSHOT);
   },
 
   async markMirrorAttempted(id: string): Promise<void> {

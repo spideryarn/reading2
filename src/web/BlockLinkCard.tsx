@@ -323,6 +323,8 @@ function BlockLinkCard({
   resolveRef.current = resolveXref;
   const readingRef = useRef(readingTimeFor);
   readingRef.current = readingTimeFor;
+  /** Whether the open card was opened by a press rather than a hover or focus — see `press`. */
+  const tappedRef = useRef(false);
 
   const { refs, floatingStyles, context, isPositioned } = useFloating({
     open: shown !== null,
@@ -394,6 +396,24 @@ function BlockLinkCard({
     };
   }, [shown]);
 
+  /* **A card a press opened goes on the next scroll** (touch.md, the rule the
+     spine and the glossary keep): no finger is resting on the line, so it would
+     ride with the paragraph to the edge of the screen. A hovered card is held by
+     the pointer and is left alone. Capture, because a scroll does not bubble.
+     Plan 261003c. */
+  useEffect(() => {
+    const el = shown?.el;
+    if (!el || !tappedRef.current) return;
+    const close = () => {
+      if (currentRef.current !== el) return;
+      currentRef.current = null;
+      tappedRef.current = false;
+      setShown(null);
+    };
+    document.addEventListener("scroll", close, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", close, { capture: true });
+  }, [shown]);
+
   /* A new article/index can change the words under an anchor even if React
      preserves that node. Refresh the open card from the new source; the real
      Reader keeps this map stable across position renders, so this runs only
@@ -422,6 +442,7 @@ function BlockLinkCard({
 
     const shut = () => {
       currentRef.current = null;
+      tappedRef.current = false;
       setShown(null);
     };
     const close = () => {
@@ -432,6 +453,7 @@ function BlockLinkCard({
     };
     const show = (el: HTMLElement, clientY?: number) => {
       pending = null;
+      tappedRef.current = false;
       if (!el.isConnected) return shut();
       const content = contentFor(el, indexRef.current, resolveRef.current, readingRef.current);
       if (content === null) return shut();
@@ -476,6 +498,28 @@ function BlockLinkCard({
       if (to && el.contains(to)) return;
       close();
     };
+    /* **A press on the reading-time line opens its card** — the one way a finger
+       can, since nothing hovers on a touch screen (Greg, spya-vskqfn; plan
+       261003c). The line does nothing when pressed, so there is no second tap
+       to commit and no need to ask what made the press: a mouse's click on a
+       line whose card is already open changes nothing, and on one whose card
+       is still waiting out its delay it opens it a moment early. That is also
+       why the iPad's mislabelled click (`mouse` for a finger, WebKit 282988)
+       cannot touch it. A lift fires `pointerout` before the click and schedules
+       a close (touch.md § a lift fires the hover events); `show` comes after,
+       and clearing the timer is what keeps the card up. Opened this way, it
+       goes on the next scroll, for no finger is resting on it — the effect
+       below. The next tap anywhere closes it through `over`. */
+    const press = (e: MouseEvent) => {
+      const el = hit(e.target);
+      if (!el?.matches(READING_LINE)) return;
+      clearTimeout(openTimer);
+      clearTimeout(closeTimer);
+      pending = null;
+      if (el === currentRef.current) return;
+      show(el, e.clientY);
+      tappedRef.current = currentRef.current === el;
+    };
     const focusIn = (e: FocusEvent) => {
       const el = hit(e.target);
       if (!el || !focusVisible(el)) return;
@@ -497,6 +541,7 @@ function BlockLinkCard({
 
     document.addEventListener("pointerover", over);
     document.addEventListener("pointerout", out);
+    document.addEventListener("click", press);
     document.addEventListener("focusin", focusIn);
     document.addEventListener("focusout", focusOut);
     document.addEventListener("keydown", key);
@@ -506,6 +551,7 @@ function BlockLinkCard({
       currentRef.current = null;
       document.removeEventListener("pointerover", over);
       document.removeEventListener("pointerout", out);
+      document.removeEventListener("click", press);
       document.removeEventListener("focusin", focusIn);
       document.removeEventListener("focusout", focusOut);
       document.removeEventListener("keydown", key);

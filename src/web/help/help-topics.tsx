@@ -219,12 +219,14 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
         </ul>
         <p>
-          <strong>Point at the spine to read it.</strong> Every section has a card: the part it
-          belongs to and its place in it (“3 of 7”), its title and a one-line gist, what is inside
-          it, how many words it has, how far in it starts, and how many search matches it holds. A{" "}
-          <strong>§</strong> after the title means the heading is the author’s own; a title without
-          one was written by the AI. Once a card is open, move slowly down the spine and the cards
-          follow, so you can read the outline section by section.
+          <strong>Point at the spine to read it.</strong> Every section has a card. It starts with a
+          small outline of the article showing where the section sits: the part it belongs to,
+          the sections on either side, and its place in the part (“3 of 7”) when the part is long.
+          Under the section’s own name are a short gist and what is inside it. Then come how many
+          words it has, how far in it starts, and how many search matches it holds. A heading set in
+          the author’s typeface is the author’s own; one in the AI’s was written by the AI. Once a
+          card is open, move slowly down the spine and the cards follow, so you can read the outline
+          section by section.
         </p>
         <p>
           <strong>Click to go there.</strong> A click lands at the start of that section. On a
@@ -367,7 +369,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             the next term. <kbd>Esc</kbd> takes you back.
           </li>
           <li>
-            <kbd>⌘ Enter</kbd> / <kbd>Ctrl Enter</kbd> opens the article’s Metadata page. In a box you
+            <kbd>⌘ Enter</kbd> / <kbd>Ctrl Enter</kbd> opens the article’s Metadata page, and on it
+            takes you back to the article, as pressing <strong>Metadata</strong> again does. In a box you
             are typing in — a comment, feedback, a quiz answer — it saves or sends instead, and plain{" "}
             <kbd>Enter</kbd> starts a new line.
           </li>
@@ -468,9 +471,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           passage behind it is the model’s opinion; weigh it as one.
         </p>
         <p>
-          <strong>A different typeface for each voice</strong> is being tried — the author in a
-          serif, the AI in a typewriter face, what you typed in a plain sans. It is{" "}
-          <HelpRef to="experimental-features">experimental</HelpRef>.
+          <strong>Each voice has its own typeface</strong>: the author in a serif, the AI in a
+          typewriter face, what you typed in a plain sans.
         </p>
       </>
     ),
@@ -518,9 +520,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
         </p>
         <p>
           <strong>None of this uses up your allowance</strong> — opening, generating, chatting and
-          re-running are included. For a difficult piece, <strong>High-powered AI</strong> on the
-          article’s Metadata page uses a stronger model (Claude Opus) for work done after you switch
-          it on; use <strong>Run it again</strong> there to redo a mode with it. That switch is the
+          re-running are included. For a difficult piece, <strong>High-powered AI</strong> uses a
+          stronger model (Claude Opus) for work done after you switch it on. Tick it while the
+          article is being added to use it for the work still to come; or switch it on later from the
+          article’s Metadata page and use <strong>Run it again</strong> there to redo a mode with it. That switch is the
           one thing besides adding that counts — see <HelpRef to="plans">Plans</HelpRef>.
         </p>
       </>
@@ -726,10 +729,6 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             Only you see it.
           </li>
           <li>
-            <strong>A typeface for each voice</strong>, so you can tell at a glance whether the
-            author, the AI or you wrote something.
-          </li>
-          <li>
             <strong>Start the whole article again</strong>, on an article’s Metadata page.
           </li>
         </ul>
@@ -770,8 +769,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             costs nothing.
           </li>
           <li>
-            <strong>High-powered AI</strong>, a switch on an article’s Metadata page that uses a
-            stronger model for it, counts as one more article (half if the article is shared).
+            <strong>High-powered AI</strong>, a stronger model for one article — a tick box while it is
+            being added, or a switch on its Metadata page — counts as one more article (half if the article is shared).
             Switching it off does not refund it, and switching it back on costs nothing more.
           </li>
           <li>
@@ -849,7 +848,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           notes, comments, chats or profile.
         </p>
         <p>
-          The <strong>Earlier</strong> tab lists what you have sent, and marks a report{" "}
+          The <strong>Earlier</strong> tab lists what you have sent and the page you sent it from, and marks a report{" "}
           <strong>Shipped</strong> once a change made for it is live. Most things that go wrong here
           fail quietly, so even a two-line report helps.
         </p>

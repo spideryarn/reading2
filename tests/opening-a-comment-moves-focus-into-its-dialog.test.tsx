@@ -92,6 +92,7 @@ function Harness() {
             onDiscuss: () => {},
             onEdit: () => {},
             onPlace: () => {},
+            onRecolour: () => {},
             error: null,
           }}
         />
@@ -275,6 +276,7 @@ function GutterHarness({ initial }: { initial: ClientComment[] }) {
             onDiscuss: () => {},
             onEdit: () => {},
             onPlace: () => {},
+            onRecolour: () => {},
             error: null,
           }}
         />

@@ -409,7 +409,7 @@ subtly differently on half its uses. Do not "simplify" it into a utility.
 ### Light and dark
 
 No light mode, no toggle — Greg's decision
-([web-client.md § Dark mode](../project/web-client.md#dark-mode)), with `color-scheme: dark` declared
+([web-client.md § Dark mode](../project/web-client.md#appearance-light-dark-and-system)), with `color-scheme: dark` declared
 twice: `:root` in `tokens.css`, and a `<meta>` in [`index.html`](../../index.html) so the browser
 paints dark before CSS loads.
 
@@ -831,7 +831,7 @@ which suits a repo that is deliberately one Vite process and no build cleverness
 | [`src/web/styles.css`](../../src/web/styles.css) **header** | Must say the file is imported into `@layer app` by `src/web/tailwind.css`, and why — otherwise the next person adds a utility and watches it do nothing. |
 | [original-version/overview.md § Deliberately not lifted](../project/original-version/overview.md#deliberately-not-lifted) | **The direct reversal.** Move shadcn/Radix/Tailwind into [§ Already lifted](../project/original-version/overview.md#already-lifted-into-this-repo), and say what changed and when. Keep Phosphor where it is. |
 | [web-client.md § Where the code is](../project/web-client.md#where-the-code-is) | Rows for `src/web/tailwind.css`, `src/web/components/ui/`, `src/web/lib/utils.ts`, `components.json`. Note `main.tsx` now imports `tailwind.css`, not `styles.css`. |
-| [web-client.md § Dark mode](../project/web-client.md#dark-mode) | That `init` writes a light `:root` block we revert every time; the `@theme inline` bridge; `tokens.css` stays canonical. |
+| [web-client.md § Dark mode](../project/web-client.md#appearance-light-dark-and-system) | That `init` writes a light `:root` block we revert every time; the `@theme inline` bridge; `tokens.css` stays canonical. |
 | [tooltips.md](../project/tooltips.md) | Record that the choice was revisited on 2026-08-25, that the "no component convention here" argument **expired**, and that it was kept on the grouping behaviour alone. A decision re-affirmed for a *narrower* reason is worth writing down. |
 | [icons.md](../project/icons.md) | One line: Lucide was picked partly for being shadcn's default, and that bet paid off — no icon work needed. |
 | [typechecking.md § The layout](../project/typechecking.md#the-layout-one-base-of-options-three-projects) | The `@/` alias, why `paths` lives in `src/web/tsconfig.json` and not the base, and the `src/components` trap. |

@@ -51,6 +51,7 @@ import {
 } from "../messages.js";
 import { Button } from "./components/ui/button.js";
 import { GoogleMark } from "./GoogleMark.js";
+import { useTheme } from "./appearance.js";
 import { forgetReturn, rememberReturn } from "./auth-return.js";
 import { callbackUrl, googleSignInAvailable, supabase } from "./lib/supabase.js";
 
@@ -68,9 +69,15 @@ const FIELD =
      16px and does not zoom back out. The reading view's fields get that floor
      from narrow-window.css § a field iOS zooms into; the utilities layer
      outranks it, so a `tw:`-styled field says so itself. */
-  "tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight";
+  "tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight-text";
 
-const QUIET = "tw:text-xs tw:text-ink-faint tw:hover:text-highlight";
+const QUIET = "tw:text-xs tw:text-ink-faint tw:hover:text-highlight-text";
+
+/** Google's sign-in button palettes, one per theme — see the comment at the button. */
+const GOOGLE_BUTTON = {
+  dark: { background: "#131314", borderColor: "#8E918F", color: "#E3E3E3" },
+  light: { background: "#FFFFFF", borderColor: "#747775", color: "#1F1F1F" },
+} as const;
 
 export function SignInControls({
   initialTab = "sign-in",
@@ -85,6 +92,7 @@ export function SignInControls({
    */
   returnTo: string;
 }) {
+  const theme = useTheme();
   const [tab, setTab] = useState<SignInTab>(initialTab);
   const [mode, setMode] = useState<Mode>("form");
   const [email, setEmail] = useState("");
@@ -296,9 +304,10 @@ export function SignInControls({
         </p>
       )}
 
-      {/* Google's own dark-theme palette, which is specified rather than
-          chosen: #131314 fill, #8E918F stroke, #E3E3E3 text, and the exact
-          words — *Continue with Google* is one of the three Google permits,
+      {/* Google's own palettes, which are specified rather than chosen —
+          dark: #131314 fill, #8E918F stroke, #E3E3E3 text; light (since the
+          light theme, 2026-10-03): #FFFFFF, #747775, #1F1F1F — and the exact
+          words: *Continue with Google* is one of the three Google permits,
           and the one that is true on both halves of the switch. */}
       {mode === "form" && (
         <>
@@ -307,7 +316,7 @@ export function SignInControls({
             onClick={() => void withGoogle()}
             disabled={busy}
             className="tw:flex tw:w-full tw:items-center tw:justify-center tw:gap-3 tw:rounded-full tw:border tw:px-4 tw:py-2.5 tw:text-sm tw:font-medium tw:disabled:opacity-60"
-            style={{ background: "#131314", borderColor: "#8E918F", color: "#E3E3E3" }}
+            style={GOOGLE_BUTTON[theme]}
           >
             <GoogleMark />
             Continue with Google

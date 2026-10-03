@@ -6,6 +6,10 @@
  *     npm run deploy -- --verify-only      # check what is live, deploy nothing
  *     npm run deploy -- --force-gate=test  # named, loud, printed in the summary
  *
+ * Anything else — a typo, a flag npm swallowed because the `--` was dropped,
+ * `--host` without `--verify-only` — is refused with exit 2 before anything
+ * runs: `parseDeployArgs` in scripts/deploy-checks.ts.
+ *
  * The plan, the measurements behind each step and the decisions Greg made are in
  * docs/plans/260827v-deploy-pipeline.md. The judgements live in scripts/deploy-checks.ts
  * so that each of them can be tested against the broken state rather than only
@@ -74,6 +78,7 @@ import {
   ledgerDivergence,
   migratorUrlFrom,
   migrationState,
+  parseDeployArgs,
   postApplyProblems,
   RELEASE_LOCK_FILE,
   servingUnrecorded,
@@ -84,6 +89,7 @@ import {
   scanSql,
   TRUNK_BRANCH,
   trunkGap,
+  type DeployMode,
   type Expected,
   type JournalEntry,
   type LogLine,
@@ -174,22 +180,25 @@ function gate(name: string, passed: boolean, why: () => string): void {
 /* Flags                                                               */
 /* ------------------------------------------------------------------ */
 
-const argv = process.argv.slice(2);
-const has = (f: string) => argv.includes(f);
-const flagValue = (f: string) => {
-  const inline = argv.find((a) => a.startsWith(`${f}=`));
-  if (inline) return inline.slice(f.length + 1);
-  const i = argv.indexOf(f);
-  return i >= 0 ? argv[i + 1] : undefined;
-};
+/**
+ * **Refused here, before anything runs** — the lock, git, the network and the
+ * database are all below this line. An argument this script does not know used
+ * to be ignored, and an ignored `--verify-onyl` is a production deploy:
+ * `parseDeployArgs`, and tests/deploy-refuses-flags.test.ts, which runs this
+ * file and checks that it stops here.
+ */
+const parsed = parseDeployArgs(process.argv.slice(2), process.env);
+if (!parsed.ok) {
+  for (const line of parsed.problem) console.error(line);
+  process.exit(2);
+}
+const MODE: DeployMode = parsed.mode;
 
-const DRY_RUN = has("--dry-run");
-const VERIFY_ONLY = has("--verify-only");
-const SKIP_MIGRATIONS = has("--skip-migrations");
-const TARGET_HOST = flagValue("--host") ?? HOST;
-const FORCED_GATES = new Set(
-  argv.filter((a) => a.startsWith("--force-gate=")).map((a) => a.slice("--force-gate=".length)),
-);
+const DRY_RUN = MODE.op === "dry-run";
+const SKIP_MIGRATIONS = MODE.op !== "verify" && MODE.skipMigrations;
+/** Only `--verify-only` may look anywhere but production: a deploy verifies what it shipped. */
+const TARGET_HOST = MODE.op === "verify" ? (MODE.host ?? HOST) : HOST;
+const FORCED_GATES: ReadonlySet<string> = MODE.op === "verify" ? new Set() : MODE.forcedGates;
 
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
@@ -1444,6 +1453,12 @@ async function verifyRequestBody(): Promise<void> {
     }
   }
   record("POST /api/health — a request body survives the platform", problems);
+
+  /* The one check scripts/check-production-gate.sh had that this file lacked,
+     moved here when that script was deleted (261003g): the public probe takes
+     the two methods it was built for and no others. */
+  const other = await get(`${TARGET_HOST}/api/health`, { method: "DELETE" });
+  record("DELETE /api/health is refused", other.status === 405 ? [] : [`answered ${other.status}, not 405`]);
 }
 
 /**
@@ -1667,7 +1682,7 @@ async function readLogs(deployment: VercelDeployment, since: Date, smoke: string
 /* ------------------------------------------------------------------ */
 
 async function main(): Promise<void> {
-  if (VERIFY_ONLY) {
+  if (MODE.op === "verify") {
     await verify({ commit: null }, smokePath("verify-only"));
     return summarise(null);
   }

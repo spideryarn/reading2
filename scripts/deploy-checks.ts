@@ -1393,3 +1393,187 @@ export function postApplyProblems(
     "counting rows would have accepted this — the hashes are what identify a migration.",
   ];
 }
+
+/* ------------------------------------------------------------------ */
+/* What was asked for                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The one thing a run is doing. A union rather than three booleans, so that
+ * "verify some other host" and "deploy" cannot both be true of one run — which
+ * is what `--host` used to mean without `--verify-only`.
+ */
+export type DeployMode =
+  | { op: "verify"; host: string | null }
+  | { op: "dry-run"; skipMigrations: boolean; forcedGates: ReadonlySet<string> }
+  | { op: "deploy"; skipMigrations: boolean; forcedGates: ReadonlySet<string> };
+
+export type ParsedDeployArgs = { ok: true; mode: DeployMode } | { ok: false; problem: string[] };
+
+/**
+ * The `npm_config_*` keys a deploy may run under — **an allowlist, and everything
+ * else is a flag npm ate.**
+ *
+ * The first half is what npm 11.19.0 exports on every `npm run`, flag or no
+ * flag (measured; tests/deploy-refuses-flags.test.ts measures it again on every
+ * run). The second is ordinary npmrc plumbing: where the registry is and how to
+ * reach it, and how npm prints.
+ *
+ * It was a match on fragments of our own flag names for an hour, and GPT Sol's
+ * plan review broke it in both directions: `--verfiy-only`, `--dr-run` and
+ * `--read-only` contain none of them and deployed, while npm's own
+ * `replace-registry-host` contains `host` and blocked a plain deploy. Guessing
+ * what a typo looks like cannot be closed; listing what is ordinary can.
+ *
+ * **Deliberately absent**, though npm knows them: `dry_run`, `read_only`,
+ * `only`, `force`, `offline`, `ignore_scripts`, `if_present`. Each is
+ * something a person might type at a deploy and mean. A key missing from this
+ * list costs one refused run and a one-line edit here; a key wrongly on it is a
+ * production deploy somebody did not ask for.
+ */
+export const NPM_ORDINARY_CONFIG: ReadonlySet<string> = new Set([
+  /* always exported */
+  "allow_scripts",
+  "cache",
+  "global_prefix",
+  "globalconfig",
+  "init_module",
+  "local_prefix",
+  "node_gyp",
+  "noproxy",
+  "npm_version",
+  "prefix",
+  "user_agent",
+  "userconfig",
+  /* plumbing */
+  "ca",
+  "cafile",
+  "color",
+  "foreground_scripts",
+  "fund",
+  "audit",
+  "https_proxy",
+  "loglevel",
+  "logs_dir",
+  "logs_max",
+  "node_options",
+  "progress",
+  "proxy",
+  "registry",
+  "replace_registry_host",
+  "script_shell",
+  "shell",
+  "strict_ssl",
+  "timing",
+  "unicode",
+  "update_notifier",
+  /* Only the value true is ordinary: `-n` / `--no` export yes as an empty string. */
+  "yes",
+]);
+
+/**
+ * **Anything this does not recognise is a refusal, never a deploy.**
+ *
+ * Until 2026-10-03 the script read its flags with `argv.includes(…)` and
+ * rejected nothing, so everything that was not exactly `--verify-only` fell
+ * through to the gates, the remote migrations and the push to `main`. Three
+ * ways in, each reproduced (docs/plans/261003g-deploy-refuses-unknown-flags.md):
+ *
+ *  - **a typo** — `--verify-onyl`, `--dryrun`, `verify-only`;
+ *  - **a dropped `--`** — npm 11 takes `npm run deploy --verify-only` as its own
+ *    config and runs the script with *empty* argv. What it leaves behind is
+ *    `npm_config_verify_only=true` in the environment (measured on 11.19.0;
+ *    `--verify-only=false` leaves the key present and empty), which is why this
+ *    reads `env` and tests for the key rather than its value. Any key outside
+ *    `NPM_ORDINARY_CONFIG` is refused, so a typo *and* a dropped `--` is caught
+ *    too;
+ *  - **`--host`**, documented as "verify a host other than www" but which only
+ *    moved the target: a full production deploy, then a look at somewhere else.
+ *    It is legal only beside `--verify-only`. It does not *imply* it, because a
+ *    flag that quietly changes the operation is the shape of this bug.
+ *
+ * `--force-gate` takes `=` only: the space form used to be silently ignored.
+ */
+export function parseDeployArgs(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>>,
+): ParsedDeployArgs {
+  const usage = [
+    "usage: npm run deploy [-- --dry-run | --verify-only [--host <url>]]",
+    "                      [-- --skip-migrations] [-- --force-gate=<name>]",
+    "Nothing was run.",
+  ];
+  const refuse = (...lines: string[]): ParsedDeployArgs => ({ ok: false, problem: [...lines, ...usage] });
+
+  const PREFIX = "npm_config_";
+  const swallowed = Object.keys(env)
+    .filter((key) => key.toLowerCase().startsWith(PREFIX))
+    .filter((key) => {
+      const name = key.toLowerCase().slice(PREFIX.length);
+      return !NPM_ORDINARY_CONFIG.has(name) || (name === "yes" && env[key] !== "true");
+    })
+    .sort();
+  const negativeAnswer = swallowed.find((key) => key.toLowerCase() === `${PREFIX}yes`);
+  if (negativeAnswer) {
+    return refuse(
+      `${negativeAnswer} is not true: npm swallowed a negative answer (-n, --no or --no-yes).`,
+      "To check without deploying, use `npm run deploy -- --dry-run` or `npm run deploy -- --verify-only`.",
+    );
+  }
+  if (swallowed.length > 0) {
+    const flags = swallowed.map((key) => `--${key.toLowerCase().slice(PREFIX.length).replaceAll("_", "-")}`);
+    return refuse(
+      `npm swallowed ${flags.join(", ")} (${swallowed.join(", ")} is set), so this script never saw it.`,
+      `A flag for the deploy needs a \`--\` in front of it: use \`npm run deploy -- ${flags.join(" ")}\`.`,
+      "If that is a real npm setting from an npmrc, it is not one a deploy is known to run under:",
+      "add it to NPM_ORDINARY_CONFIG in scripts/deploy-checks.ts.",
+    );
+  }
+
+  let dryRun = false;
+  let verifyOnly = false;
+  let skipMigrations = false;
+  let host: string | null = null;
+  const forcedGates = new Set<string>();
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i] ?? "";
+    if (arg === "--dry-run") dryRun = true;
+    else if (arg === "--verify-only") verifyOnly = true;
+    else if (arg === "--skip-migrations") skipMigrations = true;
+    else if (arg.startsWith("--force-gate=")) {
+      const name = arg.slice("--force-gate=".length);
+      if (name === "") return refuse("--force-gate= names no gate.");
+      forcedGates.add(name);
+    } else if (arg === "--force-gate") {
+      return refuse("--force-gate needs its gate after an `=`: --force-gate=<name>.");
+    } else if (arg === "--host" || arg.startsWith("--host=")) {
+      const value = (arg === "--host" ? argv[++i] : arg.slice("--host=".length))?.replace(/\/+$/, "");
+      if (value === undefined || !/^https?:\/\/[^/\s]+$/.test(value)) {
+        return refuse(`--host needs an origin such as https://www.example.com, and got '${value ?? ""}'.`);
+      }
+      host = value;
+    } else {
+      return refuse(`unknown argument '${arg}'.`);
+    }
+  }
+
+  if (verifyOnly) {
+    const extra = [
+      dryRun ? "--dry-run" : null,
+      skipMigrations ? "--skip-migrations" : null,
+      forcedGates.size > 0 ? "--force-gate" : null,
+    ].filter((f): f is string => f !== null);
+    if (extra.length > 0) {
+      return refuse(`--verify-only deploys nothing and runs no gate, so ${extra.join(", ")} means nothing beside it.`);
+    }
+    return { ok: true, mode: { op: "verify", host } };
+  }
+  if (host !== null) {
+    return refuse(
+      "--host only goes with --verify-only: a deploy always ships to, and verifies, production.",
+      `To look at that host and deploy nothing: npm run deploy -- --verify-only --host ${host}`,
+    );
+  }
+  return { ok: true, mode: { op: dryRun ? "dry-run" : "deploy", skipMigrations, forcedGates } };
+}

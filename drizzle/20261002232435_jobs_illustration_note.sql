@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."jobs" ADD COLUMN "illustration_note" text;

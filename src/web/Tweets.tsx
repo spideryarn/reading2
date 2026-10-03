@@ -502,7 +502,7 @@ function CopyButton({
           }}
         >
           {state === "done" ? (
-            <Check size={12} aria-hidden="true" className="tw:text-highlight" />
+            <Check size={12} aria-hidden="true" className="tw:text-highlight-text" />
           ) : state === "failed" ? (
             <X size={12} aria-hidden="true" className="tw:text-destructive" />
           ) : (

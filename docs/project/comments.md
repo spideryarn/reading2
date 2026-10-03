@@ -70,6 +70,23 @@ The dialog and the drawer show *Whole paragraph —* and the paragraph's opening
 pressing the mark and deleting, as for any comment.
 [260912c](../plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md).
 
+**Since 2026-10-02 the press also opens the comment box on it**, once the store has confirmed the
+bookmark. Greg, SPIDERYARN-READING2-9C:
+
+> If I bookmark a block using the icon in the gutter, it should be a bit more visible.
+>
+> And it should be possible to comment on a block without wanting an AI-chat-response. Enable that
+> and make a small UI tweak that will make that clear to the user.
+>
+> — Greg, 2026-10-01
+
+It was possible — press the mark afterwards and type — and nobody found it. Now the dialog is the
+invitation: its box says *"It's yours: the AI doesn't reply"*, the follow-up box under it says *"Ask
+the AI about this…"*, and the gutter's speech bubble says *Chat with the AI*. Closing the dialog
+leaves a bare bookmark, so one press still bookmarks. The mark itself is drawn **filled** and at full
+strength, the one filled glyph in the column.
+[261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
+
 `status` says **how the model call went, and nothing else**. Every comment made from 2026-08-28
 carries `none`: no call was ever attempted. That is also what keeps a bookmark invisible to
 `sweepOrphaned`, which turns an abandoned `pending` row into an error — a bookmark is not an answer
@@ -841,6 +858,30 @@ loaded.
 The comment dialog's arrows still walk comments only.
 [260930f](../plans/260930f-gutter-questions-listed-in-the-comments-drawer.md) has what was deferred.
 
+### Every mark says which of three it is <a id="three-kinds"></a>
+
+> And perhaps indicate whether, in general, comments should indicate whether they're a comment from
+> the user that didn't want an AI chat response, or one that did want an AI chat response, or a
+> question with AI chat response.
+>
+> — Greg, 2026-10-01 (SPIDERYARN-READING2-9H)
+
+Since 2026-10-02 the drawer's rows and the margin's lines carry a label: **Comment**, **Comment +
+AI**, **Question** (and **Bookmark** in the drawer, for one with no words). The broad *+ AI* stays
+true for a legacy explanation that is pending or failed as well as for one answered in place or in
+a chat. Nothing new is stored: `commentKind` in
+[`comment-nav.ts`](../../src/web/comment-nav.ts) reads the involvement off `threadId`, a legacy
+status or an answer, and a question is an anchored chat, which `askedQuestions` already keeps apart
+from the comments. *Save & ask* whose chat failed before it existed reads as a plain comment, which
+is what it ended up being.
+
+A visitor's copy has neither `threadId` nor status. It therefore keeps *Comment + AI* only when a
+legacy answer crosses the public projection; otherwise it becomes *Comment* when it has words, or
+*Bookmark* when it has neither words nor an answer. That last case includes a wordless modern
+comment whose private conversation link was stripped, and the margin leaves it out as it does any
+bare bookmark.
+[261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
+
 ## Where the code is
 
 | File | What it does |
@@ -1015,6 +1056,9 @@ rather than blanked, and if none survives the key comes off entirely.
 - **A selection spanning two blocks is clamped to the first.** A comment addresses one block —
   that is what makes it storable against the id spine — and silently doing the first paragraph beats
   appearing to ignore the drag.
+- **A finger's selection opens nothing by itself.** There is no mouseup on an iPad, so a touch
+  selection gets a "Highlight or comment" button below it, and the press opens this box —
+  [touch.md § A finger's selection gets a button](touch.md#a-fingers-selection-gets-a-button).
 - **A comment is stored `pending` before the model is called**, so a crash mid-answer leaves a
   visible unanswered question rather than a selection that evaporated. The dialog offers a retry.
 - **A `pending` comment nobody is answering becomes an `error` on the next read.** `pending` in the

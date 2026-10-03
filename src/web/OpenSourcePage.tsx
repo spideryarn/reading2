@@ -47,7 +47,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { CHANGELOG_HREF, PRIVACY_HREF } from "./router.js";
 import { SiteFooter } from "./SiteFooter.js";
 
-const OUT_CLASS = "tw:text-highlight tw:no-underline tw:hover:underline";
+const OUT_CLASS = "tw:text-highlight-text tw:no-underline tw:hover:underline";
 
 /** A link off the site, to somewhere in the repository. */
 function Repo({ path, children }: { path: string; children: string }) {

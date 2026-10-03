@@ -16,7 +16,13 @@
  * finished comment, so there is nothing to poll.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { anchorFields, type BlockId, type Comment, type CommentAnchor } from "../types.js";
+import {
+  anchorFields,
+  type BlockId,
+  type Comment,
+  type CommentAnchor,
+  type HighlightColour,
+} from "../types.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
@@ -71,6 +77,11 @@ interface NewCommentInputFields {
    * error. See `create` below for the check that keeps `0` and *nothing* apart.
    */
   mark?: Mark;
+  /**
+   * A highlight's colour, if the reader picked one. Only on a selection: the
+   * server refuses a colour on a whole-block bookmark.
+   */
+  colour?: HighlightColour;
 }
 
 export interface CommentsApi {
@@ -154,6 +165,13 @@ export interface CommentsApi {
    * judgement. A named path cannot express the ambiguity.
    */
   place(id: string, mark: Mark): Promise<void>;
+  /**
+   * **Recolour a highlight, or take its colour away** (`null`). Its own route,
+   * `PATCH …/:id/colour`, for the reason `place` has one. Queued behind `edit`
+   * and `place` on the same comment, because all three answers replace the
+   * whole row (plan 261003e, review S3).
+   */
+  recolour(id: string, colour: HighlightColour | null): Promise<void>;
   /**
    * Remember locally that this comment started that conversation.
    *
@@ -246,7 +264,8 @@ export function useComments(slug: string): CommentsApi {
    *    the screen disagrees with it until the next reload, which is the shape
    *    docs/reusable/silent-success.md is about.
    *
-   * Only the two PATCHes queue here. `send` streams for 15-25 seconds and
+   * Only the PATCHes queue here (`edit`, `place`, and `recolour` since
+   * 2026-10-03). `send` streams for 15-25 seconds and
    * putting an edit behind it would freeze the reader's own note for the length
    * of a model call; `forget` is a DELETE the tombstone already makes win.
    * GPT Sol, reviewing the built code, 2026-09-01.
@@ -553,6 +572,7 @@ export function useComments(slug: string): CommentsApi {
            opens over it is already showing the judgement the referee just
            made rather than catching up a beat later. */
         ...markFields(input.mark),
+        ...(input.colour ? { colour: input.colour } : {}),
         status: "none",
       };
       /* What was under this id before, if anything, so a failure can put it
@@ -580,6 +600,7 @@ export function useComments(slug: string): CommentsApi {
             ...anchorFields(input),
             ...(input.body ? { body: input.body } : {}),
             ...markFields(input.mark),
+            ...(input.colour ? { colour: input.colour } : {}),
           }),
         });
         const { comment } = await readJson<{ comment: Comment }>(r);
@@ -706,6 +727,37 @@ export function useComments(slug: string): CommentsApi {
   );
 
   /**
+   * Recolour a highlight, or remove its colour.
+   *
+   * **Not optimistic, and queued per comment**, for exactly the reasons `place`
+   * gives: the swatch row is controlled by the stored comment, so it shows the
+   * new colour once the server has it, and the queue stops a colour answer that
+   * crosses a body or placement answer on the wire from putting an old field
+   * back on screen — all three replace the whole row. Plan 261003e, review S3.
+   */
+  const recolour = useCallback(
+    (id: string, colour: HighlightColour | null): Promise<void> =>
+      queue(id, async () => {
+        setError(null);
+        try {
+          const r = await fetchOk(
+            `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/colour`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ colour }),
+            },
+          );
+          const { comment } = await readJson<{ comment: Comment }>(r);
+          setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+        } catch (e) {
+          setError(describeFetchFailure(e as Error));
+        }
+      }),
+    [slug, queue],
+  );
+
+  /**
    * Remember, **locally**, that this comment started that conversation.
    *
    * There is no request here and there must not be: the link is written by the
@@ -782,6 +834,7 @@ export function useComments(slug: string): CommentsApi {
     create,
     edit,
     place,
+    recolour,
     noteThread,
     retry,
     deepen,

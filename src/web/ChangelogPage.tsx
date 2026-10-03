@@ -287,7 +287,7 @@ function CommitRow({ commits }: { commits: string[] }) {
           /* The accessible name says what the seven characters are. Read aloud,
              a bare "0297784" is a link to nowhere describable. */
           aria-label={`Commit ${sha.slice(0, 7)} on GitHub`}
-          className="tw:font-mono tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+          className="tw:font-mono tw:text-ink-faint tw:no-underline tw:hover:text-highlight-text"
         >
           {sha.slice(0, 7)}
         </a>
@@ -322,7 +322,7 @@ function Entry({ entry }: { entry: ChangelogEntry }) {
             <Link
               key={l.url}
               href={l.url}
-              className="tw:text-highlight tw:no-underline tw:hover:underline"
+              className="tw:text-highlight-text tw:no-underline tw:hover:underline"
             >
               {l.label} <span aria-hidden="true">→</span>
             </Link>
@@ -440,7 +440,7 @@ function VersionBlock({ version, release, now, open, onOpenChange }: {
             href={commitUrl(linkSha)}
             target="_blank"
             rel="noreferrer noopener"
-            className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+            className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-ink-faint tw:no-underline tw:hover:text-highlight-text"
           >
             <GitHubMark size={12} className="tw:opacity-70" />
             {version.deployment_id === null ? "Built from commit " : "Changes through commit "}
@@ -833,7 +833,7 @@ export function ChangelogPage() {
         one update to the live site. Open one to see what changed.
       </p>
       <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
-        Spideryarn is <Link href="/opensource" className="tw:text-highlight tw:no-underline tw:hover:underline">open source</Link>, so every
+        Spideryarn is <Link href="/opensource" className="tw:text-highlight-text tw:no-underline tw:hover:underline">open source</Link>, so every
         release links to the code behind it.
       </p>
 

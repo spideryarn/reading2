@@ -132,7 +132,7 @@
 .ref-notice-toggle > span { flex: 1; }
 .ref-notice-toggle svg { flex: none; margin-top: 0.2rem; }
 .ref-notice-toggle:hover { color: var(--highlight-ink); }
-.ref-notice-toggle:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.ref-notice-toggle:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 /* Only when it is open: shut, the button IS the notice, and a gap under a
    single line would read as a box with something missing from it. */
 .ref-notice-toggle[aria-expanded="true"] { margin-bottom: 0.45rem; }
@@ -204,7 +204,7 @@
    vision rather than by reading the row. */
 .ref-scan-toggle svg:last-child { margin-left: auto; }
 .ref-scan-toggle:hover { color: var(--ink); }
-.ref-scan-toggle:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.ref-scan-toggle:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 .ref-scan-line {
   margin: 0;
   color: var(--ink-soft);
@@ -288,7 +288,7 @@
   color: var(--ink);
   font-weight: 600;
 }
-.ref-view-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.ref-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 /* The scroller. `.mode-band` is a fixed flex column from the controls bar to
    the dock, so every band puts a `flex: 1; min-height: 0; overflow-y: auto`
@@ -350,7 +350,7 @@
   cursor: pointer;
 }
 .ref-how-close:hover { color: var(--ink); }
-.ref-how-close:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.ref-how-close:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .ref-how-p {
   margin: 0.35rem 0 0;
@@ -376,7 +376,7 @@
   cursor: pointer;
 }
 .ref-how-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
-.ref-how-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.ref-how-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 /* --- Criteria, the first sub-mode. src/web/CriteriaPanel.tsx.
 
@@ -419,7 +419,7 @@
   cursor: pointer;
 }
 .crit-kind-btn.on { color: var(--ink); border-color: var(--rule-strong); background: var(--panel); }
-.crit-kind-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.crit-kind-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .crit-kind-note { margin: 0; font-size: 0.83rem; color: var(--ink-faint); }
 
 .crit-presets { display: flex; flex-wrap: wrap; gap: 0.2rem; }
@@ -458,7 +458,7 @@
   font-size: 0.84rem;
   background: none;
   border: none;
-  color: var(--highlight);
+  color: var(--highlight-text);
   text-decoration: underline;
   cursor: pointer;
   padding: 0;
@@ -523,7 +523,7 @@
   background: rgb(var(--cat-rgb));
   cursor: pointer;
 }
-.crit-swatch.current { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.crit-swatch.current { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .crit-swatch-auto {
   font: inherit;
   font-size: 0.81rem;
@@ -683,7 +683,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 }
 .clm-run:hover:not(:disabled) { border-color: var(--ink-faint); }
 .clm-run:disabled { opacity: 0.6; cursor: default; }
-.clm-run:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.clm-run:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .clm-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--ink); }
 .clm-retry {
@@ -726,7 +726,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 a.clm-jump.block-ref,
 a.clm-jump.block-ref:hover { color: inherit; opacity: 1; text-decoration: none; }
 a.clm-jump:hover .clm-quote { text-decoration: underline; }
-a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .clm-quote { font-size: 0.88rem; color: var(--ink); }
 
 .clm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.81rem; color: var(--ink-faint); cursor: pointer; }
@@ -770,7 +770,7 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight); outlin
 }
 .mir-run:hover:not(:disabled) { border-color: var(--ink-faint); }
 .mir-run:disabled { opacity: 0.6; cursor: default; }
-.mir-run:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.mir-run:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .mir-error { margin: 0; font-size: 0.86rem; color: var(--ink); }
 /* **Not an error colour, and not an error shape.** An empty answer is the
@@ -818,7 +818,7 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight); outlin
   cursor: pointer;
 }
 .mir-jump:hover .mir-quote { text-decoration: underline; }
-.mir-jump:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.mir-jump:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .mir-quote, .mir-criterion { font-size: 0.88rem; color: var(--ink); }
 
 /* The referee's own sentence, and the passage under it — set apart from the
@@ -894,7 +894,7 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight); outlin
   cursor: pointer;
 }
 .cnd-start-btn:hover { border-color: var(--ink-faint); }
-.cnd-start-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cnd-start-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .cnd-start-note { margin: 0; font-size: 0.81rem; line-height: 1.45; color: var(--ink-faint); }
 
 .cnd-list-box {
@@ -970,7 +970,7 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight); outlin
   cursor: pointer;
 }
 .cnd-stop:hover { color: var(--ink); }
-.cnd-stop:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cnd-stop:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .cnd-composer { display: flex; flex-direction: column; gap: 0.25rem; }
 .cnd-box {
@@ -984,7 +984,7 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight); outlin
   font-size: 0.88rem;
   resize: vertical;
 }
-.cnd-box:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cnd-box:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .cnd-send {
   align-self: flex-start;
   display: inline-flex;
@@ -1000,4 +1000,4 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight); outlin
 }
 .cnd-send:hover:not(:disabled) { border-color: var(--ink-faint); }
 .cnd-send:disabled { opacity: 0.6; cursor: default; }
-.cnd-send:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cnd-send:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }

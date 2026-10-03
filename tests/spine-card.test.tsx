@@ -234,9 +234,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mountSpine() {
+function mountSpine(outline = OUTLINE) {
   act(() => {
-    root.render(<Spine outline={OUTLINE} layoutKey="test" onJump={() => {}} />);
+    root.render(<Spine outline={outline} layoutKey="test" onJump={() => {}} />);
   });
   act(() => {
     vi.advanceTimersByTime(50);
@@ -339,28 +339,75 @@ describe("the sub-section list", () => {
   });
 });
 
-describe("the crumb", () => {
-  it("names the part and says where in it this section sits", () => {
+/**
+ * **Where the section sits in the article** — the outline that replaced the
+ * crumb (*THE PART · 2 of 5*) and the title line in 2026-10, Greg's
+ * spya-d896sz: *"hovering over the spine to show, okay, this is where I am right
+ * now relative to the wider course hierarchy"*. Plan 261003d.
+ *
+ * Rows are written `title` for context, `*title` on the path, `>title` for the
+ * band, and ` [k of n]` where a trimmed level counts instead of listing.
+ */
+const outlineOf = (card: HTMLElement) =>
+  [...card.querySelectorAll<HTMLElement>(".where-node")].map((li) => {
+    const mark = li.classList.contains("here") ? ">" : li.classList.contains("on-path") ? "*" : "";
+    const of = li.querySelector(".where-of")?.textContent;
+    const indent = li.closest(".where-card") && li.style.paddingLeft !== "0rem" ? "  " : "";
+    return `${indent}${mark}${li.querySelector(".where-title")?.textContent ?? ""}${of ? ` [${of}]` : ""}`;
+  });
+
+describe("where the section sits", () => {
+  it("shows the parts, and this section among its neighbours with its place in the part", () => {
     mountSpine();
-    const crumb = openCard(S2).querySelector(".tip-crumb");
-    expect(crumb?.querySelector(".tip-crumb-name")?.textContent).toBe(
-      "What feeling is for",
+    const card = openCard(S2);
+    expect(outlineOf(card)).toEqual([
+      "*What feeling is for",
+      "  The body as a model",
+      "  >Why colour is a guess [2 of 5]",
+      "  A third, for the count",
+      "Second part",
+      "Third part",
+    ]);
+    expect(
+      card.querySelector(".where-of")?.closest(".where-node")?.classList.contains("with-of"),
+    ).toBe(true);
+  });
+
+  it("puts the gist and the sub-sections straight under the section's own row", () => {
+    mountSpine();
+    const here = openCard(S1).querySelector(".where-node.here");
+    const detail = here?.nextElementSibling;
+    expect(detail?.classList.contains("where-detail")).toBe(true);
+    expect(detail?.querySelector(".tip-gist")?.textContent).toBe("What The body as a model is about.");
+    expect(detail?.querySelectorAll(".tip-kids li").length).toBe(2);
+  });
+
+  it("draws a part standing in for its own children at the top level only", () => {
+    mountSpine();
+    expect(outlineOf(openCard(P2))).toEqual(["What feeling is for", ">Second part", "Third part"]);
+  });
+
+  it("calls an untitled top-level band the same thing on the card and its button", () => {
+    const outline = OUTLINE.map((entry) =>
+      entry.node.id === "p2" ? { ...entry, node: { ...entry.node, title: "" } } : entry,
     );
-    expect(crumb?.querySelector(".tip-crumb-pos")?.textContent).toBe("2 of 5");
+    mountSpine(outline);
+    expect(openCard(P2).querySelector(".where-node.here .where-title")?.textContent).toBe("Untitled section");
+    expect(host.querySelectorAll<HTMLElement>(".spine-hit")[P2]?.getAttribute("aria-label")).toBe("Untitled section");
   });
 
-  it("has no crumb at all on a part standing in for its own children", () => {
-    mountSpine();
-    expect(openCard(P2).querySelectorAll(".tip-crumb")).toHaveLength(0);
-  });
-
-  it("names the part but says no position when it is the only section", () => {
+  it("says no position when the section is its part's only one", () => {
     /* `1 of 1` is not orientation, it is a number that has to be read before it
-       can be discarded. The part's name still earns its line. */
+       can be discarded. */
     mountSpine();
-    const card = openCard(S4);
-    expect(card.querySelector(".tip-crumb-name")?.textContent).toBe("Third part");
-    expect(card.querySelectorAll(".tip-crumb-pos")).toHaveLength(0);
+    expect(outlineOf(openCard(S4))).toEqual(["What feeling is for", "Second part", "*Third part", "  >Its only section"]);
+  });
+
+  it("is not the reader's location, so it does not claim to be", () => {
+    /* The marked row is the band the pointer is on. Only the button's own
+       `aria-current` and the footer's `you are here` speak for the reader. */
+    mountSpine();
+    expect(openCard(S2).querySelectorAll("[aria-current]")).toHaveLength(0);
   });
 });
 
@@ -489,7 +536,7 @@ describe("a section with no title of its own", () => {
   it("falls back to its nav label", () => {
     mountSpine();
     const card = openCard(S5);
-    expect(card.querySelector(".tip-title")?.textContent).toBe(
+    expect(card.querySelector(".where-node.here .where-title")?.textContent).toBe(
       "Lyn McCredden teaches Australian Literature",
     );
   });
@@ -501,7 +548,7 @@ describe("a section with no title of its own", () => {
 
   it("falls back to its position when it has no label either", () => {
     mountSpine();
-    expect(openCard(S6).querySelector(".tip-title")?.textContent).toBe(
+    expect(openCard(S6).querySelector(".where-node.here .where-title")?.textContent).toBe(
       "Section 5 of 5",
     );
   });
@@ -514,6 +561,8 @@ describe("a section with no title of its own", () => {
     const names = [...host.querySelectorAll<HTMLElement>(".spine-hit")].map((h) =>
       h.getAttribute("aria-label"),
     );
+    expect(names[S5]).toBe("What feeling is for › Lyn McCredden teaches Australian Literature");
+    expect(names[S6]).toBe("What feeling is for › Section 5 of 5");
     expect(names[S5]).not.toBe(names[S6]);
     expect(new Set(names).size).toBe(names.length);
   });
@@ -530,5 +579,92 @@ describe("the footer", () => {
     const text = openCard(P2).textContent ?? "";
     expect(text).not.toContain("words");
     expect(text).toContain("% in"); // the rest of the footer is still there
+  });
+});
+
+/**
+ * **A heading is a block, so it is somebody's leaf — and the outline above the
+ * bullets already says it.** A part's children partition its range, so the
+ * part's own heading block lands in its *first section*, as that section's
+ * first leaf; and every titled section's own heading is its first leaf too. A
+ * heading leaf's `navLabel` is the author's heading verbatim, so the first
+ * bullet repeated a row drawn two lines above it. Counted on a local database
+ * of 66 articles: 531 of 1,321 cards open on a heading leaf, about 319 of them
+ * an exact repeat. Sweep item WC-W1, plan 261003g § 3.
+ *
+ * The fixture above could not show it: none of its leaves is a heading.
+ */
+describe("a bullet that would repeat a row of the outline", () => {
+  /** A leaf that starts at a heading block: its label is the author's heading. */
+  const heading = (id: string, label: string): OutlineEntry => ({
+    ...leaf(id, label),
+    startsAtHeading: true,
+  });
+
+  const HEADED: OutlineEntry[] = [
+    {
+      node: node("m", 1, { title: "Methods", gist: "How it was done." }),
+      startRow: 0,
+      endRow: 7,
+      words: 900,
+      children: [
+        section("m1", "Participants", 0, 3, [
+          heading("h0", "Methods"), // the part's heading block
+          heading("h1", "Participants"), // the section's own
+          leaf("h2", "forty adults were recruited"),
+          leaf("h3", "two"),
+          leaf("h4", "three"),
+          leaf("h5", "four"),
+          leaf("h6", "five"),
+          leaf("h7", "six"),
+        ]),
+        section("m2", "Procedure", 4, 7, [
+          heading("h8", "Procedure"),
+          heading("h9", "Stimulus timing"), // a real sub-heading: it stays
+          heading("h10", "Participants"), // a neighbouring section's title, and
+          heading("h11", "Results"), // a neighbouring part's: rows, but not on this band's path
+          leaf("h12", "Procedure"), // a paragraph's label, not a heading: it stays
+        ]),
+      ],
+    },
+    {
+      node: node("r", 1, { title: "Results", gist: "What happened." }),
+      startRow: 8,
+      endRow: 11,
+      words: 300,
+      children: [],
+    },
+  ];
+
+  it("leaves out the part's heading and the section's own", () => {
+    mountSpine(HEADED);
+    const card = openCard(0);
+    expect(outlineOf(card).join("\n")).toContain("Methods");
+    expect(kidText(card).slice(0, 5)).toEqual([
+      "forty adults were recruited",
+      "two",
+      "three",
+      "four",
+      "five",
+    ]);
+  });
+
+  it("does not count them in `+ n more` either", () => {
+    /* Eight leaves, two of them repeats: five shown and one more, not three. */
+    mountSpine(HEADED);
+    expect(kidText(openCard(0))[5]).toBe("+ 1 more");
+  });
+
+  it("keeps a sub-heading, a heading that matches a neighbouring row, and a paragraph that matches the title", () => {
+    /* The three ways a wider rule would lose a real line — GPT Sol's PR-2 on
+       the plan, which reproduced the second against "drop whatever any row
+       says". The neighbours really are rows of this card, or this would pass
+       without the path check. */
+    mountSpine(HEADED);
+    const card = openCard(1);
+    const rows = outlineOf(card).join("\n");
+    expect(rows).toContain("Participants");
+    expect(rows).toContain("Results");
+    expect(kidText(card)).toEqual(["Stimulus timing", "Participants", "Results", "Procedure"]);
   });
 });

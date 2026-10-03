@@ -15,8 +15,7 @@
  * these are *our* decisions and the diff from upstream is small but load-bearing:
  *
  *   - `outline` shipped `dark:bg-input/30` over `bg-background` plus
- *     `shadow-xs`. Every `dark:` here means "always" (see the `@custom-variant`
- *     in tailwind.css), so on the shelf that rendered as a muddy translucent
+ *     `shadow-xs`. In Dark that rendered as a muddy translucent
  *     grey slab — measured `oklab(0.3 0 0 / 0.3)` — under a drop shadow at 5%
  *     black, which on a near-black page is nothing at all. It is the reason the
  *     page's *primary* action looked disabled. Now: a transparent face and a
@@ -48,7 +47,7 @@ const buttonVariants = cva(
         default:
           "tw:bg-primary tw:text-primary-foreground tw:hover:brightness-110",
         destructive:
-          "tw:bg-destructive tw:text-white tw:hover:bg-destructive/90 tw:focus-visible:ring-destructive/20 tw:dark:bg-destructive/60 tw:dark:focus-visible:ring-destructive/40",
+          "tw:bg-destructive tw:text-[var(--destructive-button-foreground)] tw:hover:bg-destructive/90 tw:focus-visible:ring-destructive/20 tw:dark:bg-destructive/60 tw:dark:focus-visible:ring-destructive/40",
         outline:
           "tw:border tw:border-border tw:bg-transparent tw:text-foreground tw:hover:border-highlight/60 tw:hover:bg-highlight/10 tw:hover:text-foreground",
         secondary:

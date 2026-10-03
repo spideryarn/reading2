@@ -197,3 +197,29 @@ export function availableTopics<T extends { key: string }>(
 ): T[] {
   return terms.filter((t) => count(t.key) > 0 || chosen.has(t.key));
 }
+
+/**
+ * **The reader's own tags as filter facets** — one per tag on any entry in
+ * scope, shaped like a topic so `topicMembers`, `withTopics` and
+ * `topicCountsForVisible` serve both rows and every rule above holds for tags
+ * unchanged: AND across everything chosen, one count formula.
+ *
+ * From the entries the shelf already holds rather than a request: every entry
+ * carries its tags (`LibraryEntry.tags`). Most-used first, then by name. The
+ * key is the tag itself, which is lowercase and holds no comma (src/tags.ts),
+ * in its own `?tags=` list, so it cannot collide with a topic's key.
+ * Plan 261003d.
+ */
+export function tagFacets(entries: readonly Pick<LibraryEntry, "slug" | "tags">[]): ShelfTerm[] {
+  const by = new Map<string, { slug: string; count: number }[]>();
+  for (const e of entries) {
+    for (const tag of e.tags ?? []) {
+      const list = by.get(tag);
+      if (list) list.push({ slug: e.slug, count: 1 });
+      else by.set(tag, [{ slug: e.slug, count: 1 }]);
+    }
+  }
+  return [...by]
+    .sort(([a, x], [b, y]) => y.length - x.length || (a < b ? -1 : a > b ? 1 : 0))
+    .map(([tag, articles]) => ({ key: tag, label: tag, articles }));
+}

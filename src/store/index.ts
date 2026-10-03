@@ -119,6 +119,7 @@ import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
 import { pgSearchStore } from "./pg-searches.js";
 import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
+import { pgTagStore } from "./pg-tags.js";
 import { pgShelfTermsStore } from "./pg-shelf-terms.js";
 import { pgSourceStore } from "./pg-source.js";
 import { pgVisibilityStore } from "./pg-visibility.js";
@@ -404,6 +405,9 @@ export const commentStore: CommentStore = guarded("comments", pgCommentStore);
 export const shelfStore: ShelfStore = guarded("shelf", pgShelfStore);
 
 export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch);
+
+/** The reader's own tags on their articles — docs/plans/261003d-your-own-tags-on-articles-on-the-shelf-and-the-metadata-page.md. */
+export const tagStore = guarded("tags", pgTagStore);
 
 /** The shelf's filter topics — docs/plans/260928a-shelf-facet-terms.md. */
 export const shelfTermsStore: ShelfTermsStore = guarded("shelf-terms", pgShelfTermsStore);

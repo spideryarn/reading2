@@ -144,7 +144,12 @@ describe.skipIf(chrome === null)("Tab, in a browser that has one", () => {
       /* Start inside the annotation box and keep going. A trap would cycle
          within it forever; the contract here is that it does not have one, so
          the link after the box must be reachable. */
-      const seen = await walk(ANNOTATE, "before", 8);
+      /* The budget is the box's own tab stops plus a margin, counted from its
+         markup rather than written as a number: a fixed 8 went red the day the
+         colour row added five swatches (plan 261003e), which was the box
+         growing, not a trap appearing. */
+      const stops = (ANNOTATE.match(/<(button|textarea|input|select|a href)\b/g) ?? []).length;
+      const seen = await walk(ANNOTATE, "before", stops + 3);
       expect(seen).toContain("after");
       /* And it really did pass through the box on the way, rather than skipping
          a surface that was not rendered at all. */

@@ -1,6 +1,6 @@
 {
   "id": "a488c67c-28bb-4294-a9a4-f52fe2284978",
-  "prevId": "779369ec-fcdc-4b55-a0fd-dd7b85a50b79",
+  "prevId": "64569ab6-f4c0-4729-895c-89c0b1f6f5a7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -921,6 +921,66 @@
         "article_revisions_raw_source_both": {
           "name": "article_revisions_raw_source_both",
           "value": "(\"spideryarn\".\"article_revisions\".\"raw_source_sha256\" is null) = (\"spideryarn\".\"article_revisions\".\"raw_source_kind\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.article_tags": {
+      "name": "article_tags",
+      "schema": "spideryarn",
+      "columns": {
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tag": {
+          "name": "tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "article_tags_article_id_articles_id_fk": {
+          "name": "article_tags_article_id_articles_id_fk",
+          "tableFrom": "article_tags",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "article_tags_article_id_tag_pk": {
+          "name": "article_tags_article_id_tag_pk",
+          "columns": [
+            "article_id",
+            "tag"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "article_tags_spelling": {
+          "name": "article_tags_spelling",
+          "value": "char_length(\"spideryarn\".\"article_tags\".\"tag\") between 1 and 40 and \"spideryarn\".\"article_tags\".\"tag\" = btrim(\"spideryarn\".\"article_tags\".\"tag\") and \"spideryarn\".\"article_tags\".\"tag\" = lower(\"spideryarn\".\"article_tags\".\"tag\") and \"spideryarn\".\"article_tags\".\"tag\" !~ '[,[:cntrl:]]' and \"spideryarn\".\"article_tags\".\"tag\" !~ '\\s\\s'"
         }
       },
       "isRLSEnabled": false
@@ -2390,6 +2450,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "chat_threads_one_tutorial": {
+          "name": "chat_threads_one_tutorial",
+          "columns": [
+            {
+              "expression": "article_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"spideryarn\".\"chat_threads\".\"kind\" = 'tutorial'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2454,7 +2530,7 @@
         },
         "chat_threads_kind": {
           "name": "chat_threads_kind",
-          "value": "\"spideryarn\".\"chat_threads\".\"kind\" in ('chat','remember','candidates')"
+          "value": "\"spideryarn\".\"chat_threads\".\"kind\" in ('chat','remember','candidates','tutorial')"
         }
       },
       "isRLSEnabled": false
@@ -3102,6 +3178,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "colour": {
+          "name": "colour",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -3184,6 +3266,14 @@
         "comments_body_nonempty": {
           "name": "comments_body_nonempty",
           "value": "\"spideryarn\".\"comments\".\"body\" is null or length(btrim(\"spideryarn\".\"comments\".\"body\")) > 0"
+        },
+        "comments_colour": {
+          "name": "comments_colour",
+          "value": "\"spideryarn\".\"comments\".\"colour\" is null or \"spideryarn\".\"comments\".\"colour\" in ('yellow','green','blue','pink')"
+        },
+        "comments_colour_needs_quote": {
+          "name": "comments_colour_needs_quote",
+          "value": "\"spideryarn\".\"comments\".\"colour\" is null or \"spideryarn\".\"comments\".\"quote\" is not null"
         },
         "comments_valence_needs_criterion": {
           "name": "comments_valence_needs_criterion",
@@ -3946,6 +4036,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "illustration_note": {
+          "name": "illustration_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "reset": {
           "name": "reset",
           "type": "jsonb",
@@ -4629,7 +4725,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice')"
         }
       },
       "isRLSEnabled": false

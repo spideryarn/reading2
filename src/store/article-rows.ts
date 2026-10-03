@@ -36,6 +36,7 @@ import {
   glossaryLookups,
   readingTime,
   glossaryHiddenEntries,
+  articleTags,
   refereeClaims,
   refereeCriteria,
   revisionBlocks,
@@ -205,6 +206,13 @@ export const ARTICLE_TABLE_COVERAGE = {
   glossary_hidden_entries: {
     rollback: { exported: true, into: "glossary-hidden.json" },
     bundle: { exported: true, into: "augmentations/glossary-hidden.json" },
+  },
+  /* The reader's own tags on the article — reader state, exported for
+     `reading_time`'s reason. docs/plans/261003d-your-own-tags-on-articles-on-the-shelf-and-the-metadata-page.md,
+     GPT Sol's plan review finding 6. */
+  article_tags: {
+    rollback: { exported: true, into: "tags.json" },
+    bundle: { exported: true, into: "augmentations/tags.json" },
   },
 
   /** The one table the two projections disagree about — see `TableCoverage`. */
@@ -581,6 +589,8 @@ export interface ArticleRows {
   readonly readingTime: readonly (typeof readingTime.$inferSelect)[];
   /** The glossary entries the owner hid, by entry id. Plan 261002c § 2. */
   readonly glossaryHiddenEntries: readonly (typeof glossaryHiddenEntries.$inferSelect)[];
+  /** The reader's own tags, by tag. Plan 261003d. */
+  readonly articleTags: readonly (typeof articleTags.$inferSelect)[];
 }
 
 /**
@@ -793,6 +803,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(readingTime)
     .where(eq(readingTime.articleId, article.id))
     .orderBy(asc(readingTime.blockId));
+  const tags = await tx
+    .select()
+    .from(articleTags)
+    .where(eq(articleTags.articleId, article.id))
+    .orderBy(asc(articleTags.tag));
 
   return {
     article,
@@ -810,6 +825,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     citationInvestigations: investigations,
     readingTime: secondsRead,
     glossaryHiddenEntries: hiddenTerms,
+    articleTags: tags,
   };
 }
 

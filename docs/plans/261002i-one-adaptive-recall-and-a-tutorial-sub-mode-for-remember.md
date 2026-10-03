@@ -144,6 +144,18 @@ inflation; a way out every turn.
 expert with a narrow goal and a profile), five turns each with scripted reader replies, read in
 full.
 
+**Landed** (stage 3, as 3a–3c in one commit): `tutorial` in `ThreadKind`/`THREAD_KINDS`, a shared
+`SINGLE_THREAD_KINDS`/`isSingleThreadKind`; the CHECK widened and `chat_threads_one_tutorial`
+(drizzle/20261002214711_tutorial_thread_kind.sql, generated, applied locally); `targetOf`
+generalised; `TUTORIAL_SYSTEM` with Recall's spoken-input and citing sections extracted into shared
+constants; `readItFor` exhaustive; Remember's long cap for Tutorial; export and the seed helper keep
+every known kind (Candidates was being exported as a chat too). Client: `REMEMBER_VIEWS` is
+recall · tutorial · quiz, the chip, `subModeParams` per view, `ConversationBand` keyed on the
+single-thread set, no Live props for Tutorial, its own invitation, placeholder and label. Help,
+Features and the mode catalog mention it. Tests: tests/tutorial-kind.test.ts,
+tests/store-export-thread-kind.test.ts (seen red against the old ternary), route and band cases.
+Eval: evals/remember-tutorial.ts, two runs — remember-mode.md § Tutorial has what they showed.
+
 *Passed over:* Tutorial as a stance inside the Remember thread. One transcript would then hold two
 kinds of conversation with different rules, and switching chip would show the other's turns.
 
@@ -210,4 +222,32 @@ database from the sandbox, so I ran them: 93 green across six files.
 Sol's verdict was "not ready until a fresh eval shows it", so a third run followed — see
 remember-mode.md § What the one-voice runs showed. It found one real fault (an "the article never
 mentions X" claim about something in a footnote), now forbidden by an entitlement rule.
+
+### Code review of stage 3 — GPT Sol, 2026-10-02 ([answer](261002i-stage-3-code-review-sol.md))
+
+No P0s; the fourth-kind design passed its audit (no path treats a tutorial thread as a chat, the
+migration is a safe widening, `db:chain` passes, and the shared prompt sections left
+`REMEMBER_SYSTEM`'s bytes unchanged). Sol fixed in the tree: the export test now restores through
+the real seeder and checks the unique index (its assertion then needed the driver's cause, fixed
+here); tests for a spoken Tutorial turn being refused, Start over, the chip arming nothing, the
+command bar, web-tool parity and full-section prompt equality; a scoped `case` in `subModeParams`;
+the Tutorial prompt's one-question, no-evaluative-opener and same-sentence-id rules; the eval's
+opener detector. Two P1s left for me, both done: a fresh eval (runs 3 and 4 — the fourth after a
+recency line in the final message; remember-mode.md § Tutorial has the numbers), and
+remember-mode.md's "cannot be used without reading" contract, now saying Tutorial is the exception
+Greg made and what keeps it guided reading. (Sol thought that doc needed Greg's approval to edit; it
+is not one of the rule docs AGENTS.md names, so it did not.) The P2 doc drift — url-state, quiz,
+icons, modes.ts, activation.ts, quiz.css, last-view — is fixed. Its three Postgres files could not
+reach the database from the sandbox; run here, green.
+
+### Browser pass, 2026-10-02 (Sonnet, Playwright, local dev server)
+
+Passed: no stance select in Recall, Send right-aligned at desktop and 390px (on a phone it wraps to
+its own row, right-aligned, no overflow); three chips; `?remember=tutorial`; Tutorial's empty state,
+placeholder and no Live button; two streamed Tutorial answers, short, ending on one question;
+Tutorial persists across a reload and is not shown in Recall; Recall's reply brief, linked and
+nudging; an edit with no answer arriving starts a new answer. No console errors. Found: the
+not-read reader's first Tutorial answer had no block link — fixed in the prompt and re-evaluated
+(run 5). Not exercised in the browser: the editor's "An answer is still arriving…" message (the
+editor closes when the composer sends); `tests/remember-edit-asks-again.test.tsx` covers it.
 

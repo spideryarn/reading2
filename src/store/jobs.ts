@@ -109,6 +109,7 @@ export function workKeyFor(
            returned holder and answers 409 when the two presses disagree. */
         ...(more.reset !== undefined && { reset: true }),
         ...(more.scope !== undefined && { scope: more.scope }),
+        ...(more.illustrationNote !== undefined && { illustrationNote: more.illustrationNote }),
       }),
     )
     .digest("hex");
@@ -142,6 +143,15 @@ export interface WorkKeyExtras {
    * publication's transaction.
    */
   scope?: string;
+  /**
+   * **The reader's Illustrated note** (`Job.illustrationNote`), so two presses
+   * with different notes are two pieces of work. Here rather than a new
+   * positional argument because `enqueueSuccessorIn` calls this positionally,
+   * and adjacent optional strings are the silent-shift class `sameWork`'s
+   * header describes. Only when present, so every key minted without one
+   * hashes exactly as before. Plan 261002j.
+   */
+  illustrationNote?: string;
 }
 
 /**

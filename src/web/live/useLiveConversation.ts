@@ -84,6 +84,7 @@
  */
 
 import { type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import type { SpokenExchange } from "../useChat.js";
 import type { SpokenLanded } from "../chat/controller.js";
@@ -123,7 +124,29 @@ export interface LiveLine {
   text: string;
   /** Has the final transcript landed, or is this still filling in? */
   done: boolean;
+  /**
+   * **The exchange this line belongs to** — the reader item id of its turn, as
+   * `ExchangeLedger.ownerOf` attributes it. What the thread groups by, so a late
+   * answer shows beside its own question. The line's own id until the ledger has
+   * heard of it.
+   */
+  exchange: string;
+  /**
+   * Where that exchange sits: which session of this hook (a retried session's
+   * kept words come before the new one's), then the ledger's conversation
+   * order. `seq` is `Infinity` until the ledger has placed the line.
+   */
+  session: number;
+  seq: number;
 }
+
+/**
+ * Which step a connecting session is on, so a slow one is visibly *that* step.
+ * In the order they happen: our server's ticket, the microphone (and its
+ * permission prompt), the connection to the voice service, and telling the
+ * session the conversation so far. Null when not connecting.
+ */
+export type LiveStep = "ticket" | "microphone" | "transport" | "seeding";
 
 /** Somewhere in the article the model pointed at, via `show_passage`. */
 export interface LivePointer {
@@ -141,12 +164,49 @@ export interface LiveToolRun {
   ms: number;
 }
 
+/**
+ * **Who decides when the reader's turn starts and ends.**
+ *
+ * `hands-free` is the conversation as it has always been: the microphone is
+ * open and OpenAI's voice detector decides. In a street that detector can hear
+ * the traffic as somebody who has not finished, and hold the turn open for
+ * ever (spya-kzdmhb; the one `LiveStall-open-turn` event, 2026-09-30, was a
+ * 74-second turn that never closed). So the `open-turn` notice offers **tap to
+ * talk**, which is OpenAI's documented push-to-talk: `turn_detection: null`, a
+ * clear when the reader taps Talk, and a commit when they tap Done, with the
+ * microphone track disabled in between so noise never reaches the service.
+ *
+ * **Not** "disable the track and let the detector close the turn on the
+ * silence". The first draft did that; nothing documents that a disabled WebRTC
+ * track sends silence rather than nothing, or that semantic VAD closes an
+ * unfinished-sounding turn on it. GPT Sol, plan review, 2026-10-03.
+ * docs/plans/261003d-tap-to-talk-when-noise-holds-the-live-turn-open.md.
+ *
+ * It lasts for the call and survives a Reconnect, including the pickers'; a
+ * start the reader makes themselves is hands-free again. There is no way back
+ * within a call, because that would need a second copy of the server's
+ * turn-detection settings.
+ */
+export type TalkMode =
+  | "hands-free"
+  /** Ready: the detector is off and nothing is being sent. */
+  | "tap-idle"
+  /** Between Talk and Done. */
+  | "tap-talking"
+  /**
+   * From Done until the reply begins. Nothing else says the companion is busy
+   * in that gap, and Talk in it would start a turn over the one being sent.
+   */
+  | "tap-sending";
+
 export interface LiveApi {
   phase: LivePhase;
+  /** While `connecting`, the step it is on. See `LiveStep`. */
+  step: LiveStep | null;
   error: string | null;
   /** Both sides, in the order their turns began. */
   lines: LiveLine[];
-  /** A failed append left words available locally; retrying must retain them. */
+  /** Words could not be confirmed stored (a failed append or no item owner); retrying must retain them. */
   hasUnsavedLines: boolean;
   pointers: LivePointer[];
   tools: LiveToolRun[];
@@ -207,6 +267,20 @@ export interface LiveApi {
    * so a reader who presses this and then chooses to type stays typing.
    */
   reconnect: () => void;
+  /**
+   * A reconnect is waiting for its hang-up to finish. The Live button is
+   * disabled while `closing`, so this is what lets the panel offer to cancel
+   * the restart — `stop` does that. GPT Sol, plan review 261002j.
+   */
+  reconnecting: boolean;
+  /** § TalkMode. Hands-free unless the reader chose otherwise during this call. */
+  talkMode: TalkMode;
+  /** Turn the detector off for this call. Hands-free and `live` only; a no-op otherwise. */
+  enterTapToTalk: () => void;
+  /** Open the microphone. Tap to talk, and not while the companion is answering. */
+  talk: () => void;
+  /** Close it and send the turn. */
+  doneTalking: () => void;
 }
 
 /** How this hook is wired to our own server, and to the thread. */
@@ -253,9 +327,26 @@ const SETTLE_MS = 1_200;
  */
 const SPEECH_LATENCY_MS = 1_500;
 
+/**
+ * Done waits this long after closing the microphone before it commits, so the
+ * frames already in flight land in this turn rather than the next one's clear.
+ */
+const TAP_TAIL_MS = 300;
+/** A Done sooner than this after Talk is a double tap, and commits nothing. */
+const TAP_MIN_MS = 500;
+/** Every tap-to-talk client event's `event_id` starts with this. See the `error` handler. */
+const TAP_EVENT = "spya-tap-";
+type TapEventKind = "entry" | "clear" | "commit" | "response";
+
 /** The counts a stall report carries. Numbers only — never a word the reader said. */
 interface StallTally {
   speechStarted: number;
+  /**
+   * Counted because the one open-turn event so far (SPIDERYARN-READING2-6Y)
+   * could not say whether the detector ever heard the sound stop: a
+   * `speech_stopped` with no commit behind it would look the same. 261003d.
+   */
+  speechStopped: number;
   committed: number;
   responses: number;
   cancelled: number;
@@ -265,6 +356,7 @@ interface StallTally {
 
 const freshTally = (): StallTally => ({
   speechStarted: 0,
+  speechStopped: 0,
   committed: 0,
   responses: 0,
   cancelled: 0,
@@ -274,6 +366,8 @@ const freshTally = (): StallTally => ({
 
 export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveApi {
   const [phase, setPhase] = useState<LivePhase>("idle");
+  const [step, setStep] = useState<LiveStep | null>(null);
+  const [reconnectPending, setReconnectPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lines, setLines] = useState<LiveLine[]>([]);
   const [hasUnsavedLines, setHasUnsavedLines] = useState(false);
@@ -333,6 +427,25 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const reconnectSeq = useRef(0);
   /** Whether this session opened a real microphone, so a reconnect does the same. */
   const microphoneWanted = useRef(true);
+  const [talkMode, setTalkModeState] = useState<TalkMode>("hands-free");
+  const talkModeRef = useRef<TalkMode>("hands-free");
+  /** Set by a reconnect just before its start, so that start keeps tap to talk. */
+  const keepTalkMode = useRef(false);
+  /** Tap to talk's own client events, numbered so an `error` can name which one it refused. */
+  const tapSeq = useRef(0);
+  /**
+   * Tap events actually sent by this session, and what each one was for.
+   *
+   * The string prefix is for diagnosis; it is not authority. A provider error
+   * carrying an old session's id, or merely a similarly named id, must remain a
+   * provider error rather than being swallowed as recoverable tap traffic.
+   */
+  const tapEvents = useRef(new Map<string, TapEventKind>());
+  const talkStartedAt = useRef(0);
+  /** Done's short wait for the last frames already in flight, before the commit. */
+  const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** A tap commit is out, so the next `committed` asks for the reply. */
+  const tapCommitPending = useRef(false);
   const toolResponses = useRef(new ToolResponses());
   const toolRequests = useRef(new Set<AbortController>());
   const startup = useRef<{ timer: ReturnType<typeof setTimeout>; abort: AbortController } | null>(null);
@@ -341,9 +454,29 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const lineState = useRef<LiveLine[]>([]);
   const handedOff = useRef(new Set<string>());
   const startedThread = useRef<string>("");
+  /** Which start of this hook the lines being put now belong to. See `LiveLine.session`. */
+  const sessionNo = useRef(0);
   const updateLines = useCallback((change: (previous: LiveLine[]) => LiveLine[]) => {
     lineState.current = change(lineState.current);
     setLines(lineState.current);
+  }, []);
+  /**
+   * **The same, committed now, in one render with whatever the chat controller
+   * has already projected.** For the handoff and its undo only.
+   *
+   * The live copy and the provisional chat rows live in two stores, and React
+   * would otherwise commit them in different renders — the controller's
+   * `useSyncExternalStore` update at sync priority, this state at default — so
+   * there would be a frame with both copies or neither. `flushSync` renders
+   * this change at once, and that render reads the controller's snapshot as it
+   * stands, which already holds the change the caller made first. So the rule
+   * at both call sites is: change the controller, then this.
+   * docs/plans/261002j-live-voice-chat-cleanup.md § 1b.
+   */
+  const flushLines = useCallback((change: (previous: LiveLine[]) => LiveLine[]) => {
+    lineState.current = change(lineState.current);
+    const next = lineState.current;
+    flushSync(() => setLines(next));
   }, []);
 
   const pc = useRef<RTCPeerConnection | null>(null);
@@ -393,6 +526,22 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
 
   /** The reader's microphone track, held so the hang-up can stop it first. */
   const micTrack = useRef<MediaStreamTrack | null>(null);
+  /**
+   * **What the level meter reads: an enabled clone of `micTrack`.**
+   *
+   * The meter has to move from the moment the microphone opens — a reader who
+   * presses Live and sees nothing for ten seconds cannot tell connecting from
+   * broken (Greg, spya-f4eq7p). But `micTrack` is held *disabled* until the
+   * seeding barrier lifts, and a disabled track is silence to every consumer,
+   * the analyser included (W3C Media Capture). A clone is the same capture —
+   * no second `getUserMedia`, no second permission — with its own `enabled`, so
+   * the meter hears the room while the conversation does not, and the barrier
+   * is untouched. Stopped on every teardown: in `stop`, and in `abandon` for an
+   * attempt that went stale. Null where the browser gave no `clone`, and then
+   * the meter falls back to the original once it is enabled.
+   * docs/plans/261002j-live-voice-chat-cleanup.md § After the plan review.
+   */
+  const meterTrack = useRef<MediaStreamTrack | null>(null);
 
   /**
    * **What this conversation cost, on its way to our own ledger.** One per
@@ -495,7 +644,15 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       if (handedOff.current.has(id)) return;
       updateLines((prev) => {
         const i = prev.findIndex((l) => l.id === id);
-        if (i === -1) return [...prev, { id, role, text, done }];
+        if (i === -1) {
+          const owner = ledger.current.ownerOf(id);
+          return [...prev, {
+            id, role, text, done,
+            exchange: owner?.exchange ?? id,
+            session: sessionNo.current,
+            seq: owner?.seq ?? Number.POSITIVE_INFINITY,
+          }];
+        }
         const next = [...prev];
         const was = next[i]!;
         next[i] = { ...was, text: mode === "append" ? was.text + text : text, done };
@@ -505,10 +662,51 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     [updateLines],
   );
 
+  /**
+   * Place any line the ledger has only now heard of — a typed turn whose
+   * acknowledgement just arrived, or a reader line put before its item reached
+   * the ledger. A no-op, and no render, when every line is placed.
+   */
+  const adopt = useCallback(() => {
+    let moved = false;
+    const next = lineState.current.map((line) => {
+      if (line.seq !== Number.POSITIVE_INFINITY || line.session !== sessionNo.current) return line;
+      const owner = ledger.current.ownerOf(line.id);
+      if (!owner) return line;
+      moved = true;
+      return { ...line, exchange: owner.exchange, seq: owner.seq };
+    });
+    if (moved) updateLines(() => next);
+  }, [updateLines]);
+
   const send = useCallback((msg: unknown) => {
     const channel = dc.current;
     if (channel?.readyState === "open") channel.send(JSON.stringify(msg));
   }, []);
+
+  /** Send one of tap to talk's events, under an id the `error` handler can recognise. */
+  const sendTap = useCallback((kind: TapEventKind, msg: Record<string, unknown>): string => {
+    tapSeq.current += 1;
+    const id = `${TAP_EVENT}${tapSeq.current}`;
+    tapEvents.current.set(id, kind);
+    send({ ...msg, event_id: id });
+    return id;
+  }, [send]);
+
+  /**
+   * **Turn this session's voice detector off, and the microphone with it.**
+   * A partial `session.update`: only `turn_detection` changes, and everything
+   * else the session was minted with (src/live.ts § liveSession) stays. Then a
+   * clear, so nothing the detector was holding becomes the first tap turn.
+   */
+  const detectorOff = useCallback(() => {
+    if (micTrack.current) micTrack.current.enabled = false;
+    sendTap("entry", {
+      type: "session.update",
+      session: { type: "realtime", audio: { input: { turn_detection: null } } },
+    });
+    sendTap("clear", { type: "input_audio_buffer.clear" });
+  }, [sendTap]);
 
   /** A reply is now owed, if one was not already. `StallFacts.owedSince`. */
   const owe = useCallback(() => {
@@ -573,6 +771,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       live_cancelled: t.cancelled,
       live_mutes: t.mutes,
       live_disconnects: t.disconnects,
+      live_speech_stopped: t.speechStopped,
+      live_tap_to_talk: talkModeRef.current === "hands-free" ? 0 : 1,
     });
   }, []);
 
@@ -629,10 +829,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         if (!thread) return;
         const liveCopy = lineState.current.filter((line) => exchange.itemIds.includes(line.id));
         for (const id of exchange.itemIds) handedOff.current.add(id);
-        updateLines((previous) => previous.filter((line) => !exchange.itemIds.includes(line.id)));
-        // speak synchronously installs provisional chat rows. The live copy
-        // transfers now, before the network wait, and is restored on failure.
-        const landed = await speak({
+        /* **The handoff: the controller's provisional rows go in, then the live
+           copy comes out, in one commit.** `speak` installs the rows
+           synchronously, before any network wait; `flushLines` then renders the
+           removal together with them (see there). Removing first left a frame
+           with neither copy, and React's two priorities could equally give one
+           with both. The live copy is restored the same way on failure. */
+        const landing = speak({
           threadId: thread,
           question: exchange.question,
           answer: exchange.answer,
@@ -650,9 +853,14 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
             : {}),
           ...(exchange.interrupted ? { interrupted: true } : {}),
         });
+        flushLines((previous) => previous.filter((line) => !exchange.itemIds.includes(line.id)));
+        const landed = await landing;
         if (!landed.ok) {
           for (const id of exchange.itemIds) handedOff.current.delete(id);
-          updateLines((previous) => [...liveCopy, ...previous]);
+          /* The controller has already taken its provisional rows out by the
+             time it says so (controller.ts § #repair), so this is the second
+             half of the same rule: controller first, live copy second. */
+          flushLines((previous) => [...liveCopy, ...previous]);
           unsaved.current = true;
           setHasUnsavedLines(true);
           setError(landed.error);
@@ -681,7 +889,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         updateLines((prev) => prev.filter((l) => !exchange.itemIds.includes(l.id)));
       });
     }
-  }, [updateLines]);
+  }, [updateLines, flushLines]);
 
   /**
    * A tool the model asked for.
@@ -866,6 +1074,15 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
            else did or did not arrive, and one lost event must not pin
            "Listening…" for the rest of the session. */
         setHearing(false);
+        /* **Tap to talk asks for its reply here, not beside the commit.** With
+           the detector off nothing else will, and a commit the service refused
+           — an empty buffer — must not still produce an answer to nothing. The
+           reply was owed from the commit, so a `committed` that never comes is
+           still `no-reply`. */
+        if (tapCommitPending.current) {
+          tapCommitPending.current = false;
+          sendTap("response", { type: "response.create" });
+        }
       }
 
       if (type === "conversation.item.created" || type === "conversation.item.added") {
@@ -895,7 +1112,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          finished exchange.** Not this handler: the transcription of what the
          reader said arrives after the answer to it, so anything keyed on
          arrival order writes an answer with no question. See exchanges.ts. */
-      if (seeding.current.done) commit(ledger.current.push(e));
+      if (seeding.current.done) {
+        commit(ledger.current.push(e));
+        adopt();
+      }
 
       if (type === "conversation.item.input_audio_transcription.delta") {
         // Provisional only. The completed event replaces this text, and the
@@ -965,7 +1185,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         midSentence.current = true;
         return setHearing(true);
       }
-      if (type === "input_audio_buffer.speech_stopped") return setHearing(false);
+      if (type === "input_audio_buffer.speech_stopped") {
+        tally.current.speechStopped += 1;
+        return setHearing(false);
+      }
       if (type === "output_audio_buffer.started") {
         speakingNow.current = true;
         return setSpeaking(true);
@@ -986,7 +1209,46 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       }
 
       if (type === "error") {
-        const detail = e.error as { message?: string } | undefined;
+        const detail = e.error as { message?: string; event_id?: unknown } | undefined;
+        /* **An error against one of tap to talk's own events is a notice.**
+           Every other provider error ends the session, which is right for
+           errors nobody planned for. These are planned for: a Done over an
+           empty buffer, a `session.update` the service will not take. Hanging
+           up on the reader for either would be worse than the noise was. */
+        const refused = typeof detail?.event_id === "string" ? detail.event_id : "";
+        const tapEvent = tapEvents.current.get(refused);
+        if (tapEvent) {
+          tapEvents.current.delete(refused);
+          tapCommitPending.current = false;
+          if (tapEvent === "entry") {
+            talkModeRef.current = "hands-free";
+            setTalkModeState("hands-free");
+            if (micTrack.current) micTrack.current.enabled = true;
+            setNotice("Tap to talk couldn’t start, so the conversation is listening as before.");
+          } else if (talkModeRef.current === "hands-free") {
+            /* `detectorOff` sends update then clear. If both are refused, the
+               update's recovery has already restored hands-free; the following
+               clear error must not mute it again or replace its explanation. */
+          } else if (tapEvent === "response" && talkModeRef.current === "tap-sending") {
+            /* The commit succeeded, so the reader's item is already in both the
+               provider conversation and our ledger. Calling it Ready would put
+               a new turn behind an unanswered one and stop the ledger harvesting
+               later exchanges. Keep the turn closed and its reply debt honest;
+               Reconnect is the recovery for a session that refused to answer. */
+            if (micTrack.current) micTrack.current.enabled = false;
+            setNotice(`Tap to talk: ${detail?.message ?? "the reply couldn’t start"}. Reconnect to try again.`);
+          } else {
+            /* A refused clear or commit: back to Ready, whatever it was.
+               Not recording onto a buffer whose state is unknown, and not
+               owing a reply to a turn the service never took. */
+            if (micTrack.current) micTrack.current.enabled = false;
+            talkModeRef.current = "tap-idle";
+            setTalkModeState("tap-idle");
+            owedSince.current = null;
+            setNotice(`Tap to talk: ${detail?.message ?? "that didn’t go through"}. Tap Talk to try again.`);
+          }
+          return;
+        }
         failSession(detail?.message ?? "The live session reported an error. Try again or carry on typing.", "provider-error");
         return;
       }
@@ -1000,6 +1262,12 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
            goes silent is `StallFacts.responseActive`'s question. */
         if (midSentence.current) responseStartedDuringTurn.current = true;
         owedSince.current = null;
+        /* The reply to a tap turn has begun; from here `thinking` and
+           `speaking` keep Talk waiting, as they do for any reply. */
+        if (talkModeRef.current === "tap-sending") {
+          talkModeRef.current = "tap-idle";
+          setTalkModeState("tap-idle");
+        }
         tally.current.responses += 1;
         const id = (e.response as { id?: unknown } | undefined)?.id;
         if (typeof id === "string" && id !== "") {
@@ -1057,7 +1325,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         continueAfterTools();
       }
     },
-    [answerTool, put, commit, meterEvent, failSession, continueAfterTools, accountUserReply],
+    [answerTool, put, adopt, commit, meterEvent, failSession, continueAfterTools, accountUserReply, sendTap],
   );
 
   /**
@@ -1101,6 +1369,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
        abandons rather than opening a connection behind this teardown. */
     epoch.current += 1;
     setPhase("closing");
+    setStep(null);
     stallSeen.current = null;
     setStall(null);
     if (connectionDeadline.current) clearTimeout(connectionDeadline.current);
@@ -1117,6 +1386,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     setPlaybackBlocked(false);
     setInputTrack(null);
     setInputContext(null);
+    /* The meter's clone goes at once: it is not what the conversation hears,
+       so the settle and the grace below have no use for it, and a clone left
+       running keeps the device's light on after the reader hung up. */
+    meterTrack.current?.stop();
+    meterTrack.current = null;
     const oldContext = context.current;
     context.current = null;
     if (oldContext && oldContext.state !== "closed") void oldContext.close?.().catch(() => {});
@@ -1179,6 +1453,16 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          being waited on rather than queued behind the wait. */
       commit(ledger.current.drain());
       await writing.current;
+
+      /* A visible line can exist before the ledger knows which exchange owns
+         it — notably a typed live turn whose item acknowledgement never came.
+         `drain` cannot write what it cannot own. Keep such words across a retry
+         and label the uncertainty instead of showing them after hang-up only
+         to erase them when Live is pressed again. */
+      if (lineState.current.some((line) => line.text.trim() !== "")) {
+        unsaved.current = true;
+        setHasUnsavedLines(true);
+      }
 
       dc.current?.close();
       /* Every sender's track, not just the microphone's: the synthetic silent
@@ -1314,9 +1598,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       if (startup.current || closing.current || pc.current || claim.current) return;
       const microphone = opts.microphone ?? true;
       setPhase("connecting");
+      setStep("ticket");
       setError(null);
       setSeen({});
       const preserveWords = startedThread.current === opts.threadId && unsaved.current;
+      /* Kept words keep their old session number, so they stay above the new
+         session's — whose ledger starts counting from zero again. */
+      sessionNo.current += 1;
       updateLines((previous) => preserveWords ? previous.filter((line) => line.text.trim() !== "") : []);
       unsaved.current = preserveWords;
       setHasUnsavedLines(preserveWords);
@@ -1374,7 +1662,20 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       stallReported.current = new Set();
       placedAs.current = null;
       reconnecting.current = 0;
+      setReconnectPending(false);
       microphoneWanted.current = microphone;
+      /* A reconnect keeps tap to talk — the street is still there — but not
+         mid-turn: the new call starts with the microphone off, and Talk opens
+         it. Any other start is the reader's own, and hands-free. */
+      const nextMode: TalkMode =
+        keepTalkMode.current && talkModeRef.current !== "hands-free" ? "tap-idle" : "hands-free";
+      keepTalkMode.current = false;
+      talkModeRef.current = nextMode;
+      setTalkModeState(nextMode);
+      tapEvents.current = new Map();
+      tapCommitPending.current = false;
+      if (doneTimer.current) clearTimeout(doneTimer.current);
+      doneTimer.current = null;
 
       /**
        * **This session's number, and the check that goes after every `await`.**
@@ -1414,6 +1715,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       let track: MediaStreamTrack | null = null;
       let channel: RTCDataChannel | null = null;
       let held: MicClaim | null = null;
+      /** This attempt's level-meter clone. See `meterTrack`. */
+      let meterClone: MediaStreamTrack | null = null;
       /** This attempt's meter, so `abandon` can clear it only if it is still ours. */
       let installedMeter: LiveMeter | null = null;
       /**
@@ -1433,6 +1736,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
        */
       const abandon = () => {
         track?.stop();
+        meterClone?.stop();
+        if (meterTrack.current === meterClone) meterTrack.current = null;
         channel?.close();
         conn?.close();
         if (ctx && ctx !== context.current && ctx.state !== "closed") void ctx.close?.().catch(() => {});
@@ -1593,10 +1898,17 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
               void stopRef.current();
               return;
             }
+            /* A reconnect from tap to talk: this session was minted with the
+               detector on, like every session, so turn it off before the
+               microphone would have opened. */
+            if (talkModeRef.current !== "hands-free") detectorOff();
             if (micTrack.current) {
-              micTrack.current.enabled = true;
-              setInputTrack(micTrack.current);
+              micTrack.current.enabled = talkModeRef.current === "hands-free";
+              /* Already metering the clone since the microphone opened; only
+                 a browser with no `clone` meters from here. */
+              if (!meterTrack.current) setInputTrack(micTrack.current);
             }
+            setStep(null);
             setPhase("live");
           };
           /**
@@ -1632,6 +1944,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
                those there are, with nothing looking wrong. src/routes.ts §
                `liveConnected`. */
             meter.current?.connected();
+            setStep("seeding");
             seeding.current = {
               expected: ticket.seed.length,
               ids: new Set(),
@@ -1669,6 +1982,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              opens no device, so claiming for it would make an automated check
              evict a reader's live dictation for a device it never touches. */
           let microphoneFallbackNotice: string | null = null;
+          setStep("microphone");
           if (microphone) {
             held = {
               /* Asked to stop by the next claimant.
@@ -1762,6 +2076,14 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              what lets the barrier below simply count them.
              docs/plans/260831l-live-conversation-in-chat.md § 6. */
           if (microphone) {
+            /* The meter's own copy, enabled, cloned before the original is
+               disabled so there is no doubt which state it starts in. */
+            if (typeof track.clone === "function") {
+              meterClone = track.clone();
+              meterClone.enabled = true;
+              meterTrack.current = meterClone;
+              setInputTrack(meterClone);
+            }
             track.enabled = false;
             micTrack.current = track;
             setDeviceLabel(labelled(track));
@@ -1788,6 +2110,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
             });
           }
           conn.addTrack(track);
+          setStep("transport");
 
           /* Three: the SDP exchange, straight to OpenAI with the ephemeral
              token. Our key is not in this browser and never was. */
@@ -1849,7 +2172,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         }
       })();
     },
-    [onEvent, slug, updateLines, failSession, enableAudio, checkStall],
+    [onEvent, slug, updateLines, failSession, enableAudio, checkStall, detectorOff],
   );
 
   const say = useCallback(
@@ -2003,10 +2326,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     void stop().then(() => {
       if (reconnecting.current !== mine) return;
       reconnecting.current = 0;
+      setReconnectPending(false);
       if (failed.current) return;
+      keepTalkMode.current = true;
       start({ threadId: thread, microphone });
     });
     reconnecting.current = mine;
+    setReconnectPending(true);
   }, [stop, start]);
 
   /**
@@ -2017,13 +2343,87 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const hangUp = useCallback((): Promise<void> => {
     if (reconnecting.current !== 0) {
       reconnecting.current = 0;
+      setReconnectPending(false);
       endedBecause.current = "reader";
     }
     return stop();
   }, [stop]);
 
+  /**
+   * § TalkMode, the three actions. Each is refused outside a live call: during
+   * seeding the barrier owns the track, and during a hang-up the grace window
+   * does.
+   */
+  const isLive = useCallback(() => Boolean(pc.current) && seeding.current.done && !closing.current, []);
+
+  const enterTapToTalk = useCallback(() => {
+    if (!isLive() || talkModeRef.current !== "hands-free") return;
+    talkModeRef.current = "tap-idle";
+    setTalkModeState("tap-idle");
+    detectorOff();
+    /* **The turn the noise was holding open is dropped, not answered.** The
+       reader has just been told that sound is holding it open; answering half
+       a minute of street is worse than asking them to say it again. Its local
+       state goes with it, and so does the stall's report dwell, which would
+       otherwise report a hands-free stall as a tap-to-talk one. */
+    midSentence.current = false;
+    turnOpenSince.current = null;
+    responseStartedDuringTurn.current = false;
+    stallSeen.current = null;
+    setHearing(false);
+    checkStall();
+  }, [isLive, detectorOff, checkStall]);
+
+  /**
+   * **Not while the companion is answering.** Talking over a reply would need
+   * `response.cancel`, `output_audio_buffer.clear` and the interruption
+   * bookkeeping `speech_started` does in hands-free; it is a walkie-talkie
+   * until somebody asks for more. Nor during Done's tail, whose commit is
+   * still to go.
+   */
+  const talk = useCallback(() => {
+    if (!isLive() || talkModeRef.current !== "tap-idle" || doneTimer.current) return;
+    if (toolResponses.current.responding || speakingNow.current || toolRequests.current.size > 0) return;
+    sendTap("clear", { type: "input_audio_buffer.clear" });
+    if (micTrack.current) micTrack.current.enabled = true;
+    talkStartedAt.current = Date.now();
+    lastHeard.current = Date.now();
+    talkModeRef.current = "tap-talking";
+    setTalkModeState("tap-talking");
+  }, [isLive, sendTap]);
+
+  const doneTalking = useCallback(() => {
+    if (!isLive() || talkModeRef.current !== "tap-talking") return;
+    if (micTrack.current) micTrack.current.enabled = false;
+    talkModeRef.current = "tap-idle";
+    setTalkModeState("tap-idle");
+    lastHeard.current = Date.now();
+    if (Date.now() - talkStartedAt.current < TAP_MIN_MS) {
+      sendTap("clear", { type: "input_audio_buffer.clear" });
+      return;
+    }
+    talkModeRef.current = "tap-sending";
+    setTalkModeState("tap-sending");
+    /* Bound to this session: `start` cancels it, and a callback that outlived
+       its call must not commit into the next one's buffer. A hang-up inside
+       the tail drops the turn, as a hang-up while talking does. */
+    const mine = sessionNo.current;
+    doneTimer.current = setTimeout(() => {
+      doneTimer.current = null;
+      if (sessionNo.current !== mine || !isLive() || talkModeRef.current !== "tap-sending") return;
+      tapCommitPending.current = true;
+      sendTap("commit", { type: "input_audio_buffer.commit" });
+      owe();
+    }, TAP_TAIL_MS);
+  }, [isLive, sendTap, owe]);
+
+  /* The meter reads from the moment the microphone opens (see `meterTrack`),
+     so it is shown while connecting too; the panel says the conversation is
+     not hearing it yet. */
+  const metering = phase === "live" || phase === "connecting";
   return {
     phase,
+    step: phase === "connecting" ? step : null,
     error,
     lines,
     hasUnsavedLines,
@@ -2032,8 +2432,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     hearing,
     speaking,
     inputLevel: inputMeter.level,
-    measuringInput: phase === "live" && inputMeter.measuring,
-    quietInput: phase === "live" && inputMeter.quiet,
+    measuringInput: metering && inputMeter.measuring,
+    quietInput: metering && inputMeter.quiet,
     deviceLabel,
     notice,
     playbackBlocked,
@@ -2048,5 +2448,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     say,
     stall,
     reconnect,
+    reconnecting: reconnectPending,
+    talkMode,
+    enterTapToTalk,
+    talk,
+    doneTalking,
   };
 }

@@ -69,6 +69,9 @@ const PROMISES: Record<string, string> = {
   "AdminVouchersPage.tsx › Private note": "done",
   "ChatPanel.tsx › chat-rename": "done",
   "TitleEditor.tsx › Title": "done",
+  /* Enter adds the tag typed or highlighted and the box stays for the next —
+     plan 261003d. */
+  "TagEditor.tsx › Add a tag": "done",
   /* Enter posts a question into chat. */
   "CommentDialog.tsx › Ask a follow-up question about this passage": "send",
   /* Enter opens the selected mode — it goes somewhere. Not `search`: the search
@@ -82,6 +85,8 @@ const PROMISES: Record<string, string> = {
      the keyboard, so the promise has something behind it. */
   "GlossaryPanel.tsx › Look up a term in this article": "search",
   "Library.tsx › Search the library": "search",
+  /* Enter asks the quick search now, without waiting for the pause (plan 261002h). */
+  "DockQuickSearch.tsx › Quick search": "search",
   /* Enter goes to the first matching section (plan 261001s). */
   "PageContents.tsx › Search this page's sections": "search",
   /* Enter goes to the best match by setting the address (plan 261002b). */
@@ -109,6 +114,10 @@ const PROMISES: Record<string, string> = {
   "CommentDialog.tsx › Your comment on this passage": "newline",
   "CriteriaPanel.tsx › crit-text": "newline",
   "FeedbackDialog.tsx › fb-input fb-body": "newline",
+  /* The note on how an Illustrated picture should come out: a sentence or two,
+     often dictated, and the paint it goes with is a $0.40 press that must
+     never be one keystroke away (plan 261002j). */
+  "IllustratedView.tsx › ill-steer-note": "newline",
   "ProfileBox.tsx › prof-box-input": "newline",
   /* Why you are reading, asked on the add page and in Skim (plan 260930e).
      Multi-line; ⌘/Ctrl+Enter is the add page's save, never plain Enter. */

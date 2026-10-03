@@ -621,13 +621,14 @@ export const gateParam = createParser<number>({
  * first cites it. `document` is that order with nothing hidden — "first cited"
  * on the button, and the artefact's own order. `relevance` and `influence` are
  * the reader asking for the model's judgment, descending, unscored last.
+ * `date` is publication year, oldest first, undated last (spya-xpxmjn).
  * docs/plans/260911g-citations-mode.md § Scores, and the prioritised order.
  *
  * `push`, like `sort`: changing the order is a deliberate act on the view. An
  * unknown value parses to the default, so a link written by a version with
  * more orders still shows a list.
  */
-export const CITE_ORDERS = ["prioritised", "document", "relevance", "influence"] as const;
+export const CITE_ORDERS = ["prioritised", "document", "relevance", "influence", "date"] as const;
 export type CiteOrder = (typeof CITE_ORDERS)[number];
 
 export const citeOrderParam = createParser<CiteOrder>({
@@ -1233,15 +1234,20 @@ export const refereeParam = createParser<RefereeView>({
   .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
-/* ------------------------------------------------ Remember's two sub-modes --
+/* ---------------------------------------------- Remember's three sub-modes --
    docs/plans/260831al-review-quiz-sub-mode.md. */
 
 /** Free recall, or the questions the piece asks you back. */
-export const REMEMBER_VIEWS = ["recall", "quiz"] as const;
+/* In the order the chips are drawn: Recall, Tutorial (since 2026-10-02,
+   docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md),
+   Quiz. */
+export const REMEMBER_VIEWS = ["recall", "tutorial", "quiz"] as const;
 export type RememberView = (typeof REMEMBER_VIEWS)[number];
 
 /**
- * Which half of Remember is open — `recall` (the default, omitted) or `quiz`.
+ * Which part of Remember is open — `recall` (the default, omitted), `tutorial`
+ * or `quiz`. Tutorial is a conversation like Recall, with its own one thread,
+ * so `?thread=` follows it exactly as it follows Recall; only Quiz clears it.
  *
  * **This does not break url-state.md's rule the way `?stance=` would have.** A
  * stance changes nothing on screen and is therefore component state; a sub-mode
@@ -1657,6 +1663,18 @@ export const libraryTopicsParam = createParser<string[]>({
 })
   .withDefault([])
   .withOptions({ history: "push" });
+
+/**
+ * The reader's own tags chosen in the shelf's Tags row — `tags=ai,memory`.
+ *
+ * `libraryTopicsParam`'s shape and history, for its reasons; its own key so a
+ * tag and a topic can never be mistaken for each other. **Never rewritten by
+ * the page**: a tag that is not on any article in scope is ignored rather than
+ * dropped, so an edit in flight or a shelf still loading cannot eat a filter
+ * (plan 261003d § After GPT Sol's plan review, 4). Tags hold no comma
+ * (src/tags.ts).
+ */
+export const libraryTagsParam = libraryTopicsParam;
 
 /**
  * Whether the archived half of the shelf is in view — `archived=1`.

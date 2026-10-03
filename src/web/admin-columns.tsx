@@ -332,7 +332,7 @@ function AdminMarker({ id }: { id: string }) {
        1280 and 390 on 2026-09-03. */
     <span
       title="Can reach the admin pages"
-      className="tw:shrink-0 tw:rounded tw:bg-highlight/15 tw:px-1.5 tw:text-highlight"
+      className="tw:shrink-0 tw:rounded tw:bg-highlight/15 tw:px-1.5 tw:text-highlight-text"
     >
       admin
     </span>

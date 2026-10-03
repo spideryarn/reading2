@@ -64,6 +64,7 @@ import {
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 import {
   type DifficultyCentralityDrops,
   noDifficultyCentralityDrops,
@@ -96,8 +97,12 @@ export type { Faq, FaqDropped, FaqPassage, FaqQuestion } from "./types.js";
  *
  * `faq/5`, 2026-10-02: the request gained `FAQ_OUTPUT_SCHEMA`; the prompt
  * text is unchanged.
+ *
+ * `faq/6`, 2026-10-03: the prompt gained the shared paperwork section,
+ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
+ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
  */
-export const PROMPT_VERSION = "faq/5";
+export const PROMPT_VERSION = "faq/6";
 
 /** The only hard number on quantity. The prompt's budget is an upper bound under it. */
 export const MAX_QUESTIONS = 12;
@@ -551,6 +556,8 @@ fine. None is fine: if the piece raises no question worth asking, return an
 empty list. A padded question is worse than a missing one.
 
 ${plainWords("ask")}
+
+${paperwork("pick")}
 
 OUTPUT
 

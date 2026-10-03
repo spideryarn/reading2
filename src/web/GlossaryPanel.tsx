@@ -363,37 +363,38 @@ export function GlossaryPanel({
           holds its place while the list is coming, and the corner sits in it
           (mode-band.css floors a head at the corner's height). */
       head={sorts.length > 0 ? null : <></>}
-      /* Pinned under the scroller rather than at the end of it, which is what
-          `foot` is for. The guard is the one it had as a trailing child: the
-          run row belongs to an owner whose glossary has arrived. */
-      foot={
-        glossary && (owner === null || owner.status === "ready") && owner?.glossary ? (
-          <Foot
-            job={owner.job}
-            starting={owner.starting}
-            failed={owner.failed}
-            /* **No *Find more* on an outdated list.** There the run it sends
-               does not append: `existingFor` refuses a list from another
-               prompt version, so it would *replace* the list under a button
-               that says "more" — the reason Quotes hides its own. The banner
-               that used to offer the honest rewrite went on 2026-09-29
-               (SPIDERYARN-READING2-55); re-running is in Metadata. A job or
-               a failure still shows. Plan 260929c. */
-            more={!owner.outdated}
-            /* **In the list's own recorded setting**, not the current profile.
-               `existingFor` refuses to append across a profile difference, so
-               asking a plain list's Find more for the profile would *rewrite*
-               it — dropping every term the model did not return again — under
-               a button that says "more". The *Use your profile* checkbox used
-               to carry this, seeded from the list; since it went on 2026-09-13
-               the list's `profiled` is passed directly. useGlossary.ts § `more`;
-               tests/glossary-find-more-keeps-the-lists-profile.test.tsx. */
-            onMore={() => owner.more(owner.profiled)}
-            onCancel={owner.cancel}
-          />
-        ) : null
-      }
     >
+      {/* **The run row, first thing in the column**, since 2026-10-03 — Greg,
+          spya-s660yh: *"There used to be a Find More button in Glossary mode.
+          Add it back, at the top of the column"*. It was pinned in the foot,
+          and hidden there on an outdated list (plan 260929c) — most lists, and
+          Greg's. Now it shows on every owner's finished list, and says what
+          its run will do: *Find more* when it appends, *Find terms again* when
+          it rewrites (`MoreRow`). The guard is the one the foot had: an owner
+          whose glossary has arrived.
+          docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 1. */}
+      {glossary && owner?.status === "ready" && owner.glossary ? (
+        <MoreRow
+          job={owner.job}
+          starting={owner.starting}
+          failed={owner.failed}
+          stalled={owner.stalled}
+          /* The server's verdict when it gave one (`panelRunKind`, which
+             also sees a changed or cleared profile); otherwise the two facts
+             the panel has. Plan 261003c, GPT Sol's plan review P1. */
+          rewrites={owner.panelRun ? owner.panelRun === "rewrite" : owner.stale || owner.outdated}
+          /* **In the list's own recorded setting**, not the current profile.
+             `existingFor` refuses to append across a profile difference, so
+             asking a plain list's Find more for the profile would *rewrite*
+             it — dropping every term the model did not return again — under
+             a button that says "more". The *Use your profile* checkbox used
+             to carry this, seeded from the list; since it went on 2026-09-13
+             the list's `profiled` is passed directly. useGlossary.ts § `more`;
+             tests/glossary-find-more-keeps-the-lists-profile.test.tsx. */
+          onMore={() => owner.more(owner.profiled)}
+          onCancel={owner.cancel}
+        />
+      ) : null}
 
       {/* **Above the list and above the sort**, because it is the way in rather
           than a way of arranging what is already there — and because a reader
@@ -484,9 +485,8 @@ export function GlossaryPanel({
           {/* The article has moved and the list has not. Said plainly, at the
               top, because every entry below it is now a claim about a version
               of the piece that no longer exists — and the occurrences in
-              particular will point at blocks that may not be there. The button
-              needs no `force`: the step's own freshness check already knows
-              this glossary is out of date, so an ordinary run rewrites it. */}
+              particular will point at blocks that may not be there. The run
+              that rewrites it is the row at the top (plan 261003c). */}
           {/* Two different facts, and they were nearly one. `stale` is *the
               article moved underneath these terms* — every entry below is a
               claim about a piece that no longer exists, and the occurrences in
@@ -507,23 +507,16 @@ export function GlossaryPanel({
                 <TriangleAlert size={13} />
                 These terms describe an older version of the article.
               </p>
-              <div className="gloss-run">
-                <Progress
-                  job={owner.job}
-                  starting={owner.starting}
-                  failed={owner.failed}
-                      stalled={owner.stalled}
-                  onRun={() => owner.find()}
-                  onCancel={owner.cancel}
-                  label="Find them again"
-                />
-              </div>
+              {/* **No run button of its own since 2026-10-03**: *Find terms
+                  again* at the top of the column is the same rewrite, and two
+                  buttons each drawing the one job's progress was a second
+                  place to look. GPT Sol's plan review of 261003c, P2. */}
             </div>
           ) : null}
           {/* **No banner for an outdated glossary** (older prompt, same
               article) — Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not
-              worth bugging the user about it."* Re-running is in Metadata; the
-              foot below drops its *Find more* on such a list. Plan 260929c. */}
+              worth bugging the user about it."* Plan 260929c. The run row at
+              the top says *Find terms again* on such a list (plan 261003c). */}
 
           {/* One list again, in every order. It was a `div` wrapping two headed
               `ol`s from 2026-08-26 until 2026-09-03, when the threshold started
@@ -2195,12 +2188,17 @@ export function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
  * number the reader was actually waiting for. The generator and the version are
  * pipeline facts — the public projection already drops them for a visitor
  * (src/public-types.ts) — and they are still in the artefact and the export.
+ *
+ * **It was the foot until 2026-10-03**, pinned under the list, and drew nothing
+ * on an outdated list (plan 260929c). It is the column's first row now, on
+ * every finished list (plan 261003c) — see the caller.
  */
-function Foot({
+function MoreRow({
   job,
   starting,
   failed,
-  more,
+  stalled,
+  rewrites,
   onMore,
   onCancel,
 }: {
@@ -2219,53 +2217,55 @@ function Foot({
    */
   starting: boolean;
   failed: StepFailure | null;
-  /** Whether *Find more* is offered; false on an outdated list (see the caller). */
-  more: boolean;
+  /** The tab can see this job but cannot advance it — `useStepJob.stalled`. */
+  stalled: boolean;
+  /**
+   * **This press writes a fresh list rather than adding to this one** —
+   * `existingFor` (src/glossary.ts) refuses to merge when the article, the
+   * prompt version or the profile differs, so a button saying "more" would
+   * replace the list (the reason plan 260929c hid it on an outdated list). It
+   * says *Find terms again* instead, and its tooltip says so plainly: some
+   * terms may go. Terms the reader added survive (they are outside the
+   * document, `glossary_lookups.added_name`), and so does anything keyed to an
+   * entry the new run finds again under the same name, when the article has
+   * not changed (`idsByTerm`); a `?term=` link, a *Dig deeper* answer or a hide
+   * on a term that does not come back has nothing to attach to.
+   */
+  rewrites: boolean;
   onMore(): Promise<void>;
   onCancel(id: string): void;
 }) {
-  if (job || starting) {
+  const label = rewrites ? "Find terms again" : "Find more";
+  const title = rewrites
+    ? "Writes a fresh list rather than adding to this one, so some terms here may not come back. Terms you added are kept"
+    : "Another model call, told what it has already found, looking for the quieter terms";
+  /* The stale banner used to own the transport warning and the failed job's
+     Retry. Consolidating the controls must carry both, not just the spinner
+     and Stop — code review of plan 261003c. */
+  if (job || starting || failed) {
     return (
-      <div className="gloss-foot">
+      <div className="gloss-more">
         <Progress
           job={job}
           starting={starting}
-          failed={null}
-          /* Not reachable from here: `stalled` is about a job of ours the queue
-             has stopped advancing, and the surface that warns about it is the
-             shelf card — useStepJob.ts § `stalled`. */
-          stalled={false}
+          failed={failed}
+          stalled={stalled}
           onRun={() => onMore()}
           onCancel={onCancel}
-          label="Find more"
+          label={label}
         />
       </div>
     );
   }
 
-  if (!more) {
-    return failed ? (
-      <div className="gloss-foot">
-        <p className="gloss-error">{failed.message}</p>
-      </div>
-    ) : null;
-  }
-
   return (
-    <div className="gloss-foot">
+    <div className="gloss-more">
       <div className="gloss-actions">
-        <button
-          type="button"
-          className="gloss-btn"
-          title="Another model call, told what it has already found, looking for the quieter terms"
-          onClick={() => void onMore()}
-        >
+        <button type="button" className="gloss-btn" title={title} onClick={() => void onMore()}>
           <Search size={12} />
-          Find more
+          {label}
         </button>
       </div>
-
-      {failed && <p className="gloss-error">{failed.message}</p>}
     </div>
   );
 }

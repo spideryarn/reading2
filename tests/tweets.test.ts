@@ -357,12 +357,16 @@ describe("hashBlocks and isStale", () => {
  */
 describe("the tweets prompt", () => {
   it("pins the paperwork and safe-takeaway rules behind the new stamp", () => {
-    expect(PROMPT_VERSION).toBe("tweets/7");
+    expect(PROMPT_VERSION).toBe("tweets/8");
     expect(TWEETS_SYSTEM).toContain("PAPERWORK IS NOT THE PIECE");
     expect(TWEETS_SYSTEM).toContain("any implication it states\nitself");
     expect(TWEETS_SYSTEM).toContain("If it deliberately reaches no conclusion");
     /* The shared omission rule must not erase a substantive disclosure. */
     expect(TWEETS_SYSTEM).toContain("a funder's role that\nit says may bias the result");
+    /* `tweets/8` (plan 261003c): the list names the references, and the
+       abstract paragraph is Structure's alone. */
+    expect(TWEETS_SYSTEM).toContain("the reference list or\nbibliography");
+    expect(TWEETS_SYSTEM).not.toContain("The abstract at the START");
   });
 });
 

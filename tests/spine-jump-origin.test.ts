@@ -390,7 +390,7 @@ describe("the mark for where the reader jumped from", () => {
     const markAt = first("spine-from");
     expect(markAt, "the mark must be in the track").toBeGreaterThanOrEqual(0);
     expect(last("spine-from"), "exactly one mark").toBe(markAt);
-    for (const c of ["spine-part", "spine-tick", "spine-matches", "spine-hit", "spine-viewport"]) {
+    for (const c of ["spine-part", "spine-tick", "spine-matches", "spine-hit", "spine-viewport-track"]) {
       expect(first(c), `the fixture should render a ${c}`).toBeGreaterThanOrEqual(0);
     }
 
@@ -406,7 +406,7 @@ describe("the mark for where the reader jumped from", () => {
     expect(markAt, "under the hit targets, which are what the rail is for").toBeLessThan(
       first("spine-hit"),
     );
-    expect(markAt, "under the viewport band").toBeLessThan(first("spine-viewport"));
+    expect(markAt, "under the viewport band").toBeLessThan(first("spine-viewport-track"));
   });
 
   it("is decorative — the chip beside it says the same thing in words", async () => {

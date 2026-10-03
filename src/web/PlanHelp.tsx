@@ -54,7 +54,7 @@ export function PlanInfo({ plan }: { plan: ReaderPlan }) {
         href={PRICING_HREF}
         data-testid="plan-info"
         aria-label="How your plan works — open Pricing"
-        className="tw:inline-flex tw:size-7 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-full tw:align-middle tw:text-muted-foreground tw:hover:text-highlight tw:focus-visible:text-highlight tw:pointer-coarse:size-10"
+        className="tw:inline-flex tw:size-7 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-full tw:align-middle tw:text-muted-foreground tw:hover:text-highlight-text tw:focus-visible:text-highlight-text tw:pointer-coarse:size-10"
       >
         <Info size={14} aria-hidden="true" />
       </Link>
@@ -73,7 +73,7 @@ export function GiftList({ plan }: { plan: ReaderPlan }) {
       data-testid="gift-list"
       className="tw:flex tw:items-start tw:gap-2 tw:rounded-md tw:bg-highlight/10 tw:px-3 tw:py-2 tw:text-sm tw:text-foreground"
     >
-      <GiftIcon size={16} aria-hidden="true" className="tw:mt-0.5 tw:shrink-0 tw:text-highlight" />
+      <GiftIcon size={16} aria-hidden="true" className="tw:mt-0.5 tw:shrink-0 tw:text-highlight-text" />
       <div className="tw:min-w-0">
         <p className="tw:m-0 tw:font-medium">{gifts.length === 1 ? "You have a gift" : "You have gifts"}</p>
         <ul className="tw:m-0 tw:mt-1 tw:flex tw:list-none tw:flex-col tw:gap-0.5 tw:p-0 tw:text-xs tw:text-muted-foreground">

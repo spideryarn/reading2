@@ -309,7 +309,7 @@ function ViewOption({
         value={value}
         className={`tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:rounded-sm tw:px-2 tw:text-xs tw:transition-colors ${
           selected
-            ? "tw:bg-highlight/15 tw:text-highlight"
+            ? "tw:bg-highlight/15 tw:text-highlight-text"
             : "tw:bg-transparent tw:text-muted-foreground tw:hover:bg-highlight/10 tw:hover:text-foreground"
         }`}
       >

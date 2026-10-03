@@ -151,6 +151,7 @@ import type {
 } from "./types.js";
 import type { ArtifactStore } from "./store/artifacts.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 
 /**
  * Bumped whenever the prompt changes in a way that changes what an *event* is.
@@ -162,8 +163,12 @@ import { plainWords } from "./plain-words.js";
  *
  * `timeline/4`, 2026-10-02: the request gained `TIMELINE_OUTPUT_SCHEMA`; the
  * prompt text is unchanged.
+ *
+ * `timeline/5`, 2026-10-03: the prompt gained the shared paperwork section,
+ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
+ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
  */
-export const PROMPT_VERSION = "timeline/4";
+export const PROMPT_VERSION = "timeline/5";
 
 /**
  * The most events one call may carry into the artefact.
@@ -1087,6 +1092,8 @@ FIVE WAYS TO GET THIS WRONG
    GOOD: modality "predicted"
 
 ${plainWords("landmark")}
+
+${paperwork("pick")}
 
 OUTPUT
 

@@ -35,6 +35,15 @@ two of those neither can be changed.
 
 ### The page is near-black, so every published scale is upside down
 
+**On the dark theme, which is the default.** Since 2026-10-03 there is a light theme as well
+([web-client.md § Appearance](web-client.md#appearance-light-dark-and-system)), and every scale has a
+second set of values for it at the end of
+[`styles/colourscales.css`](../../styles/colourscales.css): Okabe–Ito back to its published values
+wherever they reach 3:1 on the light page, the sequential ramps reversed so the quiet end is still
+the one nearest the page (viridis also cut short of its yellow), the diverging scales pivoting on a
+light grey, and the hue ring at a lower lightness. The rule below is the same rule turned over, and
+[`tests/colour-scales.test.ts`](../../tests/colour-scales.test.ts) holds each theme to its own page.
+
 Every scale in the literature was designed for paper. That has one consequence that changes the
 values and one that changes the *shape*:
 

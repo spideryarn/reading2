@@ -39,13 +39,21 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+/* `captureFailure` watched, not replaced: a quick search the reader walked away
+   from is expected and must not be reported as a fault (plan 261002h, Sol F7). */
+vi.mock("../src/monitoring.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/monitoring.js")>();
+  return { ...actual, captureFailure: vi.fn(actual.captureFailure) };
+});
+
 import { eq, sql } from "drizzle-orm";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, comments as commentsTable, readerProfiles } from "../src/db/schema.js";
+import { articles, articleTags, comments as commentsTable, readerProfiles } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
+import { captureFailure } from "../src/monitoring.js";
 import { originalUrl } from "../src/vercel.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT } from "../src/types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
@@ -79,7 +87,7 @@ await pgReady({
   tables: ["spideryarn.articles", "spideryarn.comments", "spideryarn.search_runs"],
 });
 
-const { handleApi } = await import("../src/routes.js");
+const { handleApi, liveRuns } = await import("../src/routes.js");
 const { adminStore, commentStore, readerStore, searchStore, shelfStore } = await import(
   "../src/store/index.js"
 );
@@ -266,6 +274,8 @@ async function callStreaming(
   method: string,
   url: string,
   body?: unknown,
+  /** Handed a `close()` that does what a reader closing the tab does to the response. */
+  onResponse?: (close: () => void) => void,
 ): Promise<{ status: number; headers: Record<string, string>; frames: string; streamed: boolean }> {
   const payload = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
   const req = Object.assign(
@@ -279,6 +289,7 @@ async function callStreaming(
   let streamed = false;
   let headers: Record<string, string> = {};
   let frames = "";
+  const closers: (() => void)[] = [];
   const res = {
     set statusCode(v: number) {
       status = v;
@@ -289,7 +300,9 @@ async function callStreaming(
     writableEnded: false,
     destroyed: false,
     setHeader() {},
-    on() {},
+    on(event: string, fn: () => void) {
+      if (event === "close") closers.push(fn);
+    },
     flushHeaders() {},
     writeHead(code: number, h: Record<string, string>) {
       streamed = true;
@@ -303,6 +316,10 @@ async function callStreaming(
       if (chunk) frames += chunk;
     },
   } as unknown as ServerResponse;
+  onResponse?.(() => {
+    (res as { destroyed: boolean }).destroyed = true;
+    for (const fn of closers) fn();
+  });
 
   await handleApi(req, res, acceptAny);
   return { status, headers, frames, streamed };
@@ -494,6 +511,48 @@ describe("the shelf routes", () => {
       const r = await call("PATCH", `/api/library/${SHELF}`, body);
       expect(r.status, body).toBe(400);
     }
+  });
+
+  /* The reader's own tags — plan 261003d. The spelling rules and the cap are
+     tests/store-tags-pg.test.ts's; these are the wire: shapes, answers, and
+     that the listing and the vocabulary carry what the PATCH wrote. */
+  describe("tags", () => {
+    beforeEach(async () => {
+      const [row] = await getDb().select({ id: articles.id }).from(articles).where(eq(articles.slug, SHELF));
+      if (row) await getDb().delete(articleTags).where(eq(articleTags.articleId, row.id));
+    });
+
+    it("adds and removes, and answers the tags after", async () => {
+      const added = await call("PATCH", `/api/library/${SHELF}/tags`, { add: ["Reading", "ai"] });
+      expect(added.status).toBe(200);
+      expect(added.body).toEqual({ tags: ["ai", "reading"] });
+      const removed = await call("PATCH", `/api/library/${SHELF}/tags`, { remove: ["AI"] });
+      expect(removed.body).toEqual({ tags: ["reading"] });
+    });
+
+    it("puts them on the shelf card and in the reader's vocabulary", async () => {
+      await call("PATCH", `/api/library/${SHELF}/tags`, { add: ["reading"] });
+      const shelf = await call("GET", "/api/library");
+      const card = (shelf.body.articles as { slug: string; tags?: string[] }[]).find((a) => a.slug === SHELF);
+      expect(card?.tags).toEqual(["reading"]);
+      const vocabulary = await call("GET", "/api/library/tags");
+      expect(vocabulary.status).toBe(200);
+      expect(vocabulary.body.tags).toContainEqual({ tag: "reading", count: 1 });
+    });
+
+    it("refuses a body of the wrong shape, an empty edit, and a bad spelling", async () => {
+      expect((await call("PATCH", `/api/library/${SHELF}/tags`, { add: "ai" })).status).toBe(400);
+      expect((await call("PATCH", `/api/library/${SHELF}/tags`, { add: [42] })).status).toBe(400);
+      expect((await call("PATCH", `/api/library/${SHELF}/tags`, {})).status).toBe(400);
+      expect((await call("PATCH", `/api/library/${SHELF}/tags`, "[1]")).status).toBe(400);
+      const comma = await call("PATCH", `/api/library/${SHELF}/tags`, { add: ["a,b"] });
+      expect(comma.status).toBe(400);
+      expect(comma.body.error).toMatch(/comma/);
+    });
+
+    it("answers 404 for an article that does not exist", async () => {
+      expect((await call("PATCH", `/api/library/${MISSING}/tags`, { add: ["x"] })).status).toBe(404);
+    });
   });
 
   it("refuses a title that is not a string or null", async () => {
@@ -1940,6 +1999,149 @@ describe("POST /api/search/:slug is a stream too", () => {
     expect((await asTestOwner(() => searchStore.load(SEARCH_SLUG))).map((run) => run.id)).toEqual([
       keep.run.id,
     ]);
+  });
+
+  describe("search-as-you-type: revise and cancel (plan 261002h)", () => {
+    /** A Decisions reply built from the request: the seeded block matches. */
+    function decisionsReply(init: RequestInit): Response {
+      const body = JSON.parse(String(init.body)) as { questions: Record<string, unknown> };
+      const answers = Object.fromEntries(
+        Object.keys(body.questions).map((id) => [id, { noul: id === BLOCK ? 0.93 : 0.1 }]),
+      );
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        text: async () => JSON.stringify({ answers, usage: { input_tokens: 900, cost: 0.00004 } }),
+      } as unknown as Response;
+    }
+
+    /** A Decisions call that waits to be released, and rejects if its signal aborts. */
+    function heldCall(init: RequestInit): { reply: Promise<Response>; release: () => void } {
+      let release!: () => void;
+      const reply = new Promise<Response>((resolve, reject) => {
+        release = () => resolve(decisionsReply(init));
+        const signal = init.signal;
+        if (signal?.aborted) reject(signal.reason);
+        signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+      return { reply, release };
+    }
+
+    async function until(check: () => boolean): Promise<void> {
+      for (let i = 0; i < 500 && !check(); i++) await new Promise((r) => setTimeout(r, 5));
+      expect(check()).toBe(true);
+    }
+
+    it("re-asks the session's quick row in place: same id, new words, one row", async () => {
+      fetchMock.mockImplementation(async (_url: string, init: RequestInit) => decisionsReply(init));
+      const id = mintId();
+      await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+        id,
+        criterion: "the prize",
+        kind: "quick",
+      });
+      const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+        id,
+        criterion: "the prize the essay won",
+        kind: "quick",
+        revises: true,
+      });
+      const frames = parseFrames(r.frames);
+      expect(frames.map((f) => f.event)).toEqual(["begin", "hit", "done"]);
+      expect((frames[0]!.data as { id: string }).id).toBe(id);
+      const stored = await asTestOwner(() => searchStore.load(SEARCH_SLUG));
+      expect(stored.map((s) => [s.id, s.criterion, s.status])).toEqual([
+        [id, "the prize the essay won", "done"],
+      ]);
+    });
+
+    it("refuses a revises that is not a boolean", async () => {
+      const r = await call("POST", `/api/search/${SEARCH_SLUG}`, {
+        criterion: "the prize",
+        kind: "quick",
+        revises: "yes",
+      });
+      expect(r.status).toBe(400);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("a quick search the reader walked away from ends as error, unreported, and its model call is cancelled", async () => {
+      vi.mocked(captureFailure).mockClear();
+      const calls: { signal: AbortSignal | undefined }[] = [];
+      fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+        calls.push({ signal: init.signal ?? undefined });
+        return heldCall(init).reply;
+      });
+      let close!: () => void;
+      const pending = callStreaming(
+        "POST",
+        `/api/search/${SEARCH_SLUG}`,
+        { criterion: "the prize the essay won", kind: "quick" },
+        (c) => {
+          close = c;
+        },
+      );
+      await until(() => calls.length > 0);
+      close();
+      const r = await pending;
+      expect(calls[0]?.signal?.aborted).toBe(true);
+      const frames = parseFrames(r.frames);
+      expect(frames.map((f) => f.event)[0]).toBe("begin");
+      const stored = await asTestOwner(() => searchStore.load(SEARCH_SLUG));
+      // Not left `pending`, where it would escape the trim and spin for ever.
+      expect(stored.map((s) => s.status)).toEqual(["error"]);
+      expect(
+        vi.mocked(captureFailure).mock.calls.filter((c) => c[1]?.route === "search"),
+      ).toEqual([]);
+    });
+
+    it("a superseded attempt's cancellation changes nothing, and does not release the newer attempt", async () => {
+      const held: { release: () => void; init: RequestInit }[] = [];
+      fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+        const h = heldCall(init);
+        held.push({ release: h.release, init });
+        return h.reply;
+      });
+      const id = mintId();
+      let closeFirst!: () => void;
+      const first = callStreaming(
+        "POST",
+        `/api/search/${SEARCH_SLUG}`,
+        { id, criterion: "the prize", kind: "quick" },
+        (c) => {
+          closeFirst = c;
+        },
+      );
+      await until(() => held.length === 1);
+      const second = callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+        id,
+        criterion: "the prize the essay won",
+        kind: "quick",
+        revises: true,
+      });
+      await until(() => held.length === 2);
+
+      // The client aborts the superseded fetch once the revision has begun.
+      closeFirst();
+      const firstReply = await first;
+      expect(parseFrames(firstReply.frames).some((f) => f.event === "done")).toBe(false);
+      // The revision is still running, and this process still says so.
+      expect(liveRuns(SEARCH_SLUG).has(id)).toBe(true);
+      const midway = await asTestOwner(() => searchStore.load(SEARCH_SLUG));
+      expect(midway.map((s) => [s.criterion, s.status])).toEqual([
+        ["the prize the essay won", "pending"],
+      ]);
+
+      held[1]!.release();
+      const secondReply = parseFrames((await second).frames);
+      expect(secondReply.map((f) => f.event)).toEqual(["begin", "hit", "done"]);
+      expect(liveRuns(SEARCH_SLUG).has(id)).toBe(false);
+      const stored = await asTestOwner(() => searchStore.load(SEARCH_SLUG));
+      expect(stored.map((s) => [s.id, s.criterion, s.status])).toEqual([
+        [id, "the prize the essay won", "done"],
+      ]);
+    });
   });
 });
 

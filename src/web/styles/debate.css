@@ -104,15 +104,15 @@
   cursor: pointer;
 }
 .dbt-bar-reset:hover { color: var(--ink); }
-.dbt-bar-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.dbt-bar-reset:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .dbt-bar-range {
   display: block;
   width: 100%;
   margin: 0.3rem 0 0;
-  accent-color: var(--highlight);
+  accent-color: var(--highlight-text);
   cursor: pointer;
 }
-.dbt-bar-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.dbt-bar-range:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 /* Said in words, because a bar that is hiding every response looks exactly like
    a search that found none — which on this panel is a real and common answer,
    and the one thing it must never be confused with. */
@@ -195,7 +195,7 @@
    what `help` says. */
 button.dbt-mark { cursor: help; }
 button.dbt-mark:hover { color: var(--ink); border-color: var(--ink-faint); }
-button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+button.dbt-mark:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 
 /* The card behind the chip: every signal found, one to a line. Narrow because
    the band it hangs off is 288px at its narrowest (`MODE_MIN` in layout.ts). */
@@ -253,7 +253,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
 }
 .dbt-title:hover { text-decoration: underline; text-underline-offset: 2px; }
 .dbt-title svg { display: inline; margin-left: 0.25rem; vertical-align: -1px; opacity: 0.7; }
-.dbt-title:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.dbt-title:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 
 /* The small line under the title: the site, and on a row about this piece its
    identification chip. Stage 2 adds *authors · year* in front of the site in
@@ -429,7 +429,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   cursor: pointer;
 }
 .dbt-more:hover { color: var(--ink); }
-.dbt-more:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.dbt-more:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .dbt-more svg { transition: transform 120ms ease; }
 .dbt-more[aria-expanded="true"] svg { transform: rotate(180deg); }
 
@@ -550,7 +550,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   text-decoration: none;
 }
 .dbt-out:hover { text-decoration: underline; text-underline-offset: 2px; }
-.dbt-out:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.dbt-out:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 .dbt-out svg { flex: none; }
 
 /* Status-only since plan 260929b: progress, Stop and failures stay pinned even
@@ -608,7 +608,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight); outline-off
   border-color: var(--rule-strong);
   background: var(--surface-raised);
 }
-.dbt-thread:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.dbt-thread:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .dbt-thread:disabled { cursor: default; opacity: 0.55; }
 .dbt-thread-label {
   display: flex;

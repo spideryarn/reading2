@@ -272,8 +272,10 @@ import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from ".
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
+import { TagEditor } from "./TagEditor.js";
+import { editArticleTags } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
-import { AuthorNames } from "./AuthorNames.js";
+import { AuthorNames, AuthorSearchLinks } from "./AuthorNames.js";
 import { howLong, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
@@ -542,7 +544,7 @@ export function Metadata({
     },
     [slug],
   );
-  const { reload, refresh } = useOrderedRead(readProvenance);
+  const { reload, refresh, armRefresh } = useOrderedRead(readProvenance);
   /* Keyed on `reload`, whose identity changes with the slug and with nothing
      else — so "a different article" is said once, in the place `useOrderedRead`
      already has to be right about it, rather than a second time here. */
@@ -812,7 +814,7 @@ export function Metadata({
       >
         <Link
           href={backHref}
-          className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+          className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight-text"
         >
           <ArrowLeft size={13} />
           Back to the article
@@ -887,7 +889,7 @@ export function Metadata({
         {showingFixture && (
           <p className="tw:mt-2 tw:mb-0">
             <span
-              className="tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:font-mono tw:text-xs tw:text-highlight"
+              className="tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:font-mono tw:text-xs tw:text-highlight-text"
               /* The `example/README.md` pointer went with the rewrite: it named
                  a file in this repository to a reader who has no copy of it.
                  What is left is the consequence, which is the part they can do
@@ -897,6 +899,32 @@ export function Metadata({
               fixture
             </span>
           </p>
+        )}
+
+        {/* **The reader's own tags**, near the top as asked (Greg, 2026-10-01:
+            *"Also add this near the top of the article's Metadata page, reusing
+            machinery"*) — the shelf's editor, TagEditor.tsx. Only on the
+            reader's own article, which is what `hasShelfRow` already says.
+            `?? []`: a Metadata answer cached before tags existed has none.
+            Plan 261003d. */}
+        {hasShelfRow && provenance && (
+          <div className="tw:mt-3 tw:max-w-xl">
+            <p className="tw:mt-0 tw:mb-1 tw:text-xs tw:font-medium tw:text-muted-foreground">
+              Your tags <span className="tw:font-normal">— only you see them</span>
+            </p>
+            <TagEditor
+              tags={provenance.tags ?? []}
+              save={async (change) => {
+                const tags = await editArticleTags(slug, change);
+                /* A metadata GET already in flight may have read the old tags.
+                   Let it finish, then repair it from the server; with no GET in
+                   flight the PATCH answer already is the freshest answer. */
+                armRefresh();
+                setProvenance((p) => (p && p.slug === slug ? { ...p, tags } : p));
+                return tags;
+              }}
+            />
+          </div>
         )}
 
         {/* The two acts people come here for most often, under the title —
@@ -949,7 +977,9 @@ export function Metadata({
             *"At the very least, display them in the Metadata section."* Only
             when stage 2 knew the list (`meta.authors`, plan 260929d); otherwise
             the byline is in the facts line under the title, as it always was.
-            The names link to the shelf searched for them, as in the masthead. */}
+            The names link to the shelf searched for them, as in the masthead,
+            and each has two outside searches under it — where a phone reader
+            finds them, since a tap on a name follows it (plan 261003f). */}
         {meta.authors && (
           /* Shut until opened, since 2026-09-30 — Greg, SPIDERYARN-READING2-6Z:
              *"we can have more of the sections be default collapsed, like
@@ -971,6 +1001,7 @@ export function Metadata({
                       {a}
                     </span>
                   ))}
+                  <AuthorSearchLinks author={author} />
                 </li>
               ))}
             </ol>
@@ -1138,7 +1169,7 @@ export function Metadata({
                 <span className="tw:text-[0.7rem] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
                   About you
                 </span>
-                <Link href={PROFILE_HREF} className="tw:text-xs tw:text-highlight">
+                <Link href={PROFILE_HREF} className="tw:text-xs tw:text-highlight-text">
                   Edit on your profile →
                 </Link>
               </div>
@@ -1157,7 +1188,7 @@ export function Metadata({
             </Row>
             <Row icon={Target} label="Where you left off">
               {lastRead ? (
-                <Link href={backHref} className={withVoice("tw:text-highlight", "author")}>
+                <Link href={backHref} className={withVoice("tw:text-highlight-text", "author")}>
                   “{snippet(lastRead.text)}”
                 </Link>
               ) : (
@@ -2044,7 +2075,7 @@ function Questions({
   // A link, because a question is worth opening: clicking one scrolls to the
   // passage it is about.
   return (
-    <Link href={href} className="tw:text-highlight">
+    <Link href={href} className="tw:text-highlight-text">
       {/* **"Comments", to match the row's own label and the mode's name.** It
           said "questions" under a label that said Comments, which is two words
           for one thing on one line — and the mode a reader has already met in
@@ -2109,7 +2140,7 @@ function Origin({
           href={source}
           target="_blank"
           rel="noreferrer noopener"
-          className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight"
+          className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight-text"
         >
           {source}
           <ExternalLink size={12} className="tw:shrink-0" />
@@ -2164,7 +2195,7 @@ function Origin({
             with no article of its own is answered with the fixture's meta, and
             this link must be about the address the reader is standing on. */}
         {uploaded && owner && (
-          <span className="tw:text-highlight">
+          <span className="tw:text-highlight-text">
             <SourceLink slug={slug}>View the original</SourceLink>
           </span>
         )}
@@ -2384,7 +2415,7 @@ function TechnicalDetails({
             >
               <button
                 type="button"
-                className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:font-mono tw:text-xs tw:break-all tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+                className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:font-mono tw:text-xs tw:break-all tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
               >
                 {slug}
               </button>
@@ -2404,7 +2435,7 @@ function TechnicalDetails({
               >
                 <button
                   type="button"
-                  className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:font-mono tw:text-xs tw:break-all tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+                  className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:font-mono tw:text-xs tw:break-all tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
                 >
                   {provenance.dir}/
                 </button>
@@ -2434,7 +2465,7 @@ function TechnicalDetails({
                     to be reachable by keyboard. */}
                 <button
                   type="button"
-                  className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:font-mono tw:text-xs tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+                  className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:font-mono tw:text-xs tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
                 >
                   {rawSha256.slice(0, 12)}…
                 </button>
@@ -2561,7 +2592,7 @@ function ArchiveArticle({
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
           This address has no article of its own — the reading view is showing the example fixture,
           so there is nothing here to archive. The{" "}
-          <Link href={LIBRARY_HREF} className="tw:text-highlight">
+          <Link href={LIBRARY_HREF} className="tw:text-highlight-text">
             library
           </Link>{" "}
           has the articles that do exist.
@@ -2639,7 +2670,7 @@ function ArchiveArticle({
         disabled={busy}
         className={`tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none ${
           archived
-            ? "tw:text-highlight tw:hover:bg-highlight/10 tw:focus-visible:bg-highlight/10"
+            ? "tw:text-highlight-text tw:hover:bg-highlight/10 tw:focus-visible:bg-highlight/10"
             : /* Quiet at rest and tinted on hover — the shelf's own Archive
                  button (ShelfEntry.tsx), one convention for the one act, and the
                  heading above already carries the weight.
@@ -2682,7 +2713,7 @@ function ArchiveArticle({
             every question you have asked about it stay exactly where they are, this page and the
             reading view keep working, and Put back is here and under{" "}
             <em className="tw:not-italic tw:text-foreground">Include archived</em> on the{" "}
-            <Link href={LIBRARY_HREF} className="tw:text-highlight">
+            <Link href={LIBRARY_HREF} className="tw:text-highlight-text">
               library
             </Link>
             .
@@ -2798,7 +2829,7 @@ function WhatDeleteDoes({ shared, full }: { shared: boolean; full: boolean }) {
                 ?.querySelector<HTMLElement>("#sec-export")
                 ?.scrollIntoView({ behavior: "smooth", block: "start" })
             }
-            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline tw:underline-offset-4 tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight-text tw:underline tw:underline-offset-4 tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
           >
             Export it first
           </button>{" "}
@@ -3263,7 +3294,7 @@ function Missed({ meta }: { meta: Meta }) {
       >
         <button
           type="button"
-          className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+          className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
         >
           Couldn't be checked — this is a scan
         </button>
@@ -3308,7 +3339,7 @@ function Missed({ meta }: { meta: Meta }) {
       >
         <button
           type="button"
-          className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+          className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
         >
           {/* The page count only when there is one. `?? 0` on a
               meta.json written before `pages` existed produces "judging
@@ -3478,11 +3509,12 @@ export function Section({
        where it scrolls to — PageContents.tsx, which derives its whole list from
        these rather than from a second array of section names.
 
-       `scroll-mt-24` is 6rem, and `REACHED_PX` over there is deliberately a
+       `scroll-mt-24` is 6rem, and "reached" over there is deliberately a
        little MORE than it — the section a click has just scrolled to must be
        the section the list then marks, and setting the two equal put that on a
-       knife edge that a browser lost. See the constant's docstring; if you
-       change this 24, that number has to stay above it. */
+       knife edge that a browser lost. Since 2026-10-03 it reads this margin off
+       the element (`reachedPx`), so changing the 24 needs no second edit —
+       and neither does a reader whose rem is not 16px. */
     <section
       ref={sectionEl}
       id={sectionId(label)}
@@ -3511,7 +3543,7 @@ export function Section({
             type="button"
             onClick={() => setOpen((was) => !was)}
             aria-expanded={showing}
-            className="tw:flex tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:p-0 tw:text-inherit tw:uppercase tw:tracking-[0.09em] tw:cursor-pointer tw:hover:text-highlight tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+            className="tw:flex tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:p-0 tw:text-inherit tw:uppercase tw:tracking-[0.09em] tw:cursor-pointer tw:hover:text-highlight-text tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
           >
             {head}
             {showing ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -3747,7 +3779,7 @@ function Wrote({
           being noticed, and are not changed here so that this stays one change. */}
       <button
         type="button"
-        className="tw:ml-auto tw:shrink-0 tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+        className="tw:ml-auto tw:shrink-0 tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
       >
         {/* "last wrote" rather than "ran" for a stage that is not done: something
             of its is on disk and the set is incomplete, which is precisely the

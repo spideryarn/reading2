@@ -1,0 +1,11 @@
+The original line was truthful: the filter is applied before `limit + 1`, so `more` means the selected filter had at least 51 rows. The shipped-map tallies also reconcile: 230/345 gives 115 unshipped for build `43be719`; 305/345 gives 40 on `origin/main`. `unshipped = all - in`, the All count, and a number inside an `aria-pressed` button are all sound.
+
+- **P1 — [src/routes.ts:8007](/home/greg/code/spideryarn2/.claude/worktrees/fb95-earlier-tab-counts/src/routes.ts:8007), [plan:40](/home/greg/code/spideryarn2/.claude/worktrees/fb95-earlier-tab-counts/docs/plans/261003b-earlier-tab-counts-on-the-pills.md:40):** `listMine` and `countMine` are independent statements and therefore do not share a PostgreSQL snapshot. A concurrent report can make the list see 51 while the count sees 50, producing the conspicuously false “Showing your 50 most recent of 50.” Return page and counts from one store operation using one statement or a repeatable-read transaction.
+
+- **P1 — [plan:45](/home/greg/code/spideryarn2/.claude/worktrees/fb95-earlier-tab-counts/docs/plans/261003b-earlier-tab-counts-on-the-pills.md:45):** Keeping the first counts for the whole opening can disagree with later filtered pages, especially across a rolling deployment—the plan’s own map changes from 115 to 40 unshipped. Counts should belong to each loaded page, with the selected page’s counts taking precedence. The in-progress client code now does this; update the plan and add a differing-count/out-of-order test.
+
+- **P2 — [FeedbackEarlier.tsx:76](/home/greg/code/spideryarn2/.claude/worktrees/fb95-earlier-tab-counts/src/web/FeedbackEarlier.tsx:76), [feedback-dialog.test.tsx:1536](/home/greg/code/spideryarn2/.claude/worktrees/fb95-earlier-tab-counts/tests/feedback-dialog.test.tsx:1536):** The shape guard checks that counts are non-negative integers but not that `all === shipped + unshipped` or that `more` agrees with the selected count. The current test actually blesses “Showing your 50 most recent of 45.” Use a filtered count above 50 and test rejection of inconsistent totals.
+
+- **P2 — [plan:35](/home/greg/code/spideryarn2/.claude/worktrees/fb95-earlier-tab-counts/docs/plans/261003b-earlier-tab-counts-on-the-pills.md:35):** “Showing your 50 most recent of 115” is awkward and elides the noun. Prefer “Showing the 50 most recent of your 115 reports.”
+
+**REVISE**

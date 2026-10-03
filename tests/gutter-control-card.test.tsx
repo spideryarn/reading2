@@ -101,7 +101,7 @@ describe("the gutter's controls", () => {
     for (const [sel, words] of [
       [".blk-bookmark", "Bookmark this paragraph"],
       [".blk-permalink", ID],
-      [".block-chat", "Chat about this paragraph"],
+      [".block-chat", "Chat with the AI about this paragraph"],
       [".blk-help", "Ask the AI for help with this paragraph"],
       [".blk-more", "More for this paragraph"],
     ] as const) {

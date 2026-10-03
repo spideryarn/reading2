@@ -41,6 +41,7 @@ import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
 import {
   articleRevisions,
+  articleTags,
   articles,
   citationFinds,
   citationInvestigations,
@@ -213,6 +214,8 @@ import { guardDbStore } from "./db-errors.js";
 import { postgresBlobStore } from "./blobs.js";
 import { readRawDocument } from "./raw-document.js";
 import { pgReaderStore } from "./pg-reader.js";
+import { tagsForArticles } from "./tag-rows.js";
+import { compareTags } from "../tags.js";
 
 /** A 404 shaped exactly like the filesystem store's, so routes.ts could not tell them apart. */
 export function notFound(slug: string): Error {
@@ -2129,10 +2132,13 @@ function illustratedIsCurrent(revision: {
     {
       /* The paper's stored figures too, as the step stamps them —
          `figuresFingerprint`, src/illustrated-figures.ts. */
+      /* With the picture's **own** note: a note is how it was asked for, not
+         an input that can move (src/illustrated.ts § `inputFingerprint`). */
       inputHash: illustratedFingerprint(
         sketch,
         undefined,
         figuresFingerprint(revision.assets as Assets | null),
+        typeof found.note === "string" ? found.note : "",
       ),
       promptVersion: ILLUSTRATED_PROMPT_VERSION,
       model: CAPABLE_MODEL,
@@ -2190,6 +2196,17 @@ export function listArticlesQuery(
           order by ${revisionBlocks.ordinal}
           limit 1)
       end`.as("heading_title"),
+      /**
+       * **The reader's own tags, in the same statement** (plan 261003d). A
+       * correlated `array(...)` rather than a second query, because
+       * tests/store-shelf-reads.test.ts holds the shelf at two statements
+       * whatever its size, and a third for tags was the first thing the full
+       * suite caught. Sorted again in TypeScript (`compareTags`), so the order
+       * does not depend on the database's collation.
+       */
+      tags: sql<string[]>`array(
+        select ${articleTags.tag} from ${articleTags}
+        where ${articleTags.articleId} = ${articles.id})`.as("tags"),
       /**
        * The second half of `stepIsDone(fetch)`, beside `hasRawSource` in the
        * revision projection. `hasArtefacts` requires a completed run row as
@@ -2850,6 +2867,7 @@ const rawPgArticleReader: ArticleReader = {
              readable and its completed run row is carried with it. */
           sourceReusable: row.revision.hasRawSource && row.fetchDone,
           processing: minimal ? "minimal" : "full",
+          tags: [...row.tags].sort(compareTags),
         }),
       );
     }
@@ -3364,6 +3382,8 @@ const rawPgArticleReader: ArticleReader = {
       /* Off the same `shelfFrom` as `purpose`, so the two stores answer this
          from the same derivation rather than from two readings of one column. */
       archivedAt: shelfFrom(found.article).archivedAt ?? null,
+      /* The reader's own tags, for the editor near the top — plan 261003d. */
+      tags: (await tagsForArticles(db, [found.article.id])).get(found.article.id) ?? [],
       /* Off the same `articles` row — plan 260930f. */
       highPowerSince: found.article.highPowerSince?.toISOString() ?? null,
       /* **The run's own verdict, from the run's own inputs** — plan 261001i § 3.

@@ -593,7 +593,7 @@ export function ResetArticle({
         <label className="tw:flex tw:items-start tw:gap-2 tw:text-foreground">
           <input
             type="checkbox"
-            className="tw:mt-[0.2rem] tw:[accent-color:var(--highlight)]"
+            className="tw:mt-[0.2rem] tw:[accent-color:var(--highlight-text)]"
             checked={again}
             disabled={busy || job !== null}
             onChange={(e) => setAgain(e.target.checked)}

@@ -1,5 +1,6 @@
 ---
 reports: spya-d896sz
+parts: 2
 ending: shipped
 ---
 # Trajectory: icons for navigation, the question first, a route sparkline, "where am I"
@@ -28,8 +29,9 @@ Sentry status write.
   saying it is a question the FAQ wrote, paired by the model with a passage in this paragraph, and
   naming the section.
 - **Where am I**: hovering (or tapping) a row's vertical position line shows a small outline of the
-  article with that stop's section marked. It is one component, built so the spine can use it; **the
-  spine does not yet**, because its hover cards need a shorter version first.
+  article with that stop's section marked. It is one component, built so the spine can use it. The
+  spine needed a shorter version first, and got it on 2026-10-03:
+  [260929_1436-spine-card-shows-where-the-section-sits.md](260929_1436-spine-card-shows-where-the-section-sits.md).
 - **Sparkline**: the head's "Stop k of N" is a line of dots, one per stop at its height in the
   article, with the number in its tooltip; the depth buttons share its row where the band is wide
   enough.

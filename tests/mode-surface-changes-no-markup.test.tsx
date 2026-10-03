@@ -1696,7 +1696,9 @@ const GLOSSARY_SHAPE: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-ask", "div.gloss-list", "div.gloss-foot"],
+  /* The run row is the first thing in the column, not the foot, since
+     2026-10-03 (plan 261003c). */
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-more", "div.gloss-ask", "div.gloss-list"],
   /* `WrittenForYou` is in this row too and renders nothing for an owner who has
      not run with a profile, which is this fixture. The count used to be the row;
      it moves into the (i) card since 2026-10-01, plan 261001m, so the row is empty. */
@@ -2000,7 +2002,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(SUMMARY);
   });
 
-  it("draws Glossary's band with its list, its ask box and its footer", async () => {
+  it("draws Glossary's band with its run row, its ask box and its list", async () => {
     await paint(mountGlossary({ kind: "owner", owner: glossaryOwner(GLOSSARY), glossary: GLOSSARY }));
     expectShape(GLOSSARY_SHAPE);
   });
@@ -2010,7 +2012,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(GLOSSARY_LOADING);
   });
 
-  it("draws Glossary's band for a visitor, without the owner's box or footer", async () => {
+  it("draws Glossary's band for a visitor, without the owner's run row or box", async () => {
     await paint(mountGlossary({ kind: "visitor", glossary: GLOSSARY }));
     expectShape(GLOSSARY_VISITOR);
   });

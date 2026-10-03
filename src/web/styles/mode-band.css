@@ -821,7 +821,7 @@
   line-height: 1.4;
   resize: none;
 }
-.chat-input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.chat-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* **Send is the primary control in its row** — Greg, 2026-09-12: *"it sort of
    should be bigger and maybe have some kind of outline to indicate that it's
    probably the most important button in that little area."* So it is the one
@@ -874,7 +874,7 @@
 /* Brightness, not a colour: an orange fill composited toward the page goes
    darker on this ground (controls.md § Two hover languages). */
 .chat-send[type="submit"]:not([aria-disabled="true"]):hover { filter: brightness(1.1); }
-.chat-send:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.chat-send:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 
 /* ---- Remember mode's composer ----
    Same component as chat's, two differences on screen: the box is a place to
@@ -961,13 +961,13 @@
 .chat-live-btn.on {
   border-color: var(--highlight);
   background: var(--highlight);
-  /* `--page`, which is what `.prof-mic.on` uses — the microphone beside this
-     one, lit the same way. It said `--paper` for about an hour, which is a
+  /* `--highlight-foreground`, which is what `.prof-mic.on` uses — the
+     microphone beside this one, lit the same way. It said `--paper` for about an hour, which is a
      token this app does not have: an undefined custom property with no fallback
      makes the whole declaration invalid, so the glyph would have *inherited*
      its colour and gone near-invisible on the orange. Nothing errors.
      tests/css-tokens.test.ts is the only thing that would ever have said so. */
-  color: var(--page);
+  color: var(--highlight-foreground);
 }
 .chat-live-label {
   font-size: 0.88rem;
@@ -977,8 +977,12 @@
 /* The label follows the button, so "Listening…" carries the same signal the
    colour does — said twice, for the one control in this app worth being
    unambiguous about. */
-.chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--page); }
-.chat-live-mic select {
+.chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--highlight-foreground); }
+/* The voice-engine choice, beside the button and only with Experimental
+   features on (plan 261003a). Small and faint: it is a comparison switch, not a
+   control most readers meet. The touch floor in narrow-window.css out-specifies
+   the size here, as it does every select held under 1rem. */
+.chat-live-engine select {
   padding: 0.1rem 0.2rem;
   border: 1px solid var(--rule);
   border-radius: 4px;
@@ -987,7 +991,89 @@
   font-family: var(--font-ui);
   font-size: 0.83rem;
 }
-.chat-live-mic select:disabled { opacity: 0.5; }
+.chat-live-engine select:disabled { opacity: 0.5; }
+
+/* **The live session's one status line**: a state word in a pill whose colour
+   says it too, then the meter, then a sentence. Listening is the only filled
+   state, for the reason `.chat-live-btn.on` is filled: it is the claim that the
+   conversation hears you. An error is the destructive colour on the pill and
+   the box, so a failure is not one grey line among others (Greg, spya-f4eq7p:
+   "if there's a problem, I want it to be clear that there's a problem").
+   docs/plans/261002j-live-voice-chat-cleanup.md § 1c. */
+.chat-live-state {
+  flex: none;
+  padding: 0.05rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.chat-live-status:is(.is-connecting, .is-thinking, .is-speaking, .is-saving) .chat-live-state {
+  border-color: var(--highlight);
+  color: var(--highlight-ink, var(--highlight));
+}
+.chat-live-status.is-listening .chat-live-state {
+  border-color: var(--highlight);
+  background: var(--highlight);
+  color: var(--highlight-foreground);
+}
+.chat-live-status.is-error { border-color: var(--destructive); }
+.chat-live-status.is-error .chat-live-state {
+  border-color: var(--destructive);
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+.chat-live-sentence { min-width: 0; }
+/* The connecting steps, in order: the one it is on in ink, the rest faint. */
+.chat-live-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.5rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+}
+.chat-live-steps li + li::before { content: "›"; margin-right: 0.5rem; color: var(--ink-faint); }
+.chat-live-steps li.now { color: var(--ink); font-weight: 600; }
+.chat-live-failure {
+  margin: 0.5rem 0 0;
+  padding: 0.45rem 0.6rem;
+  border-left: 3px solid var(--destructive);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.chat-live-failure p { margin: 0 0 0.4rem; }
+/* Filled, so the way out of a failure is the most prominent thing in it — an
+   outlined button read as one more grey control in the browser pass. */
+.chat-live-status .chat-live-retry {
+  border-color: var(--destructive);
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+  font-weight: 600;
+}
+.chat-live-status .chat-live-retry:hover:not(:disabled) {
+  border-color: var(--destructive);
+  color: var(--destructive-foreground);
+  filter: brightness(1.08);
+}
+.chat-live-stall { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem; }
+.chat-live-advanced { margin-top: 0.45rem; }
+.chat-live-advanced summary { cursor: pointer; color: var(--ink-faint); width: max-content; }
+.chat-live-advanced summary:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+.chat-live-advanced-note { margin: 0.2rem 0 0.45rem; color: var(--ink-faint); }
+
+/* **The live words in the thread** (LiveTail.tsx): the same bubbles a saved
+   exchange gets, so the handoff to the saved rows does not move anything, and
+   one quiet line under each exchange saying it is not saved yet. */
+.chat-live-line { overflow-wrap: anywhere; white-space: pre-wrap; }
+.chat-live-arriving {
+  margin: -0.55rem 0 0.85rem;
+  color: var(--ink-faint);
+  font: 0.75rem/1.3 var(--font-ui);
+}
 
 .chat-live-status {
   flex-basis: 100%;
@@ -1001,23 +1087,18 @@
   font: 0.85rem/1.45 var(--font-ui);
 }
 .chat-live-status-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
-.chat-live-transcript-toggle { display: inline-flex; align-items: center; gap: 0.25rem; margin-left: auto; color: var(--ink-faint); }
 .chat-live-device { margin: 0.4rem 0; color: var(--ink-faint); overflow-wrap: anywhere; }
 .chat-live-device-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.45rem 0; }
 .chat-live-device-picker select { min-width: 0; flex: 1 1 8rem; max-width: 100%; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 0.2rem; font: inherit; }
 .chat-live-device-picker small { flex-basis: 100%; color: var(--ink-faint); }
 .chat-live-notice { margin: 0.4rem 0; color: var(--ink-soft); }
 .chat-live-error { margin: 0.5rem 0; color: var(--destructive); overflow-wrap: anywhere; }
-.chat-live-transcript { max-height: 11rem; overflow: auto; overscroll-behavior: contain; margin: 0.5rem 0; border-top: 1px solid var(--rule); }
-.chat-live-line { margin: 0.5rem 0; overflow-wrap: anywhere; white-space: pre-wrap; }
-.chat-live-line strong { color: var(--ink-faint); font-weight: 500; }
-.chat-live-transcript-empty { color: var(--ink-faint); margin: 0.5rem 0; }
 .chat-live-tools { padding-left: 1rem; color: var(--ink-soft); max-height: 5rem; overflow: auto; }
 .chat-live-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .chat-live-status button { border: 1px solid var(--rule-strong); border-radius: 4px; color: var(--ink); background: var(--panel); padding: 0.2rem 0.4rem; font: inherit; cursor: pointer; }
 .chat-live-status button:hover:not(:disabled) { border-color: var(--highlight); color: var(--highlight-ink); }
 .chat-live-status button:disabled { opacity: 0.5; cursor: default; }
-.chat-live-status button:focus-visible, .chat-live-status select:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.chat-live-status button:focus-visible, .chat-live-status select:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 
 /* **What a spoken answer pointed at**, in place of the citations it cannot
    make: it is forbidden to say a block id aloud and uses `show_passage`
@@ -1129,7 +1210,7 @@
 }
 .band-about:hover { color: var(--ink); background: var(--surface-raised); }
 .band-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
-.band-about:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.band-about:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* Wider than a control's card (20rem): the (i) carries the mode's two catalog
    paragraphs and then its own, and Citations' card ran to 834px at 20rem — off
    the bottom of an 800px window (browser check, plan 261001m). */

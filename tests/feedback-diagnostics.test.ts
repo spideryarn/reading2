@@ -373,6 +373,39 @@ describe("a browser that will not answer", () => {
   });
 });
 
+/**
+ * **The appearance the page showed, beside the OS preference** — since
+ * 2026-10-03 a reader can choose Light on a dark OS, so `colorScheme` alone no
+ * longer says what they were looking at (GPT Sol, plan 261003e).
+ */
+describe("appearance", () => {
+  it("reports the stored choice and the resolved theme, and the server keeps them", () => {
+    stubBrowser();
+    vi.stubGlobal("window", {
+      ...(globalThis.window as object),
+      localStorage: { getItem: (k: string) => (k === "spya.appearance" ? "light" : null) },
+    });
+    vi.stubGlobal("document", { documentElement: { dataset: { theme: "light" } } });
+
+    const device = collectFeedbackDiagnostics().device;
+    expect(device?.colorScheme).toBe("dark");
+    expect(device?.appearance).toBe("light");
+    expect(device?.theme).toBe("light");
+    const parsed = parseFeedbackDiagnostics(collectFeedbackDiagnostics());
+    expect(parsed?.device?.appearance).toBe("light");
+    expect(parsed?.device?.theme).toBe("light");
+  });
+
+  it("drops a value that is not one of the choices", () => {
+    const parsed = parseFeedbackDiagnostics({
+      ...collectFeedbackDiagnostics(),
+      device: { appearance: "sepia", theme: "dim" },
+    });
+    expect(parsed?.device?.appearance).toBeNull();
+    expect(parsed?.device?.theme).toBeNull();
+  });
+});
+
 describe("the caps", () => {
   /**
    * **The most recent entries, not the oldest.**

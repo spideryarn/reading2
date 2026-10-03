@@ -56,7 +56,7 @@ function SourceRow({ url, guess }: { url: string | null; guess: SourceGuess | un
           href={url}
           target="_blank"
           rel="noreferrer noopener"
-          className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight"
+          className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight-text"
         >
           {url}
           <ExternalLink size={12} className="tw:shrink-0" />
@@ -234,7 +234,7 @@ export function PublicMetadataPage({
             the same section; it stays because it is where somebody who
             scrolled past the box will look. */}
         <p className="tw:mt-10 tw:mb-0 tw:text-xs tw:text-ink-faint">
-          <Link href={TAKEDOWN_HREF} className="tw:text-ink-faint tw:hover:text-highlight">
+          <Link href={TAKEDOWN_HREF} className="tw:text-ink-faint tw:hover:text-highlight-text">
             {TAKEDOWN_LINK}
           </Link>
         </p>

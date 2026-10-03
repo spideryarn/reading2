@@ -1,0 +1,10 @@
+{"ok":true,"first":["A framework for splitting shared, unique, and joint neural signals is proposed; whether it reveals 
+{"ok":true,"first":["Brains must process information somehow; what counts as processing, not just signal flow, is still 
+{"ok":true,"first":["Whether information theory can explain how neurons actually compute, not just connect, is the quest
+{"ok":true,"first":["Whether brains truly compute, not just transmit signals, is the question this review sets out to an
+{"ok":true,"first":["Information processing in the brain is framed as a problem awaiting the right analytic tool, not ye
+{"ok":true,"first":["Neural computation is framed as information processing; what remains is how to actually measure it 
+{"ok":true,"first":["Neural computation is framed as an information problem, with the right tool for it not yet named.",
+{"ok":true,"first":["A framework for decomposing neural computation is promised, but not yet shown.","Better data and to
+{"ok":true,"first":["Whether neurons merely sum inputs or truly compute on their patterns is the question at stake.","Ne
+{"ok":true,"first":["Whether brains can be understood as information processors is the question; what tools could ever s

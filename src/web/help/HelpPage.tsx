@@ -312,7 +312,7 @@ function HelpSectionView({ entry: e }: { entry: Entry }) {
         {e.experimental && (
           <a
             href="#experimental-features"
-            className="tw:rounded tw:border tw:border-rule tw:px-1.5 tw:py-px tw:font-sans tw:text-[0.6875rem] tw:font-medium tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+            className="tw:rounded tw:border tw:border-rule tw:px-1.5 tw:py-px tw:font-sans tw:text-[0.6875rem] tw:font-medium tw:text-ink-faint tw:no-underline tw:hover:text-highlight-text"
           >
             Experimental
           </a>
@@ -324,7 +324,7 @@ function HelpSectionView({ entry: e }: { entry: Entry }) {
         <a
           href={`#${e.anchor}`}
           aria-label={`Link to ${e.title}`}
-          className="tw:font-sans tw:text-base tw:text-ink-faint tw:no-underline tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:focus-visible:opacity-100 tw:hover:text-highlight tw:hover-none:opacity-100 tw:any-pointer-coarse:opacity-100"
+          className="tw:font-sans tw:text-base tw:text-ink-faint tw:no-underline tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:focus-visible:opacity-100 tw:hover:text-highlight-text tw:hover-none:opacity-100 tw:any-pointer-coarse:opacity-100"
         >
           #
         </a>
@@ -384,7 +384,7 @@ function HelpContents({
         placeholder="Search Help"
         enterKeyHint="search"
         aria-label="Search Help"
-        className="tw:box-border tw:block tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:font-sans tw:text-sm tw:text-foreground tw:placeholder:text-ink-faint tw:focus-visible:border-highlight tw:focus-visible:outline-none"
+        className="tw:box-border tw:block tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:font-sans tw:text-sm tw:text-foreground tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none"
       />
       {/* Mounted before the first keystroke, for PageContents.tsx's reason: a
           live region inserted with its first message is not announced
