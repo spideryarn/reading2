@@ -1,0 +1,78 @@
+/* What a fallback list would show, per floor and cap, judged blind; how much of
+   the thorough search's list it finds; the decoy check; and the edge at 0.7.
+   No model calls. Writes summary-abstract.json. */
+import { readFileSync, writeFileSync } from "node:fs";
+import { DIR, WT, quickBlocks } from "./lib.ts";
+import { QUERIES, load } from "./abstract-run.ts";
+
+const raw = JSON.parse(readFileSync(`${DIR}/abstract-raw.json`, "utf8"));
+const judged = JSON.parse(readFileSync(`${DIR}/judged-abstract.json`, "utf8"));
+const key = JSON.parse(readFileSync(`${DIR}/pool-abstract-key.json`, "utf8"));
+const ref = JSON.parse(readFileSync(`${DIR}/ref-abstract.json`, "utf8"));
+const old = JSON.parse(readFileSync(`${WT}/evals/results/quick-search-recall-2026-10-03/jev-raw.json`, "utf8"));
+
+const FLOORS = [0.45, 0.5, 0.55, 0.6];
+const CAPS = [5, 8, 20];
+const summary: any = { perQuery: [], grid: [], decoys: {}, edge: {} };
+
+/* Decoy check: blocks Jev never scored above 0.3, judged blind beside the candidates. */
+let dY = 0, dN = 0, cY = 0, cN = 0;
+for (const [k, v] of Object.entries(key) as [string, any][]) {
+  for (const id of v.decoys) judged[k].verdicts[id] === "y" ? dY++ : dN++;
+  for (const id of v.candidates) judged[k].verdicts[id] === "y" ? cY++ : cN++;
+}
+summary.decoys = { decoysJudgedRight: dY, decoysJudgedWrong: dN, candidatesJudgedRight: cY, candidatesJudgedWrong: cN };
+console.log(`decoys judged right ${dY} of ${dY + dN}; candidates (>=0.45 on any run) judged right ${cY} of ${cY + cN}`);
+
+const grid: Record<string, { runs: number; shown: number; right: number; wrong: number; refFound: number; refTotal: number; emptyRuns: number; allWrongRuns: number }> = {};
+for (const Q of QUERIES) {
+  const k = `${Q.slug}|${Q.q}`;
+  const e = raw.find((x: any) => x.slug === Q.slug && x.q === Q.q);
+  const askable = new Set(quickBlocks(load(Q.slug)).map((b: any) => b.id));
+  const refIds: string[] = (ref[k]?.hits ?? []).map((h: any) => h.blockId);
+  const refAskable = [...new Set(refIds.filter((id) => askable.has(id)))];
+  const firedRuns = e.reps.filter((r: any) => Math.max(...(Object.values(r.scores) as number[])) < 0.7);
+  if (!firedRuns.length) continue;
+  const row: any = { set: Q.set, slug: Q.slug, q: Q.q, runsFired: `${firedRuns.length} of ${e.reps.length}`, thorough: ref[k] ? `${refIds.length} (${refAskable.length} paragraphs)` : "none run" };
+  for (const F of FLOORS) for (const C of CAPS) {
+    const g = (grid[`${Q.set === "absent" ? "absent" : "category"}|${F}|${C}`] ??= { runs: 0, shown: 0, right: 0, wrong: 0, refFound: 0, refTotal: 0, emptyRuns: 0, allWrongRuns: 0 });
+    for (const r of firedRuns) {
+      const shown = (Object.entries(r.scores) as [string, number][]).filter(([, p]) => p >= F).sort((a, b) => b[1] - a[1]).slice(0, C).map(([id]) => id);
+      const right = shown.filter((id) => judged[k]?.verdicts[id] === "y").length;
+      g.runs++; g.shown += shown.length; g.right += right; g.wrong += shown.length - right;
+      if (!shown.length) g.emptyRuns++; else if (!right) g.allWrongRuns++;
+      if (ref[k]) { g.refTotal += refAskable.length; g.refFound += refAskable.filter((id) => shown.includes(id)).length; }
+      if (F === 0.5 && C === 8) (row.at05cap8 ??= []).push(`${right}/${shown.length}`);
+      if (F === 0.5 && C === 20) (row.at05cap20 ??= []).push(`${right}/${shown.length}`);
+      if (F === 0.55 && C === 8) (row.at055cap8 ??= []).push(`${right}/${shown.length}`);
+      if (F === 0.45 && C === 8) (row.at045cap8 ??= []).push(`${right}/${shown.length}`);
+    }
+  }
+  for (const f of ["at045cap8", "at05cap8", "at05cap20", "at055cap8"]) row[f] = row[f]?.join(" ");
+  summary.perQuery.push(row);
+}
+console.log("\nright/shown per fired run:");
+console.table(summary.perQuery.map(({ slug, ...r }: any) => ({ article: slug.slice(0, 12), ...r })));
+for (const [k, g] of Object.entries(grid)) {
+  const [set, F, C] = k.split("|");
+  summary.grid.push({ set, floor: +F!, cap: +C!, runs: g.runs, "shown/run": +(g.shown / g.runs).toFixed(2), right: g.right, wrong: g.wrong, precision: g.shown ? +(g.right / g.shown).toFixed(2) : null, "runs still empty": g.emptyRuns, "runs all wrong": g.allWrongRuns, "thorough's paragraphs found": `${g.refFound}/${g.refTotal}` });
+}
+console.table(summary.grid);
+
+/* The edge: how often does the best score sit within 0.03 of the floor? */
+const tops: { k: string; tops: number[] }[] = [];
+for (const [k, e] of Object.entries(old) as [string, any][]) if (e.wording === "mention") tops.push({ k, tops: e.reps.map((r: any) => Math.max(...(Object.values(r.scores) as number[]))) });
+for (const e of raw) tops.push({ k: `${e.slug}|${e.q}`, tops: e.reps.map((r: any) => Math.max(...(Object.values(r.scores) as number[]))) });
+const all = tops.flatMap((t) => t.tops);
+summary.edge = {
+  queries: tops.length, runs: all.length,
+  runsJustUnder: all.filter((p) => p >= 0.67 && p < 0.7).length,
+  runsJustOver: all.filter((p) => p >= 0.7 && p <= 0.73).length,
+  queriesThatStraddle: tops.filter((t) => t.tops.some((p) => p < 0.7) && t.tops.some((p) => p >= 0.7)).map((t) => `${t.k.split("|").slice(-1)[0]} (${t.tops.map((p) => p.toFixed(2)).join(", ")})`),
+  /* A run whose best is in [0.5, 0.7): the fallback fires and shows something. */
+  runsFallbackShows: all.filter((p) => p >= 0.5 && p < 0.7).length,
+  runsStillEmpty: all.filter((p) => p < 0.5).length,
+};
+console.log("\nedge:", JSON.stringify(summary.edge, null, 1));
+writeFileSync(`${DIR}/summary-abstract.json`, JSON.stringify(summary, null, 1));
+process.exit(0);

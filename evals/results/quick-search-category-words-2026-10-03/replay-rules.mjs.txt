@@ -1,0 +1,65 @@
+/* Free: replay candidate selection rules over the scores the 261003c eval saved
+   ("mention" wording, 48 queries x 3 runs). No model calls. What each rule adds
+   to, or takes from, production's ">= 0.7, best 20", and how the additions were
+   judged (reference hit = y, judged.json y/n, otherwise unjudged). */
+import { readFileSync } from "node:fs";
+const WT = "/home/greg/code/spideryarn2/.claude/worktrees/fbjp5nxn-quick-search-finds-too-little";
+const R1 = `${WT}/evals/results/quick-search-recall-2026-10-03`;
+const R0 = `${WT}/evals/results/quick-search-spike-2026-10-02`;
+const raw = JSON.parse(readFileSync(`${R1}/jev-raw.json`, "utf8"));
+const judged = JSON.parse(readFileSync(`${R1}/judged.json`, "utf8"));
+const refShort = JSON.parse(readFileSync(`${R1}/reference-short.json`, "utf8"));
+const CAP = 20;
+
+function verdicts(e) {
+  const v = new Map();
+  let ref = [];
+  if (e.set === "old") {
+    try { ref = JSON.parse(readFileSync(`${R0}/reference-${e.slug}.json`, "utf8"))[e.q]?.hits ?? []; } catch { ref = []; }
+  } else ref = refShort[`${e.slug}|${e.q}`]?.hits ?? [];
+  for (const h of ref) v.set(h.blockId, "y");
+  for (const [id, yn] of Object.entries(judged[`${e.slug}|${e.q}`] ?? {})) if (!v.has(id)) v.set(id, yn);
+  return v;
+}
+
+const sorted = (scores) => Object.entries(scores).sort((a, b) => b[1] - a[1]);
+export const RULES = {
+  ">=0.7 (production)": (s) => s.filter(([, p]) => p >= 0.7),
+  ">=0.5": (s) => s.filter(([, p]) => p >= 0.5),
+  "empty -> >=0.5": (s) => { const k = s.filter(([, p]) => p >= 0.7); return k.length ? k : s.filter(([, p]) => p >= 0.5); },
+  "empty -> >=0.5, best 8": (s) => { const k = s.filter(([, p]) => p >= 0.7); return k.length ? k : s.filter(([, p]) => p >= 0.5).slice(0, 8); },
+  "empty -> >=0.45, best 8": (s) => { const k = s.filter(([, p]) => p >= 0.7); return k.length ? k : s.filter(([, p]) => p >= 0.45).slice(0, 8); },
+  "fewer than 3 -> top up to 3 from >=0.5": (s) => { const k = s.filter(([, p]) => p >= 0.7); return k.length >= 3 ? k : s.filter(([, p]) => p >= 0.5).slice(0, 3); },
+  "fewer than 5 -> top up to 5 from >=0.5": (s) => { const k = s.filter(([, p]) => p >= 0.7); return k.length >= 5 ? k : s.filter(([, p]) => p >= 0.5).slice(0, 5); },
+  ">=0.7 | (>=0.5 & top-0.15)": (s) => { const top = s[0]?.[1] ?? 0; return s.filter(([, p]) => p >= 0.7 || (p >= 0.5 && p >= top - 0.15)); },
+};
+
+if (process.argv[1].endsWith("replay-rules.mjs")) {
+  const rows = [];
+  for (const [name, rule] of Object.entries(RULES)) {
+    const per = {};
+    for (const [k, e] of Object.entries(raw)) {
+      if (e.wording !== "mention") continue;
+      const v = verdicts(e);
+      const t = (per[e.set] ??= { runs: 0, kept: 0, empty: 0, changed: 0, addY: 0, addN: 0, addU: 0, lost: 0 });
+      for (const rep of e.reps) {
+        const s = sorted(rep.scores);
+        const base = new Set(RULES[">=0.7 (production)"](s).slice(0, CAP).map(([id]) => id));
+        const mine = rule(s).slice(0, CAP).map(([id]) => id);
+        t.runs++; t.kept += mine.length; if (mine.length === 0) t.empty++;
+        const add = mine.filter((id) => !base.has(id));
+        const lost = [...base].filter((id) => !mine.includes(id));
+        if (add.length || lost.length) t.changed++;
+        t.lost += lost.length;
+        for (const id of add) { const j = v.get(id); if (j === "y") t.addY++; else if (j === "n") t.addN++; else t.addU++; }
+      }
+    }
+    for (const [set, t] of Object.entries(per)) rows.push({ rule: name, set, runs: t.runs, "kept/run": +(t.kept / t.runs).toFixed(2), empty: t.empty, changed: t.changed, "added right": t.addY, "added wrong": t.addN, "added unjudged": t.addU, lost: t.lost });
+  }
+  console.table(rows);
+  /* Which runs are empty in production, and what is their top score? */
+  for (const [k, e] of Object.entries(raw)) {
+    if (e.wording !== "mention") continue;
+    e.reps.forEach((rep, i) => { const s = sorted(rep.scores); if (s[0][1] < 0.7) console.log(`empty at 0.7: [${e.set}] ${e.slug.slice(0, 14)} | ${e.q} #${i}: top ${s.slice(0, 4).map(([, p]) => p.toFixed(2)).join(" ")}`); });
+  }
+}

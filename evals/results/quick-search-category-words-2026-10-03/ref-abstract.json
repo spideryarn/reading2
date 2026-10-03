@@ -1,0 +1,341 @@
+{
+ "arxiv-2610-spya-bfrbaj|results": {
+  "source": "production run spya-uusd5t",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": [
+   {
+    "blockId": "spya-vwc792",
+    "confidence": 95
+   },
+   {
+    "blockId": "spya-zz8q69",
+    "confidence": 80
+   },
+   {
+    "blockId": "spya-f2g408",
+    "confidence": 70
+   },
+   {
+    "blockId": "spya-rmssw4",
+    "confidence": 60
+   },
+   {
+    "blockId": "spya-dcepy8",
+    "confidence": 55
+   },
+   {
+    "blockId": "spya-pgpck8",
+    "confidence": 55
+   },
+   {
+    "blockId": "spya-f3vbvp",
+    "confidence": 50
+   }
+  ]
+ },
+ "arxiv-2610-spya-bfrbaj|linear algebra": {
+  "source": "production run spya-k3td5u",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": [
+   {
+    "blockId": "spya-ft0zvv",
+    "confidence": 85
+   },
+   {
+    "blockId": "spya-bkcvuq",
+    "confidence": 95
+   },
+   {
+    "blockId": "spya-csux0a",
+    "confidence": 90
+   },
+   {
+    "blockId": "spya-hbx0rq",
+    "confidence": 80
+   },
+   {
+    "blockId": "spya-dy4aud",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-zubvtq",
+    "confidence": 78
+   },
+   {
+    "blockId": "spya-xtvpa0",
+    "confidence": 78
+   },
+   {
+    "blockId": "spya-y5e8ck",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-rngpgp",
+    "confidence": 72
+   },
+   {
+    "blockId": "spya-bygxh5",
+    "confidence": 60
+   },
+   {
+    "blockId": "spya-k757zr",
+    "confidence": 70
+   },
+   {
+    "blockId": "spya-wjs5qx",
+    "confidence": 40
+   }
+  ]
+ },
+ "arxiv-2610-spya-bfrbaj|sleep": {
+  "source": "production run spya-rbxajp",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": []
+ },
+ "arxiv-2610-spya-bfrbaj|human memory": {
+  "source": "production run spya-c33zqb",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": []
+ },
+ "constitution|examples": {
+  "ms": 14410,
+  "model": "anthropic/claude-sonnet-5",
+  "estCost": 0.0707115,
+  "hits": [
+   {
+    "blockId": "spya-nr2han",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-dajzd7",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-vgrj84",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-x8b23s",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-dzy3uc",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-fursdx",
+    "confidence": 70
+   },
+   {
+    "blockId": "spya-tabzzj",
+    "confidence": 70
+   },
+   {
+    "blockId": "spya-pu5fda",
+    "confidence": 65
+   },
+   {
+    "blockId": "spya-waxdw8",
+    "confidence": 65
+   },
+   {
+    "blockId": "spya-wmqukz",
+    "confidence": 60
+   },
+   {
+    "blockId": "spya-m5228n",
+    "confidence": 60
+   }
+  ]
+ },
+ "constitution|definitions": {
+  "ms": 9177,
+  "model": "anthropic/claude-sonnet-5",
+  "estCost": 0.022275,
+  "hits": [
+   {
+    "blockId": "spya-bh2faf",
+    "confidence": 90
+   },
+   {
+    "blockId": "spya-c5kghx",
+    "confidence": 90
+   },
+   {
+    "blockId": "spya-p4a4rd",
+    "confidence": 88
+   },
+   {
+    "blockId": "spya-dqx7dn",
+    "confidence": 88
+   },
+   {
+    "blockId": "spya-ahd063",
+    "confidence": 93
+   },
+   {
+    "blockId": "spya-nr2han",
+    "confidence": 80
+   },
+   {
+    "blockId": "spya-dajzd7",
+    "confidence": 78
+   },
+   {
+    "blockId": "spya-vgrj84",
+    "confidence": 78
+   },
+   {
+    "blockId": "spya-x8b23s",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-dzy3uc",
+    "confidence": 75
+   }
+  ]
+ },
+ "constitution|philosophy": {
+  "ms": 7312,
+  "model": "anthropic/claude-sonnet-5",
+  "estCost": 0.015978,
+  "hits": [
+   {
+    "blockId": "spya-aj4dr2",
+    "confidence": 60
+   },
+   {
+    "blockId": "spya-ctqg0n",
+    "confidence": 55
+   },
+   {
+    "blockId": "spya-ehnc9u",
+    "confidence": 45
+   },
+   {
+    "blockId": "spya-tabzzj",
+    "confidence": 40
+   },
+   {
+    "blockId": "spya-nnh6hn",
+    "confidence": 35
+   }
+  ]
+ },
+ "noema-mythology-of-conscious-ai|criticism": {
+  "ms": 11379,
+  "model": "anthropic/claude-sonnet-5",
+  "estCost": 0.09369825,
+  "hits": [
+   {
+    "blockId": "spya-ahtr6e",
+    "confidence": 90
+   },
+   {
+    "blockId": "spya-xdy4fe",
+    "confidence": 88
+   },
+   {
+    "blockId": "spya-t29n67",
+    "confidence": 80
+   },
+   {
+    "blockId": "spya-cqh2pq",
+    "confidence": 78
+   },
+   {
+    "blockId": "spya-sq9v5k",
+    "confidence": 70
+   },
+   {
+    "blockId": "spya-mcaa4g",
+    "confidence": 65
+   },
+   {
+    "blockId": "spya-xvm37k",
+    "confidence": 68
+   },
+   {
+    "blockId": "spya-hbueqc",
+    "confidence": 62
+   }
+  ]
+ },
+ "noema-mythology-of-conscious-ai|recipes": {
+  "ms": 2077,
+  "model": "anthropic/claude-sonnet-5",
+  "estCost": 0.0076365,
+  "hits": [
+   {
+    "blockId": "spya-cf70dt",
+    "confidence": 85
+   }
+  ]
+ },
+ "openai-huggingface|methods": {
+  "ms": 6856,
+  "model": "anthropic/claude-sonnet-5",
+  "estCost": 0.05099325,
+  "hits": [
+   {
+    "blockId": "spya-rnag5c",
+    "confidence": 55
+   },
+   {
+    "blockId": "spya-zfbcb4",
+    "confidence": 60
+   },
+   {
+    "blockId": "spya-m24kgb",
+    "confidence": 45
+   },
+   {
+    "blockId": "spya-cc5uhs",
+    "confidence": 40
+   }
+  ]
+ },
+ "openai-huggingface|results": {
+  "ms": 2868,
+  "model": "anthropic/claude-sonnet-5",
+  "estCost": 0.0049857,
+  "hits": []
+ },
+ "openai-huggingface|statistics": {
+  "ms": 4825,
+  "model": "anthropic/claude-sonnet-5",
+  "estCost": 0.0122517,
+  "hits": [
+   {
+    "blockId": "spya-cbv8uf",
+    "confidence": 90
+   },
+   {
+    "blockId": "spya-wtguds",
+    "confidence": 90
+   },
+   {
+    "blockId": "spya-ms8rup",
+    "confidence": 80
+   },
+   {
+    "blockId": "spya-w9ctpd",
+    "confidence": 85
+   },
+   {
+    "blockId": "spya-c2ck7h",
+    "confidence": 45
+   },
+   {
+    "blockId": "spya-m4gku9",
+    "confidence": 40
+   }
+  ]
+ },
+ "openai-huggingface|gardening": {
+  "ms": 1236,
+  "model": "anthropic/claude-sonnet-5",
+  "estCost": 0.0034316999999999998,
+  "hits": []
+ }
+}
