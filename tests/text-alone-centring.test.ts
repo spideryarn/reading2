@@ -124,7 +124,7 @@ describe("the article on its own is centred", () => {
 
        **The inequality itself is checked at five root font sizes in
        `tests/gutter-target-size.test.ts`**, which is where it belongs now that
-       the left pad is not a rem constant — below a 16px root the gutter's px
+       the gutter pad is not a rem constant — below a 16px root the gutter's px
        floor makes it *wider* in rem, so one number cannot be right everywhere.
        Given a fact one home; what is left here is the default root, so this
        file's own story stays readable. */

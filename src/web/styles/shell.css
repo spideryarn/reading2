@@ -31,7 +31,7 @@
   /* **One cell of the prose gutter, square** — § the gutter, and
      `BlockGutter.tsx` for what goes in it. Everything else about the gutter's
      size is arithmetic on this one number: the grid's one column is one of
-     these, the row floor is one of these, the cell's left padding below is one
+     these, the row floor is one of these, the cell's gutter padding below is one
      plus its inset, and the container queries in § the gutter are written in
      multiples of it (twice over, since a query cannot read a custom property).
 

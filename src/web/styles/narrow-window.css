@@ -1214,22 +1214,38 @@
    dock are chrome that spans the window in every mode, and the masthead is the
    one piece of *the article* above the fold. */
 .reader.text-alone .masthead-inner {
-  /* `65ch` measured in the article's face rather than the chrome's, for the
-     reason the sibling rule below gives at length and `.blk-gutter` gives again
-     (§ the gutter). Size and not weight, also for the sibling's reason: every
+  /* This box measures the same `65ch` as the article: the prose's face and
+     size (the face since 261003c, below). Size and not
+     weight, for the sibling rule's reason: every
      child of this box inherits its weight, so matching the prose's 450 would
      embolden the byline and the source note.
 
-     **That leaves 2.8px, the same 2.8px the sibling ships and says so.** It is
+     **That left 2.8px before the prose moved to Source Serif.** It was
      not halved by arriving here through a width rather than a margin: the
      weight axis makes this box's `65ch` 5.524px short of the prose's — measured,
      732.614 against 738.138 at a 16px root — and the term reaches the left edge
      through `W / 2` either way. An earlier comment here claimed 1.4px, from
-     halving the sibling's residual a second time — GPT Sol, 2026-09-05. */
+     halving the sibling's residual a second time — GPT Sol, 2026-09-05.
+
+     Since 2026-10-02 `.prose` measures in Source Serif while this box still
+     measures in the UI face. The gutter's 88px gap at a 1440px window included
+     its intended 5.6px inset; the remaining roughly 82px is the same
+     half-measure error here, not a few-pixel residual.
+
+     **So the family is the prose's too, since 2026-10-03 (261003c).** The
+     title carries its voice class, origin, facts and source note set the UI
+     face, the root gist is AI-voiced, the title editor is reader-voiced, and
+     the rest are icons or portalled tooltips — so this changes where the box
+     sits and no word's face, which the browser check in the plan confirms.
+     Measured then: the title 9.7px right of the first line at 1440 and 1024
+     (72px LEFT of it under the old rule). Not explained; the weight axis above
+     is the likeliest cause, and it is left as measured. */
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   /* **A box whose CENTRE sits where the prose's centre sits**, because the two
      are centred in boxes that share an axis and the reading cell's padding is
-     not symmetric. The prose sits `(--text-pad-l − --text-pad-r) / 2` right of
+     not symmetric. The prose sits the signed distance
+     `(--text-pad-l − --text-pad-r) / 2` right of
      the table's centre, so a box centred on the same axis has to lose twice
      that to start on the same pixel: `measure + padR − padL`. Exact, not an
      approximation — 295.33px against the prose's 295.33px at a 1280 window,
@@ -1246,7 +1262,7 @@
      assumed. At the default root it holds — 705px against a bar with 696 to
      give at a 1000px window and 596 at 900, so the rule is inert and the title
      stays where it has always been while the prose slides towards it. **At a
-     small root it does not.** `--blk-slot`'s px floor stops `--text-pad-l`
+     small root it does not.** `--blk-slot`'s px floor stops `--text-pad-r`
      shrinking with the type while `--reading-measure` goes on shrinking, so at
      a 9px root this width is 365.2px and at 12px it is 503.8px — **the same at
      600, 700 and 731px of window**, measured, where the old one would have
@@ -1323,19 +1339,25 @@
    before it) the question does not arise anyway — a mode band with no room
    hides this bar outright (§ a band with no room). */
 .reader:has(table.only-prose):not(.text-alone) .masthead-inner {
-  /* `65ch` measured in the article's face rather than the chrome's — the same
-     line, and the same reason, as `font-size` on `.blk-gutter` (§ the gutter).
+  /* This box measures the article's `65ch`, for the same reason as
+     `.blk-gutter` (§ the gutter): the prose's face and size.
      Inert: every child of this box sets its own size (h1 1.45rem, `.facts` and
      `.source-note` 0.82rem, `.root-gist` 0.95rem, the back link `text-xs`).
 
-     **Size and not weight, and that is what the last 2.8px is.** The gutter
+     **Size and not weight, and before the voice split that left 2.8px.** The gutter
      matches `--reading-weight` too, because nothing in it is text; here the
      byline, the source note and the whole-article gist all inherit their weight
      from this box, so matching the prose's 450 would embolden four pieces of
-     small print nobody asked to change. Measured: the title lands 2.8px right
-     of the first line of the article. The sibling rule above ships 4px of the
-     same kind of slippage and says so; this is that, from the variable font's
-     weight axis rather than from a bar's padding. GPT Sol, 2026-09-04. */
+     small print nobody asked to change. Measured then: the title landed 2.8px
+     right of the first line of the article, from the variable font's weight
+     axis rather than from a bar's padding. Since 2026-10-02 the prose instead
+     measures `65ch` in Source Serif while this box keeps Geist. The gutter's
+     261003c gutter measurement (88px including the intended 5.6px inset) shows
+     that family mismatch is roughly 82px at a 1440px window.
+
+     As in the text-alone rule, the visible descendants all own their face, so
+     the family is the prose's here too, since 2026-10-03 (261003c). */
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   max-width: var(--reading-measure);
   margin-left: max(

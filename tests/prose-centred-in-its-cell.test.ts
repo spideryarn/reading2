@@ -80,19 +80,21 @@ describe("the reading column is centred in its cell", () => {
     // Self-limiting: a cell narrower than the measure leaves the gutter alone.
     expect(r).toMatch(/max\(\s*0px/);
     /* `65ch` is the zero glyph of the font it is USED on, size AND weight —
-       Geist is variable. Without both, the gutter is 6% + ~3px shy of the
-       prose's own left edge. */
+       the reading face is variable. Without both, the gutter is 6% + ~3px shy of the
+       prose's own right edge. */
     expect(r).toContain("font-size: var(--reading-size)");
     expect(r).toContain("font-weight: var(--reading-weight)");
   });
 
-  it("the gutter and the fold chevron measure `ch` in the prose's own face", () => {
+  it("geometry beside the prose measures `ch` in the prose's own face", () => {
     /* `65ch` is the zero glyph of the font it is used on — family as well as
        size and weight. When the author's face became every reader's on
        2026-10-02 (styles/voices.css), `.prose` started measuring 65 serif
-       zeroes while these two went on measuring 65 Geist ones, and at 1440 the
-       icons stood 88px off the text — on the left, and then on the right when
-       the column moved there (261003c, measured in the browser). So the face is
+       zeroes while these geometry boxes went on measuring 65 Geist ones, and
+       at 1440 the icons stood 88px off the text — on the left, and then on the
+       right when the column moved there (261003c, measured in the browser). The in-prose
+       quiz used the same wrong measure, although its button sets its visible UI
+       face separately. So the face is
        asserted against whatever voices.css gives `.prose`, not against a name:
        if the prose's face changes again, this goes red. */
     // Lazy, because a selector list holds `:not(…)`s; only `) {` ends one.
@@ -105,6 +107,14 @@ describe("the reading column is centred in its cell", () => {
     expect(proseFace, "voices.css no longer names a face for .prose").toBeTruthy();
     expect(rule(".blk-gutter")).toContain(`font-family: ${proseFace}`);
     expect(rule(".fold-toggle")).toContain(`font-family: ${proseFace}`);
+    expect(rule("td.text .quiz-in-prose")).toContain(`font-family: ${proseFace}`);
+    /* And both mastheads, which centre a `65ch` box on the prose's axis: in
+       Geist they put the title ~80px off the first line of the article at 1440
+       (261003c code review). Every visible child names its own face. */
+    expect(rule(".reader.text-alone .masthead-inner")).toContain(`font-family: ${proseFace}`);
+    expect(rule(".reader:has(table.only-prose):not(.text-alone) .masthead-inner")).toContain(
+      `font-family: ${proseFace}`,
+    );
   });
 
   /**
@@ -145,12 +155,22 @@ describe("the reading column is centred in its cell", () => {
        and set their own 0.8rem/600, so an offset computed there would mean
        something ~90px different from the same offset in the prose. Both stay
        put, and the note's prose stays with them. */
-    expect(rule("td.text.note .prose")).toContain("margin-inline: 0");
+    const note = rule("td.text.note .prose");
+    expect(note).toContain("margin-inline: 0");
+    /* The note is smaller than ordinary prose. `ch` resolves at the size of the
+       element using it, so the offset and the max-width must read one token or
+       the gutter subtracts a different measure from the one on screen. */
+    expect(css).toContain("--note-reading-size: 0.95rem");
+    expect(note).toContain("font-size: var(--note-reading-size)");
     /* Left-aligned prose keeps ALL the surplus on its right, so the gutter
        (on the right since 261003c) takes the whole of it, not half. */
     const g = rule("td.text.note .blk-gutter");
+    expect(g).toContain("font-size: var(--note-reading-size)");
     expect(g).toMatch(/right: calc\(\s*var\(--blk-gutter-x\) \+\s*max\(\s*0px/);
-    expect(g).toContain("var(--reading-measure)");
+    expect(g).toContain(
+      "100% - var(--text-pad-l) - var(--text-pad-r) - clamp(45ch, 90vw, var(--reading-measure))",
+    );
+    expect(g).not.toContain(") / 2");
     expect(g).not.toMatch(/(^|[;\s])left:/);
   });
 
@@ -159,7 +179,7 @@ describe("the reading column is centred in its cell", () => {
     expect(r).toContain("max-width: var(--reading-measure)");
     /* Stated rather than `auto`, and it still has to be: auto margins would
        centre this box in the bar, while the prose is half the reading cell's
-       padding asymmetry right of centre in *its* box. */
+       padding asymmetry left of centre in *its* box since the gutter moved right. */
     expect(r).toContain("margin-left: max(");
     expect(r).toContain("margin-right: auto");
     expect(r).toContain("var(--text-pad-l)");
@@ -209,9 +229,9 @@ describe("the reading column is centred in its cell", () => {
        content edge. So that edge is the prose's inset.
 
        Asserted as the declaration rather than as a computed number, for the
-       reason this file gives elsewhere: `--text-pad-l` is `--blk-slot` plus its
-       padding and has moved twice this month, and a test that copied its value
-       would be a second place to change. */
+       reason this file gives elsewhere: `--text-pad-l` is the plain pad now,
+       but it has moved repeatedly and a test that copied its value would be a
+       second place to change. */
     expect(css).toMatch(/--masthead-pad-l:\s*var\(--text-pad-l\)/);
     // And the padding really is set from the pair, or they are two numbers
     // nothing reads.

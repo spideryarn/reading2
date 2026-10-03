@@ -66,7 +66,8 @@ pair" on purpose (narrow-window.css § the title over the column says so at leng
    read, not search-and-replaced.
 7. The tests that assert these numbers (`tests/prose-centred-in-its-cell.test.ts`,
    `tests/text-alone-centring.test.ts`, `tests/gutter-target-size.test.ts`, the layout tests)
-   follow the swap. A test that asserted "the gutter's `left`" now asserts its `right`.
+   follow the swap. New positive and negative assertions pin the base gutter, footnote gutter and
+   reading-time strip to `right` and reject the old `left` declarations.
 
 **What does not move:** the spine's marks (left edge of the window), the open "…" panel (it grows
 downward, one slot wide), the tooltip cards (the delegated card places itself against the control).
@@ -106,11 +107,35 @@ of the font it is used on. Since 2026-10-02 the prose is set in the author's fac
 ones. On the left it showed less, because the text's first letters line up; beside ragged line ends
 on the right it is obvious.
 
-The fix is one line in each rule: `font-family: var(--font-author)`, the face voices.css gives
-`.prose`. `tests/prose-centred-in-its-cell.test.ts` reads that face from voices.css rather than
-naming it, so a later change to the prose's face goes red here too. The two mastheads use `ch` the
-same way and were not touched. They set the UI face on purpose (their children inherit it), and a
-title a few pixels off is a separate, smaller thing; it is deferred.
+The fix is one line in each geometry-only rule: `font-family: var(--font-author)`, the face
+voices.css gives `.prose`. That applies to the gutter, the fold chevron, and the in-prose quiz
+wrapper, which used the same measure; their visible text descendants set their own face.
+`tests/prose-centred-in-its-cell.test.ts` reads the prose face from voices.css rather than naming it,
+so a later change to the prose's face goes red here too.
+
+The note override also has to resolve `ch` at the note's `0.95rem`, not the ordinary prose's
+`1.0625rem`: footnotes put the whole surplus on the right, so the size mismatch becomes a full
+measure error. `--note-reading-size` is now the one value read by the note prose and its gutter.
+
+The two mastheads use `ch` the same way, and the Sol code review showed that is not the old
+few-pixel weight residual: it is the same ~82px half-measure error, putting the title that far off the
+article's first line. Both `.masthead-inner` rules now take the prose's face as well. Every visible
+child of the masthead sets its own voice (title, origin, facts, source note, root gist, title editor),
+so this moves the box and changes no word's face. Measured in the browser, title's first glyph
+against the article's first line, with the old rule simulated by an injected override:
+
+| | old rule | now |
+|---|---|---|
+| 1440, plain | −72.1px | +9.7px |
+| 1440, Structure open | −44.4px | +2.2px |
+| 1024, plain | −72.1px | +9.7px |
+| 390 | 0 | 0 |
+
+No text element inside the masthead changed computed face. **The 9.7px left over on a plain page is
+not explained.** It is the lone-column rule (`max-width: measure + padR − padL`, which is exact for
+any pair of pads), and the likeliest cause is the weight axis, since the masthead keeps 400 where the
+prose is 450 so as not to embolden the byline. That was a 2.8px residual in Geist and may be larger in
+the serif. It is written down as measured, not fixed, and is smaller than what it replaced.
 
 ## The simpler option passed over, and the one deferred
 

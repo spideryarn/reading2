@@ -60,11 +60,10 @@
    those 24px back at every root but 20, where it has 30.
    docs/plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md.
 
-   The width is still the hit target, and it is two of them. All three of
-   those numbers are **one** number now — `--blk-slot` in § tokens — because this
-   note used to name them separately and a reader had to trust that 3.7 = 3 +
-   0.35 × 2 by eye. `--text-pad-l` is `calc()` over the gutter, the gutter is two
-   slots, and the slot carries a **24px floor** so the target survives a reader
+   The gutter's width is still the hit target: one slot. The pad that contains
+   it is arithmetic now rather than three numbers a reader has to keep in step:
+   `--text-pad-r` is one `--blk-slot` plus two 0.35rem insets. The slot carries
+   a **24px floor** so the target survives a reader
    whose browser root is 12px rather than 16. GPT Sol's stage 1 review found that
    last one, and it was the difference between meeting WCAG 2.5.8 and claiming
    to.
@@ -78,8 +77,8 @@ td.text {
   border-bottom: 0;
   /* `--blk-slot` used to be declared here, and it has moved up to `.reader`
      (§ tokens) — the row floor below reads it, the grid's columns read it, and
-     the cell's own `--text-pad-l` is now computed from it, so it has to be
-     visible to all three. A custom property inherits, and `.reader` is an
+     the cell's own gutter pad (`--text-pad-r` since 261003c) is computed from
+     it, so it has to be visible to all three. A custom property inherits, and `.reader` is an
      ancestor of every one of them. */
   /* **Where the gutter's first row starts, measured from the top of the cell —
      and it is the cell's own `padding-top` plus a hair.** Named because three
@@ -133,7 +132,7 @@ tbody tr:first-child td.text.kind-heading {
    **It follows the measure the way the gutter does, mirrored.** `.prose` is
    `clamp(45ch, 90vw, --reading-measure)` and centred in the cell (§ text), so
    the inset from the cell's right edge is the right pad plus half the room the
-   centring divides — `.blk-gutter`'s `left` with the sides swapped, and the
+   centring divides — the same quantity as `.blk-gutter`'s `right` — and the
    same `font-size` / `font-weight` so `ch` means what it means in the prose
    (gutter.css § the gutter has the argument). */
 /* `--blk-slot` has a 24px floor while heading type and padding still scale with
