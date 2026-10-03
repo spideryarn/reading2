@@ -86,6 +86,27 @@ describe("the reading column is centred in its cell", () => {
     expect(r).toContain("font-weight: var(--reading-weight)");
   });
 
+  it("the gutter and the fold chevron measure `ch` in the prose's own face", () => {
+    /* `65ch` is the zero glyph of the font it is used on — family as well as
+       size and weight. When the author's face became every reader's on
+       2026-10-02 (styles/voices.css), `.prose` started measuring 65 serif
+       zeroes while these two went on measuring 65 Geist ones, and at 1440 the
+       icons stood 88px off the text — on the left, and then on the right when
+       the column moved there (261003c, measured in the browser). So the face is
+       asserted against whatever voices.css gives `.prose`, not against a name:
+       if the prose's face changes again, this goes red. */
+    // Lazy, because a selector list holds `:not(…)`s; only `) {` ends one.
+    const voice = /:root :is\(([\s\S]*?)\)\s*\{\s*font-family:\s*([^;]+);/g;
+    let proseFace: string | undefined;
+    for (const m of css.matchAll(voice)) {
+      const selectors = (m[1] ?? "").split(",").map((x) => x.trim());
+      if (selectors.includes(".prose")) proseFace = m[2]?.trim();
+    }
+    expect(proseFace, "voices.css no longer names a face for .prose").toBeTruthy();
+    expect(rule(".blk-gutter")).toContain(`font-family: ${proseFace}`);
+    expect(rule(".fold-toggle")).toContain(`font-family: ${proseFace}`);
+  });
+
   /**
    * **The prose heading has no height.**
    *
@@ -125,7 +146,12 @@ describe("the reading column is centred in its cell", () => {
        something ~90px different from the same offset in the prose. Both stay
        put, and the note's prose stays with them. */
     expect(rule("td.text.note .prose")).toContain("margin-inline: 0");
-    expect(rule("td.text.note .blk-gutter")).toContain("left: var(--blk-gutter-x)");
+    /* Left-aligned prose keeps ALL the surplus on its right, so the gutter
+       (on the right since 261003c) takes the whole of it, not half. */
+    const g = rule("td.text.note .blk-gutter");
+    expect(g).toMatch(/right: calc\(\s*var\(--blk-gutter-x\) \+\s*max\(\s*0px/);
+    expect(g).toContain("var(--reading-measure)");
+    expect(g).not.toMatch(/(^|[;\s])left:/);
   });
 
   it("the masthead follows the prose wherever the two share a box", () => {

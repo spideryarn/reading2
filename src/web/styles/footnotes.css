@@ -93,8 +93,21 @@ td.text.note .prose {
   margin-inline: 0;
 }
 /* The gutter comes back with it, or the reader's icons would be centred beside
-   a note that is not. § the gutter. */
-td.text.note .blk-gutter { left: var(--blk-gutter-x); }
+   a note that is not. § the gutter. **On the right since 261003c**, and a
+   left-aligned note leaves ALL the room the measure does not use on its right,
+   so the column takes the whole of it rather than the half § the gutter takes:
+   the same `clamp` and the same reading face, so `ch` means what it means in
+   the note's prose. */
+td.text.note .blk-gutter {
+  right: calc(
+    var(--blk-gutter-x) +
+      max(
+        0px,
+        100% - var(--text-pad-l) - var(--text-pad-r) -
+          clamp(45ch, 90vw, var(--reading-measure))
+      )
+  );
+}
 /* A note's body is an `<li>` (src/notes.ts § What "canonical" means here), and
    stage 3 hands each one to its own row — so the browser draws a list marker for
    a list that is not there. Harmless until this change, and now a bullet sitting

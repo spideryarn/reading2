@@ -101,8 +101,12 @@
      is one more focusable element per block on the narrow layout, which is said
      out loud in docs/plans/prose-gutter-icons.md rather than glossed. */
 
-  /* Trailing padding still shrinks: 1.4rem of right margin is generous when the
-     measure is 366px. The left is § text's now.
+  /* The plain padding still shrinks: 1.4rem of margin is generous when the
+     measure is 366px. It is the LEFT one since 2026-10-03, when the gutter
+     moved to the right of the block and took the right pad with it (shell.css,
+     docs/plans/261003c-…); the phone's title and controls bar read
+     `--text-pad-l`, so they come in with it and still start on the same pixel
+     as the prose.
 
      **The token, not the padding, and that is a fix rather than a tidy-up.**
      This was `td.text { padding-right: 0.9rem }` until 2026-09-05, which left
@@ -111,10 +115,10 @@
      wrong the moment something did. Three rules now do: `.blk-gutter` and both
      mastheads compute *half the room the centring divides* from it (§ the
      gutter, § plain, centred), and each was quietly 0.25rem out below 731px.
-     Set here rather than in the `:root` block above because `--text-pad-r` is
+     Set here rather than in the `:root` block above because the pad tokens are
      declared on `.reader`, which would win. GPT Sol found it while reviewing
      the merge that introduced the second and third readers, 2026-09-05. */
-  .reader { --text-pad-r: 0.9rem; }
+  .reader { --text-pad-l: 0.9rem; }
 
   /* ------------------------------------------------------------------------
      The two bars that were silently eating their own controls.
@@ -216,13 +220,15 @@
      room held for the corner wordmark — which came to 37.6px against a prose
      inset of 35.2px, so the two edges lined up to within about two pixels *by
      accident*. Taking the reservation away took the alignment with it. Naming
-     `--text-pad-l` makes it deliberate and makes it track: the inset is a
-     `--blk-slot` of icons plus its padding (§ text), and it has moved twice
-     already this month.
+     `--text-pad-l` makes it deliberate and makes it track: the inset was a
+     `--blk-slot` of icons plus its padding (§ text) until 2026-10-03, and is
+     the plain 0.9rem since the icons moved to the right (261003c) — the third
+     time it has moved, and the first this rule did not have to hear about.
 
      The right side stays a plain gutter. The prose's own right inset is
-     `--text-pad-r`, 0.9rem here, and matching it would be symmetry for its own
-     sake — nothing lines up against that edge, because the title wraps. */
+     `--text-pad-r`, the icons' column now, and matching it would be symmetry
+     for its own sake — nothing lines up against that edge, because the title
+     wraps. */
   .masthead {
     --masthead-pad-l: var(--text-pad-l);
     --masthead-pad-r: 1rem;
@@ -1145,7 +1151,7 @@
    reason this is one declaration rather than a section. Four things are drawn
    against the cell's own edges and would every one of them be left behind by
    text that moved on its own: the gutter is absolutely positioned at the
-   cell's left (§ the gutter), a search hit paints an inset shadow at x=0
+   cell's right (§ the gutter; its left until 261003c), a search hit paints an inset shadow at x=0
    (§ has-hit), `row-active` fills the cell, and the hover target *is* the
    cell. Moving the column moves all four, and no rule above has to learn that
    a mode exists.
@@ -1284,9 +1290,10 @@
    **Not `margin-inline: auto`**, which is what the alone rule can afford, and
    the reason survives the bar becoming symmetric. Auto margins would centre
    this box in the bar, but the prose is *not* centred in the reading cell — the
-   cell's own padding is lopsided (`--text-pad-l` is a gutter of icons,
-   `--text-pad-r` is trailing space), so the prose sits half that difference
-   right of centre. So the left margin is stated: the prose's own inset
+   cell's own padding is lopsided (`--text-pad-r` is a gutter of icons since
+   261003c, `--text-pad-l` is plain space), so the prose sits half that
+   difference off centre — left of it now, right of it until 2026-10-03, and
+   the expression below is true either way. So the left margin is stated: the prose's own inset
    (`--text-pad-l` plus half the room the centring divides) measured from the
    bar's content edge, which is where a margin starts.
 

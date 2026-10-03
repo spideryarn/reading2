@@ -13,7 +13,7 @@
    typography research (styles/tokens.css) — 80 chars per line reads ~7% faster
    but comprehends ~12% worse. `--font-reading` supplies the Geist base; the
    author voice in styles/voices.css supplies the visible Source Serif face.
-   The gutter's `left:` rule three thousand lines down depends on the active
+   The gutter's `right:` rule (gutter.css) depends on the active
    face because `ch` is measured where the length is used. The measure is applied to
    .prose rather than by using .reading-column, because that class centres
    itself and here the text is left-aligned in a table cell.  */
@@ -123,9 +123,12 @@ tbody tr:first-child td.text.kind-heading {
    The chevron at the right-hand end of a heading's line, which folds the
    section under it away (FoldToggle.tsx, fold.ts; plan 261002e).
 
-   **Right, not left.** Left of the heading is the gutter, and left of the
-   gutter is `--blk-gutter-x` — 0.35rem — whenever the cell is no wider than
-   the measure, which is every band mode.
+   **At the prose's right edge, with the gutter just past it.** It was placed
+   right because the gutter was on the left; since 2026-10-03 the gutter is on
+   the right too (261003c), in the cell's right pad, so on a heading row the
+   chevron ends the line and the heading's icons start `--blk-gutter-x` further
+   on. Neighbours, at every root: both are one `--blk-slot` wide and the pad is
+   exactly a slot plus two insets (GPT Sol, plan review of 261003c).
 
    **It follows the measure the way the gutter does, mirrored.** `.prose` is
    `clamp(45ch, 90vw, --reading-measure)` and centred in the cell (§ text), so
@@ -154,6 +157,10 @@ td.text.kind-heading:has(> .fold-toggle) {
           ) / 2
       )
   );
+  /* The prose's face too, or `ch` is a Geist zero against a serif measure
+     (gutter.css § the gutter, 261003c). The chevron is an icon; no text is set
+     in it. */
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   font-weight: var(--reading-weight);
   top: var(--blk-top);

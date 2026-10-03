@@ -131,8 +131,17 @@
 
      The `max(0px, …)` above is the second reason this rule is safe where the
      masthead's is not: it self-limits to "leave the gutter alone", where a
-     fixed `max-width` cannot. */
-  left: calc(
+     fixed `max-width` cannot.
+
+     **`right`, not `left`, since 2026-10-03** (spya-kd5dk5, docs/plans/261003c-…):
+     the column moved to the right of the block, into `--text-pad-r`. Everything
+     above still holds with the sides swapped, because the expression is
+     symmetric in the two pads: it is the inset from the cell's right edge now,
+     and the "left of where the words start" caveat is "right of where they
+     end". Heading rows: § folding a section in prose.css puts the fold chevron
+     at the prose's right edge, and this column starts `--blk-gutter-x` past
+     it — neighbours, never on top of each other, at every root. */
+  right: calc(
     var(--blk-gutter-x) +
       max(
         0px,
@@ -154,7 +163,16 @@
      Nothing in this column is changed by them: every glyph is a fixed-px icon,
      `.blk-n` sets its own size, and `line-height` is 0 below. If a child is ever
      added that sizes itself in `em`, these are the lines that will have moved
-     it. */
+     it.
+
+     **And the family, since 2026-10-03.** The author's face became every
+     reader's on 2026-10-02 (styles/voices.css), so `.prose` measures 65 serif
+     zeroes; this column went on measuring 65 Geist ones and stood 88px off the
+     text at 1440 — measured in the browser for 261003c. Nothing in the column
+     is set in it: `.blk-n` and `.block-chat-n` name their own face.
+     tests/prose-centred-in-its-cell.test.ts holds this to whatever voices.css
+     gives `.prose`. */
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   font-weight: var(--reading-weight);
   top: var(--blk-top);
@@ -969,7 +987,9 @@ td.text.kind-heading .blk-gutter[data-open] {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 100%;
+  /* The gap between the column and the prose is on the column's LEFT since
+     the column moved to the right of the block (261003c). */
+  right: 100%;
   width: clamp(0px, calc(var(--read, 0) * var(--blk-gutter-x)), var(--blk-gutter-x));
   min-height: 0;
   padding: 0;
@@ -995,8 +1015,9 @@ td.text.kind-heading .blk-gutter[data-open] {
      (SPIDERYARN-READING2-84), *"What are they for? They should ideally have
      tooltips"*, two days after the tooltip shipped. Measured in the browser,
      docs/plans/261001l-…. The line moves rather than the strip growing back
-     over the column, for the reason above. */
-  left: 0;
+     over the column, for the reason above. Its RIGHT edge since 261003c: the
+     strip is left of the column now, so that is the edge beside it. */
+  right: 0;
   width: 2px;
   pointer-events: none;
   /* **`--ink`, so on this dark page the line gets *lighter* as you read** —

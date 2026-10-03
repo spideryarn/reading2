@@ -102,12 +102,13 @@ describe("the article on its own is centred", () => {
     expect(css).toContain(
       "padding: var(--block-pad) var(--text-pad-r) var(--block-pad) var(--text-pad-l)",
     );
-    /* The left one stopped being a literal on 2026-09-04: it is the prose
+    /* The gutter's one stopped being a literal on 2026-09-04: it is the prose
        gutter's column and nothing else, so it is computed from the gutter rather
-       than restated beside it. What matters to *this* file is only that the
-       masthead and the cell still name the same token. */
-    expect(css).toContain("--text-pad-l: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2)");
-    expect(css).toContain("--text-pad-r: 1.4rem");
+       than restated beside it. It is the RIGHT one since 2026-10-03, when the
+       icons moved to the right of the block (261003c). What matters to *this*
+       file is only that the masthead and the cell still name the same token. */
+    expect(css).toContain("--text-pad-r: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2)");
+    expect(css).toContain("--text-pad-l: 1.4rem");
   });
 
   it("and the cap in layout.ts is wide enough to hold them plus the measure", () => {
@@ -128,8 +129,10 @@ describe("the article on its own is centred", () => {
        Given a fact one home; what is left here is the default root, so this
        file's own story stays readable. */
     const MEASURE_REM = 46;
-    const padR = Number(/--text-pad-r:\s*([\d.]+)rem/.exec(css)?.[1]);
-    const padL = 2.2; // max(1.5rem, 24px) + 2 × 0.35rem, at a 16px root
+    // The plain pad is the left one, and the gutter's the right, since 261003c.
+    const padL = Number(/--text-pad-l:\s*([\d.]+)rem/.exec(css)?.[1]);
+    const padR = 2.2; // max(1.5rem, 24px) + 2 × 0.35rem, at a 16px root
+    expect(padL).toBe(1.4);
     expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBeGreaterThanOrEqual(
       (MEASURE_REM + padL + padR) * DEFAULT_ROOT_PX,
     );

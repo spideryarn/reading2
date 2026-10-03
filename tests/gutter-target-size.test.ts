@@ -175,11 +175,24 @@ describe("the gutter's targets meet WCAG 2.5.8 at every root", () => {
     expect(head).toContain("align-content: end");
   });
 
-  it("derives the cell's left padding from the gutter instead of restating it", () => {
+  it("derives the cell's right padding from the gutter instead of restating it", () => {
     /* The three numbers this replaced — 3rem, 0.35rem, 3.7rem — were correct and
        had to be kept in step by hand. Written as `calc()` they cannot drift, and
-       the px floor flows into the padding for free. */
-    expect(css).toContain("--text-pad-l: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2)");
+       the px floor flows into the padding for free. The right pad since
+       2026-10-03, when the gutter moved to the right of the block (spya-kd5dk5,
+       docs/plans/261003c-…); the left is the plain breathing space. */
+    expect(css).toContain("--text-pad-r: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2)");
+    expect(css).toMatch(/--text-pad-l:\s*1\.4rem/);
+    expect(css).not.toContain("--text-pad-l: calc(var(--blk-gutter-w)");
+  });
+
+  it("puts the gutter on the right of the block, not the left", () => {
+    /* The swap of the two pads above moves the room; this is the rule that
+       moves the icons into it. Without it the tokens could swap and the column
+       stay on the left, over the prose's first words. */
+    const g = rule(".blk-gutter");
+    expect(g).toMatch(/(^|[;\s])right: calc\(/);
+    expect(g).not.toMatch(/(^|[;\s])left:/);
   });
 });
 
@@ -197,7 +210,9 @@ describe("the reading-time strip stays outside the gutter's control slots", () =
     const strip = rule(".blk-gutter > span.blk-read");
     expect(strip).toContain("display: block");
     expect(strip).toContain("position: absolute");
-    expect(strip).toContain("left: 100%");
+    // Hangs in the gap between the column and the prose, now on its left.
+    expect(strip).toContain("right: 100%");
+    expect(strip).not.toMatch(/(^|[;\s])left:/);
     expect(strip).toContain(
       "width: clamp(0px, calc(var(--read, 0) * var(--blk-gutter-x)), var(--blk-gutter-x))",
     );
@@ -220,9 +235,11 @@ describe("the reading-time strip stays outside the gutter's control slots", () =
        box, so pointing at the line found the table cell and its title never
        showed (SPIDERYARN-READING2-84, measured in the browser). The strip does
        not grow back over the column instead: the controls own it.
-       docs/plans/261001l-…. */
-    expect(line).toContain("left: 0");
-    expect(line).not.toMatch(/left: -/);
+       docs/plans/261001l-…. At the strip's right edge since 261003c, which is
+       the edge beside the column now that the column is on the right. */
+    expect(line).toContain("right: 0");
+    expect(line).not.toMatch(/right: -/);
+    expect(line).not.toMatch(/(^|[;\s])left:/);
     expect(line).toContain("width: 2px");
     expect(line).toContain("pointer-events: none");
     /* Zero at level 0, so an unread row draws nothing — the 2px line is not
@@ -723,21 +740,23 @@ describe("layout.ts's copy of the slot agrees with the stylesheet", () => {
   it("reserves the whole gutter in the lone-column cap, at every root", () => {
     /* The failure this replaces: a single rem constant under-reserved by 1.2px
        at a 12px root and 12.9px at 9px, because below 16 the gutter stops
-       shrinking while everything else keeps going — so the cell's left padding
-       grows *in rem terms* exactly where a rem constant cannot follow it.
+       shrinking while everything else keeps going — so the cell's gutter padding
+       (the left until 261003c, the right since) grows *in rem terms* exactly where a rem constant cannot follow it.
 
        `--reading-measure` is 65ch, ≈46rem in the reading face; that
        approximation is the constant's own, and the assertion is the inequality
-       rather than the total. `--text-pad-r` is read from the stylesheet so this
-       fails if it moves. */
+       rather than the total. The plain pad — `--text-pad-l` since the gutter
+       moved right (261003c) — is read from the stylesheet so this fails if it
+       moves. */
     const MEASURE_REM = 46;
-    const padR = Number(/--text-pad-r:\s*([\d.]+)rem/.exec(css)?.[1]);
+    const padPlain = Number(/--text-pad-l:\s*([\d.]+)rem/.exec(css)?.[1]);
     const insetRem = Number(/--blk-gutter-x:\s*([\d.]+)rem/.exec(css)?.[1]);
-    expect(padR).toBeGreaterThan(0);
+    // The desktop value, not the phone's 0.9rem override further down the sheet.
+    expect(padPlain).toBe(1.4);
     expect(insetRem).toBeGreaterThan(0);
 
     for (const root of ROOTS) {
-      const needed = (MEASURE_REM + padR + insetRem * 2) * root + slotPx(root);
+      const needed = (MEASURE_REM + padPlain + insetRem * 2) * root + slotPx(root);
       expect(proseAloneMaxPx(root), `the cap clips the measure at a ${root}px root`).toBeGreaterThanOrEqual(
         Math.round(needed),
       );

@@ -9,6 +9,13 @@ The code is `src/web/marginalia/`: `notes.ts` decides which note goes beside whi
 tested in `tests/marginalia-notes.test.ts`), `MarginaliaColumn.tsx` draws them and the head, and
 `press.ts` decides what the Dock button does on a narrow window.
 
+**The block's gutter of icons sits between the prose and the notes.** It moved to the right of the
+block on 2026-10-03 ([261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md)),
+into the reading cell's right padding; a note starts past the cell's edge, so the order across the
+page is prose, icons, then the note, with at least `--blk-gutter-x + --marg-gap` between the icons
+and a note's words. Nothing in the column's arithmetic (`fitMargin`, `--marg-reserve`) changed,
+because the two pads only swapped sides.
+
 ## What it shows
 
 **It generates nothing.** Every note comes from something another mode has already stored, and
