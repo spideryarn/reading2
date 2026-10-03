@@ -159,6 +159,16 @@ The cost is a second localStorage key, `spya.shelf.shownColumns`. The existing k
 ids, which cannot say "shown"; and a list saved before Published existed does not name it, which
 must not read as "show it". A column that starts hidden is hidden unless the second key names it.
 
+**The fix, checked** (on `59545ce12`). GPT Sol, read-only, on the new code alone:
+[fix-check](261003m-shelf-sorts-by-publication-date-fix-check-sol.md), verdict **land**, no
+findings; it judged the second key reasonable against one versioned object with a migration.
+Browser, fresh profile: at 1440 the table is 846px in an 846px container; Columns reads 1 at rest;
+`?by=published` orders the rows with the column hidden and the row card says the date; showing the
+column survives a reload, hiding it again survives a reload; a saved `["length"]` list still leaves
+Published hidden. No console errors. At 820 and 390 the table scrolls inside its own box (816px),
+as it did before this work. Screenshots `261003m-shot-desktop-table-after.png` and
+`261003m-shot-ipad-table-after.png`; the row's buttons are drawn on hover, so neither shows them.
+
 ## What landed
 
 - `LibraryEntry.publishedAt`, filled by `describeArticle`; no migration, no new query.
