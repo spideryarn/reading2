@@ -518,9 +518,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
         </p>
         <p>
           <strong>None of this uses up your allowance</strong> — opening, generating, chatting and
-          re-running are included. For a difficult piece, <strong>High-powered AI</strong> on the
-          article’s Metadata page uses a stronger model (Claude Opus) for work done after you switch
-          it on; use <strong>Run it again</strong> there to redo a mode with it. That switch is the
+          re-running are included. For a difficult piece, <strong>High-powered AI</strong> uses a
+          stronger model (Claude Opus) for work done after you switch it on. Tick it while the
+          article is being added to use it for the work still to come; or switch it on later from the
+          article’s Metadata page and use <strong>Run it again</strong> there to redo a mode with it. That switch is the
           one thing besides adding that counts — see <HelpRef to="plans">Plans</HelpRef>.
         </p>
       </>
@@ -770,8 +771,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             costs nothing.
           </li>
           <li>
-            <strong>High-powered AI</strong>, a switch on an article’s Metadata page that uses a
-            stronger model for it, counts as one more article (half if the article is shared).
+            <strong>High-powered AI</strong>, a stronger model for one article — a tick box while it is
+            being added, or a switch on its Metadata page — counts as one more article (half if the article is shared).
             Switching it off does not refund it, and switching it back on costs nothing more.
           </li>
           <li>

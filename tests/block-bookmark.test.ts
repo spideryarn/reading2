@@ -34,8 +34,8 @@ describe("the whole-paragraph bookmark press", () => {
       () => ID,
     );
 
-    expect(await bookmark(BLOCK)).toBe(false);
-    expect(await bookmark(BLOCK)).toBe(true);
+    expect(await bookmark(BLOCK)).toBe(null);
+    expect(await bookmark(BLOCK)).toBe(ID);
     expect(sent).toEqual([ID, ID]);
   });
 
@@ -57,6 +57,6 @@ describe("the whole-paragraph bookmark press", () => {
     const second = bookmark(BLOCK);
     expect(sent).toEqual([ID]);
     release(stored(ID));
-    expect(await Promise.all([first, second])).toEqual([true, true]);
+    expect(await Promise.all([first, second])).toEqual([ID, ID]);
   });
 });

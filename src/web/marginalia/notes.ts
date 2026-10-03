@@ -29,6 +29,7 @@ import type { PublicClaimDebateRow, PublicComment } from "../../public-types.js"
 import { findQuote } from "../../quote-match.js";
 import { blockIndex, sectionNodesOf } from "../../section-path.js";
 import { titleVoice } from "../tree.js";
+import { type AskedQuestion, type CommentKind, commentKind } from "../comment-nav.js";
 import type { Voice } from "../voice.js";
 
 /** A Debate claim row, the owner's or a visitor's — every owner row is one. */
@@ -59,8 +60,19 @@ export type MarginaliaNote =
   | { kind: "debate"; items: MarginClaim[] }
   /** Works first cited in this block. Owner only — the caller's rule. */
   | { kind: "citation"; items: CitedWork[] }
-  /** The reader's own comments and bookmarks on this block. */
-  | { kind: "comment"; items: MarginComment[] };
+  /** The reader's own comments on this block, and the questions they asked
+      from it — each with its kind (SPIDERYARN-READING2-9H, plan 261002j). */
+  | { kind: "comment"; items: MarginEntry[] };
+
+/**
+ * **One of the reader's marks, with which of three it is** — a comment, a
+ * comment that also asked the AI, or a question (a conversation started from
+ * the passage). `commentKind` in comment-nav.ts says which; a bare bookmark
+ * never gets here.
+ */
+export type MarginEntry =
+  | { as: Exclude<CommentKind, "bookmark">; comment: MarginComment }
+  | { as: "question"; asked: AskedQuestion };
 
 /**
  * **What other modes have already stored**, each already filtered by the caller
@@ -71,6 +83,8 @@ export type MarginSources = {
   claims?: readonly MarginClaim[] | null;
   citations?: readonly CitedWork[] | null;
   comments?: readonly MarginComment[] | null;
+  /** Questions the reader asked from a passage — the owner's only; a visitor's payload has no chats. */
+  asked?: readonly AskedQuestion[] | null;
 };
 
 type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
@@ -269,11 +283,19 @@ function groupedNotes(
      criterion. A visitor's payload never carries one. GPT Sol, F6 on the plan.
      **Nor is a bare bookmark**: with no words and no answer there is nothing to
      say, the gutter already marks its block, and in the browser a column of
-     lone "Bookmark" stamps read as noise (2026-10-02). */
+     lone "Bookmark" stamps read as noise (2026-10-02). "Bare" is
+     `commentKind`'s bookmark, so a wordless comment that asked the AI (it has a
+     `threadId`) still shows — GPT Sol, P1 on plan 261002j. */
   for (const comment of more.comments ?? []) {
     if ("criterionId" in comment && comment.criterionId !== undefined) continue;
-    if (!comment.body && !comment.answer) continue;
-    if (index.has(comment.blockId)) put(comment.blockId, "comment", comment);
+    const as = commentKind(comment);
+    if (as !== "bookmark" && index.has(comment.blockId)) put(comment.blockId, "comment", { as, comment });
+  }
+  /* **The questions asked from a passage, in the same line as its comments**:
+     Greg named them as the third kind of the same thing (9H), and a second line
+     per block would spend the density 261002b bought. */
+  for (const asked of more.asked ?? []) {
+    if (index.has(asked.blockId)) put(asked.blockId, "comment", { as: "question", asked });
   }
 
   return inGroupedOrder(grouped);

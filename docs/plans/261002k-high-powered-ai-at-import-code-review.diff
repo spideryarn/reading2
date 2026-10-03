@@ -1,0 +1,1066 @@
+diff --git a/docs/plans/261002k-high-powered-ai-at-import-plan-review-prompt.md b/docs/plans/261002k-high-powered-ai-at-import-plan-review-prompt.md
+new file mode 100644
+index 000000000..518737a97
+--- /dev/null
++++ b/docs/plans/261002k-high-powered-ai-at-import-plan-review-prompt.md
+@@ -0,0 +1,15 @@
++You are reviewing a plan before it is built, in the Spideryarn repo (this worktree). Read-only: do not edit any file.
++
++The plan: docs/plans/261002k-high-powered-ai-at-import.md. Background: docs/project/high-powered-ai.md, docs/project/billing.md § "High-powered AI counts double", docs/project/ingest-queue.md § "The add page".
++
++Code to check the plan's claims against: src/web/AddPage.tsx (offerAutoModes, the auto-modes tick box, the phases), src/web/HighPowerSwitch.tsx, src/jobs.ts (readStepPower, runStep's per-step power read, claimSession), src/store/pg-revisions.ts (openOrBeginJobDraft / lockOrCreateArticle), src/store/pg-billing.ts (switchOnHighPower), src/billing/admission.ts (chargeAndSwitchOnHighPower), src/routes.ts (PUT /api/article/:slug/high-power), src/pipeline.ts (DEFAULT_INGEST_STEPS), src/web/useJobs.ts.
++
++Questions, answer each with file:line evidence:
++1. Is it true that the article row exists once the job is `running` (claimed), for both URL and upload ingests, so the PUT will find it? Is there any window where a job reports `running` but the row is not yet there, or where the slug the page knows differs from the row's slug (e.g. freeSlug stepping aside)?
++2. Is it true no capable-tier model call happens before `structure` in an ingest?
++3. Is it true that a retry of a failed ingest does not charge High-powered AI again, and that a failed import leaves the article row (and the charge) in place?
++4. Does reusing the existing PUT from the add page open any billing or security hole the Metadata page did not (e.g. the add page for an article already on the shelf, an article owned by someone else, a minimal paper, an admin)?
++5. Is the client-side "intent until running" design sound, or is there a simpler or more robust option within the same no-server-change budget? Is the "late" detection (structure already started) feasible from the job data the page has?
++6. Anything the plan gets wrong or misses. Keep it to findings that matter, ranked P0/P1/P2.
++
++Write your findings to the output file. Lead with a one-line verdict.
+diff --git a/docs/plans/261002k-high-powered-ai-at-import-plan-review-sol.md b/docs/plans/261002k-high-powered-ai-at-import-plan-review-sol.md
+new file mode 100644
+index 000000000..aa399fefb
+--- /dev/null
++++ b/docs/plans/261002k-high-powered-ai-at-import-plan-review-sol.md
+@@ -0,0 +1,48 @@
++Verdict: Revise before build — no P0, but three P1 assumptions make the proposed client choreography unreliable.
++
++## P1 findings
++
++1. **`running` does not guarantee that the article row exists.**
++
++The claim transaction first changes the job to `running` and commits ([src/store/pg-jobs.ts:872](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/store/pg-jobs.ts:872), [src/store/pg-jobs.ts:907](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/store/pg-jobs.ts:907)). Only afterwards does `walkClaim` open the session ([src/jobs.ts:2298](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/jobs.ts:2298), [src/jobs.ts:2335](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/jobs.ts:2335), [src/jobs.ts:2523](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/jobs.ts:2523)); that session calls `openOrBeginJobDraft`, which creates the article row ([src/jobs.ts:2066](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/jobs.ts:2066), [src/store/pg-revisions.ts:1254](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/store/pg-revisions.ts:1254)).
++
++Therefore both URL and upload jobs have a real window where polling reports `running` but the PUT returns 404 ([src/store/pg-billing.ts:1449](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/store/pg-billing.ts:1449), [src/billing/admission.ts:524](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/billing/admission.ts:524)). Treating that as an ordinary refusal would wrongly untick the box.
++
++Within the no-server-change budget, send once `job.slug` is known—even while queued—and treat 404 as transient while that owned job remains queued/running, retrying after subsequent job updates. This also switches an existing shelf article before its skip-fast job is claimed.
++
++There is no inherent slug mismatch: allocation happens before the job is inserted ([src/jobs.ts:3967](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/jobs.ts:3967)), and AddPage watches the returned job ID and ultimately uses `job.slug` ([src/web/AddPage.tsx:553](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/web/AddPage.tsx:553), [src/web/AddPage.tsx:564](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/web/AddPage.tsx:564)). The new component must likewise use `job.slug`, never derive one from the URL or filename.
++
++2. **`structure` is not the first capable-tier call for PDFs.**
++
++PDF `extract` runs `pdf-frontmatter` with `ctx.power` ([src/pipeline.ts:2388](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/pipeline.ts:2388)), and `pdf-frontmatter` is explicitly capable-tier ([src/models.ts:1051](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/models.ts:1051)). Thus uploaded PDFs and fetched PDF URLs can make a Sonnet call during `extract`, before `structure`.
++
++The claim is true only for HTML ingests. The plan and copy must say that switching after PDF extraction starts may leave the PDF-reading/front-matter call on the standard model. Tests should cover switching before and during PDF extraction.
++
++3. **Nothing orders auto-mode jobs after the high-power PUT.**
++
++When the ingest completes, `openArticle` starts `queueAutoModes` without awaiting it and immediately navigates ([src/web/AddPage.tsx:163](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/web/AddPage.tsx:163)); the completion effect invokes that path independently of any proposed switch state ([src/web/AddPage.tsx:584](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/web/AddPage.tsx:584)). If the PUT is still in flight, a mode job can claim and read standard power first.
++
++There is also an upload completion that returns `{article}` with no job after the retained job has gone ([src/routes.ts:5725](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/routes.ts:5725)); AddPage treats it immediately as completion ([src/web/AddPage.tsx:564](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/web/AddPage.tsx:564)). An intent waiting only for `running` will never be sent there.
++
++The completion path must wait for a pending high-power write to settle before queuing auto modes, and must send directly against the returned article slug for an `{article}` completion. A refusal or network-unknown result can then continue under explicitly standard/unknown semantics.
++
++## P2 findings
++
++4. **Exact “late” detection is not feasible from the polled job data.**
++
++`runStep` reads power first ([src/jobs.ts:1029](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/jobs.ts:1029)), then marks the step running and persists progress ([src/jobs.ts:1101](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/jobs.ts:1101)). The switch can commit between those operations: `structure.startedAt` would then be later than `highPowerSince`, despite structure already having selected standard power. The client also sees one-second polling snapshots, not an atomic snapshot with the PUT ([src/web/useJobs.ts:13](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/web/useJobs.ts:13)).
++
++The page can prove lateness if `extract`/`structure` had already visibly started before the click, but it cannot prove the opposite. Use cautious copy such as “Some earlier work may already have used the standard model,” or accept that exact detection needs a server-side ordering marker.
++
++5. **Dismissing a failed card does not freeze the charge.**
++
++The card’s X is “Dismiss” and calls `forget` ([src/web/AddArticle.tsx:666](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/web/AddArticle.tsx:666)). `forget` only stamps `jobs.dismissed_at`; it does not delete the article ([src/store/pg-jobs.ts:2074](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/store/pg-jobs.ts:2074)). The charge therefore remains attached to the live private article row, rather than being frozen as an article-deletion charge. Rewrite that sentence.
++
++Also, the existing auto-mode checkbox is rendered through the post-completion purpose-decision phase, not merely through `offerAutoModes` ([src/web/AddPage.tsx:689](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/web/AddPage.tsx:689), [src/web/AddPage.tsx:950](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/web/AddPage.tsx:950)). “Same interval” should use the actual `(showAutoModes || deciding)` interval if that parity is intended.
++
++## Confirmed claims
++
++- A failed ingest leaves the article row in place: failure locks the article and marks only the draft revision failed ([src/store/pg-revisions.ts:2984](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/store/pg-revisions.ts:2984), [src/store/pg-revisions.ts:2998](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/store/pg-revisions.ts:2998)).
++- Retry preserves the failed attempt’s slug for both URL and upload ingests ([src/jobs.ts:4087](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/jobs.ts:4087), [src/jobs.ts:4379](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/jobs.ts:4379)).
++- High-powered AI is charged only once for that article: the transaction checks for the existing `high_power` event before inserting ([src/store/pg-billing.ts:1490](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/store/pg-billing.ts:1490)). Retrying or repeating the PUT does not charge it again.
++- No new authorization or billing bypass was found. Charged switch-on performs both unlocked and locked owner-scoped reads ([src/store/pg-billing.ts:1449](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/store/pg-billing.ts:1449), [src/store/pg-billing.ts:1456](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/store/pg-billing.ts:1456)); another owner gets 404. Minimal papers are refused before charging ([src/routes.ts:8244](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/routes.ts:8244)), and administrators still take the checked, uncharged path ([src/routes.ts:8256](/home/greg/code/spideryarn2/.claude/worktrees/fbs2rsxy-high-powered-at-import/src/routes.ts:8256)). An already-shelved owned article exposes no authority the Metadata page did not already have.
+\ No newline at end of file
+diff --git a/docs/plans/261002k-high-powered-ai-at-import.md b/docs/plans/261002k-high-powered-ai-at-import.md
+new file mode 100644
+index 000000000..748da326e
+--- /dev/null
++++ b/docs/plans/261002k-high-powered-ai-at-import.md
+@@ -0,0 +1,124 @@
++# High-powered AI at import
++
++Report `spya-s2rsxy` (Greg, 2026-09-30), the half that
++[260930k](260930k-high-power-for-readers-and-cost-only-for-admins.md) left out. Overseer queue item
++`qi-qjtbt9je`. Parent doc: [high-powered-ai.md](../project/high-powered-ai.md).
++
++> We also need to provide a way for the user to specify this in the UI. I think the two obvious
++> places would be during the import process as a flag they can flip while it's importing, perhaps up
++> to the point where it starts doing the structure. I don't know, or keep it simple and find a
++> natural place in the UI to include it.
++>
++> — Greg, 2026-09-30
++
++## What exists
++
++- The switch on `/metadata`: `PUT /api/article/:slug/high-power {on}`, owner-scoped, charged once per
++  article (200 points private, 100 public), never refunded, must fit whole (`[pay-high-power]`),
++  administrator exempt — [billing.md § High-powered AI counts double](../project/billing.md).
++- The job runner reads the article's `high_power_since` **as each step starts** (`readStepPower`,
++  `src/jobs.ts`), so a switch flipped mid-job moves every step still to come.
++- The article row exists from the moment the job is **claimed** (the claim opens the draft:
++  `openOrBeginJobDraft` → `lockOrCreateArticle`), with the column null, and the `PUT` addresses the
++  row by `ownedSlug` — it needs no publication. So the existing switch already works on an article
++  that is mid-import; nothing has offered it there.
++- The ingest's steps are `fetch, extract, blocks, structure, …` (`DEFAULT_INGEST_STEPS`). For a web
++  page the first three make no capable-tier call and **`structure` is the first that does** — Greg's
++  "up to the point where it starts doing the structure" is exactly the window in which the switch
++  moves everything. **A PDF is the exception** (Sol's plan review, P1-2): its `extract` reads the
++  front matter with `pdf-frontmatter`, a capable-tier task, so for a PDF the window closes when
++  `extract` starts.
++- `/add/<url>` already has a tick box drawn for the whole import (*Generate the main modes*,
++  `offerAutoModes`), and the modes it queues on completion would run on Opus too once the article
++  is switched.
++
++## What v1 does
++
++**A second tick box on the add page, *High-powered AI*, off by default and never remembered, that
++calls the existing switch.** No server change, no new price, no new billing shape.
++
++1. Drawn in the same interval as *Generate the main modes* (`showAutoModes || deciding`, which
++   includes the purpose question after the import finishes), under it, with the
++   same short price sentence the Metadata switch uses (articles, never money; the administrator's
++   "no charge").
++2. **Ticking it records the intent; the page sends `PUT {on: true}` as soon as it knows the job's
++   slug** (`job.slug`, never one derived from the URL or filename). Ticked while the URL is still
++   being posted, or while a PDF is still uploading, it waits, and says *"Will switch on when the
++   import starts."* **A 404 while the job is still queued or running means "the row is not there
++   yet", not a refusal** — a job reports `running` before its claim opens the draft that creates the
++   row (Sol's P1-1) — so it is retried a second later until the job ends. After the job ends, a 404
++   is a real answer.
++2a. **The main modes wait for the switch** (Sol's P1-3). The completion queues them without
++   awaiting anything, so a mode job could claim and read the standard model before the `PUT`
++   lands. The page now settles the intent first — sending it against the completion's slug if it
++   was still waiting, which also covers the `{article}` completion that never had a job — and
++   queues the modes after; the navigation itself does not wait.
++3. **The box shows the server's last answer once one exists**, as `HighPowerSwitch` does: a refusal
++   (`[pay-high-power]`, or the minimal-paper refusal) unticks it with the reason beside it, and the
++   import carries on with the standard model. A lost connection says *couldn't confirm*, not *off*.
++4. **Unticking before the `PUT` has gone cancels the intent, free.** After it has gone it sends
++   `{on: false}`, exactly as on Metadata (nothing back, switching on again free) — the copy already
++   says so.
++5. **Late is honest, not forbidden.** Exactly when the runner read the column cannot be known from
++   the polled job (it reads power before it marks the step running — Sol's P2-4), so the copy is
++   cautious: if, when the switch answered, any step beyond `fetch` and `blocks` had started, the line
++   under the box says *some earlier work may have used the standard model* and *Run it again* on
++   Metadata redoes it. Later steps, and the main modes queued at the end, use Opus.
++   Not refusing it is deliberate: the main modes queued after the import are most of the model
++   calls, and they still benefit.
++6. Not remembered between imports. A sticky default would double the price of every later import
++   without the reader looking at the box again; *Generate the main modes* may be remembered because
++   it costs nothing from the allowance.
++
++### Copy that changes
++
++`/pricing`'s answer and `/help`'s two mentions say the switch is on the Metadata page; they become
++"when you add it, or later on its Metadata page". `/features`' line names no place and stays.
++high-powered-ai.md § *What it costs a reader*'s last paragraph ("Switching on happens only on
++`/metadata` … An import-time flag is the named next step") is rewritten to describe this.
++ingest-queue.md § The add page gets one sentence.
++
++## Simpler options passed over, and the larger one deferred
++
++- **Only Metadata, as now** — the status quo; the reader pays twice the Sonnet run for nothing they
++  keep, or reads a Sonnet first pass. The report asks for import.
++- **A tick box on the shelf's Add form, carried in the URL** (`/add/<url>?power=high`). Rejected: a
++  link that doubles a charge on arrival is a link a stranger can send. The add page already opens
++  before any job exists, so the window is the same without it.
++- **Deferred: the charge riding the job** (a `jobs` column, admission at `POST /api/jobs` for both
++  charges, the switch made server-side at `structure`). It would survive a closed tab and charge
++  only an import that got past `fetch`. It is a new billing shape — Greg's call, and not needed
++  for the 80%.
++
++## Known limits, named
++
++- **A tab closed before the job is claimed sends nothing.** The box is a page's intent, like
++  *Generate the main modes*, and `KEEP_A_TAB_OPEN` already asks for the tab. The article imports on
++  the standard model and Metadata still has the switch.
++- **An import that fails after the switch keeps the charge** on its article row, under the
++  existing never-refunded rule; a *Retry* of that job does not charge it again (one charge per
++  article, the row survives a failed job). Dismissing the failed card only hides the job; the
++  article row and its charge stay (Sol's P2-5). This is the existing price applied earlier, not a new one; the deferred job-riding design
++  is the fix if it turns out to matter.
++- **A race at the boundary**: a box ticked during `blocks` may land just after `structure` reads
++  the column. Item 5's cautious line covers it; exact detection would need a server-side marker.
++
++## Plan review
++
++GPT Sol, read-only: [261002k-high-powered-ai-at-import-plan-review-sol.md](261002k-high-powered-ai-at-import-plan-review-sol.md).
++Verdict *revise before build, no P0*. All five findings checked against the code and taken: P1-1
++(`running` before the row, so a 404 is retried while the job lives), P1-2 (PDF front matter is
++capable-tier), P1-3 (modes wait for the switch; the `{article}` completion), P2-4 (cautious late
++copy), P2-5 (dismiss does not delete). It confirmed no new billing or authorisation path: the
++`PUT` is owner-scoped, minimal papers are refused before charging, the administrator takes the
++uncharged path, and the charge is once per article.
++
++## Stages
++
++1. The tick box: a framework-free controller (`src/web/add-high-power.ts`, its state a
++   discriminated union, the `PUT` injected so a test can drive every answer) and a small
++   component that draws it; wired into
++   `AddPage.tsx`. Copy changes in `/pricing` and `/help`. Docs.
++2. Browser check on the box (desktop and phone width): tick before the job runs, tick while running,
++   a refusal.
++3. GPT Sol code review, gates, push, feedback note.
+diff --git a/docs/project/high-powered-ai.md b/docs/project/high-powered-ai.md
+index f383f0920..c58d7cd94 100644
+--- a/docs/project/high-powered-ai.md
++++ b/docs/project/high-powered-ai.md
+@@ -3,9 +3,10 @@
+ Parent: [reading-view-overview.md](reading-view-overview.md). The build, and every decision behind
+ it, is [260930f](../plans/260930f-high-powered-ai-per-article.md) (the switch, for the administrator)
+ and [260930k](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md) (readers, and what
+-it costs them).
++it costs them), and [261002k](../plans/261002k-high-powered-ai-at-import.md) (choosing it while
++the article is added).
+ 
+-**One switch per article, on `/metadata`, that moves most of that article's capable-tier calls from
++**One switch per article — on `/metadata`, or a tick box while the article is added — that moves most of that article's capable-tier calls from
+ Claude Sonnet to Claude Opus.** For a difficult piece — a dense paper, an argument that takes several
+ readings — the stronger model writes the structure, gists, quotes, FAQ answers and chat replies.
+ Simple's plain-words summaries are the exception: they use Opus for every article. So is
+@@ -43,11 +44,32 @@ The administrator is exempt, as with ingests. The mechanism is billing's:
+ and `/features`
+ ([cost-tracking.md § Only the administrator ever sees a figure](cost-tracking.md#only-the-administrator-ever-sees-a-figure)).
+ 
+-**Switching on happens only on `/metadata`, after the article is on the shelf**, not at import. The
+-ingest-time capable-tier work uses Sonnet, and a reader who wants Opus throughout presses *Run it
+-again* (free, as every re-run is). Simple is not part of the default ingest and already uses Opus
+-whenever it is requested. An import-time flag is the named next step; it needs its own plan, because
+-the charge would have to ride the job.
++## Switching it on while the article is added
++
++Since 2026-10-02 the add page (`/add/…`) has a **High-powered AI** tick box beside *Generate the main
++modes*, off by default and never remembered — a remembered tick would double the price of every later
++import unseen. It sends **the same `PUT`** as the Metadata switch, so the price and every refusal
++above are unchanged; only the moment is earlier. The build is
++[261002k](../plans/261002k-high-powered-ai-at-import.md); the page's half is
++[`src/web/add-high-power.ts`](../../src/web/add-high-power.ts).
++
++- **It is sent as soon as the page knows the job's slug**, and a `404` while the job is still alive
++  is retried — a job reports `running` before its claim creates the article row.
++- **Ticked before the capable-tier work starts, the whole import runs on Opus**: before `structure`
++  for a web page, before `extract` for a PDF, whose front matter is read on the capable tier. Later
++  than that, the line under the box says some of it *may* have used Sonnet; exactly which steps
++  cannot be told from the page, because the runner reads the setting before it marks a step running.
++- **The main modes it queues at the end wait for the switch to answer**, so none of them claims
++  first and reads Sonnet. The navigation to the article does not wait.
++- **It is a page's intent**, like *Generate the main modes*: a tab closed before the job is claimed
++  sends nothing, and the article imports on Sonnet. An import that fails after the switch keeps the
++  charge on its article row, under the never-refunded rule; its *Retry* does not charge again.
++
++Deferred, and a billing change if built: the charge riding the job itself (admitted at
++`POST /api/jobs`, switched server-side at the first capable-tier step), which would survive a closed
++tab and charge only an import that got past `fetch`.
++
++Simple is not part of the default ingest and already uses Opus whenever it is requested.
+ 
+ ## What it changes, and what it does not
+ 
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index 124b14fb0..3a728a67c 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -624,6 +624,11 @@ paper before `structure`):
+ [260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md) and
+ [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts).
+ 
++**Since 2026-10-02 it can also switch the article to High-powered AI** — a second tick box, off by
++default and never remembered, which sends the Metadata switch's own request as soon as the job's slug
++is known; the main modes above wait for it to answer.
++[high-powered-ai.md § Switching it on while the article is added](high-powered-ai.md).
++
+ ### The three traps in a page whose whole job is one effect
+ 
+ - **Queue it once.** `<StrictMode>` mounts, unmounts and mounts again in development, so a plain
+diff --git a/src/web/AddHighPower.tsx b/src/web/AddHighPower.tsx
+new file mode 100644
+index 000000000..44d9cc9bc
+--- /dev/null
++++ b/src/web/AddHighPower.tsx
+@@ -0,0 +1,80 @@
++/**
++ * **The add page's High-powered AI tick box** — draws a `HighPowerIntent`
++ * (src/web/add-high-power.ts), which holds the state and sends the request.
++ * docs/plans/261002k-high-powered-ai-at-import.md.
++ *
++ * Off by default and never remembered: a remembered tick would double the price
++ * of every later import without the reader looking at it again. The price is in
++ * articles, never money, in the Metadata switch's own words (HighPowerSwitch.tsx).
++ */
++import { useSyncExternalStore } from "react";
++import { TriangleAlert, Zap } from "lucide-react";
++
++import { isAdmin } from "../admin.js";
++import type { HighPowerIntent } from "./add-high-power.js";
++import { useSession } from "./useSession.js";
++
++export function AddHighPower({ intent }: { intent: HighPowerIntent }) {
++  const { user } = useSession();
++  const state = useSyncExternalStore(intent.subscribe, intent.get);
++  const exempt = isAdmin(user?.id);
++
++  const checked =
++    state.kind === "waiting" || state.kind === "on" || (state.kind === "saving" && state.on);
++
++  return (
++    <div data-add-high-power className="tw:mt-3 tw:text-sm">
++      <label className="tw:flex tw:items-start tw:gap-2">
++        <input
++          type="checkbox"
++          className="tw:mt-0.5"
++          checked={checked}
++          disabled={state.kind === "saving"}
++          onChange={(event) => intent.want(event.target.checked)}
++        />
++        <span>
++          <span className="tw:inline-flex tw:items-center tw:gap-1">
++            <Zap size={13} className="tw:text-ink-faint" />
++            High-powered AI
++          </span>
++          <span className="tw:block tw:text-muted-foreground">
++            A stronger AI model (Claude Opus) for this article — better on difficult pieces.{" "}
++            {exempt
++              ? "Administrator: no charge."
++              : "Counts as one more article against your allowance (half of one while it is shared publicly). Switching off later doesn't give it back."}
++          </span>
++          <span className="tw:block tw:text-muted-foreground" aria-live="polite">
++            {line(state)}
++          </span>
++        </span>
++      </label>
++    </div>
++  );
++}
++
++function line(state: ReturnType<HighPowerIntent["get"]>) {
++  switch (state.kind) {
++    case "off":
++      return null;
++    case "waiting":
++      return "Will switch on when the import starts.";
++    case "saving":
++      return "Saving…";
++    case "on":
++      return state.lateRisk
++        ? "On. Some of this import may already have used the standard model — Run it again on the article's Metadata page to redo a mode."
++        : "On — this import uses it.";
++    case "refused":
++    case "unknown":
++      return (
++        <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
++          <TriangleAlert size={12} />
++          {state.kind === "refused" ? "Not switched on" : "Couldn't confirm that"} — {state.message}
++        </span>
++      );
++    default: {
++      const never: never = state;
++      return never;
++    }
++  }
++}
+diff --git a/src/web/AddPage.tsx b/src/web/AddPage.tsx
+index b7329048a..bc910c3da 100644
+--- a/src/web/AddPage.tsx
++++ b/src/web/AddPage.tsx
+@@ -75,6 +75,8 @@ import { savePurpose } from "./purpose.js";
+ import { markAskPurpose } from "./ask-purpose.js";
+ import { Button } from "@/components/ui/button";
+ import { withVoice } from "./voice.js";
++import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
++import { AddHighPower } from "./AddHighPower.js";
+ 
+ /**
+  * Which of the two origins this page is starting.
+@@ -160,11 +162,28 @@ type Phase =
+  *
+  * Callers take the once-guard (`claimed`) first; this does not check it.
+  */
+-function openArticle(completion: Completion, generate: boolean, run: UseJobs["run"]): void {
+-  if (generate) void queueAutoModes(run, completion.slug);
++function openArticle(
++  completion: Completion,
++  generate: boolean,
++  run: UseJobs["run"],
++  highPower: HighPowerIntent,
++): void {
++  /* **The modes wait for High-powered AI; the navigation does not.** A mode job
++     queued before the switch lands could claim and read the standard model
++     (GPT Sol, plan 261002k P1-3). `settle` never rejects. */
++  const settled = highPower.settle(completion.slug);
++  if (generate) void settled.then(() => queueAutoModes(run, completion.slug));
+   navigate(readHref(completion.slug), { replace: true });
+ }
+ 
++/** The Metadata switch's own request — src/web/HighPowerSwitch.tsx. */
++const putHighPower: PutHighPower = (slug, on) =>
++  apiFetch(`/api/article/${encodeURIComponent(slug)}/high-power`, {
++    method: "PUT",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify({ on }),
++  }).then((r) => readJson<{ highPowerSince: string | null }>(r));
++
+ /** Whether the file-owning tab still has a live add rather than an outcome. */
+ function transferIsActive(transfer: Transfer | null): boolean {
+   const kind = transfer?.phase.kind;
+@@ -330,6 +349,19 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+   const runRef = useRef(queue.run);
+   runRef.current = queue.run;
+ 
++  /**
++   * **High-powered AI for this add**, one intent per address — plan 261002k.
++   * Replaced (and the old one's retries stopped) only when the address
++   * changes, not on unmount: a reader who ticked it and then left has still
++   * asked for it, and a request in flight finishes either way.
++   */
++  const highPowerRef = useRef<{ source: string; intent: HighPowerIntent } | null>(null);
++  if (highPowerRef.current?.source !== wanted) {
++    highPowerRef.current?.intent.dispose();
++    highPowerRef.current = { source: wanted, intent: new HighPowerIntent(putHighPower) };
++  }
++  const highPower = highPowerRef.current.intent;
++
+   /**
+    * **Why the reader is reading this**, asked while the import runs — the one
+    * moment answering costs nothing extra (plan 260930e § Stage 1).
+@@ -581,6 +613,17 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+   const activeCompletionKey = useRef<string | null>(completionKey);
+   activeCompletionKey.current = completionKey;
+ 
++  /* **What High-powered AI may send to, and whether a 404 is *not yet*.** The
++     job's own slug, or the completion's — never one derived from the address.
++     Alive until the job ends; before there is a job, alive while nothing has
++     finished. Every render: `observe` only sends when there is something to. */
++  const highPowerSlug = job?.slug ?? completion?.slug ?? null;
++  const highPowerAlive = job ? job.status === "queued" || job.status === "running" : completion === null;
++  const highPowerLate = mayHaveStartedOnStandard(job?.steps) || (job === null && completion !== null);
++  useEffect(() => {
++    highPower.observe(highPowerSlug, highPowerAlive, highPowerLate);
++  }, [highPower, highPowerSlug, highPowerAlive, highPowerLate]);
++
+   useEffect(() => {
+     if (completionKey === null || completionSlug === null) return;
+     if (claimed.current === completionKey) return;
+@@ -600,12 +643,12 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+          purpose. */
+       if (draftRef.current === "" && !purposeTouchedRef.current) markAskPurpose(completionSlug);
+       setPhase({ kind: "opened" });
+-      openArticle(finished, autoModesRef.current, runRef.current);
++      openArticle(finished, autoModesRef.current, runRef.current, highPower);
+       return;
+     }
+     /* Otherwise wait, indefinitely. A blur or a pause is not a decision. */
+     setPhase({ kind: "ready", completion: finished, error: null });
+-  }, [completionKey, completionSlug, wanted]);
++  }, [completionKey, completionSlug, wanted, highPower]);
+ 
+   /**
+    * **Save and open**: the purpose first and awaited, then the modes, then the
+@@ -629,7 +672,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+     const text = draftRef.current;
+     if (text.trim() === "") {
+       setPhase({ kind: "opened" });
+-      openArticle(done, autoModesRef.current, runRef.current);
++      openArticle(done, autoModesRef.current, runRef.current, highPower);
+       return;
+     }
+     setPhase({ kind: "saving", completion: done });
+@@ -642,7 +685,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+         )
+           return;
+         setPhase({ kind: "opened" });
+-        openArticle(done, autoModesRef.current, runRef.current);
++        openArticle(done, autoModesRef.current, runRef.current, highPower);
+       },
+       /* Back to *ready* with the draft intact, and nothing queued: a mode
+          written without the purpose is what the reader has just declined. */
+@@ -668,7 +711,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+       return;
+     claimed.current = phase.completion.key;
+     setPhase({ kind: "opened" });
+-    openArticle(phase.completion, autoModesRef.current, runRef.current);
++    openArticle(phase.completion, autoModesRef.current, runRef.current, highPower);
+   };
+ 
+   /* The tab, naming what is being added — the host for an address, the filename
+@@ -969,6 +1012,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
+           </span>
+         </label>
+       )}
++      {(showAutoModes || deciding) && <AddHighPower intent={highPower} />}
+ 
+       {showPurpose && (
+         <PurposeBox
+diff --git a/src/web/PricingPage.tsx b/src/web/PricingPage.tsx
+index 12f63b4f2..a5bebff87 100644
+--- a/src/web/PricingPage.tsx
++++ b/src/web/PricingPage.tsx
+@@ -301,8 +301,8 @@ function Faq() {
+               their articles costs"*, the same day. It is one more charge row
+               for the article, once, never refunded (`switchOnHighPower`,
+               src/store/pg-billing.ts). docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md. */}
+-          For a difficult piece, you can switch one article to a stronger AI model from its
+-          Metadata page. Switching it on counts as one more article against your allowance — half
++          For a difficult piece, you can switch one article to a stronger AI model — when you add
++          it, or later from its Metadata page. Switching it on counts as one more article against your allowance — half
+           of one if the article is shared publicly. Switching it off doesn&apos;t
+           give it back, and switching it on again costs nothing more.
+         </Answer>
+diff --git a/src/web/add-high-power.ts b/src/web/add-high-power.ts
+new file mode 100644
+index 000000000..3531acbcf
+--- /dev/null
++++ b/src/web/add-high-power.ts
+@@ -0,0 +1,195 @@
++/**
++ * **High-powered AI, chosen while the article is being added** — the add
++ * page's tick box, docs/plans/261002k-high-powered-ai-at-import.md.
++ *
++ * It calls the same `PUT /api/article/:slug/high-power` as the switch on
++ * `/metadata` (src/web/HighPowerSwitch.tsx), so the price, the once-per-article
++ * charge and every refusal are the server's and unchanged. What is new is only
++ * *when*: the job runner reads the column as each step starts (`readStepPower`,
++ * src/jobs.ts), so a switch that lands before `structure` moves the whole
++ * import to Opus — before `extract`, for a PDF, whose front matter is read on
++ * the capable tier.
++ *
++ * Three facts shape this, each from GPT Sol's plan review:
++ *
++ *  - **The page knows the slug before the row exists.** A job reports
++ *    `running` before its claim opens the draft that creates the article row,
++ *    so a `404` while the job is still queued or running means *not yet* and
++ *    is retried; once the job has ended it is a real answer.
++ *  - **The main modes must not overtake it.** `settle` is what the page awaits
++ *    before queueing them, and it sends a still-waiting intent there and then,
++ *    against the completion's slug — which also covers a completion that never
++ *    had a job.
++ *  - **Whether it was late cannot be known exactly** from a polled job (power
++ *    is read before a step is marked running), so `lateRisk` is a cautious
++ *    *may*, captured when the switch answers.
++ *
++ * Framework-free, with the request injected, so a test drives every answer
++ * (tests/add-high-power.test.ts); `AddHighPower.tsx` draws it.
++ */
++
++import { statusOf } from "./lib/api.js";
++
++/** One state at a time: the reader's intent, the request, or the server's last answer. */
++export type HighPowerAtAdd =
++  | { kind: "off" }
++  /** Wanted, and not sent yet: no slug, or the row was not there yet. */
++  | { kind: "waiting" }
++  | { kind: "saving"; on: boolean }
++  | { kind: "on"; since: string; lateRisk: boolean }
++  /** The server answered no, and nothing changed. */
++  | { kind: "refused"; message: string }
++  /** No answer arrived — the write may or may not have committed. */
++  | { kind: "unknown"; message: string };
++
++export type PutHighPower = (slug: string, on: boolean) => Promise<{ highPowerSince: string | null }>;
++
++/** How long a `404` waits before asking again, while the job is still alive. */
++export const NOT_YET_RETRY_MS = 1000;
++
++/**
++ * **How many *not yet*s before giving up** — five minutes at the default. A job
++ * cancelled before its claim never creates the row, and the page that would
++ * have said so may be gone, so the loop needs an end of its own.
++ */
++export const MAX_NOT_YET = 300;
++
++export class HighPowerIntent {
++  private state: HighPowerAtAdd = { kind: "off" };
++  private slug: string | null = null;
++  /** Whether the job may still create the row — a `404` is then *not yet*. */
++  private jobAlive = true;
++  private lateRisk = false;
++  private inFlight: Promise<void> | null = null;
++  private retry: ReturnType<typeof setTimeout> | null = null;
++  private notYet = 0;
++  private disposed = false;
++  private readonly listeners = new Set<() => void>();
++
++  constructor(
++    private readonly put: PutHighPower,
++    private readonly retryMs: number = NOT_YET_RETRY_MS,
++  ) {}
++
++  get = (): HighPowerAtAdd => this.state;
++
++  subscribe = (listener: () => void): (() => void) => {
++    this.listeners.add(listener);
++    return () => this.listeners.delete(listener);
++  };
++
++  /**
++   * **The page's job, as it now stands** — called on every render. `slug` is
++   * `job.slug` or the completion's, never one derived from the address.
++   */
++  observe(slug: string | null, jobAlive: boolean, lateRisk: boolean): void {
++    this.slug = slug;
++    this.jobAlive = jobAlive;
++    this.lateRisk = lateRisk;
++    this.kick();
++  }
++
++  /** The tick box. Ignored while a request is in flight (the box is disabled then). */
++  want(on: boolean): void {
++    if (this.disposed || this.state.kind === "saving") return;
++    if (on) {
++      if (this.state.kind === "on") return;
++      this.set({ kind: "waiting" });
++      this.kick();
++      return;
++    }
++    switch (this.state.kind) {
++      case "waiting":
++        /* Never sent, so nothing to undo and nothing charged. */
++        this.clearRetry();
++        this.set({ kind: "off" });
++        return;
++      case "on":
++      case "unknown":
++        /* `unknown` may be on server-side; switching off is free either way. */
++        if (this.slug) this.send(this.slug, false);
++        else this.set({ kind: "off" });
++        return;
++      default:
++        this.set({ kind: "off" });
++    }
++  }
++
++  /**
++   * **Before the main modes are queued.** The import has finished, so the row
++   * exists: a still-waiting intent is sent now against `slug`, and a `404` is
++   * final. Resolves when no request is in flight; never rejects.
++   */
++  settle(slug: string): Promise<void> {
++    this.slug = slug;
++    this.jobAlive = false;
++    this.clearRetry();
++    this.kick();
++    return this.inFlight ?? Promise.resolve();
++  }
++
++  /** A new address, or the page gone: stop retrying. A request in flight still settles. */
++  dispose(): void {
++    this.disposed = true;
++    this.clearRetry();
++  }
++
++  private kick(): void {
++    if (this.disposed || this.state.kind !== "waiting" || this.inFlight || this.retry) return;
++    if (this.slug) this.send(this.slug, true);
++  }
++
++  private send(slug: string, on: boolean): void {
++    this.set({ kind: "saving", on });
++    this.inFlight = this.put(slug, on).then(
++      (body) => {
++        this.inFlight = null;
++        this.set(
++          body.highPowerSince
++            ? { kind: "on", since: body.highPowerSince, lateRisk: this.lateRisk }
++            : { kind: "off" },
++        );
++      },
++      (e: unknown) => {
++        this.inFlight = null;
++        const message = e instanceof Error ? e.message : "The request failed.";
++        const status = statusOf(e);
++        if (on && status === 404 && this.jobAlive && !this.disposed && this.notYet < MAX_NOT_YET) {
++          this.notYet += 1;
++          /* The claim has not opened the draft yet. */
++          this.set({ kind: "waiting" });
++          this.retry = setTimeout(() => {
++            this.retry = null;
++            this.kick();
++          }, this.retryMs);
++          return;
++        }
++        this.set(status !== null ? { kind: "refused", message } : { kind: "unknown", message });
++      },
++    );
++  }
++
++  private clearRetry(): void {
++    if (this.retry) clearTimeout(this.retry);
++    this.retry = null;
++  }
++
++  private set(next: HighPowerAtAdd): void {
++    this.state = next;
++    for (const listener of this.listeners) listener();
++  }
++}
++
++/**
++ * **Whether some of this import may already have run on the standard model**
++ * — any step other than `fetch` and `blocks` started. `extract` counts because
++ * a PDF's is capable-tier; for a web page that makes the line a *may* it
++ * cannot sharpen, and the copy says *may*.
++ */
++export function mayHaveStartedOnStandard(
++  steps: readonly { name: string; status: string }[] | undefined,
++): boolean {
++  return (steps ?? []).some(
++    (s) => s.name !== "fetch" && s.name !== "blocks" && s.status !== "pending",
++  );
++}
+diff --git a/src/web/help/help-topics.tsx b/src/web/help/help-topics.tsx
+index 7775927a1..7c07fc400 100644
+--- a/src/web/help/help-topics.tsx
++++ b/src/web/help/help-topics.tsx
+@@ -518,9 +518,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
+         </p>
+         <p>
+           <strong>None of this uses up your allowance</strong> — opening, generating, chatting and
+-          re-running are included. For a difficult piece, <strong>High-powered AI</strong> on the
+-          article’s Metadata page uses a stronger model (Claude Opus) for work done after you switch
+-          it on; use <strong>Run it again</strong> there to redo a mode with it. That switch is the
++          re-running are included. For a difficult piece, <strong>High-powered AI</strong> uses a
++          stronger model (Claude Opus) for work done after you switch it on. Tick it while the
++          article is being added and the whole import uses it; or switch it on later from the
++          article’s Metadata page and use <strong>Run it again</strong> there to redo a mode with it. That switch is the
+           one thing besides adding that counts — see <HelpRef to="plans">Plans</HelpRef>.
+         </p>
+       </>
+@@ -770,8 +771,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
+             costs nothing.
+           </li>
+           <li>
+-            <strong>High-powered AI</strong>, a switch on an article’s Metadata page that uses a
+-            stronger model for it, counts as one more article (half if the article is shared).
++            <strong>High-powered AI</strong>, a stronger model for one article — a tick box while it is
++            being added, or a switch on its Metadata page — counts as one more article (half if the article is shared).
+             Switching it off does not refund it, and switching it back on costs nothing more.
+           </li>
+           <li>
+diff --git a/tests/add-high-power.test.ts b/tests/add-high-power.test.ts
+new file mode 100644
+index 000000000..00ba180ca
+--- /dev/null
++++ b/tests/add-high-power.test.ts
+@@ -0,0 +1,223 @@
++/**
++ * The add page's High-powered AI intent — src/web/add-high-power.ts, plan
++ * docs/plans/261002k-high-powered-ai-at-import.md. Every answer the `PUT` can
++ * give, driven through an injected request.
++ */
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++
++import {
++  HighPowerIntent,
++  MAX_NOT_YET,
++  mayHaveStartedOnStandard,
++  type PutHighPower,
++} from "../src/web/add-high-power.js";
++
++const SINCE = "2026-10-02T23:00:00.000Z";
++
++function refusal(status: number, message = "no"): Error {
++  return Object.assign(new Error(message), { status });
++}
++
++/** A `put` whose answers are queued by the test, recording every call. */
++function scripted(...answers: Array<string | null | Error>) {
++  const calls: Array<[string, boolean]> = [];
++  const put: PutHighPower = async (slug, on) => {
++    calls.push([slug, on]);
++    const next = answers.shift();
++    if (next === undefined) throw new Error("unscripted call");
++    if (next instanceof Error) throw next;
++    return { highPowerSince: next };
++  };
++  return { put, calls };
++}
++
++beforeEach(() => {
++  vi.useFakeTimers();
++});
++afterEach(() => {
++  vi.useRealTimers();
++});
++
++describe("HighPowerIntent", () => {
++  it("waits for the slug, then sends once and shows the server's answer", async () => {
++    const { put, calls } = scripted(SINCE);
++    const intent = new HighPowerIntent(put, 10);
++    intent.want(true);
++    expect(intent.get()).toEqual({ kind: "waiting" });
++    expect(calls).toEqual([]);
++
++    intent.observe("an-essay", true, false);
++    expect(intent.get()).toEqual({ kind: "saving", on: true });
++    await vi.runAllTimersAsync();
++    expect(calls).toEqual([["an-essay", true]]);
++    expect(intent.get()).toEqual({ kind: "on", since: SINCE, lateRisk: false });
++
++    /* Later renders send nothing more. */
++    intent.observe("an-essay", true, true);
++    await vi.runAllTimersAsync();
++    expect(calls).toHaveLength(1);
++  });
++
++  it("treats a 404 as *not yet* while the job is alive, and retries", async () => {
++    const { put, calls } = scripted(refusal(404), refusal(404), SINCE);
++    const intent = new HighPowerIntent(put, 10);
++    intent.observe("an-essay", true, false);
++    intent.want(true);
++    await vi.advanceTimersByTimeAsync(0);
++    expect(intent.get()).toEqual({ kind: "waiting" });
++    await vi.runAllTimersAsync();
++    expect(calls).toHaveLength(3);
++    expect(intent.get().kind).toBe("on");
++  });
++
++  it("gives up retrying after MAX_NOT_YET", async () => {
++    const { put, calls } = scripted(...Array.from({ length: MAX_NOT_YET + 1 }, () => refusal(404, "gone")));
++    const intent = new HighPowerIntent(put, 1);
++    intent.observe("an-essay", true, false);
++    intent.want(true);
++    await vi.runAllTimersAsync();
++    expect(calls).toHaveLength(MAX_NOT_YET + 1);
++    expect(intent.get()).toEqual({ kind: "refused", message: "gone" });
++  });
++
++  it("takes a 404 as final once the job has ended", async () => {
++    const { put } = scripted(refusal(404, "No article artefacts"));
++    const intent = new HighPowerIntent(put, 10);
++    intent.observe("an-essay", false, false);
++    intent.want(true);
++    await vi.runAllTimersAsync();
++    expect(intent.get()).toEqual({ kind: "refused", message: "No article artefacts" });
++  });
++
++  it("shows a refusal and does not retry it", async () => {
++    const { put, calls } = scripted(refusal(402, "[pay-high-power] not enough left"));
++    const intent = new HighPowerIntent(put, 10);
++    intent.observe("an-essay", true, false);
++    intent.want(true);
++    await vi.runAllTimersAsync();
++    expect(calls).toHaveLength(1);
++    expect(intent.get()).toEqual({ kind: "refused", message: "[pay-high-power] not enough left" });
++  });
++
++  it("says *unknown*, not off, when no answer arrived", async () => {
++    const { put } = scripted(new TypeError("Failed to fetch"));
++    const intent = new HighPowerIntent(put, 10);
++    intent.observe("an-essay", true, false);
++    intent.want(true);
++    await vi.runAllTimersAsync();
++    expect(intent.get()).toEqual({ kind: "unknown", message: "Failed to fetch" });
++  });
++
++  it("unticking before anything was sent costs nothing and sends nothing", async () => {
++    const { put, calls } = scripted();
++    const intent = new HighPowerIntent(put, 10);
++    intent.want(true);
++    intent.want(false);
++    intent.observe("an-essay", true, false);
++    await vi.runAllTimersAsync();
++    expect(calls).toEqual([]);
++    expect(intent.get()).toEqual({ kind: "off" });
++  });
++
++  it("unticking after it is on sends off", async () => {
++    const { put, calls } = scripted(SINCE, null);
++    const intent = new HighPowerIntent(put, 10);
++    intent.observe("an-essay", true, false);
++    intent.want(true);
++    await vi.runAllTimersAsync();
++    intent.want(false);
++    await vi.runAllTimersAsync();
++    expect(calls).toEqual([
++      ["an-essay", true],
++      ["an-essay", false],
++    ]);
++    expect(intent.get()).toEqual({ kind: "off" });
++  });
++
++  it("records whether earlier work may have used the standard model, when it answers", async () => {
++    const { put } = scripted(SINCE);
++    const intent = new HighPowerIntent(put, 10);
++    intent.want(true);
++    intent.observe("an-essay", true, true);
++    await vi.runAllTimersAsync();
++    expect(intent.get()).toEqual({ kind: "on", since: SINCE, lateRisk: true });
++  });
++
++  describe("settle — before the main modes are queued", () => {
++    it("resolves at once and sends nothing when it was never wanted", async () => {
++      const { put, calls } = scripted();
++      const intent = new HighPowerIntent(put, 10);
++      await intent.settle("an-essay");
++      expect(calls).toEqual([]);
++    });
++
++    it("sends a still-waiting intent against the completion's slug, and resolves after it", async () => {
++      const { put, calls } = scripted(SINCE);
++      const intent = new HighPowerIntent(put, 10);
++      intent.want(true);
++      const settled = intent.settle("from-the-completion");
++      expect(intent.get().kind).toBe("saving");
++      await settled;
++      expect(calls).toEqual([["from-the-completion", true]]);
++      expect(intent.get().kind).toBe("on");
++    });
++
++    it("cuts a not-yet retry short and asks now, with a 404 final", async () => {
++      const { put, calls } = scripted(refusal(404), refusal(404, "No article"));
++      const intent = new HighPowerIntent(put, 60_000);
++      intent.observe("an-essay", true, false);
++      intent.want(true);
++      await vi.advanceTimersByTimeAsync(0);
++      expect(intent.get()).toEqual({ kind: "waiting" });
++      await intent.settle("an-essay");
++      expect(calls).toHaveLength(2);
++      expect(intent.get()).toEqual({ kind: "refused", message: "No article" });
++    });
++
++    it("waits for a request already in flight", async () => {
++      let answer: (v: { highPowerSince: string | null }) => void = () => {};
++      const put: PutHighPower = () =>
++        new Promise((resolve) => {
++          answer = resolve;
++        });
++      const intent = new HighPowerIntent(put, 10);
++      intent.observe("an-essay", true, false);
++      intent.want(true);
++      let done = false;
++      void intent.settle("an-essay").then(() => {
++        done = true;
++      });
++      await vi.advanceTimersByTimeAsync(0);
++      expect(done).toBe(false);
++      answer({ highPowerSince: SINCE });
++      await vi.advanceTimersByTimeAsync(0);
++      expect(done).toBe(true);
++    });
++  });
++
++  it("stops retrying once disposed", async () => {
++    const { put, calls } = scripted(refusal(404));
++    const intent = new HighPowerIntent(put, 10);
++    intent.observe("an-essay", true, false);
++    intent.want(true);
++    await vi.advanceTimersByTimeAsync(0);
++    intent.dispose();
++    await vi.runAllTimersAsync();
++    expect(calls).toHaveLength(1);
++  });
++});
++
++describe("mayHaveStartedOnStandard", () => {
++  const step = (name: string, status: string) => ({ name, status });
++  it("is false while only fetch and blocks have moved", () => {
++    expect(mayHaveStartedOnStandard(undefined)).toBe(false);
++    expect(
++      mayHaveStartedOnStandard([step("fetch", "done"), step("extract", "pending"), step("structure", "pending")]),
++    ).toBe(false);
++  });
++  it("is true once extract (capable-tier for a PDF) or anything later has started", () => {
++    expect(mayHaveStartedOnStandard([step("fetch", "done"), step("extract", "running")])).toBe(true);
++    expect(mayHaveStartedOnStandard([step("blocks", "done"), step("structure", "running")])).toBe(true);
++    expect(mayHaveStartedOnStandard([step("structure", "skipped")])).toBe(true);
++  });
++});
+diff --git a/tests/add-page-purpose.test.tsx b/tests/add-page-purpose.test.tsx
+index 2366c1a8c..909984dcd 100644
+--- a/tests/add-page-purpose.test.tsx
++++ b/tests/add-page-purpose.test.tsx
+@@ -98,6 +98,11 @@ vi.mock("../src/web/router.js", async (importActual) => ({
+   navigate: (href: string) => navigations.push(href),
+ }));
+ 
++/** How High-powered AI's PUT answers (plan 261002k). Replaced per test. */
++let putAnswer: () => Promise<Response> = async () =>
++  new Response(JSON.stringify({ highPowerSince: "2026-10-02T23:00:00.000Z" }), { status: 200 });
++const puts = () => events.filter((e) => e.startsWith("put:"));
++
+ /** How the PATCH answers. Replaced per test; the default stores what it was sent. */
+ let patchAnswer: (body: { purpose: string | null }) => Promise<Response> = async (body) =>
+   new Response(JSON.stringify({ purpose: body.purpose?.trim() ?? null }), { status: 200 });
+@@ -106,6 +111,11 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
+   return {
+     ...actual,
+     apiFetch: async (input: string, init: RequestInit = {}) => {
++      if (init.method === "PUT" && input.endsWith("/high-power")) {
++        const body = JSON.parse(String(init.body)) as { on: boolean };
++        events.push(`put:${input.split("/")[3]}:${body.on}`);
++        return putAnswer();
++      }
+       if (init.method === "PATCH" && input.startsWith("/api/library/")) {
+         const body = JSON.parse(String(init.body)) as { purpose: string | null };
+         events.push(`patch:${JSON.stringify(body)}`);
+@@ -250,6 +260,8 @@ beforeEach(() => {
+   source = URL_SOURCE;
+   patchAnswer = async (body) =>
+     new Response(JSON.stringify({ purpose: body.purpose?.trim() ?? null }), { status: 200 });
++  putAnswer = async () =>
++    new Response(JSON.stringify({ highPowerSince: "2026-10-02T23:00:00.000Z" }), { status: 200 });
+   host = document.createElement("div");
+   document.body.appendChild(host);
+   root = createRoot(host);
+@@ -653,3 +665,59 @@ describe.each(PRODUCERS)("the ask-purpose mark (261001s § Stage 3) when $name",
+     expect(mark()).toBeNull();
+   });
+ });
++
++/**
++ * **High-powered AI chosen at import** — plan 261002k. The box sends the
++ * Metadata switch's own PUT; what is pinned here is the page's half: nothing is
++ * sent unless ticked, and **no mode is queued before the switch has answered**
++ * (GPT Sol's plan review P1-3), over all three ways an add finishes — one of
++ * which never had a job, so the intent is sent against the completion's slug.
++ */
++describe.each(PRODUCERS)("High-powered AI at import, when $name", (producer) => {
++  const powerBox = (): HTMLInputElement => {
++    const el = host.querySelector<HTMLInputElement>("[data-add-high-power] input[type=checkbox]");
++    if (!el) throw new Error("no High-powered AI box on the page");
++    return el;
++  };
++
++  it("is offered, off, and sends nothing when left alone", async () => {
++    await producer.start();
++    expect(powerBox().checked).toBe(false);
++    await producer.finish();
++    expect(puts()).toEqual([]);
++    expect(runs()).toEqual(EXPECTED_RUNS());
++  });
++
++  it("ticked, it switches the article on before any mode is queued", async () => {
++    let answer: () => void = () => {};
++    putAnswer = () =>
++      new Promise((resolve) => {
++        answer = () =>
++          resolve(new Response(JSON.stringify({ highPowerSince: "2026-10-02T23:00:00.000Z" }), { status: 200 }));
++      });
++    await producer.start();
++    act(() => powerBox().click());
++    expect(powerBox().checked).toBe(true);
++    await producer.finish();
++    expect(puts()).toEqual([`put:${SLUG}:true`]);
++    expect(navigations, "the navigation waited for the switch").toEqual([`/read/${SLUG}`]);
++    expect(runs(), "a mode was queued before High-powered AI answered").toEqual([]);
++    answer();
++    await settle();
++    expect(runs()).toEqual(EXPECTED_RUNS());
++    expect(events.indexOf(`put:${SLUG}:true`)).toBe(0);
++  });
++
++  it("a refusal still queues the modes, on the standard model", async () => {
++    putAnswer = async () =>
++      new Response(JSON.stringify({ error: "[pay-high-power] Not enough of your allowance left." }), {
++        status: 402,
++      });
++    await producer.start();
++    act(() => powerBox().click());
++    await producer.finish();
++    await settle();
++    expect(puts()).toEqual([`put:${SLUG}:true`]);
++    expect(runs()).toEqual(EXPECTED_RUNS());
++  });
++});
