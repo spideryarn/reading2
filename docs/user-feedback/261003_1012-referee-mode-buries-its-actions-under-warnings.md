@@ -46,4 +46,23 @@ rule sentences inside each panel next ([Q-referee-panel-rules], not built).
 >
 > Q-referee-panel-rules B
 
-The Notices button and the press-to-start Candidates stay as built. **The panels' how-to-read sentences move into hover cards or the (i)**, which is queued as session fb-referee-panel-rules.
+The Notices button and the press-to-start Candidates stay as built.
+
+**The panels' how-to-read sentences moved, the same day**
+([261003m](../plans/261003m-referee-panels-how-to-read-sentences-behind-a-tap-to-open-button.md)).
+Four sentences left the top of Criteria, Claims and Mirror, word for word, for a card behind a small
+***How to read this*** button at the end of each panel's first line. A tap opens it, so a phone
+reader still gets them; hover and keyboard focus open it too. They are what stops a list of passages
+reading as a verdict, so they are one press away rather than gone.
+
+The mode catalog's sentence for Referee was also corrected, because only Claims starts on its chip
+now:
+
+- before: *"This button starts no model call: the sub-modes inside arm themselves, and the one it
+  opens on has nothing to run until you have written a criterion."*
+- after: *"This button starts no model call. Of the chips inside, only Claims can start one; every
+  other run waits for its own button."*
+
+The second half of the old sentence went too. GPT Sol's review found it was not true either: the
+mode reopens on whichever sub-mode you last used, so the panel it opens on need not be waiting for
+a criterion.

@@ -1,0 +1,242 @@
+[
+ {
+  "n": 1,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 4
+ },
+ {
+  "n": 2,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 4
+ },
+ {
+  "n": 3,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 3
+ },
+ {
+  "n": 4,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 4
+ },
+ {
+  "n": 5,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 1
+ },
+ {
+  "n": 6,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 3
+ },
+ {
+  "n": 7,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 3
+ },
+ {
+  "n": 8,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 3
+ },
+ {
+  "n": 9,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 1
+ },
+ {
+  "n": 10,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 2
+ },
+ {
+  "n": 11,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 2
+ },
+ {
+  "n": 12,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 5
+ },
+ {
+  "n": 13,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 2
+ },
+ {
+  "n": 14,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 1
+ },
+ {
+  "n": 15,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 2
+ },
+ {
+  "n": 16,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 2
+ },
+ {
+  "n": 17,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 4
+ },
+ {
+  "n": 18,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 3
+ },
+ {
+  "n": 19,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 5
+ },
+ {
+  "n": 20,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 5
+ },
+ {
+  "n": 21,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 5
+ },
+ {
+  "n": 22,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 5
+ },
+ {
+  "n": 23,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 2
+ },
+ {
+  "n": 24,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 5
+ },
+ {
+  "n": 25,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 4
+ },
+ {
+  "n": 26,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 3
+ },
+ {
+  "n": 27,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 1
+ },
+ {
+  "n": 28,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 4
+ },
+ {
+  "n": 29,
+  "run": "261003l-explore-noema-rev2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 1
+ },
+ {
+  "n": 30,
+  "run": "261003l-explore-agents-rev2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 1
+ }
+]

@@ -95,6 +95,20 @@ function runLabel(api: MirrorApi): string {
   return api.result ? "Read them again" : "Read my comments back to me";
 }
 
+/**
+ * **How to read this panel**: the honest description of the input rather than
+ * a promise about the output. This call is not given the article, so "it says
+ * nothing about the paper" is a fact about what went to the model.
+ * src/referee-mirror.ts § the three constraints.
+ *
+ * Visible text above the button until 2026-10-03, when Greg chose to move each
+ * panel's how-to-read sentences behind a button (plan 261003m). Exported for
+ * `HowToRead` in modes/referee/RefereeMode.tsx, which is where it is drawn.
+ */
+export const MIRROR_IS_NOT_GIVEN_THE_PAPER =
+  "The model reads your own comments and remarks on them. It is not given the paper, and it " +
+  "says nothing about whether the paper is any good.";
+
 export function MirrorView({
   api,
   onJump,
@@ -104,15 +118,9 @@ export function MirrorView({
 }) {
   return (
     <div className="mir">
-      {/* Above the button, and it is the honest description of the input rather
-          than a promise about the output: this call is not given the article, so
-          "it says nothing about the paper" is a fact about what went to the
-          model. src/referee-mirror.ts § the three constraints. */}
-      <p className="mir-what">
-        The model reads your own comments and remarks on them. It is not given the paper, and it
-        says nothing about whether the paper is any good.
-      </p>
-
+      {/* `MIRROR_IS_NOT_GIVEN_THE_PAPER` opened the panel here until
+          2026-10-03; it is behind the band's *How to read this* button now
+          (RefereeMode.tsx § HowToRead). */}
       <button
         type="button"
         className="mir-run"

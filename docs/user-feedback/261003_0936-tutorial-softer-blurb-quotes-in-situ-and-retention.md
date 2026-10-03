@@ -56,6 +56,34 @@ The Tutorial prompt now puts what the author says first and rations questions ab
 view. Measured before and after on two articles: such questions fell from 19 of 60 turns to 6 of 60
 ([261003c](../investigations/261003c-tutorial-prompt-leans-to-retention.md)).
 
-Deferred, and queued as `qi-pbskakrj`, waiting on Greg: the Exploration sub-mode. It was not small
-enough to build unasked. The plan's Stage 3 gives three ways to do it and recommends starting with a
-Chat tool that knows his comments, highlights and threads.
+**The Exploration sub-mode is built** (queue item `qi-pbskakrj`), on `dev`, not deployed. Offered
+a Chat tool (B), a fourth Remember chip (A), or B then A, Greg answered:
+
+> Q-explore B and A
+
+and then reframed the chip before it was started:
+
+> With regard to Explore sub-mode, I'm not sure that "pushier" is quite the right way to frame it.
+> It's more that it's about helping me to think, explore & spark new ideas of my own and deepen my
+> intuitions and apply to interesting cases of my own (if relevant, e.g. based on "Why you're reading
+> this"), and a bit less about remembering specifically what's in the article. So it may also be that
+> Explore submode also makes more web searches, to situate the article in terms of the wider world.
+
+Both are built, in
+[261003l](../plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md):
+
+- **Chat can read his notes.** Asked what he has marked, what he thinks, or about an earlier
+  conversation, Chat now reads his comments, highlights and bookmarks on the article and a list of
+  his other conversations on it, and can read one of those. Only his own, only this article.
+- **Explore**, a fourth chip in Remember: Recall · Tutorial · Explore · Quiz. Its own single
+  conversation. Every turn is given his notes and conversations, starts from something he marked,
+  makes one move (a question, a case of his own, a connection, or what others say, searched and
+  linked), and is brief. No Live voice yet, as in Tutorial.
+
+Measured against Chat with the new tool, on two articles
+([261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md)):
+Explore's replies are half the length (138 words against 288), start from his notes every time,
+and search and link every time he asks what others say. **It did not beat Chat on the number
+meant to lead**: a blind judge called 93% of Explore's replies "about the reader's thinking" and
+87% of Chat's. Asked to be a thinking partner, Chat is one too; the difference is the shape of a
+turn.

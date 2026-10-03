@@ -1965,6 +1965,30 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "entirely Postgres. Its reach into the condemned modules is the seeder's copy step, as for " +
       "`tests/glossary-hidden-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/reader-notes-owner-isolation.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with chat's `reader_notes` tool (plan 261003l, 2026-10-03). " +
+      "It seeds two articles under two owners with `scratchArticleInPg`, writes comments and one " +
+      "finished conversation on each through the stores, and runs the tool as each owner against " +
+      "the other's slug and thread id — entirely Postgres. Its reach into the condemned modules is " +
+      "the seeder's copy step, as for `tests/glossary-added-term.test.ts`. Read off the graph, not " +
+      "re-witnessed.",
+  },
+  "tests/explore-digest-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with Explore, Remember's fourth sub-mode (plan 261003l stage " +
+      "2, 2026-10-03). It seeds one article with `scratchArticleInPg`, writes a comment and " +
+      "finished conversations through the stores, posts chat turns with `fetch` stubbed to keep " +
+      "the request body and fail, and reads what would have been sent — entirely Postgres. Its " +
+      "reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/reader-notes-owner-isolation.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/reset-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2796,6 +2820,15 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      looked-up term, hiding it, the owner's read and the public read, reading
      rows back out of `glossary_lookups`. No model is called. */
   "tests/glossary-added-term.test.ts": "private-postgres",
+  /* Chat's `reader_notes` tool, 261003l. Seeds two articles under two owners,
+     writes comments and a finished conversation on each through the stores, and
+     runs the tool (and Live's tool endpoint) as one owner against the other's
+     slug and thread id. No model is called. */
+  "tests/reader-notes-owner-isolation.test.ts": "private-postgres",
+  /* Explore's notes digest, 261003l stage 2. Seeds one article, a comment and
+     finished conversations of several kinds, and posts chat turns through the
+     route with `fetch` stubbed to keep the request and fail. No model is called. */
+  "tests/explore-digest-route.test.ts": "private-postgres",
   /* Claims and settles guessed web addresses on a bare article, seeds one more
      to read both payloads, and drives the route to its 409. No model is called. */
   "tests/source-guess-pg.test.ts": "private-postgres",

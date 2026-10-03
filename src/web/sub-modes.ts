@@ -1,6 +1,6 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
- * band: Remember's Recall | Tutorial | Quiz, Diagram's five pictures, Referee's four views,
+ * band: Remember's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's four views,
  * Summary's Brief | Fuller | Thread.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):
@@ -67,7 +67,7 @@ export interface SubModeWords {
   readonly aliases?: readonly string[];
 }
 
-/** Remember's three parts. The chip's words, QuizPanel.tsx § `RememberSubModeToggle`. */
+/** Remember's four parts. The chip's words, QuizPanel.tsx § `RememberSubModeToggle`. */
 export const REMEMBER_SUB_MODES: Readonly<Record<RememberView, SubModeWords>> = {
   recall: {
     label: "Recall",
@@ -77,6 +77,11 @@ export const REMEMBER_SUB_MODES: Readonly<Record<RememberView, SubModeWords>> = 
   tutorial: {
     label: "Tutorial",
     description: "Short turns: a little of the piece at a time, then a question for you to answer in your own words",
+    experimental: false,
+  },
+  explore: {
+    label: "Explore",
+    description: "Think it through for yourself: starts from what you have marked and discussed, and looks beyond the piece",
     experimental: false,
   },
   quiz: {
@@ -262,8 +267,8 @@ export function subModeParams(sub: SubMode): SubModeParams {
   switch (sub.mode) {
     case "remember": {
       /* Each view by name: Recall is the default and so absent, Quiz clears
-         `thread` (rule 1), and Tutorial keeps it as Recall does — its band
-         overrules a stale one and writes its own. Mapping "not quiz" to Recall
+         `thread` (rule 1), and Tutorial and Explore keep it as Recall does —
+         each band overrules a stale one and writes its own. Mapping "not quiz" to Recall
          was right with two views and silently wrong with three. */
       const view = sub.view;
       switch (view) {
@@ -271,6 +276,8 @@ export function subModeParams(sub: SubMode): SubModeParams {
           return { mode: "remember", remember: "quiz", thread: null };
         case "tutorial":
           return { mode: "remember", remember: "tutorial" };
+        case "explore":
+          return { mode: "remember", remember: "explore" };
         case "recall":
           return { mode: "remember", remember: null };
         default: {

@@ -311,11 +311,11 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   referee: {
     kind: "none",
     reason:
-      "opens on Criteria, which has nothing to run until the referee has written one; the chips arm themselves",
+      "opens a panel without starting a model call; only the Claims chip can arm a run",
   },
   remember: {
     kind: "none",
-    reason: "opens on Recall, which waits on the reader's own words (so does Tutorial); the Quiz chip arms itself",
+    reason: "opens on Recall, which waits on the reader's own words (so do Tutorial and Explore); the Quiz chip arms itself",
   },
 };
 

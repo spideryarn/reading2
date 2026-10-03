@@ -8,13 +8,16 @@ one of them links to. It can now, through a **tool loop**: the model asks for a 
 server runs it, the result goes back into the same conversation, and the model answers.
 
 Code: [`src/chat-tools.ts`](../../src/chat-tools.ts) (what a tool is, and the only place one runs),
+[`src/reader-notes.ts`](../../src/reader-notes.ts) (the reader's notes and conversations, written
+out for a model),
 [`src/converse.ts`](../../src/converse.ts) (`converse`, the loop — and `accumulateToolCalls`),
 [`src/routes.ts`](../../src/routes.ts) § `streamChat` (the `tool` frame),
 [`src/web/useChat.ts`](../../src/web/useChat.ts) (assigning by index),
 [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) § `ToolStrip`.
 The buttons an answer can offer are not tools and have their own files —
 [§ Command buttons](#command-buttons-chat-proposes-the-reader-presses).
-Tests: [`tests/chat-tools.test.ts`](../../tests/chat-tools.test.ts).
+Tests: [`tests/chat-tools.test.ts`](../../tests/chat-tools.test.ts), and
+[`tests/reader-notes-tool.test.ts`](../../tests/reader-notes-tool.test.ts) for the ninth.
 Built on top of [260826a-chat-mode.md](../plans/260826a-chat-mode.md), which is where the panel and the citation
 contract come from.
 
@@ -71,7 +74,7 @@ improved by work that is already planned, and the seam it goes behind is `librar
 in [`src/store/`](../../src/store/index.ts) — a store contract, so the semantic matcher lands there
 and this file does not change.
 
-## The eight, and the filter they had to pass
+## The nine, and the filter they had to pass
 
 > **Does it send the reader somewhere they could not otherwise get to?**
 
@@ -85,6 +88,11 @@ and this file does not change.
 | `article_links` | The hyperlinks **this** article contains: which blocks each sits in, the author's words for it, where it goes | The address behind a link is the one thing about this article the prompt does not carry. Without it the model has a fetching tool and nothing to point it at — see [The links the prompt does not carry](#the-links-the-prompt-does-not-carry) |
 | `article_glossary` | This article's [glossary](glossary.md), if one has been generated | So an answer about a term agrees with what the app has already told the reader, rather than quietly contradicting it |
 | `article_citations` | The works **this** article cites, from its stored [citations](citations.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
+| `reader_notes` | The reader's own comments, highlights and bookmarks on **this** article, and a list of their other conversations about it. Given a conversation's id as `thread`, that conversation | The reader's own thinking about the piece is the one thing about this article the prompt does not hold. **Typed Chat only**: it is not in `CHAT_TOOLS`. See [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) |
+
+**Eight of the nine are `CHAT_TOOLS`**, the list every kind of conversation and Live share. The
+ninth is added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts), for the kinds
+that function names and no others.
 
 **There is no `summarise_article` tool and there should never be one.** The whole article is in the
 prompt on every turn, so it would be a model call to do a thing the model can already do — wearing a
@@ -231,7 +239,131 @@ Four decisions, each from GPT Sol's plan review
 **It reaches every mode that shares `CHAT_TOOLS`** — typed Chat, Remember, Candidates and Live —
 deliberately: it is read-only and article-local, and a per-kind tool list is more machinery than
 that warrants. It does not widen what `read_web_page` may fetch; the citation URLs are one of the
-sets the allowlist in [§ Still open](#still-open) would use.
+sets the allowlist in [§ Still open](#still-open) would use. *(A per-kind list did arrive, on
+2026-10-03, for the tool in the next section. This one stays in the shared eight.)*
+
+## The reader's notes: the one tool not every conversation gets
+
+**Built 2026-10-03**, the first half of
+[261003l](../plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md). The report
+that asked for it, `spya-mtsf0y`:
+
+> ideally the exploration submode would have access to my comments, my highlights, my chat threads,
+> and so it would know what discussions I've had so far and try and push me to think further about
+> the things that are interesting to me.
+>
+> — Greg, 2026-10-03
+
+Explore is that plan's second stage
+([remember-mode.md § Explore, the fourth sub-mode](remember-mode.md#explore-the-fourth-sub-mode)).
+This is the plumbing it needs, and Chat got it first.
+
+`reader_notes` is one read-only tool with two shapes of call:
+
+```
+reader_notes()                    → the reader's comments, highlights and bookmarks on this
+                                    article, then a list of their other conversations about it
+reader_notes({ thread: "<id>" })  → one of those conversations
+```
+
+The formatting is [`src/reader-notes.ts`](../../src/reader-notes.ts): pure functions with no store
+in them, so the arithmetic is tested without a database
+([`tests/reader-notes-tool.test.ts`](../../tests/reader-notes-tool.test.ts)) and Explore puts
+`readerNotesDigest` in its final user message without a tool call. The loader in `chat-tools.ts` is two store
+reads and what to say when one fails.
+
+**What a call returns**, and each line is a decision:
+
+- **Notes in article order**, not the order they were made: the model holds the article, so that
+  is the order it can follow. Each row has the block id, the words the reader selected (clipped to
+  `NOTE_QUOTE_CHARS`, 200), the reader's own note (clipped to `NOTE_BODY_CHARS`, 400), and when it
+  was made. At most `MAX_NOTE_ROWS` (40) rows and `NOTES_CHARS` (6,000) characters.
+- **A comment's stored answer is never passed through.** It can hold web text, and the reader's own
+  words are what this is for. The row says only that there is one.
+- **The index of conversations is capped too**: `MAX_THREAD_ROWS` (20), titles clipped to
+  `THREAD_TITLE_CHARS` (80), `THREADS_CHARS` (3,000), newest first. The first plan left it
+  uncapped, and a reader can make any number of chats (GPT Sol's plan review, PR-2).
+- **One budget over the complete answer**, `READER_NOTES_CHARS` (8,000), including the escaped
+  rows, headings and fences. It is smaller than the two row budgets added up, so a full list of
+  notes squeezes the index and cannot starve it.
+- **Every cap is announced and every total is exact**:
+  [§ The bug that shaped the literal search](#the-bug-that-shaped-the-literal-search). **And the
+  budgets are hard ones.** `article_links` lets its first row out whatever its length; here every
+  field is bounded and nothing goes out over budget, because Explore sends the digest on every
+  turn.
+- **Candidates threads and the conversation the turn is in are left out**, of the count as well as
+  the rows. Candidates is Referee machinery, not the reader's thinking; the current conversation is
+  already in front of the model. `ToolContext.threadId` is how the tool knows which that is, and
+  the route passes the stored thread's id, never the request's.
+- **A direct read obeys the same rule as the index.** Naming a Candidates thread's id gets the
+  sentence an unknown id gets, word for word. The current thread's id gets its own sentence. None
+  of them throws.
+- **One conversation is its finished exchanges, as whole pairs.** The newest
+  `MAX_TRANSCRIPT_EXCHANGES` (10) that fit `TRANSCRIPT_CHARS` (8,000) including headings and
+  fence, each turn clipped to `TRANSCRIPT_TURN_CHARS` (700) and carrying its time, shown oldest first.
+- **An unfinished turn is never shown as a finished one** (PR-4). A failed answer keeps its partial
+  prose in storage, and an interrupted spoken one keeps words nobody heard. So failed, pending and
+  interrupted exchanges are left out and counted in a sentence. An answer the reader stopped, or one
+  cut off at the length limit, is shown and labelled. The rule is `settledExchanges`, and
+  `recentHistory` in `converse.ts` is now built on the same function, so the model's own history
+  and this transcript cannot come to mean different things by "what was said".
+- **Stored text is fenced, on one line per field.** Rows go inside `untrusted()`; the sentences
+  above them stay outside, and one says which words are the reader's own. Each stored field has its
+  whitespace collapsed first, so a note with a newline in it cannot start a line that looks like one
+  of our rows.
+
+**Who gets it: typed Chat and Explore.** It is not in `CHAT_TOOLS`. `toolsFor(kind)` returns the
+shared eight plus this for `chat` and `explore`, and the shared eight for every other kind; the
+`switch` is exhaustive, so a new kind has to be given an answer. Chat reaches for it when the reader
+asks what they marked or said. **Explore has the notes and the list already**, sent with every turn
+(remember-mode.md § The notes go with every turn), so there the tool is for reading one earlier
+conversation in full. Why each of the others is left out (PR-3):
+
+- **Live** shares `CHAT_TOOLS`, and its tool endpoint is given a tool's name and an article and no
+  thread. It could not leave the current conversation out, and it is callable on its own.
+- **Recall and Tutorial** are about the article, and their prompts say not to guess how far the
+  reader has got. A tool that tempts them off that job is better withheld than argued with in the
+  prompt. Either can be added later, with a check of how it behaves.
+- **Candidates** is Referee machinery.
+
+**The offer is not the gate.** `runTool` asks `toolsFor` again on the tool's own `case`, and a
+caller that names no kind has the shared eight. So a Recall model that asks for `reader_notes`
+anyway is told there is no such tool, and so is Live's endpoint, which also refuses the name before
+that because `LIVE_SERVER_TOOLS` is built from `CHAT_TOOLS`. Each guard was switched off and the
+tests watched go red.
+
+**Whose notes.** The tool is handed a slug and never an owner. `commentStore.load` and
+`chatStore.load` resolve the slug through the article's owner before they read a child row
+(`ownedSlug` in [`src/store/pg.ts`](../../src/store/pg.ts)), so another reader's slug is a 404 from
+the store, which the tool reports as *could not be read*. A thread is found only among the threads
+that load returned for this article, never by id alone.
+[`tests/reader-notes-owner-isolation.test.ts`](../../tests/reader-notes-owner-isolation.test.ts)
+has two owned articles and one owner asking with the other's slug and thread id.
+
+**What it adds to the risk, said plainly.** Until this tool, everything chat could read was the
+article, the web, or the reader's shelf. This is the first thing that is private to the reader and
+not already in the prompt. A page that has injected the model can now ask it to read the notes and
+then to fetch a URL that carries one. **`MAX_URL_QUERY_CHARS` does not prevent that.** It caps the
+query and fragment, which bounds how much can leave in one request; a short note fits in a URL's
+*path*, which that cap does not look at, and the whole-URL cap is 2,048 characters. So the bound is
+on bulk, and a single note can still leave. The tool's description tells the model never to put
+what it read in a search or a URL, which is advice to a model and not a boundary. The fix is the
+same allowlist as before ([§ Still open](#still-open)), and this is one more thing waiting on it.
+
+**The strip and the log.** The row reads *read your notes on this article* / *7 notes, 3
+conversations*, or *read one of your earlier conversations* / *4 exchanges*: counts, and no note,
+title or thread id, because `ToolRun` is stored on the message. The log line has the slug and the
+same counts.
+
+**The prompt** gained one bullet in `SYSTEM`'s tool list: read the notes when the reader asks what
+they think, what they marked, or about an earlier conversation, and not otherwise.
+
+**Passed over**: putting the notes into every Chat turn's final message with no tool. It costs
+tokens on every turn for the many questions that do not need them, and it gives nowhere to read one
+earlier conversation on request.
+
+**Not checked yet**: whether Chat reaches for it when it should and leaves it alone when it should
+not. The plan's eval is in its second stage.
 
 ## The loop, and the three things that are not obvious
 
@@ -360,6 +492,11 @@ allowlist — and `articleLinks` is exported precisely because it is the first o
 allowlist needs, so the day somebody builds it, it is a set-membership test rather than a second HTML
 parse that can disagree with this one.
 
+**And `reader_notes` gives that channel something new to carry**: the reader's own notes, which the
+query cap bounds in bulk and does not keep in.
+[§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) has the
+arithmetic.
+
 What *does* still hold, and is worth keeping true: nothing chat can call writes a file, deletes
 anything, or spends money. That is the reason the write tools below are not built yet — the first one
 that writes turns "an injected page made the answer wrong" into "an injected page changed the
@@ -389,6 +526,10 @@ argues…"* untouched, because it is the answer.
 
 So the sharing inventory cannot tell an owner what publishing a conversation would reveal, and
 neither can we: it depends on what the model happened to reach for, in each turn, months ago.
+
+**Since 2026-10-03 `reader_notes` is a second reason of the same shape**: an answer can now
+paraphrase a private note, or something said in another conversation, and that too is in the prose
+of the one column a shared transcript would have to publish.
 
 **What would have to be true before chat is shareable**, none of which is built:
 
@@ -424,6 +565,10 @@ a fact about what the reader was asking, and a path can carry the question in it
 `article_links` logs the slug and two counts (`total`, `shown`) and no link text or address — the
 addresses in an article are a fact about what the reader is reading, and one of them is the article
 itself.
+
+`reader_notes` logs the slug and counts: how many notes and conversations there are and how many
+were shown, or for one conversation whether it was found and how many exchanges. Never a note, a
+quote, a title, or which conversation was read.
 
 Two new fields on the answer's log line: `rounds` (how many times the whole article was re-sent) and
 `tools` (how many calls that bought). `rounds: 4` on a run of answers means the model is going round
@@ -612,7 +757,7 @@ answer can end in a button — *Bookmark this passage*, *Add the tag “methods�
 “X”*, *Find “X” in this article*, *Look up “X” in this article* — which is **the command bar's own
 row**, drawn the same way, `generates` marker included
 ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). It is not
-a ninth tool, and that is the point.
+another tool, and that is the point.
 
 **The rule it is built to** is the one Greg accepted on 2026-10-02
 ([chat-llm-help-commands-vision.md § Decided](chat-llm-help-commands-vision.md#decided)): the model
@@ -644,7 +789,7 @@ prompt.
   ([`command-runners.ts`](../../src/web/command-runners.ts)): the reading view's own runners by
   reference — the memoised bookmarker, the gated glossary pair — never a copy made for chat. No
   runner yet (the comments read still out) is a disabled button, not raw brackets.
-- **Who gets them.** Chat and the passage chat dialog, the owner's. Remember, Tutorial and
+- **Who gets them.** Chat and the passage chat dialog, the owner's. Remember, Tutorial, Explore and
   Candidates get no executor and their prompts no section, so a token there is text; Live's spoken
   prompt has none either, and `tests/chat-command-chips-prompt.test.ts` holds that.
 - **A token is never citation text**, valid or not, on both sides: `citableText`
@@ -667,7 +812,7 @@ shown a button, not a token. A token that was drawn as text is copied as text.
 ## Not built, and worth building
 
 Greg's list, with a recommendation each so nobody is blocked. All three are **writes**, which is the
-line the eight above deliberately do not cross — see the security section. A write that the reader
+line the nine above deliberately do not cross — see the security section. A write that the reader
 presses now has a shape ([§ Command buttons](#command-buttons-chat-proposes-the-reader-presses)),
 and **bookmark a passage** and the reader's **tags** are built that way.
 
