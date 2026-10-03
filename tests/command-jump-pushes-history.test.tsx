@@ -13,7 +13,8 @@
  * that says the words, and Back on the address the reader had. The last test
  * reads Reader.tsx itself, since mounting it drags in the whole page
  * (tests/glossary-band-wiring.test.ts § the same honest label): a wiring
- * check that the executor's `jump` is `jumpTo`.
+ * check that the executor's `jump` is `jumpTo`, and that its paid glossary
+ * path receives only the ready, visible glossary.
  *
  * The fake viewport is tests/reading-position-holds-across-a-reflow.test.tsx's.
  */
@@ -184,12 +185,24 @@ describe("Jump to the first “X”, from the command bar", () => {
 });
 
 describe("the reading view's wiring (source-level, and labelled as such)", () => {
-  it("hands the executor `jumpTo` itself — not a band jump, and not a write to ?at=", async () => {
+  it("hands the executor the deliberate jump and only the ready, visible glossary", async () => {
     const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
     const reader = await readFile(path.join(repo, "src/web/reader/Reader.tsx"), "utf8");
     const call = /readingExecutor\(\{[\s\S]*?\n {6}\}\)/.exec(reader)?.[0] ?? "";
     expect(call, "Reader.tsx no longer builds its executor with readingExecutor").not.toBe("");
     expect(call).toMatch(/\bjump: jumpTo,/);
+    /* The ask must not exist while the read is loading, failed or says there
+       is no glossary. Otherwise opening the band can generate a glossary while
+       the hand-off starts a second paid lookup (F1). */
+    expect(reader).toMatch(
+      /const glossaryReady = glossaryRead\?\.status === "ready" && glossaryRead\.glossary !== null;/,
+    );
+    expect(call).toMatch(/\bready: glossaryReady,/);
+    /* `command-proposal` can only enforce visibility against the list it is
+       handed. Hold Reader's half too: `terms` is `shownEntries(allTerms)`,
+       while `allTerms` still contains entries the owner hid (F2). */
+    expect(call).toMatch(/\bterms,/);
+    expect(call).not.toMatch(/\bterms: allTerms\b/);
     /* And the ask's move to Glossary is the plain setter, which arms no
        generate-on-open (F1) — the Dock's `onMode` is the press that does. */
     expect(call).toMatch(/openGlossary: \(\) => void setMode\("glossary"\),/);

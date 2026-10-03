@@ -117,7 +117,7 @@ let patchAnswer: () => Response;
 /** Every tags PATCH body, the tags the server holds, and a refusal when one is staged. */
 let tagPatches: unknown[];
 let storedTags: string[];
-let tagAnswer: (() => Response) | null;
+let tagAnswer: (() => Response | Promise<Response>) | null;
 let host: HTMLDivElement;
 let root: Root;
 
@@ -398,6 +398,38 @@ describe("the command bar's Metadata rows, on this page", () => {
     expect(status()).toContain("An article can carry at most 30 tags.");
     expect(host.querySelector<HTMLDialogElement>("dialog.cmdbar")?.open).toBe(true);
     expect(chips()).toEqual(["Remove the tag philosophy"]);
+  });
+
+  it("refuses a command-bar tag edit while the page's tag editor is still saving", async () => {
+    let finishSave!: (response: Response) => void;
+    tagAnswer = () =>
+      new Promise<Response>((resolve) => {
+        finishSave = resolve;
+      });
+    await open("");
+
+    const editor = host.querySelector<HTMLInputElement>('main input[aria-label="Add a tag"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter?.call(editor, "neuroscience");
+      editor?.dispatchEvent(new Event("input", { bubbles: true }));
+      editor?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(tagPatches).toEqual([{ add: ["neuroscience"] }]);
+
+    command("tag reading group");
+    await settle();
+
+    expect(tagPatches, "the shared controller admits one write at a time").toEqual([
+      { add: ["neuroscience"] },
+    ]);
+    expect(status()).toContain("Still saving the last tag change");
+    expect(host.querySelector<HTMLDialogElement>("dialog.cmdbar")?.open).toBe(true);
+
+    finishSave(json({ tags: storedTags }));
+    await settle();
+    expect(chips()).toEqual(["Remove the tag philosophy", "Remove the tag neuroscience"]);
   });
 });
 

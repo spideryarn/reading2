@@ -680,6 +680,10 @@ export function Metadata({
    * One derivation rather than the same two terms written out at each site.
    */
   const hasShelfRow = provenance !== null && !showingFixture;
+  /* The TagEditor and command bar share `saveTags`, so their admission record
+     has to live here too. React state would update a render later and admit
+     two presses in one tick; a ref closes the gate before the request leaves. */
+  const tagSaveInFlight = useRef(false);
   /**
    * **The one save of this article's tags on this page** — the `TagEditor`'s,
    * and since 2026-10-03 the command bar's *Add the tag* / *Remove the tag*
@@ -689,13 +693,19 @@ export function Metadata({
    */
   const saveTags = useCallback(
     async (change: TagChange): Promise<string[]> => {
-      const tags = await editArticleTags(slug, change);
-      /* A metadata GET already in flight may have read the old tags. Let it
-         finish, then repair it from the server; with no GET in flight the
-         PATCH answer already is the freshest answer. */
-      armRefresh();
-      setProvenance((p) => (p && p.slug === slug ? { ...p, tags } : p));
-      return tags;
+      if (tagSaveInFlight.current) throw new Error("Still saving the last tag change — a moment.");
+      tagSaveInFlight.current = true;
+      try {
+        const tags = await editArticleTags(slug, change);
+        /* A metadata GET already in flight may have read the old tags. Let it
+           finish, then repair it from the server; with no GET in flight the
+           PATCH answer already is the freshest answer. */
+        armRefresh();
+        setProvenance((p) => (p && p.slug === slug ? { ...p, tags } : p));
+        return tags;
+      } finally {
+        tagSaveInFlight.current = false;
+      }
     },
     [slug, armRefresh],
   );

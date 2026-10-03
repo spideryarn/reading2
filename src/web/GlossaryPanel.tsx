@@ -1661,11 +1661,17 @@ function AskATerm({
     const timer = setTimeout(() => {
       const asked = takeGlossaryAsk(owner.slug, handOff);
       if (asked === null) return;
+      /* The command is a new lookup, just as editing this box and pressing Look
+         up again is. Disown an older stream before asking: `ask` deliberately
+         admits only one request, so without this a command pressed over a live
+         lookup was consumed and then dropped while the old answer carried on
+         under the new term. */
+      clearAsked();
       setTerm(asked);
       void ask(asked);
     }, 0);
     return () => clearTimeout(timer);
-  }, [handOff, owner.slug, ask]);
+  }, [handOff, owner.slug, ask, clearAsked]);
 
   return (
     <div className="gloss-ask">

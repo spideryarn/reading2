@@ -55,7 +55,9 @@ describe("RISK", () => {
 describe("the stored token", () => {
   const every: CommandProposal[] = [
     { id: "jump-first", words: "free energy" },
-    { id: "find", words: 'rock & roll # "λ"' },
+    /* The tail is exactly what `encodeURIComponent` leaves alone and Markdown
+       can interpret. The token's tighter encoder must hide every character. */
+    { id: "find", words: 'rock & roll # "λ" _*()!~.' },
     { id: "glossary-open", termId: TERM_A },
     { id: "glossary-ask", term: "active inference" },
     { id: "tag-add", tag: "reading group" },

@@ -436,6 +436,7 @@ describe("dictation in the box", () => {
     type("experimental");
     mic.armed = true;
     type("experimental ");
+    expect(rows().every((row) => row.getAttribute("aria-disabled") === "true")).toBe(true);
     press("Enter");
     rowNamed("Turn experimental features on")?.click();
     await settle();

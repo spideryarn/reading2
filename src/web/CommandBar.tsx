@@ -1610,11 +1610,17 @@ export function CommandBar({
               <div
                 key={commandId(command)}
                 id={`${listId}-${commandId(command)}`}
-                className={`cmdbar-row tw:flex tw:cursor-pointer tw:items-baseline tw:gap-2 tw:rounded tw:px-3 tw:py-2 tw:text-sm ${
+                className={`cmdbar-row tw:flex tw:items-baseline tw:gap-2 tw:rounded tw:px-3 tw:py-2 tw:text-sm ${
+                  dictationBusy ? "tw:cursor-default tw:opacity-50" : "tw:cursor-pointer"
+                } ${
                   at === index ? "on tw:bg-accent tw:text-ink" : "tw:text-ink-soft"
                 }`}
                 role="option"
                 aria-selected={at === index}
+                /* The activation guard is the lock; this is the reader-facing
+                   half of it. A highlighted row that silently ignores Enter
+                   while the microphone is involved looks broken. */
+                aria-disabled={dictationBusy || undefined}
                 /* **Which kind of row this is, readable from the outside.** Not
                    styling — the two kinds are drawn identically on purpose, so
                    that going somewhere and changing the band feel like one

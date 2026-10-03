@@ -31,6 +31,9 @@ const frame = (event: string, data: unknown) => enc.encode(`event: ${event}\ndat
 let requests: string[] = [];
 /** Every job the band asked the queue for. */
 let jobPosts: unknown[] = [];
+/** Keep the next ask open, to stage a command-bar press over an existing lookup. */
+let holdNextAsk = false;
+let heldAskSignal: AbortSignal | null = null;
 
 function listResponse(): GlossaryResponse {
   const entry = {
@@ -54,6 +57,17 @@ vi.mock("../src/web/lib/api.js", () => {
     apiFetch: async (input: string, init?: RequestInit) => {
       requests.push(`${init?.method ?? "GET"} ${input}`);
       if (input.endsWith("/ask")) {
+        if (holdNextAsk) {
+          holdNextAsk = false;
+          heldAskSignal = init?.signal ?? null;
+          await new Promise<never>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              "abort",
+              () => reject(new DOMException("The operation was aborted.", "AbortError")),
+              { once: true },
+            );
+          });
+        }
         const body = new ReadableStream<Uint8Array>({
           start(c) {
             c.enqueue(frame("begin", { term: "attention head", blockId: BLOCK, quote: "Attention Heads" }));
@@ -129,6 +143,8 @@ let root: Root;
 beforeEach(() => {
   requests = [];
   jobPosts = [];
+  holdNextAsk = false;
+  heldAskSignal = null;
   resetGlossaryAskForTests();
   resetActivations();
   history.replaceState(null, "", `/read/${SLUG}?mode=glossary&sort=document`);
@@ -161,6 +177,16 @@ const asks = () => requests.filter((r) => r === `POST /api/glossary/${SLUG}/ask`
 const jobRequests = () => requests.filter((r) => r.startsWith("POST") && r.includes("/api/jobs"));
 const box = () => host.querySelector<HTMLInputElement>('input[aria-label="Look up a term in this article"]');
 
+function askFromBox(term: string): void {
+  const input = box();
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  act(() => {
+    setter?.call(input, term);
+    input?.dispatchEvent(new Event("input", { bubbles: true }));
+    input?.closest("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+  });
+}
+
 /** The bar's press, as the reading view builds it — `openGlossary` is a plain move. */
 async function pressLookUp(slug: string, term: string): Promise<void> {
   const runners = glossaryRunners({
@@ -187,6 +213,25 @@ describe("a Look up press from the bar, on an article with a ready glossary", ()
     await pressLookUp(SLUG, "attention head");
     await mount();
     expect(box()?.value).toBe("attention head");
+  });
+
+  it("supersedes a lookup already in flight instead of dropping the command", async () => {
+    await mount();
+    holdNextAsk = true;
+    askFromBox("first term");
+    await settle();
+    expect(asks()).toHaveLength(1);
+    expect(heldAskSignal?.aborted).toBe(false);
+
+    await pressLookUp(SLUG, "second term");
+    await settle();
+
+    expect(heldAskSignal?.aborted, "the command disowns the lookup it replaces").toBe(true);
+    expect(asks()).toEqual([
+      `POST /api/glossary/${SLUG}/ask`,
+      `POST /api/glossary/${SLUG}/ask`,
+    ]);
+    expect(box()?.value).toBe("second term");
   });
 });
 
