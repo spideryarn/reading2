@@ -25,6 +25,17 @@
  * columns that say they *can* be hidden — `enableHiding: false` on Article and
  * Actions in library-columns.tsx — and those two can never come back out of
  * here, whatever the store holds.
+ *
+ * ## A column that starts hidden
+ *
+ * Published (library-columns.tsx, `meta.startsHidden`) is hidden until the
+ * reader shows it: a sixth data column made the table wider than the page on a
+ * desktop and pushed Actions out of sight (plan 261003m). A list of *hidden*
+ * ids cannot say "shown", and a list saved before the column existed does not
+ * name it — which must not read as "show it". So the readers who turned one on
+ * are remembered under a second key, and a column that starts hidden is hidden
+ * unless it is named there. The first key keeps its meaning and its contents:
+ * only columns that start shown are ever written to it.
  */
 import { useCallback, useMemo, useState } from "react";
 import { functionalUpdate, type OnChangeFn, type VisibilityState } from "@tanstack/react-table";
@@ -32,10 +43,14 @@ import { functionalUpdate, type OnChangeFn, type VisibilityState } from "@tansta
 /** One key, holding a JSON array of hidden column ids. */
 export const HIDDEN_COLUMNS_KEY = "spya.shelf.hiddenColumns";
 
-/** Just enough of a column definition to know whether it may be hidden. */
+/** One key, holding a JSON array of the starts-hidden column ids the reader has shown. */
+export const SHOWN_COLUMNS_KEY = "spya.shelf.shownColumns";
+
+/** Just enough of a column definition to know whether it may be hidden, and whether it starts so. */
 interface HideableColumn {
   id: string;
   enableHiding?: boolean;
+  meta?: { startsHidden?: boolean } | undefined;
 }
 
 /**
@@ -61,17 +76,17 @@ export function parseHiddenColumns(raw: string | null, hideable: readonly string
  * mode throws outright, site data may be blocked, and under vitest with jsdom
  * `localStorage` is shadowed by Node's own global and reads `undefined`.
  */
-function readRaw(): string | null {
+function readRaw(key: string): string | null {
   try {
-    return window.localStorage.getItem(HIDDEN_COLUMNS_KEY);
+    return window.localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-function writeHidden(ids: string[]): void {
+function write(key: string, ids: string[]): void {
   try {
-    window.localStorage.setItem(HIDDEN_COLUMNS_KEY, JSON.stringify(ids));
+    window.localStorage.setItem(key, JSON.stringify(ids));
   } catch {
     /* See `readRaw`. The choice still holds for this visit — it is React
        state — and is simply not there on the next one. */
@@ -97,15 +112,25 @@ export function useShelfHiddenColumns(
 ): [VisibilityState, OnChangeFn<VisibilityState>] {
   /* Joined, so a `columns` rebuilt with the same ids (Library.tsx rebuilds it
      when `now` ticks) does not count as a change. */
-  const key = columns
-    .filter((c) => c.enableHiding !== false)
+  const canHide = columns.filter((c) => c.enableHiding !== false);
+  const key = canHide.map((c) => c.id).join("\n");
+  const hideable = useMemo(() => (key ? key.split("\n") : []), [key]);
+  const lateKey = canHide
+    .filter((c) => c.meta?.startsHidden)
     .map((c) => c.id)
     .join("\n");
-  const hideable = useMemo(() => (key ? key.split("\n") : []), [key]);
+  /** The columns that are hidden until the reader shows them. */
+  const startsHidden = useMemo(() => (lateKey ? lateKey.split("\n") : []), [lateKey]);
 
-  const [visibility, setVisibility] = useState<VisibilityState>(() =>
-    toVisibility(parseHiddenColumns(readRaw(), hideable)),
-  );
+  const [visibility, setVisibility] = useState<VisibilityState>(() => {
+    const hidden = parseHiddenColumns(readRaw(HIDDEN_COLUMNS_KEY), hideable);
+    const shown = parseHiddenColumns(readRaw(SHOWN_COLUMNS_KEY), startsHidden);
+    return toVisibility(
+      hideable.filter((id) =>
+        startsHidden.includes(id) ? !shown.includes(id) : hidden.includes(id),
+      ),
+    );
+  });
 
   const onChange = useCallback<OnChangeFn<VisibilityState>>(
     (updater) => {
@@ -113,10 +138,11 @@ export function useShelfHiddenColumns(
       /* Only what may be hidden, and only what is: a stray `title: false` from
          anywhere never reaches the table or the store. */
       const hidden = hideable.filter((id) => next[id] === false);
-      writeHidden(hidden);
+      write(HIDDEN_COLUMNS_KEY, hidden.filter((id) => !startsHidden.includes(id)));
+      write(SHOWN_COLUMNS_KEY, startsHidden.filter((id) => !hidden.includes(id)));
       setVisibility(toVisibility(hidden));
     },
-    [visibility, hideable],
+    [visibility, hideable, startsHidden],
   );
 
   return [visibility, onChange];

@@ -57,7 +57,7 @@ export function SimplePanel({
   onJump,
 }: {
   access: SimpleAccess;
-  /** Which of the three levels the row has chosen. */
+  /** Which level to draw. The band's control offers Brief and Fuller; Simple is stored and not offered (plan 261003l). */
   level: SimpleLevel;
   onJump(id: BlockId): void;
 }) {
@@ -116,7 +116,7 @@ export function SimplePanel({
               "nobody has asked" beside its progress reads as a contradiction. */}
           {!(owner.job || owner.starting) && <p>{SIMPLE_NONE_OWNER}</p>}
           <p className="gloss-hint">
-            All three levels are written together, usually in under half a minute. Written once and kept —
+            Brief and Fuller are written together, usually in under half a minute. Written once and kept —
             you will not be asked again unless the article changes.
           </p>
           {run("Write it")}

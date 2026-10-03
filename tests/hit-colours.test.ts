@@ -304,7 +304,7 @@ describe.each(["dark", "light"] as const)("the palette the slots index into, %s"
     /* Both directions matter and only one is loud. A stylesheet with *more*
        entries wastes them silently; with fewer, every mark belonging to a
        search past the end refers to an undefined custom property, which is an
-       invalid value — so the wash and the rule paint nothing and the search
+       invalid value — so the outline and its bottom rule paint nothing and the search
        looks like it found nothing. In the light block a missing slot is
        quieter still: it falls back to the dark value, which renders, in a
        colour tuned for the other page. Exactly one definition per slot per

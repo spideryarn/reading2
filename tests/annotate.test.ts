@@ -871,14 +871,14 @@ describe("annotateHtml — the colours of the searches that found the words", ()
 });
 
 /**
- * **Quotes outline; search fills** — docs/project/quotes.md § The stroke, and
- * docs/plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md.
+ * **Quotes fill; search outlines** — docs/project/quotes.md § A highlighter pen,
+ * and docs/plans/261003l-quotes-filled-like-a-highlighter-pen-and-search-hits-outlined.md.
  *
  * The markup half of a change that is otherwise entirely visual. What a jsdom
  * test can hold is exactly this — which attributes land on which run. Whether
  * the result *reads* as one quote is the browser pass, and it is in the plan.
  */
-describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
+describe("annotateHtml — a quote is filled and a search hit is outlined", () => {
   const html = "<p>He rejects the idea that mind is <em>software</em> running on wet hardware.</p>";
   const host = (out: string) => {
     const el = document.createElement("div");
@@ -887,9 +887,9 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
   };
 
   it("gives a quote its tier and no wash at all", () => {
-    /* `data-wash` is the switch the stylesheet hangs the fill, the hue band and
-       its bottom padding off. A quote must not have it, or it arrives wearing a
-       fill — the exact opposite of what a quote is supposed to be. */
+    /* `data-wash` is the switch the stylesheet hangs the search outline, hue
+       band and bottom padding off. A quote must not have it unless a search hit
+       covers the same words. */
     const out = annotateHtml(html, [{ id: "q1", start: 3, end: 10, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } }]);
     const mark = host(out).querySelector("mark.hit");
     expect(mark?.getAttribute("data-quote")).toBe("2");
@@ -901,7 +901,7 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
     expect(mark?.getAttribute("style")).toBe("--quote-a:1.00");
   });
 
-  it("gives a search hit a wash and no tier", () => {
+  it("gives a search hit its outline switch and no quote tier", () => {
     const out = annotateHtml(html, [{ id: "h1", start: 3, end: 10, kind: "hit", strength: 0.4 }]);
     const mark = host(out).querySelector("mark.hit");
     expect(mark?.hasAttribute("data-quote")).toBe(false);
@@ -922,7 +922,7 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
       { id: "q1", start: 3, end: 30, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } },
     ]);
     const mark = host(out).querySelector("mark.hit");
-    /* The wash is the search's 0.4, untouched; the quote's own brightness sits
+    /* The outline is the search's 0.4, untouched; the quote's own brightness sits
        beside it in a property of its own and cannot reach it. */
     expect(mark?.getAttribute("style")).toBe("--hit-a:0.400;--quote-a:1.00");
     expect(mark?.getAttribute("data-quote")).toBe("2");
@@ -957,7 +957,7 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
       expect(alone?.hasAttribute("data-wash")).toBe(false);
     });
 
-    it("leaves a Quote it overlaps an outline and nothing else", () => {
+    it("leaves a Quote it overlaps with its fill and nothing else", () => {
       const out = annotateHtml(html, [bare, { id: "q1", start: 3, end: 10, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } }]);
       const mark = host(out).querySelector("mark.hit");
       expect(mark?.getAttribute("data-quote")).toBe("2");
@@ -1000,19 +1000,17 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
     });
   });
 
-  it("caps the outline only at the true ends of a quote that gets split", () => {
+  it("marks the true ends of a split quote for rounding and a pressed ring", () => {
     /* One quote containing an `<em>` is THREE sibling marks — annotateHtml
-       splits per text node, and a wash hides that where an outline cannot. So
-       the rules are drawn on every fragment and the inline end-caps only on the
-       two carrying these, and the outline runs continuously across the joins.
-       Without it, one sentence reads as three separate quotes. */
+       splits per text node. Only the outer fragments may round the fill or cap
+       a pressed ring; doing that on all three would notch one sentence into
+       three apparent quotes. */
     const out = annotateHtml(html, [{ id: "q1", start: 20, end: 50, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } }]);
     const marks = [...host(out).querySelectorAll("mark.hit")];
     expect(marks.length).toBe(3);
     expect(marks.map((m) => m.hasAttribute("data-quote-start"))).toEqual([true, false, false]);
     expect(marks.map((m) => m.hasAttribute("data-quote-end"))).toEqual([false, false, true]);
-    /* And every fragment still knows it is a quote, so every one draws its
-       rules — that is what makes the outline continuous rather than two ends. */
+    /* And every fragment still knows it is a quote, so every piece gets fill. */
     expect(marks.every((m) => m.getAttribute("data-quote") === "1")).toBe(true);
   });
 
@@ -1021,6 +1019,25 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
     const mark = host(out).querySelector("mark.hit");
     expect(mark?.hasAttribute("data-quote-start")).toBe(true);
     expect(mark?.hasAttribute("data-quote-end")).toBe(true);
+  });
+
+  it("caps a search hit's outline only at its true ends, as a quote's fill is rounded", () => {
+    /* Since 2026-10-03 the search hit is the outline (Greg, `spya-xrgste`; plan
+       261003l), so it has the problem the quote had: one hit across an `<em>`
+       is three marks, and three closed boxes read as three hits. */
+    const out = annotateHtml(html, [{ id: "h1", start: 20, end: 50, kind: "hit", strength: 0.5, slot: 0 }]);
+    const marks = [...host(out).querySelectorAll("mark.hit[data-wash]")];
+    expect(marks.length).toBe(3);
+    expect(marks.map((m) => m.hasAttribute("data-wash-start"))).toEqual([true, false, false]);
+    expect(marks.map((m) => m.hasAttribute("data-wash-end"))).toEqual([false, false, true]);
+  });
+
+  it("does not cap a quote as a search hit, nor a bare hit at all", () => {
+    const quote = annotateHtml(html, [{ id: "q1", start: 3, end: 10, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } }]);
+    expect(quote).not.toContain("data-wash-start");
+    const bare = annotateHtml(html, [{ id: "b1", start: 3, end: 10, kind: "hit", bare: true }]);
+    expect(bare).not.toContain("data-wash-start");
+    expect(bare).not.toContain("data-wash-end");
   });
 
   it("keeps /design's pasted specimens identical to what the annotator produces", () => {

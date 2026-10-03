@@ -28,6 +28,7 @@
 import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { Mode } from "../modes.js";
+import { type ArgumentKind, PICK_SLUG, type PickKey, type PickOption } from "../command-pick.js";
 import { subModeWords, type SubMode } from "./sub-modes.js";
 
 /**
@@ -179,6 +180,22 @@ export type Command =
        * only on `close` (CommandBar.tsx § `activate`).
        */
       readonly run: () => ActionOutcome | Promise<ActionOutcome>;
+      /**
+       * **Whether pressing this only shows the reader something** — opens a
+       * drawer, a dialog, a section — and changes and sends nothing.
+       *
+       * Read by one decision: a row the command bar's model picked from a
+       * sentence runs without a second Enter only if it just moves the reader
+       * (CommandBar.tsx § `onlyMovesTheReader`, plan 261003k). A mode or a
+       * page answers that with `generates`; an action is a closure, so it has
+       * to say.
+       *
+       * **Required, for `generates`'s reason**: an optional flag would let a
+       * new action that writes compile without deciding, and the wrong default
+       * here is a sentence archiving an article. `false` is the safe answer
+       * when unsure — the row is then drawn and waits for Enter.
+       */
+      readonly opensOnly: boolean;
     });
 
 /**
@@ -258,6 +275,10 @@ export function commandText(command: Command): CommandText {
         `${words.label} ${parent}`,
         `${parent} ${words.label}`,
         `${words.label} mode`,
+        /* The sub-mode's own nicknames — Summary's Thread answers to `tweets`
+           (sub-modes.ts § `SubModeWords`). Here and not on the parent's catalog
+           row, so the word selects this row and not the mode's. */
+        ...(words.aliases ?? []),
       ],
       description: words.description,
     };
@@ -314,6 +335,46 @@ export function commandId(command: Command): string {
       return never;
     }
   }
+}
+
+/**
+ * **A row's key, as the browser sends it and the server holds it** — its id
+ * and its label, since Archive and *Put back* share an id (plan 261003k, F5).
+ *
+ * **The id is `commandId` with everything about *this* visit taken out of a
+ * page's address**, so one list on the server serves every article and every
+ * place in it: the slug becomes `PICK_SLUG`, and the query string and the
+ * fragment go. `page:/read/my-paper/metadata?at=spya-k3m9qt` and the Help row's
+ * `page:/help#glossary` are sent as `page:/read/:slug/metadata` and
+ * `page:/help`. Nothing else in an id varies by article.
+ *
+ * A key is for matching, never for acting: what runs is the row the bar holds
+ * today, found again by this function (CommandBar.tsx).
+ */
+export function pickKey(command: Command, slug?: string): PickKey {
+  const { label } = commandText(command);
+  if (command.kind !== "page") return { id: commandId(command), label };
+  const path = command.href.split(/[?#]/, 1)[0] ?? "";
+  const own = slug === undefined ? null : `/read/${encodeURIComponent(slug)}`;
+  const shared =
+    own !== null && (path === own || path.startsWith(`${own}/`)) ? `/read/${PICK_SLUG}${path.slice(own.length)}` : path;
+  return { id: `page:${shared}`, label };
+}
+
+/**
+ * **One row as a model is shown it**: its key, and the three kinds of words
+ * the bar itself matches on. Nothing a row *does* — no closure, no href beyond
+ * what the id already holds — so it serialises.
+ *
+ * These are what src/command-pick-catalogue.generated.json holds, and the
+ * model's answer is only ever one of the ids (plan 261003k, decision 2). The
+ * eval that chose the model reads the same list: evals/command-pick/README.md.
+ */
+export type { PickOption };
+
+export function pickOption(command: Command, slug?: string): PickOption {
+  const { description, aliases } = commandText(command);
+  return { ...pickKey(command, slug), description, aliases: [...aliases] };
 }
 
 /**
@@ -456,6 +517,15 @@ export type ArgumentQuery =
   | { readonly kind: "tag-add"; readonly words: string }
   | { readonly kind: "tag-remove"; readonly words: string };
 
+/* The kinds here and the kinds a sentence can be answered with
+   (src/command-pick.ts § `ARGUMENT_KINDS`) are one list written twice, because
+   that module cannot import this one (the eval imports it, and this reaches a
+   `.tsx`). Either of these two lines fails to compile if they part. */
+const _everyKindIsPicked: ArgumentKind = "find" as ArgumentQuery["kind"];
+const _everyPickIsAKind: ArgumentQuery["kind"] = "find" as ArgumentKind;
+void _everyKindIsPicked;
+void _everyPickIsAKind;
+
 /**
  * **One verb phrase, and the command it starts.** `endings` are phrases that
  * may close the query and are not part of the argument — *to this paper* —
@@ -508,6 +578,13 @@ const VERBS: readonly Verb[] = [
   { kind: "find", verb: "search for" },
   { kind: "find", verb: "search" },
   { kind: "find", verb: "find" },
+  /* *find mentions of dopamine* is a search for dopamine: without these the
+     shorter `find` took it and looked for `mentions of dopamine`, which no
+     article says (found by the command-pick eval, 261003e). */
+  { kind: "find", verb: "find mentions of" },
+  { kind: "find", verb: "find all mentions of" },
+  { kind: "find", verb: "find every mention of" },
+  { kind: "find", verb: "find references to" },
   { kind: "jump-first", verb: "jump to first" },
   { kind: "jump-first", verb: "first occurrence of" },
   { kind: "jump-first", verb: "first mention of" },

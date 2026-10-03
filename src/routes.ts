@@ -471,6 +471,8 @@ import {
   tooLongMessage,
   transcribe,
 } from "./transcribe.js";
+import { type PickAnswer, parsePickRequest } from "./command-pick.js";
+import { pickCommand } from "./command-pick-call.js";
 import type {
   Block,
   ChatAnchor,
@@ -6780,6 +6782,43 @@ async function transcribeDictation(
   }
 }
 
+/* --------------------------------------------------------- command pick -- */
+
+/**
+ * **A sentence typed into the command bar, turned into one of its rows.**
+ * `POST /api/command-pick` — plan 261003k; src/command-pick-call.ts makes the
+ * two model calls and src/command-pick.ts owns the body's shape.
+ *
+ * `transcribeDictation`'s three habits, for its reasons: the body is an exact
+ * shape and a key we do not know is refused (with fixed prose — the reason
+ * reaches a log); what the caller sends is parsed rather than trusted; and the
+ * reader's disconnect aborts the model call, on `res` and not `req`.
+ *
+ * **No slug, in the path or the body**: the model reads the sentence and the
+ * bar's rows, never the article, so there is nothing here an article decides —
+ * and so nothing to attribute the spend to.
+ *
+ * **No per-reader rate limit, and that is a decision** (the plan § Stage 2):
+ * dictation and quick search have none either, and what bounds a call is that
+ * it is signed-in only, capped (300 characters, 200 keys), about $0.0002, and
+ * can only answer with a key the caller sent or words from the caller's own
+ * sentence, chosen among options whose words are ours.
+ */
+async function pickCommandForSentence(req: IncomingMessage, res: ServerResponse): Promise<PickAnswer> {
+  const parsed = parsePickRequest(await readBody(req));
+  if (!parsed.ok) throw httpError(400, parsed.reason);
+  const gone = new AbortController();
+  const drop = () => gone.abort();
+  res.on("close", drop);
+  try {
+    const outcome = await pickCommand(parsed.request, gone.signal);
+    if (!outcome.ok) throw httpError(outcome.status, outcome.failure.message);
+    return outcome.answer;
+  } finally {
+    res.off("close", drop);
+  }
+}
+
 /* ------------------------------------------------------------- feedback -- */
 
 /**
@@ -8393,6 +8432,21 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "handler",
     handler: async ({ request: { req, res } }) => {
       send(res, 200, await transcribeDictation(req, res));
+    },
+  },
+
+  /* **The command bar's sentence** — asked only when the bar's own matching
+     found nothing and the reader pressed Enter. No slug: nothing about it is
+     an article's. src/command-pick-call.ts, plan 261003k. */
+  {
+    kind: "exact",
+    method: "POST",
+    /* `COMMAND_PICK_PATH` (src/command-pick.ts) is what the bar posts to; a
+       literal here because the contract test reads this table as text. */
+    path: "/api/command-pick",
+    article: "none",
+    handler: async ({ request: { req, res } }) => {
+      send(res, 200, await pickCommandForSentence(req, res));
     },
   },
 

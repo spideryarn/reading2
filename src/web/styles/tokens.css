@@ -105,9 +105,10 @@
      0.4) and its edge (opaque) — spine.css § reading time. A cyan, because the
      rail's own ground is the part tint, an orange at hue ~52, and this has to
      be told from it at a glance in a strip twelve pixels wide. It sits between
-     the quote strip's green (~165) and `--chat-mark`'s blue (235) and is
-     lighter than either. **Not a hue nothing else uses** — there is none left
-     (styles/tokens.css § --quote-stroke-rgb says the same): two of the
+     old quote strip's green (~165; the strip is a purple since 2026-10-03)
+     and `--chat-mark`'s blue (235) and is lighter than either. **Not a hue
+     nothing else uses** — there is none left
+     (styles/tokens.css § --quote-rgb says the same): two of the
      reader-picked search colours, `--cat-11` and `--cat-12`, are its
      neighbours, and are told from it by being thin lanes on the rail's other
      side. docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md. */
@@ -120,12 +121,13 @@
      One set, because the app is dark only (styles/tokens.css § DARK ONLY); if
      light mode ever comes back these need a light twin like everything else.
 
-     Kept clear of the three washes already in the prose — "don't put three
-     meanings on one hue" (original-version/highlighting.md): the yellow sits
-     at 100°, well round from the orange (58°) that `--highlight-wash` and the
-     gist's active cell mean; the blue at 270°, away from a chat's 235°; and
-     all four are chromatic, where a search's `--hit-wash-rgb` is a deliberately
-     grey slate. Tinted into the page in oklab, for the reason the long note on
+     Kept clear of the other fills in the prose — "don't put three meanings on
+     one hue" (original-version/highlighting.md): the yellow sits at 100°, well
+     round from the orange (58°) that `--highlight-wash` and the gist's active
+     cell mean; the blue at 270°, away from a chat's 235°; and the nearest two
+     stay about 40° from the model quote's purple at 310°. Search is an outline
+     at rest; its pressed-only slate fill is deliberately achromatic. Tinted
+     into the page in oklab, for the reason the long note on
      `--highlight-wash` gives, and at a strength that keeps the light prose
      comfortably legible on top. */
   --hl-yellow: color-mix(in oklab, oklch(0.88 0.16 100) 30%, var(--page));

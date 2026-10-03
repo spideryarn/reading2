@@ -1,0 +1,9 @@
+- **F1 — P2, established: the static guard accepts selectors that recreate the bug.** At [prose-marks-stay-inline-in-chrome.test.ts:143](/home/greg/code/spideryarn2/.claude/worktrees/fb-trg9kz-footnote-line-breaks/tests/prose-marks-stay-inline-in-chrome.test.ts:143), `onAMark` accepts any `mark` after `(`. I verified that `:not(mark.xref).cite { display: inline-flex }` passes the guard and matches `<mark class="cite">`. Require the class’s own compound to positively constrain its element to `mark`; add this counterexample to the guard’s tests. No current false positives were found.
+
+No P0/P1 findings. The diagnosis explains the cited clauses becoming separate atomic boxes: HEAD’s `.cite` sets `inline-flex`, while [annotations.css:243](/home/greg/code/spideryarn2/.claude/worktrees/fb-trg9kz-footnote-line-breaks/src/web/styles/annotations.css:243) supplies no display override. I found no other bare MarkKind selector reaching prose marks.
+
+The `cite-chips` rename is justified and its listed scope is complete. The source/tests/docs/evals/scripts sweep found no additional active chip consumers; current `Cited` callers supply no `className` that restores `cite`.
+
+The [Chrome test:115](/home/greg/code/spideryarn2/.claude/worktrees/fb-trg9kz-footnote-line-breaks/tests/prose-marks-stay-inline-in-chrome.test.ts:115) checks the conclusion for its fixture: wrapping, continuity before and after each mark, and a broken-rule control. Its limits are the single layout and isolated mark kinds. My run passed both static tests; Chrome could not launch under the sandbox, so browser assertions were unverified here.
+
+VERDICT: build with changes

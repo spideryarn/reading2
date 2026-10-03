@@ -1,6 +1,7 @@
-/* summary.css — the Summary band: the piece in plain words, a slider over three
-   levels and the chosen level's paragraphs. SummaryMode.tsx, SimplePanel.tsx,
-   docs/project/summaries.md.
+/* summary.css — the Summary band: one row with a three-way control, Brief |
+   Fuller | Thread, and under it the chosen length's paragraphs or the thread.
+   SummaryMode.tsx, SimplePanel.tsx, docs/project/summaries.md. The thread's own
+   rules are glossary.css § tweets; only the control row is shared with it.
 
    It also drew the tree's gists as a nested outline, at Parts or Sections,
    until 2026-10-01; that outline and its rules went then
@@ -10,11 +11,13 @@
    In the mode band. The shell is `.mode-band`; everything here is what goes
    inside it. The title row is `.band-head`, § mode band — Summary draws none. */
 
-/* ---- the one row: the slider and the badge (plan 261001b) ----
+/* ---- the one row: the three-way control ----
    Greg, 2026-09-30: *"avoid wasting vertical space"* (SPIDERYARN-READING2-7A).
-   The group is a `<fieldset>` whose legend only a screen reader hears.
+   **The same row in both views**: Summary's own surface draws it over the
+   paragraphs and the thread's panel draws it over the thread (Tweets.tsx §
+   `controls`), so the control does not move when the view changes.
    **Wrapping rather than scrolling** at the band's narrowest (18rem, MODE_MIN
-   in layout.ts): the badge drops to a second line before anything hides. */
+   in layout.ts). */
 .summ-controls {
   flex: none;
   display: flex;
@@ -26,63 +29,47 @@
 }
 /* The band's top row, so it clears the (i) in the corner: mode-band.css § `.mode-band > .band-about`. */
 .mode-band.has-about > .summ-controls { padding-right: calc(0.6rem + var(--band-about-room)); }
-.summ-seg {
-  /* A `<fieldset>`, so the reset comes first — the UA gives it a groove
-     border, side padding and a margin nobody asked for, and a min-content
-     width that refuses to shrink. */
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-}
+/* Under the control row the thread's *Copy the thread* row is no longer the
+   top one, so it gives the corner's room back. */
+.mode-band.has-about > .summ-controls ~ .band-head { padding-right: 0.7rem; }
 
-/* **The plain-words slider** (SPIDERYARN-READING2-7J): three stops, shorter
-   and plainer to the left. Always live since the outline went. */
-.summ-slider { gap: 0.3rem; }
-.summ-slider-track {
+/* **Brief | Fuller | Thread** — Greg, 2026-10-03 (spya-thpsnd): *"Not buttons,
+   like group buttons. Not radio buttons exactly, but like, you know, a sense
+   that you can have one of those three."* So the three are drawn joined, one
+   outline around the group and a rule between neighbours, with the chosen one
+   raised. A radiogroup of buttons, as Structure's and Referee's toggles are
+   (structure-mode.css § `.struct-views`); it replaced the plain-words slider
+   (docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
+.summ-views {
   display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-}
-.summ-slider input[type="range"] {
-  width: 4.6rem;
-  min-height: 1.75rem;
-  margin: 0;
-  accent-color: var(--highlight-text);
-  cursor: pointer;
-}
-/* **An icon at each end instead of the level's name** — Greg, 2026-10-01:
-   *"get rid of the "Simple" text - perhaps replace with an icon"*
-   (SPIDERYARN-READING2-7R). Short lines at the Brief end, a full block at the
-   Fuller end. Muted, because they label the scale rather than compete with
-   the thumb; a press on one goes to that end. */
-.summ-slider-end {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  border: 0;
+  min-width: 0;
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
+}
+.summ-view-btn {
+  padding: 0.15rem 0.6rem;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.84rem;
   cursor: pointer;
-  transition: color 0.12s;
 }
-.summ-slider-end:hover { color: var(--ink); }
-.summ-slider-end:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-/* A finger gets the house's large target, while the glyph stays quiet. The
-   slider gets the same height so the whole scale is one touch surface. */
+.summ-view-btn + .summ-view-btn { border-left: 1px solid var(--rule); }
+.summ-view-btn:first-child { border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px); }
+.summ-view-btn:last-child { border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0; }
+.summ-view-btn:hover { color: var(--ink); }
+.summ-view-btn.on {
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-weight: 600;
+}
+/* Inside the group's outline, so the ring is not clipped by a neighbour. */
+.summ-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: -2px; }
+/* A finger gets the house's large target. */
 @media (any-pointer: coarse) {
-  .summ-slider-end { width: var(--control-h-lg); height: var(--control-h-lg); }
-  .summ-slider input[type="range"] { min-height: var(--control-h-lg); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .summ-slider-end { transition: none; }
+  .summ-view-btn { min-height: var(--control-h-lg); padding-inline: 0.8rem; }
 }
 
 

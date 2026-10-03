@@ -99,6 +99,13 @@ declare module "@tanstack/react-table" {
     fluid?: boolean;
     /** Kept out of the chip row — a column you sort from its header only. */
     noChip?: boolean;
+    /**
+     * Hidden until the reader shows it from the Columns menu. Read by the
+     * page's own visibility state (the shelf's is shelf-hidden-columns.ts), not
+     * by anything in this file: a page that passes no visibility state shows
+     * every column.
+     */
+    startsHidden?: boolean;
   }
 }
 

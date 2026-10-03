@@ -197,6 +197,10 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* Quick search — the same reader waiting on the same box, scored by Jev on
      the Decisions wire. src/quick-search.ts, plan 261002e. */
   "search-quick": "interactive request work",
+  /* The command bar's sentence — a reader who pressed Enter and is watching
+     the bar. Both of its calls. src/command-pick-call.ts, plan 261003k. */
+  "command-pick": "interactive request work",
+  "command-pick-words": "interactive request work",
   /* **The fix this table was written for.** Hover a link in the article and this
      says how it stands to the piece being read — docs/project/links.md. It is
      request-scope, reader-triggered, and was in no category at all. */

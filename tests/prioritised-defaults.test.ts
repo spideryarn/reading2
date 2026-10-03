@@ -79,10 +79,10 @@ describe("each measured bar rests at its new boundary", () => {
   });
 });
 
-describe("the quote stroke keeps its own number", () => {
+describe("the quote fill keeps its own tier threshold", () => {
   it("stays heavy from 0.80, above where the bar now rests", () => {
     /* Tied to the bar, every quote on screen by default would be heavy and the
-       two-tier stroke would say nothing on first open. Decoupled, a quote the
+       two-tier fill would say nothing on first open. Decoupled, a quote the
        default bar keeps can still be drawn light. */
     expect(QUOTE_HEAVY_AT).toBe(0.8);
     const kept = quote(0.7);

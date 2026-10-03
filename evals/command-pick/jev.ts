@@ -20,6 +20,8 @@ export interface JevChoiceAnswer {
   choice?: string;
   confidence?: number;
   probabilities?: Record<string, number>;
+  /** A `noul` question's answer: the probability of yes. */
+  noul?: number;
 }
 
 export interface JevResult {

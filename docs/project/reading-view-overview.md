@@ -113,9 +113,9 @@ readers never are.
   Hierarchy folded into it, and where the code is.
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
   wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
-- **[summaries.md](summaries.md)** — the piece in plain words, at three lengths on one slider (Brief,
-  Simple, Fuller), each paragraph linked to its passages and checked against them. Its Parts and
-  Sections outline went on 2026-10-01; Structure draws that tree.
+- **[summaries.md](summaries.md)** — the piece in plain words, at two lengths (Brief, Fuller), each
+  paragraph linked to its passages and checked against them, or as a thread: one three-way control.
+  Its Parts and Sections outline went on 2026-10-01; Structure draws that tree.
 - **[ideas.md](ideas.md)** — the propositions the piece needs you to hold, sibling to the glossary:
   a term is a word you look up, an idea is a claim you hold. The first stage that lets the model
   name block ids.
@@ -152,8 +152,9 @@ readers never are.
   passages, not in the paper's order, walked with a handful of stops, then a dozen, then more. Open
   it for Greg's dictated brief, verbatim, and the questions still waiting for him.
 - **[tweets.md](tweets.md)** — the article as a numbered thread, in a wide band beside the prose,
-  each post linked to the passages it came from. **The one mode that writes on arrival** rather
-  than on a press. Open it for why, and for the plans and the code.
+  each post linked to the passages it came from. Summary's Thread view since 2026-10-03, a mode of
+  its own (Tweets) before; `?mode=tweets` lands there. **The one view that writes on arrival**
+  rather than on a press. Open it for why, and for the plans and the code.
 
 - **Marginalia** — called Annotations until 2026-10-01, when it was renamed
   ([261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md); old `?mode=annotations` links still work). The one mode drawn to the *right* of the prose rather than in the band: a
@@ -244,7 +245,7 @@ the first that can fail: an action now answers *close* or *stay open, saying why
 still out shows `Starting…` and refuses a second press.
 
 **One of the rows is about the article you are standing on** — its Metadata (Tweets was the second
-until it became a mode on 2026-09-29, and is a mode row now) — and it exists only because the bar does: it is mounted on the reading view and, since 2026-09-30,
+until it became a mode on 2026-09-29, and is the sub-mode row *Summary › Thread* since 2026-10-03) — and it exists only because the bar does: it is mounted on the reading view and, since 2026-09-30,
 on the article's Metadata page, for the owner, so there is always an article to name. The day it is
 offered anywhere else is the day those rows have to answer for themselves, and the answer written
 down for that day is *no row at all* rather than a row with nothing to point at. **On the Metadata
@@ -255,20 +256,33 @@ as the Dock's link beside it does
 **What the original call refused is mostly still refused**, and where it is not, that is Greg's doing
 rather than a boundary quietly moving. It said a passage jump, a generation row, a chat and a model
 call each need **a verb this bar does not have**. Two of those have since arrived: a *generation row*
-is what Tweets is — since 2026-09-29 a mode row, whose band writes the thread on arrival when there
+is what the thread's row is — a mode row from 2026-09-29 and *Summary › Thread* since 2026-10-03,
+whose band writes the thread on arrival when there
 is none ([260915e](../plans/260915e-tweets-page-starts-writing-when-opened.md) for the rule,
-[260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) for the move),
+[260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) and
+[261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md) for the moves),
 and it wears the `generates` marker for it — and Feedback is a genuinely new verb, admitted because it is
 what he asked for. A passage jump and an "ask this article" each needed the bar to grow an
 **argument** — *which* passage, *which* question — when it has one text box and that box is the
 filter. Arguments have since arrived, each behind a verb the reader types (below), and with them the
 passage jump; an "ask this article" is still out. A query that matches
-nothing says `No command matches.` and nothing else: no search fallback, no "did you mean", an honest
+nothing says `No command matches.` and, by itself, guesses nothing: no search fallback, an honest
 empty state preferred to a helpful guess.
+
+**Since 2026-10-03 a signed-in reader can ask what a sentence meant**
+([261003k](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md)).
+When nothing matches, the empty line adds *Press Enter to ask what you meant.*, and Enter sends the
+sentence to a fast model that picks among the bar's own rows — *what's changed on this site*, *is
+consciousness mentioned anywhere*. Nothing is guessed until that Enter. A pick the model is sure of,
+of a row that only moves the reader, runs at once. Everything else — a less sure pick, anything that
+writes, spends or generates, and every command that takes words — is drawn as the bar's ordinary
+rows under *Did you mean* and waits for a fresh press. Signed out, the empty line is as before and
+nothing is sent. The models, the measurement and what is not built:
+[chat-llm-help-commands-vision.md § Where we are](chat-llm-help-commands-vision.md#where-we-are).
 
 **Sub-modes have rows of their own since 2026-10-01** — Greg, SPIDERYARN-READING2-77: *"In the
 Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram, etc."* *Remember › Quiz*,
-*Diagram › Illustrated*, *Referee › Claims*, *Summary › Simple* and the rest sit after the mode rows
+*Diagram › Illustrated*, *Referee › Claims*, *Summary › Thread* and the rest sit after the mode rows
 and before the pages, and Enter opens the mode with that chip already pressed: armed as the chip
 arms (Quiz writes questions, Illustrated paints), never as the mode does, and with the same
 `generates` marker rule. Only a mode the Dock draws offers its sub-modes, and Diagram offers the

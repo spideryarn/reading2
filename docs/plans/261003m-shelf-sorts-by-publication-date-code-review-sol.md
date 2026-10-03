@@ -1,0 +1,11 @@
+- **C1 — P1, fixed — [relative-time.ts:142](/home/greg/code/spideryarn2/.claude/worktrees/fbt3es7k-shelf-sort-by-publication-date/src/web/relative-time.ts:142).** `0000-01-01` and `0001-01-01` printed identically while sorting a year apart. Locale defaults could also change the calendar. Added Gregorian formatting and an era for year zero; four regressions failed before the fix. The label was already zone-independent.
+
+- **C2 — P2, fixed — [library.md:749](/home/greg/code/spideryarn2/.claude/worktrees/fbt3es7k-shelf-sort-by-publication-date/docs/project/library.md:749).** “A paper added by DOI has none” is false: DOI URLs can resolve to dated HTML. PDF and minimal-paper metadata writers omit `publishedAt`. Corrected the reference doc and [plan:34](/home/greg/code/spideryarn2/.claude/worktrees/fbt3es7k-shelf-sort-by-publication-date/docs/plans/261003m-shelf-sorts-by-publication-date.md:34).
+
+- **C3 — P2, fixed — [shelf-table-row-card.test.tsx:341](/home/greg/code/spideryarn2/.claude/worktrees/fbt3es7k-shelf-sort-by-publication-date/tests/shelf-table-row-card.test.tsx:341).** All three requested files passed with Published cells printing “broken date.” Added a rendered-cell regression, watched it fail, then removed the mutation. Also strengthened that file’s date assertion and [library-sorting.test.ts:334](/home/greg/code/spideryarn2/.claude/worktrees/fbt3es7k-shelf-sort-by-publication-date/tests/library-sorting.test.ts:334) to check the month.
+
+No visitor or other-owner exposure found: the shelf query filters by owner, and public projections omit the field. Card notes correctly select Published and say “no publication date” when absent. Missing dates sink last when Published is the primary key. URL/help wording otherwise matches; no additional complexity finding.
+
+Changed only the five linked files, uncommitted. Requested tests: **61 passed**; with doc-link tests: **77 passed**. Lint and typechecking passed. Typechecking used `node --import tsx scripts/typecheck.ts` because the npm invocation hit the sandbox’s IPC restriction.
+
+**Verdict: land after fixes.**

@@ -58,7 +58,8 @@ export function readMode(url: string): BandMode {
 
 /**
  * The two things a `/read/<slug>` address can be showing — three until the
- * thread became a mode on 2026-09-29 (`?mode=tweets`; router.ts § `liftLegacyTweets`).
+ * thread became a mode on 2026-09-29, and then Summary's Thread view on
+ * 2026-10-03 (router.ts § `liftLegacyTweets`).
  *
  * Defined here rather than in src/web/router.ts, which owns the routes but
  * imports React's world. `router.ts` re-exports this name, so nothing that used

@@ -69,7 +69,7 @@ export const REMEMBERED = [
   "spine", // the bird's-eye rail
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
   "margin", // Marginalia's column of notes, right of the prose — draws only what is already there
-  "summary", // which of three plain-words levels — only a press spends, never arrival
+  "summary", // brief, fuller or thread — dormant without `mode`, and a restore never opens the thread
   "structure", // fisheye or expanded — nothing to generate either way
   "diagram", // which of the five pictures
   "dx", // drift's sideways axis
@@ -116,7 +116,7 @@ export const NEVER_REMEMBERED = [
      not put the reader back into a conversation mode at all, either. */
   "thread",
   /* Search mode's matcher, the thing being matched, and the ordering of its
-     results. A search *washes* the passages that match, so replaying last
+     results. A search *outlines* the passages that match, so replaying last
      week's over the prose changes what the article looks like on arrival.
      Excluded as a block so the rule is one sentence rather than six. */
   "match",
@@ -185,17 +185,43 @@ export const ARTICLE_PARAMS: readonly string[] = [...REMEMBERED, ...NEVER_REMEMB
  *   dropped on judgment rather than on cost, because a conversation panel that
  *   opens by itself reads as the app *starting* something.
  *
- * - **`tweets`** — since 2026-09-29, when the thread page became a mode and
- *   brought its rule with it: opening it with no thread **writes one**, a model
- *   call, on arrival rather than on a press (useTweets.ts). A restore is the one
- *   arrival nobody chose. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
- *
  * **`?diagram=`, `?dx=`, `?dhue=` and `?remember=` stay in `REMEMBERED`.** They
  * are subordinate to a mode nobody is now in, so they draw nothing and fetch
  * nothing — and pressing Diagram or Remember later returns the reader to the
  * picture or the half they had chosen, which is most of what they wanted.
+ *
+ * `tweets` was the fourth, from 2026-09-29 to 2026-10-03. The thread is one of
+ * Summary's views now, so its rule is a condition on a pair of parameters
+ * rather than a mode word: § `opensTheThread` below.
  */
-const NEEDS_AN_EXPLICIT_PRESS = new Set(["chat", "diagram", "remember", "tweets"]);
+const NEEDS_AN_EXPLICIT_PRESS = new Set(["chat", "diagram", "remember"]);
+
+/**
+ * **Would restoring these pairs open Summary's thread?** Then the mode is
+ * dropped, as the three above are.
+ *
+ * Opening the thread with none stored **writes one**, a model call, on arrival
+ * rather than on a press (useTweets.ts § `useAutoRunOnArrival`; Greg,
+ * 2026-09-12), and a restore is the one arrival nobody chose. Summary at Brief
+ * or Fuller arms nothing on arrival and is restored as it stands, so the
+ * question needs both pairs: `mode` reads as Summary and the remembered
+ * `summary` is `thread`. `summary=thread` itself stays remembered and dormant,
+ * as `diagram=force` does, so pressing Summary later returns to the thread —
+ * and that press is a press.
+ *
+ * `mode=tweets`, the word a browser may have remembered before 2026-10-03,
+ * counts whatever `summary` says: `settleAddress` would lift it to the thread
+ * (router.ts § `liftLegacyTweets`).
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
+ */
+function opensTheThread(all: readonly string[]): boolean {
+  const first = (name: string) => all.find((p) => pairKey(p) === name);
+  const mode = first("mode");
+  if (mode === undefined) return false;
+  if (pairValue(mode) === "tweets") return true;
+  const summary = first("summary");
+  return pairValue(mode) === "summary" && summary !== undefined && pairValue(summary) === "thread";
+}
 
 /** Where one article's last view is kept. One key per slug; see `writeLastView`. */
 const KEY_PREFIX = "spya.lastView.";
@@ -262,9 +288,10 @@ export function hasArticleState(search: string): boolean {
  * rewrites are textual.
  *
  * **Three modes are remembered as no mode at all** —
- * `NEEDS_AN_EXPLICIT_PRESS` above. Every other mode is put back as it stands,
- * and a *link* that names any of the three is untouched: this is only about
- * what we replay unasked.
+ * `NEEDS_AN_EXPLICIT_PRESS` above — **and so is Summary while its thread is the
+ * view** (`opensTheThread`). Every other mode is put back as it stands, and a
+ * *link* that names any of them is untouched: this is only about what we replay
+ * unasked.
  */
 export function rememberableSearch(search: string): string {
   /* **`mode=annotations` is `margin=1` now** (2026-10-01): Marginalia (called
@@ -291,10 +318,11 @@ export function rememberableSearch(search: string): string {
         return ["margin=1"];
       })
     : raw;
+  const thread = opensTheThread(translated);
   const kept = [...new Set(translated)].filter((p) => {
     const key = pairKey(p);
     if (!REMEMBERED.includes(key as (typeof REMEMBERED)[number])) return false;
-    return !(key === "mode" && NEEDS_AN_EXPLICIT_PRESS.has(pairValue(p)));
+    return !(key === "mode" && (thread || NEEDS_AN_EXPLICIT_PRESS.has(pairValue(p))));
   });
   return kept.length > 0 ? `?${kept.join("&")}` : "";
 }

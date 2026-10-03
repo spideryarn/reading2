@@ -87,10 +87,10 @@ export interface QuoteMarks extends PassageSlot {
 }
 
 /**
- * The quotes whose outlines can open a prose card, in document order.
+ * The quotes whose fills can open a prose card, in document order.
  *
  * Usually `marked` contains `useQuoteMarks`' threshold-visible list. Skim is
- * the exception: its current stop is a quote and stays outlined even when the
+ * the exception: its current stop is a quote and stays filled even when the
  * Quotes bar hides it, so the card has to read the prose's merged marks rather
  * than `steppable`. Filtering `all` preserves the artefact's document order;
  * `proseFound` deliberately prepends that hidden Skim stop.

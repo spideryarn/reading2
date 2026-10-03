@@ -348,7 +348,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
   keyboard: {
     title: "Keyboard shortcuts",
     keywords:
-      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define tag untag microphone dictate speak",
+      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define tag untag microphone dictate speak sentence ask did you mean natural language",
     body: (
       <>
         <ul>
@@ -367,6 +367,14 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <em>tag as methods</em> and <em>untag methods</em> change your own tags, and{" "}
             <em>experimental</em> turns experimental features on or off. Press the microphone in the
             box to say it instead of typing.
+          </li>
+          <li>
+            If you do not know the name, type or say a whole sentence — <em>what’s changed on this site</em>,{" "}
+            <em>is consciousness mentioned anywhere</em> — and, when nothing matches, press{" "}
+            <kbd>Enter</kbd> to ask what you meant. A fast AI model reads your sentence and the list
+            of commands, never the article. If it is sure and the command only takes you somewhere,
+            you go there; otherwise it shows its best guesses under <strong>Did you mean</strong> and
+            you press <kbd>Enter</kbd> on the one you want. You need to be signed in.
           </li>
           <li>
             <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the
@@ -463,7 +471,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             <strong>Tied to passages.</strong> Quotes are cut out of the article: the model only
             chose them. FAQ writes no answers at all; each question points to the passages that
-            respond to it. Summary, Tweets, Ideas, Remember and Chat link each claim to the
+            respond to it. Summary and its thread, Ideas, Remember and Chat link each claim to the
             paragraphs behind it, so you can check in one click.
           </li>
           <li>
@@ -514,8 +522,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             button to start it, so a link someone sends you never starts work you did not ask for.
           </li>
           <li>
-            <strong>Tweets is the exception</strong>: on your own article it starts writing as soon as
-            you open it, however you got there.
+            <strong>Summary’s Thread is the exception</strong>: on your own article it starts writing as
+            soon as you open it, however you got there.
           </li>
           <li>
             <strong>Chat, Search and the margin’s ?</strong> work when you ask, and answers appear as
@@ -579,7 +587,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             <strong>Sorting.</strong> The chips set the order; press the one you are on to reverse
             it. <strong>Shift-click</strong> a second chip to sort within the first — by Added, then
-            by Length, say.
+            by Length, say. <strong>Published</strong> is the date the publisher gives; an article
+            with none, which includes every PDF, goes last.
           </li>
           <li>
             <strong>Cards or Table.</strong> The same list two ways: cards for deciding what to read

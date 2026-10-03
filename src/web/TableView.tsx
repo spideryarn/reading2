@@ -394,7 +394,7 @@ const NOT_A_BLOCK_SELECTION = [
      paragraph, which is how a finger reaches the gutter and therefore how a
      reader annotates (docs/project/touch.md). The list below says "a quote and
      nothing else": a quote that *also* carries a comment, a chat anchor, a
-     glossary term or a search's wash keeps the exclusion, because there the tap
+     glossary term or a search's outline keeps the exclusion, because there the tap
      does mean something. GPT Sol found this, reviewing
      docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md — the plan
      had recorded "nothing clicks a `mark.hit`" as a reason there was nothing to
@@ -403,7 +403,7 @@ const NOT_A_BLOCK_SELECTION = [
      **A bare quick hit also lets the tap select the paragraph.** Its mark
      carries `data-hit` for navigation, but paints nothing and has no tap
      action. Excluding every non-quote hit would turn an invisible whole
-     paragraph into a dead zone. Visible washes and overlapping interactive
+     paragraph into a dead zone. Visible outlines and overlapping interactive
      marks still own their taps through the concrete selectors below.
 
      **The one case this still gets wrong**: a quote inside a `<mark>` the
@@ -1301,7 +1301,7 @@ function TableViewInner({
              read from the artefact by index and never from the DOM, so a
              `class="xref"` the article wrote itself is an underline that does
              nothing (xref.ts). First, because it wins the words it is on: a
-             term, a citation, a comment or a search's wash under it has
+             term, a citation, a comment or a search's outline round it has
              already stood aside (`onMouseUp` below, ProseHoverCard's
              selectors). An author's link never contains one — `xrefMarks`
              drops those — so the link logic below is not being pre-empted.

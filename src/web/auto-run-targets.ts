@@ -2,8 +2,9 @@
  * **The targets allowed one automatic attempt, named once, in a module that
  * imports nothing at runtime.**
  *
- * Eleven start after a press; Tweets starts when its owner arrives at its own
- * page. `beginAutoAttempt` applies the same loop guard to both triggers.
+ * All but one start after a press; the thread starts when its owner arrives at
+ * Summary's Thread view. `beginAutoAttempt` applies the same loop guard to both
+ * triggers.
  *
  * A file of its own for the reason [`src/modes.ts`](../modes.ts) and
  * [`src/web/referee-views.ts`](./referee-views.ts) are files of their own: two
@@ -63,15 +64,15 @@ type StepAutoRunTarget = StepTarget<
   | "skim"
   | "sketch"
   | "illustrated"
-  /* The article as a numbered thread. Its own page rather than a band, and
-     since 2026-09-15 it starts on arrival rather than on a press — no token is
-     ever armed for it; it is here because `beginAutoAttempt` is keyed on this
-     union (useAutoRun.ts § `useAutoRunOnArrival`). */
+  /* The article as a numbered thread — Summary's Thread view. Since 2026-09-15
+     it starts on arrival rather than on a press — no token is ever armed for
+     it; it is here because `beginAutoAttempt` is keyed on this union
+     (useAutoRun.ts § `useAutoRunOnArrival`). */
   | "tweets"
   /* The second half of Remember: the questions the piece asks you back. */
   | "quiz"
-  /* Summary's plain-words work, armed by its bar button, command rows, slider
-     or either end button — docs/plans/261002a-summary-generates-on-open.md. */
+  /* Summary's plain-words work, armed by its bar button and by its Brief and
+     Fuller segments and command rows — docs/plans/261002a-summary-generates-on-open.md. */
   | "simple"
   /* Marginalia's relation words (so, but, vs): its own artefact, armed by the
      press that turns the column on —

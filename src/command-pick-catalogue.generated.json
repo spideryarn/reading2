@@ -1,0 +1,1584 @@
+[
+ {
+  "id": "mode:plain",
+  "label": "Plain",
+  "description": "Just the article — no columns, no panel",
+  "aliases": [
+   "article",
+   "text",
+   "reading"
+  ],
+  "kind": "mode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:structure",
+  "label": "Structure",
+  "description": "The document's shape — every part, and its sections",
+  "aliases": [
+   "columns",
+   "outline",
+   "tree",
+   "map",
+   "hierarchy",
+   "toc",
+   "contents"
+  ],
+  "kind": "mode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:summary",
+  "label": "Summary",
+  "description": "The piece restated: in plain words, brief or fuller, or as a thread of short posts",
+  "aliases": [
+   "summarise",
+   "summarize"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:diagram",
+  "label": "Diagram",
+  "description": "The article's shape as a picture: a model reads the argument and draws it",
+  "aliases": [
+   "sketch",
+   "picture",
+   "visual"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:skim",
+  "label": "Skim",
+  "description": "A route through the piece's quotes, a little deeper each time round",
+  "aliases": [
+   "spiral",
+   "route",
+   "trajectory"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:quotes",
+  "label": "Quotes",
+  "description": "The lines worth keeping — the piece's own sentences, chosen and checked against it",
+  "aliases": [
+   "quotations",
+   "excerpts"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:faq",
+  "label": "FAQ",
+  "description": "The questions a careful reader would ask this piece, and where it responds",
+  "aliases": [
+   "faqs",
+   "frequently asked questions"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:glossary",
+  "label": "Glossary",
+  "description": "The terms this piece uses in a non-obvious way, defined from the piece itself",
+  "aliases": [
+   "define",
+   "terms",
+   "definitions"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:ideas",
+  "label": "Ideas",
+  "description": "The propositions this piece needs you to hold — the ones it assumes, and the ones it adds",
+  "aliases": [
+   "premises",
+   "propositions",
+   "assumptions"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:timeline",
+  "label": "Timeline",
+  "description": "When the piece says these things happened, in order — and how sure it actually is",
+  "aliases": [
+   "chronology",
+   "dates",
+   "events"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:referee",
+  "label": "Referee",
+  "description": "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
+  "aliases": [
+   "review",
+   "reviewer",
+   "peer review"
+  ],
+  "kind": "mode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:citations",
+  "label": "Citations",
+  "description": "The works this piece cites, each with a link — ranked by how much the piece leans on them",
+  "aliases": [
+   "references",
+   "bibliography",
+   "sources",
+   "works cited"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:debate",
+  "label": "Debate",
+  "description": "What the rest of the web says about this piece — often nobody has written anything, and it says so",
+  "aliases": [
+   "critiques",
+   "reception",
+   "responses"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:search",
+  "label": "Search",
+  "description": "Find a passage by the words it uses, or by what it says",
+  "aliases": [
+   "find",
+   "highlight"
+  ],
+  "kind": "mode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:chat",
+  "label": "Chat",
+  "description": "Ask about this article — answers point back at the paragraphs they came from",
+  "aliases": [
+   "ask",
+   "question"
+  ],
+  "kind": "mode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:remember",
+  "label": "Remember",
+  "description": "Work the piece into memory through Recall, a short Tutorial or a Quiz — not saved notes or flashcards",
+  "aliases": [
+   "recall"
+  ],
+  "kind": "mode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:marginalia",
+  "label": "Marginalia",
+  "description": "Notes in a column right of the text, each level with the passage it is about",
+  "aliases": [
+   "annotations",
+   "margin notes",
+   "margin",
+   "sidenotes"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:structure:fisheye",
+  "label": "Fisheye",
+  "description": "Every part, opened up around the one you are reading",
+  "aliases": [
+   "Structure",
+   "Fisheye Structure",
+   "Structure Fisheye",
+   "Fisheye mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:structure:expanded",
+  "label": "Expanded",
+  "description": "Every part and section, each with its summary, in one list",
+  "aliases": [
+   "Structure",
+   "Expanded Structure",
+   "Structure Expanded",
+   "Expanded mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:summary:brief",
+  "label": "Brief",
+  "description": "The piece in plain words, short and very simple",
+  "aliases": [
+   "Summary",
+   "Brief Summary",
+   "Summary Brief",
+   "Brief mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:summary:fuller",
+  "label": "Fuller",
+  "description": "The piece in plain words, a little longer and keeping more of its terms",
+  "aliases": [
+   "Summary",
+   "Fuller Summary",
+   "Summary Fuller",
+   "Fuller mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:summary:thread",
+  "label": "Thread",
+  "description": "The article as a numbered thread of short posts",
+  "aliases": [
+   "Summary",
+   "Thread Summary",
+   "Summary Thread",
+   "Thread mode",
+   "tweets",
+   "tweet thread",
+   "twitter",
+   "x",
+   "social"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:diagram:force",
+  "label": "Force",
+  "description": "Sections as bubbles that pull together where they talk about the same things",
+  "aliases": [
+   "Diagram",
+   "Force Diagram",
+   "Diagram Force",
+   "Force mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:diagram:drift",
+  "label": "Drift",
+  "description": "One dot per paragraph, down the page in order and sideways by subject",
+  "aliases": [
+   "Diagram",
+   "Drift Diagram",
+   "Diagram Drift",
+   "Drift mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:diagram:trail",
+  "label": "Trail",
+  "description": "Drift's dots joined in reading order — does the piece travel or circle back",
+  "aliases": [
+   "Diagram",
+   "Trail Diagram",
+   "Diagram Trail",
+   "Trail mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:diagram:sketch",
+  "label": "Sketch",
+  "description": "A model reads the argument and draws its shape",
+  "aliases": [
+   "Diagram",
+   "Sketch Diagram",
+   "Diagram Sketch",
+   "Sketch mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:diagram:illustrated",
+  "label": "Illustrated",
+  "description": "The Sketch, painted — an interpretation of the argument's shape",
+  "aliases": [
+   "Diagram",
+   "Illustrated Diagram",
+   "Diagram Illustrated",
+   "Illustrated mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:referee:criteria",
+  "label": "Criteria",
+  "description": "Your own reviewing criteria, run over the piece",
+  "aliases": [
+   "Referee",
+   "Criteria Referee",
+   "Referee Criteria",
+   "Criteria mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:referee:claims",
+  "label": "Claims",
+  "description": "What the piece promises, against the passages meant to deliver it",
+  "aliases": [
+   "Referee",
+   "Claims Referee",
+   "Referee Claims",
+   "Claims mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:referee:mirror",
+  "label": "Mirror",
+  "description": "Your own review comments, read back to you — never a verdict on the paper",
+  "aliases": [
+   "Referee",
+   "Mirror Referee",
+   "Referee Mirror",
+   "Mirror mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:referee:candidates",
+  "label": "Candidates",
+  "description": "Who could review this piece, and what expertise it would take",
+  "aliases": [
+   "Referee",
+   "Candidates Referee",
+   "Referee Candidates",
+   "Candidates mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:remember:recall",
+  "label": "Recall",
+  "description": "Say what you took from the piece, and find out where it holds up",
+  "aliases": [
+   "Remember",
+   "Recall Remember",
+   "Remember Recall",
+   "Recall mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:remember:tutorial",
+  "label": "Tutorial",
+  "description": "Short turns: a little of the piece at a time, then a question for you to answer in your own words",
+  "aliases": [
+   "Remember",
+   "Tutorial Remember",
+   "Remember Tutorial",
+   "Tutorial mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:remember:quiz",
+  "label": "Quiz",
+  "description": "The piece asks you questions, and your answers are marked against it",
+  "aliases": [
+   "Remember",
+   "Quiz Remember",
+   "Remember Quiz",
+   "Quiz mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "page:/read/:slug/metadata",
+  "label": "Metadata",
+  "description": "Where this came from, how long it is, and every step that built it.",
+  "aliases": [
+   "about",
+   "details",
+   "source",
+   "reading time",
+   "stats",
+   "regenerate",
+   "rerun",
+   "re-run",
+   "redo",
+   "reprocess",
+   "ai processing",
+   "high-powered",
+   "cost",
+   "price",
+   "export",
+   "archive",
+   "delete"
+  ],
+  "kind": "page",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:section-high-powered",
+  "label": "High-powered AI",
+  "description": "The switch for a stronger model on this article, first in AI processing.",
+  "aliases": [
+   "high power",
+   "high powered",
+   "opus",
+   "more powerful ai",
+   "more powerful model",
+   "stronger model",
+   "better model",
+   "smarter model"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:section-ai-processing",
+  "label": "AI processing",
+  "description": "What was done to this article, and every step you can run again.",
+  "aliases": [
+   "regenerate everything",
+   "rerun everything",
+   "reprocess everything",
+   "pipeline",
+   "stages",
+   "processing",
+   "what we did to it"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:section-access-sharing",
+  "label": "Share this article",
+  "description": "Access & sharing: who can read it, and making it public or private again.",
+  "aliases": [
+   "access & sharing",
+   "access and sharing",
+   "access",
+   "sharing",
+   "publish",
+   "unpublish",
+   "private",
+   "make public",
+   "make private",
+   "who can read",
+   "visibility"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:archive",
+  "label": "Archive this article",
+  "description": "Off your shelf and out of its search; still readable here, and reversible.",
+  "aliases": [
+   "hide",
+   "put away",
+   "remove from shelf",
+   "done with it",
+   "tidy"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:export",
+  "label": "Export this article",
+  "description": "Download a zip of everything we hold for it, as plain files.",
+  "aliases": [
+   "download",
+   "zip",
+   "backup",
+   "save a copy",
+   "take out"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-arc",
+  "label": "Arc › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun arc",
+   "re-run arc",
+   "regenerate arc",
+   "redo arc",
+   "refresh arc",
+   "arc again",
+   "run arc again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-tweets",
+  "label": "Thread › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun thread",
+   "re-run thread",
+   "regenerate thread",
+   "redo thread",
+   "refresh thread",
+   "thread again",
+   "run thread again",
+   "rerun tweets",
+   "re-run tweets",
+   "regenerate tweets",
+   "redo tweets",
+   "refresh tweets",
+   "tweets again",
+   "run tweets again",
+   "rerun tweet thread",
+   "re-run tweet thread",
+   "regenerate tweet thread",
+   "redo tweet thread",
+   "refresh tweet thread",
+   "tweet thread again",
+   "run tweet thread again",
+   "rerun twitter",
+   "re-run twitter",
+   "regenerate twitter",
+   "redo twitter",
+   "refresh twitter",
+   "twitter again",
+   "run twitter again",
+   "rerun social",
+   "re-run social",
+   "regenerate social",
+   "redo social",
+   "refresh social",
+   "social again",
+   "run social again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-glossary",
+  "label": "Glossary › Run again",
+  "description": "Adds more terms to an up-to-date list; otherwise writes a new one",
+  "aliases": [
+   "rerun glossary",
+   "re-run glossary",
+   "regenerate glossary",
+   "redo glossary",
+   "refresh glossary",
+   "glossary again",
+   "run glossary again",
+   "rerun define",
+   "re-run define",
+   "regenerate define",
+   "redo define",
+   "refresh define",
+   "define again",
+   "run define again",
+   "rerun terms",
+   "re-run terms",
+   "regenerate terms",
+   "redo terms",
+   "refresh terms",
+   "terms again",
+   "run terms again",
+   "rerun definitions",
+   "re-run definitions",
+   "regenerate definitions",
+   "redo definitions",
+   "refresh definitions",
+   "definitions again",
+   "run definitions again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-quotes",
+  "label": "Quotes › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun quotes",
+   "re-run quotes",
+   "regenerate quotes",
+   "redo quotes",
+   "refresh quotes",
+   "quotes again",
+   "run quotes again",
+   "rerun quotations",
+   "re-run quotations",
+   "regenerate quotations",
+   "redo quotations",
+   "refresh quotations",
+   "quotations again",
+   "run quotations again",
+   "rerun excerpts",
+   "re-run excerpts",
+   "regenerate excerpts",
+   "redo excerpts",
+   "refresh excerpts",
+   "excerpts again",
+   "run excerpts again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-ideas",
+  "label": "Ideas › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun ideas",
+   "re-run ideas",
+   "regenerate ideas",
+   "redo ideas",
+   "refresh ideas",
+   "ideas again",
+   "run ideas again",
+   "rerun premises",
+   "re-run premises",
+   "regenerate premises",
+   "redo premises",
+   "refresh premises",
+   "premises again",
+   "run premises again",
+   "rerun propositions",
+   "re-run propositions",
+   "regenerate propositions",
+   "redo propositions",
+   "refresh propositions",
+   "propositions again",
+   "run propositions again",
+   "rerun assumptions",
+   "re-run assumptions",
+   "regenerate assumptions",
+   "redo assumptions",
+   "refresh assumptions",
+   "assumptions again",
+   "run assumptions again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-timeline",
+  "label": "Timeline › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun timeline",
+   "re-run timeline",
+   "regenerate timeline",
+   "redo timeline",
+   "refresh timeline",
+   "timeline again",
+   "run timeline again",
+   "rerun chronology",
+   "re-run chronology",
+   "regenerate chronology",
+   "redo chronology",
+   "refresh chronology",
+   "chronology again",
+   "run chronology again",
+   "rerun dates",
+   "re-run dates",
+   "regenerate dates",
+   "redo dates",
+   "refresh dates",
+   "dates again",
+   "run dates again",
+   "rerun events",
+   "re-run events",
+   "regenerate events",
+   "redo events",
+   "refresh events",
+   "events again",
+   "run events again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-quiz",
+  "label": "Quiz › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun quiz",
+   "re-run quiz",
+   "regenerate quiz",
+   "redo quiz",
+   "refresh quiz",
+   "quiz again",
+   "run quiz again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-faq",
+  "label": "FAQ › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun faq",
+   "re-run faq",
+   "regenerate faq",
+   "redo faq",
+   "refresh faq",
+   "faq again",
+   "run faq again",
+   "rerun faqs",
+   "re-run faqs",
+   "regenerate faqs",
+   "redo faqs",
+   "refresh faqs",
+   "faqs again",
+   "run faqs again",
+   "rerun frequently asked questions",
+   "re-run frequently asked questions",
+   "regenerate frequently asked questions",
+   "redo frequently asked questions",
+   "refresh frequently asked questions",
+   "frequently asked questions again",
+   "run frequently asked questions again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-relations",
+  "label": "Relation words › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun relation words",
+   "re-run relation words",
+   "regenerate relation words",
+   "redo relation words",
+   "refresh relation words",
+   "relation words again",
+   "run relation words again",
+   "rerun relations",
+   "re-run relations",
+   "regenerate relations",
+   "redo relations",
+   "refresh relations",
+   "relations again",
+   "run relations again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-sketch",
+  "label": "Sketch › Run again",
+  "description": "One model call, about a minute",
+  "aliases": [
+   "rerun sketch",
+   "re-run sketch",
+   "regenerate sketch",
+   "redo sketch",
+   "refresh sketch",
+   "sketch again",
+   "run sketch again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-skim",
+  "label": "Skim › Run again",
+  "description": "Needs Quotes first; without them it stops before any model call",
+  "aliases": [
+   "rerun skim",
+   "re-run skim",
+   "regenerate skim",
+   "redo skim",
+   "refresh skim",
+   "skim again",
+   "run skim again",
+   "rerun spiral",
+   "re-run spiral",
+   "regenerate spiral",
+   "redo spiral",
+   "refresh spiral",
+   "spiral again",
+   "run spiral again",
+   "rerun route",
+   "re-run route",
+   "regenerate route",
+   "redo route",
+   "refresh route",
+   "route again",
+   "run route again",
+   "rerun trajectory",
+   "re-run trajectory",
+   "regenerate trajectory",
+   "redo trajectory",
+   "refresh trajectory",
+   "trajectory again",
+   "run trajectory again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-debate",
+  "label": "Debate › Run again",
+  "description": "Up to two model calls, each of which searches the web",
+  "aliases": [
+   "rerun debate",
+   "re-run debate",
+   "regenerate debate",
+   "redo debate",
+   "refresh debate",
+   "debate again",
+   "run debate again",
+   "rerun critiques",
+   "re-run critiques",
+   "regenerate critiques",
+   "redo critiques",
+   "refresh critiques",
+   "critiques again",
+   "run critiques again",
+   "rerun reception",
+   "re-run reception",
+   "regenerate reception",
+   "redo reception",
+   "refresh reception",
+   "reception again",
+   "run reception again",
+   "rerun responses",
+   "re-run responses",
+   "regenerate responses",
+   "redo responses",
+   "refresh responses",
+   "responses again",
+   "run responses again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-citations",
+  "label": "Citations › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun citations",
+   "re-run citations",
+   "regenerate citations",
+   "redo citations",
+   "refresh citations",
+   "citations again",
+   "run citations again",
+   "rerun references",
+   "re-run references",
+   "regenerate references",
+   "redo references",
+   "refresh references",
+   "references again",
+   "run references again",
+   "rerun bibliography",
+   "re-run bibliography",
+   "regenerate bibliography",
+   "redo bibliography",
+   "refresh bibliography",
+   "bibliography again",
+   "run bibliography again",
+   "rerun sources",
+   "re-run sources",
+   "regenerate sources",
+   "redo sources",
+   "refresh sources",
+   "sources again",
+   "run sources again",
+   "rerun works cited",
+   "re-run works cited",
+   "regenerate works cited",
+   "redo works cited",
+   "refresh works cited",
+   "works cited again",
+   "run works cited again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-crossrefs",
+  "label": "Cross-references › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun cross-references",
+   "re-run cross-references",
+   "regenerate cross-references",
+   "redo cross-references",
+   "refresh cross-references",
+   "cross-references again",
+   "run cross-references again",
+   "rerun cross references",
+   "re-run cross references",
+   "regenerate cross references",
+   "redo cross references",
+   "refresh cross references",
+   "cross references again",
+   "run cross references again",
+   "rerun crossrefs",
+   "re-run crossrefs",
+   "regenerate crossrefs",
+   "redo crossrefs",
+   "refresh crossrefs",
+   "crossrefs again",
+   "run crossrefs again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "action:rerun-simple",
+  "label": "Simple summary › Run again",
+  "description": "Written again from scratch; free, and what is here stays until it succeeds",
+  "aliases": [
+   "rerun simple summary",
+   "re-run simple summary",
+   "regenerate simple summary",
+   "redo simple summary",
+   "refresh simple summary",
+   "simple summary again",
+   "run simple summary again",
+   "rerun simple",
+   "re-run simple",
+   "regenerate simple",
+   "redo simple",
+   "refresh simple",
+   "simple again",
+   "run simple again",
+   "rerun summary",
+   "re-run summary",
+   "regenerate summary",
+   "redo summary",
+   "refresh summary",
+   "summary again",
+   "run summary again",
+   "rerun summarise",
+   "re-run summarise",
+   "regenerate summarise",
+   "redo summarise",
+   "refresh summarise",
+   "summarise again",
+   "run summarise again",
+   "rerun summarize",
+   "re-run summarize",
+   "regenerate summarize",
+   "redo summarize",
+   "refresh summarize",
+   "summarize again",
+   "run summarize again"
+  ],
+  "kind": "action",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "page:/help",
+  "label": "Help",
+  "description": "How Spideryarn works, open at the part about the mode you are in.",
+  "aliases": [
+   "faq",
+   "how do i",
+   "manual",
+   "guide",
+   "documentation",
+   "docs",
+   "instructions"
+  ],
+  "kind": "page",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
+  "id": "action:comments",
+  "label": "Comments",
+  "description": "Your bookmarks and notes on this piece, in the drawer.",
+  "aliases": [
+   "notes",
+   "bookmarks",
+   "annotations",
+   "questions"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article"
+  ]
+ },
+ {
+  "id": "page:/",
+  "label": "Library",
+  "description": "Your shelf, and the box you paste a new article into.",
+  "aliases": [
+   "home",
+   "homepage",
+   "shelf",
+   "my articles",
+   "add",
+   "add an article"
+  ],
+  "kind": "page",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
+  "id": "page:/profile",
+  "label": "Profile",
+  "description": "Your account, your plan, and the settings that follow you around.",
+  "aliases": [
+   "settings",
+   "account",
+   "plan",
+   "billing",
+   "preferences"
+  ],
+  "kind": "page",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
+  "id": "page:/read/public",
+  "label": "Shared articles",
+  "description": "Every article anybody has shared, yours included.",
+  "aliases": [
+   "public",
+   "public library",
+   "public shelf",
+   "shared",
+   "browse"
+  ],
+  "kind": "page",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
+  "id": "page:/changelog",
+  "label": "What’s new",
+  "description": "Every release since launch, newest first.",
+  "aliases": [
+   "changelog",
+   "releases",
+   "updates",
+   "what's new",
+   "whats new"
+  ],
+  "kind": "page",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
+  "id": "action:feedback",
+  "label": "Feedback",
+  "description": "Tell us what is wrong, or what you wish it did.",
+  "aliases": [
+   "bug",
+   "report",
+   "problem",
+   "contact",
+   "help",
+   "suggestion"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
+  "id": "action:experimental",
+  "label": "Turn experimental features off",
+  "description": "Hide the modes and features still being built.",
+  "aliases": [
+   "experimental",
+   "experimental features",
+   "labs"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
+  "id": "action:experimental",
+  "label": "Turn experimental features on",
+  "description": "Show the modes and features still being built, too.",
+  "aliases": [
+   "experimental",
+   "experimental features",
+   "labs"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article-experimental-off"
+  ]
+ },
+ {
+  "id": "action:archive",
+  "label": "Put this article back",
+  "description": "Back on your shelf, where the library and its search show it again.",
+  "aliases": [
+   "put back",
+   "put back on shelf",
+   "unarchive",
+   "restore",
+   "return to shelf"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article-archived"
+  ]
+ }
+]

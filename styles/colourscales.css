@@ -31,7 +31,8 @@
  * **Triplets, not colours, wherever an alpha is wanted.** `--cat-3-rgb` is
  * `86 180 233`, and `--cat-3` is `rgb(var(--cat-3-rgb))` beside it. Only the
  * space-separated form takes a variable alpha — `rgb(var(--cat-3-rgb) / 0.3)` —
- * and the search wash needs one because it carries the model's confidence. That
+ * and the search outline needs one because its top edge and ends carry the
+ * model's confidence. That
  * is the same reason `--hit-rgb` is written that way in tokens.css, and the
  * same failure if it is not: the colour resolves, the alpha is silently
  * dropped, and every mark paints at full strength with the confidence gone.

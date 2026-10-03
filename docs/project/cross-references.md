@@ -87,7 +87,7 @@ cross-reference: it cannot know the nonce.
   It was a 2px dotted line in the link colour until then. `mark.xref` in
   [`annotations.css`](../../src/web/styles/annotations.css),
   [261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md).
-- **Precedence**: an xref wins over a glossary term, a citation mark, a comment and a search wash on
+- **Precedence**: an xref wins over a glossary term, a citation mark, a comment and a search hit on
   the same words. The one exception is an author's own `<a>`: an xref crossing one is dropped,
   and the author's link keeps its card and its click.
 - **Keyboard**: one Tab stop per link, on the first piece of a phrase that marking split. Enter

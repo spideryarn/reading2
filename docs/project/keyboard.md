@@ -251,7 +251,7 @@ Quiz's seam: `Reader` hands `useArrowNav` a handler only in that mode, so every 
 and the key goes back to the browser when the handler takes nothing. The rule is `stepQuote`
 (QuotesPanel.tsx), the band's ‹ › rule too: nothing selected goes to the first quote, ← on the
 first goes to the first again (Skim's rule), → on the last takes nothing, no wrap. It steps only
-over quotes the prose actually outlines (`useQuoteMarks`' `steppable`), so a row whose block a
+over quotes the prose actually marks (`useQuoteMarks`' `steppable`), so a row whose block a
 re-extraction took away is skipped rather than selected with nowhere to go (GPT Sol's plan review).
 A step selects the quote (`?quote=`, the ring), jumps to it, scrolls its row into view in the band,
 and on a narrow window steps the band aside. The ‹ › name their key on their cards.
