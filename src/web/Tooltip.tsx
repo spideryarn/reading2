@@ -577,7 +577,7 @@ export function ControlTip({
  *
  * `.tooltip` styles the panel and deliberately sets no font-size, so a bare
  * string inherits `body`'s 1rem — noticeably bigger than every other tooltip in
- * the app, all of which are on classed content (`.tip-crumb`, `.tip-search`,
+ * the app, all of which are on classed content (`.where-card`, `.tip-search`,
  * `.tip-soon`). Sized here rather than by adding a rule to styles.css, which
  * would be a fifth spelling of the same thing.
  *

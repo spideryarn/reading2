@@ -1506,7 +1506,7 @@ function UndoStrip({ title, onUndo }: { title: string; onUndo: () => void }) {
  *
  * `.tooltip` in styles.css paints the surface and nothing else — no size, no
  * colour — because every tooltip in the reading view carries classed content
- * that sets its own (`.tip-crumb`, `.tip-search`, `.tip-soon`). This page is
+ * that sets its own (`.where-card`, `.tip-search`, `.tip-soon`). This page is
  * Tailwind, so the sizing lives here in the same way `Note` does in
  * Metadata.tsx rather than as a sixth `.tip-*` rule in the stylesheet.
  *
