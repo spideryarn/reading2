@@ -218,6 +218,16 @@ as two prompts did. Write-up:
 [261003b](../docs/investigations/261003b-chat-proposes-commands-as-chips.md);
 [chat-tools.md § Command buttons](../docs/project/chat-tools.md#command-buttons-chat-proposes-the-reader-presses).
 
+## `command-pick/` — which fast model turns a sentence into a command?
+
+Behind the command bar's *Press Enter to ask what you meant*. Two runs: **2026-10-02**, whether Jev
+can pick a row at all ([261002c](../docs/investigations/261002c-jev-picks-a-command.md)), and
+**2026-10-03**, the row and its words, Jev against three small chat models, over the bar's real
+rows ([261003e](../docs/investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md)),
+which chose the models and the run-at-once cut production uses. Paid, about $1. How to rerun, and
+why its prompts are imported from `src/command-pick.ts`:
+[command-pick/README.md](command-pick/README.md).
+
 ## `reorder-quality.ts` — did putting the article first change the writing?
 
 ```

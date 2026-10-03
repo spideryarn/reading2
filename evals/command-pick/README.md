@@ -47,8 +47,9 @@ or read the old numbers as being about the old list.
 
 ## Files
 
-- `catalogue.ts` — the options: the slice above, five argument commands whose words are written
-  here, and `none`. Also which picks would run at once and which write or spend.
+- `catalogue.ts` — the options: the slice above, the five argument commands, and `none`. Also
+  which picks would run at once and which write or spend. The argument commands' words are
+  production's, imported from `src/command-pick.ts` § `ARGUMENT_OPTIONS`.
 - `phrases.ts` — 192 requests in four sets, with the ids counted as right, the expected argument,
   and the three labelling rules. `blind.raw.json` is the blind set as its writer (a subagent shown
   only row names and descriptions) left it.
@@ -56,7 +57,9 @@ or read the old numbers as being about the old list.
 - `chat.ts` — one call to a chat model with this arm's own `reasoning` and `provider`, the declared
   bypass `command-pick-chat` (the gateway's `eval` row decides both for its caller, and they are
   what the arms differ in). Both are metered through `evals/declared-spend.ts`.
-- `run.ts` — the arms and their prompts.
+- `run.ts` — the arms. The prompts production also sends (`choiceAsk`, `wordsMessages`) are
+  imported from `src/command-pick.ts`, so what was measured and what is sent are one copy; changing
+  that wording is a new measurement.
 - `summarise.ts` — whole-outcome accuracy by set, latency and cost per arrangement, the predeclared
   reading, the words, Jev's top three, the confidence cuts and what would have run at once, risky
   picks for requests with no right answer, and every miss.
