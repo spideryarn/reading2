@@ -49,6 +49,7 @@ import { and, asc, desc, eq, isNull, type SQL, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { feedback as feedbackTable } from "../db/schema.js";
+import { feedbackPageLabel } from "../feedback-page.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type {
@@ -364,8 +365,11 @@ const rawPgFeedbackStore: FeedbackStore = {
        "50 most recent of 50". Sequential, not `Promise.all`, inside it —
        src/store/article-rows.ts § `walk` says why. */
     return getDb().transaction(async (tx) => {
-      /* **Four columns, named here**, not `REPORT_COLUMNS` narrowed afterwards:
-         what is never selected cannot be handed on by a later spread. One row past
+      /* **Five columns, named here**, not `REPORT_COLUMNS` narrowed afterwards:
+         what is never selected cannot be handed on by a later spread. `url` is
+         the fifth, and it is selected only to be turned into `page` below — the
+         address itself goes no further than this function
+         (src/feedback-page.ts). One row past
          the limit is how `more` is known; the `(owner_id, created_at)` index the
          cap uses serves this too, and `id` breaks a tie between two reports filed
          in the same instant so the order is stable across reads. */
@@ -375,6 +379,7 @@ const rawPgFeedbackStore: FeedbackStore = {
           createdAt: feedbackTable.createdAt,
           kind: feedbackTable.kind,
           body: feedbackTable.body,
+          url: feedbackTable.url,
         })
         .from(feedbackTable)
         .where(and(eq(feedbackTable.ownerId, owner), idFilter(filter)))
@@ -397,6 +402,7 @@ const rawPgFeedbackStore: FeedbackStore = {
           /* The same honest cast `toReport` makes: a CHECK holds the column to the union. */
           kind: row.kind === null ? null : (row.kind as FeedbackKind),
           body: row.body,
+          page: feedbackPageLabel(row.url),
         })),
         more: rows.length > limit,
         counts: { all: counted?.all ?? 0, in: counted?.in ?? 0 },

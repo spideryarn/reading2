@@ -1300,6 +1300,7 @@ describe("the Earlier tab", () => {
         createdAt: "2026-09-12T10:45:00.000Z",
         kind: "suggestion",
         body: "A tab of what I sent before.\nJust a list.",
+        page: "/read/why-trees-spya-k3m9qt",
         shipped: true,
       },
       {
@@ -1307,6 +1308,8 @@ describe("the Earlier tab", () => {
         createdAt: "2026-09-09T08:00:00.000Z",
         kind: null,
         body: "The shelf is slow.",
+        /* A report older than 2026-09-02, or one whose address did not parse. */
+        page: null,
         shipped: false,
       },
     ],
@@ -1408,6 +1411,34 @@ describe("the Earlier tab", () => {
   it("refuses a report without a shipped flag as the wrong shape", async () => {
     const { shipped: _dropped, ...withoutFlag } = REPORTS.reports[0] ?? { shipped: true };
     listAnswer = page({ reports: [withoutFlag], more: false, counts: COUNTS });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+  });
+
+  /* spya-y4upzw: the address always went with a report; this is where the
+     reader can see that it did.
+     docs/plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md. */
+  it("says which page each report was filed from, and nothing for a report with none", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    const items = [...panelOf("Earlier").querySelectorAll("li")];
+    expect(items[0]?.querySelector(".fb-earlier-page")?.textContent).toBe("/read/why-trees-spya-k3m9qt");
+    expect(items[0]?.querySelector(".fb-earlier-meta")?.textContent).toContain(
+      " · Suggestion · on /read/why-trees-spya-k3m9qt · Shipped",
+    );
+    /* Text, not a link: the label has lost the query, so it is not where they were. */
+    expect(items[0]?.querySelector(".fb-earlier-meta a")).toBeNull();
+    expect(items[1]?.querySelector(".fb-earlier-page")).toBeNull();
+    expect(items[1]?.querySelector(".fb-earlier-meta")?.textContent).not.toContain(" on ");
+  });
+
+  it("refuses a report without a page as the wrong shape", async () => {
+    const { page: _dropped, ...withoutPage } = REPORTS.reports[0] ?? { page: null };
+    listAnswer = page({ reports: [withoutPage], more: false, counts: { all: 1, shipped: 1, unshipped: 0 } });
     mount();
     click(tab("Earlier"));
     await act(async () => {});
@@ -1868,6 +1899,47 @@ describe("the Earlier tab", () => {
     await act(async () => {});
     expect(lists).toHaveLength(2);
     expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
+  });
+});
+
+/**
+ * **The address a report carries is the page the reader is on when they open
+ * the box** — spya-y4upzw, and the property every later use of `url` rests on
+ * (the row, the Sentry tag, the admin's mail, the Earlier tab's label).
+ *
+ * The host is mounted once for the life of the signed-in app, so an address
+ * read when it mounted would be the first page of the session on every report.
+ * It is read at render, and opening is a render. Seen red on 2026-10-03 by
+ * holding the address in a `useState` initialiser instead.
+ * docs/plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md.
+ */
+describe("where a report says it was filed", () => {
+  const before = location.href;
+  afterEach(() => history.replaceState(null, "", before));
+
+  it("is the address in force when the dialog is opened, not when the host mounted", async () => {
+    function Open() {
+      const openFeedback = useFeedbackOpen();
+      return createElement("button", { type: "button", onClick: () => openFeedback?.() }, "Open feedback");
+    }
+    history.replaceState(null, "", "/read/a-piece?mode=quotes");
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => {
+      root.render(createElement(FeedbackHost, null, createElement(Open)));
+    });
+    /* An in-app navigation that re-renders nothing here: the router is mocked
+       to one constant route, which is the worst case for a stale address. */
+    history.pushState(null, "", "/admin/vouchers?tab=unused");
+    const trigger = [...host.querySelectorAll("button")].find((b) => b.textContent === "Open feedback");
+    act(() => trigger?.click());
+    type("Does this carry the page I am on?");
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(1);
+    expect(body().url).toBe(location.href);
+    expect(String(body().url)).toMatch(/\/admin\/vouchers\?tab=unused$/);
   });
 });
 

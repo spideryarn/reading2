@@ -94,6 +94,7 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
       !Number.isNaN(Date.parse(report.createdAt)) &&
       (report.kind === null || FEEDBACK_KINDS.some((kind) => kind === report.kind)) &&
       typeof report.body === "string" &&
+      (report.page === null || typeof report.page === "string") &&
       typeof report.shipped === "boolean"
     );
   })) return false;
@@ -329,6 +330,16 @@ export function EarlierList({
                 <p className="fb-earlier-meta">
                   <time dateTime={report.createdAt}>{when(report.createdAt, now)}</time>
                   {report.kind === null ? null : ` · ${KIND_WORD[report.kind]}`}
+                  {/* Where it was filed (spya-y4upzw): the address has always
+                      gone with a report, and this is the one place the reader
+                      sees that it did. The server's label, not the address
+                      (src/feedback-page.ts), so text and not a link. */}
+                  {report.page === null ? null : (
+                    <>
+                      {" · on "}
+                      <span className="fb-earlier-page">{report.page}</span>
+                    </>
+                  )}
                   {report.shipped ? (
                     <>
                       {" · "}
