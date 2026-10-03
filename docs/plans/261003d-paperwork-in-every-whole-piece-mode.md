@@ -83,7 +83,9 @@ One line per prompt, and three existing lines reconciled so the prompt gives one
 `tests/paperwork-coverage.test.ts`, the shape of `tests/plain-words-coverage.test.ts`: every
 `src/` file that hands a model the whole article (`articleWithIds(` or `articleText(`, found by
 syntax) calls `paperwork(` or is in `PAPERWORK_EXEMPT` in `src/paperwork.ts` with its reason. Seen
-red first, by deleting one interpolation. And a line in [mode.md](../project/mode.md)'s checklist.
+red first, by deleting one interpolation. Reconstructing the parent against the final exemption
+list finds ten uncovered prompt files: the nine measured modes plus Debate, which the plan review
+added. And a line in [mode.md](../project/mode.md)'s checklist.
 
 **What it cannot see:** a file with two prompts passes if either carries it (Debate's would, if it
 were not exempt), and a prompt that reads the article some other way (the structure step numbers
@@ -171,10 +173,19 @@ P0, four P1s, all taken. The sections above are the plan as first written; the c
 
 Four papers, the nine modes through production's own `generate*` (no profile, standard power),
 results under `evals/results/paperwork-modes/`, harness `evals/paperwork/modes.ts`. Arms: `before`
-and `before-2` on the old prompts (same prompt hashes, checked); `after` on the first wording;
+and `before-2` on the old prompts (the same nine mode-source hashes; `paperwork.ts` changed between
+them but none of those old prompts called it); `after` on the first wording;
 `after-2` on the final one; `after-3`, one paper, to test a failure (below). Plus targeted
 repeats of Arc and Quiz from scratch copies of the old and new prompt files, since removed. About
 $12 in all.
+
+The committed results contain the five production arms, the blind pair inputs, their keys and the
+two judges' answer sheets (`judge.md`, beside each key), and under `repeats/` the targeted runs that
+were kept: the label wording's six on `entropy-24`, the final wording's on all three papers, and
+the Quiz A/B with every drop logged. GPT Sol's code review found the sheets and repeats missing and
+the ledger's claims stronger than what was saved; they were saved afterwards. The earlier Arc
+repeats (the guard sentence, the intermediate wording, the old prompt's 8 on `source`) were only
+printed, so those counts remain run notes.
 
 ### What the old prompts did
 
@@ -203,38 +214,50 @@ is as true of a paperwork part as any other. So a paperwork part keeps its ordin
 what is at stake at the start, what is settled at the end — and the sentence may not mention the
 paperwork. **16 of 16** well-formed on `entropy-24`, and 0 malformed in every later run.
 
-| paperwork in the Arc sentence | old prompt | new prompt |
+On `source`'s closing part that still left about 4 in 8 sentences on the sourcing, so the
+sentence gained a concrete list — *no sources, data, thanks, funding, interests, authors or record*.
+GPT Sol's code review rightly found that list contradicted the shared rule for a piece whose
+argument is about its sources or data, and replaced it with *in their paperwork role*, unmeasured.
+The final wording keeps the list and adds the qualifier — *"where those are only paperwork"* — and
+was measured as such (`repeats/k930-arc-final-*.txt`):
+
+| paperwork in the Arc sentence | old prompt | final wording |
 |---|---|---|
-| `analog-cognition`, the opening part (authors, disclosures) | 2 of 2 | 1 of 7 |
-| `scaling-hypothesis`, the closing part (links) | 2 of 2 | 0 of 1 |
-| `source` (ball lightning), the closing part (data, interests, thanks), by my reading | about 6 of 8 | about 4 of 8, and lighter: the conclusion leads |
+| `analog-cognition`, the opening part (authors, disclosures) | 2 of 2 | 0 of 8 (and 1 of 7 under the intermediate wording) |
+| `scaling-hypothesis`, the closing part (links) | 2 of 2 | 0 of 1 (`after-2`, intermediate wording) |
+| `source` (ball lightning), the closing part (data, interests, thanks), by my reading | 2 of 2 in the arms, about 6 of 8 in repeats | about 2 of 8, and light: *"the sources … made available"*, *"undisclosed-bias testimony"* |
+| `entropy-24`, sentence count right | — | 10 of 10 |
 
-Reduced, not removed. The rest belongs to the deterministic option deferred above.
+Reduced, not removed. The rest belongs to the deterministic option, now queued as `qi-2byhh6nc`.
 
-### A failure that was load, not the prompt
+### A failure correlated with the concurrent run
 
 The two full `after` arms lost half of Quiz's questions on `source` (10 and 14 dropped as
 *unquoted*: the evidence quote not found in the passage named), and `after-2`'s FAQ there failed
 outright on 14 block ids that are not in the article. Neither old arm did it. In isolation it does
-not reproduce: **Quiz 5 of 5 clean on each prompt, old and new; FAQ 5 of 5 clean on the new**, and
-`after-3` (the same paper alone, all nine modes) was clean. Both bad runs were inside a burst of 36
-concurrent calls. Recorded as seen, not chased: it is not this change, but a model that cites ids
-it was not shown under load is worth knowing about.
+not reproduce: **Quiz 5 of 5 clean on each prompt, old and new** (`repeats/k930-quiz-*.txt`, which
+log every drop, and there were none); **FAQ 5 of 5 clean on the new** (a run note). The committed `after-3` result also has the same paper alone,
+all nine modes, clean. Both bad runs were launched as part of the harness's concurrent multi-paper
+burst. That pattern points away from a deterministic prompt defect, but does not establish load as
+the cause or prove the prompt change unrelated; ordinary model variation remains another
+explanation.
 
 ### The blind read
 
-Two Opus judges, each reading one `pairs.md` only, 12 pairs (one per mode, Arc on all four
-papers), keys balanced 7 : 5, unblinded afterwards.
+Two Opus judges, each reading one `pairs.md` only, 12 pairs (one per mode, Arc on all four papers),
+keys balanced 7 : 5, unblinded afterwards; each sheet is `judge.md` beside its key. The Arc pairs
+read `after-2`, the intermediate Arc wording, not the final one.
 
 | | less paperwork (new : old : tie) | preferred (new : old : tie) |
 |---|---|---|
 | new (`after-2`) vs old (`before`) | **3 : 0 : 9** — Timeline's editor's notes, Arc's closing "pointers", Arc on ball lightning | 7 : 5 : 0 |
 | control, old vs old (`before-2` vs `before`) | 1 : 0 : 11 (one draw happened to skip the editor's note) | 7 : 2 : 3 |
 
-**Paperwork goes down where there was some, and preference is inside the control's spread**, so no
-quality effect either way: neither judge's worst faults (an invented date in a new Timeline; Quiz
-and FAQ questions whose passages do not answer them, on both sides) is a paperwork effect, and the
-control produced faults of the same kinds. **The boundary held**: on `scaling-hypothesis` the new
+The judgments say paperwork goes down where there was some, while preference is inside the
+control's spread. With 12 pairs that is not evidence of *no* quality effect; it found none large enough to stand out in this small read. The judges' reported
+worst faults (an invented date in a new Timeline; Quiz and FAQ questions whose passages do not
+answer them, on both sides) are not paperwork effects, and the control reportedly produced faults
+of the same kinds. **The boundary held in the committed outputs**: on `scaling-hypothesis` the new
 prompts keep OpenAI's funding as argument — the *"lacking anything like DM's long-term funding"*
 quote and OpenAI LP in the Glossary.
 

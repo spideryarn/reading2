@@ -15,9 +15,10 @@
  * source beside the answer. Illustrated is given the same arm's sketch and a stub painter, so only
  * its brief is paid for.
  *
- * **The screen.** Each mode's output is a list of items; an item's block ids are every `spya-xxxxxx`
- * string inside it. An item whose ids are all in `PAPERWORK` below is a paperwork item. An item
- * with no ids at all (glossary entries, arc sentences, sketch nodes) is screened by the
+ * **The screen.** `itemsOf` knows where each mode keeps its anchors: passages, evidence,
+ * occurrences, a quote's block, a glossary entry's computed blocks, a sketch node or vignette's
+ * block, or an Arc entry's range. An item whose anchors are all in `PAPERWORK` below is a paperwork
+ * item. Prose with no anchor — captions, plate titles and image prompts — is screened by the
  * `PAPERWORK_WORDS` regex from run.ts instead, and every hit is printed to be read. A screen, not
  * the evidence.
  *

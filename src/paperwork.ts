@@ -57,7 +57,8 @@ the content says.`,
 sentence by the usual rules: where the ARGUMENT stands as that part opens. At
 the start, that is what is at stake; at the end, what the piece has settled and
 what it has not. It never mentions the paperwork — no sources, data, thanks,
-funding, interests, authors or record — and neither does any other sentence.`,
+funding, interests, authors or record, where those are only paperwork — and
+neither does any other sentence.`,
 };
 
 /**

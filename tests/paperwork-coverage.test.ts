@@ -26,17 +26,20 @@ import { parseSource, walkAst, type AstNode } from "./helpers/ts-ast.js";
 const ROOT = path.join(import.meta.dirname, "..");
 const WHOLE_ARTICLE = new Set(["articleWithIds", "articleText"]);
 
-function facts(source: string): { wholeArticle: boolean; paperwork: boolean } {
+function facts(source: string): { wholeArticle: boolean; paperworkKinds: string[] } {
   let wholeArticle = false;
-  let paperwork = false;
+  const paperworkKinds: string[] = [];
   walkAst(parseSource(source).program, (node) => {
     if (node.type !== "CallExpression") return;
     const callee = node.callee as AstNode | undefined;
     if (callee?.type !== "Identifier" || typeof callee.name !== "string") return;
     if (WHOLE_ARTICLE.has(callee.name)) wholeArticle = true;
-    if (callee.name === "paperwork") paperwork = true;
+    if (callee.name === "paperwork") {
+      const arg = (node.arguments as AstNode[] | undefined)?.[0];
+      paperworkKinds.push(arg?.type === "StringLiteral" && typeof arg.value === "string" ? arg.value : "(non-literal)");
+    }
   });
-  return { wholeArticle, paperwork };
+  return { wholeArticle, paperworkKinds };
 }
 
 function files(dir: string): string[] {
@@ -49,9 +52,22 @@ function files(dir: string): string[] {
 
 function uncovered(sources: ReadonlyMap<string, string>): string[] {
   return [...sources]
-    .filter(([f, s]) => !PAPERWORK_EXEMPT[f] && facts(s).wholeArticle && !facts(s).paperwork)
+    .filter(([f, s]) => !PAPERWORK_EXEMPT[f] && facts(s).wholeArticle && facts(s).paperworkKinds.length === 0)
     .map(([f]) => f);
 }
+
+const CHANGED_PROMPTS = {
+  "src/sketch.ts": "summary",
+  "src/illustrated.ts": "summary",
+  "src/faq.ts": "pick",
+  "src/quiz.ts": "pick",
+  "src/ideas.ts": "pick",
+  "src/quotes.ts": "pick",
+  "src/glossary.ts": "pick",
+  "src/timeline.ts": "pick",
+  "src/arc.ts": "part",
+  "src/debate.ts": "pick",
+} as const;
 
 describe("the paperwork rule is the default for every whole-article prompt", () => {
   const all = files("src").filter((f) => f !== "src/article-prompt.ts" && !f.startsWith("src/web/"));
@@ -72,17 +88,23 @@ describe("the paperwork rule is the default for every whole-article prompt", () 
     ).toEqual([]);
   });
 
+  it("each prompt changed here calls the rule exactly once, with its own kind", () => {
+    for (const [f, kind] of Object.entries(CHANGED_PROMPTS)) {
+      expect(facts(sources.get(f)!).paperworkKinds, f).toEqual([kind]);
+    }
+  });
+
   it("every exemption names a file that exists, reads the whole article, and does not carry the rule", () => {
     for (const [f, why] of Object.entries(PAPERWORK_EXEMPT)) {
       const source = sources.get(f);
       expect(source, `${f} does not exist`).toBeDefined();
       expect(facts(source!).wholeArticle, `${f} no longer reads the whole article`).toBe(true);
-      expect(facts(source!).paperwork, `${f} carries the rule, so drop its exemption`).toBe(false);
+      expect(facts(source!).paperworkKinds, `${f} carries the rule, so drop its exemption`).toEqual([]);
       expect(why.length, f).toBeGreaterThan(10);
     }
   });
 
-  it("would reject a new whole-article file until it carries the rule", () => {
+  it("would reject a new whole-article file until that file calls the rule", () => {
     expect(uncovered(new Map([["src/new-mode.ts", "const s = articleWithIds(meta, blocks);"]]))).toEqual([
       "src/new-mode.ts",
     ]);
