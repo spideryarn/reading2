@@ -9,11 +9,10 @@ a database other than the per-suite test databases `npx vitest run <file>` creat
 Read first: `docs/plans/261002j-illustrated-steering-note.md` (the plan, amended after your plan
 review in `docs/plans/261002j-illustrated-steering-note-review-sol.md`).
 
-The diff: `git diff 804d1cbdc~1 HEAD -- . ':!drizzle/meta'` shows the WIP commit plus a merge of
-origin/dev — so instead use `git diff origin/dev -- <files>` for exactly these files, which are
+The diff: use `git diff origin/dev -- <files>` for exactly these files, which are
 mine:
 
-- `drizzle/20261002230703_jobs_illustration_note.sql`, `src/db/schema.ts` (jobs.illustration_note)
+- `drizzle/20261002232435_jobs_illustration_note.sql`, `src/db/schema.ts` (jobs.illustration_note)
 - `src/types.ts` (Job.illustrationNote), `src/store/pg-jobs.ts`, `src/store/jobs.ts` (WorkKeyExtras),
   `src/jobs.ts` (EnqueueRequest, enqueue, sameWork, retryJob, step ctx)
 - `src/routes.ts` (parseIllustrationNote, parseJobRequest, publicJob)

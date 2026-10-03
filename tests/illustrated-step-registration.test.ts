@@ -887,6 +887,10 @@ describe("one press that draws and then paints", () => {
  * note, so the two cases that matter are both here: a second press with the
  * same note is done (the post-run stamp matches), and a press with a different
  * note — or none — is not, so it is never skipped while reporting success.
+ *
+ * **Mutation.** Run 2026-10-03: dropping `ctx.illustrationNote` from the step's
+ * `stamp` (src/pipeline.ts) reddens all three cases here and nothing else in
+ * the file.
  */
 describe("the reader's steering note", () => {
   const NOTE = "Fewer scenes, and bigger lettering.";

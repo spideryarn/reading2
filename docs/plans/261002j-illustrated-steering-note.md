@@ -154,3 +154,30 @@ because `enqueueSuccessorIn` calls it positionally (P1); the run-from-slug trade
 and the command named correctly; a post-run freshness test; the shared character policy;
 `stepRunRequest`, not `jobBody`. A paid hostile-note eval is not run: the residual it would measure
 is the one the hostile *article* fixture already shows, with the owner as the only party.
+
+## Stage 3: one real paint with a note, 2026-10-03
+
+The shipping stage through the harness (`evals/illustrated/run.ts --note`), Noema, run twice side by
+side: once plain, once with *"Draw it as an antique sea chart rather than a manuscript page, with no
+more than five scenes on the first plate, and make the lettering large."* Results and overview plates
+are in `evals/results/illustrated-261002j-plain/` and `-noted/` (the zoom plates were not kept, to
+spare the repository 7 MB of PNG).
+
+| | plain | noted |
+|---|---|---|
+| register the brief chose | illuminated manuscript page | antique hand-drawn sea chart |
+| vignettes on the overview | 11 | **5** |
+| vignettes kept / written | 26 / 27 | 20 / 21 |
+| brief | $0.4377, 369 s | $0.3615, 309 s |
+| plates | $0.2042 | $0.2041 |
+
+**The note steers rather than merely arrives**: the style, the scene count and the size of the
+lettering all moved as asked, and the zoom plates, which the note did not mention, kept 8 each. Every
+caption on the noted overview is spelt correctly and readable at thumbnail size.
+
+**One finding, and it is an existing one.** The sea-chart register brought its own ornament:
+scattered depth soundings ("207", "10d", "25") in open water. They are numbers nobody supplied, so
+they are the *"glyph-shapes that are not words"* that [illustrated.md](../project/illustrated.md)
+already records under *Don't compose scenes made of writing*, not a misspelt caption. A note that
+picks a register full of lettering (charts, ledgers, scrolls) will invite more of it. Nothing is
+built against that: the register is the reader's choice, and the captions stay correct.
