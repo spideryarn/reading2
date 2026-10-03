@@ -205,3 +205,6 @@ It is a passed-over option, not a deferred half of this report, so it has no que
   thrown out because the prompt quoted the eval paper's citations as its examples.
 - 2026-10-03: GPT Sol's code review: push after its P1 fixes. Two of its three fixes kept; its prompt
   edit measured and reverted.
+- 2026-10-03: full suite, 1499 of 1501 files passed, 1 skipped. The one failure was this plan's own
+  test, read while the code reviewer was halfway through editing it and the guard; run alone on the
+  finished tree it passes. Pushed to `dev` as `0c9339868`. Not deployed.
