@@ -467,6 +467,24 @@ export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
 export const QUICK_SEARCH_MODEL = "typesafe/jev-1.13";
 
 /**
+ * **What picks a command from a sentence typed into the command bar** — Jev
+ * again, asked one `choice` question over the bar's rows
+ * (src/command-pick-call.ts, plan 261003k). About 0.3 s and $0.0002.
+ *
+ * Its own constant beside `QUICK_SEARCH_MODEL`, although today they are one
+ * string, because each holds a threshold measured on its model:
+ * **`RUN_AT_ONCE`, 0.95 (src/command-pick.ts), was measured on
+ * `typesafe/jev-1.13`** and means nothing on the next version. Moving this is
+ * a rerun of evals/command-pick/, not a bump
+ * (docs/investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md).
+ *
+ * The words of an argument command — what to look for, the tag — are copied
+ * out by a second call on the quick tier's model, `QUICK_MODEL_OPENROUTER`
+ * (job `command-pick-words`): Jev's own attempt at them failed 15 times in 48.
+ */
+export const COMMAND_PICK_MODEL = "typesafe/jev-1.13";
+
+/**
  * **What turns a dictation into text.** Not on a tier, for the same reason the
  * PDF reader is not: a tier is a judgment about how much reasoning a job needs,
  * and this one needs none — it needs ears and a vocabulary list.
@@ -861,7 +879,16 @@ export type NonTaskAiJob =
      a `Task`: its model was chosen by a spike, not a tier, and it speaks the
      Decisions wire, where a tier's reasoning effort means nothing. Its own job
      rather than `search`, so the ledger can say what the quick half costs. */
-  | "search-quick";
+  | "search-quick"
+  /* **A sentence in the command bar, turned into one of its rows** — Jev's
+     one `choice` over the rows (src/command-pick-call.ts, plan 261003k). Not
+     a `Task`, for `search-quick`'s two reasons. */
+  | "command-pick"
+  /* **And the words that sentence names**, when the pick is a command that
+     takes some: a second, tiny call on `QUICK_MODEL_OPENROUTER`. Its own job,
+     so the ledger can say what the two halves cost. Not a `Task`: it is the
+     model the eval measured, not a tier, and an override would unpin it. */
+  | "command-pick-words";
 
 /**
  * **Every model call this app pays for**, whether or not it is a tier decision.
@@ -1361,6 +1388,10 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   /* OpenRouter's Decisions API — typed probabilities, not a chat completion.
      src/quick-search.ts through `openRouterDecisions`. */
   "search-quick": "decisions",
+  /* The command bar's sentence: Jev's `choice` on the Decisions wire, then a
+     small JSON answer on chat/completions for the words. src/command-pick-call.ts. */
+  "command-pick": "decisions",
+  "command-pick-words": "chat",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
      the only one that does, posts to chat/completions. The declared bypasses in
@@ -1625,6 +1656,8 @@ export const NON_TASK_MODELS: readonly {
   { job: "shelf-topics", id: SHELF_TOPICS_MODEL, provider: "openrouter" },
   { job: "paper-metadata", id: PAPER_METADATA_MODEL, provider: "openrouter" },
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
+  { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },
+  { job: "command-pick-words", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },
   /* `DIG_DEEPER_MODEL` in src/dig-deeper.ts is this same constant; named here
      by its source because that file imports this one. */
   { job: "dig-deeper", id: HIGH_POWER_MODEL_OPENROUTER, provider: "openrouter" },

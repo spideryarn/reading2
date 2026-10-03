@@ -1586,6 +1586,61 @@ describe("the decisions wire", () => {
     expect(result.noul).toEqual({ a: 0.5, e: 0 });
   });
 
+  /* The `choice` question, since 2026-10-03 — the command bar's pick (plan
+     261003k). The answer's shape is the one evals/command-pick/ saved 600 of. */
+  it("reads a choice with its confidence and every option's probability, on the command-pick job", async () => {
+    const ask = {
+      model: "typesafe/jev-1.13",
+      state: { app: "a", reader_request: "what changed" },
+      questions: {
+        command: {
+          type: "choice" as const,
+          instructions: "Which one command?",
+          criteria: { "page:/changelog": "What's new", none: "None of these" },
+        },
+      },
+    };
+    const sent = stubTransport(() =>
+      decided({
+        answers: {
+          command: {
+            type: "choice",
+            choice: "page:/changelog",
+            confidence: 0.88,
+            probabilities: { "page:/changelog": 0.88, none: 0.12, junk: "0.5", over: 1.2 },
+          },
+        },
+        usage: { input_tokens: 4905, output_tokens: 837, cost: 0.00020601 },
+      }),
+    );
+    const { result, report } = await collectSpend(() => openRouterDecisions("command-pick", ask));
+    expect(sent[0]?.body).toEqual(ask);
+    expect(result.choice).toEqual({
+      command: { choice: "page:/changelog", confidence: 0.88, probabilities: { "page:/changelog": 0.88, none: 0.12 } },
+    });
+    /* And a choice is not a yes/no: quick search's reading is untouched. */
+    expect(result.noul).toEqual({});
+    expect(report.calls[0]?.job).toBe("command-pick");
+    expect(report.calls[0]?.wire).toBe("decisions");
+  });
+
+  it("leaves out a choice that names nothing or has no confidence, rather than guessing one", async () => {
+    stubTransport(() =>
+      decided({
+        answers: {
+          a: { type: "choice", choice: "x" },
+          b: { type: "choice", choice: "x", confidence: 1.5 },
+          c: { type: "choice", confidence: 0.9 },
+          d: { type: "choice", choice: "x", confidence: 0.9 },
+          e: { noul: 0.4 },
+        },
+      }),
+    );
+    const { result } = await collectSpend(() => openRouterDecisions("search-quick", ASK));
+    expect(result.choice).toEqual({ d: { choice: "x", confidence: 0.9, probabilities: {} } });
+    expect(result.noul).toEqual({ e: 0.4 });
+  });
+
   it("names the context overflow, and only that, so a caller can halve and ask again", async () => {
     /* Copied from the spike's `mechanics.json` → `overflow`. */
     const overflow =

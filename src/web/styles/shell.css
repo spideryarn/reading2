@@ -472,8 +472,8 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    the class, and the ⟦illegible⟧ markers are in the text itself. The rule is
    here rather than in tokens.css because it is article content, not chrome.
 
-   A left border rather than a background wash: the search and comment
-   highlights already own washes, and a third one competing with them would
+   A left border rather than a background wash: quote and comment highlights
+   already own fills, and a third one competing with them would
    make a page with all three unreadable (docs/project/search.md). */
 .pdf-uncertain {
   border-left: 2px solid var(--ink-faint);

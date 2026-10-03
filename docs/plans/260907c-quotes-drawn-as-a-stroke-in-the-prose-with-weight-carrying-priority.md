@@ -382,7 +382,7 @@ edited one approved set at a time with before and after shown — which a run wi
 cannot do. Greg approved it on 2026-09-07 and it is done: `--quote-stroke-rgb` /
 `--quote-stroke-color` now have a paragraph beside the other colour tokens, as the third half of
 the sentence that already had two — *search hits fill, quotes outline* — pointing at
-[quotes.md § The stroke](../project/quotes.md#the-stroke-which-is-how-a-quote-says-how-much-it-matters)
+[quotes.md § The stroke](../project/quotes.md#a-highlighter-pen-which-is-how-a-quote-says-how-much-it-matters)
 for the mechanism rather than restating it.
 
 **The same approval carried a split**, which is not part of this feature but is the reason the entry

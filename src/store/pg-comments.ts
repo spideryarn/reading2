@@ -372,6 +372,9 @@ const rawPgCommentStore: CommentStore = {
            top of the retry the reader is watching arrive. GPT Sol, 2026-09-01. */
         attemptId: sql`gen_random_uuid()`,
         leaseExpiresAt: sql`clock_timestamp() + make_interval(secs => ${COMMENT_ANSWER_LEASE_MS} / 1000.0)`,
+        /* A new attempt has not finished. Left in place, the last answer's time
+           would sit under a spinner saying this one had. */
+        finishedAt: null,
       })
       /* **`in ('done','error')` is a claim; `<> 'none'` was not.**
          The first version excluded only bookmarks, so a row already `pending`
@@ -517,7 +520,9 @@ const rawPgCommentStore: CommentStore = {
     const articleId = await articleIdForOwned(slug);
     const [row] = await db
       .update(commentsTable)
-      .set({ colour })
+      /* `colour_at` beside it, cleared colour included: taking a colour away is
+         as much the reader's act as picking one. */
+      .set({ colour, colourAt: sql`clock_timestamp()` })
       .where(
         and(
           eq(commentsTable.articleId, articleId),
@@ -694,6 +699,12 @@ const rawPgCommentStore: CommentStore = {
            clears its pair in `finish` for the same reason. */
         attemptId: null,
         leaseExpiresAt: null,
+        /* **When the answer landed, or failed** — in this statement, so the
+           fence below decides it with everything else: a superseded attempt
+           matches no row and stamps nothing. Unconditional because the guard
+           above has already refused any patch that does not end the answer.
+           The database's clock, like the lease it replaces. */
+        finishedAt: sql`clock_timestamp()`,
       })
       .where(
         and(
@@ -786,7 +797,15 @@ const rawPgCommentStore: CommentStore = {
          row keeps a lease nobody holds, and the next reader of this table finds
          an `error` comment that still names a live attempt. `pg-chat.ts` clears
          its pair for the same reason. */
-      .set({ status: "error", error: COMMENT_SWEPT, attemptId: null, leaseExpiresAt: null })
+      /* `finished_at` is when the sweep ended the attempt, not when its process
+         died — nobody recorded that. */
+      .set({
+        status: "error",
+        error: COMMENT_SWEPT,
+        attemptId: null,
+        leaseExpiresAt: null,
+        finishedAt: sql`clock_timestamp()`,
+      })
       .where(
         and(
           eq(commentsTable.articleId, articleId),

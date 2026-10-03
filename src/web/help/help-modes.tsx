@@ -324,7 +324,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     reading: (
       <>
         <p>
-          <strong>Hidden instructions</strong>, at the top, checks the original web page for text a
+          <strong>Hidden instructions</strong>, behind the Notices button, checks the original web page for text a
           person would not see but an AI would read — text the colour of its background, too small to
           read, invisible characters, instructions written to a model. It reports and blocks nothing.
           “Nothing found” is not a clean bill: PDFs and some parts of a page are not checked, and it
@@ -543,7 +543,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   quotes: {
-    keywords: "quotations excerpts best lines highlights memorable sentences outline important striking keep",
+    keywords: "quotations excerpts best lines highlights highlighter memorable sentences purple important striking keep",
     whenToUse: (
       <p>
         When you want to carry lines out of the piece in its own words — for notes, a review, or to see
@@ -555,13 +555,14 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
       <>
         <ul>
           <li>
-            <strong>Once made, quotes are outlined in the text in every mode.</strong> A thicker, darker
-            outline means the AI judged the line more important or more striking. Search results are
-            filled with colour and quotes are only outlined, so the two never look alike. A green strip
-            down the left edge of the spine shows where they are in the whole piece.
+            <strong>Once made, quotes are highlighted in the text in every mode</strong>, in purple, like
+            a highlighter pen. A stronger highlight means the AI judged the line more important or more
+            striking. Search results are outlined and quotes are filled in, so the two never look alike,
+            and your own highlights are yellow, green, blue or pink. A purple strip down the left edge of
+            the spine shows where the quotes are in the whole piece.
           </li>
           <li>
-            Rest the pointer on an outlined quote for a moment and a card shows its two scores, why it
+            Rest the pointer on a highlighted quote for a moment and a card shows its two scores, why it
             was chosen, <kbd>‹</kbd> <kbd>›</kbd> to the quote before or after it in the text, and a
             button to open it in Quotes.
           </li>
@@ -683,8 +684,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
       <>
         <p>
           In <strong>Fisheye</strong>, where a column has no room for every row it says how many come
-          earlier or later. <strong>Expanded</strong> follows you only when you move into another
-          section, so if you scroll it by hand it keeps your place until then. Press any row to jump
+          earlier or later. As one list, Fisheye always shows the sections directly under the part
+          you are in and the available summary of the current one; when that will not all fit, the
+          list scrolls. Use <strong>Expanded</strong> to see deeper subsections too. Both scrolling
+          lists follow you only when you move into another section, so if you scroll one by hand it
+          keeps your place until then. Press any row to jump
           there.
         </p>
         <p>

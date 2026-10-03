@@ -1,7 +1,7 @@
 /**
  * **‹ › and ← → between quotes** — `stepQuote` in src/web/QuotesPanel.tsx is
  * the rule the band's stepper and the keys share; the prose card walks the
- * outlined quotes in document order.
+ * filled quotes in document order.
  * docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 3.
  */
 import { describe, expect, it } from "vitest";
@@ -54,7 +54,7 @@ describe("stepQuote", () => {
 });
 
 describe("the quotes available to the prose card", () => {
-  it("includes every outlined quote in document order, including a Skim stop hidden by the bar", () => {
+  it("includes every filled quote in document order, including a Skim stop hidden by the bar", () => {
     const search = {
       key: "search:b:0",
       blockId: LIST[1]!.blockId,

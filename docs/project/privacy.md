@@ -456,6 +456,18 @@ paragraph. The search and its hits are stored like a meaning search (`search_run
 'quick'`), and [`src/quick-search.ts`](../../src/quick-search.ts) logs counts only, never the
 criterion or a passage.
 
+## A sentence in the command bar
+
+**Added 2026-10-03**, with
+[reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar): a sentence
+the bar cannot match, sent on Enter by a signed-in reader, goes to TypeSafe's `jev-1.13` with our
+own words for the bar's commands, and, when the command picked takes words (a search, a term, a
+tag), to `gpt-5.6-luna` as well, which copies them out. Neither is shown the article. **A new flow
+of the reader's own words to two models already on the page**, not a new subprocessor, so the
+`jev-1.13` clause in the models paragraph says so and `LAST_UPDATED` moved to 3 October 2026. The
+sentence is not stored, and [`src/command-pick-call.ts`](../../src/command-pick-call.ts) logs the
+outcome's kind, counts and timings, never the sentence or the words.
+
 ## The admin's sign-up and upgrade notices carry the address
 
 **Added 2026-10-01**, at Greg's request

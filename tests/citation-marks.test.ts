@@ -153,7 +153,7 @@ describe("citeMarks", () => {
     /* Two kinds over the same words are ONE element carrying both classes, not
        two nested ones — annotate.ts § MarkKind. Pinned here because the
        citation is the fifth kind and the merge is what the class list is for:
-       a citation inside a quoted sentence must keep `hit` so the quote's stroke
+       a citation inside a quoted sentence must keep `hit` so the quote's fill
        survives, and keep `cite` so the card can find it. */
     const marks = citeMarks(BLOCKS, [TULVING]).get(ONE) ?? [];
     /* A real `QuoteStroke` — `{ tier, alpha }`, src/types.ts. The first draft of

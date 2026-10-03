@@ -2056,6 +2056,15 @@ const rawPgJobStore: JobStore = {
           error: sql`case when ${over} then null else ${jobs.error} end`,
           failureKind: sql`case when ${over} then null else ${jobs.failureKind} end`,
           finishedAt: sql`case when ${over} then now() else ${jobs.finishedAt} end`,
+          /* **When the reader pressed Stop**, on both branches — unconditional
+             inside the statement because the WHERE is what makes a request
+             accepted: a job that is already over, or somebody else's, matches
+             no row and stamps nothing. On the asking branch this is the only
+             record of the moment, since `finished_at` waits for the claimant
+             and may not end as `cancelled` at all. A second press on a job
+             already stopping matches again and moves it: it is the *latest*
+             accepted request. Nothing clears it. */
+          cancelRequestedAt: sql`now()`,
         })
         .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), inArray(jobs.status, ACTIVE)))
         .returning();

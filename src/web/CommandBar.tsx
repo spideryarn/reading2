@@ -59,6 +59,11 @@
  *  3. **No match says `No command matches.` and nothing else.** That overrode
  *     the recommendation put to him, which was to offer the article search as a
  *     fallback row. An honest empty state was preferred to a helpful guess.
+ *     **Since 2026-10-03 a signed-in reader is also told that Enter will ask
+ *     what they meant** (spya-t0dg9u, plan 261003k): a sentence that names no
+ *     row goes to a fast model, which answers with one of this bar's own rows
+ *     or with nothing. Still no guess — nothing is asked or drawn until that
+ *     Enter. `ask` below, and src/command-pick.ts.
  *  4. **The bar's mode rows are exactly what the Dock lists** — narrowed from
  *     *the bar lists exactly what the Dock lists* by the 2026-09-07 change,
  *     since the rest are the bar's own. The surviving half is still true *by
@@ -103,6 +108,15 @@
  * they are on the elements even while they carry no rules.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type ArgumentKind,
+  COULD_NOT_TELL,
+  MAX_SENTENCE,
+  type PickAnswer,
+  type PickRequest,
+  RUN_AT_ONCE,
+  sameKey,
+} from "../command-pick.js";
 import { PUBLIC_SHELF_LABEL } from "../messages.js";
 import { MODE_LABEL } from "../title-text.js";
 import { modeGenerates, subModeGenerates } from "./activation.js";
@@ -112,11 +126,14 @@ import {
   commandText,
   modeCommand,
   parseArgumentQuery,
+  pickKey,
   rankCommands,
   subModeCommand,
   type ActionOutcome,
+  type ArgumentQuery,
   type Command,
 } from "./command-match.js";
+import { askForPick } from "./command-pick-client.js";
 import {
   type CommandExecutor,
   type ProposalRunners,
@@ -376,6 +393,8 @@ export function besideTheModes({
                command-match.ts § `CommandWords` says why saying `false` out
                loud is the point rather than the noise. */
             generates: false,
+            /* The drawer, and nothing else. */
+            opensOnly: true,
             run: () => {
               openComments();
               return CLOSE;
@@ -396,6 +415,8 @@ export function besideTheModes({
             description: "Tell us what is wrong, or what you wish it did.",
             aliases: ["bug", "report", "problem", "contact", "help", "suggestion"],
             generates: false,
+            /* The dialog, empty; sending a report is a press inside it. */
+            opensOnly: true,
             run: () => {
               openFeedback();
               return CLOSE;
@@ -700,17 +721,92 @@ export function findHref(slug: string, carried: string, words: string): string {
  * vanish.
  */
 function argumentRows(article: CommandBarArticle, query: string): readonly Command[] {
-  const runners: ProposalRunners = {
-    ...article.executor?.runners,
-    ...(article.shelfRow === undefined ? {} : tagRunners(article.shelfRow.tags)),
-  };
+  return argumentRowsFor(article, parseArgumentQuery(query));
+}
+
+/**
+ * **The rows for arguments already parsed** — `argumentRows` without the verb
+ * table, so that a sentence a model read (`suggestedRows` below, plan 261003k)
+ * lands on exactly the rows its verb would have made: the same resolution, the
+ * same runners, the same refusals. One path to "what does this ask for".
+ */
+function argumentRowsFor(article: CommandBarArticle, queries: readonly ArgumentQuery[]): readonly Command[] {
+  const runners = runnersHere(article);
   const sources = article.executor?.sources ?? {};
-  return parseArgumentQuery(query)
+  return queries
     .flatMap((argument) => resolveArgument(argument, sources))
     .flatMap((row) => {
       const command = argumentCommand(article, runners, row);
       return command === null ? [] : [command];
     });
+}
+
+/** What can be run on this page: the reading view's executor, and the tags from the shelf row on either page. */
+function runnersHere(article: CommandBarArticle): ProposalRunners {
+  return {
+    ...article.executor?.runners,
+    ...(article.shelfRow === undefined ? {} : tagRunners(article.shelfRow.tags)),
+  };
+}
+
+/**
+ * **The argument commands a sentence may be answered with here** — the ones
+ * `argumentCommand` would draw a row for, so the model is never offered a
+ * command this page would then refuse to draw. Find is an address, offered
+ * wherever there is an article; a glossary look-up needs a glossary read.
+ */
+function argumentKindsHere(article: CommandBarArticle | undefined): readonly ArgumentKind[] {
+  if (article === undefined) return [];
+  const runners = runnersHere(article);
+  const glossary =
+    article.executor?.sources.glossary !== undefined &&
+    (canRun(runners, "glossary-open") || canRun(runners, "glossary-ask"));
+  return [
+    "find",
+    ...(canRun(runners, "jump-first") ? (["jump-first"] as const) : []),
+    ...(glossary ? (["glossary"] as const) : []),
+    ...(canRun(runners, "tag-add") ? (["tag-add"] as const) : []),
+    ...(canRun(runners, "tag-remove") ? (["tag-remove"] as const) : []),
+  ];
+}
+
+/**
+ * **A model's answer, as rows of today's bar** — and the only place an answer
+ * becomes something that can be pressed (plan 261003k, GPT Sol's F5).
+ *
+ * A `row` answer is keys; each is looked up in the list the bar holds *now*,
+ * by id **and** label, so what runs is always today's row and its runner. A
+ * key that is no longer there is simply not drawn — if *Archive* became *Put
+ * back* while the answer was out, the suggestion is gone rather than reversed.
+ * An `argument` answer goes the way a typed verb goes (`argumentRowsFor`), so
+ * an alias two glossary entries share is two rows (F3) and an invalid tag is a
+ * row that says why.
+ */
+function suggestedRows(
+  answer: PickAnswer,
+  commands: readonly Command[],
+  article: CommandBarArticle | undefined,
+): readonly Command[] {
+  switch (answer.kind) {
+    case "none":
+      return [];
+    case "row":
+      return [answer.key, ...answer.others].flatMap((key) => {
+        const command = commands.find((c) => sameKey(pickKey(c, article?.slug), key));
+        return command === undefined ? [] : [command];
+      });
+    case "argument":
+      return article === undefined ? [] : argumentRowsFor(article, [{ kind: answer.argument, words: answer.words }]);
+    default: {
+      const never: never = answer;
+      return never;
+    }
+  }
+}
+
+/** The ordered rows a reader has been shown, including an argument's resolved target. */
+function suggestionSignature(rows: readonly Command[]): string {
+  return JSON.stringify(rows.map((row) => [commandId(row), commandText(row).label]));
 }
 
 /** One argument row as a bar row, or `null` where nothing here can run it. */
@@ -732,6 +828,9 @@ function argumentCommand(article: CommandBarArticle, runners: ProposalRunners, r
     aliases: [],
     generates,
     typedOnly: true,
+    /* Never, whatever the proposal: an argument row is made of words nobody
+       has confirmed, so it is always drawn and pressed (plan 261003k, F2). */
+    opensOnly: false,
     run:
       row.kind === "refused"
         ? () => ({ kind: "stay", message: row.reason })
@@ -761,6 +860,8 @@ export function experimentalCommand(on: boolean, run: () => ActionOutcome | Prom
     /* Saving a preference calls no model. */
     generates: false,
     typedOnly: true,
+    /* It saves a setting on the reader's account. */
+    opensOnly: false,
     run,
   };
 }
@@ -774,8 +875,10 @@ export function experimentalCommand(on: boolean, run: () => ActionOutcome | Prom
  * `set` while one is in flight, so the inverse row would do nothing. The press
  * is the store's own `set`, the one the Dock's switch and /profile call,
  * awaited: a refusal keeps the bar open with the reason.
+ *
+ * Exported for tests/command-pick-catalogue.test.ts, as `subModeRows` is.
  */
-function experimentalRows(experimental: CommandBarExperimental): readonly Command[] {
+export function experimentalRows(experimental: CommandBarExperimental): readonly Command[] {
   const { on, loaded, signedIn, saving, set } = experimental;
   if (!loaded || !signedIn || saving) return [];
   return [
@@ -969,6 +1072,35 @@ function commandGenerates(command: Command): boolean {
 }
 
 /**
+ * **Whether pressing this row does nothing but take the reader somewhere** —
+ * the one question that decides whether a row a model picked from a sentence
+ * may run without a second Enter (plan 261003k § The line, applied).
+ *
+ * A mode, a sub-mode or a page moves the reader unless opening it starts work
+ * (`commandGenerates`). An action is a closure, so it says for itself
+ * (`opensOnly`, required: command-match.ts § `Command`). Everything else —
+ * Archive, Export, the Experimental switch, a *Run again*, every argument row
+ * — is drawn and waits, **whatever the model's confidence**: every model in
+ * the eval picked Archive for some request that should have been nothing, at
+ * up to 0.98 (docs/investigations/261003e-…).
+ */
+function onlyMovesTheReader(command: Command): boolean {
+  if (commandGenerates(command)) return false;
+  switch (command.kind) {
+    case "mode":
+    case "submode":
+    case "page":
+      return true;
+    case "action":
+      return command.opensOnly;
+    default: {
+      const never: never = command;
+      return never;
+    }
+  }
+}
+
+/**
  * **The sub-mode rows to offer**: every sub-mode of every mode the Dock drew,
  * in Dock order and then chip order — and, inside a mode, only the chips that
  * mode would draw with the switch as it is (Diagram's pictures are the one
@@ -979,8 +1111,11 @@ function commandGenerates(command: Command): boolean {
  * **Plus the picture `?diagram=` names**, experimental or not — the chip row's
  * own second rule, so with the switch off and a shared `diagram=trail` link
  * open, the bar offers Trail exactly where the chips do. GPT Sol, plan review.
+ *
+ * Exported for tests/command-pick-catalogue.test.ts, which writes the list the
+ * command-pick eval measures against from the functions the bar itself calls.
  */
-function subModeRows(
+export function subModeRows(
   modes: readonly Mode[],
   experimentalOn: boolean,
   diagram: DiagramKind,
@@ -1008,6 +1143,20 @@ function subModeRows(
  * than about the app.
  */
 export const NO_MATCH = "No command matches.";
+
+/**
+ * **What follows it, since 2026-10-03, for a signed-in reader who has typed
+ * something**: a sentence that names no row can be asked about (plan 261003k).
+ * Greg's call 3 — an honest empty state over a guessed fallback — still holds:
+ * nothing is guessed until the reader presses Enter for it.
+ */
+export const ASK_HINT = "Press Enter to ask what you meant.";
+
+/** The line under the box while the sentence is with the model. */
+const ASKING = "Working out what you meant…";
+
+/** The one-line heading over rows a model suggested, so they are not mistaken for a match on what was typed. */
+const SUGGESTED_HEADING = "Did you mean";
 
 interface Props {
   /**
@@ -1091,16 +1240,18 @@ export function CommandBar({
   const [selected, setSelected] = useState(0);
 
   /**
-   * **The line under the box** — `Starting…` while an action is out, or the
-   * sentence an action came back with when it kept the bar open (a refused
-   * run). One value, so the two cannot both show; `null` is an empty line.
+   * **The line under the box** — `Starting…` while an action is out, `Working
+   * out what you meant…` while a sentence is with the model (`ask`), or the
+   * sentence either came back with when it kept the bar open (a refused run,
+   * a sentence nobody could place). One value, so no two can show at once;
+   * `null` is an empty line.
    * Cleared by typing and by an ordinary opening of the bar. The one exception
    * is a refusal that reopens a bar the reader dismissed while its request was
    * out: that opening exists to show the sentence.
    */
-  const [said, setSaid] = useState<{ kind: "pending" } | { kind: "message"; text: string } | null>(
-    null,
-  );
+  const [said, setSaid] = useState<
+    { kind: "pending" } | { kind: "asking" } | { kind: "message"; text: string } | null
+  >(null);
   /**
    * **One action at a time, held before the first render can show it.** Two
    * Enters — or an Enter and a click — can both reach `activate` before React
@@ -1124,6 +1275,47 @@ export function CommandBar({
    * across the reset rather than relying on state-update ordering.
    */
   const reopeningWith = useRef<string | null>(null);
+
+  /**
+   * **A sentence, asked about** (plan 261003k): what the model answered, held
+   * as an answer and not as rows — what is drawn is looked up again at every
+   * render (`suggestedRows`), in whatever the row list is by then.
+   */
+  const [suggested, setSuggested] = useState<{ answer: PickAnswer; rowsSignature: string } | null>(null);
+  /**
+   * **The request revision** (GPT Sol's F5): bumped by every edit to the box
+   * and every opening or closing of the bar. An answer that comes back to a
+   * later revision is thrown away — it was about a sentence the reader has
+   * since changed, or a bar they have since shut. The third thing that makes
+   * an answer stale, the row list changing while it is out, is `signature`
+   * below.
+   */
+  const revision = useRef(0);
+  /** The ask that is out, so the next revision can stop it rather than wait for it. */
+  const asking = useRef<AbortController | null>(null);
+  /**
+   * **Drop whatever was asked or suggested** — the one thing an edit, an
+   * opening and a closing all do. The request is aborted (the server stops the
+   * model call when the connection closes) and `inFlight` is released at once,
+   * so a new sentence can be asked without waiting for the old one to fail.
+   */
+  const dropAsk = useCallback(() => {
+    revision.current += 1;
+    if (asking.current !== null) {
+      asking.current.abort();
+      asking.current = null;
+      inFlight.current = false;
+    }
+    setSuggested(null);
+  }, []);
+
+  /* Navigation can unmount the Dock without closing its dialog first. Stop
+     the request and invalidate its continuation even if fetch ignores abort. */
+  useLayoutEffect(() => () => {
+    revision.current += 1;
+    asking.current?.abort();
+    asking.current = null;
+  }, []);
 
   /**
    * **The way into the Feedback dialog**, or `null` where no host is mounted
@@ -1212,10 +1404,65 @@ export function CommandBar({
    * bar offers parses as one at all. Not ranked, because each row's label is
    * made of the query; ranking it against itself would always hit.
    */
-  const results = useMemo(() => {
+  const matched = useMemo(() => {
     const ranked = rankCommands(draft, commands);
     return article === undefined ? ranked : [...ranked, ...argumentRows(article, draft)];
   }, [draft, commands, article]);
+
+  /**
+   * **The rows as the server knows them**, and their signature — the row list
+   * reduced to what an answer can name. The keys are what a sentence is asked
+   * over; the signature is how an answer knows the list it was asked over is
+   * still the list when it lands (F5). A changed list also clears drawn
+   * suggestions: removing a row must not move Enter to its neighbour.
+   */
+  const keys = useMemo(() => commands.map((c) => pickKey(c, article?.slug)), [commands, article?.slug]);
+  const signature = JSON.stringify([keys, article?.slug, article?.view, argumentKindsHere(article), experimental.signedIn]);
+  const previousSignature = useRef(signature);
+  useLayoutEffect(() => {
+    if (previousSignature.current === signature) return;
+    previousSignature.current = signature;
+    dropAsk();
+    setSaid((was) => (was?.kind === "asking" ? null : was));
+  }, [signature, dropAsk]);
+  /* What an answer needs when it lands, a render or several later. Refs, for
+     `jobsRef`'s reason: the `.then` below must read today's, not the ones its
+     closure was made with. */
+  const now = useRef({ signature, commands, article });
+  now.current = { signature, commands, article };
+
+  /**
+   * **What a model suggested, as today's rows** — drawn only while nothing
+   * the reader typed matches; their own match always wins.
+   */
+  const resolvedSuggestions = useMemo(
+    () => (suggested === null ? [] : suggestedRows(suggested.answer, commands, article)),
+    [suggested, commands, article],
+  );
+  const suggestionsChanged = suggested !== null && suggested.rowsSignature !== suggestionSignature(resolvedSuggestions);
+  const offered = suggestionsChanged ? [] : resolvedSuggestions;
+  /* Argument resolution can change without changing the catalogue's keys
+     (for example, a glossary refresh removes one of two matching terms). */
+  useLayoutEffect(() => {
+    if (suggestionsChanged) dropAsk();
+  }, [suggestionsChanged, dropAsk]);
+  const suggesting = matched.length === 0 && offered.length > 0;
+  const results = suggesting ? offered : matched;
+  /**
+   * **Whether Enter on nothing asks** — somebody is signed in (the route is
+   * signed-in only; `experimental.signedIn` is the store's answer, the one
+   * fact about the reader the bar is handed) and there is a sentence.
+   *
+   */
+  const canAsk = experimental.signedIn && draft.trim() !== "";
+  /**
+   * **The offer is not made straight under a refusal.** `COULD_NOT_TELL`
+   * stays up until the box changes, and *Press Enter to ask* beneath it read
+   * as the bar contradicting itself (the browser check, 2026-10-03). Enter
+   * still asks again — a timeout deserves a second try — it is only the
+   * invitation that waits for a changed sentence.
+   */
+  const offerToAsk = canAsk && !(said?.kind === "message" && said.text === COULD_NOT_TELL);
   const index = Math.min(selected, Math.max(0, results.length - 1));
   const active = results[index];
 
@@ -1243,6 +1490,9 @@ export function CommandBar({
          layout effect runs before that paint, so there is no frame to see. */
       setDraft("");
       setSelected(0);
+      /* Before `inFlight` is read just below: an ask from the last opening
+         is stopped, not waited for. */
+      dropAsk();
       /* Still `Starting…` if the last opening's action is out: a press here
          would be refused until it settles, and an empty line would not say
          why. */
@@ -1262,7 +1512,10 @@ export function CommandBar({
       closingOurselves.current = true;
       dialog.close();
     }
-  }, [open]);
+    /* Shut by any route — our own close, Escape, the backdrop — a sentence
+       still being asked about is nobody's any more. */
+    if (!open) dropAsk();
+  }, [open, dropAsk]);
 
   /**
    * **A fresh bar every time, and the draft does not survive a close.**
@@ -1295,11 +1548,16 @@ export function CommandBar({
    * goes — it was about the row the reader had. `Starting…` stays; the run is
    * still out.
    */
-  const changeDraft = useCallback((value: string) => {
-    setDraft(value);
-    setSelected(0);
-    setSaid((now) => (now?.kind === "message" ? null : now));
-  }, []);
+  const changeDraft = useCallback(
+    (value: string) => {
+      setDraft(value);
+      setSelected(0);
+      /* An answer on its way, or already drawn, was about the old words. */
+      dropAsk();
+      setSaid((was) => (was?.kind === "pending" ? was : null));
+    },
+    [dropAsk],
+  );
 
   /**
    * **The microphone, on the bar's box** — Greg's *"type (or even talk)"* from
@@ -1453,6 +1711,70 @@ export function CommandBar({
     },
     [activateMode, activateSubMode, onOpen, onClose, dictationBusy],
   );
+  const activateNow = useRef(activate);
+  activateNow.current = activate;
+
+  /**
+   * **Enter on a sentence that matched nothing: ask what it meant** (plan
+   * 261003k). One post; the answer is one of the keys sent, or words from the
+   * sentence, or nothing.
+   *
+   * **What runs without a second Enter is decided here and nowhere else**: a
+   * `row` answer, at or above `RUN_AT_ONCE`, whose row is in today's list and
+   * `onlyMovesTheReader`. Everything else that resolves to a row is drawn,
+   * first row selected, and waits for a fresh press; nothing at all, a
+   * failure or a timeout says `COULD_NOT_TELL` and leaves the bar open.
+   *
+   * `inFlight` is the lock an asynchronous action already uses, so two Enters
+   * post once and no row is pressed while the sentence is out.
+   */
+  const ask = useCallback(() => {
+    if (!canAsk || inFlight.current || dictationBusy) return;
+    const sentence = draft.trim();
+    /* The route would refuse it; a paragraph is not a command. */
+    if (sentence.length > MAX_SENTENCE) {
+      setSaid({ kind: "message", text: COULD_NOT_TELL });
+      return;
+    }
+    const request: PickRequest = { sentence, rows: keys, argumentKinds: argumentKindsHere(article) };
+    const controller = new AbortController();
+    const at = revision.current;
+    inFlight.current = true;
+    asking.current = controller;
+    setSuggested(null);
+    setSaid({ kind: "asking" });
+    void askForPick(request, controller.signal).then((answer) => {
+      /* The box changed, or the bar shut: `dropAsk` has already let go. */
+      if (at !== revision.current) return;
+      asking.current = null;
+      inFlight.current = false;
+      const today = now.current;
+      /* The rows changed under the question (F5). Not an answer about this
+         list, so not shown — and not a failure either. */
+      if (today.signature !== signature) {
+        setSaid(null);
+        return;
+      }
+      const rows = answer === null ? [] : suggestedRows(answer, today.commands, today.article);
+      const [first] = rows;
+      if (answer === null || first === undefined) {
+        setSaid({ kind: "message", text: COULD_NOT_TELL });
+        return;
+      }
+      setSaid(null);
+      if (
+        answer.kind === "row" &&
+        answer.confidence >= RUN_AT_ONCE &&
+        sameKey(pickKey(first, today.article?.slug), answer.key) &&
+        onlyMovesTheReader(first)
+      ) {
+        activateNow.current(first);
+        return;
+      }
+      setSelected(0);
+      setSuggested({ answer, rowsSignature: suggestionSignature(rows) });
+    });
+  }, [canAsk, dictationBusy, draft, keys, signature, article]);
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the click handled here is the backdrop, whose keyboard equivalent is Escape — which <dialog> implements itself. Lightbox.tsx carries the same ignore for the same handler; FeedbackDialog.tsx does not only because its ⌘/Ctrl+Enter listener happens to satisfy the rule
@@ -1543,7 +1865,14 @@ export function CommandBar({
             }
             if (e.key === "Enter") {
               e.preventDefault();
+              /* **Only a fresh press** (GPT Sol's F4 on plan 261003k). A key
+                 held down repeats, and the first Enter may have asked a
+                 question whose answer is now a row that spends: the repeat
+                 must not confirm it. Nor an Enter that is finishing a word in
+                 an input method, which was never a press of this bar. */
+              if (e.repeat || e.nativeEvent.isComposing) return;
               if (active !== undefined) activate(active);
+              else ask();
             }
           }}
         />
@@ -1567,7 +1896,7 @@ export function CommandBar({
             said === null ? "" : "tw:border-b tw:border-rule tw:px-4 tw:py-2"
           } ${said?.kind === "message" ? "tw:text-ink" : "tw:text-muted-foreground"}`}
         >
-          {said === null ? "" : said.kind === "pending" ? "Starting…" : said.text}
+          {said === null ? "" : said.kind === "pending" ? "Starting…" : said.kind === "asking" ? ASKING : said.text}
         </p>
         {/* The microphone's own strip — the timer, the transcript on its way, a
             refusal. **After the bar's status line, not before it**: the strip
@@ -1576,17 +1905,27 @@ export function CommandBar({
         <DictationStrip dictation={dictate.dictation} />
 
         {results.length === 0 ? (
-          /* Exactly this, and nothing beside it — Greg's answer 3. No search
-             fallback, no "did you mean", no list of everything. */
+          /* Greg's answer 3: no search fallback, no list of everything, and
+             nothing guessed. Beside it, for a signed-in reader who has typed
+             something, only the offer to ask (`ASK_HINT`) — which does
+             nothing until they press Enter for it. */
           <p className="cmdbar-empty tw:m-0 tw:px-4 tw:py-4 tw:text-sm tw:text-muted-foreground">
-            {NO_MATCH}
+            {offerToAsk ? `${NO_MATCH} ${ASK_HINT}` : NO_MATCH}
           </p>
         ) : (
-          /* **`div`s rather than a `ul`/`li`**, on Biome's own advice: an
+          <>
+          {/* Rows a model suggested are the bar's ordinary rows, under one
+              muted line saying they were not found by what was typed. */}
+          {suggesting && (
+            <p className="cmdbar-suggested tw:m-0 tw:px-4 tw:pt-3 tw:text-sm tw:text-muted-foreground">
+              {SUGGESTED_HEADING}
+            </p>
+          )}
+          {/* **`div`s rather than a `ul`/`li`**, on Biome's own advice: an
              interactive ARIA role on a non-interactive element is an error
              (`noNoninteractiveElementToInteractiveRole`), and a listbox of
              options is exactly that. The semantics a screen reader reads come
-             from the roles either way. */
+             from the roles either way. */}
           <div
             id={listId}
             className="cmdbar-list tw:m-0 tw:overflow-y-auto tw:p-1"
@@ -1663,6 +2002,7 @@ export function CommandBar({
               </div>
             ))}
           </div>
+          </>
         )}
       </div>
     </dialog>

@@ -426,6 +426,23 @@ export const DECLARATIONS: readonly Declaration[] = [
     why: "Measuring whether Jev can be the interface model's fast first pass (docs/project/chat-llm-help-commands-vision.md § Jev first). Jev is served only on POST /api/alpha/decisions, which the gateway (src/ai-call.ts) has no route for; building that sixth wire waits on this eval saying Jev is worth it.",
   },
   {
+    /* **The small chat models the same eval compares Jev with** — plan 261003k
+       Stage 1. The question is latency, and latency on this wire is mostly a
+       matter of how hard the model thinks and which upstream serves it: the
+       two things `openRouterJson("eval", …)` decides for its caller and will
+       not let a body carry. So the arms post their own request, as the
+       structure eval's do (`structure-whole-document-chat`). */
+    id: "command-pick-chat",
+    kind: "bypass",
+    since: "2026-10-03",
+    account: "openrouter",
+    file: "evals/command-pick/chat.ts",
+    job: "eval",
+    wire: "chat",
+    metered: true,
+    why: "Each arm sets its own `reasoning.effort` (off or the lowest the model takes) and its own provider routing (DeepSeek on the zero-retention upstreams `paper-metadata` uses). The gateway's `eval` row sends the provider default for both, so through it every arm would be measured thinking at a setting production would not use, and the latency — the number the eval exists for — would be about the wrong request.",
+  },
+  {
     /* **The fleet dashboard's dictation, and the first entry here that is not
        this app.**
 

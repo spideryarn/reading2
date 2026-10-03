@@ -141,5 +141,5 @@ brings it back.
 - **A dialog.** Greg asked for a banner, and a modal in front of an article a reader has just opened
   is a worse first impression than the layout it is apologising for.
 - **A `reader_profile` column instead of `localStorage`.** Ruled out for the reason
-  [referee-card.ts](../../src/web/referee-card.ts) gives at length: a per-device "I have read this"
+  referee-card.ts (removed 2026-10-03, plan 261003k) gives at length: a per-device "I have read this"
   bit is not view state and not worth a migration.

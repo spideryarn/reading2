@@ -505,6 +505,18 @@ describe("the registry's two answers agree", () => {
     }
   });
 
+  it("Candidates arms nothing and is not marked as generating", () => {
+    /* Literal, because the agreement test above passes when both answers are
+       wrong together. Candidates reaches a search engine, so it waits for its
+       own button — src/web/activation.ts § REFEREE_TARGET. */
+    const candidates: SubMode = { mode: "referee", view: "candidates" };
+    expect(subModeTarget(candidates)).toBeNull();
+    expect(bandTarget("referee", { ...DEFAULTS, referee: "candidates" })).toBeNull();
+    expect(subModeGenerates(candidates)).toBe(false);
+    /* And Claims still does, so the row above is not passing on an empty table. */
+    expect(subModeTarget({ mode: "referee", view: "claims" })).toBe("claims");
+  });
+
   it("Quiz clears the thread, in the same write", () => {
     expect(subModeParams(QUIZ)).toEqual({ mode: "remember", remember: "quiz", thread: null });
     expect(withSubMode("?mode=chat&thread=spya-k3m9qt&at=spya-aaaaaa", QUIZ)).toBe(

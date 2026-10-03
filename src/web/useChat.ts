@@ -208,7 +208,8 @@ export interface ChatApi {
   /**
    * **Ask for the thread list again.**
    *
-   * One caller: Candidates' automatic run, for the one case a press cannot be
+   * Candidates' *Try again* (and its automatic run, which nothing arms since
+   * 2026-10-03 — activation.ts § REFEREE_TARGET), for the one case a press cannot be
    * answered from what is on screen — a first read that *failed* is not an
    * answer to *is there a thread yet*, so it is answered by reading again rather
    * than by starting a paid turn. useAutoRun.ts § A failed read is not an

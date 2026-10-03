@@ -802,6 +802,7 @@ describe("Candidates explains the press before it is pressed", () => {
           thread: null,
           loaded: true,
           loadFailed: false,
+          onReload: () => {},
           blocks: BLOCKS,
           error: null,
           onAsk: () => {},

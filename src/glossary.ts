@@ -514,36 +514,68 @@ export function panelRunKind(
  *
  * Aliases are indexed as well as names, and first writer wins, so an alias
  * already owned by an earlier entry does not silently change hands.
+ *
+ * **The entry's `addedAt` travels with its id** — `InheritedEntry`.
  */
-export function idsByTerm(onDisk: Glossary | null): Map<string, string> {
-  const out = new Map<string, string>();
+export function idsByTerm(onDisk: Glossary | null): Map<string, InheritedEntry> {
+  const out = new Map<string, InheritedEntry>();
   if (!onDisk) return out;
   for (const entry of onDisk.entries) {
+    /* One object per entry, shared by every name it answers to. */
+    const inherited: InheritedEntry = {
+      id: entry.id,
+      ...(entry.addedAt === undefined ? {} : { addedAt: entry.addedAt }),
+    };
     for (const term of [entry.name, ...entry.aliases]) {
       const key = normaliseTerm(term);
-      if (key && !out.has(key)) out.set(key, entry.id);
+      if (key && !out.has(key)) out.set(key, inherited);
     }
   }
   return out;
 }
 
 /**
- * Give a fresh entry the id the old list used for the same term.
+ * What a rewritten entry takes from the one it replaces: **its id, and when it
+ * was first added.** `InheritedQuote` in src/quotes.ts, for the same reason.
+ *
+ * The two travel together because they are the same claim — "this is the entry
+ * the reader already had". A rewrite that kept the id and stamped today would
+ * say a term found on Monday was found on Tuesday.
+ *
+ * **Absence is preserved, not filled.** An old entry with no `addedAt` hands on
+ * no `addedAt`: we do not invent a time for something that was already there.
+ */
+export interface InheritedEntry {
+  id: string;
+  addedAt?: string;
+}
+
+/**
+ * Give a fresh entry the id the old list used for the same term, and the time
+ * that entry was added.
  *
  * Only ever runs on a **rewrite** — a list whose prose is being regenerated
  * because the prompt that wrote it has moved on. Two fresh entries cannot claim
  * the same old id, so the first one to match wins and the second keeps the id
- * it was minted with.
+ * it was minted with — and this run's time.
  */
-function inheritIds(fresh: GlossaryEntry[], inherit: Map<string, string> | null): GlossaryEntry[] {
+function inheritIds(
+  fresh: GlossaryEntry[],
+  inherit: Map<string, InheritedEntry> | null,
+): GlossaryEntry[] {
   if (!inherit || inherit.size === 0) return fresh;
   const used = new Set<string>();
   return fresh.map((entry) => {
     for (const term of [entry.name, ...entry.aliases]) {
-      const id = inherit.get(normaliseTerm(term));
-      if (id && !used.has(id)) {
-        used.add(id);
-        return { ...entry, id };
+      const old = inherit.get(normaliseTerm(term));
+      if (old && !used.has(old.id)) {
+        used.add(old.id);
+        /* The fresh entry's own `addedAt` (this run's) is taken off first, so
+           an old entry that had none still has none — `InheritedEntry`. */
+        const kept: GlossaryEntry = { ...entry, id: old.id };
+        delete kept.addedAt;
+        if (old.addedAt !== undefined) kept.addedAt = old.addedAt;
+        return kept;
       }
     }
     return entry;
@@ -558,6 +590,11 @@ function inheritIds(fresh: GlossaryEntry[], inherit: Map<string, string> | null)
  * so an id that changes when a later pass finds a better name for the same
  * thing would break the reader's link to say the word slightly differently.
  * Names are display; ids are identity.
+ *
+ * **`addedAt` is the incumbent's too, and so is its absence** — it goes with
+ * the id, not with the name or the prose. An incumbent stored before the field
+ * existed stays without one even when the challenger has a time: the entry was
+ * already there, and the challenger's time is when it was found *again*.
  */
 function merge(incumbent: GlossaryEntry, challenger: GlossaryEntry): GlossaryEntry {
   const swap = richer(challenger.name, incumbent.name);
@@ -628,6 +665,9 @@ function merge(incumbent: GlossaryEntry, challenger: GlossaryEntry): GlossaryEnt
     // Only ever true of `glossary/1` entries; kept so a merge between two of
     // them does not quietly clear a badge the panel is still rendering.
     ...(winner.fromOutside || loser.fromOutside ? { fromOutside: true } : {}),
+    /* By hand, because this object is built field by field and a field nobody
+       names is a field dropped. Never `?? challenger.addedAt`. */
+    ...(incumbent.addedAt === undefined ? {} : { addedAt: incumbent.addedAt }),
     blocks: [],
   };
 }
@@ -769,7 +809,7 @@ export function buildGlossary(
      * id, so `?term=` links and stored lookups survive a rewrite that the prose
      * does not.
      */
-    inherit?: Map<string, string> | null;
+    inherit?: Map<string, InheritedEntry> | null;
     /**
      * The scores the prompt asked for and did not get — `GlossaryScoreDrops`,
      * mutated in place, one set for the whole call.
@@ -779,17 +819,42 @@ export function buildGlossary(
      * not log has no use for it. `generateGlossary` always passes one.
      */
     scores?: GlossaryScoreDrops;
+    /**
+     * When this pass finished, ISO — **one value, used both for every entry
+     * the pass adds (`GlossaryEntry.addedAt`) and for the list's
+     * `generatedAt`**, so the two cannot disagree by the milliseconds between
+     * two clock reads. Defaults to now; a test passes one.
+     */
+    now?: string;
   },
 ): Glossary {
+  const completedAt = opts.now ?? new Date().toISOString();
   const raw = Array.isArray(parsed.entries) ? (parsed.entries as RawEntry[]) : [];
   const previous = opts.existing?.entries ?? [];
   /* Ids already spent, so a fresh entry cannot collide with one the reader may
      already have a `?term=` link to — from the list being appended to, and from
      the one being replaced, because an inherited id must not be minted for some
      *other* term in the same batch. */
-  const taken = new Set([...previous.map((e) => e.id), ...(opts.inherit?.values() ?? [])]);
+  const taken = new Set([
+    ...previous.map((e) => e.id),
+    ...[...(opts.inherit?.values() ?? [])].map((old) => old.id),
+  ]);
+  /* Stamped here, once, before anything can merge or inherit: `inheritIds`
+     swaps the stamp for the old entry's time (or takes it off, where the old
+     entry had none), and `merge` keeps the incumbent's. What reaches the end
+     still carrying `completedAt` is exactly what this pass added. It is in no
+     hash and no prompt — src/types.ts § `GlossaryEntry.addedAt`.
+
+     **The fresh entries are merged with each other before any inherits.** The
+     other order let an earlier fresh entry absorb a later one that had just
+     been handed the old id, and the id and its time went with the loser (GPT
+     Sol's review of docs/plans/261003j, F8). */
   const fresh = inheritIds(
-    toEntries(raw, taken, opts.scores ?? noGlossaryScoreDrops()),
+    dedupe(
+      toEntries(raw, taken, opts.scores ?? noGlossaryScoreDrops()).map(
+        (entry): GlossaryEntry => ({ ...entry, addedAt: completedAt }),
+      ),
+    ),
     opts.inherit ?? null,
   );
   if (previous.length === 0 && fresh.length === 0) {
@@ -812,7 +877,7 @@ export function buildGlossary(
     profileHash: runProfileHash(opts.profile ?? null),
     entries: inDocumentOrder(located, opts.blocks),
     passes: (opts.existing?.passes ?? 0) + 1,
-    generatedAt: new Date().toISOString(),
+    generatedAt: completedAt,
     elapsedMs: (opts.existing?.elapsedMs ?? 0) + opts.elapsedMs,
   };
 }

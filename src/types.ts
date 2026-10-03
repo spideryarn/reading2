@@ -561,6 +561,26 @@ export interface GlossaryEntry {
    */
   fromOutside?: boolean;
   /**
+   * When the pass that added this entry finished, ISO — **its own time, not
+   * the list's.** `Glossary.generatedAt` is re-stamped by every *Find more
+   * terms*, so without this an entry from the first pass could not be told
+   * from one the third pass added. Greg, 2026-10-03: *"Store when it
+   * happened."* The twin of `Quote.addedAt`.
+   *
+   * **Absent on every entry stored before 2026-10-03, and never backfilled.**
+   * For those the list's `generatedAt` is an upper bound, not their time, and
+   * writing the bound into the field would turn it into a claim. Kept — and
+   * its absence kept — across an append, across a merge whichever name or
+   * prose wins, and across a rewrite that inherits the id (src/glossary.ts
+   * § `merge`, § `InheritedEntry`).
+   *
+   * Stored and shown nowhere yet. It enters no hash, no freshness comparison,
+   * no dedupe and no prompt; the public projection (src/public/dto.ts) does
+   * not copy it. A term the reader added themselves is not in the document
+   * and has no `addedAt`: its time is its `glossary_lookups` row's.
+   */
+  addedAt?: string;
+  /**
    * What came back when the reader asked us to check this term on the web.
    *
    * **Absent until somebody presses the button**, and that is the design rather
@@ -1090,11 +1110,13 @@ export interface Quote {
 }
 
 /**
- * How heavily a quote is outlined in the prose — **two levels, and the number of
- * levels is the finding, not an accident.**
+ * How heavily a quote is drawn in the prose — **two levels, and the number of
+ * levels is the finding, not an accident.** (Drawn as a fill since 2026-10-03,
+ * plan 261003l; the widths and the blind test below are from when it was an
+ * outline, and the test has not been re-run on fills.)
  *
- * `1` is the light stroke, `2` the heavy one. The stylesheet owns the widths
- * (1px and 3px, styles/annotations.css § quote strokes); this is an ordinal so
+ * `1` is the light fill, `2` the heavy one. The stylesheet owns their strengths
+ * (0.20 and 0.32, styles/annotations.css § quote fills); this is an ordinal so
  * that the design values stay in the design layer, exactly as `data-hues` keeps
  * a count here and the colours next door.
  *
@@ -1111,8 +1133,12 @@ export interface Quote {
 export type QuoteTier = 1 | 2;
 
 /**
- * **How a quote's outline is drawn: its weight and its brightness, as one
- * value.** `tier` is the coarse priority step above; `alpha` (0.70–1.00) is
+ * **How strongly a quote is drawn: its tier and its brightness, as one
+ * value.** Since 2026-10-03 a quote is a fill, like a highlighter pen, and both
+ * numbers set how strong the fill is (plan 261003l, Greg, `spya-xrgste`);
+ * until then it was an outline, they were its weight and its alpha, and that
+ * is where the name `QuoteStroke` comes from. The numbers and what they mean
+ * did not change. `tier` is the coarse priority step above; `alpha` (0.70–1.00) is
  * the fine one on top of it, since 2026-09-11 — Greg, SPIDERYARN-READING2-2W:
  * *"perhaps slightly fade the border based on the priority-score (but even
  * low-priority quotes should still be clearly visible)"*.

@@ -222,6 +222,8 @@ export function rerunCommand(
     ...rerunWords(step),
     generates: true,
     typedOnly: true,
+    /* It posts a paid run. */
+    opensOnly: false,
     run,
   };
 }

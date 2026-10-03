@@ -156,6 +156,9 @@ export function sectionCommand(row: SectionRow, run: Run): Command {
     aliases: row.aliases,
     generates: false,
     typedOnly: true,
+    /* It opens a section of the Metadata page; the controls in it are pressed
+       there. */
+    opensOnly: true,
     run,
   };
 }
@@ -195,6 +198,8 @@ export function archiveCommand(archived: boolean, run: Run): Command {
         aliases: ["put back", "put back on shelf", "unarchive", "restore", "return to shelf"],
         generates: false,
         typedOnly: true,
+        /* It writes the reader's shelf row. */
+        opensOnly: false,
         run,
       }
     : {
@@ -205,6 +210,9 @@ export function archiveCommand(archived: boolean, run: Run): Command {
         aliases: ["hide", "put away", "remove from shelf", "done with it", "tidy"],
         generates: false,
         typedOnly: true,
+        /* It writes the reader's shelf row — and every model in the eval picked
+           it for some request that should have been nothing (261003e). */
+        opensOnly: false,
         run,
       };
 }
@@ -222,6 +230,9 @@ export function exportCommand(run: Run): Command {
     aliases: ["download", "zip", "backup", "save a copy", "take out"],
     generates: false,
     typedOnly: true,
+    /* It builds a zip on the server and puts a file on the reader's disk:
+       harmless, and still not something a sentence should do unasked. */
+    opensOnly: false,
     run,
   };
 }

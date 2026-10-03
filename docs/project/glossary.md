@@ -1282,6 +1282,29 @@ hand. [260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md
 The [run row](#the-run-row-find-more-or-find-terms-again) is the one button at the top of the
 column. Its forced run appends only when `existingFor` accepts the list; otherwise it rewrites.
 
+### Each entry keeps the time it was added
+
+`GlossaryEntry.addedAt`, since 2026-10-03, and the twin of `Quote.addedAt`
+([quotes.md](quotes.md)). The list's `generatedAt` is re-stamped by every pass, so without a time
+of its own an entry from the first pass could not be told from one the third pass added. Greg,
+2026-10-03: *"Store when it happened."*
+
+- **A pass stamps what it adds, once**, with the same clock read as its `generatedAt`
+  (`buildGlossary`).
+- **The time belongs to the id, not to the name or the prose.** `merge` keeps the incumbent's
+  whichever name wins, and a rewrite that inherits an id inherits its time with it (`idsByTerm`,
+  `InheritedEntry`). A rewrite after the article's text moved inherits nothing, so those entries
+  are new and say so.
+- **Absence is kept, not filled.** An entry stored before the field existed has none and never gets
+  one — not from a merge with a timed entry, not from a rewrite. It was already there, and the
+  list's `generatedAt` is only an upper bound for it.
+
+**It is shown nowhere yet**, and it is in no hash, no freshness check, no dedupe rule and no prompt.
+The public projection does not copy it ([`src/public/dto.ts`](../../src/public/dto.ts)). A term the
+reader added themselves is not in the document, so it has no `addedAt`; its time is its
+`glossary_lookups` row's. [`tests/glossary-added-at.test.ts`](../../tests/glossary-added-at.test.ts);
+plan [261003j](../plans/261003j-store-when-it-happened-timestamp-audit.md) § stage 3.
+
 ### There was a *Start again* beside it, and it went
 
 Greg, 2026-09-05:

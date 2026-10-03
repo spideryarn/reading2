@@ -48,20 +48,16 @@ table landed with its entry and with a fixture that inserts a row and requires i
 
 **One run per article, and no id.** A referee writes several criteria and asks the paper what *it*
 claims exactly once, so the primary key is `article_id` alone and starting a run **replaces** what is
-there. `created_at` doubles as the sweep's clock, which is how the Postgres store gets the grace
+there. `created_at` is the run's start (`finished_at`, stored and not shown, is its end) and doubles
+as the sweep's clock, which is how the Postgres store gets the grace
 window `RefereeClaimsStore.sweep`'s one boolean cannot express — without it a second Vercel process
 loading the panel would error a run the first one is still streaming
 ([`src/store/pg-referee-claims.ts`](../../src/store/pg-referee-claims.ts)).
 
-**Candidates works end to end** as of 2026-09-01 — open the sub-mode and the opening ask goes out on
-the press that opened it, creating the thread; then scope the search in the composer and names arrive
-with the shortlist above the transcript. **The brief used to arrive unprompted**, on a `useEffect`
-the first time the sub-mode was *mounted*, and that is why the button was added: a mount is not a
-gesture — a pasted link, a Back step and a re-render all reach one — so a first-time referee paid for
-a model call and sent paper-derived terms to a search engine without having asked for either
-(2026-09-02). The press-not-mount rule survives; since 2026-09-06 a press on the **chip** counts as
-one, and the button stays for the reader whose automatic attempt failed
-([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md), and § the disclosure, below). It is a third `ThreadKind` on chat's own machinery
+**Candidates works end to end** — open the sub-mode, then press *Build the reviewer brief* to
+create its thread; scope the search in the composer and names arrive with the shortlist above the
+transcript. Opening the panel and retrying a failed read start no turn (§ What the band looks like).
+It is a third `ThreadKind` on chat's own machinery
 (`drizzle/0050_candidates_thread_kind.sql`, [`src/converse.ts`](../../src/converse.ts) § `systemFor`,
 [`src/referee-candidates.ts`](../../src/referee-candidates.ts),
 [`src/web/CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx)). See § 4 below for where each of
@@ -74,7 +70,7 @@ cannot reach a referee, and its `coverage` cannot stop any UI from saying 'nothi
 `GET /api/referee/scan/:slug` now runs it over the stored **raw source**
 ([`src/source-scan.ts`](../../src/source-scan.ts)), and
 [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx) draws the answer at the
-**mode** level — above the sub-mode chips, on screen whichever panel is open — because a hidden
+**mode** level — inside Notices, whichever panel is open — because a hidden
 instruction is a fact about the document and bears on Criteria, Claims, Mirror and Candidates
 alike. Rule 5 below says where each of its rules is enforced.
 
@@ -97,6 +93,44 @@ day it was none of those while looking finished from a test file, which is worth
 plan before anything was built, and the plan's own § *Where this plan still disagrees with the
 review* is candid about the one it did not take.
 **Research**: [260831e-helping-peer-reviewers/](../research/260831e-helping-peer-reviewers/README.md).
+
+## What the band looks like, since 2026-10-03
+
+Greg, 2026-10-03 (`spya-vbeyse`):
+
+> The referee mode is, the UI is very confusing. … It seems to bury the actual actions and useful
+> stuff underneath a whole bunch of warnings. I mean, maybe those warnings are necessary, but
+> perhaps we could hide them inside the information tooltip or something, or create a warning
+> tooltip, and in general see how you can improve that whole mode UI.
+
+Measured that day at 1280 × 800, the criterion box started 607px down a 760px band. So, top to
+bottom, the band is now:
+
+1. **One row: the four chips and a *Notices* button**, with the band's (i) in the corner.
+2. **The Notices box, only while it is open** — the source scan, then the confidentiality
+   sentences in full. It is shut on every visit and remembers nothing. **It opens itself when the
+   scan found something** (`sourceScanOpens` in
+   [`SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx), the scan's own rule, so a
+   labelled finding counts and a scan that lands late still opens it).
+3. **The panel**, which starts with one line saying what to do in this sub-mode: the first
+   sentence of the chip's own hover card, from the same constant.
+
+***How Referee mode works* is the (i)**, in the corner where every other mode keeps its own
+([mode.md](mode.md)): the mode's two sentences from `MODE_CATALOG`, then *What the colours mean*.
+The card that used to open inside the band, its `localStorage` bit and its header button are gone.
+
+**The Candidates chip opens the panel and starts nothing.** The panel's *Build the reviewer brief*
+button starts the turn, and the search-engine sentence is printed at the top of that panel before
+and after the first turn. That is what let the sentence leave the top of the other three sub-modes.
+
+**What this gave up**, each a reversal of something argued further down this page: the one-line
+*"text has already been sent"* fact and the scan's headline are no longer on screen in every state
+(a finding still is), and Candidates takes one more press. All three are open questions for Greg in
+[261003k](../plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md),
+which also has the before and after screenshots. Where a later section describes the notice's own
+collapse, the line above the chips or the chip starting Candidates, it is describing the
+arrangement before this one and the reasoning that arrangement answered.
+[`tests/referee-notices.test.tsx`](../../tests/referee-notices.test.tsx) holds the new one.
 
 ## The job, and the tension it was built to hold
 
@@ -768,48 +802,23 @@ that cannot be reached is not an explanation.
 both, including the part jsdom cannot demonstrate: it dispatches events to `disabled` elements
 happily, so the old spelling passed a "the card opens" test here and failed it in every browser.
 
-## The card that says what the mode is for
+## What the mode is for: the (i) in the corner
 
 The cards above answer *what does this control do*. They cannot answer *what is this mode*, because a
-card only opens on a control you already suspected. So there is one **"How Referee mode works"** card,
-under the sub-mode chips at the top of the panel:
-[`src/web/RefereeCard.tsx`](../../src/web/RefereeCard.tsx).
+card only opens on a control you already suspected. That answer is the band's (i), in the top-right
+corner like every other mode's: the mode's own two sentences from `MODE_CATALOG` — no accept or
+reject, no score, no grade — and then *What the colours mean*, stated as the *shape* of the rule
+rather than as red and green, since `?refscale=br` paints the same two directions blue and red
+(`RefereeAbout` in [`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx)).
 
-**Two short paragraphs.** The refusal — *you are the referee; nothing here scores the paper or drafts
-your review* — and what the colours mean, which is stated as the *shape* of the rule rather than as
-red and green, since `?refscale=br` paints the same two directions blue and red.
-
-**It had a third part and it was cut**, 2026-09-02. A line each on the four sub-modes sat between
-those two, and it was an artefact of the order the work landed in: stage 2 had already put a
-`ControlTip` on each of the four chips directly above this card, so every one of those lines had a
-second copy that opens on the chip it is about. The card is kept short deliberately — *a card longer
-on screen than the panel underneath it has failed at the thing it is for* — and it was breaking its
-own rule. Measured in Chrome at 1280×900 on an article with no criteria: **409.5px** before,
-**203.1px** after, against a 269.9px empty-state Criteria composer underneath it.
-
-**It is in `.ref-panel`, not `.ref-brief`.** That matters more than it looks. `.ref-brief` holds the
-confidentiality notice and the injection scan, and neither of those may ever be dismissed — a
-closable card sitting beside a non-closable one invites closing the wrong one, and teaches a referee
-that the box above ought to close too. The card is in the scroller with the sub-mode, where
-everything is transient by construction.
-
-**Shut it and it stays shut; the header's *How this works* button brings it back.** One bit, in
-`localStorage`, and reopening clears it rather than opening the card for one mount — otherwise the
-button works once and the card is gone again on the next paper, which reads as the button not having
-worked. [`src/web/referee-card.ts`](../../src/web/referee-card.ts) is the store and the whole argument
-for it; [`tests/referee-how-card.test.tsx`](../../tests/referee-how-card.test.tsx) pins both
-directions and the case where the browser refuses to keep anything.
-
-**Why `localStorage` at all**, when `RefereeBand`'s own docstring used to say it was banned outright
-citing [url-state.md](url-state.md): that was the flat version of a real rule rather than the rule.
-View state — *how you are looking at an article* — goes in the URL because it has to survive a reload
-and travel when the address is pasted to somebody else. A per-device *"I have read this"* bit is
-neither: it is not about this article, and pasting it at somebody else would be pasting your own
-reading history at them. The install hint is the same kind of per-browser state. The alternative
-considered and dropped was a reader-profile column, which is a migration for a checkbox.
-
-**What the card is not** is a way to dismiss the confidentiality notice. That notice collapses, is
-never dismissed, remembers nothing, and starts shut on every visit — see § Confidentiality below.
+**It was a card inside the band from 2026-09-02 to 2026-10-03**, open by default above the first
+control until shut, with one bit in `localStorage` and a *How this works* button in the header to
+bring it back. It went when Greg met the mode as burying its actions (§ What the band looks like):
+at 1280 × 800 it was 237px of the 607px above the criterion box. Two things it taught are worth
+keeping. A line each on the four sub-modes was cut from it on 2026-09-02 because each repeated the
+chip's own hover card directly above — *a card longer on screen than the panel underneath it has
+failed at the thing it is for*. And what a referee is told to do first is now one line at the top
+of the panel, from that same hover card's first sentence, so there is still exactly one copy.
 
 ## The rules the whole mode obeys
 
@@ -943,12 +952,14 @@ So there are three sentences, in three places, and the **tense is the whole poin
 - **Past tense, inside Referee mode itself** — `REFEREE_TEXT_ALREADY_SENT`
   (`src/messages.ts`), shown by `RefereeBand`
   ([`src/web/modes/referee/RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx)), and
-  **collapsed since 2026-09-02** at Greg's asking. The *fact* is the label on the control —
-  `REFEREE_TEXT_ALREADY_SENT_SHORT`, which is the long sentence's own opening clause — so shutting
-  the box hides the venues and the audience, never that the text has gone; and `noticeOpen` is a
-  `useState` that remembers nothing, so every visit starts shut. That is the difference between a
-  collapse and a dismissal, and it is why the storage objection below does not apply: there is
-  nothing to store. It does
+  **behind the band's Notices button since 2026-10-03** (§ What the band looks like). From
+  2026-09-02 until then it was a collapse of its own whose label was the fact itself, so that
+  shutting the box hid the venues and the audience and never that the text had gone; that
+  one-line fact is no longer on screen while Notices is shut, which is an open question for Greg
+  in [261003k](../plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md).
+  What survives is that nothing is remembered, so every visit starts the same way. That is the
+  difference between a collapse and a dismissal, and it is why the storage objection below does
+  not apply: there is nothing to store. It does
   not pretend a choice is still open: this article's text has already been sent, that happened when
   it was added, and here is what NIH, NSF, Elsevier, Springer Nature, Wiley, NeurIPS and ICLR all say
   about that as a confidentiality breach in itself, separate from who writes the review. It names

@@ -389,12 +389,8 @@ export function ClaimsView({
       {api.error && <p className="clm-error">{api.error}</p>}
       {!api.loaded && <p className="gloss-quiet">Loading…</p>}
 
-      {api.loaded && run === null && !api.error && (
-        <p className="gloss-quiet">
-          The claims this paper makes about its own work, each with the passages where the paper
-          takes it up. Every row is a door into the prose.
-        </p>
-      )}
+      {/* The empty state described the sub-mode here until 2026-10-03; the
+          band's lead line above the panel says it now (RefereeMode.tsx). */}
 
       {pending && claims.length === 0 && <p className="gloss-quiet">Reading the paper…</p>}
 

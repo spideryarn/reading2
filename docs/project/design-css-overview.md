@@ -143,39 +143,35 @@ The `--accent` warning above was already written in two files, in capitals, and 
 anyway with `--accent`'s neighbour. **A rule that is only written down is not a check**, which is
 why these now are.
 
-**There is exactly one colour that is not the orange, and it is `--hit-rgb`** — the wash over search
-results ([search.md](search.md)). It exists because a comment, a glossary term and a search hit can
+**Search has its own non-orange colour, `--hit-rgb`**, used as the fixed hue for literal results
+([search.md](search.md)). It exists because a comment, a glossary term and a search hit can
 all cover the same sentence, and three meanings separated only by opacity is one hue too few. That
 is not a guess: the version this project is an offshoot of drew all three in `#DB8A45` and got away
 with it only because it could never show two at once
 ([original-version/highlighting.md](original-version/highlighting.md)). On a near-black ground the
 failure is worse than muddled, it is invisible.
 
-It is held as **three space-separated numbers rather than as a colour**, because the confidence wash
-is `rgb(var(--hit-rgb) / <alpha>)` and that form is the one that takes a variable alpha. `--hit` is
+It is held as **three space-separated numbers rather than as a colour**, because a literal match's
+confidence edge is `rgb(var(--hit-rgb) / <alpha>)` and that form is the one that takes a variable alpha. `--hit` is
 the ordinary-colour alias beside it. Anything else that needs a second meaning on the prose should
 add a token here rather than reach for another alpha of the orange.
 
-**Since 2026-08-26 that sentence needs a second half.** Several saved searches can be showing at
-once, each in its own hue, so the search mark had to split into two channels: a low-chroma slate
-wash (`--hit-wash-rgb`) carrying the model's confidence, and one coloured rule per search underneath
-it carrying *which* search. `--hit-rgb` is now the panel's chrome colour rather than the wash's. The
+Several saved searches can be showing at once, each in its own hue, so the search mark has two
+channels: the top edge and ends carry the model's confidence, while one coloured rule per search
+along the bottom carries *which* search. `--hit-rgb` is the fallback edge and band colour for a
+literal match, which has no saved-search hue of its own. The
 eight hues are in [`colourscales.css`](../../styles/colourscales.css) and the reasoning is in
 [colour-scales.md](colour-scales.md) — including the two things that make a published palette wrong
 on this page, and the fact that slot 6 sits close enough to the brand orange to be worth knowing
 about.
 
-**And a third half since 2026-09-07, which adds a token rather than a hue.** Quotes are drawn in the
-prose as an *outline* — `--quote-stroke-rgb`, with `--quote-stroke-color` the alias beside it — and
-the width of that outline carries the quote's priority. The reason it is not another wash is that
-every channel a `<mark>` has was already spoken for: the fill says how confident a search is, the
-hue underneath says *which* search found it, and a fourth alpha of the slate would have been a
-second way of saying "somebody marked this". **Search hits fill; quotes outline.** If a future
-change needs a fill for quotes after all, the reason this was chosen has gone. The mechanism, the
-two tiers and what is still open — including the fact that this green is the same family as
-`--cat-2` rather than the unused hue it was first claimed to be — are in
-[quotes.md § The stroke](quotes.md#the-stroke-which-is-how-a-quote-says-how-much-it-matters) and
-[260907c](../plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md).
+**Quotes add a token rather than another search hue.** A quote is a fill, like a
+highlighter pen, in `--quote-rgb` (a purple; `--quote-color` is the alias beside it), and its strength
+carries the quote's priority. **Quotes fill; search hits outline**, since 2026-10-03,
+when Greg swapped the two (`spya-xrgste`). `--hit-wash-rgb` is now only the pressed hit's faint wash
+and the quick hit's ring. The mechanism, the two tiers, why purple, and the month it was the other
+way round are in
+[quotes.md § A highlighter pen](quotes.md#a-highlighter-pen-which-is-how-a-quote-says-how-much-it-matters).
 
 One trap worth repeating here because it is invisible: **mix colours in `oklab`, not `oklch`.**
 `--page` is written `oklch(0.145 0 0)`, a hue explicitly specified as 0 rather than missing, so

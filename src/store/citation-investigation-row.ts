@@ -14,7 +14,14 @@ import type { citationInvestigations } from "../db/schema.js";
 import type { PaperUnreadableReason } from "../messages.js";
 import type { CitationInvestigation, InvestigatedPaper, PaperMatchedBy } from "../types.js";
 
-type Row = typeof citationInvestigations.$inferSelect;
+/**
+ * **Without `created_at`, on purpose.** That column is the first press's time
+ * and only the database default writes it; `Columns` is what the upsert sets on
+ * a later press, so leaving it out of the type is what stops a re-run naming
+ * it and moving it. Nothing reads it back either — it is stored, not shown
+ * (docs/plans/261003j-store-when-it-happened-timestamp-audit.md).
+ */
+type Row = Omit<typeof citationInvestigations.$inferSelect, "createdAt">;
 type Columns = Omit<Row, "articleId" | "entryId" | "ownerId">;
 type PaperColumns = Pick<
   Columns,
@@ -141,7 +148,7 @@ export function paperFromRow(row: PaperColumns): InvestigatedPaper | undefined {
   }
 }
 
-/** Every column but the key and the owner — so an upsert replaces the whole answer, the paper included. */
+/** Every column but the key, the owner and `created_at` — so an upsert replaces the whole answer, the paper included. */
 export function investigationColumns(inv: CitationInvestigation): Columns {
   return {
     answer: inv.answer,
