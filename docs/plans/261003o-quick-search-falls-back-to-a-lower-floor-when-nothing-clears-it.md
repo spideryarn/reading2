@@ -200,3 +200,9 @@ becomes unnecessary.
   CR-2 (P2) nothing stores that a list is a fallback, and a score just under 0.7 prints as 70, which
   is Q2; CR-3 and CR-4 (P3) wrong counts in the prose and two stale comments, fixed by the reviewer.
   It would keep 0.5 over 0.55.
+- 2026-10-03, 23:21: pushed to `dev` on the fast gates: `tests/quick-search.test.ts` and
+  `tests/doc-links.test.ts` (47 of 47) and `npm run typecheck`, both on the tree merged with `dev`,
+  and lint on the two touched files. **The full suite had not reported**: started 22:44 on the
+  pre-merge tree, still running 37 minutes later on a busy box, no failure of a search test in its
+  log so far. Its verdict is in `logs/tmux-jobs/jp5nxn-suite-2244-168424.log` in this worktree.
+
