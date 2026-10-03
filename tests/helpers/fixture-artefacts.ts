@@ -188,6 +188,7 @@ const LAYOUT: {
   timeline: { timeline: (at) => path.join(at.dir, "timeline.json") },
   quiz: { quiz: (at) => path.join(at.dir, "quiz.json") },
   faq: { faq: (at) => path.join(at.dir, "faq.json") },
+  relations: { relations: (at) => path.join(at.dir, "relations.json") },
   skim: { skim: (at) => path.join(at.dir, "skim.json") },
   sketch: { sketch: (at) => path.join(at.dir, "sketch.json") },
   illustrated: { illustrated: (at) => path.join(at.dir, "illustrated.json") },

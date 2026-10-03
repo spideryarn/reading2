@@ -204,6 +204,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import {
   Archive,
   ArrowLeft,
+  ArrowRightLeft,
   Blocks,
   Bot,
   BookA,
@@ -372,6 +373,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   /* The same bubble as `quiz`, reused rather than a new import — the FAQ panel
      is stage 2 of docs/plans/260916d-faq-mode.md and may choose its own glyph. */
   faq: MessageCircleQuestionMark,
+  /* Two arrows, one each way: how a paragraph bears on the one before it.
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  relations: ArrowRightLeft,
   sketch: PenLine,
   /* A paintbrush beside the sketch's pen: the same argument, painted rather
      than drawn. docs/project/diagram.md § Illustrated. */

@@ -18,8 +18,9 @@ because the two pads only swapped sides.
 
 ## What it shows
 
-**It generates nothing.** Every note comes from something another mode has already stored, and
-opening the column never starts a run. The owner's lists are read through each mode's *read half*
+**It generates one thing, its own relation words** ([below](#relation-words)). Every other note
+comes from something another mode has already stored, and opening the column never runs another
+mode. The owner's lists are read through each mode's *read half*
 (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`), never the full mode hook, because the full hook
 can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
 read. A visitor's lists come in their payload.
@@ -37,6 +38,8 @@ one would otherwise be missed; it would not be, so it is not
 [261002d](../plans/261002d-marginalia-refreshes-when-a-mode-it-reads-finishes.md),
 `tests/marginalia-live-refresh.test.tsx`).
 
+- **A relation word** (*so*, *but*, *vs*) beside a paragraph where the argument turns —
+  [§ Relation words](#relation-words).
 - **The head**, pinned at the top: which part and section you are in, and the arc's sentence for
   where the argument has got to. It has a rule under it so it does not read as one more note (Greg,
   spya-rczgjb).
@@ -73,6 +76,39 @@ one would otherwise be missed; it would not be, so it is not
   The quote check is there because a visitor's payload carries no staleness flag (no "this was
   written against an older version of the article"). A list written before a block changed could
   otherwise sit beside prose that no longer says what it quotes.
+
+## Relation words
+
+> include the "relation-words", e.g. BUT, SO
+>
+> — Greg, 2026-09-30 (spya-u3dgk7)
+
+A small-caps word first in a paragraph's note, saying how it bears on the paragraph before it:
+**so** (it draws its conclusion from it), **but** (it pushes back on it), **vs** (it sets something
+against it without denying it). The word is a button; its card says the sentence. The plan, the
+options passed over and GPT Sol's review are in
+[261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md).
+
+- **The `relations` step** ([`src/relations.ts`](../../src/relations.ts)): one model call per
+  article. Every body paragraph of at least a sentence, bar the first, gets one of ten relations
+  from a closed list (`RELATIONS` in src/types.ts). The model writes no prose. It must answer every
+  listed paragraph; a run that answers fewer than half fails rather than storing a sparse list
+  that would look like an article with few turns. Stored in `article_revisions.relations`.
+- **Ten are stored, three are drawn.** `DRAWN_RELATIONS` in `notes.ts` is the one place that says
+  which, with a card for each in `tips.ts`. On the 108 paragraphs of the decorated experiment the
+  three are about one paragraph in three; all ten would be a word on every paragraph. Drawing
+  *why* or *e.g.* later is a row in each table and no new model call.
+- **The press that turns the column on asks for it**, and nothing else does. Marginalia's row in
+  `MODE_TARGET` (src/web/activation.ts) is `relations`, so it is the house rule for a mode that
+  starts itself ([`useAutoRun`](../../src/web/useAutoRun.ts)): one attempt per article per session;
+  a pasted `?margin=1` link, a reload and Back spend nothing; the press that turns the column off
+  arms nothing. A stale or outdated list counts as none, so the next press rewrites it. The hook is
+  [`src/web/useRelations.ts`](../../src/web/useRelations.ts).
+- **Nothing in the column says it is running.** The words appear when the job finishes; the job
+  is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
+- **Owner only.** A visitor's payload does not carry them: it has no staleness verdict, and a word,
+  unlike a quote, cannot be checked against its paragraph, so an old *but* could sit beside a
+  rewritten one.
 
 ## Every note says where it came from
 

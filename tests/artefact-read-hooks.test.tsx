@@ -151,7 +151,7 @@ const READS = [
 ] as const;
 
 describe("the read hooks start no job", () => {
-  it("the actual owner Marginalia feed performs only its four artefact GETs", async () => {
+  it("the actual owner Marginalia feed performs only its five artefact GETs, and no press means no job", async () => {
     await act(async () => {
       root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", onFeed: vi.fn() }));
     });
@@ -162,6 +162,9 @@ describe("the read hooks start no job", () => {
       "/api/debate/read-hooks",
       "/api/faq/read-hooks",
       "/api/ideas/read-hooks",
+      /* Marginalia's own artefact. Its hook can start a job, but only on a
+         press (useRelations.ts); a mount, as here, asks for nothing. */
+      "/api/relations/read-hooks",
       "/api/timeline/read-hooks",
     ]);
     expect(jobRequests()).toEqual([]);

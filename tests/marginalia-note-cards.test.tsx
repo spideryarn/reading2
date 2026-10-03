@@ -186,6 +186,14 @@ describe("whose words a shut line is (fonts.md)", () => {
     expect(host.querySelector(".marg-stamp")?.classList.contains("voice-ui")).toBe(true);
   });
 
+  it("a relation word is a button a keyboard can reach, in the AI's face, and says what it means", () => {
+    paint([{ kind: "relation", relation: "contrast" }]);
+    const word = host.querySelector<HTMLButtonElement>("button.marg-relation");
+    expect(word?.textContent).toBe("vs");
+    expect(word?.classList.contains("voice-ai")).toBe(true);
+    expect(word?.getAttribute("aria-label")).toContain("sets something against what came before");
+  });
+
   it("a comment is the reader's", () => {
     paint([{ kind: "comment", items: [{ as: "comment", comment }] }]);
     expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-reader")).toBe(true);

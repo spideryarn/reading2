@@ -9,6 +9,7 @@ import type { Arc, Block, CitedWork, FaqQuestion, Idea, TimelineEvent, Tree, Tre
 import {
   type MarginClaim,
   type MarginComment,
+  DRAWN_RELATIONS,
   marginaliaNotes,
   arcAt,
   headPath,
@@ -464,5 +465,45 @@ describe("marginaliaNotes, Timeline events (plan 261003f)", () => {
       }).get("spya-aaaaa2") ?? []
     ).map((n) => n.kind);
     expect(kinds).toEqual(["faq", "timeline", "debate"]);
+  });
+});
+
+/* Relation words — plan 261003f stage 2. Only the turns are drawn, first in
+   the block's note. */
+describe("marginaliaNotes, relation words (plan 261003f)", () => {
+  it("draws only the turns: so, but and vs; the other seven are stored and not drawn", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      relations: {
+        "spya-aaaaa2": "therefore",
+        "spya-aaaaa3": "but",
+        "spya-aaaaa4": "contrast",
+        "spya-aaaaa5": "and-also",
+        "spya-aaaaa6": "because",
+      },
+    });
+    expect([...notes.entries()]).toEqual([
+      ["spya-aaaaa2", [{ kind: "relation", relation: "therefore" }]],
+      ["spya-aaaaa3", [{ kind: "relation", relation: "but" }]],
+      ["spya-aaaaa4", [{ kind: "relation", relation: "contrast" }]],
+    ]);
+    expect(Object.keys(DRAWN_RELATIONS).sort()).toEqual(["but", "contrast", "therefore"]);
+  });
+
+  it("skips a paragraph this article no longer has", () => {
+    expect(marginaliaNotes(null, quoted, null, { relations: { "spya-zzzzzz": "but" } }).size).toBe(0);
+  });
+
+  it("puts the word first, above the part's question and everything else", () => {
+    const tree2 = {
+      ...tree,
+      nodes: { ...tree.nodes, a: { ...(tree.nodes.a as TreeNode), range: ["spya-aaaaa2", "spya-aaaaa3"] } },
+    } as Tree;
+    const kinds = (
+      marginaliaNotes(tree2, quoted, null, {
+        faq: [faqQ("f", [{ blockId: "spya-aaaaa2", quote: say(1) }])],
+        relations: { "spya-aaaaa2": "but" },
+      }).get("spya-aaaaa2") ?? []
+    ).map((n) => n.kind);
+    expect(kinds).toEqual(["relation", "question", "faq"]);
   });
 });

@@ -768,6 +768,7 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   debate: true,
   citations: true,
   faq: true,
+  relations: true,
   skim: true,
   sketch: true,
   illustrated: true,
@@ -805,6 +806,11 @@ function artefact(url: string): Response | null {
     return has ? json({ citations: CITATIONS, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/faq/"))
     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
+  /* Marginalia's relation words. */
+  if (url.startsWith("/api/relations/"))
+    return has
+      ? json({ relations: { relations: {} }, stale: false, outdated: false })
+      : GONE();
   if (url.startsWith("/api/tweets/"))
     return has ? json({ thread: stamped(THREAD), stale: false, profileChanged: false }) : GONE();
   if (url.startsWith("/api/skim/"))
@@ -1193,9 +1199,11 @@ const SPENDS: Record<Mode, Spend> = {
      press armed nothing and the band waited on "Write it"; Greg asked that
      opening it start the run (7T, docs/plans/261002a-summary-generates-on-open.md). */
   summary: { kind: "posts", steps: ["simple"] },
-  /* The tree's questions, the arc and the ideas already made — read, never
-     generated. A press that started the Ideas job here would be the bug. */
-  marginalia: { kind: "none", why: "draws what the article already has; it never starts a job" },
+  /* The tree's questions, the arc and other modes' lists are read, never
+     generated: a press that started the Ideas job here would be the bug. Its
+     own relation words are the one thing the press that turns it on asks for
+     (docs/plans/261003f-marginalia-relation-words-and-timeline-events.md). */
+  marginalia: { kind: "posts", steps: ["relations"] },
   /* The five artefact modes, each arming its own name. */
   glossary: { kind: "posts", steps: ["glossary"] },
   ideas: { kind: "posts", steps: ["ideas"] },

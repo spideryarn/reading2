@@ -1832,6 +1832,8 @@ export function Reader({
     const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
       faq: marginaliaFaq,
       timeline: marginaliaTimeline,
+      /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
+      relations: owner ? ownerFeed.relations : null,
       claims: marginaliaClaims,
       citations: marginaliaCitations,
       comments,
@@ -1851,6 +1853,8 @@ export function Reader({
     marginaliaIdeas,
     marginaliaFaq,
     marginaliaTimeline,
+    owner,
+    ownerFeed.relations,
     marginaliaClaims,
     marginaliaCitations,
     comments,

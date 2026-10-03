@@ -16,7 +16,7 @@ missing.**
 > — Greg, 2026-09-29 (spya-ayajv6)
 
 Relation words were written up as stage 2 of
-[261001d](261001d-annotations-mode-marginalia-in-a-right-hand-column.md#stage-2--relation-words-proposed-not-built)
+[261001d](261001d-annotations-mode-marginalia-in-a-right-hand-column.md) (its Stage 2)
 and held back until the column had been tried. It has been tried for two days, through seven
 follow-up plans. Timeline events are named in [marginalia.md § Keep an eye out for new
 kinds](../project/marginalia.md#keep-an-eye-out-for-new-kinds) as "not here yet".

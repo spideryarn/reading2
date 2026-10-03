@@ -37,9 +37,18 @@ import { ControlTip, Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
 import { useTimelineRead } from "../useTimeline.js";
 import { datingWords } from "../TimelinePanel.js";
-import { type HeadStep, type MarginClaim, type MarginEntry, type MarginaliaNote, layoutNotes } from "./notes.js";
+import {
+  DRAWN_RELATIONS,
+  type DrawnRelation,
+  type HeadStep,
+  type MarginClaim,
+  type MarginEntry,
+  type MarginaliaNote,
+  layoutNotes,
+} from "./notes.js";
+import { type RelationsByBlock, useRelations } from "../useRelations.js";
 import { MARK_KIND_LABEL } from "../comment-nav.js";
-import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN } from "./tips.js";
+import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
 
 /** The gap the collision pass keeps between two notes, in px. */
@@ -132,6 +141,40 @@ function QuestionNote({ depth, text }: { depth: number; text: string }) {
   );
 }
 
+/**
+ * **How this paragraph bears on the one before it** — *so*, *but*, *vs*
+ * (plan 261003f). A word, never a symbol: a symbol that needs a tooltip has
+ * already failed (docs/research/260828c-decorated-mode-ideas.md). **A button
+ * with a card of its own**, as the question is and for its reason: there is
+ * nothing to press, so the card is the only thing a keyboard or a finger
+ * could reach. Ours to draw (small caps), but the judgement is the model's,
+ * so it is in the AI's face (fonts.md).
+ */
+function RelationWord({ relation }: { relation: DrawnRelation }) {
+  const [open, setOpen] = useState(false);
+  const tip = RELATION_TIPS[relation];
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      open={open}
+      onOpenChange={setOpen}
+      content={<ControlTip head={tip.head} what={tip.what} how={tip.how} />}
+    >
+      <button
+        type="button"
+        className={withVoice("marg-relation", "ai")}
+        data-relation={relation}
+        aria-expanded={open}
+        aria-label={`${tip.head}: ${tip.what}`}
+        onClick={() => setOpen((was) => !was)}
+      >
+        {DRAWN_RELATIONS[relation]}
+      </button>
+    </Tooltip>
+  );
+}
+
 /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
     prose never carries them. */
 function MarginNotes({
@@ -148,6 +191,8 @@ function MarginNotes({
     <div className="marg-note" data-marg-note="">
       {notes.map((note) => {
         switch (note.kind) {
+          case "relation":
+            return <RelationWord key="relation" relation={note.relation} />;
           case "question":
             return <QuestionNote key={`q${note.depth}`} depth={note.depth} text={note.text} />;
           case "idea":
@@ -612,9 +657,10 @@ export type MarginFeed = {
   faq: Faq["questions"] | null;
   timeline: readonly TimelineEvent[] | null;
   claims: readonly MarginClaim[] | null;
+  relations: RelationsByBlock;
 };
 
-export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: null, claims: null };
+export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: null, claims: null, relations: null };
 
 /**
  * **The owner's ideas, FAQ, Timeline and Debate, read and never made.** A component of
@@ -636,6 +682,10 @@ export function OwnerMarginFeed({
   const faqRead = useFaqRead(slug);
   const timelineRead = useTimelineRead(slug);
   const debateRead = useDebateRead(slug);
+  /* **The one thing here that can spend**: the relation words are Marginalia's
+     own, with no band to make them in, so the press that turned the column on
+     asks for them (useRelations.ts). Never on a mount. */
+  const relations = useRelations(slug);
   /* **A list made while the margin is open reaches it** — FAQ run in the left
      band appears here without reopening the margin. The band refreshes its own
      read when its job finishes; this hears the same completion for the margin's
@@ -651,8 +701,8 @@ export function OwnerMarginFeed({
   const claims =
     debateRead.status === "ready" && !debateRead.stale ? (debateRead.debate?.claims.rows ?? null) : null;
   useEffect(() => {
-    onFeed({ ideas, faq, timeline, claims });
-  }, [ideas, faq, timeline, claims, onFeed]);
+    onFeed({ ideas, faq, timeline, claims, relations });
+  }, [ideas, faq, timeline, claims, relations, onFeed]);
   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
   return null;
 }

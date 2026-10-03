@@ -93,6 +93,7 @@ import type {
   SketchFound,
   QuizFound,
   FaqFound,
+  RelationsResponse,
   CrossrefsFound,
   SimpleSummaryFound,
   SkimFound,
@@ -288,6 +289,15 @@ export interface ArticleReader {
    * docs/plans/260916d-faq-mode.md.
    */
   loadFaq(slug: string): Promise<FaqFound>;
+
+  /**
+   * How each paragraph bears on the one before it, plus whether it still
+   * describes the article — FAQ's two staleness facts, over FAQ's fingerprint.
+   * **Owner-only, and there is no public twin**: a visitor's payload carries no
+   * staleness verdict and a relation word has no quote to check (Sol P1-4).
+   * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+   */
+  loadRelations(slug: string): Promise<RelationsResponse>;
 
   /**
    * The cross-references, plus whether they still describe the article — the

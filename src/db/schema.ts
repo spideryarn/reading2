@@ -84,6 +84,7 @@ import type {
   Citation,
   Debate,
   Faq,
+  Relations,
   Crossrefs,
   SimpleSummary,
   Skim,
@@ -938,6 +939,16 @@ export const articleRevisions = spideryarn.table(
      * `revision_blocks`, on the argument its neighbours make.
      */
     faq: jsonb("faq").$type<Faq>(),
+
+    /**
+     * How each paragraph bears on the one before it — `Relations`,
+     * src/types.ts, written by the `relations` step.
+     * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+     *
+     * The WHOLE artefact, like its neighbours; `sourceHash` is FAQ's
+     * fingerprint. **Owner only**: it is in no public projection.
+     */
+    relations: jsonb("relations").$type<Relations>(),
 
     /**
      * Links between the article's own blocks — `Crossrefs`, src/types.ts,
@@ -2695,7 +2706,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','citations','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",

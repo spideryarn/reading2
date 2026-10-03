@@ -897,6 +897,7 @@ const CACHEABLE = [
   "/api/ideas/",
   "/api/quotes/",
   "/api/timeline/",
+  "/api/relations/",
   "/api/quiz/",
   /* Here with the route rather than with the panel, as `/api/debate/` is: the
      derived test asks for it the moment the route exists. */

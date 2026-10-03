@@ -23,6 +23,7 @@ import type {
   FaqQuestion,
   Idea,
   IdeaProvenance,
+  Relation,
   TimelineEvent,
   Tree,
 } from "../../types.js";
@@ -38,7 +39,27 @@ export type MarginClaim = PublicClaimDebateRow;
 /** A comment or bookmark, the owner's or a visitor's. */
 export type MarginComment = Comment | PublicComment;
 
+/**
+ * **The relation words that are drawn, and the word each is drawn as.** The
+ * step stores one of ten per paragraph (src/types.ts § `RELATIONS`); the margin
+ * draws only the turns, where the argument changes direction or lands a
+ * conclusion — Greg's "BUT, SO", and *vs* beside them. *And-also* on a third
+ * of all paragraphs would be the second article down the margin this mode must
+ * not become. Widening this is one row here and one in tips.ts, and no model
+ * call. Plan 261003f.
+ */
+export const DRAWN_RELATIONS = {
+  therefore: "so",
+  but: "but",
+  contrast: "vs",
+} as const satisfies Partial<Record<Relation, string>>;
+export type DrawnRelation = keyof typeof DRAWN_RELATIONS;
+
+const isDrawn = (relation: Relation): relation is DrawnRelation => Object.hasOwn(DRAWN_RELATIONS, relation);
+
 export type MarginaliaNote =
+  /** How this paragraph bears on the one before it. First in its note. */
+  | { kind: "relation"; relation: DrawnRelation }
   /** The question a part — or, at `depth` 0, the whole article — answers. */
   | { kind: "question"; depth: number; text: string }
   /** An idea the piece assumes or introduces, occurring in this block. */
@@ -90,6 +111,8 @@ export type MarginSources = {
   comments?: readonly MarginComment[] | null;
   /** Questions the reader asked from a passage — the owner's only; a visitor's payload has no chats. */
   asked?: readonly AskedQuestion[] | null;
+  /** How each paragraph bears on the one before — the owner's only in v1. */
+  relations?: Readonly<Record<BlockId, Relation>> | null;
 };
 
 type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
@@ -138,6 +161,14 @@ export function marginaliaNotes(
     if (list) list.push(note);
     else out.set(blockId, [note]);
   };
+
+  /* **The relation word first**: it is about the paragraph's opening, and it
+     is the shortest thing in the note. In article order, like everything
+     else, so the column's collision pass sees notes top to bottom. */
+  for (const block of blocks) {
+    const relation = more.relations?.[block.id];
+    if (relation !== undefined && isDrawn(relation)) add(block.id, { kind: "relation", relation });
+  }
 
   /* **Beside the part's first paragraph, not its first block.** A part's range
      starts at its heading, or at the date line under the title, and a question
