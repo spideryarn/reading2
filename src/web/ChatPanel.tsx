@@ -1689,6 +1689,8 @@ function ToolIcon({ name }: { name: string }) {
     case "article_links":
       return <Link2 size={12} aria-hidden />;
     case "article_glossary":
+    /* The reader's own notes: a page of writing, like the glossary's. */
+    case "reader_notes":
       return <FileText size={12} aria-hidden />;
     case "article_citations":
       return <BookMarked size={12} aria-hidden />;

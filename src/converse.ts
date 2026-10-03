@@ -102,13 +102,14 @@ import { type ModelPower, modelFor } from "./models.js";
    though asking were the same as checking. src/referee-candidates-prompt.ts. */
 import { CANDIDATES_SYSTEM } from "./referee-candidates-prompt.js";
 import {
-  CHAT_TOOLS,
   type ToolContext,
   type ToolRun,
   describeCall,
   parseToolArgs,
   runTool,
+  toolsFor,
 } from "./chat-tools.js";
+import { settledExchanges } from "./reader-notes.js";
 import { blockRefLeaks } from "./block-ref-leak.js";
 import { citableText } from "./citable.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
@@ -533,6 +534,10 @@ say when each is worth reaching for.
   would be worth more than a fact from the web. That connection is something
   nobody else can offer them. Never invent one: if the search finds nothing,
   they have not read about it.
+- READ THE READER'S NOTES when they ask what they think, what they marked or
+  wrote on this article, or about an earlier conversation. You cannot see their
+  notes or their other conversations until you read them, so do not guess at
+  them. Do not read them for any other question.
 - ASKING WHETHER A CLAIM HOLDS UP IS A QUESTION ABOUT THE WORLD, not a question
   about the article. "What is the evidence for this?", "is that true?", "has
   anyone replicated it?", "who says so?" — reach for the web BY DEFAULT. The
@@ -1316,6 +1321,14 @@ export interface ConverseRequest {
    */
   slug: string;
   /**
+   * The conversation this turn is in — **from the stored thread, never the
+   * request body**, the rule `kind` follows below. Only the tools use it:
+   * `reader_notes` leaves this conversation out of the ones it lists and will
+   * not read it back. Absent in an eval or a test with no thread, where
+   * nothing is left out.
+   */
+  threadId?: string | undefined;
+  /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
    * Unlike `slug` above, this one **does** reach the prompt — in the final user
@@ -1723,20 +1736,16 @@ export function recentHistory(history: ChatMessage[], turns = HISTORY_TURNS): Ch
    * dropping is small, because a reader interrupts precisely when an answer had
    * stopped being useful to them. Recommended by Fable, 2026-08-31;
    * `ChatMessage.interrupted` in src/types.ts.
+   *
+   * **The walk itself is `settledExchanges` in src/reader-notes.ts** since
+   * 2026-10-03, because `reader_notes` shows a model an earlier conversation
+   * and has to mean the same thing by "what was said". One rule with two
+   * readers, rather than a copy that would let a failed turn back in by the
+   * other door. Everything above is still the reasoning for it.
    */
-  const usable = (m: ChatMessage | undefined): m is ChatMessage =>
-    m !== undefined && m.status === "done" && m.text.trim() !== "" && m.interrupted !== true;
-
-  const pairs: ChatMessage[][] = [];
-  for (let i = 0; i < history.length; i++) {
-    const question = history[i];
-    if (question?.role !== "user") continue;
-    const answer = history[i + 1];
-    if (answer?.role !== "assistant") continue;
-    i++; // the answer belongs to this turn either way
-    if (usable(question) && usable(answer)) pairs.push([question, answer]);
-  }
-  return pairs.slice(-turns).flat();
+  return settledExchanges(history)
+    .settled.slice(-turns)
+    .flatMap(({ question, answer }) => [question, answer]);
 }
 
 /**
@@ -1801,6 +1810,7 @@ export async function* converse({
   at,
   visible,
   slug,
+  threadId,
   profile = null,
   useTools = true,
   kind = "chat",
@@ -1943,7 +1953,17 @@ export async function* converse({
      seconds is not a stalled stream, and killing it for that would be wrong.
      Found by a GPT Sol review, 2026-08-26. */
   const toolSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
-  const toolContext: ToolContext = { slug, meta, blocks, signal: toolSignal, power };
+  /* `kind` is the gate `runTool` asks again (src/chat-tools.ts, rule 4), and
+     `threadId` is what `reader_notes` leaves out of its own list. */
+  const toolContext: ToolContext = {
+    slug,
+    meta,
+    blocks,
+    signal: toolSignal,
+    power,
+    kind,
+    threadId,
+  };
 
   /* The last round's, read by the guards after the loop. Declared out here so
      those guards can stay where they are and keep meaning what they meant.
@@ -2245,7 +2265,7 @@ export async function* converse({
          back in the same response — so it costs no round trip and there is never
          a reason to take it away. Ours cost a whole extra request each time,
          which is why the last round drops them: see `MAX_TOOL_ROUNDS`. */
-      tools: withTools ? [webSearchTool(kind), ...CHAT_TOOLS] : [webSearchTool(kind)],
+      tools: withTools ? [webSearchTool(kind), ...toolsFor(kind)] : [webSearchTool(kind)],
       messages,
     };
 

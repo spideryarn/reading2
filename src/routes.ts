@@ -3355,6 +3355,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       // The tools need to know which article the reader has open; the prompt
       // does not, and does not get it. src/chat-tools.ts § ToolContext.
       slug,
+      /* From the thread the store wrote, like `kind` below: `reader_notes`
+         leaves the conversation it is called from out of the ones it lists. */
+      threadId: thread.id,
       /* Resolved per turn rather than once per thread, so a reader who edits
          their profile mid-conversation gets the next answer written to the new
          one. The opposite of the job path, which freezes it — and the reason
@@ -4272,6 +4275,12 @@ async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }
  * fetches a URL this server chooses to fetch either way — a reader can already
  * ask a typed conversation to read one — so the defence is the same one, in the
  * same place. docs/project/security.md.
+ *
+ * **`reader_notes` is refused here twice.** It is not in `LIVE_SERVER_TOOLS`,
+ * which is built from the shared `CHAT_TOOLS` and not from `toolsFor`; and the
+ * context below names no `kind`, so `runTool` would call it an unknown tool
+ * even if the first check went. This endpoint has no thread to leave out of
+ * that tool's list — docs/project/chat-tools.md § The reader's notes.
  */
 async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
   const { name, args } = (body ?? {}) as Record<string, unknown>;
