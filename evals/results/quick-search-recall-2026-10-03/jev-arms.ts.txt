@@ -1,0 +1,29 @@
+/* Jev arms: every wording x every query x 3 runs, with production's block filter and chunking
+   (quickBlocks, chunkBlocks imported from src/quick-search.ts). SPENDS (Jev, about $0.6).
+   Saves every block's score so floors and cut-off rules are computed offline (analyse.ts).
+   Usage: npx tsx data/qeval/jev-arms.ts [wording ...] */
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { DIR, WORDINGS, jevSearch, loadArticle, totalSpend } from "./lib.ts";
+import { ALL } from "./queries.ts";
+
+const P = `${DIR}/jev-raw.json`;
+const raw: Record<string, any> = existsSync(P) ? JSON.parse(readFileSync(P, "utf8")) : {};
+const wordings = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(WORDINGS);
+const REPS = 3;
+for (const w of wordings) {
+  for (const s of ALL) {
+    const key = `${w}|${s.slug}|${s.q}`;
+    if (raw[key]?.reps?.length === REPS) continue;
+    const { blocks } = await loadArticle(s.slug);
+    const reps: any[] = [];
+    for (let i = 0; i < REPS; i++) {
+      const r = await jevSearch(w, s.q, blocks);
+      reps.push({ ms: r.ms, cost: r.cost, inputTokens: r.inputTokens, chunks: r.chunks, calls: r.calls, scores: r.scores });
+    }
+    raw[key] = { wording: w, slug: s.slug, q: s.q, set: s.set, reps };
+    console.log(`${w.padEnd(8)} ${s.slug.slice(0, 10)} ${s.q.slice(0, 40).padEnd(40)} ${reps.map((r) => r.ms).join("/")} ms  ${reps[0].inputTokens} tok  kept>=.7 ${reps.map((r) => Object.values(r.scores as Record<string, number>).filter((v) => v >= 0.7).length).join("/")}`);
+    writeFileSync(P, JSON.stringify(raw));
+  }
+}
+console.log(`total spend so far (jev + est) $${totalSpend().toFixed(4)}`);
+process.exit(0);

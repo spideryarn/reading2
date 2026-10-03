@@ -163,9 +163,25 @@ export function SearchBand({
         draft,
         onAsk: (criterion, kind, sourceId) => {
           const question = criterion.trim();
-          // Flesh out ends only the session belonging to that quick row.
+          // Thorough ends only the session belonging to that quick row.
           if (sourceId !== undefined) typing.rowGone(sourceId);
           if (isRunning(question, kind)) return;
+          /* **Thorough replaces its quick row** (plan 261003i B2, Greg's
+             `spya-z4bae4`): the meaning search is asked and the quick row
+             deleted in the same press, with the two calls this band already
+             had. The new row wears the colour the quick one was *drawn* in —
+             the resolved slot, because an automatic colour is stored nowhere —
+             so the reader's marks do not change hue for asking for more care.
+             The quick answer is gone even if the thorough one fails; it is a
+             second to ask again, and the plan says what keeping it would
+             cost. */
+          if (sourceId !== undefined) {
+            const id = ask(question, kind, panel.slots.get(sourceId));
+            remove(sourceId);
+            setActive((ids) => [...ids.filter((x) => x !== sourceId), id]);
+            onOpenHit(null);
+            return;
+          }
           /* `ask` mints the id, so `?runs=` can name the search before the
              model has said anything — the same trick `?note=` and `?thread=`
              use.

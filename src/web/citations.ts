@@ -178,6 +178,80 @@ export function splitCitations(para: string, known: Known): Segment[] {
 }
 
 /**
+ * One double-quoted run: an opening `"` or `“`, a body with no quotation mark
+ * in it, a closing `"` or `”`. Both marks are required, in the one string.
+ */
+const QUOTED = /["“]([^"“”]*)["”]/g;
+/** The end of a sentence in the prose between quotations: `.`, `!` or `?`, then whitespace. */
+const SENTENCE_BREAK = /[.!?]\s/;
+/** Where a model says it left words out: `…`, `...`, or either in brackets. */
+const ELISION = /\s*\[?(?:…|\.{3,})\]?\s*/;
+/** Shorter than this is `"a self"`: too little to find, and nothing to hunt for in a long paragraph. */
+const QUOTE_MIN = 8;
+
+/**
+ * **The quotations a citation chip is vouching for**: every double-quoted run
+ * in `text` that is in the chip's own sentence, when `text` is the prose
+ * between the previous chip (or the start of the run) and this one. Empty when
+ * there is none, and then the chip behaves as it always has.
+ *
+ * A reader's report, spya-hzpf9b: an answer reads *He calls it "an intelligent
+ * data pattern" [spya-ajt4fw]*, the chip lands on a 250-word paragraph and
+ * washes all of it, and the sentence quoted cannot be found. With the words in
+ * hand the flash can paint them instead (flash.ts § `FlashTarget.quotes`). Plan
+ * docs/plans/261003i-tutorial-leans-to-retention-a-softer-blurb-quote-links-that-show-the-quote.md.
+ *
+ * **The same sentence, not only the words straight before the chip.** The
+ * first version took a quotation only when nothing but whitespace lay between
+ * it and the chip. Measured on 120 tutor turns
+ * (docs/investigations/261003c-tutorial-prompt-leans-to-retention.md), about
+ * one article quotation in ten is not there: the model writes *he says the engram
+ * "looks increasingly random" once correlations are removed, so "the
+ * interpretation … must be creative" [id]*, or *"salience" of the data,
+ * reinterpreted fresh each time [id]* — one or two quotations earlier in the
+ * sentence, the chip at its end. So a quotation counts when **no sentence
+ * break lies between its closing mark and the chip**: a `.`, `!` or `?`
+ * followed by whitespace, in the prose outside quotation marks. A break
+ * disowns that quotation and every one before it.
+ *
+ * **What makes the looser rule safe is the other end** (flash.ts §
+ * `quoteRanges`): each quotation is looked for in the cited block and painted
+ * only if it is there. One wrongly attached here — a quotation from another
+ * block, a scare-quoted word of the model's own — can at worst paint words
+ * that really are in this chip's block, and usually paints nothing.
+ *
+ * **One text node is all this sees** (Cited.tsx § `cited`), so a quotation
+ * with emphasis inside it — three inline nodes — has its opening mark in a
+ * node this is never shown. The pattern needs both marks, so that case yields
+ * nothing rather than the tail of the quotation. An accepted limit, pinned in
+ * tests/quote-flash.test.tsx.
+ *
+ * **An elided quotation gives its longest piece**: the article does not contain
+ * `a … b`, and one piece found is better than the pair not found. Sentence
+ * punctuation the closing mark took in with it (`pattern."`) is dropped, since
+ * the article's own sentence may not end there.
+ */
+export function quotesBefore(text: string): string[] {
+  const runs = [...text.matchAll(QUOTED)];
+  const out: string[] = [];
+  /* Right to left, from the chip: the prose after each quotation and before
+     the next one (or the chip) is the only place a break is looked for, so a
+     full stop inside somebody's quotation is not one. */
+  let gapEnd = text.length;
+  for (const run of runs.reverse()) {
+    if (SENTENCE_BREAK.test(text.slice(run.index + run[0].length, gapEnd))) break;
+    gapEnd = run.index;
+    let longest = "";
+    for (const piece of (run[1] ?? "").split(ELISION)) {
+      const words = piece.trim().replace(/[.,;:]+$/, "");
+      if (words.length > longest.length) longest = words;
+    }
+    if (longest.length >= QUOTE_MIN && !out.includes(longest)) out.unshift(longest);
+  }
+  return out;
+}
+
+/**
  * The ids an answer cites that this article does not have.
  *
  * The client's counterpart to `unknownCitedIds` in src/converse.ts, which logs

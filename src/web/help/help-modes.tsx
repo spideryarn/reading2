@@ -244,9 +244,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           fast model scores every paragraph, and the ones that match are marked whole, with no
           reasons. It searches whenever you pause typing, and what you type keeps one saved search,
           updated as you go rather than a new one each time. Press Enter when you are done; typing
-          again after that, or after a break, starts a new one. Use it for a first look;{" "}
-          <strong>flesh out</strong> on a quick search runs the full meaning search on the same
-          words.
+          again after that, or after a break, starts a new one. Its paragraphs are marked with a
+          bar down the side and a mark in the spine, not a highlight over the words. Use it for a
+          first look; <strong>thorough</strong> on a quick search runs the full meaning search on
+          the same words, in about half a minute, and replaces the quick one.
         </p>
         <p>
           To start a quick search from anywhere in the article, type in the{" "}
@@ -472,8 +473,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Tutorial</strong>: short turns, a little of the piece at a time. Say what you
-            remember, or that you haven’t read it yet, and each reply teaches one small piece,
-            links the passage, and asks you to put it in your own words, give an example or push back.
+            remember; it’s fine if you haven’t read it yet, or haven’t finished. Each reply teaches
+            one small piece, links the passage, and asks you to put it in your own words, explain
+            why the author needs it or connect it to an earlier part. It is about what the author
+            is saying; now and then it asks what you think.
             Now and then it comes back to an earlier point. It takes your profile and your reason for
             reading into account. Typed or dictated; there is no Live conversation here yet.
           </li>

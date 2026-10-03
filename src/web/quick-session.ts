@@ -31,7 +31,7 @@
  *   session. With no session open they ask a fresh search, as they always did.
  *   Before `loaded`, explicit flushes are held too, with their words sealed.
  * - The session also **ends** on: the box emptied; a matcher switch; ↺ or ✕
- *   or *flesh out* (`rowGone` / `end`); leaving the mode or the article (the
+ *   or *thorough* (`rowGone` / `end`); leaving the mode or the article (the
  *   caller's state simply goes); and the box blurred for longer than a pause.
  * - Words left in the box after a session ends are **inert**: only an edit
  *   starts a new session, so remounting with text in the box never asks.
@@ -78,7 +78,7 @@ export type QuickEvent =
   | { type: "asked"; id: string | null }
   /** `begin` answered under another id; follow it. */
   | { type: "renamed"; from: string; to: string }
-  /** Deleted, or fleshed out: if it is this session's row, the session ends. */
+  /** Deleted, or replaced by *thorough*: if it is this session's row, the session ends. */
   | { type: "rowGone"; id: string }
   /** A matcher switch, ↺, a long blur, leaving the mode. */
   | { type: "end" };

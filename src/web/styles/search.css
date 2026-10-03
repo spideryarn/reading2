@@ -181,12 +181,16 @@
   /* The second place the hue appears on a row, because an 11px dot is easy to
      miss and small-field colour discrimination is the worst case for any
      palette — the same reason the granularity tints run down lightness as well
-     as chroma (§ --depth-0 at the top of this file). Faint until the search is
-     switched on: an unticked row is a search that is drawing nothing, and a
-     full-strength edge on it would be the panel claiming otherwise. */
-  border-left: 2px solid rgb(var(--cat-rgb, var(--rule)) / 0.3);
+     as chroma (§ --depth-0 at the top of this file).
+
+     **Full strength whether or not the row is ticked**, since 2026-10-03. It
+     was 30% until ticked, on the argument that an unticked row draws nothing
+     and a strong edge would claim otherwise; Greg's report `spya-fwcwun` is
+     that the row did not say its colour clearly enough, and an unticked row
+     is exactly where a reader looks to decide which to switch on. What says
+     *on* is the tick and the brighter words. */
+  border-left: 2px solid rgb(var(--cat-rgb, var(--hit-wash-rgb)));
 }
-.srch-saved-row.on { border-left-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
 .srch-saved-row:hover { background: var(--surface-raised); }
 /* The box no longer wraps the words — it adds a search to the marks, while
    pressing the row replaces them (SearchPanel.tsx § Four targets on a row). So
@@ -229,7 +233,25 @@
   outline: 2px solid var(--highlight-text);
   outline-offset: -2px;
 }
+/* The swatch and the words on one line: the colour key (`spya-fwcwun`). A
+   solid square of the search's colour, the same neutral fallback as the box
+   for a row with no slot. Square, not round, so it does not read as the
+   result rows' dot, which sits in a gutter and means "found by". */
+.srch-saved-words {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.srch-saved-swatch {
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 2px;
+  background: rgb(var(--cat-rgb, var(--hit-wash-rgb)));
+}
 .srch-saved-criterion {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -415,10 +437,10 @@
 }
 .srch-saved-kind::after { content: "·"; margin-left: 0.2rem; }
 
-/* *Flesh out* on a finished quick row: the `find` button's small outlined
+/* *Thorough* on a finished quick row: the `find` button's small outlined
    shape, in the row's control group, because it is the same act — asking — on
    the same words. */
-.srch-flesh {
+.srch-thorough {
   flex: none;
   align-self: center;
   padding: 0.05rem 0.4rem;
@@ -431,8 +453,8 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.srch-flesh:not(:disabled):hover { border-color: var(--hit); color: var(--ink); }
-.srch-flesh:disabled { opacity: 0.4; cursor: default; }
+.srch-thorough:not(:disabled):hover { border-color: var(--hit); color: var(--ink); }
+.srch-thorough:disabled { opacity: 0.4; cursor: default; }
 
 /* The same banner the glossary and the tweet thread page carry, in the same
    words and the same box — see `StaleNote` in SearchPanel.tsx. Sits between the

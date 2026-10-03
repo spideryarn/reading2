@@ -1,0 +1,36 @@
+/* Sol F4: is the Buddhism miss a context (chunk) effect or a wording/vocabulary one?
+   The article is ONE chunk in production (58 blocks, ~13k tokens), so no boundary exists to
+   blame. This scores the target paragraph with less and less of the article around it, and under
+   paired queries and both wordings. SPENDS (Jev, under 2 cents). */
+import { writeFileSync } from "node:fs";
+import { DIR, ENTROPY, JEV, WORDINGS, decide, loadArticle, quickBlocks, totalSpend } from "./lib.ts";
+
+const TARGET = "spya-p2wrn0";
+const asked: any[] = quickBlocks((await loadArticle(ENTROPY)).blocks);
+const i = asked.findIndex((b) => b.id === TARGET);
+const contexts: Record<string, any[]> = {
+  "whole article (production)": asked,
+  "first half": asked.slice(0, Math.ceil(asked.length / 2)),
+  "second half + target (target moved to a chunk without its neighbours)": [asked[i], ...asked.slice(Math.ceil(asked.length / 2))],
+  "target + 3 neighbours each side": asked.slice(Math.max(0, i - 3), i + 4),
+  "target alone": [asked[i]],
+};
+const out: any[] = [];
+for (const wording of ["plain", "mention"]) {
+  for (const q of ["Buddhism", "Buddhist", "no self"]) {
+    for (const [name, bs] of Object.entries(contexts)) {
+      const xs: number[] = [], ranks: number[] = [];
+      for (let k = 0; k < 3; k++) {
+        const r = await decide(JEV, { query: q, passages: Object.fromEntries(bs.map((b) => [b.id, b.text])) }, Object.fromEntries(bs.map((b) => [b.id, { type: "noul", instructions: WORDINGS[wording]!(b.id) }])));
+        const s: Record<string, number> = Object.fromEntries(Object.entries(r.body.answers).map(([k2, v]: any) => [k2, v.noul]));
+        xs.push(s[TARGET]!);
+        ranks.push(Object.values(s).filter((v) => v > s[TARGET]!).length + 1);
+      }
+      out.push({ wording, q, context: name, blocks: bs.length, target: xs, rank: ranks });
+      console.log(`${wording.padEnd(8)} ${q.padEnd(9)} ${name.slice(0, 45).padEnd(45)} n=${String(bs.length).padEnd(3)} target ${xs.map((x) => x.toFixed(2)).join("/")} rank ${ranks.join("/")}`);
+    }
+  }
+}
+writeFileSync(`${DIR}/out-counterfactual.json`, JSON.stringify(out, null, 1));
+console.log(`spend so far $${totalSpend().toFixed(4)}`);
+process.exit(0);

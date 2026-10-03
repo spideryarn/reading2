@@ -26,6 +26,7 @@ import {
 } from "../scroll.js";
 import { positionToWrite, type Section } from "../position.js";
 import { beginJump } from "../keynav.js";
+import type { JumpAim } from "../flash.js";
 import { rowsForBlockIds } from "../rows.js";
 import { isFolded, subscribeFold } from "../fold.js";
 
@@ -265,10 +266,11 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
   // must leave it alone, or the restore effect would stop recognising the
   // position the reader is actually standing at.
   const jumpTo = useCallback(
-    (blockId: BlockId, passage?: string) => {
+    /* `aim`: a passage key, or a quote to paint on landing — flash.ts § `JumpAim`. */
+    (blockId: BlockId, aim?: JumpAim) => {
       const moved = beginJump(blocks, blockId, (id) => {
         void setAt(id, { history: "push", limitUrlUpdates: throttle(0) });
-      }, passage);
+      }, aim);
       if (moved) synced.current = blockId;
     },
     [blocks, setAt],

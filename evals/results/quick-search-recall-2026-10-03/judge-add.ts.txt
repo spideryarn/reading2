@@ -1,0 +1,13 @@
+/* Merge a batch of hand judgements into judged.json. Usage: npx tsx judge-add.ts <batch.json> */
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { DIR } from "./lib.ts";
+const P = `${DIR}/judged.json`;
+const all = existsSync(P) ? JSON.parse(readFileSync(P, "utf8")) : {};
+const add = JSON.parse(readFileSync(process.argv[2]!, "utf8"));
+let n = 0;
+for (const [k, v] of Object.entries(add) as any) {
+  all[k] ??= {};
+  for (const [id, j] of Object.entries(v)) { all[k][id.startsWith("spya-") ? id : `spya-${id}`] = j; n++; }
+}
+writeFileSync(P, JSON.stringify(all, null, 1));
+console.log(`merged ${n}; total ${Object.values(all).reduce((s: number, v: any) => s + Object.keys(v).length, 0)}`);

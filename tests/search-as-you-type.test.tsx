@@ -320,7 +320,7 @@ describe("quick search as you type", () => {
     expect(rows()).toBe(1);
   });
 
-  it.each([false, true])("flesh out ends only its own typing session (own=%s)", async (own) => {
+  it.each([false, true])("thorough ends only its own typing session (own=%s)", async (own) => {
     const { posted } = server();
     const original = answer;
     answer = (url, init) => {
@@ -343,7 +343,7 @@ describe("quick search as you type", () => {
     const id = posted[0]!.body.id;
     const row = [...host.querySelectorAll(".srch-saved-row")].find((r) =>
       r.querySelector(`input[aria-label="Also mark: ${own ? "why" : "older question"}"]`))!;
-    click(row.querySelector(".srch-flesh")!);
+    click(row.querySelector(".srch-thorough")!);
     await flush();
     type("why later");
     await pause();
@@ -351,6 +351,104 @@ describe("quick search as you type", () => {
     expect(next.kind).toBe("quick");
     if (own) expect(next.id).not.toBe(id);
     else expect(next).toMatchObject({ id, revises: true });
+  });
+
+  /**
+   * **Thorough replaces the quick row** — plan 261003i B2, Greg's
+   * `spya-z4bae4`. One press: the meaning search is asked, the quick row is
+   * deleted at once, and the new row wears the colour the quick one was
+   * *drawn* in — an automatic colour is stored nowhere, so it is the browser's
+   * resolved slot that is written, once `begin` has said which row to write.
+   */
+  describe("thorough replaces the quick row", () => {
+    const OLD = "spya-old002";
+    interface Call { method: string; url: string; body: Record<string, unknown> | null }
+    /** One saved, finished quick row; POSTs answer `begin` (under `as`, if given) and hold. */
+    function saved(as?: string): Call[] {
+      const calls: Call[] = [];
+      answer = (url, init) => {
+        const method = (init.method ?? "GET").toUpperCase();
+        const body = init.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
+        calls.push({ method, url, body });
+        if (method === "GET") {
+          return Promise.resolve(json({ runs: [{
+            id: OLD, criterion: "older question", kind: "quick",
+            createdAt: "2026-01-01T00:00:00.000Z", status: "done", hits: [],
+          }] }));
+        }
+        if (method === "POST") {
+          const run = { ...body, id: as ?? body!.id, createdAt: "2026-10-03T09:00:00.000Z", status: "pending", hits: [] };
+          const enc = new TextEncoder();
+          return Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+            start(c) { c.enqueue(enc.encode(`event: begin\ndata: ${JSON.stringify(run)}\n\n`)); },
+          })));
+        }
+        return Promise.resolve(json({ ok: true }));
+      };
+      return calls;
+    }
+    const row = () => must<HTMLElement>(".srch-saved-row");
+    /** The palette slot a row is drawn in, read off the custom property it sets. */
+    const slotOf = (el: HTMLElement) => Number(/--cat-(\d+)-rgb/.exec(el.getAttribute("style") ?? "")?.[1]);
+    const inUrl = () => new URLSearchParams(location.search).get("runs");
+
+    it("asks meaning, deletes the quick row at once, and hands its colour and its tick to the new row", async () => {
+      history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick&runs=${OLD}`);
+      const calls = saved();
+      mount();
+      await flush();
+      const slot = slotOf(row());
+      expect(Number.isInteger(slot), "the quick row has a colour to hand on").toBe(true);
+
+      click(must(".srch-thorough"));
+      await flush();
+
+      const posts = calls.filter((c) => c.method === "POST");
+      expect(posts.map((c) => c.body)).toMatchObject([{ criterion: "older question", kind: "meaning" }]);
+      const id = String(posts[0]!.body!.id);
+      expect(calls.filter((c) => c.method === "DELETE").map((c) => c.url)).toEqual([`/api/search/${SLUG}/${OLD}`]);
+      // One row left, and it is the meaning one, in the quick row's colour.
+      expect(rows()).toBe(1);
+      expect(host.querySelector(".srch-saved-kind")).toBeNull();
+      expect(slotOf(row())).toBe(slot);
+      // …stored, not only drawn: after the POST, so the row exists to be written.
+      const patch = calls.findIndex((c) => c.method === "PATCH");
+      expect(calls[patch]).toMatchObject({ url: `/api/search/${SLUG}/${id}`, body: { colour: slot } });
+      expect(patch).toBeGreaterThan(calls.findIndex((c) => c.method === "POST"));
+      expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
+      expect(ticked()).toEqual(["older question"]);
+      expect(inUrl()).toBe(id);
+    });
+
+    it("follows a begin that answers under another id: the colour and ?runs= name the server's row", async () => {
+      history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick&runs=${OLD}`);
+      const calls = saved("spya-srv009");
+      mount();
+      await flush();
+      const slot = slotOf(row());
+      click(must(".srch-thorough"));
+      await flush();
+      expect(calls.filter((c) => c.method === "PATCH")).toMatchObject([
+        { url: `/api/search/${SLUG}/spya-srv009`, body: { colour: slot } },
+      ]);
+      expect(slotOf(row())).toBe(slot);
+      expect(inUrl()).toBe("spya-srv009");
+    });
+
+    it("asks once and deletes once when the button is pressed twice", async () => {
+      const calls = saved();
+      mount();
+      await flush();
+      const button = must<HTMLButtonElement>(".srch-thorough");
+      act(() => {
+        button.click();
+        button.click();
+      });
+      await flush();
+      expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+      expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(1);
+      expect(rows()).toBe(1);
+    });
   });
 
   it("leaves words inert after a matcher switch: nothing is asked until the next edit", async () => {

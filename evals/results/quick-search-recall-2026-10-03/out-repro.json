@@ -1,0 +1,2397 @@
+[
+ {
+  "q": "Buddhism",
+  "rep": 0,
+  "ms": 807,
+  "inputTokens": 13450,
+  "cost": 0.0005649,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.73,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.73
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.73
+   ],
+   [
+    "spya-nrvjwg",
+    0.55
+   ],
+   [
+    "spya-qkzyvy",
+    0.51
+   ],
+   [
+    "spya-ajt4fw",
+    0.37
+   ],
+   [
+    "spya-mp6jk0",
+    0.36
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.06,
+   "spya-sgdjgg": 0.17,
+   "spya-b93r7c": 0.12,
+   "spya-ycvhdt": 0.29,
+   "spya-gtrjqw": 0.29,
+   "spya-p2wrn0": 0.73,
+   "spya-vra8j7": 0.29,
+   "spya-bvgkdk": 0.26,
+   "spya-ajt4fw": 0.37,
+   "spya-f4qd4m": 0.2,
+   "spya-y5um3w": 0.24,
+   "spya-ukwu2f": 0.18,
+   "spya-axgwpb": 0.24,
+   "spya-ehr9h6": 0.29,
+   "spya-fj9c4z": 0.26,
+   "spya-mqqggr": 0.34,
+   "spya-fj93fz": 0.2,
+   "spya-uvzun7": 0.25,
+   "spya-gnrbz4": 0.29,
+   "spya-ururb9": 0.22,
+   "spya-tgqpmx": 0.21,
+   "spya-d9sezk": 0.18,
+   "spya-cxzd2e": 0.17,
+   "spya-estzx7": 0.19,
+   "spya-hy6v7n": 0.19,
+   "spya-nutxbb": 0.14,
+   "spya-g9sd8y": 0.19,
+   "spya-g0k9pt": 0.13,
+   "spya-u4fwjr": 0.14,
+   "spya-zsjhf7": 0.24,
+   "spya-e3gpxg": 0.19,
+   "spya-p9qncy": 0.23,
+   "spya-zcp9sj": 0.33,
+   "spya-emftp3": 0.16,
+   "spya-yg2x8v": 0.14,
+   "spya-psfv5q": 0.26,
+   "spya-jr5aqz": 0.19,
+   "spya-v4d0ma": 0.17,
+   "spya-aswawz": 0.24,
+   "spya-xktjdz": 0.35,
+   "spya-cevjcm": 0.18,
+   "spya-p3vhcs": 0.18,
+   "spya-eq2x8a": 0.16,
+   "spya-acu77n": 0.09,
+   "spya-xb5ys8": 0.24,
+   "spya-a9mm4e": 0.32,
+   "spya-vm2cgr": 0.33,
+   "spya-h7rvc6": 0.23,
+   "spya-mp6jk0": 0.36,
+   "spya-qkzyvy": 0.51,
+   "spya-eeka65": 0.25,
+   "spya-cmdgsb": 0.32,
+   "spya-p7jfa2": 0.28,
+   "spya-zxcpyb": 0.23,
+   "spya-nrvjwg": 0.55,
+   "spya-m602ph": 0.04,
+   "spya-anrzj6": 0.07,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "Buddhism",
+  "rep": 1,
+  "ms": 464,
+  "inputTokens": 13450,
+  "cost": 0.0005649,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.71,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.71
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.71
+   ],
+   [
+    "spya-nrvjwg",
+    0.54
+   ],
+   [
+    "spya-qkzyvy",
+    0.5
+   ],
+   [
+    "spya-ajt4fw",
+    0.38
+   ],
+   [
+    "spya-cmdgsb",
+    0.36
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.05,
+   "spya-sgdjgg": 0.21,
+   "spya-b93r7c": 0.13,
+   "spya-ycvhdt": 0.28,
+   "spya-gtrjqw": 0.27,
+   "spya-p2wrn0": 0.71,
+   "spya-vra8j7": 0.3,
+   "spya-bvgkdk": 0.26,
+   "spya-ajt4fw": 0.38,
+   "spya-f4qd4m": 0.21,
+   "spya-y5um3w": 0.23,
+   "spya-ukwu2f": 0.2,
+   "spya-axgwpb": 0.24,
+   "spya-ehr9h6": 0.3,
+   "spya-fj9c4z": 0.26,
+   "spya-mqqggr": 0.29,
+   "spya-fj93fz": 0.21,
+   "spya-uvzun7": 0.25,
+   "spya-gnrbz4": 0.29,
+   "spya-ururb9": 0.24,
+   "spya-tgqpmx": 0.23,
+   "spya-d9sezk": 0.19,
+   "spya-cxzd2e": 0.16,
+   "spya-estzx7": 0.19,
+   "spya-hy6v7n": 0.21,
+   "spya-nutxbb": 0.14,
+   "spya-g9sd8y": 0.18,
+   "spya-g0k9pt": 0.14,
+   "spya-u4fwjr": 0.14,
+   "spya-zsjhf7": 0.25,
+   "spya-e3gpxg": 0.19,
+   "spya-p9qncy": 0.21,
+   "spya-zcp9sj": 0.33,
+   "spya-emftp3": 0.16,
+   "spya-yg2x8v": 0.15,
+   "spya-psfv5q": 0.28,
+   "spya-jr5aqz": 0.18,
+   "spya-v4d0ma": 0.17,
+   "spya-aswawz": 0.24,
+   "spya-xktjdz": 0.33,
+   "spya-cevjcm": 0.18,
+   "spya-p3vhcs": 0.18,
+   "spya-eq2x8a": 0.16,
+   "spya-acu77n": 0.1,
+   "spya-xb5ys8": 0.24,
+   "spya-a9mm4e": 0.31,
+   "spya-vm2cgr": 0.31,
+   "spya-h7rvc6": 0.23,
+   "spya-mp6jk0": 0.32,
+   "spya-qkzyvy": 0.5,
+   "spya-eeka65": 0.27,
+   "spya-cmdgsb": 0.36,
+   "spya-p7jfa2": 0.3,
+   "spya-zxcpyb": 0.22,
+   "spya-nrvjwg": 0.54,
+   "spya-m602ph": 0.04,
+   "spya-anrzj6": 0.07,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "Buddhism",
+  "rep": 2,
+  "ms": 553,
+  "inputTokens": 13450,
+  "cost": 0.0005649,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.73,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.73
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.73
+   ],
+   [
+    "spya-nrvjwg",
+    0.56
+   ],
+   [
+    "spya-qkzyvy",
+    0.53
+   ],
+   [
+    "spya-ajt4fw",
+    0.39
+   ],
+   [
+    "spya-a9mm4e",
+    0.36
+   ]
+  ],
+  "scores": {
+   "spya-sgdjgg": 0.19,
+   "spya-ururb9": 0.24,
+   "spya-estzx7": 0.2,
+   "spya-nutxbb": 0.15,
+   "spya-aswawz": 0.24,
+   "spya-v4d0ma": 0.17,
+   "spya-cevjcm": 0.18,
+   "spya-anrzj6": 0.08,
+   "spya-bvgkdk": 0.27,
+   "spya-y5um3w": 0.25,
+   "spya-ukwu2f": 0.21,
+   "spya-mqqggr": 0.35,
+   "spya-d9sezk": 0.19,
+   "spya-g0k9pt": 0.15,
+   "spya-p9qncy": 0.23,
+   "spya-cxzd2e": 0.17,
+   "spya-yg2x8v": 0.15,
+   "spya-mp6jk0": 0.35,
+   "spya-b93r7c": 0.14,
+   "spya-zxcpyb": 0.25,
+   "spya-btvxrc": 0.05,
+   "spya-ycvhdt": 0.3,
+   "spya-zcp9sj": 0.32,
+   "spya-eq2x8a": 0.17,
+   "spya-vm2cgr": 0.32,
+   "spya-xb5ys8": 0.24,
+   "spya-qkzyvy": 0.53,
+   "spya-eeka65": 0.24,
+   "spya-p7jfa2": 0.29,
+   "spya-ehr9h6": 0.33,
+   "spya-uvzun7": 0.26,
+   "spya-e3gpxg": 0.19,
+   "spya-jr5aqz": 0.19,
+   "spya-acu77n": 0.1,
+   "spya-axgwpb": 0.25,
+   "spya-fj9c4z": 0.27,
+   "spya-g9sd8y": 0.19,
+   "spya-zsjhf7": 0.25,
+   "spya-p3vhcs": 0.18,
+   "spya-a9mm4e": 0.36,
+   "spya-nrvjwg": 0.56,
+   "spya-vra8j7": 0.3,
+   "spya-ajt4fw": 0.39,
+   "spya-fj93fz": 0.26,
+   "spya-gnrbz4": 0.3,
+   "spya-tgqpmx": 0.24,
+   "spya-u4fwjr": 0.15,
+   "spya-h7rvc6": 0.25,
+   "spya-p2wrn0": 0.73,
+   "spya-hy6v7n": 0.21,
+   "spya-emftp3": 0.18,
+   "spya-psfv5q": 0.29,
+   "spya-f4qd4m": 0.22,
+   "spya-xktjdz": 0.36,
+   "spya-cmdgsb": 0.35,
+   "spya-m602ph": 0.04,
+   "spya-gtrjqw": 0.31,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "buddhism",
+  "rep": 0,
+  "ms": 458,
+  "inputTokens": 13450,
+  "cost": 0.0005649,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.71,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.71
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.71
+   ],
+   [
+    "spya-nrvjwg",
+    0.53
+   ],
+   [
+    "spya-qkzyvy",
+    0.5
+   ],
+   [
+    "spya-ajt4fw",
+    0.4
+   ],
+   [
+    "spya-mp6jk0",
+    0.35
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.06,
+   "spya-sgdjgg": 0.17,
+   "spya-b93r7c": 0.14,
+   "spya-ycvhdt": 0.28,
+   "spya-gtrjqw": 0.29,
+   "spya-p2wrn0": 0.71,
+   "spya-vra8j7": 0.31,
+   "spya-bvgkdk": 0.26,
+   "spya-ajt4fw": 0.4,
+   "spya-f4qd4m": 0.24,
+   "spya-y5um3w": 0.26,
+   "spya-ukwu2f": 0.22,
+   "spya-axgwpb": 0.26,
+   "spya-ehr9h6": 0.32,
+   "spya-fj9c4z": 0.3,
+   "spya-mqqggr": 0.32,
+   "spya-fj93fz": 0.22,
+   "spya-uvzun7": 0.26,
+   "spya-gnrbz4": 0.31,
+   "spya-ururb9": 0.23,
+   "spya-tgqpmx": 0.23,
+   "spya-d9sezk": 0.17,
+   "spya-cxzd2e": 0.17,
+   "spya-estzx7": 0.2,
+   "spya-hy6v7n": 0.19,
+   "spya-nutxbb": 0.16,
+   "spya-g9sd8y": 0.2,
+   "spya-g0k9pt": 0.14,
+   "spya-u4fwjr": 0.15,
+   "spya-zsjhf7": 0.25,
+   "spya-e3gpxg": 0.19,
+   "spya-p9qncy": 0.24,
+   "spya-zcp9sj": 0.32,
+   "spya-emftp3": 0.19,
+   "spya-yg2x8v": 0.15,
+   "spya-psfv5q": 0.29,
+   "spya-jr5aqz": 0.19,
+   "spya-v4d0ma": 0.18,
+   "spya-aswawz": 0.23,
+   "spya-xktjdz": 0.32,
+   "spya-cevjcm": 0.19,
+   "spya-p3vhcs": 0.19,
+   "spya-eq2x8a": 0.18,
+   "spya-acu77n": 0.1,
+   "spya-xb5ys8": 0.26,
+   "spya-a9mm4e": 0.34,
+   "spya-vm2cgr": 0.34,
+   "spya-h7rvc6": 0.25,
+   "spya-mp6jk0": 0.35,
+   "spya-qkzyvy": 0.5,
+   "spya-eeka65": 0.28,
+   "spya-cmdgsb": 0.35,
+   "spya-p7jfa2": 0.31,
+   "spya-zxcpyb": 0.25,
+   "spya-nrvjwg": 0.53,
+   "spya-m602ph": 0.04,
+   "spya-anrzj6": 0.07,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "buddhism",
+  "rep": 1,
+  "ms": 414,
+  "inputTokens": 13450,
+  "cost": 0.0005649,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.69,
+  "rank": 1,
+  "kept": [],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.69
+   ],
+   [
+    "spya-nrvjwg",
+    0.59
+   ],
+   [
+    "spya-qkzyvy",
+    0.52
+   ],
+   [
+    "spya-ajt4fw",
+    0.41
+   ],
+   [
+    "spya-mp6jk0",
+    0.38
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.05,
+   "spya-sgdjgg": 0.2,
+   "spya-b93r7c": 0.14,
+   "spya-ycvhdt": 0.3,
+   "spya-gtrjqw": 0.29,
+   "spya-p2wrn0": 0.69,
+   "spya-vra8j7": 0.33,
+   "spya-bvgkdk": 0.29,
+   "spya-ajt4fw": 0.41,
+   "spya-f4qd4m": 0.22,
+   "spya-y5um3w": 0.27,
+   "spya-ukwu2f": 0.23,
+   "spya-axgwpb": 0.26,
+   "spya-ehr9h6": 0.32,
+   "spya-fj9c4z": 0.29,
+   "spya-mqqggr": 0.35,
+   "spya-fj93fz": 0.23,
+   "spya-uvzun7": 0.27,
+   "spya-gnrbz4": 0.3,
+   "spya-ururb9": 0.25,
+   "spya-tgqpmx": 0.24,
+   "spya-d9sezk": 0.22,
+   "spya-cxzd2e": 0.18,
+   "spya-estzx7": 0.21,
+   "spya-hy6v7n": 0.22,
+   "spya-nutxbb": 0.15,
+   "spya-g9sd8y": 0.19,
+   "spya-g0k9pt": 0.16,
+   "spya-u4fwjr": 0.16,
+   "spya-zsjhf7": 0.28,
+   "spya-e3gpxg": 0.2,
+   "spya-p9qncy": 0.24,
+   "spya-zcp9sj": 0.37,
+   "spya-emftp3": 0.2,
+   "spya-yg2x8v": 0.16,
+   "spya-psfv5q": 0.31,
+   "spya-jr5aqz": 0.21,
+   "spya-v4d0ma": 0.21,
+   "spya-aswawz": 0.25,
+   "spya-xktjdz": 0.34,
+   "spya-cevjcm": 0.18,
+   "spya-p3vhcs": 0.2,
+   "spya-eq2x8a": 0.17,
+   "spya-acu77n": 0.12,
+   "spya-xb5ys8": 0.27,
+   "spya-a9mm4e": 0.33,
+   "spya-vm2cgr": 0.33,
+   "spya-h7rvc6": 0.24,
+   "spya-mp6jk0": 0.38,
+   "spya-qkzyvy": 0.52,
+   "spya-eeka65": 0.27,
+   "spya-cmdgsb": 0.36,
+   "spya-p7jfa2": 0.35,
+   "spya-zxcpyb": 0.27,
+   "spya-nrvjwg": 0.59,
+   "spya-m602ph": 0.04,
+   "spya-anrzj6": 0.08,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "buddhism",
+  "rep": 2,
+  "ms": 412,
+  "inputTokens": 13450,
+  "cost": 0.0005649,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.71,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.71
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.71
+   ],
+   [
+    "spya-nrvjwg",
+    0.54
+   ],
+   [
+    "spya-qkzyvy",
+    0.5
+   ],
+   [
+    "spya-ajt4fw",
+    0.4
+   ],
+   [
+    "spya-cmdgsb",
+    0.38
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.05,
+   "spya-sgdjgg": 0.18,
+   "spya-b93r7c": 0.15,
+   "spya-ycvhdt": 0.28,
+   "spya-gtrjqw": 0.3,
+   "spya-p2wrn0": 0.71,
+   "spya-vra8j7": 0.33,
+   "spya-bvgkdk": 0.29,
+   "spya-ajt4fw": 0.4,
+   "spya-f4qd4m": 0.26,
+   "spya-y5um3w": 0.27,
+   "spya-ukwu2f": 0.23,
+   "spya-axgwpb": 0.27,
+   "spya-ehr9h6": 0.33,
+   "spya-fj9c4z": 0.29,
+   "spya-mqqggr": 0.35,
+   "spya-fj93fz": 0.24,
+   "spya-uvzun7": 0.26,
+   "spya-gnrbz4": 0.32,
+   "spya-ururb9": 0.26,
+   "spya-tgqpmx": 0.26,
+   "spya-d9sezk": 0.22,
+   "spya-cxzd2e": 0.19,
+   "spya-estzx7": 0.21,
+   "spya-hy6v7n": 0.22,
+   "spya-nutxbb": 0.15,
+   "spya-g9sd8y": 0.2,
+   "spya-g0k9pt": 0.16,
+   "spya-u4fwjr": 0.16,
+   "spya-zsjhf7": 0.24,
+   "spya-e3gpxg": 0.2,
+   "spya-p9qncy": 0.24,
+   "spya-zcp9sj": 0.34,
+   "spya-emftp3": 0.19,
+   "spya-yg2x8v": 0.16,
+   "spya-psfv5q": 0.32,
+   "spya-jr5aqz": 0.18,
+   "spya-v4d0ma": 0.19,
+   "spya-aswawz": 0.26,
+   "spya-xktjdz": 0.36,
+   "spya-cevjcm": 0.2,
+   "spya-p3vhcs": 0.19,
+   "spya-eq2x8a": 0.18,
+   "spya-acu77n": 0.11,
+   "spya-xb5ys8": 0.26,
+   "spya-a9mm4e": 0.34,
+   "spya-vm2cgr": 0.33,
+   "spya-h7rvc6": 0.25,
+   "spya-mp6jk0": 0.37,
+   "spya-qkzyvy": 0.5,
+   "spya-eeka65": 0.27,
+   "spya-cmdgsb": 0.38,
+   "spya-p7jfa2": 0.33,
+   "spya-zxcpyb": 0.26,
+   "spya-nrvjwg": 0.54,
+   "spya-m602ph": 0.04,
+   "spya-anrzj6": 0.08,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "Buddhist",
+  "rep": 0,
+  "ms": 362,
+  "inputTokens": 13449,
+  "cost": 0.000564858,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.78,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.78
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.78
+   ],
+   [
+    "spya-nrvjwg",
+    0.57
+   ],
+   [
+    "spya-qkzyvy",
+    0.5
+   ],
+   [
+    "spya-ajt4fw",
+    0.36
+   ],
+   [
+    "spya-mp6jk0",
+    0.34
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.07,
+   "spya-sgdjgg": 0.25,
+   "spya-b93r7c": 0.12,
+   "spya-ycvhdt": 0.25,
+   "spya-gtrjqw": 0.28,
+   "spya-p2wrn0": 0.78,
+   "spya-vra8j7": 0.24,
+   "spya-bvgkdk": 0.25,
+   "spya-ajt4fw": 0.36,
+   "spya-f4qd4m": 0.16,
+   "spya-y5um3w": 0.21,
+   "spya-ukwu2f": 0.17,
+   "spya-axgwpb": 0.19,
+   "spya-ehr9h6": 0.24,
+   "spya-fj9c4z": 0.25,
+   "spya-mqqggr": 0.27,
+   "spya-fj93fz": 0.21,
+   "spya-uvzun7": 0.23,
+   "spya-gnrbz4": 0.26,
+   "spya-ururb9": 0.22,
+   "spya-tgqpmx": 0.2,
+   "spya-d9sezk": 0.16,
+   "spya-cxzd2e": 0.15,
+   "spya-estzx7": 0.16,
+   "spya-hy6v7n": 0.16,
+   "spya-nutxbb": 0.12,
+   "spya-g9sd8y": 0.16,
+   "spya-g0k9pt": 0.13,
+   "spya-u4fwjr": 0.13,
+   "spya-zsjhf7": 0.19,
+   "spya-e3gpxg": 0.17,
+   "spya-p9qncy": 0.22,
+   "spya-zcp9sj": 0.32,
+   "spya-emftp3": 0.15,
+   "spya-yg2x8v": 0.15,
+   "spya-psfv5q": 0.27,
+   "spya-jr5aqz": 0.17,
+   "spya-v4d0ma": 0.15,
+   "spya-aswawz": 0.19,
+   "spya-xktjdz": 0.24,
+   "spya-cevjcm": 0.15,
+   "spya-p3vhcs": 0.18,
+   "spya-eq2x8a": 0.15,
+   "spya-acu77n": 0.09,
+   "spya-xb5ys8": 0.2,
+   "spya-a9mm4e": 0.28,
+   "spya-vm2cgr": 0.33,
+   "spya-h7rvc6": 0.2,
+   "spya-mp6jk0": 0.34,
+   "spya-qkzyvy": 0.5,
+   "spya-eeka65": 0.24,
+   "spya-cmdgsb": 0.28,
+   "spya-p7jfa2": 0.26,
+   "spya-zxcpyb": 0.18,
+   "spya-nrvjwg": 0.57,
+   "spya-m602ph": 0.04,
+   "spya-anrzj6": 0.08,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "Buddhist",
+  "rep": 1,
+  "ms": 590,
+  "inputTokens": 13449,
+  "cost": 0.000564858,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.81,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.81
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.81
+   ],
+   [
+    "spya-nrvjwg",
+    0.6
+   ],
+   [
+    "spya-qkzyvy",
+    0.49
+   ],
+   [
+    "spya-ajt4fw",
+    0.39
+   ],
+   [
+    "spya-zcp9sj",
+    0.34
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.07,
+   "spya-sgdjgg": 0.25,
+   "spya-b93r7c": 0.12,
+   "spya-ycvhdt": 0.22,
+   "spya-gtrjqw": 0.3,
+   "spya-p2wrn0": 0.81,
+   "spya-vra8j7": 0.26,
+   "spya-bvgkdk": 0.27,
+   "spya-ajt4fw": 0.39,
+   "spya-f4qd4m": 0.17,
+   "spya-y5um3w": 0.23,
+   "spya-ukwu2f": 0.18,
+   "spya-axgwpb": 0.22,
+   "spya-ehr9h6": 0.27,
+   "spya-fj9c4z": 0.27,
+   "spya-mqqggr": 0.27,
+   "spya-fj93fz": 0.23,
+   "spya-uvzun7": 0.24,
+   "spya-gnrbz4": 0.27,
+   "spya-ururb9": 0.24,
+   "spya-tgqpmx": 0.2,
+   "spya-d9sezk": 0.16,
+   "spya-cxzd2e": 0.15,
+   "spya-estzx7": 0.19,
+   "spya-hy6v7n": 0.18,
+   "spya-nutxbb": 0.13,
+   "spya-g9sd8y": 0.16,
+   "spya-g0k9pt": 0.13,
+   "spya-u4fwjr": 0.14,
+   "spya-zsjhf7": 0.22,
+   "spya-e3gpxg": 0.18,
+   "spya-p9qncy": 0.22,
+   "spya-zcp9sj": 0.34,
+   "spya-emftp3": 0.16,
+   "spya-yg2x8v": 0.15,
+   "spya-psfv5q": 0.28,
+   "spya-jr5aqz": 0.16,
+   "spya-v4d0ma": 0.16,
+   "spya-aswawz": 0.23,
+   "spya-xktjdz": 0.24,
+   "spya-cevjcm": 0.19,
+   "spya-p3vhcs": 0.18,
+   "spya-eq2x8a": 0.16,
+   "spya-acu77n": 0.1,
+   "spya-xb5ys8": 0.23,
+   "spya-a9mm4e": 0.29,
+   "spya-vm2cgr": 0.32,
+   "spya-h7rvc6": 0.22,
+   "spya-mp6jk0": 0.33,
+   "spya-qkzyvy": 0.49,
+   "spya-eeka65": 0.25,
+   "spya-cmdgsb": 0.32,
+   "spya-p7jfa2": 0.27,
+   "spya-zxcpyb": 0.19,
+   "spya-nrvjwg": 0.6,
+   "spya-m602ph": 0.04,
+   "spya-anrzj6": 0.1,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "Buddhist",
+  "rep": 2,
+  "ms": 476,
+  "inputTokens": 13449,
+  "cost": 0.000564858,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.79,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.79
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.79
+   ],
+   [
+    "spya-nrvjwg",
+    0.59
+   ],
+   [
+    "spya-qkzyvy",
+    0.48
+   ],
+   [
+    "spya-ajt4fw",
+    0.37
+   ],
+   [
+    "spya-cmdgsb",
+    0.33
+   ]
+  ],
+  "scores": {
+   "spya-e3gpxg": 0.18,
+   "spya-eq2x8a": 0.15,
+   "spya-sgdjgg": 0.24,
+   "spya-cevjcm": 0.19,
+   "spya-f4qd4m": 0.17,
+   "spya-estzx7": 0.19,
+   "spya-ehr9h6": 0.27,
+   "spya-ururb9": 0.24,
+   "spya-nutxbb": 0.14,
+   "spya-acu77n": 0.1,
+   "spya-gtrjqw": 0.27,
+   "spya-emftp3": 0.16,
+   "spya-yg2x8v": 0.14,
+   "spya-m602ph": 0.04,
+   "spya-fj9c4z": 0.26,
+   "spya-gnrbz4": 0.28,
+   "spya-tgqpmx": 0.21,
+   "spya-g9sd8y": 0.17,
+   "spya-psfv5q": 0.29,
+   "spya-aswawz": 0.2,
+   "spya-cmdgsb": 0.33,
+   "spya-p9qncy": 0.24,
+   "spya-a9mm4e": 0.3,
+   "spya-vm2cgr": 0.32,
+   "spya-zxcpyb": 0.19,
+   "spya-w2jj7e": 0.03,
+   "spya-axgwpb": 0.21,
+   "spya-p7jfa2": 0.27,
+   "spya-nrvjwg": 0.59,
+   "spya-anrzj6": 0.08,
+   "spya-btvxrc": 0.06,
+   "spya-v4d0ma": 0.16,
+   "spya-p2wrn0": 0.79,
+   "spya-vra8j7": 0.27,
+   "spya-bvgkdk": 0.28,
+   "spya-qkzyvy": 0.48,
+   "spya-ajt4fw": 0.37,
+   "spya-cxzd2e": 0.15,
+   "spya-p3vhcs": 0.19,
+   "spya-xb5ys8": 0.22,
+   "spya-h7rvc6": 0.23,
+   "spya-mp6jk0": 0.32,
+   "spya-b93r7c": 0.12,
+   "spya-fj93fz": 0.23,
+   "spya-u4fwjr": 0.14,
+   "spya-zsjhf7": 0.19,
+   "spya-jr5aqz": 0.15,
+   "spya-xktjdz": 0.24,
+   "spya-y5um3w": 0.24,
+   "spya-mqqggr": 0.28,
+   "spya-d9sezk": 0.16,
+   "spya-g0k9pt": 0.13,
+   "spya-hy6v7n": 0.18,
+   "spya-ycvhdt": 0.26,
+   "spya-ukwu2f": 0.17,
+   "spya-uvzun7": 0.25,
+   "spya-zcp9sj": 0.33,
+   "spya-eeka65": 0.26
+  }
+ },
+ {
+  "q": "Buddhist no-self",
+  "rep": 0,
+  "ms": 456,
+  "inputTokens": 13451,
+  "cost": 0.000564942,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.87,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.87
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.87
+   ],
+   [
+    "spya-nrvjwg",
+    0.64
+   ],
+   [
+    "spya-qkzyvy",
+    0.58
+   ],
+   [
+    "spya-gtrjqw",
+    0.56
+   ],
+   [
+    "spya-ajt4fw",
+    0.56
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.09,
+   "spya-sgdjgg": 0.39,
+   "spya-b93r7c": 0.14,
+   "spya-ycvhdt": 0.42,
+   "spya-gtrjqw": 0.56,
+   "spya-p2wrn0": 0.87,
+   "spya-vra8j7": 0.4,
+   "spya-bvgkdk": 0.34,
+   "spya-ajt4fw": 0.56,
+   "spya-f4qd4m": 0.32,
+   "spya-y5um3w": 0.34,
+   "spya-ukwu2f": 0.28,
+   "spya-axgwpb": 0.39,
+   "spya-ehr9h6": 0.42,
+   "spya-fj9c4z": 0.37,
+   "spya-mqqggr": 0.47,
+   "spya-fj93fz": 0.31,
+   "spya-uvzun7": 0.36,
+   "spya-gnrbz4": 0.51,
+   "spya-ururb9": 0.38,
+   "spya-tgqpmx": 0.24,
+   "spya-d9sezk": 0.27,
+   "spya-cxzd2e": 0.18,
+   "spya-estzx7": 0.19,
+   "spya-hy6v7n": 0.26,
+   "spya-nutxbb": 0.17,
+   "spya-g9sd8y": 0.22,
+   "spya-g0k9pt": 0.16,
+   "spya-u4fwjr": 0.2,
+   "spya-zsjhf7": 0.29,
+   "spya-e3gpxg": 0.23,
+   "spya-p9qncy": 0.3,
+   "spya-zcp9sj": 0.35,
+   "spya-emftp3": 0.2,
+   "spya-yg2x8v": 0.16,
+   "spya-psfv5q": 0.36,
+   "spya-jr5aqz": 0.3,
+   "spya-v4d0ma": 0.19,
+   "spya-aswawz": 0.26,
+   "spya-xktjdz": 0.32,
+   "spya-cevjcm": 0.21,
+   "spya-p3vhcs": 0.2,
+   "spya-eq2x8a": 0.2,
+   "spya-acu77n": 0.13,
+   "spya-xb5ys8": 0.37,
+   "spya-a9mm4e": 0.38,
+   "spya-vm2cgr": 0.44,
+   "spya-h7rvc6": 0.27,
+   "spya-mp6jk0": 0.55,
+   "spya-qkzyvy": 0.58,
+   "spya-eeka65": 0.25,
+   "spya-cmdgsb": 0.5,
+   "spya-p7jfa2": 0.41,
+   "spya-zxcpyb": 0.25,
+   "spya-nrvjwg": 0.64,
+   "spya-m602ph": 0.03,
+   "spya-anrzj6": 0.04,
+   "spya-w2jj7e": 0.02
+  }
+ },
+ {
+  "q": "Buddhist no-self",
+  "rep": 1,
+  "ms": 368,
+  "inputTokens": 13451,
+  "cost": 0.000564942,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.88,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ],
+   [
+    "spya-nrvjwg",
+    0.68
+   ],
+   [
+    "spya-qkzyvy",
+    0.6
+   ],
+   [
+    "spya-ajt4fw",
+    0.59
+   ],
+   [
+    "spya-gtrjqw",
+    0.57
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.08,
+   "spya-sgdjgg": 0.33,
+   "spya-b93r7c": 0.16,
+   "spya-ycvhdt": 0.44,
+   "spya-gtrjqw": 0.57,
+   "spya-p2wrn0": 0.88,
+   "spya-vra8j7": 0.43,
+   "spya-bvgkdk": 0.38,
+   "spya-ajt4fw": 0.59,
+   "spya-f4qd4m": 0.32,
+   "spya-y5um3w": 0.36,
+   "spya-ukwu2f": 0.3,
+   "spya-axgwpb": 0.41,
+   "spya-ehr9h6": 0.44,
+   "spya-fj9c4z": 0.4,
+   "spya-mqqggr": 0.46,
+   "spya-fj93fz": 0.31,
+   "spya-uvzun7": 0.37,
+   "spya-gnrbz4": 0.52,
+   "spya-ururb9": 0.4,
+   "spya-tgqpmx": 0.26,
+   "spya-d9sezk": 0.28,
+   "spya-cxzd2e": 0.19,
+   "spya-estzx7": 0.2,
+   "spya-hy6v7n": 0.28,
+   "spya-nutxbb": 0.17,
+   "spya-g9sd8y": 0.24,
+   "spya-g0k9pt": 0.17,
+   "spya-u4fwjr": 0.18,
+   "spya-zsjhf7": 0.31,
+   "spya-e3gpxg": 0.23,
+   "spya-p9qncy": 0.33,
+   "spya-zcp9sj": 0.38,
+   "spya-emftp3": 0.21,
+   "spya-yg2x8v": 0.18,
+   "spya-psfv5q": 0.38,
+   "spya-jr5aqz": 0.3,
+   "spya-v4d0ma": 0.2,
+   "spya-aswawz": 0.29,
+   "spya-xktjdz": 0.32,
+   "spya-cevjcm": 0.22,
+   "spya-p3vhcs": 0.21,
+   "spya-eq2x8a": 0.21,
+   "spya-acu77n": 0.12,
+   "spya-xb5ys8": 0.37,
+   "spya-a9mm4e": 0.41,
+   "spya-vm2cgr": 0.45,
+   "spya-h7rvc6": 0.29,
+   "spya-mp6jk0": 0.55,
+   "spya-qkzyvy": 0.6,
+   "spya-eeka65": 0.25,
+   "spya-cmdgsb": 0.53,
+   "spya-p7jfa2": 0.44,
+   "spya-zxcpyb": 0.27,
+   "spya-nrvjwg": 0.68,
+   "spya-m602ph": 0.03,
+   "spya-anrzj6": 0.04,
+   "spya-w2jj7e": 0.02
+  }
+ },
+ {
+  "q": "Buddhist no-self",
+  "rep": 2,
+  "ms": 387,
+  "inputTokens": 13451,
+  "cost": 0.000564942,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.88,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ],
+   [
+    "spya-nrvjwg",
+    0.65
+   ],
+   [
+    "spya-ajt4fw",
+    0.59
+   ],
+   [
+    "spya-qkzyvy",
+    0.58
+   ],
+   [
+    "spya-gtrjqw",
+    0.55
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.1,
+   "spya-sgdjgg": 0.39,
+   "spya-b93r7c": 0.17,
+   "spya-ycvhdt": 0.47,
+   "spya-gtrjqw": 0.55,
+   "spya-p2wrn0": 0.88,
+   "spya-vra8j7": 0.4,
+   "spya-bvgkdk": 0.36,
+   "spya-ajt4fw": 0.59,
+   "spya-f4qd4m": 0.35,
+   "spya-y5um3w": 0.37,
+   "spya-ukwu2f": 0.3,
+   "spya-axgwpb": 0.42,
+   "spya-ehr9h6": 0.43,
+   "spya-fj9c4z": 0.38,
+   "spya-mqqggr": 0.47,
+   "spya-fj93fz": 0.3,
+   "spya-uvzun7": 0.37,
+   "spya-gnrbz4": 0.49,
+   "spya-ururb9": 0.4,
+   "spya-tgqpmx": 0.26,
+   "spya-d9sezk": 0.27,
+   "spya-cxzd2e": 0.18,
+   "spya-estzx7": 0.2,
+   "spya-hy6v7n": 0.26,
+   "spya-nutxbb": 0.17,
+   "spya-g9sd8y": 0.23,
+   "spya-g0k9pt": 0.17,
+   "spya-u4fwjr": 0.19,
+   "spya-zsjhf7": 0.31,
+   "spya-e3gpxg": 0.23,
+   "spya-p9qncy": 0.31,
+   "spya-zcp9sj": 0.37,
+   "spya-emftp3": 0.22,
+   "spya-yg2x8v": 0.19,
+   "spya-psfv5q": 0.39,
+   "spya-jr5aqz": 0.32,
+   "spya-v4d0ma": 0.19,
+   "spya-aswawz": 0.28,
+   "spya-xktjdz": 0.33,
+   "spya-cevjcm": 0.22,
+   "spya-p3vhcs": 0.21,
+   "spya-eq2x8a": 0.21,
+   "spya-acu77n": 0.15,
+   "spya-xb5ys8": 0.37,
+   "spya-a9mm4e": 0.39,
+   "spya-vm2cgr": 0.45,
+   "spya-h7rvc6": 0.28,
+   "spya-mp6jk0": 0.54,
+   "spya-qkzyvy": 0.58,
+   "spya-eeka65": 0.26,
+   "spya-cmdgsb": 0.52,
+   "spya-p7jfa2": 0.41,
+   "spya-zxcpyb": 0.26,
+   "spya-nrvjwg": 0.65,
+   "spya-m602ph": 0.03,
+   "spya-anrzj6": 0.05,
+   "spya-w2jj7e": 0.02
+  }
+ },
+ {
+  "q": "Buddhism and no-self",
+  "rep": 0,
+  "ms": 398,
+  "inputTokens": 13453,
+  "cost": 0.000565026,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.88,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ],
+   [
+    "spya-nrvjwg",
+    0.68
+   ],
+   [
+    "spya-qkzyvy",
+    0.6
+   ],
+   [
+    "spya-ajt4fw",
+    0.59
+   ],
+   [
+    "spya-gtrjqw",
+    0.57
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.1,
+   "spya-sgdjgg": 0.4,
+   "spya-b93r7c": 0.15,
+   "spya-ycvhdt": 0.42,
+   "spya-gtrjqw": 0.57,
+   "spya-p2wrn0": 0.88,
+   "spya-vra8j7": 0.46,
+   "spya-bvgkdk": 0.39,
+   "spya-ajt4fw": 0.59,
+   "spya-f4qd4m": 0.34,
+   "spya-y5um3w": 0.41,
+   "spya-ukwu2f": 0.29,
+   "spya-axgwpb": 0.42,
+   "spya-ehr9h6": 0.46,
+   "spya-fj9c4z": 0.42,
+   "spya-mqqggr": 0.47,
+   "spya-fj93fz": 0.32,
+   "spya-uvzun7": 0.39,
+   "spya-gnrbz4": 0.51,
+   "spya-ururb9": 0.41,
+   "spya-tgqpmx": 0.27,
+   "spya-d9sezk": 0.29,
+   "spya-cxzd2e": 0.2,
+   "spya-estzx7": 0.23,
+   "spya-hy6v7n": 0.31,
+   "spya-nutxbb": 0.18,
+   "spya-g9sd8y": 0.23,
+   "spya-g0k9pt": 0.18,
+   "spya-u4fwjr": 0.17,
+   "spya-zsjhf7": 0.32,
+   "spya-e3gpxg": 0.24,
+   "spya-p9qncy": 0.34,
+   "spya-zcp9sj": 0.39,
+   "spya-emftp3": 0.23,
+   "spya-yg2x8v": 0.19,
+   "spya-psfv5q": 0.4,
+   "spya-jr5aqz": 0.32,
+   "spya-v4d0ma": 0.24,
+   "spya-aswawz": 0.31,
+   "spya-xktjdz": 0.37,
+   "spya-cevjcm": 0.23,
+   "spya-p3vhcs": 0.22,
+   "spya-eq2x8a": 0.21,
+   "spya-acu77n": 0.13,
+   "spya-xb5ys8": 0.39,
+   "spya-a9mm4e": 0.43,
+   "spya-vm2cgr": 0.44,
+   "spya-h7rvc6": 0.29,
+   "spya-mp6jk0": 0.56,
+   "spya-qkzyvy": 0.6,
+   "spya-eeka65": 0.27,
+   "spya-cmdgsb": 0.52,
+   "spya-p7jfa2": 0.46,
+   "spya-zxcpyb": 0.27,
+   "spya-nrvjwg": 0.68,
+   "spya-m602ph": 0.03,
+   "spya-anrzj6": 0.06,
+   "spya-w2jj7e": 0.02
+  }
+ },
+ {
+  "q": "Buddhism and no-self",
+  "rep": 1,
+  "ms": 357,
+  "inputTokens": 13453,
+  "cost": 0.000565026,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.88,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ],
+   [
+    "spya-nrvjwg",
+    0.69
+   ],
+   [
+    "spya-qkzyvy",
+    0.59
+   ],
+   [
+    "spya-ajt4fw",
+    0.57
+   ],
+   [
+    "spya-gtrjqw",
+    0.56
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.14,
+   "spya-sgdjgg": 0.3,
+   "spya-b93r7c": 0.15,
+   "spya-ycvhdt": 0.41,
+   "spya-gtrjqw": 0.56,
+   "spya-p2wrn0": 0.88,
+   "spya-vra8j7": 0.45,
+   "spya-bvgkdk": 0.35,
+   "spya-ajt4fw": 0.57,
+   "spya-f4qd4m": 0.35,
+   "spya-y5um3w": 0.39,
+   "spya-ukwu2f": 0.29,
+   "spya-axgwpb": 0.39,
+   "spya-ehr9h6": 0.44,
+   "spya-fj9c4z": 0.41,
+   "spya-mqqggr": 0.46,
+   "spya-fj93fz": 0.31,
+   "spya-uvzun7": 0.41,
+   "spya-gnrbz4": 0.49,
+   "spya-ururb9": 0.4,
+   "spya-tgqpmx": 0.27,
+   "spya-d9sezk": 0.28,
+   "spya-cxzd2e": 0.18,
+   "spya-estzx7": 0.21,
+   "spya-hy6v7n": 0.28,
+   "spya-nutxbb": 0.17,
+   "spya-g9sd8y": 0.23,
+   "spya-g0k9pt": 0.19,
+   "spya-u4fwjr": 0.18,
+   "spya-zsjhf7": 0.32,
+   "spya-e3gpxg": 0.25,
+   "spya-p9qncy": 0.31,
+   "spya-zcp9sj": 0.39,
+   "spya-emftp3": 0.21,
+   "spya-yg2x8v": 0.19,
+   "spya-psfv5q": 0.35,
+   "spya-jr5aqz": 0.31,
+   "spya-v4d0ma": 0.22,
+   "spya-aswawz": 0.3,
+   "spya-xktjdz": 0.37,
+   "spya-cevjcm": 0.22,
+   "spya-p3vhcs": 0.22,
+   "spya-eq2x8a": 0.21,
+   "spya-acu77n": 0.13,
+   "spya-xb5ys8": 0.41,
+   "spya-a9mm4e": 0.43,
+   "spya-vm2cgr": 0.45,
+   "spya-h7rvc6": 0.3,
+   "spya-mp6jk0": 0.55,
+   "spya-qkzyvy": 0.59,
+   "spya-eeka65": 0.28,
+   "spya-cmdgsb": 0.52,
+   "spya-p7jfa2": 0.45,
+   "spya-zxcpyb": 0.28,
+   "spya-nrvjwg": 0.69,
+   "spya-m602ph": 0.03,
+   "spya-anrzj6": 0.06,
+   "spya-w2jj7e": 0.02
+  }
+ },
+ {
+  "q": "Buddhism and no-self",
+  "rep": 2,
+  "ms": 522,
+  "inputTokens": 13453,
+  "cost": 0.000565026,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.87,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.87
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.87
+   ],
+   [
+    "spya-nrvjwg",
+    0.69
+   ],
+   [
+    "spya-gtrjqw",
+    0.6
+   ],
+   [
+    "spya-ajt4fw",
+    0.59
+   ],
+   [
+    "spya-qkzyvy",
+    0.59
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.1,
+   "spya-sgdjgg": 0.41,
+   "spya-b93r7c": 0.16,
+   "spya-ycvhdt": 0.41,
+   "spya-gtrjqw": 0.6,
+   "spya-p2wrn0": 0.87,
+   "spya-vra8j7": 0.44,
+   "spya-bvgkdk": 0.37,
+   "spya-ajt4fw": 0.59,
+   "spya-f4qd4m": 0.35,
+   "spya-y5um3w": 0.39,
+   "spya-ukwu2f": 0.3,
+   "spya-axgwpb": 0.42,
+   "spya-ehr9h6": 0.45,
+   "spya-fj9c4z": 0.42,
+   "spya-mqqggr": 0.47,
+   "spya-fj93fz": 0.31,
+   "spya-uvzun7": 0.4,
+   "spya-gnrbz4": 0.52,
+   "spya-ururb9": 0.4,
+   "spya-tgqpmx": 0.27,
+   "spya-d9sezk": 0.29,
+   "spya-cxzd2e": 0.2,
+   "spya-estzx7": 0.21,
+   "spya-hy6v7n": 0.28,
+   "spya-nutxbb": 0.18,
+   "spya-g9sd8y": 0.23,
+   "spya-g0k9pt": 0.19,
+   "spya-u4fwjr": 0.18,
+   "spya-zsjhf7": 0.29,
+   "spya-e3gpxg": 0.24,
+   "spya-p9qncy": 0.3,
+   "spya-zcp9sj": 0.39,
+   "spya-emftp3": 0.23,
+   "spya-yg2x8v": 0.2,
+   "spya-psfv5q": 0.41,
+   "spya-jr5aqz": 0.32,
+   "spya-v4d0ma": 0.23,
+   "spya-aswawz": 0.31,
+   "spya-xktjdz": 0.36,
+   "spya-cevjcm": 0.22,
+   "spya-p3vhcs": 0.23,
+   "spya-eq2x8a": 0.21,
+   "spya-acu77n": 0.14,
+   "spya-xb5ys8": 0.4,
+   "spya-a9mm4e": 0.42,
+   "spya-vm2cgr": 0.45,
+   "spya-h7rvc6": 0.31,
+   "spya-mp6jk0": 0.55,
+   "spya-qkzyvy": 0.59,
+   "spya-eeka65": 0.28,
+   "spya-cmdgsb": 0.52,
+   "spya-p7jfa2": 0.46,
+   "spya-zxcpyb": 0.28,
+   "spya-nrvjwg": 0.69,
+   "spya-m602ph": 0.03,
+   "spya-anrzj6": 0.05,
+   "spya-w2jj7e": 0.02
+  }
+ },
+ {
+  "q": "no-self",
+  "rep": 0,
+  "ms": 419,
+  "inputTokens": 13448,
+  "cost": 0.000564816,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.88,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ],
+   [
+    "spya-gtrjqw",
+    0.69
+   ],
+   [
+    "spya-nrvjwg",
+    0.62
+   ],
+   [
+    "spya-ajt4fw",
+    0.61
+   ],
+   [
+    "spya-ycvhdt",
+    0.59
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.11,
+   "spya-sgdjgg": 0.55,
+   "spya-b93r7c": 0.21,
+   "spya-ycvhdt": 0.59,
+   "spya-gtrjqw": 0.69,
+   "spya-p2wrn0": 0.88,
+   "spya-vra8j7": 0.47,
+   "spya-bvgkdk": 0.46,
+   "spya-ajt4fw": 0.61,
+   "spya-f4qd4m": 0.42,
+   "spya-y5um3w": 0.43,
+   "spya-ukwu2f": 0.39,
+   "spya-axgwpb": 0.48,
+   "spya-ehr9h6": 0.51,
+   "spya-fj9c4z": 0.44,
+   "spya-mqqggr": 0.51,
+   "spya-fj93fz": 0.41,
+   "spya-uvzun7": 0.38,
+   "spya-gnrbz4": 0.55,
+   "spya-ururb9": 0.43,
+   "spya-tgqpmx": 0.37,
+   "spya-d9sezk": 0.34,
+   "spya-cxzd2e": 0.22,
+   "spya-estzx7": 0.26,
+   "spya-hy6v7n": 0.31,
+   "spya-nutxbb": 0.22,
+   "spya-g9sd8y": 0.3,
+   "spya-g0k9pt": 0.21,
+   "spya-u4fwjr": 0.22,
+   "spya-zsjhf7": 0.33,
+   "spya-e3gpxg": 0.26,
+   "spya-p9qncy": 0.36,
+   "spya-zcp9sj": 0.37,
+   "spya-emftp3": 0.25,
+   "spya-yg2x8v": 0.24,
+   "spya-psfv5q": 0.39,
+   "spya-jr5aqz": 0.35,
+   "spya-v4d0ma": 0.26,
+   "spya-aswawz": 0.3,
+   "spya-xktjdz": 0.35,
+   "spya-cevjcm": 0.25,
+   "spya-p3vhcs": 0.24,
+   "spya-eq2x8a": 0.26,
+   "spya-acu77n": 0.22,
+   "spya-xb5ys8": 0.43,
+   "spya-a9mm4e": 0.45,
+   "spya-vm2cgr": 0.52,
+   "spya-h7rvc6": 0.33,
+   "spya-mp6jk0": 0.57,
+   "spya-qkzyvy": 0.56,
+   "spya-eeka65": 0.28,
+   "spya-cmdgsb": 0.5,
+   "spya-p7jfa2": 0.45,
+   "spya-zxcpyb": 0.3,
+   "spya-nrvjwg": 0.62,
+   "spya-m602ph": 0.03,
+   "spya-anrzj6": 0.05,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "no-self",
+  "rep": 1,
+  "ms": 395,
+  "inputTokens": 13448,
+  "cost": 0.000564816,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.87,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.87
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.87
+   ],
+   [
+    "spya-gtrjqw",
+    0.68
+   ],
+   [
+    "spya-ycvhdt",
+    0.61
+   ],
+   [
+    "spya-nrvjwg",
+    0.61
+   ],
+   [
+    "spya-ajt4fw",
+    0.59
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.1,
+   "spya-sgdjgg": 0.55,
+   "spya-b93r7c": 0.21,
+   "spya-ycvhdt": 0.61,
+   "spya-gtrjqw": 0.68,
+   "spya-p2wrn0": 0.87,
+   "spya-vra8j7": 0.46,
+   "spya-bvgkdk": 0.43,
+   "spya-ajt4fw": 0.59,
+   "spya-f4qd4m": 0.4,
+   "spya-y5um3w": 0.42,
+   "spya-ukwu2f": 0.38,
+   "spya-axgwpb": 0.48,
+   "spya-ehr9h6": 0.5,
+   "spya-fj9c4z": 0.42,
+   "spya-mqqggr": 0.45,
+   "spya-fj93fz": 0.39,
+   "spya-uvzun7": 0.4,
+   "spya-gnrbz4": 0.53,
+   "spya-ururb9": 0.42,
+   "spya-tgqpmx": 0.35,
+   "spya-d9sezk": 0.34,
+   "spya-cxzd2e": 0.22,
+   "spya-estzx7": 0.28,
+   "spya-hy6v7n": 0.3,
+   "spya-nutxbb": 0.22,
+   "spya-g9sd8y": 0.29,
+   "spya-g0k9pt": 0.23,
+   "spya-u4fwjr": 0.21,
+   "spya-zsjhf7": 0.31,
+   "spya-e3gpxg": 0.25,
+   "spya-p9qncy": 0.34,
+   "spya-zcp9sj": 0.35,
+   "spya-emftp3": 0.23,
+   "spya-yg2x8v": 0.23,
+   "spya-psfv5q": 0.37,
+   "spya-jr5aqz": 0.32,
+   "spya-v4d0ma": 0.25,
+   "spya-aswawz": 0.29,
+   "spya-xktjdz": 0.33,
+   "spya-cevjcm": 0.25,
+   "spya-p3vhcs": 0.24,
+   "spya-eq2x8a": 0.24,
+   "spya-acu77n": 0.2,
+   "spya-xb5ys8": 0.41,
+   "spya-a9mm4e": 0.42,
+   "spya-vm2cgr": 0.5,
+   "spya-h7rvc6": 0.32,
+   "spya-mp6jk0": 0.56,
+   "spya-qkzyvy": 0.54,
+   "spya-eeka65": 0.27,
+   "spya-cmdgsb": 0.48,
+   "spya-p7jfa2": 0.42,
+   "spya-zxcpyb": 0.3,
+   "spya-nrvjwg": 0.61,
+   "spya-m602ph": 0.03,
+   "spya-anrzj6": 0.06,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "no-self",
+  "rep": 2,
+  "ms": 374,
+  "inputTokens": 13448,
+  "cost": 0.000564816,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.88,
+  "rank": 1,
+  "kept": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ]
+  ],
+  "top5": [
+   [
+    "spya-p2wrn0",
+    0.88
+   ],
+   [
+    "spya-gtrjqw",
+    0.68
+   ],
+   [
+    "spya-nrvjwg",
+    0.61
+   ],
+   [
+    "spya-ycvhdt",
+    0.6
+   ],
+   [
+    "spya-ajt4fw",
+    0.59
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.11,
+   "spya-sgdjgg": 0.53,
+   "spya-b93r7c": 0.2,
+   "spya-ycvhdt": 0.6,
+   "spya-gtrjqw": 0.68,
+   "spya-p2wrn0": 0.88,
+   "spya-vra8j7": 0.47,
+   "spya-bvgkdk": 0.43,
+   "spya-ajt4fw": 0.59,
+   "spya-f4qd4m": 0.43,
+   "spya-y5um3w": 0.42,
+   "spya-ukwu2f": 0.37,
+   "spya-axgwpb": 0.47,
+   "spya-ehr9h6": 0.5,
+   "spya-fj9c4z": 0.43,
+   "spya-mqqggr": 0.48,
+   "spya-fj93fz": 0.39,
+   "spya-uvzun7": 0.39,
+   "spya-gnrbz4": 0.54,
+   "spya-ururb9": 0.43,
+   "spya-tgqpmx": 0.35,
+   "spya-d9sezk": 0.34,
+   "spya-cxzd2e": 0.22,
+   "spya-estzx7": 0.27,
+   "spya-hy6v7n": 0.3,
+   "spya-nutxbb": 0.21,
+   "spya-g9sd8y": 0.29,
+   "spya-g0k9pt": 0.22,
+   "spya-u4fwjr": 0.21,
+   "spya-zsjhf7": 0.35,
+   "spya-e3gpxg": 0.25,
+   "spya-p9qncy": 0.35,
+   "spya-zcp9sj": 0.34,
+   "spya-emftp3": 0.24,
+   "spya-yg2x8v": 0.24,
+   "spya-psfv5q": 0.38,
+   "spya-jr5aqz": 0.36,
+   "spya-v4d0ma": 0.26,
+   "spya-aswawz": 0.32,
+   "spya-xktjdz": 0.34,
+   "spya-cevjcm": 0.26,
+   "spya-p3vhcs": 0.24,
+   "spya-eq2x8a": 0.25,
+   "spya-acu77n": 0.21,
+   "spya-xb5ys8": 0.41,
+   "spya-a9mm4e": 0.42,
+   "spya-vm2cgr": 0.5,
+   "spya-h7rvc6": 0.31,
+   "spya-mp6jk0": 0.55,
+   "spya-qkzyvy": 0.55,
+   "spya-eeka65": 0.26,
+   "spya-cmdgsb": 0.48,
+   "spya-p7jfa2": 0.41,
+   "spya-zxcpyb": 0.3,
+   "spya-nrvjwg": 0.61,
+   "spya-m602ph": 0.03,
+   "spya-anrzj6": 0.05,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "Evolution",
+  "rep": 0,
+  "ms": 359,
+  "inputTokens": 13449,
+  "cost": 0.000564858,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.66,
+  "rank": 5,
+  "kept": [
+   [
+    "spya-ajt4fw",
+    0.73
+   ],
+   [
+    "spya-cmdgsb",
+    0.72
+   ],
+   [
+    "spya-gtrjqw",
+    0.71
+   ]
+  ],
+  "top5": [
+   [
+    "spya-ajt4fw",
+    0.73
+   ],
+   [
+    "spya-cmdgsb",
+    0.72
+   ],
+   [
+    "spya-gtrjqw",
+    0.71
+   ],
+   [
+    "spya-nrvjwg",
+    0.67
+   ],
+   [
+    "spya-p2wrn0",
+    0.66
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.29,
+   "spya-sgdjgg": 0.65,
+   "spya-b93r7c": 0.4,
+   "spya-ycvhdt": 0.42,
+   "spya-gtrjqw": 0.71,
+   "spya-p2wrn0": 0.66,
+   "spya-vra8j7": 0.66,
+   "spya-bvgkdk": 0.61,
+   "spya-ajt4fw": 0.73,
+   "spya-f4qd4m": 0.47,
+   "spya-y5um3w": 0.43,
+   "spya-ukwu2f": 0.48,
+   "spya-axgwpb": 0.46,
+   "spya-ehr9h6": 0.52,
+   "spya-fj9c4z": 0.58,
+   "spya-mqqggr": 0.57,
+   "spya-fj93fz": 0.61,
+   "spya-uvzun7": 0.61,
+   "spya-gnrbz4": 0.58,
+   "spya-ururb9": 0.56,
+   "spya-tgqpmx": 0.55,
+   "spya-d9sezk": 0.37,
+   "spya-cxzd2e": 0.49,
+   "spya-estzx7": 0.58,
+   "spya-hy6v7n": 0.58,
+   "spya-nutxbb": 0.55,
+   "spya-g9sd8y": 0.58,
+   "spya-g0k9pt": 0.54,
+   "spya-u4fwjr": 0.44,
+   "spya-zsjhf7": 0.62,
+   "spya-e3gpxg": 0.52,
+   "spya-p9qncy": 0.5,
+   "spya-zcp9sj": 0.62,
+   "spya-emftp3": 0.42,
+   "spya-yg2x8v": 0.37,
+   "spya-psfv5q": 0.39,
+   "spya-jr5aqz": 0.32,
+   "spya-v4d0ma": 0.66,
+   "spya-aswawz": 0.53,
+   "spya-xktjdz": 0.56,
+   "spya-cevjcm": 0.44,
+   "spya-p3vhcs": 0.44,
+   "spya-eq2x8a": 0.47,
+   "spya-acu77n": 0.18,
+   "spya-xb5ys8": 0.45,
+   "spya-a9mm4e": 0.54,
+   "spya-vm2cgr": 0.53,
+   "spya-h7rvc6": 0.41,
+   "spya-mp6jk0": 0.48,
+   "spya-qkzyvy": 0.5,
+   "spya-eeka65": 0.3,
+   "spya-cmdgsb": 0.72,
+   "spya-p7jfa2": 0.51,
+   "spya-zxcpyb": 0.65,
+   "spya-nrvjwg": 0.67,
+   "spya-m602ph": 0.05,
+   "spya-anrzj6": 0.08,
+   "spya-w2jj7e": 0.04
+  }
+ },
+ {
+  "q": "Evolution",
+  "rep": 1,
+  "ms": 396,
+  "inputTokens": 13449,
+  "cost": 0.000564858,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.66,
+  "rank": 5,
+  "kept": [
+   [
+    "spya-ajt4fw",
+    0.74
+   ],
+   [
+    "spya-cmdgsb",
+    0.72
+   ],
+   [
+    "spya-gtrjqw",
+    0.71
+   ]
+  ],
+  "top5": [
+   [
+    "spya-ajt4fw",
+    0.74
+   ],
+   [
+    "spya-cmdgsb",
+    0.72
+   ],
+   [
+    "spya-gtrjqw",
+    0.71
+   ],
+   [
+    "spya-nrvjwg",
+    0.68
+   ],
+   [
+    "spya-p2wrn0",
+    0.66
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.27,
+   "spya-sgdjgg": 0.65,
+   "spya-b93r7c": 0.4,
+   "spya-ycvhdt": 0.39,
+   "spya-gtrjqw": 0.71,
+   "spya-p2wrn0": 0.66,
+   "spya-vra8j7": 0.65,
+   "spya-bvgkdk": 0.6,
+   "spya-ajt4fw": 0.74,
+   "spya-f4qd4m": 0.5,
+   "spya-y5um3w": 0.45,
+   "spya-ukwu2f": 0.49,
+   "spya-axgwpb": 0.47,
+   "spya-ehr9h6": 0.52,
+   "spya-fj9c4z": 0.58,
+   "spya-mqqggr": 0.59,
+   "spya-fj93fz": 0.62,
+   "spya-uvzun7": 0.62,
+   "spya-gnrbz4": 0.56,
+   "spya-ururb9": 0.57,
+   "spya-tgqpmx": 0.56,
+   "spya-d9sezk": 0.36,
+   "spya-cxzd2e": 0.48,
+   "spya-estzx7": 0.57,
+   "spya-hy6v7n": 0.6,
+   "spya-nutxbb": 0.54,
+   "spya-g9sd8y": 0.59,
+   "spya-g0k9pt": 0.53,
+   "spya-u4fwjr": 0.44,
+   "spya-zsjhf7": 0.59,
+   "spya-e3gpxg": 0.5,
+   "spya-p9qncy": 0.5,
+   "spya-zcp9sj": 0.59,
+   "spya-emftp3": 0.43,
+   "spya-yg2x8v": 0.39,
+   "spya-psfv5q": 0.41,
+   "spya-jr5aqz": 0.33,
+   "spya-v4d0ma": 0.65,
+   "spya-aswawz": 0.51,
+   "spya-xktjdz": 0.55,
+   "spya-cevjcm": 0.43,
+   "spya-p3vhcs": 0.43,
+   "spya-eq2x8a": 0.46,
+   "spya-acu77n": 0.17,
+   "spya-xb5ys8": 0.44,
+   "spya-a9mm4e": 0.52,
+   "spya-vm2cgr": 0.53,
+   "spya-h7rvc6": 0.42,
+   "spya-mp6jk0": 0.47,
+   "spya-qkzyvy": 0.5,
+   "spya-eeka65": 0.3,
+   "spya-cmdgsb": 0.72,
+   "spya-p7jfa2": 0.5,
+   "spya-zxcpyb": 0.64,
+   "spya-nrvjwg": 0.68,
+   "spya-m602ph": 0.05,
+   "spya-anrzj6": 0.09,
+   "spya-w2jj7e": 0.04
+  }
+ },
+ {
+  "q": "Evolution",
+  "rep": 2,
+  "ms": 402,
+  "inputTokens": 13449,
+  "cost": 0.000564858,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.65,
+  "rank": 5,
+  "kept": [
+   [
+    "spya-ajt4fw",
+    0.74
+   ],
+   [
+    "spya-cmdgsb",
+    0.72
+   ],
+   [
+    "spya-gtrjqw",
+    0.71
+   ]
+  ],
+  "top5": [
+   [
+    "spya-ajt4fw",
+    0.74
+   ],
+   [
+    "spya-cmdgsb",
+    0.72
+   ],
+   [
+    "spya-gtrjqw",
+    0.71
+   ],
+   [
+    "spya-nrvjwg",
+    0.67
+   ],
+   [
+    "spya-p2wrn0",
+    0.65
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.27,
+   "spya-sgdjgg": 0.64,
+   "spya-b93r7c": 0.39,
+   "spya-ycvhdt": 0.42,
+   "spya-gtrjqw": 0.71,
+   "spya-p2wrn0": 0.65,
+   "spya-vra8j7": 0.65,
+   "spya-bvgkdk": 0.58,
+   "spya-ajt4fw": 0.74,
+   "spya-f4qd4m": 0.48,
+   "spya-y5um3w": 0.42,
+   "spya-ukwu2f": 0.48,
+   "spya-axgwpb": 0.46,
+   "spya-ehr9h6": 0.52,
+   "spya-fj9c4z": 0.57,
+   "spya-mqqggr": 0.56,
+   "spya-fj93fz": 0.59,
+   "spya-uvzun7": 0.59,
+   "spya-gnrbz4": 0.55,
+   "spya-ururb9": 0.56,
+   "spya-tgqpmx": 0.54,
+   "spya-d9sezk": 0.39,
+   "spya-cxzd2e": 0.48,
+   "spya-estzx7": 0.56,
+   "spya-hy6v7n": 0.58,
+   "spya-nutxbb": 0.55,
+   "spya-g9sd8y": 0.57,
+   "spya-g0k9pt": 0.53,
+   "spya-u4fwjr": 0.44,
+   "spya-zsjhf7": 0.6,
+   "spya-e3gpxg": 0.52,
+   "spya-p9qncy": 0.5,
+   "spya-zcp9sj": 0.59,
+   "spya-emftp3": 0.43,
+   "spya-yg2x8v": 0.38,
+   "spya-psfv5q": 0.4,
+   "spya-jr5aqz": 0.33,
+   "spya-v4d0ma": 0.64,
+   "spya-aswawz": 0.52,
+   "spya-xktjdz": 0.57,
+   "spya-cevjcm": 0.43,
+   "spya-p3vhcs": 0.43,
+   "spya-eq2x8a": 0.45,
+   "spya-acu77n": 0.18,
+   "spya-xb5ys8": 0.44,
+   "spya-a9mm4e": 0.53,
+   "spya-vm2cgr": 0.52,
+   "spya-h7rvc6": 0.41,
+   "spya-mp6jk0": 0.48,
+   "spya-qkzyvy": 0.51,
+   "spya-eeka65": 0.31,
+   "spya-cmdgsb": 0.72,
+   "spya-p7jfa2": 0.5,
+   "spya-zxcpyb": 0.64,
+   "spya-nrvjwg": 0.67,
+   "spya-m602ph": 0.06,
+   "spya-anrzj6": 0.08,
+   "spya-w2jj7e": 0.04
+  }
+ },
+ {
+  "q": "evolution",
+  "rep": 0,
+  "ms": 361,
+  "inputTokens": 13449,
+  "cost": 0.000564858,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.67,
+  "rank": 6,
+  "kept": [
+   [
+    "spya-ajt4fw",
+    0.77
+   ],
+   [
+    "spya-cmdgsb",
+    0.74
+   ],
+   [
+    "spya-gtrjqw",
+    0.71
+   ]
+  ],
+  "top5": [
+   [
+    "spya-ajt4fw",
+    0.77
+   ],
+   [
+    "spya-cmdgsb",
+    0.74
+   ],
+   [
+    "spya-gtrjqw",
+    0.71
+   ],
+   [
+    "spya-v4d0ma",
+    0.69
+   ],
+   [
+    "spya-nrvjwg",
+    0.68
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.21,
+   "spya-sgdjgg": 0.66,
+   "spya-b93r7c": 0.43,
+   "spya-ycvhdt": 0.4,
+   "spya-gtrjqw": 0.71,
+   "spya-p2wrn0": 0.67,
+   "spya-vra8j7": 0.67,
+   "spya-bvgkdk": 0.63,
+   "spya-ajt4fw": 0.77,
+   "spya-f4qd4m": 0.48,
+   "spya-y5um3w": 0.43,
+   "spya-ukwu2f": 0.48,
+   "spya-axgwpb": 0.48,
+   "spya-ehr9h6": 0.53,
+   "spya-fj9c4z": 0.58,
+   "spya-mqqggr": 0.6,
+   "spya-fj93fz": 0.64,
+   "spya-uvzun7": 0.62,
+   "spya-gnrbz4": 0.58,
+   "spya-ururb9": 0.58,
+   "spya-tgqpmx": 0.56,
+   "spya-d9sezk": 0.38,
+   "spya-cxzd2e": 0.51,
+   "spya-estzx7": 0.59,
+   "spya-hy6v7n": 0.62,
+   "spya-nutxbb": 0.57,
+   "spya-g9sd8y": 0.63,
+   "spya-g0k9pt": 0.56,
+   "spya-u4fwjr": 0.46,
+   "spya-zsjhf7": 0.65,
+   "spya-e3gpxg": 0.54,
+   "spya-p9qncy": 0.52,
+   "spya-zcp9sj": 0.63,
+   "spya-emftp3": 0.44,
+   "spya-yg2x8v": 0.41,
+   "spya-psfv5q": 0.42,
+   "spya-jr5aqz": 0.34,
+   "spya-v4d0ma": 0.69,
+   "spya-aswawz": 0.54,
+   "spya-xktjdz": 0.61,
+   "spya-cevjcm": 0.47,
+   "spya-p3vhcs": 0.46,
+   "spya-eq2x8a": 0.47,
+   "spya-acu77n": 0.18,
+   "spya-xb5ys8": 0.46,
+   "spya-a9mm4e": 0.55,
+   "spya-vm2cgr": 0.56,
+   "spya-h7rvc6": 0.43,
+   "spya-mp6jk0": 0.44,
+   "spya-qkzyvy": 0.5,
+   "spya-eeka65": 0.31,
+   "spya-cmdgsb": 0.74,
+   "spya-p7jfa2": 0.51,
+   "spya-zxcpyb": 0.67,
+   "spya-nrvjwg": 0.68,
+   "spya-m602ph": 0.05,
+   "spya-anrzj6": 0.09,
+   "spya-w2jj7e": 0.04
+  }
+ },
+ {
+  "q": "evolution",
+  "rep": 1,
+  "ms": 399,
+  "inputTokens": 13449,
+  "cost": 0.000564858,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.68,
+  "rank": 4,
+  "kept": [
+   [
+    "spya-ajt4fw",
+    0.74
+   ],
+   [
+    "spya-cmdgsb",
+    0.73
+   ],
+   [
+    "spya-gtrjqw",
+    0.7
+   ]
+  ],
+  "top5": [
+   [
+    "spya-ajt4fw",
+    0.74
+   ],
+   [
+    "spya-cmdgsb",
+    0.73
+   ],
+   [
+    "spya-gtrjqw",
+    0.7
+   ],
+   [
+    "spya-p2wrn0",
+    0.68
+   ],
+   [
+    "spya-v4d0ma",
+    0.68
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.28,
+   "spya-sgdjgg": 0.65,
+   "spya-b93r7c": 0.42,
+   "spya-ycvhdt": 0.35,
+   "spya-gtrjqw": 0.7,
+   "spya-p2wrn0": 0.68,
+   "spya-vra8j7": 0.65,
+   "spya-bvgkdk": 0.63,
+   "spya-ajt4fw": 0.74,
+   "spya-f4qd4m": 0.44,
+   "spya-y5um3w": 0.4,
+   "spya-ukwu2f": 0.47,
+   "spya-axgwpb": 0.43,
+   "spya-ehr9h6": 0.51,
+   "spya-fj9c4z": 0.58,
+   "spya-mqqggr": 0.49,
+   "spya-fj93fz": 0.61,
+   "spya-uvzun7": 0.61,
+   "spya-gnrbz4": 0.58,
+   "spya-ururb9": 0.58,
+   "spya-tgqpmx": 0.57,
+   "spya-d9sezk": 0.32,
+   "spya-cxzd2e": 0.5,
+   "spya-estzx7": 0.59,
+   "spya-hy6v7n": 0.6,
+   "spya-nutxbb": 0.54,
+   "spya-g9sd8y": 0.6,
+   "spya-g0k9pt": 0.55,
+   "spya-u4fwjr": 0.47,
+   "spya-zsjhf7": 0.61,
+   "spya-e3gpxg": 0.53,
+   "spya-p9qncy": 0.5,
+   "spya-zcp9sj": 0.6,
+   "spya-emftp3": 0.43,
+   "spya-yg2x8v": 0.39,
+   "spya-psfv5q": 0.41,
+   "spya-jr5aqz": 0.28,
+   "spya-v4d0ma": 0.68,
+   "spya-aswawz": 0.55,
+   "spya-xktjdz": 0.58,
+   "spya-cevjcm": 0.44,
+   "spya-p3vhcs": 0.45,
+   "spya-eq2x8a": 0.46,
+   "spya-acu77n": 0.17,
+   "spya-xb5ys8": 0.46,
+   "spya-a9mm4e": 0.54,
+   "spya-vm2cgr": 0.55,
+   "spya-h7rvc6": 0.43,
+   "spya-mp6jk0": 0.45,
+   "spya-qkzyvy": 0.45,
+   "spya-eeka65": 0.31,
+   "spya-cmdgsb": 0.73,
+   "spya-p7jfa2": 0.51,
+   "spya-zxcpyb": 0.67,
+   "spya-nrvjwg": 0.68,
+   "spya-m602ph": 0.05,
+   "spya-anrzj6": 0.08,
+   "spya-w2jj7e": 0.03
+  }
+ },
+ {
+  "q": "evolution",
+  "rep": 2,
+  "ms": 367,
+  "inputTokens": 13449,
+  "cost": 0.000564858,
+  "model": "typesafe/jev-1.13-20260917",
+  "target": 0.69,
+  "rank": 4,
+  "kept": [
+   [
+    "spya-ajt4fw",
+    0.78
+   ],
+   [
+    "spya-cmdgsb",
+    0.74
+   ],
+   [
+    "spya-gtrjqw",
+    0.71
+   ]
+  ],
+  "top5": [
+   [
+    "spya-ajt4fw",
+    0.78
+   ],
+   [
+    "spya-cmdgsb",
+    0.74
+   ],
+   [
+    "spya-gtrjqw",
+    0.71
+   ],
+   [
+    "spya-p2wrn0",
+    0.69
+   ],
+   [
+    "spya-v4d0ma",
+    0.69
+   ]
+  ],
+  "scores": {
+   "spya-btvxrc": 0.27,
+   "spya-sgdjgg": 0.66,
+   "spya-b93r7c": 0.4,
+   "spya-ycvhdt": 0.41,
+   "spya-gtrjqw": 0.71,
+   "spya-p2wrn0": 0.69,
+   "spya-vra8j7": 0.66,
+   "spya-bvgkdk": 0.64,
+   "spya-ajt4fw": 0.78,
+   "spya-f4qd4m": 0.48,
+   "spya-y5um3w": 0.43,
+   "spya-ukwu2f": 0.49,
+   "spya-axgwpb": 0.46,
+   "spya-ehr9h6": 0.52,
+   "spya-fj9c4z": 0.6,
+   "spya-mqqggr": 0.58,
+   "spya-fj93fz": 0.61,
+   "spya-uvzun7": 0.59,
+   "spya-gnrbz4": 0.6,
+   "spya-ururb9": 0.58,
+   "spya-tgqpmx": 0.56,
+   "spya-d9sezk": 0.37,
+   "spya-cxzd2e": 0.5,
+   "spya-estzx7": 0.6,
+   "spya-hy6v7n": 0.61,
+   "spya-nutxbb": 0.56,
+   "spya-g9sd8y": 0.6,
+   "spya-g0k9pt": 0.56,
+   "spya-u4fwjr": 0.45,
+   "spya-zsjhf7": 0.64,
+   "spya-e3gpxg": 0.53,
+   "spya-p9qncy": 0.51,
+   "spya-zcp9sj": 0.63,
+   "spya-emftp3": 0.44,
+   "spya-yg2x8v": 0.39,
+   "spya-psfv5q": 0.43,
+   "spya-jr5aqz": 0.34,
+   "spya-v4d0ma": 0.69,
+   "spya-aswawz": 0.55,
+   "spya-xktjdz": 0.58,
+   "spya-cevjcm": 0.46,
+   "spya-p3vhcs": 0.45,
+   "spya-eq2x8a": 0.46,
+   "spya-acu77n": 0.18,
+   "spya-xb5ys8": 0.48,
+   "spya-a9mm4e": 0.54,
+   "spya-vm2cgr": 0.56,
+   "spya-h7rvc6": 0.45,
+   "spya-mp6jk0": 0.47,
+   "spya-qkzyvy": 0.48,
+   "spya-eeka65": 0.3,
+   "spya-cmdgsb": 0.74,
+   "spya-p7jfa2": 0.5,
+   "spya-zxcpyb": 0.68,
+   "spya-nrvjwg": 0.69,
+   "spya-m602ph": 0.05,
+   "spya-anrzj6": 0.08,
+   "spya-w2jj7e": 0.03
+  }
+ }
+]
