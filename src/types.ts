@@ -2848,6 +2848,51 @@ export function isMicPlacement(x: unknown): x is MicPlacement {
   return typeof x === "string" && (MIC_PLACEMENTS as readonly string[]).includes(x);
 }
 
+/**
+ * **Which of the two live-conversation engines a call is on.** `realtime` is
+ * OpenAI Realtime, one model that listens, thinks and speaks; `gpt-live` is
+ * GPT-Live, a voice model with a text model behind it. Built side by side to be
+ * compared, and one of them will be deleted —
+ * docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md.
+ *
+ * Here for the reason `MicPlacement` is: the browser names the engine when it
+ * saves a spoken exchange and the server checks the string, so both ends need
+ * the one union.
+ */
+export type LiveEngine = "realtime" | "gpt-live";
+
+/** The same two as a value, tied to the union by `satisfies`. */
+export const LIVE_ENGINES = ["realtime", "gpt-live"] as const satisfies readonly LiveEngine[];
+
+/** Is this string one of ours? The gate a wire-read engine goes through. */
+export function isLiveEngine(x: unknown): x is LiveEngine {
+  return typeof x === "string" && (LIVE_ENGINES as readonly string[]).includes(x);
+}
+
+/**
+ * **What `POST /api/chat/:slug/:threadId/live-session` answers** — everything
+ * the browser needs to open one GPT-Live call, and nothing it could use to
+ * change what the models were told.
+ *
+ * No seed and no expiry. The history went to OpenAI inside the create request
+ * (`session.input`), so there is nothing for the browser to replay; and the
+ * create response carries no expiry — `session.started` on the data channel
+ * does (`session.expires_at`).
+ */
+export interface GptLiveTicket {
+  /** The SDP answer, to set as the peer connection's remote description. */
+  sdp: string;
+  /**
+   * **Our** journal row's id — what `/api/live/:sessionId/connected`, `/usage`
+   * and `/close` are addressed to. Not OpenAI's.
+   */
+  sessionId: string;
+  /** OpenAI's id for the session (`live_…`). The same one `session.started` carries. */
+  liveSessionId: string;
+  /** The row the first spoken append must claim, or `null` for an empty thread. */
+  tailId: string | null;
+}
+
 export interface ToolRun {
   /** The function name the model asked for. */
   name: string;
@@ -6605,8 +6650,29 @@ export interface AdminFeedbackReport {
   /** ISO. Sentry acknowledged it. Attempted-but-not-acknowledged is the interesting state. */
   mirroredAt: string | null;
   sentryEventId: string | null;
+  /**
+   * ISO, or `null`. **When an administrator marked this report as one to leave
+   * alone** — a test, a duplicate, nonsense. Not something the reader sent and
+   * not shown to them; the agents' sweep skips a marked report
+   * (scripts/feedback-unswept.ts). src/db/schema.ts § `ignoredAt`.
+   */
+  ignoredAt: string | null;
   /** ISO. */
   createdAt: string;
+}
+
+/**
+ * **The body of `PATCH /api/admin/feedback/:ownerId/:id`**: exactly
+ * `{ ignored: boolean }`. Anything else is refused rather than read
+ * generously, so a field added to this route later cannot be sent by a client
+ * that predates it and quietly dropped.
+ */
+export function parseFeedbackIgnorePatch(raw: unknown): { ignored: boolean } | "malformed" {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return "malformed";
+  const keys = Object.keys(raw);
+  const ignored = (raw as { ignored?: unknown }).ignored;
+  if (keys.length !== 1 || typeof ignored !== "boolean") return "malformed";
+  return { ignored };
 }
 
 /**

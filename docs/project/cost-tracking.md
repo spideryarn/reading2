@@ -42,6 +42,17 @@ three rules**, and each rule has something that enforces it:
 A **new mode** needs nothing beyond this: its step name *is* its line on the article's cost
 breakdown. [mode.md § Its cost](mode.md#its-cost) says what to check.
 
+**Live conversation is the one feature these rules do not cover.** Its model calls happen on a
+connection from the browser to OpenAI, so no gateway sees them. The browser reports what was spent
+and the server prices it — [live-conversation.md § The meter](live-conversation.md#the-meter). Each
+engine has two kinds of row, told apart by `event_kind`: `response` and `transcription` for
+Realtime; `voice` and `backend` for GPT-Live
+([§ GPT-Live's two bills](live-conversation.md#gpt-lives-two-bills)). All four are
+`cost_source: 'computed'`: our arithmetic on a browser's counts, never a figure a provider settled.
+A `backend` row prices cached input at its own rate; the model's long-context tier is not modelled,
+so a very long article's rows may be understated (`LIVE_BACKEND_PRICES` in
+[`src/pricing.ts`](../../src/pricing.ts)).
+
 ## Where the figures show up
 
 | Question | Where |

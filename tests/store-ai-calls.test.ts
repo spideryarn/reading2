@@ -89,6 +89,7 @@ function row(over: Partial<AiCallRow> = {}): AiCallRow {
     outputTextTokens: null,
     outputAudioTokens: null,
     transcriptionSeconds: null,
+    voiceSeconds: null,
     ...over,
   };
 }

@@ -684,6 +684,137 @@ export function priceRealtimeTranscription(
   };
 }
 
+/* ------------------------------------------------------------ GPT-Live -- */
+
+/**
+ * **USD per MINUTE of a GPT-Live voice session** — the second engine's voice
+ * bill (docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md).
+ *
+ * GPT-Live does not report audio tokens at all. It reports one cumulative
+ * number of seconds for the session and bills that by the minute, so this is
+ * the shape `TRANSCRIPTION_PRICES` has and not the one `REALTIME_PRICES` has.
+ *
+ * **Where $0.05 comes from:** OpenAI's pricing page, the GPT-Live sessions
+ * table, read 2026-10-03. Not checked against a bill — there is no OpenAI
+ * admin key to check with — so it is `computed` like every other figure here.
+ */
+export const LIVE_VOICE_PRICES: Readonly<Record<string, readonly PerMinuteRow[]>> = {
+  "gpt-live-1": [{ from: "1970-01-01", usdPerMinute: 0.05 }],
+};
+
+/** A per-minute price and the UTC date it applies from. */
+export interface PerMinuteRow {
+  from: string;
+  usdPerMinute: number;
+}
+
+/**
+ * **What some seconds of a GPT-Live voice session cost.** `null` for a model
+ * with no row. The seconds are a *difference* between two cumulative reports,
+ * worked out by the caller under a row lock; this is only the arithmetic.
+ */
+export function priceLiveVoice(model: string, seconds: number, at: Date): PricedCall | null {
+  const rows = LIVE_VOICE_PRICES[model];
+  if (!rows) return null;
+  let found: PerMinuteRow | null = null;
+  for (const row of rows) {
+    if (Date.parse(`${row.from}T00:00:00Z`) <= at.getTime()) found = row;
+  }
+  if (!found) return null;
+  const total = toNanos((seconds / 60) * found.usdPerMinute);
+  return {
+    /* All input, as `priceRealtimeTranscription` does and for its reason:
+       `PricedCall` promises four parts that sum to the total, and the provider
+       gives one undivided figure for the session. */
+    totalNanos: total,
+    inputNanos: total,
+    outputNanos: 0,
+    cacheWriteNanos: 0,
+    cacheReadNanos: 0,
+    priceVersion: `${model}@${found.from}`,
+  };
+}
+
+/**
+ * What the text model behind a GPT-Live voice costs, per million tokens.
+ *
+ * `cachedInput` is null when nobody has established the cached rate. A response
+ * with cached tokens is then unpriced, with its counts retained for repricing.
+ * An upper bound counted as computed cost would silently inflate spend reports.
+ */
+export interface LiveBackendPrice {
+  input: number;
+  cachedInput: number | null;
+  output: number;
+}
+
+/** A backend price, and the UTC date it applies from. */
+export interface LiveBackendPriceRow {
+  from: string;
+  price: LiveBackendPrice;
+}
+
+/**
+ * **The GPT-Live backend's rate card.**
+ *
+ * `gpt-6-luna` at $0.10 in, $0.01 cached in and $0.50 out per million tokens:
+ * OpenAI's own pricing page (developers.openai.com/api/docs/pricing, the
+ * Standard table's short-context columns), read 2026-10-03. The backend runs on
+ * OpenAI directly, inside the Live session, so that page is the one that binds.
+ *
+ * **The long-context tier is not modelled.** The same row lists $0.20 / $0.02 /
+ * $0.75 for long context, and the page as fetched did not say where it starts.
+ * A very long article could cross it, and its rows would then be understated.
+ *
+ * A card whose `cachedInput` is null leaves a response with cached tokens
+ * unpriced, counts retained, so a missing rate is never counted as a cost.
+ */
+export const LIVE_BACKEND_PRICES: Readonly<Record<string, readonly LiveBackendPriceRow[]>> = {
+  "gpt-6-luna": [{ from: "1970-01-01", price: { input: 0.1, cachedInput: 0.01, output: 0.5 } }],
+};
+
+/** One backend response's tokens. `freshInputTokens` already excludes the cached ones. */
+export interface LiveBackendTokens {
+  freshInputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * **What one GPT-Live backend response cost.** `null` for a model with no row —
+ * recorded as unpriced, never as zero.
+ *
+ * `prices` is a parameter so the arithmetic can be tested against a card that
+ * has a cached rate, which the real one does not yet.
+ */
+export function priceLiveBackend(
+  model: string,
+  tokens: LiveBackendTokens,
+  at: Date,
+  prices: Readonly<Record<string, readonly LiveBackendPriceRow[]>> = LIVE_BACKEND_PRICES,
+): PricedCall | null {
+  const rows = prices[model];
+  if (!rows) return null;
+  let found: LiveBackendPriceRow | null = null;
+  for (const row of rows) {
+    if (Date.parse(`${row.from}T00:00:00Z`) <= at.getTime()) found = row;
+  }
+  if (!found) return null;
+  const p = found.price;
+  if (p.cachedInput === null && tokens.cachedInputTokens > 0) return null;
+  const inputUsd = usd(tokens.freshInputTokens, p.input);
+  const cacheReadUsd = usd(tokens.cachedInputTokens, p.cachedInput ?? 0);
+  const outputUsd = usd(tokens.outputTokens, p.output);
+  return {
+    totalNanos: toNanos(inputUsd + cacheReadUsd + outputUsd),
+    inputNanos: toNanos(inputUsd),
+    outputNanos: toNanos(outputUsd),
+    cacheWriteNanos: 0,
+    cacheReadNanos: toNanos(cacheReadUsd),
+    priceVersion: `${model}@${found.from}`,
+  };
+}
+
 /** A dollar figure OpenRouter reported, as nano-dollars. */
 export function providerCostToNanos(cost: number | null | undefined): Nanos | null {
   if (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return null;

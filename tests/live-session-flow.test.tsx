@@ -1580,6 +1580,51 @@ describe("live audio and tool recovery", () => {
     h.unmount();
   });
 
+  /* The same latent bug the GPT-Live browser check of 2026-10-03 found: an id
+     the article does not have was kept, and the server refuses the whole append
+     for one (`parseSpokenPassages`), which ends the call. */
+  it("drops a pointed-at id the article does not have, tells the model, and stores only the real one", async () => {
+    const written: SpokenExchange[] = [];
+    const h = await connected({
+      wiring: wiringFor(ticketWith()),
+      speak: async (x) => {
+        written.push(x);
+        return { ok: true, threadId: THREAD, tailId: "spya-srva01" };
+      },
+      blocks: new Set(["spya-gm3xu0", "spya-k3m9qt"]),
+    });
+    const [added, created, transcript, done, transcription] = turn("u1", "r1", "Where does it say that?", "In the opening.");
+    const outputs = () => sent
+      .map((e) => e.item as { type?: string; call_id?: string; output?: string } | undefined)
+      .filter((item) => item?.type === "function_call_output")
+      .map((item) => [item?.call_id, item?.output]);
+    await act(async () => {
+      channel?.deliver(added!);
+      channel?.deliver(created!);
+      channel?.deliver({
+        type: "response.function_call_arguments.done", response_id: "r1", call_id: "c1", name: "show_passage",
+        arguments: JSON.stringify({ blockIds: ["spya-gm3xu0a", null], why: "the prediction" }),
+      });
+      channel?.deliver({
+        type: "response.function_call_arguments.done", response_id: "r1", call_id: "c2", name: "show_passage",
+        arguments: JSON.stringify({ blockIds: ["spya-k3m9qt", "spya-zzzzzz"], why: "the prediction" }),
+      });
+    });
+    await settle();
+    expect(outputs()).toEqual([
+      ["c1", "None of those ids are in the article; nothing was shown. Not in the article: spya-gm3xu0a. 1 of the values given was not an id."],
+      ["c2", "Showed the reader 1 passage. 1 id was not in the article: spya-zzzzzz."],
+    ]);
+    expect(h.get().pointers.map((p) => p.blockIds)).toEqual([["spya-k3m9qt"]]);
+    await act(async () => {
+      for (const e of [transcript, done, transcription]) channel?.deliver(e!);
+    });
+    await settle();
+    expect(written).toHaveLength(1);
+    expect(written[0]?.passages).toEqual([{ blockIds: ["spya-k3m9qt"], why: "the prediction" }]);
+    h.unmount();
+  });
+
   it("returns a failure output when a remote tool never finishes", async () => {
     vi.useFakeTimers();
     const h = mount({ wiring: { ...wiringFor(ticketWith()), runTool: () => new Promise(() => {}) } });

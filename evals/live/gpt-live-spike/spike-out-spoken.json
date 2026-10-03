@@ -1,0 +1,1597 @@
+{
+ "notes": {
+  "audioContextState": "running",
+  "sessionHttp": {
+   "status": 201,
+   "sessionId": "live_u0_EUrPjp3oMERblJsADSyL1hZGfCQubB3V",
+   "raw": {
+    "session": {
+     "id": "live_u0_EUrPjp3oMERblJsADSyL1hZGfCQubB3V"
+    },
+    "transportType": "webrtc",
+    "topKeys": [
+     "session",
+     "transport"
+    ]
+   },
+   "answerSdpChars": 1679,
+   "offerSdpChars": 1654
+  },
+  "remoteTrack": "audio",
+  "pcState": "connected",
+  "dcOpen": "oai-events",
+  "micSwapped": "Fake Default Audio Input"
+ },
+ "events": [
+  {
+   "t": 269,
+   "wall": 1791023870944,
+   "dir": "note",
+   "ev": {
+    "type": "note.audioContextState",
+    "v": "running"
+   }
+  },
+  {
+   "t": 954,
+   "wall": 1791023871629,
+   "dir": "note",
+   "ev": {
+    "type": "note.sessionHttp",
+    "v": {
+     "status": 201,
+     "sessionId": "live_u0_EUrPjp3oMERblJsADSyL1hZGfCQubB3V",
+     "raw": {
+      "session": {
+       "id": "live_u0_EUrPjp3oMERblJsADSyL1hZGfCQubB3V"
+      },
+      "transportType": "webrtc",
+      "topKeys": [
+       "session",
+       "transport"
+      ]
+     },
+     "answerSdpChars": 1679,
+     "offerSdpChars": 1654
+    }
+   }
+  },
+  {
+   "t": 960,
+   "wall": 1791023871634,
+   "dir": "note",
+   "ev": {
+    "type": "note.remoteTrack",
+    "v": "audio"
+   }
+  },
+  {
+   "t": 963,
+   "wall": 1791023871637,
+   "dir": "note",
+   "ev": {
+    "type": "note.pcState",
+    "v": "connecting"
+   }
+  },
+  {
+   "t": 1896,
+   "wall": 1791023872571,
+   "dir": "note",
+   "ev": {
+    "type": "note.pcState",
+    "v": "connected"
+   }
+  },
+  {
+   "t": 2149,
+   "wall": 1791023872824,
+   "dir": "note",
+   "ev": {
+    "type": "note.dcOpen",
+    "v": "oai-events"
+   }
+  },
+  {
+   "t": 2277,
+   "wall": 1791023872952,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPjqC6Uwf20dRqwtPr6",
+    "type": "session.started",
+    "session": {
+     "id": "live_u0_EUrPjp3oMERblJsADSyL1hZGfCQubB3V",
+     "expires_at": 1791031071,
+     "model": "gpt-live-1",
+     "instructions": "You are a voice companion helping someone read an article. Be brief: one or two short spoken sentences. British English.\n# Delegation Policy\nYou know nothing about the article yourself. Whenever the user asks what the article says about anything, delegate to the backend and never guess. While the backend works you may say you are checking.",
+     "audio": {
+      "output": {
+       "voice": "marin"
+      }
+     },
+     "delegation": {
+      "type": "responses",
+      "responses": {
+       "model": "gpt-6-luna",
+       "instructions": "You are the backend for a live voice conversation about an article. To answer any question about what the article says, you MUST call lookup_passage with the topic, then answer in one plain spoken sentence using only what it returned.",
+       "reasoning": {
+        "effort": "low"
+       },
+       "tools": [
+        {
+         "type": "function",
+         "name": "lookup_passage",
+         "description": "Look up what the article says about a topic",
+         "parameters": {
+          "type": "object",
+          "properties": {
+           "topic": {
+            "type": "string"
+           }
+          },
+          "required": [
+           "topic"
+          ],
+          "additionalProperties": false
+         }
+        }
+       ],
+       "tool_choice": "auto"
+      }
+     },
+     "status": "active",
+     "input": []
+    }
+   }
+  },
+  {
+   "t": 2309,
+   "wall": 1791023872984,
+   "dir": "note",
+   "ev": {
+    "type": "note.micSwapped",
+    "v": "Fake Default Audio Input"
+   }
+  },
+  {
+   "t": 4211,
+   "wall": 1791023874886,
+   "dir": "in",
+   "ev": {
+    "type": "session.input_transcript.delta",
+    "start_ms": 1600,
+    "end_ms": 1800,
+    "delta": " What",
+    "event_id": "event_EUrPmVj5iJxCveU9RU33D"
+   }
+  },
+  {
+   "t": 4410,
+   "wall": 1791023875085,
+   "dir": "in",
+   "ev": {
+    "type": "session.input_transcript.delta",
+    "start_ms": 1800,
+    "end_ms": 2000,
+    "delta": " does",
+    "event_id": "event_EUrPnnMddIUuzt1bYj8X2"
+   }
+  },
+  {
+   "t": 4633,
+   "wall": 1791023875308,
+   "dir": "in",
+   "ev": {
+    "type": "session.input_transcript.delta",
+    "start_ms": 2000,
+    "end_ms": 2200,
+    "delta": " the",
+    "event_id": "event_EUrPn9f0IYZIqwmLA0AXP"
+   }
+  },
+  {
+   "t": 4983,
+   "wall": 1791023875657,
+   "dir": "in",
+   "ev": {
+    "type": "session.input_transcript.delta",
+    "start_ms": 2400,
+    "end_ms": 2600,
+    "delta": " article",
+    "event_id": "event_EUrPnQJOKkAxRYjA2QJi5"
+   }
+  },
+  {
+   "t": 5398,
+   "wall": 1791023876073,
+   "dir": "in",
+   "ev": {
+    "type": "session.input_transcript.delta",
+    "start_ms": 2800,
+    "end_ms": 3000,
+    "delta": " say",
+    "event_id": "event_EUrPo0FYB1ruzY1Y8LCno"
+   }
+  },
+  {
+   "t": 5591,
+   "wall": 1791023876265,
+   "dir": "in",
+   "ev": {
+    "type": "session.input_transcript.delta",
+    "start_ms": 3000,
+    "end_ms": 3200,
+    "delta": " about",
+    "event_id": "event_EUrPo6E64Xfjy83D0j8XX"
+   }
+  },
+  {
+   "t": 5772,
+   "wall": 1791023876447,
+   "dir": "in",
+   "ev": {
+    "type": "session.input_transcript.delta",
+    "start_ms": 3200,
+    "end_ms": 3400,
+    "delta": " the",
+    "event_id": "event_EUrPoYglclZ90APlDyMDY"
+   }
+  },
+  {
+   "t": 6565,
+   "wall": 1791023877240,
+   "dir": "in",
+   "ev": {
+    "type": "session.input_transcript.delta",
+    "start_ms": 4000,
+    "end_ms": 4200,
+    "delta": " lighthouse",
+    "event_id": "event_EUrPpUSLnb76C22sRnCyG"
+   }
+  },
+  {
+   "t": 6606,
+   "wall": 1791023877281,
+   "dir": "in",
+   "ev": {
+    "type": "session.delegation.created",
+    "offset_ms": 4000,
+    "delegation": {
+     "id": "item_EUrPpQobYmB54id9y3MY5",
+     "type": "delegation",
+     "response_id": "resp_0a31e1b65549a787006ac0db05444487d1aa17bf90f615de91",
+     "target": "responses"
+    },
+    "event_id": "event_EUrPpq1pT8082I9y2YoSj"
+   }
+  },
+  {
+   "t": 6606,
+   "wall": 1791023877281,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPpocO2XxS9LRO6VlwV",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.created",
+     "response": {
+      "id": "resp_0a31e1b65549a787006ac0db05444487d1aa17bf90f615de91",
+      "object": "response",
+      "created_at": 1791023877,
+      "status": "in_progress",
+      "access_programs": null,
+      "background": false,
+      "completed_at": null,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_0a31e1b65549a787016ac0daffa81c87d185f5b7ebc772e707",
+      "prompt_cache_key": "live:4ec4edebba9557bc8c2b89b5a44a08e23a7f34d00abf8beb618ea64bc5f",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "auto",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": null,
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 0
+    }
+   }
+  },
+  {
+   "t": 6626,
+   "wall": 1791023877300,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPptZOCNZKIjgjTCEMm",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.in_progress",
+     "response": {
+      "id": "resp_0a31e1b65549a787006ac0db05444487d1aa17bf90f615de91",
+      "object": "response",
+      "created_at": 1791023877,
+      "status": "in_progress",
+      "access_programs": null,
+      "background": false,
+      "completed_at": null,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_0a31e1b65549a787016ac0daffa81c87d185f5b7ebc772e707",
+      "prompt_cache_key": "live:4ec4edebba9557bc8c2b89b5a44a08e23a7f34d00abf8beb618ea64bc5f",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "auto",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": null,
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 1
+    }
+   }
+  },
+  {
+   "t": 7063,
+   "wall": 1791023877738,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 4400,
+    "end_ms": 4600,
+    "delta": " ",
+    "event_id": "event_EUrPp2oyHaqqkYuqFbwfj"
+   }
+  },
+  {
+   "t": 7266,
+   "wall": 1791023877940,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 4600,
+    "end_ms": 4800,
+    "delta": "I'm checking",
+    "event_id": "event_EUrPpxnnqrExazUDk2wYS"
+   }
+  },
+  {
+   "t": 7488,
+   "wall": 1791023878162,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 4800,
+    "end_ms": 5000,
+    "delta": " the article",
+    "event_id": "event_EUrPqv6EiX3HnmcNH0hNd"
+   }
+  },
+  {
+   "t": 7665,
+   "wall": 1791023878340,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 5000,
+    "end_ms": 5200,
+    "delta": ".",
+    "event_id": "event_EUrPqxd1t5IziFQdBb0VB"
+   }
+  },
+  {
+   "t": 7889,
+   "wall": 1791023878564,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 5200,
+    "end_ms": 5400,
+    "delta": " One",
+    "event_id": "event_EUrPqOtYPrIdSvNfEIbIQ"
+   }
+  },
+  {
+   "t": 8053,
+   "wall": 1791023878727,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 5400,
+    "end_ms": 5600,
+    "delta": " moment.",
+    "event_id": "event_EUrPqFGORqbFTFuBRQArk"
+   }
+  },
+  {
+   "t": 9294,
+   "wall": 1791023879968,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPrmjMmRpgUYjDkq0Lb",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_item.added",
+     "item": {
+      "id": "fc_0a31e1b65549a787006ac0db07fb9487d1be4400c841793774",
+      "type": "function_call",
+      "status": "in_progress",
+      "arguments": "",
+      "call_id": "call_n8kYXHgMwoBeMnzDhakmY8fQ",
+      "name": "lookup_passage"
+     },
+     "output_index": 0,
+     "sequence_number": 2
+    }
+   }
+  },
+  {
+   "t": 9294,
+   "wall": 1791023879968,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPrCe2oSNyJ1JQ3sJQK",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.function_call_arguments.delta",
+     "delta": "{\"",
+     "item_id": "fc_0a31e1b65549a787006ac0db07fb9487d1be4400c841793774",
+     "obfuscation": "i9XvphXO3SvyCB",
+     "output_index": 0,
+     "sequence_number": 3
+    }
+   }
+  },
+  {
+   "t": 9296,
+   "wall": 1791023879970,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPrJx7TSSsr296PDO8W",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.function_call_arguments.delta",
+     "delta": "topic",
+     "item_id": "fc_0a31e1b65549a787006ac0db07fb9487d1be4400c841793774",
+     "obfuscation": "bYaI8weTWAr",
+     "output_index": 0,
+     "sequence_number": 4
+    }
+   }
+  },
+  {
+   "t": 9300,
+   "wall": 1791023879975,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPrADcJY9SlQIt8q1h9",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.function_call_arguments.delta",
+     "delta": "\":\"",
+     "item_id": "fc_0a31e1b65549a787006ac0db07fb9487d1be4400c841793774",
+     "obfuscation": "jq2ndPr38P5ze",
+     "output_index": 0,
+     "sequence_number": 5
+    }
+   }
+  },
+  {
+   "t": 9311,
+   "wall": 1791023879986,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPsLsodlUPGsWpnYT15",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.function_call_arguments.delta",
+     "delta": "l",
+     "item_id": "fc_0a31e1b65549a787006ac0db07fb9487d1be4400c841793774",
+     "obfuscation": "BDDc0mWkzDWDbxN",
+     "output_index": 0,
+     "sequence_number": 6
+    }
+   }
+  },
+  {
+   "t": 9333,
+   "wall": 1791023880007,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPsJ4wChmeznhmHxuv4",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.function_call_arguments.delta",
+     "delta": "ighthouse",
+     "item_id": "fc_0a31e1b65549a787006ac0db07fb9487d1be4400c841793774",
+     "obfuscation": "Ar19uFW",
+     "output_index": 0,
+     "sequence_number": 7
+    }
+   }
+  },
+  {
+   "t": 9381,
+   "wall": 1791023880055,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPsQo5vhozRdxYFPJuf",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.function_call_arguments.delta",
+     "delta": "\"}",
+     "item_id": "fc_0a31e1b65549a787006ac0db07fb9487d1be4400c841793774",
+     "obfuscation": "mJVaZXlr6xy5ut",
+     "output_index": 0,
+     "sequence_number": 8
+    }
+   }
+  },
+  {
+   "t": 9419,
+   "wall": 1791023880093,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPstuI41Hi4c2bKQBG2",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.function_call_arguments.done",
+     "arguments": "{\"topic\":\"lighthouse\"}",
+     "item_id": "fc_0a31e1b65549a787006ac0db07fb9487d1be4400c841793774",
+     "output_index": 0,
+     "sequence_number": 9
+    }
+   }
+  },
+  {
+   "t": 9419,
+   "wall": 1791023880093,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPsot6we7pVnsd9n9U7",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_item.done",
+     "item": {
+      "id": "fc_0a31e1b65549a787006ac0db07fb9487d1be4400c841793774",
+      "type": "function_call",
+      "status": "completed",
+      "arguments": "{\"topic\":\"lighthouse\"}",
+      "call_id": "call_n8kYXHgMwoBeMnzDhakmY8fQ",
+      "name": "lookup_passage"
+     },
+     "output_index": 0,
+     "sequence_number": 10
+    }
+   }
+  },
+  {
+   "t": 9582,
+   "wall": 1791023880257,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPsKzokUSfeI6AizrCm",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.completed",
+     "response": {
+      "id": "resp_0a31e1b65549a787006ac0db05444487d1aa17bf90f615de91",
+      "object": "response",
+      "created_at": 1791023877,
+      "status": "completed",
+      "access_programs": null,
+      "background": false,
+      "completed_at": 1791023880,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_0a31e1b65549a787016ac0daffa81c87d185f5b7ebc772e707",
+      "prompt_cache_key": "live:4ec4edebba9557bc8c2b89b5a44a08e23a7f34d00abf8beb618ea64bc5f",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+       "input_tokens": 862,
+       "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 0
+       },
+       "output_tokens": 20,
+       "output_tokens_details": {
+        "reasoning_tokens": 0
+       },
+       "total_tokens": 882
+      },
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 11
+    }
+   }
+  },
+  {
+   "t": 15586,
+   "wall": 1791023886261,
+   "dir": "out",
+   "ev": {
+    "type": "response.item.create",
+    "item": {
+     "type": "function_call_output",
+     "call_id": "call_n8kYXHgMwoBeMnzDhakmY8fQ",
+     "output": "The article says the lighthouse was painted teal in 1987."
+    }
+   }
+  },
+  {
+   "t": 15587,
+   "wall": 1791023886261,
+   "dir": "out",
+   "ev": {
+    "type": "response.create"
+   }
+  },
+  {
+   "t": 15755,
+   "wall": 1791023886430,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPy3AaOSig9Br6qSo6V",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.created",
+     "response": {
+      "id": "resp_0a31e1b65549a787006ac0db0e6bf887d190b0ee639ad78e41",
+      "object": "response",
+      "created_at": 1791023886,
+      "status": "in_progress",
+      "access_programs": null,
+      "background": false,
+      "completed_at": null,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_0a31e1b65549a787006ac0db05444487d1aa17bf90f615de91",
+      "prompt_cache_key": "live:4ec4edebba9557bc8c2b89b5a44a08e23a7f34d00abf8beb618ea64bc5f",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "auto",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": null,
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 0
+    }
+   }
+  },
+  {
+   "t": 15786,
+   "wall": 1791023886461,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrPyrphKHWOQlKuaXNjh",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.in_progress",
+     "response": {
+      "id": "resp_0a31e1b65549a787006ac0db0e6bf887d190b0ee639ad78e41",
+      "object": "response",
+      "created_at": 1791023886,
+      "status": "in_progress",
+      "access_programs": null,
+      "background": false,
+      "completed_at": null,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_0a31e1b65549a787006ac0db05444487d1aa17bf90f615de91",
+      "prompt_cache_key": "live:4ec4edebba9557bc8c2b89b5a44a08e23a7f34d00abf8beb618ea64bc5f",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "auto",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": null,
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 1
+    }
+   }
+  },
+  {
+   "t": 15948,
+   "wall": 1791023886623,
+   "dir": "in",
+   "ev": {
+    "type": "session.usage.updated",
+    "usage": {
+     "seconds": 15
+    },
+    "context_window": {
+     "usage_ratio": 0.0091171875
+    },
+    "event_id": "event_EUrPyqYgstvhrWWYvZOtn"
+   }
+  },
+  {
+   "t": 19545,
+   "wall": 1791023890219,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2NbWFFecmzE3LXvLJ",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_item.added",
+     "item": {
+      "id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+      "type": "message",
+      "status": "in_progress",
+      "content": [],
+      "phase": "final_answer",
+      "role": "assistant"
+     },
+     "output_index": 0,
+     "sequence_number": 2
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2pCR4wu4BWWWfh9of",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.content_part.added",
+     "content_index": 0,
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "output_index": 0,
+     "part": {
+      "type": "output_text",
+      "annotations": [],
+      "logprobs": [],
+      "text": ""
+     },
+     "sequence_number": 3
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2gGgnfP9SPNuljaua",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": "The",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "Ko5FYM7YbaACo",
+     "output_index": 0,
+     "sequence_number": 4
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2gMKdIH1B6RF1ioFf",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": " article",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "geS6SReO",
+     "output_index": 0,
+     "sequence_number": 5
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2XtYPbZJnVDLAb1GE",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": " says",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "fmyA4noTo3b",
+     "output_index": 0,
+     "sequence_number": 6
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2eoxjf2gSIxGIzAV1",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": " the",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "5S5oZzqvYpqg",
+     "output_index": 0,
+     "sequence_number": 7
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2s2JzItjAp2YLYgdf",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": " lighthouse",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "Vq6tN",
+     "output_index": 0,
+     "sequence_number": 8
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2qEqkQhUmW8QNggef",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": " was",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "UY7R7gJQVxLh",
+     "output_index": 0,
+     "sequence_number": 9
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ28NG5VfFp9sxwCNKC",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": " painted",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "pwqeTTja",
+     "output_index": 0,
+     "sequence_number": 10
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2WByRl2AF0Z2nQDpf",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": " teal",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "U7ggErTHLq7",
+     "output_index": 0,
+     "sequence_number": 11
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ27xdWnhtXKMP2v1rz",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": " in",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "RvNeXrnL3Nj2h",
+     "output_index": 0,
+     "sequence_number": 12
+    }
+   }
+  },
+  {
+   "t": 19551,
+   "wall": 1791023890225,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2y1x0HaMGjveyBlbc",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": " ",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "nMH3GZe991GJdkp",
+     "output_index": 0,
+     "sequence_number": 13
+    }
+   }
+  },
+  {
+   "t": 19675,
+   "wall": 1791023890350,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2EZa3R0iCfd9sT0rw",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": "198",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "gluFgo9OdWMtQ",
+     "output_index": 0,
+     "sequence_number": 14
+    }
+   }
+  },
+  {
+   "t": 19675,
+   "wall": 1791023890350,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2E5bxecsaom7zeObW",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": "7",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "0anIiyx7nIEBFjb",
+     "output_index": 0,
+     "sequence_number": 15
+    }
+   }
+  },
+  {
+   "t": 19675,
+   "wall": 1791023890350,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2vRO04JLg7YVS2p6U",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.delta",
+     "content_index": 0,
+     "delta": ".",
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "obfuscation": "qywOMX4REEWfGSR",
+     "output_index": 0,
+     "sequence_number": 16
+    }
+   }
+  },
+  {
+   "t": 19676,
+   "wall": 1791023890350,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2Qb1UWJsEvGDnwkdP",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_text.done",
+     "content_index": 0,
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "logprobs": [],
+     "output_index": 0,
+     "sequence_number": 17,
+     "text": "The article says the lighthouse was painted teal in 1987."
+    }
+   }
+  },
+  {
+   "t": 19676,
+   "wall": 1791023890350,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2mVCU9I7xPbdKY8sR",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.content_part.done",
+     "content_index": 0,
+     "item_id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+     "output_index": 0,
+     "part": {
+      "type": "output_text",
+      "annotations": [],
+      "logprobs": [],
+      "text": "The article says the lighthouse was painted teal in 1987."
+     },
+     "sequence_number": 18
+    }
+   }
+  },
+  {
+   "t": 19676,
+   "wall": 1791023890350,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2h9KukJTx3mUbQwNC",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.output_item.done",
+     "item": {
+      "id": "msg_0a31e1b65549a787006ac0db122b3487d19548fc7165f1032d",
+      "type": "message",
+      "status": "completed",
+      "content": [
+       {
+        "type": "output_text",
+        "annotations": [],
+        "logprobs": [],
+        "text": "The article says the lighthouse was painted teal in 1987."
+       }
+      ],
+      "phase": "final_answer",
+      "role": "assistant"
+     },
+     "output_index": 0,
+     "sequence_number": 19
+    }
+   }
+  },
+  {
+   "t": 19727,
+   "wall": 1791023890402,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQ2lnGxh663DNqQA4cN",
+    "type": "response.event",
+    "delegation_id": "item_EUrPpQobYmB54id9y3MY5",
+    "event": {
+     "type": "response.completed",
+     "response": {
+      "id": "resp_0a31e1b65549a787006ac0db0e6bf887d190b0ee639ad78e41",
+      "object": "response",
+      "created_at": 1791023886,
+      "status": "completed",
+      "access_programs": null,
+      "background": false,
+      "completed_at": 1791023890,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_0a31e1b65549a787006ac0db05444487d1aa17bf90f615de91",
+      "prompt_cache_key": "live:4ec4edebba9557bc8c2b89b5a44a08e23a7f34d00abf8beb618ea64bc5f",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+       "input_tokens": 907,
+       "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 0
+       },
+       "output_tokens": 17,
+       "output_tokens_details": {
+        "reasoning_tokens": 0
+       },
+       "total_tokens": 924
+      },
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 20
+    }
+   }
+  },
+  {
+   "t": 20269,
+   "wall": 1791023890944,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 17600,
+    "end_ms": 17800,
+    "delta": " It says",
+    "event_id": "event_EUrQ2AxCYguEYQxJMmnrX"
+   }
+  },
+  {
+   "t": 20455,
+   "wall": 1791023891130,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 17800,
+    "end_ms": 18000,
+    "delta": " the lighthouse",
+    "event_id": "event_EUrQ3jRaodGtWmzFtePCM"
+   }
+  },
+  {
+   "t": 21117,
+   "wall": 1791023891791,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 18400,
+    "end_ms": 18600,
+    "delta": " was",
+    "event_id": "event_EUrQ38YVtwpKvSWJQAszl"
+   }
+  },
+  {
+   "t": 21245,
+   "wall": 1791023891920,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 18600,
+    "end_ms": 18800,
+    "delta": " painted",
+    "event_id": "event_EUrQ39VbXxp2ec3EdqrMl"
+   }
+  },
+  {
+   "t": 21662,
+   "wall": 1791023892336,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 19000,
+    "end_ms": 19200,
+    "delta": " teal",
+    "event_id": "event_EUrQ4KHRb0aH3MbhirvLJ"
+   }
+  },
+  {
+   "t": 22073,
+   "wall": 1791023892747,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 19400,
+    "end_ms": 19600,
+    "delta": " in",
+    "event_id": "event_EUrQ41KCbpl3w2IlPAPck"
+   }
+  },
+  {
+   "t": 22265,
+   "wall": 1791023892940,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 19600,
+    "end_ms": 19800,
+    "delta": " 198",
+    "event_id": "event_EUrQ4tq4VGjHmKbmNabAz"
+   }
+  },
+  {
+   "t": 22457,
+   "wall": 1791023893131,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 19800,
+    "end_ms": 20000,
+    "delta": "7.",
+    "event_id": "event_EUrQ5gbBBh42vAZg02soc"
+   }
+  },
+  {
+   "t": 30950,
+   "wall": 1791023901624,
+   "dir": "in",
+   "ev": {
+    "type": "session.usage.updated",
+    "usage": {
+     "seconds": 28
+    },
+    "context_window": {
+     "usage_ratio": 0.0123359375
+    },
+    "event_id": "event_EUrQDLEuwJQ7s6Bqm0Xbx"
+   }
+  },
+  {
+   "t": 34470,
+   "wall": 1791023905145,
+   "dir": "out",
+   "ev": {
+    "type": "session.close"
+   }
+  },
+  {
+   "t": 35177,
+   "wall": 1791023905851,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrQHhvyeZs9kb3WIftnQ",
+    "type": "session.closed",
+    "reason": "close_requested",
+    "session": {
+     "id": "live_u0_EUrPjp3oMERblJsADSyL1hZGfCQubB3V",
+     "expires_at": 1791031071,
+     "model": "gpt-live-1",
+     "instructions": "You are a voice companion helping someone read an article. Be brief: one or two short spoken sentences. British English.\n# Delegation Policy\nYou know nothing about the article yourself. Whenever the user asks what the article says about anything, delegate to the backend and never guess. While the backend works you may say you are checking.",
+     "audio": {
+      "output": {
+       "voice": "marin"
+      }
+     },
+     "delegation": {
+      "type": "responses",
+      "responses": {
+       "model": "gpt-6-luna",
+       "instructions": "You are the backend for a live voice conversation about an article. To answer any question about what the article says, you MUST call lookup_passage with the topic, then answer in one plain spoken sentence using only what it returned.",
+       "reasoning": {
+        "effort": "low"
+       },
+       "tools": [
+        {
+         "type": "function",
+         "name": "lookup_passage",
+         "description": "Look up what the article says about a topic",
+         "parameters": {
+          "type": "object",
+          "properties": {
+           "topic": {
+            "type": "string"
+           }
+          },
+          "required": [
+           "topic"
+          ],
+          "additionalProperties": false
+         }
+        }
+       ],
+       "tool_choice": "auto"
+      }
+     },
+     "status": "active",
+     "input": []
+    },
+    "usage": {
+     "seconds": 32
+    }
+   }
+  }
+ ]
+}

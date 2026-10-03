@@ -672,10 +672,19 @@ export interface AiCallRow {
    * than one bag of optional counts — src/live.ts § `RealtimeUsage`.
    */
   transcriptionSeconds: number | null;
+  /**
+   * **Seconds of a GPT-Live voice session this row bills for** — the positive
+   * difference between two cumulative reports, never a running total. Set on
+   * `voice` rows only. Kept apart from `transcriptionSeconds`, which is a
+   * different model's audio on a different rate card.
+   */
+  voiceSeconds: number | null;
 }
 
 /**
- * Which of a live session's two paid operations a row is.
+ * Which of a live session's paid operations a row is. `response` and
+ * `transcription` are the Realtime engine's two bills; `voice` (seconds) and
+ * `backend` (tokens) are GPT-Live's two.
  *
  * Here rather than in src/live.ts because `AiCallRow` needs it and the store
  * adapters need it, and neither of those may import the feature's own module —
@@ -683,7 +692,7 @@ export interface AiCallRow {
  * reaches this file's neighbourhood. A union of two string literals is not worth
  * a cycle.
  */
-export type RealtimeEventKind = "response" | "transcription";
+export type RealtimeEventKind = "response" | "transcription" | "voice" | "backend";
 
 /**
  * Where a finished row goes. Supplied by whoever opened the collector.
@@ -1105,6 +1114,7 @@ function write(
     outputTextTokens: null,
     outputAudioTokens: null,
     transcriptionSeconds: null,
+    voiceSeconds: null,
   };
   const promise = sink(row).catch((err: Error) => {
     scope.box.writeFailures += 1;

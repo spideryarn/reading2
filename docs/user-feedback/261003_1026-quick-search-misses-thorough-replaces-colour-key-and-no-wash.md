@@ -72,3 +72,21 @@ A quick search's hit no longer paints anything on the words: the line beside the
 mark in the spine only. A thorough (meaning) search still highlights the words it quotes, because
 there the highlight is a sentence inside the paragraph, not the whole paragraph. Whether that should
 go too is a question for Greg.
+
+## Greg's answers, 2026-10-03
+
+> Q-thorough-keep Well, I was inclined to go with B because it felt more robust. But I guess if it's really going to be half a day, maybe it's not worth it. I haven't tried it enough to have an opinion about whether it's likely that I'll lose a thorough search. Probably not. Use your judgment.
+
+**Left as A** (the Overseer's call): Thorough replaces the quick search the moment it is pressed. If losing a quick answer to a failed thorough search ever shows up, keeping the quick one until the thorough one succeeds is the fix (about half a day).
+
+> Q-meaning-wash A Ah, I may have misunderstood then. I didn't realize that the thorough search does highlight sentences. If that's the case, I guess that's cool.
+
+**Kept**: a thorough search still highlights the sentence it matched.
+
+> Q-quick-model A
+
+**Stays on Jev**, with the new wording.
+
+> Q-literal-first I would hope that if the word literally matches that it will have a high confidence. I think we should rely on that rather than adding weird special string match cases.
+
+**Not built.** If a literal mention scores low, fix it in the prompt or the model, never with a string-match special case.

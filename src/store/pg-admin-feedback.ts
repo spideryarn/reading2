@@ -103,6 +103,7 @@ const LIST_COLUMNS = {
   mirrorAttemptedAt: feedbackTable.mirrorAttemptedAt,
   mirroredAt: feedbackTable.mirroredAt,
   sentryEventId: feedbackTable.sentryEventId,
+  ignoredAt: feedbackTable.ignoredAt,
   createdAt: feedbackTable.createdAt,
   /**
    * **The same instant, at the precision the column actually holds.**
@@ -147,6 +148,7 @@ interface ListRow {
   mirrorAttemptedAt: Date | null;
   mirroredAt: Date | null;
   sentryEventId: string | null;
+  ignoredAt: Date | null;
   createdAt: Date;
   /** See `LIST_COLUMNS`. Read into the cursor, never onto the report. */
   createdAtExact: string;
@@ -187,6 +189,7 @@ function toListed(row: ListRow): AdminFeedbackReport {
     mirrorAttemptedAt: row.mirrorAttemptedAt === null ? null : row.mirrorAttemptedAt.toISOString(),
     mirroredAt: row.mirroredAt === null ? null : row.mirroredAt.toISOString(),
     sentryEventId: row.sentryEventId,
+    ignoredAt: row.ignoredAt === null ? null : row.ignoredAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -331,4 +334,35 @@ export async function readFeedbackScreenshotAcrossOwners(
     .where(and(eq(feedbackTable.ownerId, ownerId), eq(feedbackTable.id, id)))
     .limit(1);
   return row?.screenshot ?? null;
+}
+
+/**
+ * **Mark one report as one to leave alone, or take the mark back** — for
+ * `PATCH /api/admin/feedback/:ownerId/:id`. The only write in this file.
+ *
+ * Greg, 2026-10-03 (`spya-g95x4j`): *"I just saw feedback that I wished I could
+ * delete, and there wasn't a way to do it, or at least mark it as to be
+ * ignored."* One nullable timestamp and nothing else: the reader's words, the
+ * diagnostics and the screenshot are never touched, so the mark can be undone
+ * and loses nothing. `scripts/feedback-unswept.ts` is what reads it.
+ *
+ * Keyed on the **pair**, like the reads above and for the same reason.
+ * `coalesce` keeps the first moment when it is asked twice: the column says
+ * when the report was ignored, not when the button was last pressed.
+ *
+ * `null` for a pair that is not a report, which the route makes a 404.
+ */
+export async function setFeedbackIgnoredAcrossOwners(
+  ownerId: string,
+  id: string,
+  ignored: boolean,
+): Promise<AdminFeedbackReport | null> {
+  const [row] = await getDb()
+    .update(feedbackTable)
+    .set({
+      ignoredAt: ignored ? sql`coalesce(${feedbackTable.ignoredAt}, now())` : null,
+    })
+    .where(and(eq(feedbackTable.ownerId, ownerId), eq(feedbackTable.id, id)))
+    .returning(LIST_COLUMNS);
+  return row ? toListed(row) : null;
 }

@@ -46,8 +46,10 @@ import {
   listFeedbackAcrossOwners,
   readFeedbackAcrossOwners,
   readFeedbackScreenshotAcrossOwners,
+  setFeedbackIgnoredAcrossOwners,
 } from "../src/store/pg-admin-feedback.js";
 import { ADMIN_FEEDBACK_MAX, decodeFeedbackCursor, encodeFeedbackCursor } from "../src/types.js";
+import { listSql, showSql } from "../scripts/feedback-unswept.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -281,6 +283,7 @@ describe("the admin feedback read on Postgres", () => {
         "environment",
         "kind",
         "id",
+        "ignoredAt",
         "mirrorAttemptedAt",
         "mirroredAt",
         "ownerId",
@@ -515,5 +518,106 @@ describe("the admin feedback read on Postgres", () => {
         .delete(feedbackTable)
         .where(and(eq(feedbackTable.ownerId, ADMIN_USER_ID_LOCAL), eq(feedbackTable.id, mine)));
     }
+  });
+
+  /**
+   * **Ignore** — Greg, 2026-10-03 (`spya-g95x4j`): *"I just saw feedback that I
+   * wished I could delete, and there wasn't a way to do it, or at least mark it
+   * as to be ignored."* The first write this file has, and the only one: one
+   * nullable timestamp on the pair. docs/plans/261003j-….
+   */
+  describe("marking a report as ignored", () => {
+    it("stamps the report, shows it in the list, and takes it back", async () => {
+      const id = mintId();
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id })));
+      expect((await ours()).find((r) => r.id === id)?.ignoredAt).toBeNull();
+
+      const marked = await setFeedbackIgnoredAcrossOwners(ALICE, id, true);
+      expect(marked?.id).toBe(id);
+      expect(typeof marked?.ignoredAt).toBe("string");
+      /* The list and the answer are one projection, so the card can redraw
+         from either. */
+      expect((await ours()).find((r) => r.id === id)?.ignoredAt).toBe(marked?.ignoredAt);
+
+      const undone = await setFeedbackIgnoredAcrossOwners(ALICE, id, false);
+      expect(undone?.ignoredAt).toBeNull();
+      expect((await ours()).find((r) => r.id === id)?.ignoredAt).toBeNull();
+    });
+
+    it("keeps the first moment when asked twice, and changes nothing else on the row", async () => {
+      const id = mintId();
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id, body: "ASDF1" })));
+      const before = (await ours()).find((r) => r.id === id);
+
+      const first = await setFeedbackIgnoredAcrossOwners(ALICE, id, true);
+      await new Promise((go) => setTimeout(go, 15));
+      const second = await setFeedbackIgnoredAcrossOwners(ALICE, id, true);
+      expect(second?.ignoredAt).toBe(first?.ignoredAt);
+      /* The report is never edited: the mark is the whole of the write. */
+      expect({ ...second, ignoredAt: null }).toEqual(before);
+    });
+
+    it("marks one owner's report and not the other's under the same id", async () => {
+      const id = mintId();
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id })));
+      await runAsOwner(BOB, () => pgFeedbackStore.submit(report({ id })));
+
+      await setFeedbackIgnoredAcrossOwners(ALICE, id, true);
+      const both = (await ours()).filter((r) => r.id === id);
+      expect(both.find((r) => r.ownerId === ALICE)?.ignoredAt).not.toBeNull();
+      expect(both.find((r) => r.ownerId === BOB)?.ignoredAt).toBeNull();
+    });
+
+    /**
+     * **The reader of the mark, against a real table, in all three states.**
+     * `scripts/feedback-unswept.ts` reads production, and reaches `dev` before
+     * the deploy that adds `ignored_at` there, so its select has to answer on
+     * a table without the column. Here: this database's table (column present,
+     * set and unset) and a temporary copy with the column dropped.
+     */
+    it("is read by the sweep's own select, with the column and without it", async () => {
+      const marked = mintId();
+      const plain = mintId();
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: marked })));
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: plain })));
+      await setFeedbackIgnoredAcrossOwners(ALICE, marked, true);
+      type Row = { id: string; ignored_at: unknown; id_occurrences: number };
+
+      await getDb().transaction(async (tx) => {
+        const since = new Date(Date.now() - 3_600_000).toISOString();
+        const withColumn = (await tx.execute(
+          sql.raw(listSql().replace("$1", `'${since}'::timestamptz`)),
+        )) as unknown as { rows: Row[] };
+        const byId = new Map(withColumn.rows.map((r) => [r.id, r]));
+        expect(byId.get(marked)?.ignored_at).not.toBeNull();
+        expect(byId.get(marked)?.ignored_at).toBeDefined();
+        expect(byId.get(plain)?.ignored_at).toBeNull();
+        expect(byId.get(plain)?.id_occurrences).toBe(1);
+
+        await tx.execute(
+          sql.raw(
+            `create temp table feedback_before_ignore on commit drop as
+               select * from spideryarn.feedback where owner_id = '${ALICE}'`,
+          ),
+        );
+        await tx.execute(sql.raw("alter table feedback_before_ignore drop column ignored_at"));
+        for (const statement of [
+          listSql("feedback_before_ignore").replace("$1", `'${since}'::timestamptz`),
+          showSql("feedback_before_ignore").replace("$1", `'${marked}'`),
+        ]) {
+          const without = (await tx.execute(sql.raw(statement))) as unknown as { rows: Row[] };
+          expect(without.rows.map((r) => r.id)).toContain(marked);
+          /* No column, so nothing is ignored, and nothing failed. */
+          expect(without.rows.every((r) => r.ignored_at === null)).toBe(true);
+        }
+      });
+    });
+
+    it("answers null for a pair that is not a report, and writes nothing", async () => {
+      const id = mintId();
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id })));
+      expect(await setFeedbackIgnoredAcrossOwners(BOB, id, true)).toBeNull();
+      expect((await ours()).find((r) => r.id === id)?.ignoredAt).toBeNull();
+    });
   });
 });
