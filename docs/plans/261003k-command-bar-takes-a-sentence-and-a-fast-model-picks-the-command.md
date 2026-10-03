@@ -80,13 +80,13 @@ Five decisions in that picture, each the simpler of two:
    half-typed word. A sentence almost never matches a row by accident (the match is "your whole
    query appears inside one name"), so *nothing matched* is a good enough sign that the reader
    wrote a sentence.
-2. **The model's answer is one of the bar's existing rows, by id — never anything new.** The client
-   sends the rows it has (id, name, nicknames, the one-line description); the answer is checked
-   against that same list on the server and again in the browser; an id that is not in it is
-   *none*. This is the vision doc's "the command list is the tool list". Passed over: a
-   server-side copy of the command list, which is the hand-copied catalogue the first eval warned
-   about, and would not know the rows that follow state (*Archive* / *Put back*, the modes the
-   reader's Experimental switch hides).
+2. **The model's answer is one of the bar's existing rows, by id — never anything new.** The
+   words the model reads for each row come from **one trusted list the server holds**, generated
+   from the bar's real rows and checked by a test (F1). The browser sends only the keys of the rows
+   it has right now (an id and its label, so *Archive* and *Put back* are different keys); a key
+   the server does not know is dropped. The first draft had the browser send the words too, which
+   was simpler and made the endpoint a classifier anybody signed in could point at their own
+   options.
 3. **An argument command is the same `CommandProposal` the verbs already make.** *"is consciousness
    mentioned anywhere"* comes back as `find` + `consciousness`, goes through `checked()` and
    `resolveArgument`, and is drawn as the row *Find “consciousness” in this article*. No second
@@ -100,10 +100,11 @@ Five decisions in that picture, each the simpler of two:
    typed verbs are instant and free and are what the model's answer lands on; a sentence is the
    fallback for when you did not know the verb. One mechanism underneath, two ways in.
 
-**The line, applied.** A navigate-class pick the model is sure of runs at once. Anything `RISK`
-calls `writes` or `spends`, any row carrying `generates`, and any pick below the confidence cut is
-drawn and waits for Enter — the row the reader would have pressed themselves. The interface model
-never sees the article: its input is the sentence and the rows.
+**The line, applied.** Only a pick of one **row** that the model is sure of, and that only moves
+the reader, runs at once. Everything else is drawn and waits for a fresh press of Enter: any
+**argument** answer (the words the model pulled out have no measured confidence — F2), anything
+`RISK` calls `writes` or `spends`, any row carrying `generates`, and any pick below the cut. The
+interface model never sees the article: its input is the sentence and the rows.
 
 ## Stage 1 — the eval (Greg: *"let's start with an eval"*)
 
@@ -137,32 +138,38 @@ not forked.
   second; nothing destructive picked for a *none*.
 - Written up as `docs/investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md`.
 
-**Predeclared reading of the result**, so the numbers choose rather than me:
-Jev alone if its argument trick is within a few points of the best small model; otherwise Jev for
-the pick and the best small model only when the pick takes an argument; a small model alone only if
-it beats Jev's pick outright at under a second p90.
+**Predeclared reading of the result** (F6), frozen before the blind set is read: compare
+**complete** outcomes — right row, and for an argument command the right words after the
+production check — on the requests the bar cannot answer itself. Floors: 85% right there, p90 at
+most 1.2 s. Among arrangements that meet both, one call beats two when they are within 3 points;
+otherwise the more accurate. The hybrid's latency and cost are the real sum of its two calls.
+Results go in a fresh folder, so no answer from the 72-phrase run is reused (F7).
 
 ## Stage 2 — v1
+
+**The trusted list** — `src/command-pick-catalogue.generated.json`: every `(id, label)` the bar
+can offer, over the contexts it opens in (owner on an article, archived or not, Experimental on or
+off; a visitor; Metadata; no article), each with its description, nicknames, `generates` and kind.
+Generated from the real rows under vitest; a test regenerates it and fails if the file differs.
 
 **Shared, pure** — `src/command-pick.ts` (no React, imported by server and browser):
 
 ```ts
-/** One row of the bar as the model sees it. */
-interface PickOption { id: string; label: string; description: string; aliases: string[] }
+interface PickKey { id: string; label: string }
 type ArgumentKind = "find" | "jump-first" | "glossary" | "tag-add" | "tag-remove";
-interface PickRequest { sentence: string; options: PickOption[]; argumentKinds: ArgumentKind[] }
+interface PickRequest { sentence: string; rows: PickKey[]; argumentKinds: ArgumentKind[] }
 type PickAnswer =
-  | { kind: "row"; id: string; confidence: number; others: { id: string; p: number }[] }
-  | { kind: "argument"; argument: ArgumentKind; words: string; confidence: number }
+  | { kind: "row"; key: PickKey; confidence: number; others: PickKey[] }
+  | { kind: "argument"; argument: ArgumentKind; words: string }
   | { kind: "none" };
 ```
 
-with the caps (sentence ≤ 300 characters, ≤ 150 options, each field length-capped), the body
-validator (exact shape, unknown keys refused — `POST /api/transcribe`'s rule), the argument kinds'
-own descriptions (trusted words, written here, not sent by the client), the question builder, and
-`readPick`, which turns the model's raw answer into a `PickAnswer` and returns `none` for an id that
-was not offered or an argument that is empty or not found in the sentence. **`words` must appear in
-the sentence** (compared case-insensitively): the model extracts, it does not invent.
+with the caps (sentence ≤ 300 characters, ≤ 200 keys), the body validator (exact shape, unknown
+keys refused — `POST /api/transcribe`'s rule), the argument kinds' own descriptions, the question
+builder, and `readPick`, which turns the model's raw answer into a `PickAnswer` and returns `none`
+for a key that was not sent or an argument that is empty or not found in the sentence. **`words`
+must appear in the sentence** (case-insensitively): the model extracts, it does not invent, and a
+dictated *neuro science* stays as said.
 
 **Server** — `src/command-pick-call.ts` and one row in `AUTH_ROUTES` (src/routes.ts):
 `POST /api/command-pick`, `article: "none"`, signed-in by the gate every row gets. One job,
@@ -178,27 +185,30 @@ The route-contract test gets its row and its two counts.
 have none; ai-gateway.md records why (the OpenRouter monthly cap is the backstop), and a new rate
 bucket is a migration plus an edit to files on the security map, which an unattended run does not
 make. What bounds a call instead: signed-in only, the caps above, one model call of about $0.0001,
-and an answer that can only be an id the caller sent or a substring of the sentence the caller
-sent — so the endpoint is useless as a general model proxy.
+options whose words are the server's own, and an answer that can only be a key the caller sent or
+a substring of the sentence the caller sent.
 
 **Client** — `src/web/CommandBar.tsx`:
 
-- `pickOptions(commands)`: the rows as `PickOption`s, from `commandId` + `commandText`.
+- `pickKeys(commands)`: the rows as `{id, label}`, from `commandId` + `commandText`.
 - With no row and a non-empty query, signed in, the empty line reads
   *No command matches. Press Enter to ask what you meant.* and Enter posts. `inFlight` and the
-  status line (`Working out what you meant…`) are the ones an async action already uses; typing or
-  closing abandons the answer (the `opening` counter, plus a draft check).
-- The answer becomes **suggested rows** — a small piece of state, `{ forDraft, commands }`, shown
-  in place of the empty line while the draft is unchanged. A `row` answer resolves ids to the
-  bar's own `Command`s (unknown id → dropped); an `argument` answer goes through
-  `resolveArgument` and `argumentCommand`, the path a typed verb takes.
-- **Runs at once** only when all of: one `row` or `argument` answer, confidence at or above the cut
-  Stage 1 measures, the command neither `generates` nor has `RISK` of writes/spends, and it is not
-  an `action` row other than the ones that only open something (decided per row by a required
-  field, `opensOnly`, so a new action row must say). Everything else is drawn, first row selected,
-  and Enter runs it through `activate` — unchanged.
-- `none`, a failure or a timeout: *Couldn't tell what you meant.* and the bar stays open on the
-  full list.
+  status line (`Working out what you meant…`) are the ones an async action already uses.
+- **One request revision** (F5): a counter bumped by any edit to the box, a close, and a change of
+  the row list. An answer for an older revision is thrown away.
+- The answer becomes **suggested keys**, not commands: `{ revision, keys | argument }`. What is
+  drawn is looked up in the *current* row list at render, by id **and** label, and argument answers
+  go through `resolveArgument` and `argumentCommand` — the path a typed verb takes. So if *Archive*
+  became *Put back* while the answer was out, the suggestion is gone rather than reversed, and the
+  runner is always today's.
+- **Runs at once** only when all of: a `row` answer; its key is still in the list; confidence at or
+  above the cut Stage 1 measures; and the row only moves the reader — a mode or sub-mode or page
+  that does not `generate`, or an action that declares `opensOnly` (a required field on action
+  rows, so a new one must say). Everything else is drawn, first row selected, and waits.
+- **A proposal is confirmed only by a fresh press** (F4): the bar ignores a repeating Enter
+  (`event.repeat`) and one during text composition, everywhere — so holding Enter cannot ask and
+  then confirm.
+- `none`, a failure or a timeout: *Couldn't tell what you meant.* and the bar stays open.
 - Signed out, or on a page whose bar has no reader: today's `No command matches.`, no request.
 
 **Behind the Experimental switch for v1?** No: it adds nothing to the screen until a query matches
@@ -207,8 +217,10 @@ nothing, and then one sentence. A [Q] in the debrief.
 Tests, red first: `readPick` (an id not offered, an argument not in the sentence, a malformed
 answer → `none`); the validator's caps; the route's contract row; the bar — Enter with no match
 posts once, two Enters post once, a sure navigate pick runs, an unsure one draws rows, a
-`generates` or writes pick never runs without a second Enter, typing during the call discards the
-answer, signed-out posts nothing.
+`generates`, writes or argument pick never runs without a second Enter, a held Enter across the
+answer runs nothing (F4), an alias two glossary entries share stays two rows (F3), Archive turning
+into Put back while the answer is out leaves no suggestion (F5), typing during the call discards
+the answer, signed-out posts nothing; and the server drops a key it does not hold (F1).
 
 ## Stage 3 — docs, Help, browser check, the note
 
@@ -230,6 +242,21 @@ subagent. The feedback note; queue entries for the deferred halves.
 - **Two commands from one sentence.**
 - **A capable model when the fast one is unsure** — replaced by showing the candidates (decision 4).
 
+## Review ledger
+
+Plan review, GPT Sol, [261003k-plan-review-sol.md](261003k-plan-review-sol.md), against 316e9365c.
+Every finding checked against the code and accepted.
+
+| ID | Sev | Finding | Taken |
+|---|---|---|---|
+| F1 | P0 | Browser-supplied option words make the route a classifier for anyone signed in | The server holds the words (a generated, tested list); the browser sends keys |
+| F2 | P1 | Small models and extracted arguments have no confidence to run at once on | Argument answers are always proposed; only a sure row pick runs |
+| F3 | P1 | One answer can resolve to several rows (a shared glossary alias) | Follows from F2: argument answers never run at once; test added |
+| F4 | P1 | A held Enter asks and then confirms a spending row | Repeating and composing Enters ignored |
+| F5 | P1 | An id can mean the opposite row by the time the answer lands (Archive / Put back) | Keys are id + label, resolved against today's rows; a request revision |
+| F6 | P2 | The selection rule could prefer two calls over an equal one | Rewritten: complete outcomes, floors, one call preferred |
+| F7 | P2 | The runner would reuse the old 72 answers | A fresh results folder |
+
 ## Progress
 
-- 2026-10-03: plan drafted.
+- 2026-10-03: plan drafted; Sol's plan review (F1–F7) folded in. The eval is running.

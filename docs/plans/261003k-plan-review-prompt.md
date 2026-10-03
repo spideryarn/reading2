@@ -38,3 +38,4 @@ you would make. End with a verdict: build as is / build with these changes / ret
 4. The Jev "one yes/no question per word" argument trick: worth an arm, or noise?
 5. Whether `words must appear in the sentence` is too strict for dictated speech (a tag of
    "neuroscience" said as "neuro science").
+Candidate commit: 316e9365c
