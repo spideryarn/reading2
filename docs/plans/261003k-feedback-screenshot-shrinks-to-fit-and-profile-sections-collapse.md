@@ -170,7 +170,7 @@ Built as planned, with Sol's changes. The tests were red first, five of them.
 - `screenshotFromFile` walks 1600, 1280, 1024, 800, 640 and sends the first PNG at or under 90% of
   the limit. A picture that arrives smaller than 1600 starts at its own size.
 - The limit is 2,000,000 in `src/types.ts`, the schema's CHECK, and migration
-  `20261003160244_feedback_screenshot_size_two_megabytes.sql`. Applied to the local database only.
+  `20261003162711_feedback_screenshot_size_two_megabytes.sql`. Applied to the local database only.
 - The server's deflate went from level 9 to 6. Measured on the box, on the worst raster found
   (1600 × 1600, two values a channel): 46.7 s at level 9, 2.1 s at 6 and 12% bigger, 0.6 s at 3 and
   46% bigger. Photographic rasters took about a quarter of a second at every level.
@@ -220,3 +220,13 @@ after them:
 It confirmed the moved `Section` behaves as the original, and that a picture the client passes and
 the server refuses still gets the server's sentence with the draft kept. I re-ran the Postgres
 suites it could not: 8 files, 565 tests, and typecheck, all passing.
+
+### The merge with dev, 2026-10-03: the migration was regenerated
+
+`dev` had gained `20261003161906_shelf_topic_sets` while this was being built, so the two
+migrations forked from one parent. This one was unpublished and purely generated, so it was the
+loser by [database.md § Repairing a fork](../project/database.md): its `.sql`, snapshot and journal
+entry were deleted, the trunk's journal taken whole, and `npm run db:generate` run again. It is now
+`20261003162711`, stamped after the trunk's, which is what lets production's migrator reach it. The
+SQL is the same two statements. The first draft's ledger row in the shared local database was
+deleted by hand (one row, local target checked) and both migrations then applied there.

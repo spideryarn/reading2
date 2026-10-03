@@ -81,7 +81,7 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
 - **[column-context.md](column-context.md)** — history: the fisheye the gist columns had, gone on
   2026-09-29. Open it only to learn why `useColumnContext` is called that — its focus sampling is
   what Structure still uses.
-- **[reading-time.md](reading-time.md)** — the spine thicker where you have spent longer, and a
+- **[reading-time.md](reading-time.md)** — an area chart down the spine of where you have spent longer, and a
   hairline beside each passage: how a second is shared out, what counts, and why a batch is never
   sent twice. Owner only, behind the experimental switch.
 - **[maths.md](maths.md)** — TeX in an article drawn as maths: which delimiters count and why a
@@ -259,9 +259,10 @@ is what Tweets is — since 2026-09-29 a mode row, whose band writes the thread 
 is none ([260915e](../plans/260915e-tweets-page-starts-writing-when-opened.md) for the rule,
 [260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) for the move),
 and it wears the `generates` marker for it — and Feedback is a genuinely new verb, admitted because it is
-what he asked for. A passage jump and an "ask this article" are still out, and the line is now
-sharper than "a verb we don't have": each would need the bar to grow an **argument** — *which*
-passage, *which* question — and it has one text box and it is the filter. A query that matches
+what he asked for. A passage jump and an "ask this article" each needed the bar to grow an
+**argument** — *which* passage, *which* question — when it has one text box and that box is the
+filter. Arguments have since arrived, each behind a verb the reader types (below), and with them the
+passage jump; an "ask this article" is still out. A query that matches
 nothing says `No command matches.` and nothing else: no search fallback, no "did you mean", an honest
 empty state preferred to a helpful guess.
 
@@ -314,6 +315,42 @@ words mode with the words lit up: free, instant, and only when the query starts 
 verbs. So it is not the search fallback Greg refused below — the reader typed the verb — and a query
 that names nothing still says `No command matches.`
 [261002c](../plans/261002c-commands-do-more-and-an-interface-model-vision.md).
+
+**Four more requests take an argument since 2026-10-03, and a command with its argument is now a
+value** — Greg, `spya-wh2xys`: *"in an ideal world, it would sort of take parameters … a tool I would
+really like would be jump to the first place where X"*. One verb table
+([`command-match.ts`](../../src/web/command-match.ts) § `parseArgumentQuery`; `find` is now one entry
+of it) turns the typed phrase into a **`CommandProposal`**
+([`command-proposal.ts`](../../src/web/command-proposal.ts)): an id, one argument checked by that
+command's own rule, and a risk class (`RISK`: navigates, writes, spends) that the `generates` marker
+is read off. `runProposal` presses it through the runners the page supplies
+([`command-runners.ts`](../../src/web/command-runners.ts)), and **a proposal with no runner where the
+reader is standing is no row** — never a row that fails — so the Metadata page offers find and the
+tags and nothing else. The rows are typed-only and follow the ranked ones, as find's does.
+[261003f](../plans/261003f-commands-take-arguments-tags-dictation-and-chat-tools.md).
+
+- ***Jump to the first “X”*** — `jump to first`, `first mention of`, `where does it first say` and
+  two more. The first hit Search's words mode would light up, reached by the deliberate jump, so Back
+  and the return chip come home ([url-state.md](url-state.md)). The verbs all say *first*: `take me
+  to glossary` names a mode, and must not become a search for the word. No hit keeps the bar open and
+  says so. A visitor has it too; it writes nothing.
+- ***Glossary: “term”***, or ***Look up “X” in this article*** when the glossary lacks it — `look up`,
+  `define`, *what does X mean*. The owner's.
+  [glossary.md § Looking a term up](glossary.md#looking-a-term-up) has the one thing that must stay
+  true of the second.
+- ***Add the tag “x”*** / ***Remove the tag “x”*** — `tag as`, `add a tag of`, `untag` and their
+  kin. [library.md § Your own tags](library.md#your-own-tags).
+- ***Turn experimental features on*** / ***off*** takes no argument and arrived with them: one row
+  whose label follows the state, the rule Archive set.
+  [experimental-features.md § The three controls](experimental-features.md#the-three-controls).
+
+**The box takes dictation**, which is Greg's *"type (or even talk)"* from the bar's first day: the
+microphone every other box has, and nothing can be pressed while it is listening —
+[dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box).
+
+**Chat offers the same proposals as buttons in an answer**, pressed through the same runners; the
+model writes a token and never runs anything —
+[chat-tools.md § Command buttons](chat-tools.md#command-buttons-chat-proposes-the-reader-presses).
 
 Three pieces of it are worth knowing about:
 

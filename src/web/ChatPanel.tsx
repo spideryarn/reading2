@@ -75,6 +75,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { withoutCommandLines } from "../citable.js";
 import { worthRetrying } from "../messages.js";
 import type {
   BlockId,
@@ -86,6 +87,8 @@ import type {
 } from "../types.js";
 import { isSingleThreadKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
+import { useChatCommands } from "./CommandChip.js";
+import { chipFor } from "./chat-commands.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -1426,6 +1429,7 @@ function Turn({
    */
   const pencil = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(editing);
+  const commands = useChatCommands() ?? undefined;
   useEffect(() => {
     if (wasEditing.current && !editing) pencil.current?.focus();
     wasEditing.current = editing;
@@ -1561,7 +1565,14 @@ function Turn({
       <WebSources citations={message.citations} />
       {message.status !== "pending" && (
         <div className="chat-actions">
-          {message.text !== "" && <CopyAnswer text={message.text} />}
+          {message.text !== "" && (
+            <CopyAnswer
+              text={withoutCommandLines(
+                message.text,
+                (raw) => commands !== undefined && chipFor(raw, commands, blocks) !== null,
+              )}
+            />
+          )}
           {/* "Answer again" is a regenerate, not only a retry — it is offered on
               a perfectly good answer too. So the extra condition is narrow: it
               disappears only when this turn *failed*, and failed in a way that
@@ -1948,6 +1959,10 @@ function Answer({
      is the one every block link shares (BlockLinkCard.tsx), which also moves
      from chip to chip without a second wait — what a `TooltipGroup` here used
      to do. */
+  /* The executor a command chip presses through, where the reading view put
+     one round this panel — chat and the chat dialog, never Remember. `null`
+     everywhere else, and a `[cmd:…]` is then plain text. CommandChip.tsx. */
+  const commands = useChatCommands() ?? undefined;
   return (
     <CitedMarkdown
       text={text}
@@ -1964,6 +1979,7 @@ function Answer({
          for plain sentences and has neither. Cited.tsx § links,
          Cited.tsx § CitedMarkdown. */
       links
+      commands={commands}
     />
   );
 }

@@ -322,7 +322,9 @@ describe("the experimental-features store, across a session", () => {
     /* `set(true)` over an already-on switch, deliberately: the optimistic value
        keeps `on` true, so the assertion below is about the sign-out rather than
        about the press. */
-    act(() => probe.now().set(true));
+    act(() => {
+      void probe.now().set(true);
+    });
     expect(calls.map((c) => c.method)).toEqual(["GET", "GET", "PATCH"]);
 
     announce(null);
@@ -344,7 +346,9 @@ describe("the experimental-features store, across a session", () => {
 
     held = [];
     act(() => probe.now().reload());
-    act(() => probe.now().set(true));
+    act(() => {
+      void probe.now().set(true);
+    });
 
     /* Both come back saying "on", and the reader signs out **in the same tick**,
        before either continuation has run. That ordering is the point: a response
@@ -417,7 +421,9 @@ describe("the experimental-features store, across a session", () => {
     await settle();
     const was = probe.now();
 
-    act(() => probe.now().set(true));
+    act(() => {
+      void probe.now().set(true);
+    });
     await settle();
 
     expect(calls).toEqual([]);
@@ -484,7 +490,9 @@ describe("a write that finishes while a read is still in flight", () => {
     const probe = drive();
     expect(made()).toEqual([{ url: "/api/reader", method: "GET" }]);
 
-    act(() => probe.now().set(true));
+    act(() => {
+      void probe.now().set(true);
+    });
     expect(calls.at(-1)?.method).toBe("PATCH");
 
     /* The PATCH comes back first, and the server says it is on. */
@@ -546,7 +554,9 @@ describe("a reload that would undo a save", () => {
     expect(probe.now().loaded).toBe(true);
 
     held = [];
-    act(() => probe.now().set(true));
+    act(() => {
+      void probe.now().set(true);
+    });
     const sent = calls.length;
 
     act(() => probe.now().reload());
@@ -584,7 +594,9 @@ describe("what a session change does to the wire", () => {
     const probe = drive();
     held = [];
     announce("reader-a");
-    act(() => probe.now().set(true));
+    act(() => {
+      void probe.now().set(true);
+    });
 
     const [get, patch] = calls;
     expect(get?.method).toBe("GET");
@@ -626,7 +638,9 @@ describe("a save that fails after it cancelled the opening read", () => {
     announce("reader-a");
     expect(probe.now().loaded).toBe(false);
 
-    act(() => probe.now().set(true));
+    act(() => {
+      void probe.now().set(true);
+    });
     expect(calls.map((c) => c.method)).toEqual(["GET", "PATCH"]);
 
     answer = () => Promise.reject(new Error("the server said no"));
@@ -671,7 +685,9 @@ describe("a save from the account that has left", () => {
     expect(probe.now().loaded).toBe(true);
 
     held = [];
-    act(() => probe.now().set(true));
+    act(() => {
+      void probe.now().set(true);
+    });
     expect(calls.at(-1)?.method).toBe("PATCH");
 
     act(() => {
@@ -691,7 +707,9 @@ describe("a save from the account that has left", () => {
     expect(snapshot().saving, "A did not clear B's saving flag").toBe(true);
 
     /* And the write lock is still B's: a second press writes nothing. */
-    act(() => snapshot().set(true));
+    act(() => {
+      void snapshot().set(true);
+    });
     expect(
       calls.filter((c) => c.method === "PATCH"),
       "one write at a time, still",
@@ -723,12 +741,78 @@ describe("a save that succeeds after a load that failed", () => {
     expect(probe.now().loaded).toBe(false);
 
     answer = () => Promise.resolve({ experimentalSince: DATE_A });
-    act(() => probe.now().set(true));
+    act(() => {
+      void probe.now().set(true);
+    });
     await settle();
 
     expect(probe.now().on).toBe(true);
     expect(probe.now().loaded).toBe(true);
     expect(probe.now().loadError, "the load failure is over").toBe(null);
+    probe.stop();
+  });
+});
+
+describe("what a save answers, for a caller that waits", () => {
+  /**
+   * **`set` is awaitable since 2026-10-03**, for the command bar's *Turn
+   * experimental features on/off* row (plan 261003f, Stage 1.4, GPT Sol's F5):
+   * a refused save has to keep the bar open with the reason, and a press that
+   * was never sent has to say so rather than close as if it had worked. The
+   * switch itself still ignores the answer — the store's state says it all.
+   */
+  it("resolves saved once the server has the value", async () => {
+    const probe = drive();
+    announce("reader-a");
+    await settle();
+    answer = () => Promise.resolve({ experimentalSince: DATE_A });
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await probe.now().set(true);
+    });
+    expect(outcome).toEqual({ kind: "saved" });
+    expect(probe.now().on).toBe(true);
+    probe.stop();
+  });
+
+  it("resolves failed, with the sentence, when the save is refused", async () => {
+    const probe = drive();
+    announce("reader-a");
+    await settle();
+    answer = () => Promise.reject(new Error("The server said no."));
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await probe.now().set(true);
+    });
+    expect(outcome).toEqual({ kind: "failed", message: "The server said no." });
+    expect(probe.now().on).toBe(false);
+    probe.stop();
+  });
+
+  it("resolves not-sent for a second press while the first is out, and for nobody signed in", async () => {
+    const probe = drive();
+    announce("reader-a");
+    await settle();
+    held = [];
+    act(() => {
+      void probe.now().set(true);
+    });
+    let second: unknown;
+    await act(async () => {
+      second = await probe.now().set(false);
+    });
+    expect(second).toEqual({ kind: "not-sent", why: "busy" });
+    await act(async () => held?.[0]?.({ experimentalSince: DATE_A }));
+    await settle();
+    held = null;
+
+    announce(null);
+    await settle();
+    let signedOut: unknown;
+    await act(async () => {
+      signedOut = await probe.now().set(true);
+    });
+    expect(signedOut).toEqual({ kind: "not-sent", why: "signed-out" });
     probe.stop();
   });
 });

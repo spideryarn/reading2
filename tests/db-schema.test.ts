@@ -648,7 +648,8 @@ describe("the schema keeps the promises the plan makes", () => {
                             'billing_accounts_owner_fk','ingest_events_owner_fk',
                             'jobs_ingest_event_fk','realtime_sessions_owner_fk',
                             'rate_limit_events_owner_fk','link_summaries_owner_fk',
-                            'shelf_topic_scores_owner_fk','reader_arrivals_owner_fk')
+                            'shelf_topic_scores_owner_fk','reader_arrivals_owner_fk',
+                            'shelf_topic_sets_owner_fk')
           order by conname`,
       );
       expect(rows.map((r) => r.conname)).toEqual([
@@ -695,6 +696,9 @@ describe("the schema keeps the promises the plan makes", () => {
            CASCADE, for `link_summaries`' reason: the model's scores for a
            reader's shelf topics are a cache, worth nothing once they are gone. */
         "shelf_topic_scores_owner_fk",
+        /* drizzle/20261003161906, appended by hand to the generated migration.
+           CASCADE, for the same reason: the model's topic set is a cache. */
+        "shelf_topic_sets_owner_fk",
         "uploads_owner_fk",
       ]);
     });

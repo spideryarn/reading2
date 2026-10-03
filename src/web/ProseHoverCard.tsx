@@ -75,6 +75,7 @@ import {
   CITE_QUOTE_LABEL,
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
+  showsWhy,
   InSpideryarn,
   readNoteOf,
   registryConflictNote,
@@ -1974,11 +1975,17 @@ function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryar
       )}
 
       <div className="prose-card-part prose-card-part-why">
-        <p className="prose-card-label">{CITE_WHY_LABEL}</p>
-        <p className="prose-card-text">{work.why}</p>
-        {/* The band's line, from the band's function: we have not read the
-            work, so `why` above is the article's claim, not the work's content.
-            CitationsPanel.tsx § what we have and have not read. */}
+        {/* `why` only beside the verdict that was checked against it
+            (CitationsPanel.tsx § showsWhy, plan 261003j). The lookup alone:
+            this card draws no *Dig deeper* answer. */}
+        {showsWhy({ lookup: work.lookup }) && (
+          <>
+            <p className="prose-card-label">{CITE_WHY_LABEL}</p>
+            <p className="prose-card-text">{work.why}</p>
+          </>
+        )}
+        {/* The band's line, from the band's function: what we have read of
+            the work. CitationsPanel.tsx § what we have and have not read. */}
         <p className="prose-card-cite-read">{readNoteOf(work)}</p>
       </div>
       <CiteCardReading work={work} />

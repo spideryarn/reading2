@@ -1,6 +1,6 @@
 {
-  "id": "2d46cd01-6415-4d6b-984e-29e6d7d5f73c",
-  "prevId": "b1d76e43-f7f7-4823-832f-bbd481a0de85",
+  "id": "b8ee1b18-1434-4ac5-b4cc-f070c06127ca",
+  "prevId": "ec342672-0d59-40f9-84b9-69edf9196aab",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -6063,6 +6063,144 @@
         "shelf_topic_scores_claim": {
           "name": "shelf_topic_scores_claim",
           "value": "num_nonnulls(\"spideryarn\".\"shelf_topic_scores\".\"claim_id\", \"spideryarn\".\"shelf_topic_scores\".\"claim_hash\", \"spideryarn\".\"shelf_topic_scores\".\"claimed_until\") in (0, 3)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.shelf_topic_sets": {
+      "name": "shelf_topic_sets",
+      "schema": "spideryarn",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "profile_hash": {
+          "name": "profile_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "topics": {
+          "name": "topics",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "members": {
+          "name": "members",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "works": {
+          "name": "works",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unplaced": {
+          "name": "unplaced",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rethought_at": {
+          "name": "rethought_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "filed_at": {
+          "name": "filed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_until": {
+          "name": "claimed_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failures": {
+          "name": "failures",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "retry_after": {
+          "name": "retry_after",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "shelf_topic_sets_failures": {
+          "name": "shelf_topic_sets_failures",
+          "value": "\"spideryarn\".\"shelf_topic_sets\".\"failures\" >= 0"
+        },
+        "shelf_topic_sets_result": {
+          "name": "shelf_topic_sets_result",
+          "value": "num_nonnulls(\"spideryarn\".\"shelf_topic_sets\".\"model\", \"spideryarn\".\"shelf_topic_sets\".\"prompt_version\", \"spideryarn\".\"shelf_topic_sets\".\"profile_hash\", \"spideryarn\".\"shelf_topic_sets\".\"topics\", \"spideryarn\".\"shelf_topic_sets\".\"members\", \"spideryarn\".\"shelf_topic_sets\".\"works\", \"spideryarn\".\"shelf_topic_sets\".\"unplaced\", \"spideryarn\".\"shelf_topic_sets\".\"rethought_at\") in (0, 8)"
+        },
+        "shelf_topic_sets_filed": {
+          "name": "shelf_topic_sets_filed",
+          "value": "\"spideryarn\".\"shelf_topic_sets\".\"filed_at\" is null or \"spideryarn\".\"shelf_topic_sets\".\"rethought_at\" is not null"
+        },
+        "shelf_topic_sets_topics_array": {
+          "name": "shelf_topic_sets_topics_array",
+          "value": "\"spideryarn\".\"shelf_topic_sets\".\"topics\" is null or jsonb_typeof(\"spideryarn\".\"shelf_topic_sets\".\"topics\") = 'array'"
+        },
+        "shelf_topic_sets_topics_nonempty": {
+          "name": "shelf_topic_sets_topics_nonempty",
+          "value": "case when \"spideryarn\".\"shelf_topic_sets\".\"topics\" is null then true when jsonb_typeof(\"spideryarn\".\"shelf_topic_sets\".\"topics\") = 'array' then jsonb_array_length(\"spideryarn\".\"shelf_topic_sets\".\"topics\") > 0 else false end"
+        },
+        "shelf_topic_sets_members_object": {
+          "name": "shelf_topic_sets_members_object",
+          "value": "\"spideryarn\".\"shelf_topic_sets\".\"members\" is null or jsonb_typeof(\"spideryarn\".\"shelf_topic_sets\".\"members\") = 'object'"
+        },
+        "shelf_topic_sets_counts": {
+          "name": "shelf_topic_sets_counts",
+          "value": "(\"spideryarn\".\"shelf_topic_sets\".\"works\" is null or \"spideryarn\".\"shelf_topic_sets\".\"works\" >= 0) and (\"spideryarn\".\"shelf_topic_sets\".\"unplaced\" is null or \"spideryarn\".\"shelf_topic_sets\".\"unplaced\" >= 0)"
+        },
+        "shelf_topic_sets_claim": {
+          "name": "shelf_topic_sets_claim",
+          "value": "num_nonnulls(\"spideryarn\".\"shelf_topic_sets\".\"claim_id\", \"spideryarn\".\"shelf_topic_sets\".\"claimed_until\") in (0, 2)"
         }
       },
       "isRLSEnabled": false

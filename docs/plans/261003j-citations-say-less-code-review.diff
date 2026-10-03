@@ -1,0 +1,1102 @@
+diff --git a/docs/investigations/261003d-what-a-citations-row-says-and-where-it-came-from.md b/docs/investigations/261003d-what-a-citations-row-says-and-where-it-came-from.md
+new file mode 100644
+index 000000000..0609ab341
+--- /dev/null
++++ b/docs/investigations/261003d-what-a-citations-row-says-and-where-it-came-from.md
+@@ -0,0 +1,65 @@
++# What a Citations row says, and where each word came from
++
++Up: [investigations.md](../project/investigations.md) · the mode: [citations.md](../project/citations.md)
++· the plan it informed: [261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md)
++
++## What was asked
++
++Greg's report `spya-zmdb7y` (2026-10-03) said a Citations row seems to add only a paraphrase of the
++citing paragraph, and should say nothing about a paper beyond what the article's bibliography gives.
++Two questions follow. How much of a row is the model's own words about the work? And is what would
++be left — title, authors, year — really from the article?
++
++## What was measured
++
++[`evals/citations-say-less.ts`](../../evals/citations-say-less.ts), free and deterministic: it reads
++stored lists and calls no model. Run on 2026-10-03 over the five local articles with a stored list,
++194 rows. The raw output is
++[`evals/results/citations-say-less-261003.tsv`](../../evals/results/citations-say-less-261003.tsv).
++
++**The model's sentence, `why`.** Every row has one. It averages 9 to 18 words by article, and comes
++to 2,143 words over the 194 rows. Between 36% and 73% of its content words are absent from the
++paragraphs that cite the work. That number is a screen and not a finding: a paraphrase swaps words
++by definition. Reading thirty of the sentences against their citing paragraphs found none that said
++something the paragraph did not.
++
++**What is left.** The script flags a row when a word of its title, an author, or its year is not in
++the article's text or the row's stored reference entry. This is a lexical flag over the whole
++article: it catches a name the article never says, and cannot see a name the article gives to a
++different work (GPT Sol showed a Smith 1999 row mislabelled Jones 2020 passing, because both words
++were elsewhere in the article). It flagged eleven rows, read one by one:
++
++- seven titles are labels the model built where the article gives no title (*"Roon's Twitter
++  reply"*, *"OpenAI Five (OA5) blog/report"*), which the prompt asks for;
++- two years are false alarms: the article's `1963` is glued to `63ya` in the block text;
++- one author is the model correcting the article's typo (*Dojolonga* for Djolonga);
++- one author carries the model's gloss (*"Archimedes (attributed by Pappus of Alexandria)"*);
++- **one author is from the model's memory**: *The Bitter Lesson · Sutton*, in an article that never
++  names Sutton. It is correct, and nothing marks it as ours.
++
++So: one unsupported author found by hand among the flagged rows. That is not a rate for
++misattributed authors, which this script cannot measure.
++
++## What was decided
++
++`why` is no longer drawn by default on the row, the hover card or Marginalia's note; it appears only
++beside a check made against it. The rendering tests hold that; on these 194 rows it is 2,143 words
++before and 0 after.
++
++Code now drops authors or a year the article never gives (`locateInArticle` in `src/citations.ts`).
++The script replays that function over the stored rows with no entry: **3 by-lines dropped in 194,
++no years** — the three authors above, and both glued years kept. No prompt changed, so no model was
++called.
++
++## What was ruled out
++
++- **A model-judged eval of whether `why` adds anything.** Not run: the decision does not depend on
++  the exact share, and Greg's reading and mine agreed.
++- **A tolerance for a corrected spelling in the author check.** One case in 194; the row keeps its
++  title, which carries the article's own spelling.
++
++## Limits
++
++Five articles, all local, three of them essays with inline links and no reference list. The Entropy
++paper the report was filed on is not in the local database and was not measured. The author check
++reads block text only, so a name that appears only inside a link's address counts as absent.
+diff --git a/docs/plans/261003j-citations-say-less-plan-review-prompt.md b/docs/plans/261003j-citations-say-less-plan-review-prompt.md
+new file mode 100644
+index 000000000..f47782e15
+--- /dev/null
++++ b/docs/plans/261003j-citations-say-less-plan-review-prompt.md
+@@ -0,0 +1,33 @@
++# Plan review: Citations rows say only what the bibliography supports (261003j)
++
++You are reviewing a plan before it is built. Read-only: change no files.
++
++Read, in this order:
++
++1. `docs/plans/261003j-citations-say-only-what-the-bibliography-supports.md` — the plan.
++2. `docs/project/citations.md` — what the mode does today.
++3. The code the plan touches: `src/web/CitationsPanel.tsx` (§ `WorkRow`, `LookupReading`,
++   `readNoteOf`, `assessedOf`), `src/web/ProseHoverCard.tsx` (§ `CiteCard`, `CiteCardReading`),
++   `src/web/marginalia/MarginaliaColumn.tsx` (§ `CitationNote`), `src/web/CitationInvestigation.tsx`.
++4. `evals/citations-say-less.ts` — the script behind the plan's numbers.
++
++The request, from the product owner: a Citations row should say nothing about a cited paper beyond
++what the article's bibliography gives, must not suggest we know what the paper says, and should
++leave the rest to the on-request *Dig deeper* button. He asked for the simplest version.
++
++Questions:
++
++- Is the rule for when the model's `why` sentence is shown (an assessed quick-check reading, or a
++  kept *Dig deeper* answer) right and complete? Is there a state where the verdict or the answer
++  refers to "what the article uses it for" and the sentence would be missing, or a state where it
++  is shown with nothing beside it that checked it? Look at failed, stale and running states.
++- Does any other surface draw `why` to a reader that the plan misses? Search for it.
++- Does the plan leave anything on a default row that claims more than the article gives?
++- Is the measurement honest? Does `evals/citations-say-less.ts` measure what the plan says it does,
++  and is the conclusion (one row in 194 with an author from memory) supported by it?
++- Is keeping `why` in the prompt and the stored list the right call for a first version?
++- Anything in the plan that is wrong, risky or more complicated than it needs to be.
++
++Answer with findings numbered P1, P2, …, each with a severity (blocker, should-fix, note), the
++evidence (file and line), and what you would do. End with one line: `VERDICT: build as planned`,
++`VERDICT: build after fixes`, or `VERDICT: rethink`.
+diff --git a/docs/plans/261003j-citations-say-less-plan-review-sol.md b/docs/plans/261003j-citations-say-less-plan-review-sol.md
+new file mode 100644
+index 000000000..02c9076c8
+--- /dev/null
++++ b/docs/plans/261003j-citations-say-less-plan-review-sol.md
+@@ -0,0 +1,40 @@
++**P1 — blocker: The default row still exceeds the requested boundary.**  
++The plan explicitly keeps an author supplied from memory and the influence bar ([plan:93](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/docs/plans/261003j-citations-say-only-what-the-bibliography-supports.md:93), [plan:108](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/docs/plans/261003j-citations-say-only-what-the-bibliography-supports.md:108)). It also misses registry enrichment: `workByLine` supplies missing authors/year from Crossref or DataCite before any reader request ([CitationsPanel.tsx:206](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/web/CitationsPanel.tsx:206)). Disclosure does not make these bibliography-supported.
++
++I would hide influence and registry-supplied metadata on default surfaces, and omit extracted metadata that cannot be grounded in the work’s verified entry or mention. Keep the raw entry visible. Do not defer the known Sutton exception while claiming this request is complete; conservative omission is simpler than adding fuzzy matching.
++
++**P2 — should-fix: A running answer can need `why` before the proposed predicate allows it.**  
++A no-match quick check does not stop the investigation ([citation-investigate.ts:890](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/citation-investigate.ts:890)). Streaming text is drawn immediately, but `work.investigation` is populated only after `done` ([useCitations.ts:524](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/web/useCitations.ts:524), [CitationInvestigation.tsx:521](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/web/CitationInvestigation.tsx:521)). Thus an arriving “does it back the claim?” answer can have neither an assessed lookup nor a kept investigation, leaving its claim missing.
++
++Conversely, a retry can retain a stored investigation while the rendered view replaces its answer with progress ([CitationInvestigation.tsx:353](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/web/CitationInvestigation.tsx:353)).
++
++I would base the band’s rule on what is displayed: an assessed lookup, an arriving answer, a kept answer, or a failed run’s displayed previous answer. Add tests for these cases, especially streaming after no-match.
++
++**P3 — should-fix: The hover card cannot safely use the same stored-state predicate.**  
++`CiteCardReading` displays only an assessed lookup; it never displays an investigation ([ProseHoverCard.tsx:2028](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/web/ProseHoverCard.tsx:2028)). With a kept investigation and an unassessed or absent lookup, the proposed shared rule shows `why` without the answer that justified revealing it.
++
++The simplest fix is to show `why` on the hover card only beside its assessed lookup. Let the band reveal it beside investigation answers.
++
++**P4 — should-fix: “One row in 194 with an author from memory” is stronger than the measurement supports.**  
++The script pools words from the **whole article**, then adds the entry, and checks tokens independently ([citations-say-less.ts:70](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/evals/citations-say-less.ts:70), [citations-say-less.ts:115](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/evals/citations-say-less.ts:115)). It cannot establish that an author, year or title belongs to this work. A wrong author appearing elsewhere passes; rearranged title words pass; an unrelated publication year passes.
++
++I exercised `measureRow` with a Smith (1999) reference incorrectly attributed to Jones (2020). Because Jones and 2020 appeared elsewhere, both checks passed.
++
++Report this as **one manually identified unsupported author**, not an exhaustive rate established by the script. Save the manual evidence and distinguish lexical flags from attribution checks. Likewise, the novelty pool includes reference blocks, not just citing paragraphs ([citations-say-less.ts:65](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/evals/citations-say-less.ts:65)).
++
++**P5 — should-fix: The eval can report an empty corpus after failed reads, and does not measure “after.”**  
++Every `loadCitations` exception is swallowed ([citations-say-less.ts:105](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/evals/citations-say-less.ts:105)). My database rerun was blocked by sandbox networking; all five reads failed, yet the script exited successfully with “no stored citations list.”
++
++Also, the script counts stored `why` words; it does not render rows, apply the proposed predicate, or account for thresholds and attachments. The plan’s “measured after: 0 words” is a proposed rendering invariant, not this script’s result ([plan:78](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/docs/plans/261003j-citations-say-only-what-the-bibliography-supports.md:78)).
++
++Catch only expected missing-list errors, fail on read failures, and retain the baseline output. Describe the after claim as verified by rendering tests once those pass. I could not independently reproduce the 194-row totals.
++
++**P6 — note: Preserve dynamic provenance; avoid unconditional “not read” wording.**  
++The plan says the not-read sentence stays on every row/card ([plan:63](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/docs/plans/261003j-citations-say-only-what-the-bibliography-supports.md:63)), but `readNoteOf` correctly changes it after assessment or reading the PDF ([CitationsPanel.tsx:555](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/web/CitationsPanel.tsx:555)). Keep that function unconditional while hiding only `why`. The entry caption’s existing “We have not looked the work up” also becomes false after lookup ([CitationsPanel.tsx:291](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/web/CitationsPanel.tsx:291)); retain its attribution clause and remove that absolute statement.
++
++**P7 — note: Keeping stored `why` is appropriate for this first version; the surface search is complete.**  
++The quick-check and investigation fingerprints include `why` ([citation-lookup.ts:162](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/citation-lookup.ts:162), [citation-investigate-context.ts:177](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/citation-investigate-context.ts:177)). Keeping it avoids unnecessary prompt changes and invalidating answers. Existing fingerprint checks exclude stale attachments; failed runs with a surviving previous answer remain legitimate reasons to display the claim.
++
++I found no additional direct citation-`why` renderer beyond the band, prose card and Marginalia. Chat also receives it as “used for,” which the plan explicitly retains ([chat-tools.ts:1508](/home/greg/code/spideryarn2/.claude/worktrees/fb-citations-say-less/src/chat-tools.ts:1508)). Dropping it from Marginalia and substituting the entry is sound.
++
++VERDICT: build after fixes
+\ No newline at end of file
+diff --git a/docs/plans/261003j-citations-say-only-what-the-bibliography-supports.md b/docs/plans/261003j-citations-say-only-what-the-bibliography-supports.md
+new file mode 100644
+index 000000000..3054944a5
+--- /dev/null
++++ b/docs/plans/261003j-citations-say-only-what-the-bibliography-supports.md
+@@ -0,0 +1,152 @@
++# Citations: a row says only what the bibliography supports
++
++Up: [plans.md](../project/plans.md) · the mode: [citations.md](../project/citations.md)
++
++Greg, through the Feedback button, 2026-10-03 (`spya-zmdb7y`), on the Entropy article:
++
++> it seems as though it's actually just giving some kind of paraphrase of what's already in the text
++> about that piece and not adding anything. If that's the case, and I mean that kind of makes sense,
++> that's all it can do without searching the web. That's almost no value. … And we don't want to
++> mislead the reader into thinking that that's what the paper actually says when actually there's no
++> new information beyond what's in the text. So instead, I think citations mode should perhaps err
++> on the side of saying, you know, nothing about a paper beyond what's available in the
++> bibliography, but I know we have a dig deeper or something button that can then go out to the web.
++> Great. So better to say less and allow the user to ask for more and be explicit about the
++> limitations
++
++The full report is in the feedback note.
++
++## What a row says today
++
++Title, authors · year, the entry from the reference list — all the article's own. Then one sentence
++the model wrote, `why`, labelled *what the article uses it for*, then *We have not read this work,
++only the article that cites it.* The same sentence is on the hover card in the prose, and in
++Marginalia's opened citation note, where it has **no label at all**.
++
++`why` is the only thing on a default row that is the model's own words about the work. It is written
++from the citing paragraph, so it can only restate that paragraph. The label was added on 2026-09-29
++(260929g) to stop it reading as the paper's content; Greg's report says it still does.
++
++## Measured before
++
++`evals/citations-say-less.ts`, free, over the five local articles with a stored list (194 rows);
++the write-up is
++[261003d](../investigations/261003d-what-a-citations-row-says-and-where-it-came-from.md):
++
++| article | rows | `why` words a row | `why` words in all |
++|---|---|---|---|
++| spider-silk | 80 | 8.9 | 711 |
++| antikythera-mechanism | 46 | 12.5 | 574 |
++| scaling-hypothesis | 58 | 11.8 | 682 |
++| openai-huggingface | 8 | 17.5 | 140 |
++| vb | 2 | 18.0 | 36 |
++
++Every row carries the sentence: 2,143 words of model paraphrase across 194 rows. Between a third and
++a half of each sentence's content words are not in the citing paragraphs, which is what a paraphrase
++looks like; reading thirty of them found none that told me something the citing paragraph did not.
++
++The same script flags a row when a word of its title, authors or year is nowhere in the article's
++text or the row's entry. It is a lexical flag over the whole article, so it catches a name the
++article never says and cannot see a name given to the wrong work. It flagged eleven rows, read by
++hand in the write-up. Seven are titles the model built where the article gives none (*"Roon's
++Twitter reply"*), which the prompt asks for. Two years are false alarms (`1963` glued to `63ya`).
++Three are authors: **one from the model's memory** (*The Bitter Lesson · Sutton*, where the article
++never names Sutton), one the model correcting the article's typo (*Dojolonga*), one carrying the
++model's gloss (*Archimedes (attributed by Pappus of Alexandria)*).
++
++## What changes
++
++1. **The band's row** no longer draws `why` by default. It draws it, with its label, only once the
++   row has something it was checked against: a *Dig deeper* answer or a quick-check reading
++   (`assessedOf(work) !== null || work.investigation !== undefined`). There the sentence is the
++   claim under test — the verdict line reads *supports what the article uses it for*, which means
++   nothing if the reader cannot see what that is.
++2. **The hover card** in the prose: the same function (`showsWhy`), asked only about the quick
++   check. The card draws no *Dig deeper* answer, so a kept answer alone does not bring `why` back
++   there: each surface shows the claim exactly when it shows something checked against it.
++3. **Marginalia's opened citation note** drops `why` and shows the article's own reference entry
++   instead, when the row has one. A lone work with neither a by-line nor an entry shows its title, so
++   the opened note is never empty.
++4. *We have not read this work, only the article that cites it* stays on every row and card. With no
++   sentence above it, it is now the whole of what we say, which is the point.
++
++5. **Code drops authors or a year the article never gives**, when the list is made
++   (`locateInArticle` in `src/citations.ts`). Added after GPT Sol's plan review (P1): the plan first
++   left this as a question, and the review's point was that a known exception to the rule being
++   built should not ship beside it. Every word of the authors must be a word of the article's text
++   or its PDF reference list; the year's four digits must be in it somewhere. Otherwise the field
++   goes, the row stays, and `authorsUnfound` / `yearUnfound` count it. The check is the
++   conservative one: it does not try to match a corrected spelling, so the typo row loses its
++   by-line too. It cannot tell a name given to the wrong work. A list already stored keeps what it
++   has until it is made again; `PROMPT_VERSION` is not bumped, because no prompt changed.
++6. **The entry's caption** loses *We have not looked the work up*, which is false on a row *Dig
++   deeper* has read (P6). It now reads *…copied from the article, not from the work.*
++
++In the band the sentence also shows on the row *Dig deeper* is running on, before anything is kept:
++the quick check can find nothing while the answer still streams (P2).
++
++A visitor has no lookup and no investigation, so a visitor never sees `why`.
++
++**Not changed**: the prompt, the schema, `PROMPT_VERSION`. `why` is still written
++and stored, because *Dig deeper* is built on it — the quick check judges the search extract against
++it, the paper's passages are picked by it, the streamed answer is told it, and both fingerprints
++cover it (`citation-lookup.ts`, `citation-paper-passages.ts`, `citation-investigate.ts`). Chat's
++`article_citations` tool still returns it, labelled *used for*; that is the reader asking.
++
++So nothing needs re-running for the display change, and a list made last week is drawn the new way
++at once.
++
++## Measured after
++
++**The display.** No row, card or Marginalia note draws `why` until something is checked against it.
++That is held by rendering tests, not by the script: `tests/citations-panel.test.tsx`,
++`tests/citation-hover-card.test.tsx` and `tests/marginalia-shut-notes.test.tsx`, each seen red
++first. On the 194 stored rows, none of which has a *Dig deeper* answer locally, that is 2,143 words
++before and 0 after.
++
++**The guard.** The script replays `locateInArticle` over the stored rows that have no entry: it
++drops **3 by-lines in 194 rows and no years** — exactly the three authors above. The two glued
++years are kept.
++
++## The simpler option passed over, and the larger one
++
++- **Simpler: delete `why` from the row and never show it.** Passed over because after *Dig deeper*
++  the verdict refers to it, and hiding the claim under test makes the verdict unreadable.
++- **Larger: stop the model writing `why` at all.** It would save about 12 output words a row and
++  remove a field nobody sees by default. Passed over for now because the on-request path would need
++  a new statement of the claim (the citing passage alone), three prompts changed and re-measured,
++  and two fingerprints bumped, which hides every kept *Dig deeper* answer. [Q-stop-writing-why].
++
++## Questions for Greg
++
++**[Q-stop-writing-why]** Above. Recommend leaving it until *Dig deeper*'s prompts are next touched.
++
++**[Q-influence]** The *influence* bar is the model's memory of how well known a work is. That is
++something we say about the paper that the bibliography does not support. It is disclosed in the
++band's (i), and it feeds the default *prioritised* order.
++
++- **A. Keep it** (what is built). The order stays useful; the claim is small and disclosed.
++- **B. Drop the bar from the row, keep it in the order.** The row says less; the order is then
++  shaped by a number the reader cannot see.
++- **C. Drop influence altogether**, ordering by relevance alone.
++- Recommend **A**: it is a ranking hint, not a statement of what the paper says, which is what the
++  report objects to.
++
++## GPT Sol's plan review
++
++[The review](261003j-citations-say-less-plan-review-sol.md): *build after fixes*, seven findings.
++
++| | finding | what was done |
++|---|---|---|
++| P1 | the default row still says more than the article: an author from memory, the influence bar, registry-filled authors | **Author and year: fixed**, change 5. **Influence: left, as [Q-influence]**: it is a ranking hint and not a statement of what the paper says, and removing it changes the default order. **Registry authors: left**: they come from Crossref by the article's own DOI, are marked *from Crossref*, and are bibliographic facts, not our reading of the paper. |
++| P2 | a streaming answer can need `why` before the rule allows it | fixed: the row being dug shows it; test added |
++| P3 | the hover card shows no *Dig deeper* answer, so must not use the kept answer | already so: the card asks only about the quick check |
++| P4 | "one row in 194" is a hand reading, not what the script establishes | reworded here and in the write-up; the script's header says what it cannot see |
++| P5 | the script swallowed read failures and did not measure "after" | it now skips only a missing list and throws otherwise; "after" is the rendering tests plus the guard replay |
++| P6 | the entry caption's *We have not looked the work up* is false after a lookup | fixed, change 6 |
++| P7 | keeping `why` stored is right for a first version; no other surface draws it | agreed |
++
++## Stages
++
++One stage: the three surfaces, their tests seen red first, citations.md, a browser check at desktop,
++iPad and phone widths, GPT Sol's code review.
+diff --git a/docs/project/citations.md b/docs/project/citations.md
+index f5dcfbb3a..103df3bd9 100644
+--- a/docs/project/citations.md
++++ b/docs/project/citations.md
+@@ -16,7 +16,7 @@ The design, the review that reshaped it and the real runs are
+ ## A row
+ 
+ The title — a link out, opening a new tab ([links.md](links.md)) — then authors · year as the article
+-gives them, more than two authors shortened to *First et al.*, one plain sentence on *what the piece uses it for*, and a quiet line: relevance and influence as two small bars (the numbers in their tooltip, as in the glossary),
++gives them, more than two authors shortened to *First et al.*, and a quiet line: relevance and influence as two small bars (the numbers in their tooltip, as in the glossary),
+ where the link came from, and **first cited**, a jump to the passage
+ ([`BlockRef`](../../src/web/BlockRef.tsx)). A work the article names only in its bibliography says
+ *only in the references* and jumps there. § [Which citation, and whose
+@@ -65,8 +65,7 @@ Asked for through the Feedback button on 2026-09-29 (SPIDERYARN-READING2-5G):
+ > be really careful to be clear about whether you could get the actual paper, so that we can be sure
+ > you're not hallucinating
+ 
+-`why` is written **from the article**, and nothing that makes the list reads the cited work. So the
+-row labels `why` *what the article uses it for*, and every row and hover card carries one quiet line
++Nothing that makes the list reads the cited work, so every row and hover card carries one quiet line
+ saying what we have read. Usually that is nothing: *We have not read this work, only the article that
+ cites it.* After *Look it up* it names what was read, which is only ever a search engine's extract
+ of a matching page, and never the work itself. Once *Dig deeper* has read the paper itself
+@@ -76,6 +75,46 @@ with the host, the length and the day. `readNoteOf` in
+ surfaces, total over `linkFrom` and the lookup's state. The design and its two plan reviews are
+ [260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
+ 
++## Nothing about the work beyond the article's bibliography
++
++Asked for through the Feedback button on 2026-10-03 (`spya-zmdb7y`):
++
++> we don't want to mislead the reader into thinking that that's what the paper actually says when
++> actually there's no new information beyond what's in the text. So instead, I think citations mode
++> should perhaps err on the side of saying, you know, nothing about a paper beyond what's available
++> in the bibliography … better to say less and allow the user to ask for more
++>
++> — Greg, 2026-10-03
++
++The model writes one sentence a work, `why`: *what the article uses it for*. It is written from the
++citing paragraph and can only restate it. Until 2026-10-03 every row, hover card and Marginalia note
++drew it; measured on 194 stored rows that was 2,143 words of paraphrase, about 11 a row
++([the investigation](../investigations/261003d-what-a-citations-row-says-and-where-it-came-from.md)).
++
++**Now `why` is drawn only beside something that was checked against it** (`showsWhy` in
++[`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx)): in the band, once the row has a
++quick-check verdict or a *Dig deeper* answer; on the hover card, once it has the verdict, since the
++card draws no *Dig deeper* answer. There it is the claim under test, still labelled *what the article
++uses it for* — the verdict reads *supports what the article uses it for*, which says nothing without
++it. Marginalia's opened note never draws it, and shows the article's own reference entry instead. A
++visitor has neither a verdict nor an answer, so never sees it.
++
++**Authors and a year the article never gives are dropped**, by code, when the list is made
++(`locateInArticle` in [`src/citations.ts`](../../src/citations.ts)). The prompt asks for both *as the
++article gives them*; one stored row in 194 had an author from the model's memory instead (*The
++Bitter Lesson · Sutton*, in an essay that never names Sutton). Every word of the authors must be a
++word of the article's text or its PDF reference list, and the year's four digits must be in it
++somewhere, or that field goes and the row stays; `authorsUnfound` and `yearUnfound` on the step's
++log line count them. It asks only whether the article says the name at all, not whether it says it
++of this work, which code cannot know. A name the model corrected (the article's *Dojolonga*) goes
++too. A row with a DOI can still get its authors from the registry, marked *from Crossref*. A list
++made before 2026-10-03 keeps what it has until it is made again.
++
++`why` is still written and stored: the quick check, the paper's passages and the *Dig deeper* answer
++are all aimed by it, and chat's `article_citations` tool returns it as *used for*. The plan, with
++what was passed over, is
++[261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md).
++
+ ## Which citation, and whose entry
+ 
+ Asked for through the Feedback button on 2026-09-30, from a PDF of a numbered-citation review
+@@ -147,7 +186,7 @@ clear upgrade keeps its *Look it up*, find and investigation, while an ambiguous
+ them to another work.
+ 
+ **Shown**: the by-line's tooltip holds the authors as given and the entry, labelled as the entry in
+-the article's own reference list, which we have not looked up; the prose hover card shows the entry
++the article's own reference list, copied from the article and not from the work; the prose hover card shows the entry
+ in full, since a card is what a finger gets. **A visitor gets the entry only when it is its own
+ bibliography block's text**, every character of which is already on their page. An entry read from
+ a PDF's text layer stays owner-only: it can carry a publisher's one-page "Downloaded by …" stamp
+@@ -237,7 +276,7 @@ like one of the article's own hyperlinks. `/design` has three specimens, includi
+ 
+ **Pointing at one opens the work**, in the card the glossary and the links already share
+ ([`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx)) — a fourth section, not a second card.
+-It draws the title with its link, authors · year, `why`, and *cited in N paragraphs* — or *only in
++It draws the title with its link, authors · year, the entry, and *cited in N paragraphs* — or *only in
+ the references* for a bibliography-only work. The provenance
+ is the panel's own `sourceOf`, so a `search` row is drawn here as a search exactly as it is there:
+ two surfaces disagreeing about whether an address is the work's own would teach a reader something
+diff --git a/docs/user-feedback/261003_0958-citations-say-only-what-the-bibliography-supports.md b/docs/user-feedback/261003_0958-citations-say-only-what-the-bibliography-supports.md
+new file mode 100644
+index 000000000..bc246e1b6
+--- /dev/null
++++ b/docs/user-feedback/261003_0958-citations-say-only-what-the-bibliography-supports.md
+@@ -0,0 +1,23 @@
++---
++reports: spya-zmdb7y
++ending: shipped
++---
++# Citations: say nothing about a paper beyond the bibliography
++
++Greg's suggestion from the Feedback dialog (he is admin), filed 2026-10-03 09:58 on the Entropy
++article, relayed by the Overseer. Sentry: confirmed, event `57fc6776b14c4fb8836b8ce90791daae`. Not
++built before (checked `git log origin/dev`, `docs/plans/`, this directory and `gjd-remote ls` on
++2026-10-03).
++
++> I'm not sure about this, but it seems as though citations mode is actually not adding much value because it's just kind of, it's extracting out the references. Okay, that's good. I think just being able to see, for a given block or whatever, okay, this is the citation, you know, because it's only got a footnote, 15 to 17. Okay, 15 corresponds to this one, 16 to this one, 17 to this one. Okay, great, and with the title and whatever in situ, that would save me jumping around. Okay, that's moderately useful. But it seems as though it's actually just giving some kind of paraphrase of what's already in the text about that piece and not adding anything. If that's the case, and I mean that kind of makes sense, that's all it can do without searching the web. That's almost no value. So I'm trying to—well, okay, it is a little bit of value, but it's not much. And we don't want to mislead the reader into thinking that that's what the paper actually says when actually there's no new information beyond what's in the text. So instead, I think citations mode should perhaps err on the side of saying, you know, nothing about a paper beyond what's available in the bibliography, but I know we have a dig deeper or something button that can then go out to the web. Great. So better to say less and allow the user to ask for more and be explicit about the limitations or whatever, or not give an indication that we've done more than we actually have. And it does mean that the user will have to click dig deeper and then there's a delay, but I think it's too expensive to do the full web search for every single citation every time. So we have to just accept that it has to be on request.
++
++**Shipped.** The model's sentence on each work (*what the article uses it for*) is no longer shown on
++the row, the hover card in the prose, or Marginalia's citation note. A row is now the title, authors
++and year, the reference entry, the link, and the line saying we have not read the work. The sentence
++comes back only after *Dig deeper*, beside the check that was made against it. Nothing was re-run:
++lists already made are drawn the new way. A list made from now on also drops an author or year the
++article never gives (one stored row in 194 had an author from the model's memory). Plan, measurement and GPT Sol's reviews:
++[261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md).
++
++Two questions are left for Greg in the plan: whether the model should stop writing the sentence at
++all, and whether the *influence* bar still belongs on a row.
+diff --git a/evals/citations-say-less.ts b/evals/citations-say-less.ts
+new file mode 100644
+index 000000000..8e7426949
+--- /dev/null
++++ b/evals/citations-say-less.ts
+@@ -0,0 +1,163 @@
++/**
++ * **What does a Citations row say about a work, and where did each word come
++ * from?** Plan 261003k, Greg's report spya-zmdb7y: the row should say no more
++ * about a paper than the article's bibliography supports.
++ *
++ * Free and deterministic: it reads stored lists, calls no model. For every
++ * stored list among the slugs given (or every local article that has one) it
++ * counts, per row:
++ *
++ *  - the words of `why` — a sentence the model wrote, the only words on a
++ *    default row that are neither the article's nor a registry's;
++ *  - how many of `why`'s content words are nowhere in the paragraphs that cite
++ *    the work — a lexical proxy for "it adds something", and only a proxy: a
++ *    paraphrase scores high here while adding nothing, so read the rows too;
++ *  - whether the words of the title, the authors and the year are anywhere in
++ *    the article's text or the row's stored entry. A lexical flag, not an
++ *    attribution check: it pools the whole article, so it catches a name the
++ *    article never says and cannot see a name given to the wrong work. Every
++ *    flag is listed under its article to be read by hand.
++ *
++ *   npx tsx evals/citations-say-less.ts [slug …] [--rows=N]
++ */
++import { loadEnvLocal } from "../src/env.js";
++import { isMain } from "../src/is-main.js";
++import type { CitedWork } from "../src/types.js";
++import type { Block } from "../src/types.js";
++
++const STOP = new Set(
++  "a an and are as at be by for from has have in is it its of on or that the their this to was were which with not but than into about over how what who when where why can may more most also such these those been being they them he she we our you your".split(
++    " ",
++  ),
++);
++
++/** Lower-cased words, accents and punctuation folded away. */
++export function wordsOf(text: string): string[] {
++  return text
++    .normalize("NFKD")
++    .replace(/[̀-ͯ]/g, "")
++    .toLowerCase()
++    .split(/[^a-z0-9]+/)
++    .filter((w) => w.length > 0);
++}
++
++function contentWords(text: string): string[] {
++  return wordsOf(text).filter((w) => w.length > 2 && !STOP.has(w));
++}
++
++/** The share of `words` that are in `pool`; 1 for no words. */
++export function shareIn(words: readonly string[], pool: ReadonlySet<string>): number {
++  if (words.length === 0) return 1;
++  return words.filter((w) => pool.has(w)).length / words.length;
++}
++
++export interface RowMeasure {
++  id: string;
++  whyWords: number;
++  /** `why`'s content words absent from every citing paragraph, as a share. */
++  whyNovel: number;
++  /** Title words found in the article's text or the row's entry. */
++  titleGrounded: number;
++  authorsGrounded: number;
++  yearGrounded: boolean | null;
++}
++
++export function measureRow(work: CitedWork, blocks: ReadonlyMap<string, Block>, articleWords: ReadonlySet<string>): RowMeasure {
++  const citing = new Set<string>();
++  const ids = new Set<string>([work.firstCited, ...(work.citedAt ?? [])]);
++  if (work.reference) ids.add(work.reference.blockId);
++  for (const m of work.mentions ?? []) ids.add(m.blockId);
++  for (const id of ids) for (const w of wordsOf(blocks.get(id)?.text ?? "")) citing.add(w);
++
++  const grounded = new Set(articleWords);
++  for (const w of wordsOf(work.entry ?? "")) grounded.add(w);
++
++  const why = contentWords(work.why);
++  const authors = wordsOf(work.authors ?? "").filter((w) => w !== "et" && w !== "al");
++  const year = work.year ? wordsOf(work.year) : null;
++  return {
++    id: work.id,
++    whyWords: wordsOf(work.why).length,
++    whyNovel: 1 - shareIn(why, citing),
++    titleGrounded: shareIn(wordsOf(work.title), grounded),
++    authorsGrounded: shareIn(authors, grounded),
++    yearGrounded: year === null ? null : year.every((w) => grounded.has(w) || grounded.has(w.replace(/[a-z]$/, ""))),
++  };
++}
++
++function mean(xs: readonly number[]): number {
++  return xs.length === 0 ? 0 : xs.reduce((a, b) => a + b, 0) / xs.length;
++}
++
++async function main(): Promise<void> {
++  loadEnvLocal();
++  const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
++  const store = await import("../src/store/index.js");
++  const { closeDb } = await import("../src/db/client.js");
++  const { emptyDrops, locateInArticle } = await import("../src/citations.js");
++  const { CitationsListNotFound } = await import("../src/store/citations-list-not-found.js");
++  const args = process.argv.slice(2);
++  const rows = Number(args.find((a) => a.startsWith("--rows="))?.slice(7) ?? 0);
++  let slugs = args.filter((a) => !a.startsWith("--"));
++
++  await runAsOwner(environmentOwnerId(), async () => {
++    if (slugs.length === 0) slugs = (await store.listArticles()).map((a) => a.slug);
++    console.log("slug\tworks\twhy words/row\twhy words total\twhy novel\ttitle<1\tauthors<1\tyear not in article\tguard drops authors\tguard drops year");
++    let lists = 0;
++    for (const slug of slugs) {
++      /* Only "no list was made" is skipped: a failed read is not an empty
++         corpus, and must not print as one (GPT Sol's plan review, P5). */
++      let citations: Awaited<ReturnType<typeof store.loadCitations>>;
++      try {
++        citations = await store.loadCitations(slug);
++      } catch (err) {
++        if (err instanceof CitationsListNotFound) continue;
++        throw err;
++      }
++      const works = citations.citations.citations;
++      if (works.length === 0) continue;
++      lists++;
++      const { blocks } = await store.loadArticle(slug);
++      const byId = new Map(blocks.map((b) => [b.id as string, b]));
++      const articleWords = new Set(blocks.flatMap((b) => wordsOf(b.text)));
++      const measured = works.map((w) => measureRow(w, byId, articleWords));
++      /* The stage's own guard, replayed over the stored rows: what a list made
++         today would drop. A row with a stored entry was checked against that
++         entry when it was made, so only the others are asked. */
++      const drops = emptyDrops();
++      const dropped: string[] = [];
++      for (const w of works.filter((x) => !x.entry)) {
++        const kept = locateInArticle({ title: w.title, ...(w.authors ? { authors: w.authors } : {}), ...(w.year ? { year: w.year } : {}) }, byId, null, drops);
++        if (w.authors && !kept.authors) dropped.push(`authors "${w.authors}" — ${w.title}`);
++        if (w.year && !kept.year) dropped.push(`year "${w.year}" — ${w.title}`);
++      }
++      console.log(
++        [
++          slug,
++          works.length,
++          mean(measured.map((m) => m.whyWords)).toFixed(1),
++          measured.reduce((a, m) => a + m.whyWords, 0),
++          mean(measured.map((m) => m.whyNovel)).toFixed(2),
++          measured.filter((m) => m.titleGrounded < 1).length,
++          measured.filter((m) => m.authorsGrounded < 1).length,
++          measured.filter((m) => m.yearGrounded === false).length,
++          drops.authorsUnfound,
++          drops.yearUnfound,
++        ].join("\t"),
++      );
++      for (const d of dropped) console.log(`  - the guard would drop ${d}`);
++      for (const w of works.slice(0, rows)) {
++        const m = measured.find((x) => x.id === w.id);
++        console.log(`  · ${w.title} — ${w.authors ?? ""} ${w.year ?? ""}\n    why: ${w.why}\n    novel ${m?.whyNovel.toFixed(2)} title ${m?.titleGrounded.toFixed(2)} authors ${m?.authorsGrounded.toFixed(2)} year ${m?.yearGrounded}`);
++      }
++      for (const m of measured.filter((x) => x.titleGrounded < 1 || x.authorsGrounded < 1 || x.yearGrounded === false)) {
++        const w = works.find((x) => x.id === m.id);
++        console.log(`  ! ${w?.title} | ${w?.authors ?? ""} | ${w?.year ?? ""} — title ${m.titleGrounded.toFixed(2)} authors ${m.authorsGrounded.toFixed(2)} year ${m.yearGrounded}`);
++      }
++    }
++    if (lists === 0) console.log("(no stored citations list among these articles)");
++  });
++  await closeDb();
++}
++
++if (isMain(import.meta.url)) await main();
+diff --git a/evals/results/citations-say-less-261003.tsv b/evals/results/citations-say-less-261003.tsv
+new file mode 100644
+index 000000000..4910d4bf2
+--- /dev/null
++++ b/evals/results/citations-say-less-261003.tsv
+@@ -0,0 +1,20 @@
++slug	works	why words/row	why words total	why novel	title<1	authors<1	year not in article	guard drops authors	guard drops year
++spider-silk-spya-ge30uz	80	8.9	711	0.36	0	0	0	0	0
++antikythera-mechanism-spya-zhxrzm	46	12.5	574	0.40	0	1	0	1	0
++  - the guard would drop authors "Archimedes (attributed by Pappus of Alexandria)" — On Sphere-Making
++  ! On Sphere-Making | Archimedes (attributed by Pappus of Alexandria) |  — title 1.00 authors 0.83 year null
++vb-spya-vu3xen	2	18.0	36	0.73	1	0	0	0	0
++  ! The Acceleration of Addictiveness |  |  — title 0.50 authors 1.00 year null
++openai-huggingface	8	17.5	140	0.42	2	0	0	0	0
++  ! Roon's Twitter reply |  |  — title 0.75 authors 1.00 year null
++  ! Interview with Ryan Greenblatt (Dwarkesh Podcast) |  |  — title 0.83 authors 1.00 year null
++scaling-hypothesis	58	11.8	682	0.49	4	2	2	2	0
++  - the guard would drop authors "Sutton" — The Bitter Lesson
++  - the guard would drop authors "Djolonga et al" — Djolonga et al 2020
++  ! OpenAI Five (OA5) blog/report |  |  — title 0.80 authors 1.00 year null
++  ! The Bitter Lesson | Sutton |  — title 1.00 authors 0.00 year null
++  ! AlphaGo Zero (Mastering the Game of Go without Human Knowledge) |  |  — title 0.90 authors 1.00 year null
++  ! Vahdat & Kautz 2020 (NVAE) | Vahdat & Kautz | 2020 — title 0.75 authors 1.00 year true
++  ! Djolonga et al 2020 | Djolonga et al | 2020 — title 0.75 authors 0.00 year true
++  ! The Quiet Enemy / The Legacy of Hiroshima | Edward Teller | 1962 — title 1.00 authors 1.00 year false
++  ! An Introduction to Wittgenstein's Tractatus | Anscombe | 1963 — title 1.00 authors 1.00 year false
+diff --git a/src/citations.ts b/src/citations.ts
+index dd4f42bb8..949256909 100644
+--- a/src/citations.ts
++++ b/src/citations.ts
+@@ -466,6 +466,72 @@ function locateInEntry(
+   };
+ }
+ 
++/* The article's words and its text, once per run: `readDraft` is called per work. */
++const ARTICLE_TEXT = new WeakMap<ReadonlyMap<string, Block>, { words: Set<string>; text: string }>();
++
++/**
++ * A PDF's reference list is the article's own text too, though not among its
++ * blocks: a work whose entry number did not check out still took its authors
++ * from there. Words are kept both with an apostrophe closed up, as `keyWords`
++ * reads a name (*O'Brien*), and split at it, so *Tulving's* gives *Tulving*.
++ */
++function articleTextOf(
++  byId: ReadonlyMap<string, Block>,
++  list: NumberedReferenceList | null,
++): { words: Set<string>; text: string } {
++  let known = ARTICLE_TEXT.get(byId);
++  if (!known) {
++    const text = [...[...byId.values()].map((b) => b.text), ...(list ? list.entries.values() : [])].join("\n");
++    const words = new Set(keyWords(text).split(" "));
++    for (const w of keyWords(text.replace(/[‘’'`]/g, " ")).split(" ")) words.add(w);
++    known = { words, text };
++    ARTICLE_TEXT.set(byId, known);
++  }
++  return known;
++}
++
++/**
++ * **Authors and a year the article never gives are dropped** — the same rule
++ * `locateInEntry` holds a PDF entry to, for a work with no entry to check
++ * against. Greg, 2026-10-03 (spya-zmdb7y, plan 261003j): a row says *"nothing
++ * about a paper beyond what's available in the bibliography"*. The prompt asks
++ * for both "as the article gives them" and the model mostly obeys; measured,
++ * one stored row had an author from its memory (*The Bitter Lesson · Sutton*).
++ * A right author from memory looks exactly like a wrong one, so neither is kept.
++ *
++ * **It asks only whether the article says the name at all**, anywhere — not
++ * whether it says it of this work, which code cannot know. So it catches
++ * memory, not a mix-up between two works the article does cite. It also drops
++ * a name the model corrected (the article's *Dojolonga* for Djolonga): the
++ * title still carries what the article wrote.
++ *
++ * The year is looked for as characters, not as a word: an ingested page can
++ * glue text to it (`196363ya`).
++ */
++export function locateInArticle(
++  fields: { title: string; authors?: string; year?: string },
++  byId: ReadonlyMap<string, Block>,
++  list: NumberedReferenceList | null,
++  drops: CitationDrops,
++): { title: string; authors?: string; year?: string } {
++  const article = articleTextOf(byId, list);
++  const names = keyWords((fields.authors ?? "").replace(/\bet al\.?\s*$/i, "").replace(/\band\b/gi, " "))
++    .split(" ")
++    .filter(Boolean);
++  const authorsHere = names.length > 0 && names.every((w) => article.words.has(w));
++  if (fields.authors && !authorsHere) drops.authorsUnfound++;
++  const digits = fields.year?.match(/\d{4}/)?.[0];
++  const yearHere =
++    fields.year !== undefined &&
++    (digits ? article.text.includes(digits) : keyWords(fields.year).split(" ").every((w) => article.words.has(w)));
++  if (fields.year && !yearHere) drops.yearUnfound++;
++  return {
++    title: fields.title,
++    ...(authorsHere && fields.authors ? { authors: fields.authors } : {}),
++    ...(yearHere && fields.year ? { year: fields.year } : {}),
++  };
++}
++
+ /** A reference block's text as its `entry`: whitespace collapsed, capped. */
+ function entryOfBlock(block: Block | undefined): string | undefined {
+   return block === undefined ? undefined : entryOfText(block.text);
+@@ -578,7 +644,7 @@ function readDraft(
+      entry; capped where the row is written (`buildCitations`). */
+   const entry = located === null ? undefined : listed!;
+   const identifierEntry = identifierEntryFor(list, entryNumber, entry);
+-  const fields = located ?? said;
++  const fields = located ?? locateInArticle(said, byId, list, drops);
+   const authors = fields.authors ?? "";
+   const year = fields.year ?? "";
+   const relevance = scoreCounting(w.relevance, scores, "relevanceAbsent", "relevanceRejected");
+diff --git a/src/feedback-endings.generated.ts b/src/feedback-endings.generated.ts
+index 5866d4b77..4080aafc6 100644
+--- a/src/feedback-endings.generated.ts
++++ b/src/feedback-endings.generated.ts
+@@ -358,6 +358,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-zbcchv": "shipped",
+   "spya-zfcp5x": "shipped",
+   "spya-zhkutu": "shipped",
++  "spya-zmdb7y": "shipped",
+   "spya-zper0p": "shipped",
+   "spya-zuk4f7": "shipped",
+   "spya-zv8dc6": "shipped",
+diff --git a/src/types.ts b/src/types.ts
+index 2b0db67e8..2b3c1c3fc 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -4540,9 +4540,12 @@ export interface CitationDrops {
+   entryMismatch: number;
+   /** An entry whose text does not contain the model's title — the entry is dropped (plan 260930i, Sol F3). */
+   entryDisagrees: number;
+-  /** Authors not all found as words of the work's entry — dropped, the entry kept. */
++  /**
++   * Authors not all found as words of the work's entry — dropped, the entry
++   * kept. With no entry, authors the article names nowhere (plan 261003j).
++   */
+   authorsUnfound: number;
+-  /** A year the work's entry does not carry — dropped, the entry kept. */
++  /** A year the work's entry does not carry, or with no entry, the article — dropped. */
+   yearUnfound: number;
+ }
+ 
+diff --git a/src/web/CitationsPanel.tsx b/src/web/CitationsPanel.tsx
+index ca44b2cc8..22ec9d046 100644
+--- a/src/web/CitationsPanel.tsx
++++ b/src/web/CitationsPanel.tsx
+@@ -289,7 +289,7 @@ export function registryConflictNote(source: RegistrySource): string {
+ 
+ /** Said under an entry wherever it is shown — a row's tooltip and the prose card. */
+ export const CITE_ENTRY_NOTE =
+-  "The entry in the article's own reference list, copied from the article. We have not looked the work up.";
++  "The entry in the article's own reference list, copied from the article, not from the work.";
+ 
+ /**
+  * The citing words in quotation marks — unless they already are in them, as a
+@@ -507,6 +507,19 @@ export const CITATIONS_NONE = "We found no works this piece cites.";
+ /** The label on `why`, in the band and the hover card alike. */
+ export const CITE_WHY_LABEL = "what the article uses it for";
+ 
++/* **`why` is drawn only beside something that was checked against it** — Greg,
++   2026-10-03 (spya-zmdb7y, plan 261003j): *"err on the side of saying … nothing
++   about a paper beyond what's available in the bibliography"*. The sentence can
++   only restate the citing paragraph, and on a row nothing has looked up it
++   still reads as what the paper says, label or no label. Once a quick check
++   has a verdict (*supports what the article uses it for*) or *Dig deeper* has
++   an answer, it is the claim under test, and the reader needs it to read
++   either. Each surface asks about what IT draws: the card shows no *Dig
++   deeper* answer, so it passes only the lookup. */
++export function showsWhy(work: Pick<ShownWork, "lookup" | "investigation">): boolean {
++  return assessedOf(work) !== null || work.investigation !== undefined;
++}
++
+ /** Every row, until something has read the work: nothing has. */
+ export const CITE_NOT_READ = "We have not read this work, only the article that cites it.";
+ 
+@@ -1028,9 +1041,13 @@ function WorkRow({
+       {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
+       {by && !byLineFolds(work, by) && <ByLine work={work} by={by} />}
+       {line.conflict && <p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
+-      <p className="cite-why">
+-        <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
+-      </p>
++      {/* Also while this row is being dug: the quick check can find nothing and
++          the answer still streams, with no lookup and no kept answer yet. */}
++      {(showsWhy(work) || investigate?.running === work.id || (investigate?.draft ?? null) !== null) && (
++        <p className="cite-why">
++          <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
++        </p>
++      )}
+       <p className="cite-read">{readNoteOf(work)}</p>
+       <LookupReading work={work} />
+       <p className="cite-meta">
+diff --git a/src/web/ProseHoverCard.tsx b/src/web/ProseHoverCard.tsx
+index 4cdc24ef5..a479c71ff 100644
+--- a/src/web/ProseHoverCard.tsx
++++ b/src/web/ProseHoverCard.tsx
+@@ -75,6 +75,7 @@ import {
+   CITE_QUOTE_LABEL,
+   CITE_VERDICT_LABEL,
+   CITE_WHY_LABEL,
++  showsWhy,
+   InSpideryarn,
+   readNoteOf,
+   registryConflictNote,
+@@ -1974,11 +1975,17 @@ function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryar
+       )}
+ 
+       <div className="prose-card-part prose-card-part-why">
+-        <p className="prose-card-label">{CITE_WHY_LABEL}</p>
+-        <p className="prose-card-text">{work.why}</p>
+-        {/* The band's line, from the band's function: we have not read the
+-            work, so `why` above is the article's claim, not the work's content.
+-            CitationsPanel.tsx § what we have and have not read. */}
++        {/* `why` only beside the verdict that was checked against it
++            (CitationsPanel.tsx § showsWhy, plan 261003j). The lookup alone:
++            this card draws no *Dig deeper* answer. */}
++        {showsWhy({ lookup: work.lookup }) && (
++          <>
++            <p className="prose-card-label">{CITE_WHY_LABEL}</p>
++            <p className="prose-card-text">{work.why}</p>
++          </>
++        )}
++        {/* The band's line, from the band's function: what we have read of
++            the work. CitationsPanel.tsx § what we have and have not read. */}
+         <p className="prose-card-cite-read">{readNoteOf(work)}</p>
+       </div>
+       <CiteCardReading work={work} />
+diff --git a/src/web/marginalia/MarginaliaColumn.tsx b/src/web/marginalia/MarginaliaColumn.tsx
+index 8ae48c346..dea890811 100644
+--- a/src/web/marginalia/MarginaliaColumn.tsx
++++ b/src/web/marginalia/MarginaliaColumn.tsx
+@@ -403,10 +403,14 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
+       {items.map((work) => {
+         const by = byLineOf(work);
+         return (
++          /* The article's own words about the work and nothing of ours: the
++             by-line and its reference entry, never the model's `why` (Greg,
++             spya-zmdb7y, plan 261003j). A lone work with neither repeats its
++             title, so the note never opens to nothing. */
+           <div key={work.id} className="marg-open-item">
+-            {!only && <p className="marg-open-head">{work.title}</p>}
++            {(!only || (!by && !work.entry)) && <p className="marg-open-head">{work.title}</p>}
+             {by && <p className="marg-open-by">{by}</p>}
+-            <p className="marg-cite-why">{work.why}</p>
++            {work.entry && <p className="marg-cite-entry">{work.entry}</p>}
+           </div>
+         );
+       })}
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index 9d2a3a144..38c1f6211 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -213,6 +213,10 @@ p.marg-shut {
+ .marg-open-by {
+   color: var(--ink-faint);
+ }
++/* The article's own reference entry for a cited work (plan 261003j). */
++.marg-cite-entry {
++  color: var(--ink-faint);
++}
+ .marg-open-answer {
+   color: var(--ink-faint);
+   display: -webkit-box;
+diff --git a/src/web/styles/voices.css b/src/web/styles/voices.css
+index eeae41a3f..a4a2dd5a7 100644
+--- a/src/web/styles/voices.css
++++ b/src/web/styles/voices.css
+@@ -68,6 +68,8 @@
+     .tip-cite-text,
+     .prose-card-quote,
+     .cite-entry,
++    /* Marginalia's opened citation: the article's own reference entry */
++    .marg-cite-entry,
+     .dbt-claim-text,
+     /* the by-claim heading: the same verbatim quote as .dbt-claim-text */
+     .dbt-group-quote,
+@@ -161,10 +163,9 @@
+     .marg-idea-statement,
+     .marg-arc,
+     .marg-arc-full,
+-    /* Marginalia's shut notes, opened: Debate's reading of a page, a
+-       citation's why, the AI's answer to a comment */
++    /* Marginalia's shut notes, opened: Debate's reading of a page, the AI's
++       answer to a comment */
+     .marg-debate-applies,
+-    .marg-cite-why,
+     .marg-open-answer,
+     /* Sketch: the card, the title bar, and the scene tooltips. NOT the SVG
+        labels, which are wrapped in TypeScript at Geist's width (CHAR_W in
+diff --git a/tests/citation-hover-card.test.tsx b/tests/citation-hover-card.test.tsx
+index 58c410286..e463c6500 100644
+--- a/tests/citation-hover-card.test.tsx
++++ b/tests/citation-hover-card.test.tsx
+@@ -282,7 +282,7 @@ const card = () => document.querySelector(".prose-card");
+ const cite = (n: number) => host.querySelectorAll("mark.cite")[n] as HTMLElement;
+ 
+ describe("resting on a citation", () => {
+-  it("draws the work: its title, who wrote it and when, and what the piece uses it for", () => {
++  it("draws the work: its title, who wrote it and when, and nothing of ours about it", () => {
+     paint();
+     expect(card()).toBe(null);
+     hover(cite(0));
+@@ -290,9 +290,11 @@ describe("resting on a citation", () => {
+     expect(text).toContain("Elements of Episodic Memory");
+     expect(text).toContain("Tulving");
+     expect(text).toContain("1983");
+-    /* The one line that is ours rather than the author's — Fable, 2026-09-16:
+-       "That is the augmentation; the citation itself is the author's." */
+-    expect(text).toContain("The piece takes its account of retrieval cues from it.");
++    /* Until 2026-10-03 the card also drew `why`, the one line that was ours
++       rather than the author's. Greg, spya-zmdb7y: it restates the citing
++       paragraph and reads as what the paper says, so it waits for a check
++       (plan 261003j; "what the card says after Look it up" has that half). */
++    expect(text).not.toContain("The piece takes its account of retrieval cues from it.");
+   });
+ 
+   it("links a work the article gave an address for, and says where the address came from", () => {
+@@ -407,7 +409,10 @@ describe("what the card says we have read", () => {
+     paint();
+     hover(cite(0));
+     expect(read()).toBe(CITE_NOT_READ);
+-    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")?.textContent).toBe(CITE_WHY_LABEL);
++    /* Nothing the model wrote about the work, until something was checked
++       against it (Greg, spya-zmdb7y, plan 261003j). */
++    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")).toBeNull();
++    expect(card()?.textContent).not.toContain(TULVING.why);
+     /* A searched row too: a Scholar search is not the work either. */
+     hover(cite(1));
+     expect(read()).toBe(CITE_NOT_READ);
+@@ -459,6 +464,9 @@ describe("what the card says after Look it up", () => {
+     paint([looked, KAPLAN, BROADBENT]);
+     hover(cite(0));
+     expect(read()).toBe(citeReadAssessed(310, "arxiv.org"));
++    /* The claim the verdict is about, labelled as the article's. */
++    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")?.textContent).toBe(CITE_WHY_LABEL);
++    expect(card()?.querySelector(".prose-card-part-why .prose-card-text")?.textContent).toBe(TULVING.why);
+     const verdict = card()?.querySelector(".prose-card-cite-verdict");
+     expect(verdict?.querySelector(".prose-card-label")?.textContent).toBe(CITE_VERDICT_LABEL);
+     expect(verdict?.querySelector(".prose-card-cite-verdict-text")?.textContent).toBe(verdictText("partly"));
+@@ -526,6 +534,8 @@ describe("what the card says after Look it up", () => {
+     hover(cite(0));
+     expect(card()).not.toBeNull();
+     expect(card()?.textContent).not.toMatch(/DISTINCTIVE INVESTIGATION|Investigat/);
++    /* So no claim either: the card draws nothing that was checked against it. */
++    expect(card()?.textContent).not.toContain(TULVING.why);
+     expect(card()?.querySelector(".cite-investigate, .cite-inv")).toBeNull();
+   });
+ });
+diff --git a/tests/citations-panel.test.tsx b/tests/citations-panel.test.tsx
+index 0f04e1de1..feb620b9f 100644
+--- a/tests/citations-panel.test.tsx
++++ b/tests/citations-panel.test.tsx
+@@ -1051,11 +1051,43 @@ describe("what a row says we have read", () => {
+     const r = row(CENTRAL.id);
+     expect(r.querySelector(".cite-read")?.textContent).toBe(CITE_NOT_READ);
+     expect(CITE_NOT_READ).toMatch(/not read/i);
+-    /* And `why` is labelled as the article's, not the work's. */
+-    expect(r.querySelector(".cite-why-label")?.textContent).toContain(CITE_WHY_LABEL);
++    /* And nothing the model wrote about the work: `why` is a paraphrase of
++       the citing paragraph, and on a row nothing has checked it reads as what
++       the paper says (Greg, spya-zmdb7y, plan 261003j). */
++    expect(r.querySelector(".cite-why")).toBeNull();
++    expect(r.textContent).not.toContain(CENTRAL.why);
+     expect(CITE_WHY_LABEL).toMatch(/article/);
+   });
+ 
++  it("shows why, labelled as the article's, once something was checked against it", async () => {
++    /* The verdict says "supports what the article uses it for", and Dig
++       deeper's answer opens "Does it back the claim?": each needs the claim
++       beside it. */
++    const dug = work({ id: "spya-d2g3h4", title: "Dug", relevance: 0.9, influence: 0.9, investigation: INVESTIGATION });
++    await draw(owner({ citations: artefact([LOOKED, dug, CENTRAL]) }));
++    for (const id of [LOOKED.id, dug.id]) {
++      const why = row(id).querySelector(".cite-why");
++      expect(why?.querySelector(".cite-why-label")?.textContent).toContain(CITE_WHY_LABEL);
++      expect(why?.textContent).toContain(LOOKED.why);
++    }
++    expect(row(CENTRAL.id).querySelector(".cite-why")).toBeNull();
++  });
++
++  it("shows why while Dig deeper runs on the row, before any answer is kept", async () => {
++    /* The quick check can find nothing and the answer still streams, opening
++       "Does it back the claim?" with no lookup and no kept answer to hang the
++       claim on (GPT Sol's plan review, P2). Only the row being dug. */
++    await draw(
++      owner({
++        citations: artefact([CENTRAL, FAMOUS]),
++        investigating: CENTRAL.id,
++        investigateDraft: { id: CENTRAL.id, text: "Does it back the claim?" },
++      }),
++    );
++    expect(row(CENTRAL.id).querySelector(".cite-why")?.textContent).toContain(CENTRAL.why);
++    expect(row(FAMOUS.id).querySelector(".cite-why")).toBeNull();
++  });
++
+   it("says only that a page matching the title was found, never that it is the paper", async () => {
+     await draw(owner({ citations: artefact([FOUND, CENTRAL]) }));
+     const said = row(FOUND.id).querySelector(".cite-read")?.textContent ?? "";
+diff --git a/tests/citations.test.ts b/tests/citations.test.ts
+index fb6ffaffa..8291f5911 100644
+--- a/tests/citations.test.ts
++++ b/tests/citations.test.ts
+@@ -108,6 +108,48 @@ function build(
+ 
+ const scored = { relevance: 0.8, influence: 0.5 };
+ 
++/* ------------------------------------ authors and a year, from the article --
++   Greg, spya-zmdb7y (plan 261003j): a row says nothing about a work beyond
++   what the article gives. The prompt asks for authors and year "as the article
++   gives them"; one stored row in 194 carried an author from the model's memory
++   (*The Bitter Lesson · Sutton*, in an essay that never names Sutton). */
++
++describe("an author or year the article never gives is dropped", () => {
++  const body = block("spya-b00001", "The bitter lesson is the harder and bigger, the better, as Müller's (1963) book said.");
++  const lesson = { title: "The Bitter Lesson", why: "x", ...scored, mentions: [{ block: body.id, quote: "The bitter lesson" }] };
++
++  it("drops an author who is nowhere in the article, and counts it", () => {
++    const { rows, drops } = build([{ ...lesson, authors: "Sutton" }], [body]);
++    expect(rows[0]?.title).toBe("The Bitter Lesson");
++    expect(rows[0]?.authors).toBeUndefined();
++    expect(drops.authorsUnfound).toBe(1);
++  });
++
++  it("drops a year that is nowhere in the article, and counts it", () => {
++    const { rows, drops } = build([{ ...lesson, year: "2019" }], [body]);
++    expect(rows[0]?.year).toBeUndefined();
++    expect(drops.yearUnfound).toBe(1);
++  });
++
++  it("keeps an author and year the article gives, through a possessive, an accent and 'et al.'", () => {
++    const { rows, drops } = build([{ ...lesson, authors: "Müller et al.", year: "1963" }], [body]);
++    expect(rows[0]?.authors).toBe("Müller et al.");
++    expect(rows[0]?.year).toBe("1963");
++    expect(drops.authorsUnfound).toBe(0);
++    expect(drops.yearUnfound).toBe(0);
++  });
++
++  it("keeps a year the article glues to other characters", () => {
++    const glued = block("spya-b00002", "Anscombe 196363ya, An Introduction to the bitter lesson.");
++    const { rows } = build(
++      [{ ...lesson, mentions: [{ block: glued.id, quote: "Anscombe 1963" }], authors: "Anscombe", year: "1963" }],
++      [glued],
++    );
++    expect(rows[0]?.year).toBe("1963");
++    expect(rows[0]?.authors).toBe("Anscombe");
++  });
++});
++
+ /* ------------------------------------------------------------------ links */
+ 
+ describe("the link comes from the article, by code", () => {
+diff --git a/tests/marginalia-shut-notes.test.tsx b/tests/marginalia-shut-notes.test.tsx
+index 16e0f3233..72f165de9 100644
+--- a/tests/marginalia-shut-notes.test.tsx
++++ b/tests/marginalia-shut-notes.test.tsx
+@@ -105,6 +105,32 @@ describe("a shut line", () => {
+     expect(el.querySelector(".marg-shut-button")?.textContent).toContain("3 works");
+   });
+ 
++  /* Greg, spya-zmdb7y (plan 261003j): nothing about a cited work beyond what
++     the article's own bibliography gives. `why` is the model's paraphrase. */
++  it("opens a citation to the article's own entry, never the model's sentence about the work", () => {
++    const cited = {
++      id: "a",
++      title: "A work",
++      authors: "Tulving",
++      year: "1983",
++      why: "THE MODEL'S SENTENCE.",
++      entry: "Tulving, E. (1983). Elements of Episodic Memory. Oxford.",
++    } as unknown as CitedWork;
++    const el = draw([{ kind: "citation", items: [cited] }]);
++    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
++    const item = el.querySelector(".marg-open-item");
++    expect(item?.textContent).not.toContain("THE MODEL'S SENTENCE.");
++    expect(item?.querySelector(".marg-cite-entry")?.textContent).toBe(cited.entry);
++  });
++
++  it("opens a lone citation with no by-line and no entry to its title, not to nothing", () => {
++    const bare = { id: "a", title: "A bare work", why: "THE MODEL'S SENTENCE." } as unknown as CitedWork;
++    const el = draw([{ kind: "citation", items: [bare] }]);
++    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
++    const item = el.querySelector(".marg-open-item");
++    expect(item?.textContent).toBe("A bare work");
++  });
++
+   it("opens a reader's comment to the whole of it, its line cut at one", () => {
+     const body = "Not sure I buy this claim, and here is a long reason why that will not fit on one line.";
+     const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", body, status: "none" } as unknown as MarginComment;
+diff --git a/tests/voices-css.test.ts b/tests/voices-css.test.ts
+index b0d5f6b31..2ade5105d 100644
+--- a/tests/voices-css.test.ts
++++ b/tests/voices-css.test.ts
+@@ -199,7 +199,6 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }>
+     ".marg-idea-name",
+     ".marg-arc",
+     ".marg-debate-applies",
+-    ".marg-cite-why",
+     ".marg-open-answer",
+   ],
+ };

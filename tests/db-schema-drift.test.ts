@@ -259,6 +259,7 @@ describe("declaredTables", () => {
       "revision_step_runs",
       "search_runs",
       "shelf_topic_scores",
+      "shelf_topic_sets",
       "upload_source_guesses",
       "uploads",
     ]);
@@ -342,7 +343,8 @@ describe("against a real database", () => {
          a second copy of the list above and it is deliberate: it is what makes a
          table that reaches the *schema* and not the *database* say so, which is
          the whole of the drift guard. */
-      expect(report.declaredTables).toBe(44);
+      /* Forty-five since `shelf_topic_sets`, 2026-10-03 (plan 261003f). */
+      expect(report.declaredTables).toBe(45);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

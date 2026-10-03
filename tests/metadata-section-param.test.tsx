@@ -115,6 +115,10 @@ let posts: unknown[];
 /** Every archive PATCH body, and the answer the next one gets. */
 let patches: unknown[];
 let patchAnswer: () => Response;
+/** Every tags PATCH body, the tags the server holds, and a refusal when one is staged. */
+let tagPatches: unknown[];
+let storedTags: string[];
+let tagAnswer: (() => Response | Promise<Response>) | null;
 let host: HTMLDivElement;
 let root: Root;
 
@@ -151,6 +155,9 @@ beforeEach(() => {
   }
   posts = [];
   patches = [];
+  tagPatches = [];
+  storedTags = ["philosophy"];
+  tagAnswer = null;
   patchAnswer = () => json({ entry: { slug: SLUG, archivedAt: "2026-10-02T00:00:00.000Z" } });
   jobEngine.reset();
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
@@ -166,6 +173,7 @@ beforeEach(() => {
           profile: null,
           purpose: null,
           archivedAt: null,
+          tags: storedTags,
         }),
       );
     }
@@ -186,6 +194,12 @@ beforeEach(() => {
     if (url === `/api/library/${SLUG}` && method === "PATCH") {
       patches.push(JSON.parse(String(init?.body ?? "{}")));
       return Promise.resolve(patchAnswer());
+    }
+    if (url === `/api/library/${SLUG}/tags` && method === "PATCH") {
+      const change = JSON.parse(String(init?.body ?? "{}")) as { add?: string[]; remove?: string[] };
+      tagPatches.push(change);
+      storedTags = [...storedTags.filter((t) => !(change.remove ?? []).includes(t)), ...(change.add ?? [])];
+      return Promise.resolve(tagAnswer?.() ?? json({ tags: storedTags }));
     }
     return Promise.resolve(json({}));
   });
@@ -346,6 +360,77 @@ describe("the command bar's Metadata rows, on this page", () => {
     await settle();
     expect(patches).toHaveLength(1);
     expect(status()).toContain("The shelf is busy.");
+  });
+
+  /**
+   * **The page's tag editor follows a tag added from the bar, with no reload**
+   * — GPT Sol's F4 on plan 261003f: a bare `editArticleTags` from the bar would
+   * write the tag and leave the editor on this page showing the old list. The
+   * bar presses the same wrapped save the editor does.
+   */
+  const chips = () =>
+    [...host.querySelectorAll<HTMLButtonElement>("main button[aria-label^='Remove the tag']")].map((b) =>
+      b.getAttribute("aria-label"),
+    );
+
+  it("adds a tag through the page's own save, and the tag editor shows it at once", async () => {
+    await open("");
+    expect(chips()).toEqual(["Remove the tag philosophy"]);
+    command("add a tag of Reading  Group to this paper");
+    await settle();
+    expect(tagPatches).toEqual([{ add: ["reading group"] }]);
+    expect(host.querySelector<HTMLDialogElement>("dialog.cmdbar")?.open).toBe(false);
+    expect(chips()).toEqual(["Remove the tag philosophy", "Remove the tag reading group"]);
+  });
+
+  it("removes one the same way", async () => {
+    await open("");
+    command("untag philosophy");
+    await settle();
+    expect(tagPatches).toEqual([{ remove: ["philosophy"] }]);
+    expect(chips()).toEqual([]);
+  });
+
+  it("keeps a refused tag save in the bar, and the editor as it was", async () => {
+    tagAnswer = () => json({ error: "An article can carry at most 30 tags." }, 400);
+    await open("");
+    command("tag neuroscience");
+    await settle();
+    expect(status()).toContain("An article can carry at most 30 tags.");
+    expect(host.querySelector<HTMLDialogElement>("dialog.cmdbar")?.open).toBe(true);
+    expect(chips()).toEqual(["Remove the tag philosophy"]);
+  });
+
+  it("refuses a command-bar tag edit while the page's tag editor is still saving", async () => {
+    let finishSave!: (response: Response) => void;
+    tagAnswer = () =>
+      new Promise<Response>((resolve) => {
+        finishSave = resolve;
+      });
+    await open("");
+
+    const editor = host.querySelector<HTMLInputElement>('main input[aria-label="Add a tag"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter?.call(editor, "neuroscience");
+      editor?.dispatchEvent(new Event("input", { bubbles: true }));
+      editor?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(tagPatches).toEqual([{ add: ["neuroscience"] }]);
+
+    command("tag reading group");
+    await settle();
+
+    expect(tagPatches, "the shared controller admits one write at a time").toEqual([
+      { add: ["neuroscience"] },
+    ]);
+    expect(status()).toContain("Still saving the last tag change");
+    expect(host.querySelector<HTMLDialogElement>("dialog.cmdbar")?.open).toBe(true);
+
+    finishSave(json({ tags: storedTags }));
+    await settle();
+    expect(chips()).toEqual(["Remove the tag philosophy", "Remove the tag neuroscience"]);
   });
 });
 
