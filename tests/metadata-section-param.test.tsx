@@ -65,7 +65,8 @@ Object.defineProperty(window, "matchMedia", {
    the page's `useQueryState` hear it, exactly as main.tsx arranges. */
 enableHistorySync();
 
-const { Metadata, Section } = await import("../src/web/Metadata.js");
+const { Metadata } = await import("../src/web/Metadata.js");
+const { Section } = await import("../src/web/PageSection.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { METADATA_SECTIONS } = await import("../src/web/params.js");
 const { useRevealOnArrival } = await import("../src/web/PageContents.js");

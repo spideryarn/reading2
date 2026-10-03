@@ -70,13 +70,27 @@ function paint(): void {
   });
 }
 
-/** Let the two fetches settle. */
+/**
+ * Let the two fetches settle, **then open the card**.
+ *
+ * *Recently read* starts shut since 2026-10-03 (Greg, `spya-ka3cau`;
+ * tests/profile-sections-collapsed.test.tsx), and a shut section draws no
+ * body, so every claim below would be about an empty page. Opening it is
+ * setup: what the card says once a reader looks is still the subject. A
+ * missing button throws rather than passing the `not.toContain` cases for
+ * nothing.
+ */
 async function settle(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
   });
+  const heading = [...host.querySelectorAll("h2 button")].find((b) =>
+    b.textContent?.includes("Recently read"),
+  );
+  if (!(heading instanceof HTMLButtonElement)) throw new Error("No Recently read heading to open");
+  act(() => heading.click());
 }
 
 beforeEach(() => {

@@ -704,6 +704,39 @@ after is a real failure and offers nothing.
 The measurements, both reviews and the two bugs the tests found after the reviews are in
 [260827k-microphone-device-and-recording.md](../plans/260827k-microphone-device-and-recording.md).
 
+## The page's six sections
+
+`/profile` ([`src/web/ProfilePage.tsx`](../../src/web/ProfilePage.tsx)) has six sections, and
+since 2026-10-03 three of them start shut. Greg, feedback report `spya-ka3cau`:
+
+> In the meta data page, we have a nice table of contents on the left-hand side, I think with a
+> search bar as well. And most of the sections are default collapsed, except for the important
+> ones. Let's consider doing the same thing for the profile page. So the important ones that we
+> should keep open are probably account, plan, and about you. And then I think the others could
+> perhaps be default collapsed.
+>
+> — Greg, 2026-10-03
+
+| Section | | Why |
+|---|---|---|
+| **Account**, **Plan**, **About you** | open, and not collapsible | what a reader comes here for. *Plan* is where the quota's refusal sends them for a button, so its heading must not be something that can hide it |
+| **Settings**, **Recently read**, **What's running** | collapsible, shut on arrival | looked at now and then. The heading is a button with a chevron, as on Metadata |
+
+They are the Metadata page's `Section`, moved to
+[`src/web/PageSection.tsx`](../../src/web/PageSection.tsx) so there is one copy of the folding
+([web-client.md § Shared code (client)](web-client.md#shared-code-client)). Open or shut is local
+state: it is not in the URL and is not remembered, so the three start shut on every visit. None is
+`keepMounted`. Settings' saves live in a store outside the component or on the device, and the two
+read-outs are fed by fetches the page owns, so shutting a section cancels nothing.
+
+**The contents list and search box in the margin are not here**, and that is a question left for
+Greg rather than a decision: his report describes them and then asks for the folding. Each section
+already carries the `data-section` and `keywords` the list reads, so adding it is a
+`<PageContents>` and a margin class. The reasoning is in
+[plan 261003k](../plans/261003k-feedback-screenshot-shrinks-to-fit-and-profile-sections-collapse.md).
+[`tests/profile-sections-collapsed.test.tsx`](../../tests/profile-sections-collapsed.test.tsx)
+holds which three are which.
+
 ## Where the pieces are
 
 The experimental switch is the existing per-reader setting beside the profile; its layers are
