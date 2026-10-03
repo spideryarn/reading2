@@ -155,8 +155,8 @@ function targetOf(
   kind: ThreadKind | undefined,
 ): ChatThread | undefined {
   const named = threads.find((t) => t.id === threadId);
-  /* Every single-thread kind, not only Remember: Tutorial is one per article
-     too (`SINGLE_THREAD_KINDS`, src/types.ts). */
+  /* Every single-thread kind, not only Remember: Tutorial and Explore are one
+     per article too (`SINGLE_THREAD_KINDS`, src/types.ts). */
   if (named || !isSingleThreadKind(kind)) return named;
   return threads.find((t) => t.kind === kind);
 }

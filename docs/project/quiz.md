@@ -251,7 +251,7 @@ not merely the writing of frames, and gets no `done` at all.
 
 ## On screen
 
-`?remember=quiz`, and the Recall | Tutorial | Quiz toggle at the top of the band —
+`?remember=quiz`, and the Recall | Tutorial | Explore | Quiz toggle at the top of the band —
 [url-state.md](url-state.md) has the parameter and its defined collision with `?thread=`.
 
 **The step row is icons, their words in tooltips** (Greg, 2026-09-30, SPIDERYARN-READING2-71:
@@ -259,7 +259,7 @@ not merely the writing of frames, and gets no `done` at all.
 [icons.md § Navigation](icons.md)): Previous, Next and *Show all N questions* are `ChevronLeft`,
 `ChevronRight` and `List`. **Two things keep their words**: *Show a reference answer*, whose
 indefinite article is the point (§ A reference answer is not an answer key); and the
-Recall | Tutorial | Quiz toggle, because on a touch screen a hover card
+Recall | Tutorial | Explore | Quiz toggle, because on a touch screen a hover card
 never opens, and "say what you took from it" versus "the article asks" is not something a glyph
 carries on its own (GPT Sol's plan review; Greg's *"maybe remember mode as well"* left it open). **← / → step the questions** as Previous and Next do —
 [keyboard.md § ← / → in Quiz](keyboard.md), which also has the one rule the keys add.

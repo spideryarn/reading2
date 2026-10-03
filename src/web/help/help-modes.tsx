@@ -458,7 +458,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
 
   remember: {
     keywords:
-      "recall memory tutorial guided reading quiz test yourself questions retention learn check understanding explain back study revise",
+      "recall memory tutorial guided reading explore think ideas own view apply wider world quiz test yourself questions retention learn check understanding explain back study revise",
     whenToUse: (
       <>
         <p>
@@ -486,6 +486,16 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             is saying; now and then it asks what you think.
             Now and then it comes back to an earlier point. It takes your profile and your reason for
             reading into account. Typed or dictated; there is no Live conversation here yet.
+          </li>
+          <li>
+            <strong>Explore</strong>: for working out what you think, more than for remembering what
+            the piece says. It is sent what you have highlighted, bookmarked and written on this
+            article, and a list of your other conversations about it, and starts from one of those.
+            Each short reply does one thing: asks a question that opens your idea up, tries it on a
+            case (your own, when your reason for reading gives one), makes a connection, or looks
+            up what others have said and links it. It says which parts come from the article, the
+            web, your notes and its own view. One Explore conversation per article; typed or
+            dictated, with no Live conversation yet.
           </li>
           <li>
             <strong>Quiz</strong>: up to twenty short questions written from the piece, each answered

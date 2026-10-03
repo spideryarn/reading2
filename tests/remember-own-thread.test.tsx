@@ -100,7 +100,11 @@ const { ConversationBand } = await import("../src/web/modes/conversation/Convers
 const SLUG = "a-piece";
 const AT = "2026-09-20T10:00:00.000Z";
 
-function thread(id: string, kind: "chat" | "remember" | "tutorial", over: Partial<ChatThread> = {}): ChatThread {
+function thread(
+  id: string,
+  kind: "chat" | "remember" | "tutorial" | "explore",
+  over: Partial<ChatThread> = {},
+): ChatThread {
   return {
     id,
     kind,
@@ -118,6 +122,7 @@ function thread(id: string, kind: "chat" | "remember" | "tutorial", over: Partia
 const CHAT = thread("spya-chat01", "chat");
 const REMEMBER = thread("spya-rem001", "remember");
 const TUTORIAL = thread("spya-tut002", "tutorial");
+const EXPLORE = thread("spya-exp002", "explore");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -161,7 +166,7 @@ function param(key: string): string | null {
   return new URLSearchParams(location.search).get(key);
 }
 
-async function mount(kind: "chat" | "remember" | "tutorial", search: string): Promise<void> {
+async function mount(kind: "chat" | "remember" | "tutorial" | "explore", search: string): Promise<void> {
   history.replaceState(null, "", `/a-piece${search}`);
   await act(async () =>
     root.render(
@@ -486,5 +491,96 @@ describe("Tutorial opens its own one conversation", () => {
     expect(fresh?.id).not.toBe(TUTORIAL.id);
     expect(fresh?.messages).toHaveLength(0);
     expect(last()?.threadId).toBe(fresh?.id);
+  });
+});
+
+/* Explore, Remember's fourth sub-mode (plan 261003l): its own single thread,
+   with Recall's lifecycle and none of Live. */
+describe("Explore opens its own one conversation", () => {
+  it("opens the stored Explore thread, never Recall's, Tutorial's or a list", async () => {
+    stored = [CHAT, REMEMBER, TUTORIAL, EXPLORE];
+    await mount("explore", "?mode=remember&remember=explore");
+    expect(last()?.threadId).toBe(EXPLORE.id);
+    expect(shown().map((t) => t.id)).toEqual([EXPLORE.id]);
+    for (const props of renders) expect(drawsList(props)).toBe(false);
+  });
+
+  it("is not listed in Recall, in Tutorial or in Chat", async () => {
+    stored = [CHAT, REMEMBER, TUTORIAL, EXPLORE];
+    await mount("remember", "?mode=remember");
+    expect(shown().map((t) => t.id)).toEqual([REMEMBER.id]);
+    await mount("tutorial", "?mode=remember&remember=tutorial");
+    expect(shown().map((t) => t.id)).toEqual([TUTORIAL.id]);
+    await mount("chat", "?mode=chat");
+    expect(shown().map((t) => t.id)).toEqual([CHAT.id]);
+  });
+
+  it("begins its own conversation when there is none, of its own kind", async () => {
+    stored = [REMEMBER, TUTORIAL];
+    await mount("explore", "?mode=remember&remember=explore");
+    const opened = shown();
+    expect(opened).toHaveLength(1);
+    expect(opened[0]?.kind).toBe("explore");
+    expect(opened[0]?.id).not.toBe(REMEMBER.id);
+    expect(opened[0]?.id).not.toBe(TUTORIAL.id);
+  });
+
+  it("overrules a stale ?thread= that names another conversation", async () => {
+    stored = [REMEMBER, EXPLORE];
+    await mount("explore", `?mode=remember&remember=explore&thread=${REMEMBER.id}`);
+    await settle();
+    expect(last()?.threadId).toBe(EXPLORE.id);
+    expect(param("thread")).toBe(EXPLORE.id);
+  });
+
+  it("offers no Live conversation", async () => {
+    stored = [EXPLORE];
+    await mount("explore", "?mode=remember&remember=explore");
+    expect(last()?.live).toBeUndefined();
+    expect(last()?.onStartLive).toBeUndefined();
+  });
+
+  it("starts Explore over only after the stored thread has been deleted", async () => {
+    stored = [EXPLORE];
+    await mount("explore", "?mode=remember&remember=explore");
+    await act(async () => prop<(id: string) => void>("onDelete")(EXPLORE.id));
+    await settle();
+    expect(calls.filter((c) => c.method === "DELETE")).toHaveLength(1);
+    expect(last()?.threadId ?? null).toBeNull();
+    expect(shown()).toHaveLength(0);
+
+    await act(async () => releaseDelete?.(200));
+    await settle();
+    const fresh = shown()[0];
+    expect(fresh?.kind).toBe("explore");
+    expect(fresh?.id).not.toBe(EXPLORE.id);
+    expect(fresh?.messages).toHaveLength(0);
+    expect(last()?.threadId).toBe(fresh?.id);
+  });
+});
+
+/* **Live is a capability a kind has or has not**, said for every kind
+   (`OFFERS_LIVE`), where it used to be `kind === "tutorial"` — under which
+   Explore would have drawn a Live button and met a 400 on its first spoken
+   turn. GPT Sol's review of plan 261003l, PR-5. */
+describe("which conversations offer Live", () => {
+  it("is exactly the kinds a spoken turn may create or join", async () => {
+    const { OFFERS_LIVE } = await import("../src/web/modes/conversation/ConversationModes.js");
+    const { isSpokenKind } = await import("../src/chat.js");
+    expect(Object.keys(OFFERS_LIVE).sort()).toEqual(["chat", "explore", "remember", "tutorial"]);
+    for (const [kind, offers] of Object.entries(OFFERS_LIVE)) {
+      expect(`${kind}: ${String(offers)}`).toBe(`${kind}: ${String(isSpokenKind(kind))}`);
+    }
+  });
+
+  it("still hands Live to Recall and to Chat", async () => {
+    stored = [REMEMBER];
+    await mount("remember", "?mode=remember");
+    expect(last()?.live).toBeDefined();
+    expect(last()?.onStartLive).toBeTypeOf("function");
+    stored = [CHAT];
+    await mount("chat", `?mode=chat&thread=${CHAT.id}`);
+    expect(last()?.live).toBeDefined();
+    expect(last()?.onStartLive).toBeTypeOf("function");
   });
 });

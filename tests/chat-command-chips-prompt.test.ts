@@ -7,7 +7,7 @@
  * written in the prompt is run through the real parser, and every id chat may
  * propose has to be shown at least once.
  *
- * And the section is chat's alone: Remember and Tutorial are not handed an
+ * And the section is chat's alone: Remember, Tutorial and Explore are not handed an
  * executor (Reader.tsx), and the spoken prompt must never be taught a token it
  * would read aloud (src/live.ts § `LIVE_SYSTEM`).
  */
@@ -22,7 +22,7 @@ import { parseProposalToken } from "../src/web/command-proposal.js";
 const meta = { slug: "a-piece", title: "A piece", url: "https://example.com/a" } as unknown as Meta;
 const blocks = [{ id: "spya-k3m9qt", text: "A paragraph." }] as unknown as Block[];
 
-const system = (kind: "chat" | "remember" | "tutorial" | "candidates"): string => {
+const system = (kind: "chat" | "remember" | "tutorial" | "explore" | "candidates"): string => {
   const messages = buildConverseMessages({ meta, blocks, history: [], question: "q", kind });
   const found = messages.find((m) => m.role === "system");
   if (!found) throw new Error(`no system message for a ${kind} turn`);
@@ -30,7 +30,7 @@ const system = (kind: "chat" | "remember" | "tutorial" | "candidates"): string =
 };
 
 /** The prompt's own rules, without the article that follows them. */
-const rules = (kind: "chat" | "remember" | "tutorial" | "candidates"): string =>
+const rules = (kind: "chat" | "remember" | "tutorial" | "explore" | "candidates"): string =>
   system(kind).split("A paragraph.")[0] ?? "";
 
 const tokensIn = (text: string): string[] => text.match(new RegExp(COMMAND_TOKEN_SOURCE, "g")) ?? [];
@@ -61,7 +61,7 @@ describe("the chat prompt's section on offering an action", () => {
     expect(prompt).toContain("You have not done it");
   });
 
-  it.each(["remember", "tutorial", "candidates"] as const)("is not in the %s prompt", (kind) => {
+  it.each(["remember", "tutorial", "explore", "candidates"] as const)("is not in the %s prompt", (kind) => {
     expect(rules(kind)).not.toContain("[cmd:");
     expect(rules(kind)).not.toContain("OFFERING AN ACTION");
   });

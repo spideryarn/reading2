@@ -2,12 +2,12 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-**Built 2026-08-27, and named *Remember* since 2026-09-01; Recall, Tutorial and Quiz since 2026-10-02** — the rename and its reasoning are in
+**Built 2026-08-27, and named *Remember* since 2026-09-01; Recall, Tutorial and Quiz since 2026-10-02, and Explore since 2026-10-03** — the rename and its reasoning are in
 [260901d](../plans/260901d-rename-review-mode-to-remember-mode-everywhere.md). The reader talks — or
 types — about what they remember of the article, and the model corrects briefly where their account
 and the piece come apart, links the passage, and **nudges them to remember a little more** — filling
 the gap when they are stuck. One voice since 2026-10-02; until then four **stances** (Balanced,
-Respond, Socratic, Signposts) were picked per turn. Where the three sub-modes are going:
+Respond, Socratic, Signposts) were picked per turn. Where the four sub-modes are going:
 [remembering-vision.md](remembering-vision.md).
 
 Greg, 2026-08-27, when it was still called Review:
@@ -279,13 +279,122 @@ for the reader's view two turns running.
 haven't read it yet, or haven't finished."* A first message with nothing of the piece in it and no
 request is started from zero without comment; a short one that names a goal is taken to the goal.
 
-**A separate *Exploration* sub-mode**, for "what do I think?", with the reader's comments,
-highlights and chat threads in view, is proposed and not built:
-[261003i § Stage 3](../plans/261003i-tutorial-leans-to-retention-a-softer-blurb-quote-links-that-show-the-quote.md).
+**What the reader thinks has its own sub-mode since the same day**: § Explore, the fourth
+sub-mode, below, which starts from the reader's comments, highlights and conversations.
+
+## Explore, the fourth sub-mode
+
+**Built 2026-10-03**, stage 2 of
+[261003l](../plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md). Greg asked
+for it in report `spya-mtsf0y`, straight after asking Tutorial to lean towards the author:
+
+> why don't we create a new exploration submode alongside tutorial submode that is more for, like,
+> what do I think? Now, it may be that I can just get that from the chat, but ideally the exploration
+> submode would have access to my comments, my highlights, my chat threads, and so it would know what
+> discussions I've had so far and try and push me to think further about the things that are
+> interesting to me.
+>
+> — Greg, 2026-10-03
+
+And before it was built he said what "push" should not mean:
+
+> With regard to Explore sub-mode, I'm not sure that "pushier" is quite the right way to frame it.
+> It's more that it's about helping me to think, explore & spark new ideas of my own and deepen my
+> intuitions and apply to interesting cases of my own (if relevant, e.g. based on "Why you're reading
+> this"), and a bit less about remembering specifically what's in the article. So it may also be that
+> Explore submode also makes more web searches, to situate the article in terms of the wider world.
+>
+> — Greg, 2026-10-03
+
+The chips read **Recall · Tutorial · Explore · Quiz** (`?remember=explore`). Recall and Tutorial are
+about what the author says; Explore is about what the reader thinks. It is where Tutorial's rationed
+own-view turns go (§ It is about the author first).
+
+**What a turn does.** One move, in under about 150 words, with one question at most and last:
+
+```
+   a question that opens their idea up     what follows, what it rests on, where it stops
+   a case to try it on                     their own, when "Why you're reading this" gives one
+   a connection they have not made         two of their marks, a note and a passage, another saved piece
+   the wider world                         who disagrees, what came after: searched for, and linked
+```
+
+The prompt is `EXPLORE_SYSTEM` in [`src/converse.ts`](../../src/converse.ts). Its rules, each from
+the two quotations above or from [remembering-vision.md](remembering-vision.md):
+
+- **Start from what is theirs, and name it**, so the reader can see it was read. One thing, never a
+  tour of their notes. A highlight shows that they marked a passage, not what they thought of it.
+- **Their own cases come from what they said**: the profile's reason for reading, their notes, this
+  conversation. It never invents a case, a job or a note for them; asked to apply the piece to work
+  it has not been told about, it asks.
+- **It searches the web readily** to place the piece, and links what it used. The reader's own words
+  never go into a search or a web address.
+- **Four origins, kept apart**: the article's (a block id), the web's (a link), the reader's ("your
+  note says…", "in your Recall conversation…") and its own view. The first two and the last are
+  Chat's WHERE EACH CLAIM CAME FROM section, interpolated; the reader is the origin Explore adds.
+- **No verdicts and no praise**, the family rule. Taking the idea up is the compliment.
+- **A reader with nothing marked** is started from their message and their profile, and nothing is
+  said about the absence.
+
+It shares Recall's spoken-input section and the two citing parts that are not about correcting the
+reader (`CITING_IDS`, `QUOTATION_IDS`), so a quotation still carries its block id; a turn does not
+have to quote at all.
+
+### The notes go with every turn
+
+Explore is sent **the reader's notes digest in the final user message of every turn**: their
+comments, highlights and bookmarks on this article and a list of their other conversations about
+it, through the same bounded formatter the `reader_notes` tool uses
+([chat-tools.md § The reader's notes](chat-tools.md#the-readers-notes-the-one-tool-not-every-conversation-gets)).
+So the opening turn starts from what the reader marked without spending a tool round on it.
+
+**Every turn, not only the first** (GPT Sol's plan review, PR-1). The plan first sent it once. Only
+the reader's question is stored and history is rebuilt from the stored rows, so a digest sent with
+the opening turn is gone by the second; a retry or an edit of the opening question would never have
+had it; and after twenty turns the opening message is trimmed anyway. `exploreNotes` in
+[`src/routes.ts`](../../src/routes.ts) builds it on send, retry and edit alike, from the **stored**
+thread's kind and id, never the request's.
+
+- **Below the cache breakpoint**, beside the profile (`notesSection`), so the article message is the
+  same bytes with and without it, and a highlight made mid-conversation moves nothing above the line.
+- **Bounded**: at most `READER_NOTES_CHARS` (8,000) characters, which is what "every turn" costs at
+  the most.
+- **Explore only, held in two places.** The route builds none for any other kind, and
+  `buildConverseMessages` refuses to carry one for any other kind.
+- **A failed load costs the digest, not the turn.** The answer still comes, and the log has counts
+  only: never a note, a quote or a title.
+- **The tool is offered too** (`toolsFor("explore")`), for one earlier conversation in full.
+- **Not stored.** It is derived on each turn; the messages it rides with carry their own times.
+
+Tests: [`explore-kind.test.ts`](../../tests/explore-kind.test.ts) (the prompt, where the digest
+lands, the byte-identical prefix) and
+[`explore-digest-route.test.ts`](../../tests/explore-digest-route.test.ts) (the request that goes
+out on an opening send, a retry, an edit, a second turn and a trimmed history; none for Chat,
+Recall, Tutorial or Candidates).
+
+### How it opens, and what it does not have
+
+The reader speaks first, as in Tutorial. The empty state says in two lines what Explore is for and
+offers three starters as buttons, each sent as the reader's first message word for word: *Start
+from what I've marked and discussed*, *Help me apply this to my own work*, *Where does this sit in
+the wider world?* Recall's invitation refuses buttons because a Recall starter would be the reader's
+account written by us; these are requests, and put no view in the reader's mouth.
+
+**The machinery is Tutorial's**: a fifth `ThreadKind`, `explore`, one per article
+(`chat_threads_one_explore`), the same band, panel, tall dictation box, Start over and long length
+cap, chat's job and model. **No Live**, as Tutorial: which kinds offer it is `OFFERS_LIVE` in
+[`ConversationModes.tsx`](../../src/web/modes/conversation/ConversationModes.tsx), said for every
+kind, where it was a `kind === "tutorial"` check that would have given Explore a button and a 400.
+A spoken turn would also carry no digest. **No command buttons**, as Recall and Tutorial.
+
+**Not measured yet.** Whether Explore's turns are about the reader's thinking more often than
+Chat's with the tool, whether a first turn names something marked, and whether it invents notes for
+a reader with none, are the plan's eval; its write-up will be under
+[`docs/investigations/`](investigations.md).
 
 ## A link after a quotation shows the quoted words
 
-In every answer drawn by `Cited` — Chat, Recall, Tutorial — a block link whose sentence quotes the
+In every answer drawn by `Cited` — Chat, Recall, Tutorial, Explore — a block link whose sentence quotes the
 article paints **those words** when pressed, not the whole paragraph. Greg, `spya-hzpf9b`: *"so
 that the user can see the quote in situ."* His links were all to the right blocks; the blocks were
 200 to 250 words long.
@@ -380,7 +489,8 @@ lives on the **question** row, is a different rule and still crosses both
 
 ```
    ┌────────────────────────────────────────────────────────┐
-   │  system:  SYSTEM  or  REMEMBER_SYSTEM                  │  ← the KIND
+   │  system:  SYSTEM, REMEMBER_SYSTEM, TUTORIAL_SYSTEM     │  ← the KIND
+   │           or EXPLORE_SYSTEM                            │
    ├────────────────────────────────────────────────────────┤
    │  user:    the whole article, with block ids            │
    │           ▒▒▒▒▒ cache_control: ephemeral ▒▒▒▒▒         │  ← THE BREAKPOINT
@@ -388,6 +498,7 @@ lives on the **question** row, is a different rule and still crosses both
    │  assistant: "I've read it. Tell me what you took…"     │
    │  … the last 20 turns …                                 │
    │  user:    position · profile · anchor                  │
+   │           the reader's notes (Explore only)            │
    │           what the reader said                         │
    └────────────────────────────────────────────────────────┘
 ```
@@ -448,8 +559,9 @@ differs is an empty state and a box six rows tall instead of one. Likewise one
 `ConversationBand` in `modes/conversation/ConversationModes.tsx` with one `useChat`, rather than a
 second chat state machine.
 
-**Live works in a Remember conversation too, and is saved as one** — including when it is the
-first thing said in the empty conversation Remember opens with. Spoken rows carry no stance.
+**Live works in a Recall conversation too, and is saved as one** — including when it is the
+first thing said in the empty conversation Remember opens with. Tutorial and Explore have none
+(§ How it opens, and what it does not have). Spoken rows carry no stance.
 [live-conversation.md](live-conversation.md) has the rule and the bug that prompted it.
 
 The composer's microphone is **the existing** `useDictationField` ([dictation.md](dictation.md)) —

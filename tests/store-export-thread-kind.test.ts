@@ -56,9 +56,9 @@ describe("db:export and a conversation's kind", () => {
     await db.delete(chatThreads).where(eq(chatThreads.articleId, ARTICLE_ID));
     const at = new Date("2026-10-02T10:00:00.000Z");
     await db.insert(chatThreads).values(
-      (["chat", "remember", "candidates", "tutorial"] as const).map((kind, i) => ({
+      (["chat", "remember", "candidates", "tutorial", "explore"] as const).map((kind, i) => ({
         articleId: ARTICLE_ID,
-        id: `spya-knd${"abcd"[i]}23`,
+        id: `spya-knd${"abcde"[i]}23`,
         ownerId: owner,
         title: kind,
         kind,
@@ -86,7 +86,7 @@ describe("db:export and a conversation's kind", () => {
     if (out) await rm(out, { recursive: true, force: true });
   });
 
-  it("writes every kind as itself, Tutorial and Candidates included", async () => {
+  it("writes every kind as itself, Tutorial, Explore and Candidates included", async () => {
     const file = JSON.parse(await readFile(path.join(EXPORTED_ARTICLE, "chat.json"), "utf8")) as {
       threads: ChatThread[];
     };
@@ -95,13 +95,14 @@ describe("db:export and a conversation's kind", () => {
       remember: "remember",
       candidates: "candidates",
       tutorial: "tutorial",
+      explore: "explore",
     });
   });
 
   it("restores every exported kind as itself", async () => {
     const db = getDb();
     await db.delete(chatThreads).where(eq(chatThreads.articleId, ARTICLE_ID));
-    expect(await seedChatFromFiles(SLUG)).toEqual({ threads: 4, messages: 0 });
+    expect(await seedChatFromFiles(SLUG)).toEqual({ threads: 5, messages: 0 });
     const restored = await db
       .select({ title: chatThreads.title, kind: chatThreads.kind })
       .from(chatThreads)
@@ -110,9 +111,33 @@ describe("db:export and a conversation's kind", () => {
     expect(restored).toEqual([
       { title: "candidates", kind: "candidates" },
       { title: "chat", kind: "chat" },
+      { title: "explore", kind: "explore" },
       { title: "remember", kind: "remember" },
       { title: "tutorial", kind: "tutorial" },
     ]);
+  });
+
+  /* Explore's index, from the migration that widened the CHECK for it
+     (drizzle/*_explore_thread_kind.sql, plan 261003l). */
+  it("enforces one Explore thread per article", async () => {
+    const db = getDb();
+    const err: unknown = await db
+      .insert(chatThreads)
+      .values({
+        articleId: ARTICLE_ID,
+        id: "spya-kndy23",
+        ownerId: currentOwnerId(),
+        title: "another explore",
+        kind: "explore",
+      })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    const cause = (err as { cause?: unknown } | null)?.cause;
+    expect(String((cause as { message?: string } | undefined)?.message ?? cause ?? err)).toMatch(
+      /chat_threads_one_explore/,
+    );
   });
 
   it("enforces one Tutorial thread per article", async () => {

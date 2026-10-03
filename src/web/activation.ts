@@ -299,7 +299,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   },
   remember: {
     kind: "none",
-    reason: "opens on Recall, which waits on the reader's own words (so does Tutorial); the Quiz chip arms itself",
+    reason: "opens on Recall, which waits on the reader's own words (so do Tutorial and Explore); the Quiz chip arms itself",
   },
 };
 

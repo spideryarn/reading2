@@ -5,7 +5,8 @@
  * Two callers. The `reader_notes` tool in src/chat-tools.ts loads the rows and
  * hands them here; and Explore (stage 2 of
  * docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md)
- * puts `readerNotesDigest` into its final user message without a tool call.
+ * puts `readerNotesDigest` into its final user message without a tool call
+ * (src/routes.ts § `exploreNotes`, src/converse.ts § `notesSection`).
  * That second caller is why this is its own file: it imports types and the
  * fence and nothing else, so it can be reached without chat-tools' fetch and
  * DOM graph, and its arithmetic is tested without a database
@@ -263,6 +264,8 @@ function kindWords(kind: ThreadKind): string {
       return "Recall";
     case "tutorial":
       return "Tutorial";
+    case "explore":
+      return "Explore";
     case "candidates":
       return "Referee candidates";
     default: {

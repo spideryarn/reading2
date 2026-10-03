@@ -1977,6 +1977,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the seeder's copy step, as for `tests/glossary-added-term.test.ts`. Read off the graph, not " +
       "re-witnessed.",
   },
+  "tests/explore-digest-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with Explore, Remember's fourth sub-mode (plan 261003l stage " +
+      "2, 2026-10-03). It seeds one article with `scratchArticleInPg`, writes a comment and " +
+      "finished conversations through the stores, posts chat turns with `fetch` stubbed to keep " +
+      "the request body and fail, and reads what would have been sent — entirely Postgres. Its " +
+      "reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/reader-notes-owner-isolation.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/reset-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2811,6 +2823,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      runs the tool (and Live's tool endpoint) as one owner against the other's
      slug and thread id. No model is called. */
   "tests/reader-notes-owner-isolation.test.ts": "private-postgres",
+  /* Explore's notes digest, 261003l stage 2. Seeds one article, a comment and
+     finished conversations of several kinds, and posts chat turns through the
+     route with `fetch` stubbed to keep the request and fail. No model is called. */
+  "tests/explore-digest-route.test.ts": "private-postgres",
   /* Claims and settles guessed web addresses on a bare article, seeds one more
      to read both payloads, and drives the route to its 409. No model is called. */
   "tests/source-guess-pg.test.ts": "private-postgres",

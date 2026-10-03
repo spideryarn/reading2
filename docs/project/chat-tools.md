@@ -254,7 +254,9 @@ that asked for it, `spya-mtsf0y`:
 >
 > — Greg, 2026-10-03
 
-Explore is that plan's second stage. This is the plumbing it needs, and Chat gets it first.
+Explore is that plan's second stage
+([remember-mode.md § Explore, the fourth sub-mode](remember-mode.md#explore-the-fourth-sub-mode)).
+This is the plumbing it needs, and Chat got it first.
 
 `reader_notes` is one read-only tool with two shapes of call:
 
@@ -266,8 +268,8 @@ reader_notes({ thread: "<id>" })  → one of those conversations
 
 The formatting is [`src/reader-notes.ts`](../../src/reader-notes.ts): pure functions with no store
 in them, so the arithmetic is tested without a database
-([`tests/reader-notes-tool.test.ts`](../../tests/reader-notes-tool.test.ts)) and Explore can put
-`readerNotesDigest` in its prompt without a tool call. The loader in `chat-tools.ts` is two store
+([`tests/reader-notes-tool.test.ts`](../../tests/reader-notes-tool.test.ts)) and Explore puts
+`readerNotesDigest` in its final user message without a tool call. The loader in `chat-tools.ts` is two store
 reads and what to say when one fails.
 
 **What a call returns**, and each line is a decision:
@@ -287,7 +289,7 @@ reads and what to say when one fails.
 - **Every cap is announced and every total is exact**:
   [§ The bug that shaped the literal search](#the-bug-that-shaped-the-literal-search). **And the
   budgets are hard ones.** `article_links` lets its first row out whatever its length; here every
-  field is bounded and nothing goes out over budget, because Explore will send the digest on every
+  field is bounded and nothing goes out over budget, because Explore sends the digest on every
   turn.
 - **Candidates threads and the conversation the turn is in are left out**, of the count as well as
   the rows. Candidates is Referee machinery, not the reader's thinking; the current conversation is
@@ -310,10 +312,12 @@ reads and what to say when one fails.
   whitespace collapsed first, so a note with a newline in it cannot start a line that looks like one
   of our rows.
 
-**Who gets it: typed Chat, and nobody else yet.** It is not in `CHAT_TOOLS`. `toolsFor(kind)`
-returns the shared eight plus this for `chat`, and the shared eight for every other kind; the
-`switch` is exhaustive, so a new kind has to be given an answer. Why each of the others is left out
-(PR-3):
+**Who gets it: typed Chat and Explore.** It is not in `CHAT_TOOLS`. `toolsFor(kind)` returns the
+shared eight plus this for `chat` and `explore`, and the shared eight for every other kind; the
+`switch` is exhaustive, so a new kind has to be given an answer. Chat reaches for it when the reader
+asks what they marked or said. **Explore has the notes and the list already**, sent with every turn
+(remember-mode.md § The notes go with every turn), so there the tool is for reading one earlier
+conversation in full. Why each of the others is left out (PR-3):
 
 - **Live** shares `CHAT_TOOLS`, and its tool endpoint is given a tool's name and an article and no
   thread. It could not leave the current conversation out, and it is callable on its own.
@@ -785,7 +789,7 @@ prompt.
   ([`command-runners.ts`](../../src/web/command-runners.ts)): the reading view's own runners by
   reference — the memoised bookmarker, the gated glossary pair — never a copy made for chat. No
   runner yet (the comments read still out) is a disabled button, not raw brackets.
-- **Who gets them.** Chat and the passage chat dialog, the owner's. Remember, Tutorial and
+- **Who gets them.** Chat and the passage chat dialog, the owner's. Remember, Tutorial, Explore and
   Candidates get no executor and their prompts no section, so a token there is text; Live's spoken
   prompt has none either, and `tests/chat-command-chips-prompt.test.ts` holds that.
 - **A token is never citation text**, valid or not, on both sides: `citableText`

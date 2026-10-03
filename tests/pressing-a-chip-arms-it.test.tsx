@@ -10,7 +10,7 @@
  * ([260906b](../docs/plans/260906b-opening-a-mode-starts-it-generating.md)):
  *
  *  - Referee's four sub-mode chips, two of which arm and two of which must not;
- *  - Remember's Recall | Tutorial | Quiz toggle;
+ *  - Remember's Recall | Tutorial | Explore | Quiz toggle;
  *  - and, as a negative since 2026-09-15, the bar's **Tweets** button, which
  *    armed a token from 2026-09-06 and now must not: the thread writes itself on
  *    arrival (tests/tweets-press-starts-it.test.tsx), and a press that armed as
@@ -194,7 +194,7 @@ describe("Referee's sub-mode chips", () => {
 
 /* ---------------------------------------------------- Remember's toggle -- */
 
-function mountRememberToggle(value: "recall" | "tutorial" | "quiz"): void {
+function mountRememberToggle(value: "recall" | "tutorial" | "explore" | "quiz"): void {
   act(() => {
     root.render(
       createElement(RememberSubModeToggle, { slug: SLUG, value, onChange: () => {} }),
@@ -209,7 +209,7 @@ function toggleButton(label: string): string {
   return `.remember-submode-btn:nth-of-type(${at + 1})`;
 }
 
-describe("Remember's Recall | Tutorial | Quiz toggle", () => {
+describe("Remember's Recall | Tutorial | Explore | Quiz toggle", () => {
   it("arms the quiz when Quiz is pressed", () => {
     mountRememberToggle("recall");
     expect(armed("quiz")).toBe(false);
@@ -228,7 +228,7 @@ describe("Remember's Recall | Tutorial | Quiz toggle", () => {
     expect(armed("quiz")).toBe(true);
   });
 
-  it("arms nothing for Recall or Tutorial, or for merely being in Quiz", () => {
+  it("arms nothing for Recall, Tutorial or Explore, or for merely being in Quiz", () => {
     mountRememberToggle("quiz");
     expect(armed("quiz")).toBe(false);
     mountRememberToggle("recall");
@@ -237,6 +237,16 @@ describe("Remember's Recall | Tutorial | Quiz toggle", () => {
     mountRememberToggle("tutorial");
     click(toggleButton("Tutorial"));
     expect(armed("quiz")).toBe(false);
+    mountRememberToggle("explore");
+    click(toggleButton("Explore"));
+    expect(armed("quiz")).toBe(false);
+  });
+
+  it("draws the four chips in order", () => {
+    mountRememberToggle("explore");
+    const chips = [...host.querySelectorAll<HTMLElement>(".remember-submode-btn")];
+    expect(chips.map((b) => b.textContent?.trim())).toEqual(["Recall", "Tutorial", "Explore", "Quiz"]);
+    expect(chips.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "true", "false"]);
   });
 });
 

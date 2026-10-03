@@ -3593,7 +3593,7 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.anchorBlockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
-    check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates','tutorial')`),
+    check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates','tutorial','explore')`),
     /**
      * **One Remember thread per article.** Remember is its own single
      * conversation, not a list. On `article_id` alone: an article has one owner
@@ -3618,6 +3618,14 @@ export const chatThreads = spideryarn.table(
     uniqueIndex("chat_threads_one_tutorial")
       .on(t.articleId)
       .where(sql`${t.kind} = 'tutorial'`),
+    /**
+     * **One Explore thread per article**, Remember's fourth sub-mode: the same
+     * reason, the same fallback, and again no fold, because no Explore thread
+     * existed before the index. docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md.
+     */
+    uniqueIndex("chat_threads_one_explore")
+      .on(t.articleId)
+      .where(sql`${t.kind} = 'explore'`),
   ],
 );
 

@@ -328,8 +328,8 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   remember: {
     description:
-      "Work the piece into memory through Recall, a short Tutorial or a Quiz — not saved notes or flashcards",
-    how: "Recall waits on you: nothing runs until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. Its replies point back to the passages they use. Tutorial waits on you too, then takes short turns: a little of the piece, then a question for you to answer in your own words.",
+      "Work the piece into memory through Recall, a short Tutorial or a Quiz, or Explore what you think of it — not saved notes or flashcards",
+    how: "Recall waits on you: nothing runs until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. Its replies point back to the passages they use. Tutorial waits on you too, then takes short turns: a little of the piece, then a question for you to answer in your own words. Explore is about your own thinking: it is sent what you have highlighted, noted and discussed on this article, starts from that, and may search the web to show where the piece stands.",
     /* `recall` is this mode's own default sub-mode, so the word lands where the
        reader expects.
 

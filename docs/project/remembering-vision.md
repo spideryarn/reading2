@@ -1,11 +1,11 @@
 # Remembering — where Remember mode is going
 
 Up: [reading-view-overview.md](reading-view-overview.md) · what is built:
-[remember-mode.md](remember-mode.md) (Recall, Tutorial) and [quiz.md](quiz.md) · the research:
+[remember-mode.md](remember-mode.md) (Recall, Tutorial, Explore) and [quiz.md](quiz.md) · the research:
 [261002c](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md)
 
 **A direction, not a spec.** Started 2026-10-02 from Greg's reports `spya-c8x66d` and `spya-j0scgz`.
-What is built is in the two docs above; this is the reasoning that ties the three sub-modes together
+What is built is in the two docs above; this is the reasoning that ties the four sub-modes together
 and the ideas that are not built yet.
 
 ## The point
@@ -31,7 +31,7 @@ the reader does the remembering and the model makes it likely to succeed.
 >
 > — Greg, `spya-j0scgz`, 2026-10-01
 
-## Three sub-modes, three directions of the same exchange
+## Four sub-modes: three directions of the same exchange, and one that faces the other way
 
 ```
             who talks first      what the model does                    the research behind it
@@ -41,6 +41,10 @@ the reader does the remembering and the model makes it likely to succeed.
    Tutorial the reader, then     teaches a little, asks them to say it  one-to-one tutoring, self-
             turn and turn about  back or use it, comes back to earlier  explanation, Bloom's levels,
                                  points                                  spacing within a session
+   Explore  the reader           starts from what they marked and       none commissioned: built
+                                 discussed; one move a turn (a          from Greg's two notes of
+                                 question, a case of theirs, a          2026-10-03
+                                 connection, what the wider world says)
    Quiz     the article          asks questions, marks the answers      the testing effect
 ```
 
@@ -49,15 +53,30 @@ the model brings a little at a time and the reader turns it into their own words
 sort of balance between test-driven learning and kind of conversational teaching one-to-one."* Quiz
 is the article asking, with no conversation.
 
-## What all three share
+**Explore is the one that is about the reader's thinking rather than recall.** The other three ask
+what the piece says and whether the reader has it; Explore asks what the reader makes of it. Greg,
+2026-10-03: *"helping me to think, explore & spark new ideas of my own and deepen my intuitions and
+apply to interesting cases of my own … and a bit less about remembering specifically what's in the
+article."* It sits under Remember because thinking with a piece is the other half of what
+vision.md calls internalising it, and because it grew out of Tutorial: when Tutorial was turned
+towards the author, the own-view turns it gave up needed somewhere to go. It is also the first
+sub-mode that knows what the reader did elsewhere on the article, which the last idea in § Not built
+yet asks of the others.
 
-- **Brief.** Each turn a paragraph or two at most, so it feels like a conversation rather than a
-  lecture. A long explanation is a sign the reader wants Chat, or the passage itself.
-- **Block links, always.** Every reply says where in the piece to look, so the reader can go back to
-  the words rather than take the model's. That is the augment-not-replace rule made concrete.
+## What they share
+
+The first two are about remembering, so they hold for Recall, Tutorial and Quiz. The rest hold for
+Explore too.
+
 - **Hints that make success likely, without being a gimme.** A cue reinstates where in the piece
   something was and what the author was arguing, rather than supplying the answer.
 - **Never make them fail twice.** Two rungs of hinting at most, then tell — plainly, without "wrong".
+- **Brief.** Each turn a paragraph or two at most, so it feels like a conversation rather than a
+  lecture. A long explanation is a sign the reader wants Chat, or the passage itself.
+- **Block links, always, for what the piece says.** Every reply that says what the article says
+  names where to look, so the reader can go back to the words rather than take the model's. That is
+  the augment-not-replace rule made concrete. An Explore turn need not be about the article's
+  words; when it quotes them, the id is there.
 - **Adapted to the reader.** The profile and the reason they gave for reading change the
   conversation completely: *"if I'm an expert in the topic trying to find out one particular issue,
   then the conversation should be very different than if I'm a complete novice."*
@@ -78,4 +97,8 @@ is the article asking, with no conversation.
   multiple choice he is wary of, and finds both *"kind of artificial and annoying"*. Plain
   back-and-forth first.
 - **Recall and Tutorial knowing about each other and about Quiz** — a Tutorial that starts from what
-  the Quiz showed you missed, for instance.
+  the Quiz showed you missed, for instance. Explore is sent the reader's notes and a list of their
+  other conversations on every turn (remember-mode.md § The notes go with every turn); the Quiz's
+  results and reading time are not in that yet.
+- **Live voice for Explore**, for Tutorial's reason, and with one more thing to solve first: a
+  spoken turn carries no notes digest.

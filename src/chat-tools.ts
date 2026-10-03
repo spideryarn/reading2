@@ -507,11 +507,14 @@ const CHAT_TOOLS_WITH_NOTES: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL]
  *
  * Exhaustive, so a fifth `ThreadKind` is a red compile here rather than a
  * conversation that quietly gets — or quietly loses — the reader's notes.
- * Stage 2 of the plan above adds `explore` to the first arm.
+ * Explore gets them because the reader's own thinking is its subject; it is
+ * also sent the digest on every turn (src/routes.ts § `exploreNotes`), so the
+ * tool there is for one conversation in full, or a second look.
  */
 export function toolsFor(kind: ThreadKind): FunctionTool[] {
   switch (kind) {
     case "chat":
+    case "explore":
       return CHAT_TOOLS_WITH_NOTES;
     case "remember":
     case "tutorial":

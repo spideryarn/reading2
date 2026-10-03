@@ -330,13 +330,16 @@ describe("threadIndexRows — the reader's other conversations", () => {
         thread("spya-t00001", { kind: "chat" }),
         thread("spya-t00002", { kind: "remember" }),
         thread("spya-t00003", { kind: "tutorial" }),
+        thread("spya-t00004", { kind: "explore" }),
       ],
       undefined,
     ).rows.join("\n");
     expect(rows).toContain("a chat");
     expect(rows).toContain("Recall");
     expect(rows).toContain("Tutorial");
+    expect(rows).toContain("Explore");
     expect(rows).not.toContain("remember");
+    expect(rows).not.toContain("explore");
   });
 
   it("is newest first, by when the conversation was last added to", () => {
@@ -739,8 +742,8 @@ describe("toolsFor — who is offered the reader's notes (PR-3)", () => {
     expect(READER_NOTES_TOOL.function.name).toBe("reader_notes");
   });
 
-  it("gives it to chat, after the shared eight", () => {
-    expect(names("chat")).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes"]);
+  it.each(["chat", "explore"] as const)("gives it to %s, after the shared eight", (kind) => {
+    expect(names(kind)).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes"]);
   });
 
   it.each(["remember", "tutorial", "candidates"] as const)("gives %s the shared eight only", (kind) => {
@@ -819,6 +822,14 @@ describe("runTool — reader_notes", () => {
       expect(store.calls).toEqual([]);
     },
   );
+
+  /* Explore is the second kind that has it (plan 261003l stage 2): the gate in
+     `runTool` reads the same `toolsFor` the offer does. */
+  it("is a tool for an Explore thread, and leaves that thread out", async () => {
+    const out = await runTool("reader_notes", {}, ctx({ kind: "explore" }));
+    expect(out.detail).not.toBe("no such tool");
+    expect(out.content).toContain("<<<UNTRUSTED");
+  });
 
   it("is not a tool for a caller that says no kind — which is Live's endpoint", async () => {
     const out = await runTool("reader_notes", {}, ctx({ kind: undefined }));

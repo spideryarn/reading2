@@ -195,8 +195,9 @@ right instead, beside a band or without one.
   dozen short-answer questions cached per article, easy ones first and central ones within that, and
   a marker told outright that the article outranks its own reference answer.
 - **[remembering-vision.md](remembering-vision.md)** — where Remember is going: Recall, Tutorial and
-  Quiz as three directions of one exchange, what all three share (brief, block links, hints that make
-  success likely), and the ideas not built yet. Read it before adding a fourth.
+  Quiz as three directions of one exchange, Explore as the one about the reader's own thinking, what
+  they share (brief, block links, hints that make success likely), and the ideas not built yet. Read
+  it before adding a fifth.
 
 ### Hovering and moving around
 

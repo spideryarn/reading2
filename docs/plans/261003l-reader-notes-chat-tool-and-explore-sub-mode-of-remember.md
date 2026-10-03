@@ -249,3 +249,36 @@ CR-10 (P2, left): chat's own store logging carries the current thread id, which 
 stage and outside it. Ownership, the kind gate, exchange filtering and `recentHistory`'s
 equivalence held by inspection. One round; nothing overruled. Sol could not run the two Postgres
 files; they were run here and pass.
+
+### Stage 2, what landed
+
+Explore is built as Stage 2 and the review table say: a fifth `ThreadKind`, `EXPLORE_SYSTEM`, the
+chip, the empty state with three starters, no Live (`OFFERS_LIVE`, a capability per kind), and the
+notes digest in the final user message of **every** Explore turn (`exploreNotes` in the route,
+`notesSection` in the builder). What it is and why is in
+[remember-mode.md § Explore, the fourth sub-mode](../project/remember-mode.md#explore-the-fourth-sub-mode).
+
+Choices the plan left open:
+
+- **The digest is refused for other kinds in the builder as well as the route**, so a caller's
+  mistake cannot put a reader's notes into a Recall, Tutorial or Candidates turn.
+- **A reader with nothing marked is still sent the digest**, which then says there are no notes and
+  no other conversations. The prompt says to say nothing about the absence; sending it stops the
+  model spending a tool round to find out. The eval's third reader is the check.
+- **A one-line reminder beside the question** (`lengthLine`), as Chat and Tutorial have, and on the
+  opening turn it also says where to start. Written before any eval run, on the evidence of the
+  other two.
+- **The shared prompt sections were split, not copied**: `CITING_RULES` is now three constants
+  joined to the same bytes, and Chat's claim-origin section is `CLAIM_ORIGINS`. The four existing
+  prompts were dumped before and after and compared byte for byte.
+- **Chip order**: Recall, Tutorial, Explore, Quiz, the three conversations together.
+
+The migration is `drizzle/20261003182913_explore_thread_kind.sql`, generated and additive. **It is
+not applied to the shared local database yet**: `db:migrate` refused, correctly, because that
+database already holds `20261003170347_store_when_it_happened`, which reached `dev` after this
+worktree branched. After `dev` is merged in, this migration is regenerated on top of it
+([database.md § Two worktrees generated at once](../project/database.md#two-worktrees-generated-at-once)),
+so its name will change. The Postgres tests ran green in the private lane, which builds its
+database from this tree's `drizzle/`.
+
+Not done here: the eval and its investigation, the browser check, and the code review.

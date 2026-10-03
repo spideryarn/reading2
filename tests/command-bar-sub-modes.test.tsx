@@ -198,6 +198,15 @@ describe("which sub-mode rows the bar offers", () => {
     expect(fullName(first as HTMLElement)).toBe("Remember › Tutorial");
   });
 
+  it("offers Explore first when the reader types `explore`", () => {
+    reading();
+    openBar();
+    type("explore");
+    const first = rows()[0];
+    expect(first?.dataset.kind).toBe("submode");
+    expect(fullName(first as HTMLElement)).toBe("Remember › Explore");
+  });
+
   it("offers Illustrated when the reader types `illus`", () => {
     reading();
     openBar();
