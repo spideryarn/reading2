@@ -1,0 +1,6 @@
+/* Print whole blocks by id, for the hand reading. Scratch only. Usage: npx tsx show.ts <slug-prefix> id [id ...] */
+import { ARTICLES, loadArticle } from "./lib.ts";
+const slug = ARTICLES.find((s) => s.startsWith(process.argv[2]!))!;
+const { blocks } = await loadArticle(slug);
+for (const id of process.argv.slice(3)) console.log(`\n${id}: ${blocks.find((b) => b.id === id || b.id === `spya-${id}`)?.text}`);
+process.exit(0);

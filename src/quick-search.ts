@@ -7,8 +7,8 @@
  *
  * Plan: docs/plans/261002e-quick-search-v1.md. Every number in this file — the
  * request shape, the floor, the chunk budget — was measured in
- * docs/investigations/261002o-quick-search-spike.md, and that is where to go
- * before changing one.
+ * docs/investigations/261002o-quick-search-spike.md, with the wording and floor
+ * rechecked in investigation 261003c. Read those before changing one.
  *
  * ## What it asks
  *
@@ -16,15 +16,21 @@
  * text}}` and one `noul` (yes/no, answered as a probability) question per
  * block, keyed by the block id. The state is billed **once**, not per question,
  * which is what makes one request over the whole article cost about $0.0004.
- * The plain wording; a "meaning, not words" sentence was measured and bought
- * nothing for 45% more input.
+ * The question asks whether the passage *mentions or discusses* what the
+ * reader wants. Until 2026-10-03 it asked whether the passage *matches*, and a
+ * one-word topic the article only mentions in passing scored under the floor:
+ * 109 of 141 literal-target opportunities missed on 18 short-topic queries
+ * (47 targets, three runs each), against 17 with
+ * this wording (docs/investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md).
+ * A "meaning, not words" sentence was measured before that and bought nothing
+ * for 45% more input.
  *
  * ## What it gives back, and what it cannot
  *
  * Blocks scoring at least `QUICK_FLOOR`, best first, capped at `MAX_HITS`, each
  * as a `SearchHit` whose `quote` is the whole block — Jev scores blocks, so
  * there is no sentence inside one to point at — with `confidence` its
- * probability × 100 and no `reasoning`. That is what *flesh out* (a meaning
+ * probability × 100 and no `reasoning`. That is what *thorough* (a meaning
  * search with the same words) is for. A quick 88 and a meaning 88 are
  * different numbers; the run's `kind` says which one this is.
  *
@@ -62,10 +68,19 @@ import type { Block, Meta, SearchHit } from "./types.js";
  * and a cut at 0.5 let in 34 blocks for one query and 255 of 542 for another,
  * because the whole article was about it. The plan said 0.8, measured on the
  * arm with the "meaning, not words" sentence; re-measured on the plain wording
- * this file actually sends, 0.8 kept only about 52% of the meaning search's
- * hits against 73% at 0.7, and the passages between 0.7 and 0.8 were nearly
+ * this file sent then, 0.8 kept only about 52% of the meaning search's hits
+ * against 73% at 0.7 before the cap, and the passages between 0.7 and 0.8 were nearly
  * all genuine. docs/investigations/261002o-quick-search-spike.md § threshold,
  * and evals/results/quick-search-spike-2026-10-02/floor-summary.json.
+ *
+ * **Re-measured on 2026-10-03 with the "mention or discuss" wording, and kept.**
+ * On the same 16 queries 0.7 keeps 0.78 of the meaning search's hits (0.82 at
+ * 0.65, 0.76 at 0.75, 0.65 at 0.8). On 18 short-topic queries floors of 0.6
+ * and 0.65 find no more literal targets (17 of 141 opportunities missed at
+ * 0.6 and at 0.7; 29 at 0.75) and let in more wrong blocks. At 0.5, 14 are
+ * missed, with more junk and unjudged hits. The six absent-topic controls top
+ * out at 0.04–0.11, so the floor returns nothing for them; a floor relative
+ * to the top score would not. Investigation 261003c.
  */
 export const QUICK_FLOOR = 0.7;
 
@@ -73,7 +88,7 @@ export const QUICK_FLOOR = 0.7;
  * How long the whole search may take, every chunk included.
  *
  * The spike's p90 was 0.5 s on a typical article and 0.9 s on a 542-block one,
- * so this is forty times the slow case — long enough never to fire on a
+ * so this is about twenty times the slow case — long enough never to fire on a
  * healthy endpoint, short enough that a hung one is reported rather than left
  * spinning on a feature whose whole promise is speed.
  */
@@ -167,11 +182,15 @@ export function chunkBlocks(blocks: Block[], budget: number = CHUNK_TOKEN_BUDGET
   return chunks;
 }
 
-/** The one question, worded as the spike measured it. */
+/**
+ * The one question. On the eval's full-article "Buddhism" runs, the target
+ * scored 0.70–0.75 with *match* and 0.96 with *mention or discuss*
+ * (investigation 261003c, which is where to go before changing a word of it).
+ */
 function questionFor(id: string): DecisionQuestion {
   return {
     type: "noul",
-    instructions: `Does passage ${id} match what the reader is looking for (query)?`,
+    instructions: `Does passage ${id} mention or discuss what the reader is looking for (query)?`,
   };
 }
 

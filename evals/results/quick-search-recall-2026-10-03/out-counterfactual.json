@@ -1,0 +1,482 @@
+[
+ {
+  "wording": "plain",
+  "q": "Buddhism",
+  "context": "whole article (production)",
+  "blocks": 58,
+  "target": [
+   0.73,
+   0.71,
+   0.75
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "Buddhism",
+  "context": "first half",
+  "blocks": 29,
+  "target": [
+   0.72,
+   0.73,
+   0.73
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "Buddhism",
+  "context": "second half + target (target moved to a chunk without its neighbours)",
+  "blocks": 30,
+  "target": [
+   0.62,
+   0.61,
+   0.59
+  ],
+  "rank": [
+   1,
+   2,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "Buddhism",
+  "context": "target + 3 neighbours each side",
+  "blocks": 7,
+  "target": [
+   0.73,
+   0.73,
+   0.72
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "Buddhism",
+  "context": "target alone",
+  "blocks": 1,
+  "target": [
+   0.54,
+   0.55,
+   0.58
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "Buddhist",
+  "context": "whole article (production)",
+  "blocks": 58,
+  "target": [
+   0.79,
+   0.8,
+   0.81
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "Buddhist",
+  "context": "first half",
+  "blocks": 29,
+  "target": [
+   0.79,
+   0.79,
+   0.79
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "Buddhist",
+  "context": "second half + target (target moved to a chunk without its neighbours)",
+  "blocks": 30,
+  "target": [
+   0.71,
+   0.7,
+   0.72
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "Buddhist",
+  "context": "target + 3 neighbours each side",
+  "blocks": 7,
+  "target": [
+   0.78,
+   0.78,
+   0.78
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "Buddhist",
+  "context": "target alone",
+  "blocks": 1,
+  "target": [
+   0.68,
+   0.65,
+   0.68
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "no self",
+  "context": "whole article (production)",
+  "blocks": 58,
+  "target": [
+   0.87,
+   0.87,
+   0.87
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "no self",
+  "context": "first half",
+  "blocks": 29,
+  "target": [
+   0.88,
+   0.88,
+   0.87
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "no self",
+  "context": "second half + target (target moved to a chunk without its neighbours)",
+  "blocks": 30,
+  "target": [
+   0.84,
+   0.84,
+   0.84
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "no self",
+  "context": "target + 3 neighbours each side",
+  "blocks": 7,
+  "target": [
+   0.89,
+   0.89,
+   0.89
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "plain",
+  "q": "no self",
+  "context": "target alone",
+  "blocks": 1,
+  "target": [
+   0.86,
+   0.85,
+   0.85
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "Buddhism",
+  "context": "whole article (production)",
+  "blocks": 58,
+  "target": [
+   0.96,
+   0.96,
+   0.96
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "Buddhism",
+  "context": "first half",
+  "blocks": 29,
+  "target": [
+   0.96,
+   0.96,
+   0.96
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "Buddhism",
+  "context": "second half + target (target moved to a chunk without its neighbours)",
+  "blocks": 30,
+  "target": [
+   0.93,
+   0.93,
+   0.94
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "Buddhism",
+  "context": "target + 3 neighbours each side",
+  "blocks": 7,
+  "target": [
+   0.95,
+   0.95,
+   0.96
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "Buddhism",
+  "context": "target alone",
+  "blocks": 1,
+  "target": [
+   0.89,
+   0.9,
+   0.88
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "Buddhist",
+  "context": "whole article (production)",
+  "blocks": 58,
+  "target": [
+   0.97,
+   0.97,
+   0.97
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "Buddhist",
+  "context": "first half",
+  "blocks": 29,
+  "target": [
+   0.97,
+   0.97,
+   0.97
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "Buddhist",
+  "context": "second half + target (target moved to a chunk without its neighbours)",
+  "blocks": 30,
+  "target": [
+   0.95,
+   0.95,
+   0.95
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "Buddhist",
+  "context": "target + 3 neighbours each side",
+  "blocks": 7,
+  "target": [
+   0.97,
+   0.97,
+   0.96
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "Buddhist",
+  "context": "target alone",
+  "blocks": 1,
+  "target": [
+   0.92,
+   0.91,
+   0.91
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "no self",
+  "context": "whole article (production)",
+  "blocks": 58,
+  "target": [
+   0.96,
+   0.96,
+   0.96
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "no self",
+  "context": "first half",
+  "blocks": 29,
+  "target": [
+   0.96,
+   0.97,
+   0.96
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "no self",
+  "context": "second half + target (target moved to a chunk without its neighbours)",
+  "blocks": 30,
+  "target": [
+   0.96,
+   0.96,
+   0.96
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "no self",
+  "context": "target + 3 neighbours each side",
+  "blocks": 7,
+  "target": [
+   0.96,
+   0.96,
+   0.97
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ },
+ {
+  "wording": "mention",
+  "q": "no self",
+  "context": "target alone",
+  "blocks": 1,
+  "target": [
+   0.96,
+   0.96,
+   0.96
+  ],
+  "rank": [
+   1,
+   1,
+   1
+  ]
+ }
+]

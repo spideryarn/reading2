@@ -1,0 +1,124 @@
+/* Shared helpers for the quick-search recall eval (261003c). Adapted from the
+   261002o spike's runner-lib. Plain fetch to OpenRouter; spend is read from each
+   response's usage.cost and appended to spend.jsonl. */
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
+
+export const WT = "/home/greg/code/spideryarn2/.claude/worktrees/fb-search-quick-2610";
+export const DIR = `${WT}/data/qeval`;
+const env = readFileSync(`${WT}/.env.local`, "utf8");
+export const KEY = env.match(/^OPENROUTER_API_KEY=(.*)$/m)![1]!.replace(/^"|"$/g, "").trim();
+
+const { quickBlocks, chunkBlocks } = await import(`${WT}/src/quick-search.ts`);
+export { quickBlocks, chunkBlocks };
+
+export const JEV = "typesafe/jev-1.13";
+
+export function spent(arm: string, cost: number | null | undefined) {
+  appendFileSync(`${DIR}/spend.jsonl`, JSON.stringify({ t: new Date().toISOString(), arm, cost: cost ?? null }) + "\n");
+}
+export function totalSpend(): number {
+  if (!existsSync(`${DIR}/spend.jsonl`)) return 0;
+  return readFileSync(`${DIR}/spend.jsonl`, "utf8").trim().split("\n").filter(Boolean)
+    .reduce((s, l) => s + (JSON.parse(l).cost ?? 0), 0);
+}
+
+export interface DecideResult { status: number; ms: number; body: any; inputTokens: number | null; cost: number | null; error?: string }
+
+export async function decide(model: string, state: unknown, questions: Record<string, unknown>, timeoutMs = 60_000): Promise<DecideResult> {
+  const t0 = performance.now();
+  try {
+    const r = await fetch("https://openrouter.ai/api/alpha/decisions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, state, questions }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const text = await r.text();
+    const ms = Math.round(performance.now() - t0);
+    let body: any;
+    try { body = JSON.parse(text); } catch { body = { unparsed: text.slice(0, 2000) }; }
+    spent("jev", body?.usage?.cost);
+    return { status: r.status, ms, body, inputTokens: body?.usage?.input_tokens ?? null, cost: body?.usage?.cost ?? null, error: r.ok ? undefined : text.slice(0, 1500) };
+  } catch (e) {
+    return { status: 0, ms: Math.round(performance.now() - t0), body: null, inputTokens: null, cost: null, error: String(e) };
+  }
+}
+
+export interface B { id: string; text: string; kind: string; gistable: boolean; [k: string]: unknown }
+
+/** The question wordings under test. `plain` is production's, character for character. */
+export const WORDINGS: Record<string, (id: string) => string> = {
+  plain: (id) => `Does passage ${id} match what the reader is looking for (query)?`,
+  mention: (id) => `Does passage ${id} mention or discuss what the reader is looking for (query)?`,
+  brief: (id) => `Is passage ${id} about, or does it mention (even briefly), what the reader is looking for (query)?`,
+  want: (id) => `Would a reader searching the article for the query want to be shown passage ${id}? Yes if it is about the query or mentions it, even in passing.`,
+  relates: (id) => `Does passage ${id} contain anything related to the query?`,
+};
+
+export interface JevRun { ms: number; cost: number; inputTokens: number; chunks: number; calls: any[]; scores: Record<string, number> }
+
+async function scoreChunk(wording: string, q: string, bs: B[], calls: any[], depth = 0): Promise<Record<string, number>> {
+  const w = WORDINGS[wording]!;
+  let r = await decide(JEV, { query: q, passages: Object.fromEntries(bs.map((b) => [b.id, b.text])) },
+    Object.fromEntries(bs.map((b) => [b.id, { type: "noul", instructions: w(b.id) }])));
+  for (let i = 0; i < 3 && (r.status === 0 || r.status >= 500 || r.status === 429); i++) {
+    await new Promise((res) => setTimeout(res, 1500 * (i + 1)));
+    r = await decide(JEV, { query: q, passages: Object.fromEntries(bs.map((b) => [b.id, b.text])) },
+      Object.fromEntries(bs.map((b) => [b.id, { type: "noul", instructions: w(b.id) }])));
+  }
+  calls.push({ n: bs.length, status: r.status, ms: r.ms, inputTokens: r.inputTokens, cost: r.cost, error: r.error?.slice(0, 200), model: r.body?.model });
+  if (r.status === 400 && /max_tokens_exceeded/.test(r.error ?? "") && bs.length > 1 && depth < 3) {
+    const h = Math.ceil(bs.length / 2);
+    const [a, b] = await Promise.all([scoreChunk(wording, q, bs.slice(0, h), calls, depth + 1), scoreChunk(wording, q, bs.slice(h), calls, depth + 1)]);
+    return { ...a, ...b };
+  }
+  if (r.status !== 200) throw new Error(`${r.status} ${r.error}`);
+  return Object.fromEntries(Object.entries(r.body.answers).map(([k, v]: any) => [k, v.noul]));
+}
+
+/** One quick search exactly as production chunks it: quickBlocks → chunkBlocks → parallel requests. */
+export async function jevSearch(wording: string, q: string, allBlocks: B[]): Promise<JevRun> {
+  const asked: B[] = quickBlocks(allBlocks);
+  const chunks: B[][] = chunkBlocks(asked);
+  const calls: any[] = [];
+  const t0 = performance.now();
+  const parts = await Promise.all(chunks.map((c) => scoreChunk(wording, q, c, calls)));
+  const ms = Math.round(performance.now() - t0);
+  return { ms, chunks: chunks.length, calls, scores: Object.assign({}, ...parts), cost: calls.reduce((s, c) => s + (c.cost ?? 0), 0), inputTokens: calls.reduce((s, c) => s + (c.inputTokens ?? 0), 0) };
+}
+
+export function fixture(slug: string): { meta: any; blocks: B[] } {
+  const b = JSON.parse(readFileSync(`${WT}/tests/fixtures/data-root/data/${slug}/blocks.json`, "utf8"));
+  const meta = JSON.parse(readFileSync(`${WT}/tests/fixtures/data-root/data/${slug}/meta.json`, "utf8"));
+  return { meta, blocks: Array.isArray(b) ? b : b.blocks };
+}
+
+export const ENTROPY = "entropy-26-00481-with-cover-from-taylor-beck-spya-naz564";
+export const REPL = "replication-crisis-spya-hrjamq";
+export const ARTICLES = ["constitution", "noema-mythology-of-conscious-ai", "openai-huggingface", REPL, ENTROPY];
+
+export async function loadArticle(slug: string): Promise<{ meta: any; blocks: B[] }> {
+  if (slug === ENTROPY) {
+    const d = JSON.parse(readFileSync(`${DIR}/entropy.json`, "utf8"));
+    return { meta: { title: d.meta.title, byline: d.meta.byline, slug }, blocks: d.blocks.map((b: any) => ({ ...b, treatment: b.treatment ?? undefined, role: b.role ?? undefined })) };
+  }
+  if (slug === REPL) {
+    const p = `${DIR}/replication.json`;
+    if (existsSync(p)) return JSON.parse(readFileSync(p, "utf8"));
+    throw new Error("replication.json not saved yet — run load-repl.ts");
+  }
+  return fixture(slug);
+}
+
+export const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) / 2)]! : NaN; };
+export const pct = (xs: number[], p: number) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.ceil(p * s.length) - 1)]! : NaN; };
+export const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : NaN);
+
+export async function pool<T, R>(items: T[], n: number, fn: (t: T, i: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (next < items.length) { const i = next++; out[i] = await fn(items[i]!, i); }
+  }));
+  return out;
+}

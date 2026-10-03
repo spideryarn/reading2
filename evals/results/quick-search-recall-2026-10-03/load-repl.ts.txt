@@ -1,0 +1,18 @@
+/* Save the long article (local Postgres, a public Wikipedia page) so later scripts need no database. */
+import { writeFileSync } from "node:fs";
+import { DIR, REPL, WT, jevSearch, ENTROPY, loadArticle } from "./lib.ts";
+if (process.argv[2] === "repl") {
+  const { loadArticle: load } = await import(`${WT}/src/store/index.ts`);
+  const { runAsOwner } = await import(`${WT}/src/owner.ts`);
+  const a: any = await runAsOwner("397036d5-7104-4165-859e-7698bf6660b5" as any, () => load(REPL));
+  writeFileSync(`${DIR}/replication.json`, JSON.stringify({ meta: a.meta, blocks: a.blocks }));
+  console.log("saved", a.blocks.length, "blocks", a.meta?.title);
+} else {
+  // 20 repeats of the exact production request for "Buddhism": how often is the target under 0.7?
+  const { blocks } = await loadArticle(ENTROPY);
+  const xs: number[] = [];
+  for (let i = 0; i < 20; i++) xs.push((await jevSearch("plain", "Buddhism", blocks)).scores["spya-p2wrn0"]!);
+  console.log(xs.map((x) => x.toFixed(2)).join(" "), "under 0.7:", xs.filter((x) => x < 0.7).length, "/ 20");
+  writeFileSync(`${DIR}/out-repro-20.json`, JSON.stringify(xs));
+}
+process.exit(0);

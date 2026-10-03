@@ -1522,7 +1522,7 @@ describe("the decisions wire", () => {
     questions: {
       "spya-aaaaa1": {
         type: "noul" as const,
-        instructions: "Does passage spya-aaaaa1 match what the reader is looking for (query)?",
+        instructions: "Does passage spya-aaaaa1 mention or discuss what the reader is looking for (query)?",
       },
     },
   };

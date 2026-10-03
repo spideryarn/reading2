@@ -1,0 +1,8 @@
+const r = await fetch("https://openrouter.ai/api/v1/models");
+const j = await r.json();
+const re = new RegExp(process.argv[2] ?? "luna|flash|haiku|deepseek|mercury|nano|mini|groq|cerebras|jev|lite", "i");
+for (const m of j.data.filter((m) => re.test(m.id)).sort((a, b) => (b.created ?? 0) - (a.created ?? 0)).slice(0, 60)) {
+  console.log(
+    `${m.id.padEnd(48)} ctx ${String(m.context_length).padStart(8)} in $${(Number(m.pricing?.prompt) * 1e6).toFixed(3)}/M out $${(Number(m.pricing?.completion) * 1e6).toFixed(3)}/M  ${new Date((m.created ?? 0) * 1000).toISOString().slice(0, 10)}`,
+  );
+}

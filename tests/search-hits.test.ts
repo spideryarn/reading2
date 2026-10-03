@@ -867,6 +867,46 @@ describe("hitMarks", () => {
     expect(marks.get("spya-w4x8bn")![0]!.open).toBeUndefined();
   });
 
+  /**
+   * **A quick hit is bare: the bar and the spine say it, the words wear
+   * nothing** (plan 261003i B4, Greg's `spya-m59qg0`). From the run's kind and
+   * nothing else — `whole` means quote placement *failed*, and a meaning hit
+   * that fell back to its paragraph keeps its wash.
+   */
+  it("makes a quick hit's mark bare, and leaves the bar and the spine what they were", () => {
+    const text = "He rejects the idea that mind is software running on wet hardware.";
+    const quick = [{
+      id: "spya-run2aa", slot: 3, kind: "quick" as const,
+      hits: [{ blockId: "spya-k3m9qt", quote: text, confidence: 91, reasoning: "" }],
+    }];
+    const hits = resolveHits(BLOCKS, quick);
+    expect(hits[0]!.bare).toBe(true);
+    const [mark] = hitMarks(hits, null, "rg").get("spya-k3m9qt")!;
+    expect(mark!.bare).toBe(true);
+    // The identity the scroll and the flash look the wrapper up by.
+    expect(mark!.id).toBe(hits[0]!.key);
+    // The paragraph bar and the spine are computed from `Found`, and still have it.
+    expect(blockHues(hits).get("spya-k3m9qt")).toEqual([3]);
+    expect(blockStrength(hits).get("spya-k3m9qt")).toBeCloseTo(0.91);
+  });
+
+  it("leaves a meaning hit washed, including one whose quote fell back to the whole paragraph", () => {
+    const fell = resolveHits(
+      BLOCKS,
+      one([{ blockId: "spya-k3m9qt", quote: "words that are not there", confidence: 80, reasoning: "" }]),
+    );
+    expect(fell[0]!.whole).toBe(true);
+    expect(fell[0]!.bare).toBeUndefined();
+    const [mark] = hitMarks(fell, null, "rg").get("spya-k3m9qt")!;
+    expect(mark!.bare).toBeUndefined();
+    expect(mark!.strength).toBeGreaterThan(0.5);
+  });
+
+  it("leaves a words match washed", () => {
+    expect(found[0]!.bare).toBeUndefined();
+    expect(hitMarks(found, null, "rg").get("spya-k3m9qt")![0]!.bare).toBeUndefined();
+  });
+
   it("is empty when nothing was found, so the prose is untouched", () => {
     expect(hitMarks([], null, "rg").size).toBe(0);
   });

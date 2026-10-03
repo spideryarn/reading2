@@ -1,0 +1,17 @@
+import { readFileSync } from "node:fs";
+const d = JSON.parse(readFileSync(new URL("./entropy.json", import.meta.url), "utf8"));
+console.log(d.meta);
+const T = Object.fromEntries(d.blocks.map((b) => [b.id, b]));
+for (const s of d.searchRuns) {
+  console.log(`\nRUN ${s.id} kind=${s.kind} status=${s.status} model=${s.model} crit=${JSON.stringify(s.criterion)} err=${s.error} hits=${s.hits.length}`);
+  for (const h of s.hits) console.log(`   ${h.blockId} c=${h.confidence} ord=${T[h.blockId]?.ordinal} :: ${(h.quote ?? "").slice(0, 90).replace(/\n/g, " ")}`);
+}
+console.log("\nBLOCKS");
+const kinds = {};
+for (const b of d.blocks) kinds[`${b.kind}/${b.gistable}/${b.treatment}`] = (kinds[`${b.kind}/${b.gistable}/${b.treatment}`] ?? 0) + 1;
+console.log(kinds, "chars", d.blocks.reduce((s, b) => s + b.text.length, 0));
+for (const b of d.blocks) if (/buddh/i.test(b.text)) {
+  const i = b.text.search(/buddh/i);
+  console.log(`BUDDH ${b.id} ord=${b.ordinal} kind=${b.kind} gist=${b.gistable} treat=${b.treatment} len=${b.text.length} :: …${b.text.slice(Math.max(0, i - 200), i + 250).replace(/\n/g, " ")}…`);
+}
+if (process.argv[2] === "all") for (const b of d.blocks) console.log(`${b.ordinal} ${b.id} ${b.kind} ${b.gistable ? "" : "NG"} ${b.treatment ?? ""} [${b.text.length}] ${b.text.slice(0, 160).replace(/\n/g, " ")}`);
