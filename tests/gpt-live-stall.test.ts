@@ -1,0 +1,233 @@
+/**
+ * **Is GPT-Live owing the reader a reply** — the pure rule behind the notice.
+ * src/web/live/gpt-live/stall.ts.
+ *
+ * As in tests/live-stall.test.ts, the cases that must *not* fire matter as
+ * much as the ones that must: a notice on a working conversation teaches the
+ * reader to ignore it. The orderings are from the spike (the run where the
+ * backend answered and the voice said nothing) and from GPT Sol's plan review
+ * (F7: filler, then the final, then silence).
+ */
+import { describe, expect, it } from "vitest";
+
+import {
+  GPT_LIVE_NO_REPLY_MS,
+  gptLiveStallOf,
+  replyOwedSince,
+  sessionZero,
+  type GptLiveStallFacts,
+} from "../src/web/live/gpt-live/stall.js";
+
+const T = 1_000_000;
+
+function facts(over: Partial<GptLiveStallFacts> = {}): GptLiveStallFacts {
+  return {
+    now: T,
+    readerLastAt: null,
+    companionLastBeganAt: null,
+    delegations: [],
+    delegationEndedAt: null,
+    ...over,
+  };
+}
+
+describe("an ordinary conversation is not a stall", () => {
+  it("says nothing before anybody has spoken", () => {
+    expect(gptLiveStallOf(facts())).toBeNull();
+  });
+
+  it("says nothing when the companion answered the reader, however long ago", () => {
+    expect(
+      gptLiveStallOf(facts({ readerLastAt: T - 600_000, companionLastBeganAt: T - 590_000 })),
+    ).toBeNull();
+  });
+
+  it("says nothing through a long answer the reader is listening to", () => {
+    expect(gptLiveStallOf(facts({ readerLastAt: T - 90_000, companionLastBeganAt: T - 200 }))).toBeNull();
+  });
+
+  it("gives a reply its full window", () => {
+    expect(gptLiveStallOf(facts({ readerLastAt: T - GPT_LIVE_NO_REPLY_MS + 1 }))).toBeNull();
+    expect(
+      gptLiveStallOf(
+        facts({
+          delegations: [{ id: "d1", finalAt: T - GPT_LIVE_NO_REPLY_MS + 1 }],
+          delegationEndedAt: T - GPT_LIVE_NO_REPLY_MS + 1,
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("does not call a slow tool a missing reply", () => {
+    expect(
+      gptLiveStallOf(
+        facts({
+          readerLastAt: T - 5 * GPT_LIVE_NO_REPLY_MS,
+          /* Filler, then a long search. */
+          companionLastBeganAt: T - 5 * GPT_LIVE_NO_REPLY_MS + 1_000,
+          delegations: [{ id: "d1", finalAt: null }],
+        }),
+      ),
+    ).toBeNull();
+    /* And with no filler at all: the running delegation suspends the reader's clock. */
+    expect(
+      gptLiveStallOf(
+        facts({ readerLastAt: T - 5 * GPT_LIVE_NO_REPLY_MS, delegations: [{ id: "d1", finalAt: null }] }),
+      ),
+    ).toBeNull();
+  });
+
+  it("says nothing once the answer has begun after the final", () => {
+    expect(
+      gptLiveStallOf(
+        facts({
+          readerLastAt: T - 60_000,
+          delegations: [{ id: "d1", finalAt: T - 50_000 }],
+          delegationEndedAt: T - 50_000,
+          companionLastBeganAt: T - 49_000,
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("a reply that is owed", () => {
+  it("the reader spoke, there is no delegation, and nothing came back", () => {
+    expect(gptLiveStallOf(facts({ readerLastAt: T - GPT_LIVE_NO_REPLY_MS }))).toBe("no-reply");
+    /* The companion's earlier speech does not count. */
+    expect(
+      gptLiveStallOf(facts({ readerLastAt: T - GPT_LIVE_NO_REPLY_MS, companionLastBeganAt: T - 60_000 })),
+    ).toBe("no-reply");
+  });
+
+  it("the backend finished and the voice never said anything (the spike's eleventh run)", () => {
+    const final = T - GPT_LIVE_NO_REPLY_MS;
+    const f = facts({ delegations: [{ id: "d1", finalAt: final }], delegationEndedAt: final });
+    expect(replyOwedSince(f)).toBe(final);
+    expect(gptLiveStallOf(f)).toBe("no-reply");
+  });
+
+  it("filler before the final pays nothing (F7)", () => {
+    const final = T - GPT_LIVE_NO_REPLY_MS;
+    expect(
+      gptLiveStallOf(
+        facts({
+          readerLastAt: final - 9_000,
+          /* "One moment", after the tool and before the backend's final answer. */
+          companionLastBeganAt: final - 500,
+          delegations: [{ id: "d1", finalAt: final }],
+          delegationEndedAt: final,
+        }),
+      ),
+    ).toBe("no-reply");
+  });
+
+  it("a delegation with no tools owes its answer like any other", () => {
+    /* Created and completed in one response: the hook only ever lists it with its final. */
+    const final = T - GPT_LIVE_NO_REPLY_MS;
+    expect(
+      gptLiveStallOf(
+        facts({
+          readerLastAt: final - 2_000,
+          delegations: [{ id: "d1", finalAt: final }],
+          delegationEndedAt: final,
+        }),
+      ),
+    ).toBe("no-reply");
+  });
+
+  it("counts from the final, not from the reader's words, after a long tool", () => {
+    const final = T - 5_000;
+    const f = facts({
+      readerLastAt: T - 60_000,
+      delegations: [{ id: "d1", finalAt: final }],
+      delegationEndedAt: final,
+    });
+    expect(replyOwedSince(f)).toBe(final);
+    expect(gptLiveStallOf(f)).toBeNull();
+    expect(gptLiveStallOf({ ...f, now: final + GPT_LIVE_NO_REPLY_MS })).toBe("no-reply");
+  });
+
+  it("a delegation that failed leaves the reader owed a reply from the failure", () => {
+    const failedAt = T - 5_000;
+    /* The hook has removed the failed delegation and kept only when it ended. */
+    const f = facts({
+      readerLastAt: T - 60_000,
+      companionLastBeganAt: T - 58_000,
+      delegationEndedAt: failedAt,
+    });
+    expect(replyOwedSince(f)).toBe(failedAt);
+    expect(gptLiveStallOf({ ...f, now: failedAt + GPT_LIVE_NO_REPLY_MS })).toBe("no-reply");
+    expect(gptLiveStallOf({ ...f, companionLastBeganAt: failedAt + 1_000, now: failedAt + 60_000 })).toBeNull();
+  });
+});
+
+describe("two delegations at once", () => {
+  it("speech for the first does not clear the second, which finished afterwards", () => {
+    const f = facts({
+      readerLastAt: T - 40_000,
+      delegations: [
+        { id: "d1", finalAt: T - 30_000 },
+        { id: "d2", finalAt: T - 20_000 },
+      ],
+      delegationEndedAt: T - 20_000,
+      /* The first delegation's answer, spoken before the second finished. */
+      companionLastBeganAt: T - 28_000,
+    });
+    expect(replyOwedSince(f)).toBe(T - 20_000);
+    expect(gptLiveStallOf(f)).toBe("no-reply");
+    expect(gptLiveStallOf({ ...f, now: T - 1 })).toBeNull();
+  });
+
+  it("is owed nothing by the one still running, and is still owed by the one that finished", () => {
+    const f = facts({
+      readerLastAt: T - 40_000,
+      delegations: [
+        { id: "d1", finalAt: T - GPT_LIVE_NO_REPLY_MS },
+        { id: "d2", finalAt: null },
+      ],
+      delegationEndedAt: T - GPT_LIVE_NO_REPLY_MS,
+    });
+    expect(gptLiveStallOf(f)).toBe("no-reply");
+  });
+
+  it("cannot tell which of two finished delegations one answer was for: it pays both (documented)", () => {
+    expect(
+      gptLiveStallOf(
+        facts({
+          readerLastAt: T - 60_000,
+          delegations: [
+            { id: "d1", finalAt: T - 50_000 },
+            { id: "d2", finalAt: T - 48_000 },
+          ],
+          delegationEndedAt: T - 48_000,
+          companionLastBeganAt: T - 47_000,
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("placing a fragment on the caller's clock", () => {
+  it("takes the earliest estimate of where the session timeline starts", () => {
+    /* The spike's allow trace: arrival time and end_ms of three output fragments. */
+    let zero = sessionZero(null, 4_091, 2_000);
+    expect(zero).toBe(2_091);
+    zero = sessionZero(zero, 5_571, 3_600);
+    expect(zero).toBe(1_971);
+    zero = sessionZero(zero, 6_410, 4_400);
+    expect(zero).toBe(1_971);
+  });
+
+  it("puts that trace's answer after the final and its first filler words before it", () => {
+    const zero = [
+      [4_091, 2_000],
+      [5_571, 3_600],
+      [6_410, 4_400],
+    ].reduce<number | null>((z, [arrived, end]) => sessionZero(z, arrived ?? 0, end ?? 0), null) as number;
+    const finalAt = 5_010;
+    /* " Alright" began at 1800 on the timeline, "The" at 4200. */
+    expect(zero + 1_800).toBeLessThan(finalAt);
+    expect(zero + 4_200).toBeGreaterThan(finalAt);
+  });
+});
