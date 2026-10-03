@@ -318,11 +318,19 @@ export function readingRuns(
 
 /** The two paths of the rail's reading-time chart — `readingAreaPaths`. */
 export interface ReadingAreaPaths {
-  /** The filled area: one closed rectangle per run, from the left edge to its reach. */
+  /** The filled area: `edge`, with each stretch closed down the rail's left side. */
   area: string;
-  /** The line down the area's right-hand side. Never closed, never filled. */
+  /** The line along the area's right-hand side. Never closed, never filled. */
   edge: string;
 }
+
+/**
+ * The furthest an ease may reach either side of a boundary, as a share of the
+ * document's height: 8px each side on an 800px rail, so 16px for a whole join.
+ * Without a cap two long runs would be joined by one long slope, and neither
+ * would show the reach it has.
+ */
+const EASE_CAP = 1 / 100;
 
 /**
  * How far apart, in document pixels, one run's bottom and the next one's top
@@ -344,28 +352,84 @@ const coord = (v: number): string => String(Math.round(v * 100) / 100);
  * >
  * > — Greg, 2026-10-03 (spya-jhe9mc)
  *
- * **The edge is drawn only where something was read.** It runs down each run's
- * right-hand side and steps sideways where two neighbouring runs differ; across
- * an unread gap it stops and starts again as a new subpath, and it never
- * returns to the left edge. So an empty stretch of rail keeps meaning "not
- * read", and a stretch's top and bottom are not underlined as though they were
- * amounts. A step outline rather than a curve, which would draw reach between
- * a read block and an unread one where there is none.
+ * **A curve, not steps**, since later the same day: a block is two or three
+ * pixels of rail, and a step at every boundary drew a row of towers.
+ * docs/plans/261003o-spine-reading-chart-quieter-and-smoothed-into-a-curve.md.
+ *
+ * > what if we were to smooth it a bit so it'd be a bit more like a curve and
+ * > less like a bunch of blocks, like skyscrapers on a skyline.
+ * >
+ * > — Greg, 2026-10-03 (spya-bguwsn)
+ *
+ * Each stretch (runs with no unread gap between them) is one outline: it eases
+ * out from the left edge inside the first run, eases from one reach to the next
+ * across each boundary, and eases back to the left edge inside the last run. An
+ * ease reaches half the shorter of the two runs it joins on either side of
+ * the boundary, `EASE_CAP` at most, so a long run keeps a straight side at its
+ * own reach.
+ *
+ * **Nothing is drawn where nothing was read.** The eases at a stretch's ends
+ * stay inside its own runs, and an unread gap starts a new subpath, so an empty
+ * stretch of rail keeps meaning "not read". What the curve does give up is
+ * between two read neighbours: up to half of the lesser-read one is drawn at
+ * more than its reach, and half of the other at less.
+ *
+ * **It cannot overshoot the rail.** Each cubic's two control points take their
+ * x from its two end points, so the curve stays between them.
  *
  * At full reach the edge is at x = 16, the viewBox's far side: keeping that
  * stroke inside the rail is spine.css § reading time's job, not this one's.
  */
-export function readingAreaPaths(runs: readonly ReadingRun[]): ReadingAreaPaths {
+export function readingAreaPaths(runs: readonly ReadingRun[], docHeight: number): ReadingAreaPaths {
+  /* No visible extent means no mark. A zero-height cubic would still stroke
+     horizontally across the rail and change its neighbours' easing budgets. */
+  runs = runs.filter((run) => run.height > 0);
+  const cap = docHeight * EASE_CAP;
+  /** An S from (xa, ya), going straight down at both ends, to (xb, yb). */
+  const ease = (xa: number, ya: number, xb: number, yb: number): string => {
+    const mid = coord((ya + yb) / 2);
+    return `C${coord(xa)} ${mid} ${coord(xb)} ${mid} ${coord(xb)} ${coord(yb)}`;
+  };
   let area = "";
   let edge = "";
-  let prevBottom: number | null = null;
-  for (const run of runs) {
-    const bottom = run.top + run.height;
-    const [x, top, end] = [coord(run.reach), coord(run.top), coord(bottom)];
-    area += `M0 ${top}H${x}V${end}H0Z`;
-    const joined = prevBottom !== null && Math.abs(run.top - prevBottom) < SAME_STRETCH_PX;
-    edge += joined ? `H${x}V${end}` : `M${x} ${top}V${end}`;
-    prevBottom = bottom;
+  for (let i = 0; i < runs.length; ) {
+    /* One stretch: runs[i..end], each joined to the one before it. */
+    let end = i;
+    for (let next = runs[end + 1]; next !== undefined; next = runs[end + 1]) {
+      const cur = runs[end];
+      if (!cur || Math.abs(next.top - (cur.top + cur.height)) >= SAME_STRETCH_PX) break;
+      end++;
+    }
+    const first = runs[i];
+    const last = runs[end];
+    if (!first || !last) break;
+    const bottom = last.top + last.height;
+
+    let y = first.top + Math.min(first.height / 2, cap);
+    let d = `M0 ${coord(first.top)}${ease(0, first.top, first.reach, y)}`;
+    /** Straight down to `to`, unless the last ease already ended there. */
+    const down = (to: number): void => {
+      if (to <= y) return;
+      d += `V${coord(to)}`;
+      y = to;
+    };
+    for (let j = i; j < end; j++) {
+      const [above, below] = [runs[j], runs[j + 1]];
+      if (!above || !below) break;
+      const half = Math.min(above.height / 2, below.height / 2, cap);
+      down(below.top - half);
+      /* `Math.max`: two joined runs may overlap by a fraction of a pixel
+         (`SAME_STRETCH_PX`), and the outline must never go back up the rail. */
+      const to = Math.max(y, below.top + half);
+      d += ease(above.reach, y, below.reach, to);
+      y = to;
+    }
+    down(bottom - Math.min(last.height / 2, cap));
+    d += ease(last.reach, y, 0, Math.max(y, bottom));
+
+    edge += d;
+    area += `${d}Z`;
+    i = end + 1;
   }
   return { area, edge };
 }
