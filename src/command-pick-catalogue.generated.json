@@ -596,7 +596,7 @@
    "Candidates mode"
   ],
   "kind": "submode",
-  "generates": true,
+  "generates": false,
   "contexts": [
    "owner-article",
    "owner-article-archived",
