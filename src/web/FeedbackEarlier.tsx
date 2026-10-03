@@ -112,6 +112,26 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
   return true;
 }
 
+/**
+ * A tab can outlive a deployment rollback: the new client then reads the old
+ * server, whose otherwise-valid rows predate `page`. Treat that one absent
+ * field as the same answer as `null`; a present malformed value still reaches
+ * the validator above and fails closed. There is no service-worker copy of
+ * this route — this is only wire compatibility across two live builds.
+ */
+function withLegacyPage(value: unknown): unknown {
+  if (typeof value !== "object" || value === null) return value;
+  const answer = value as Record<string, unknown>;
+  if (!Array.isArray(answer.reports)) return value;
+  return {
+    ...answer,
+    reports: answer.reports.map((report: unknown) => {
+      if (typeof report !== "object" || report === null || Object.hasOwn(report, "page")) return report;
+      return { ...report, page: null };
+    }),
+  };
+}
+
 export interface EarlierFeedback {
   /** The state of the filter showing. */
   earlier: EarlierState;
@@ -151,7 +171,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean): EarlierFeedb
         settle({ kind: "failed", message: FEEDBACK_EARLIER_FAILED.message });
         return;
       }
-      const page: unknown = await res.json();
+      const page = withLegacyPage(await res.json());
       settle(
         isEarlierFeedbackPage(page, which)
           ? { kind: "loaded", page }

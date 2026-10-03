@@ -1436,9 +1436,25 @@ describe("the Earlier tab", () => {
     expect(items[1]?.querySelector(".fb-earlier-meta")?.textContent).not.toContain(" on ");
   });
 
-  it("refuses a report without a page as the wrong shape", async () => {
-    const { page: _dropped, ...withoutPage } = REPORTS.reports[0] ?? { page: null };
+  it("reads an old server's row without page as a report with no page label", async () => {
+    const report = REPORTS.reports[0];
+    if (!report) throw new Error("the fixture has no report");
+    const { page: _dropped, ...withoutPage } = report;
     listAnswer = page({ reports: [withoutPage], more: false, counts: { all: 1, shipped: 1, unshipped: 0 } });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain(withoutPage.body);
+    expect(panelOf("Earlier").querySelector(".fb-earlier-page")).toBeNull();
+    expect(panelOf("Earlier").textContent).not.toContain("[fb-list]");
+  });
+
+  it("still refuses a present malformed page", async () => {
+    listAnswer = page({
+      reports: [{ ...REPORTS.reports[0], page: { path: "/read/not-text" } }],
+      more: false,
+      counts: { all: 1, shipped: 1, unshipped: 0 },
+    });
     mount();
     click(tab("Earlier"));
     await act(async () => {});

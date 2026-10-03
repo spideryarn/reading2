@@ -49,11 +49,12 @@ what Greg's report disagrees with. The second still holds, so the response does 
 address. It carries a **page label**, made on the server:
 
 - the path only: no origin, no query string, no fragment (search terms and `?mode=` live there);
-- **only a path the app's own router recognises** (`parseRoute`); anything else is `null`. Added
-  after GPT Sol's plan review: a signed-in reader can file from any address, mistyped or pasted, and
-  the route accepts any `http(s)` origin, so an unrecognised path is arbitrary text;
+- **only a page the app has**; anything else is `null`. Added after GPT Sol's plan review: a
+  signed-in reader can file from any address, mistyped or pasted, and the route accepts any
+  `http(s)` origin, so an unrecognised path is arbitrary text;
 - an import becomes just `/add` (what follows is a third-party URL or an upload id);
-- no length cap, because every recognised path is short (a slug is at most 60 characters);
+- an article's path is rebuilt from its decoded, validated slug (at most 60 characters), so no
+  length cap is needed and a percent-encoded spelling does not survive;
 - `null` when the stored value is `null` or does not parse as an `http(s)` address.
 
 What it still carries, knowingly, is an article's slug in `/read/<slug>`: validated, and already the
@@ -62,7 +63,9 @@ name the reader sees in their own address bar.
 One pure function, `feedbackPageLabel(url)`, in a new `src/feedback-page.ts`. The store calls it
 inside `listMine`, so the raw address is selected but never leaves the store: `MyFeedback` gains
 `page`, not `url`. The route goes on picking fields by name and adds `page` to the pick. The client
-validator requires `page` to be a string or `null`, and the row prints it as text, not as a link.
+validator requires a present `page` to be a string or `null`, and the row prints it as text, not as
+a link. A missing `page` is normalised to `null`, because a new tab can outlive a rollback to the
+old server; malformed present values still fail the whole answer.
 
 ### The simpler option passed over
 
@@ -92,7 +95,8 @@ because the author of the request could not tell, and the next reader cannot eit
 3. Route (`tests/feedback-route.test.ts`): the answer carries `page`; a store that hands back a
    `url` field too still sends none.
 4. Dialog (`tests/feedback-dialog.test.tsx`): the row prints the page; a `null` page prints nothing
-   extra; a response whose row has no `page` is the failed state, not a list.
+   extra; a response from the previous server with no `page` reads as `null`, while a present
+   malformed `page` is the failed state.
 5. `FeedbackHost` sends the address in force when the dialog is opened, after an in-app navigation
    — the property the whole table above rests on, and not pinned today if no test covers it.
 
@@ -122,3 +126,22 @@ shows the page. `privacy.md` does not describe the Earlier tab, so it is unchang
   That is Greg's call and wider than this report; it is raised in the feedback note.
 - Sol's overall view: the request was already met by `7a590fe58`, and the Earlier label is a
   separate improvement rather than the missing implementation. Agreed, and the note says so.
+
+## GPT Sol's code review, and what was done with it
+
+[The review](261003g-earlier-tab-shows-the-page-each-report-was-filed-from-code-review-sol.md). No
+P0 or P1.
+
+- **P2, a new client reading an old server breaks the tab** (after a production rollback, the old
+  server's rows have no `page`). **Fixed by Sol**: a row with no `page` is read as `page: null`; a
+  `page` that is present and malformed is still refused. Kept as written.
+- **P2, server code imported `src/web/router.ts`.** The first build used `parseRoute` for "is this
+  one of our pages", on my claim that `src/messages.ts` and `src/public/page.ts` already imported
+  the router. They only mention it in comments; this would have been the first server import from
+  `src/web/`, and it put `import "react"` in the API bundle. **Fixed by me, the smaller way**:
+  `src/feedback-page.ts` names the fixed pages itself and imports nothing from `src/web/`, and
+  `tests/feedback-page.test.ts` holds the two together with a sample path for every `Route` kind
+  (a new kind is a compile error there) that must get a label exactly when the router recognises
+  it. Passed over: moving the pure parser out of the 1,800-line router into a shared module, which
+  is the durable fix Sol named and too large a move for one label. A page missing from the list
+  shows no label, never a wrong one.
