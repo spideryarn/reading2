@@ -257,6 +257,10 @@ desktop, iPad and phone-portrait shows a re-planned route with a carried stop ma
 - **[Q-mark-every-row]** The pips are on every row of a route that has any carried stop. The
   alternative is to draw them only on the carried rows, which is quieter but makes the mark appear
   and disappear down the list. Built: every row.
+- **[Q-carry-cap]** The model carries about a third of More on average, but anywhere from none
+  to all of the Gist stops on one article between two runs. A cap in code (say, at most half of
+  Gist carried into More, or nothing carried into Most) would narrow that. Built: no cap, because
+  his words were "many of or some of".
 - **[Q-read-mark]** Whether to also build the reading-time version of the mark.
 
 ## GPT Sol's plan review (2026-10-03)
@@ -283,3 +287,16 @@ check each by id.
   mode. That effect has no test — there is no Reader-level harness — and is in the browser check.
 
 - 2026-10-03: plan written; prior-work check clean.
+- 2026-10-03: stage 2 built by two Opus subagents (server; client) and measured by a third —
+  [261003e](../investigations/261003e-skim-again-carried-stops-eval.md), two rounds, $1.09.
+  Round one's wording carried a quarter of More but put the carried stops at the head of the pass
+  in 10 of 11 runs, as a recap: the old prompt already listed Gist stops first, which never showed
+  while passes shared nothing. A paragraph was added saying the route is one order with the depths
+  mixed; round two has the recap in 4 of 11 runs and 40 of 59 carried stops next to a stop they
+  pair with. It also carries more (33% of More, 22% of Most). Kept, with no cap: under the 43% of
+  full nesting, and within "many of or some of". **Not shown**: that More reads more connected
+  after Gist (8–3, inside the control's 5–0). Shown: that it reads more complete started cold
+  (11–1 against a control of 3–1).
+- What the build changed from the plan: the mark's hidden words name only the *other* passes
+  ("Also in Gist"); the pips are off when no stop is walked in more than one *offered* pass; the
+  door's *More detail ›* title no longer says "the stops the passes before it left out".

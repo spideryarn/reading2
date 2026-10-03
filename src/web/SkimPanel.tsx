@@ -56,6 +56,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { UseSkim } from "./useSkim.js";
 import type { PublicSkim } from "../public-types.js";
+import type { SkimDepth } from "../types.js";
 import type { DoorView, SkimView } from "./modes/skim/SkimMode.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { entryProse } from "./GlossaryPanel.js";
@@ -82,6 +83,15 @@ export interface PlaceStep {
 /** A path as one line of text: what a screen reader hears, and what "same place as the row above" compares. */
 export function placeText(place: readonly PlaceStep[]): string {
   return place.map((step) => step.title).join(" › ");
+}
+
+/** One pass a row's stop could be in, and whether it is — one pip (`StopPasses`). */
+export interface SkimPass {
+  depth: SkimDepth;
+  /** *Gist*, *More*, *Most* — said, never printed. */
+  label: string;
+  /** The stop is walked in this pass — `walkedIn` (skim-route.ts). */
+  on: boolean;
 }
 
 /** One row of the list. Built by `useSkimMode`, drawn here. */
@@ -116,6 +126,14 @@ export interface SkimRow {
   words: string | null;
   /** Where it sits in the article's outline, for its position mark's card — `[]` for none (260929f § 3). */
   where: readonly WhereRow[];
+  /**
+   * Every pass the route offers, shallowest first, and whether this stop is
+   * walked in it — the pips under the number. **`null` when the pips are not
+   * drawn at all**: a route offering one depth, or one that carries no stop
+   * into a deeper pass, which is every route from before `skim/9`. All rows or
+   * none (plan 261003l § The mark).
+   */
+  passes: readonly SkimPass[] | null;
 }
 
 /**
@@ -193,6 +211,54 @@ function StopPosition({ at, current }: { at: number; current: boolean }) {
 }
 
 /**
+ * **The other passes a stop is in**, for the row's accessible name — *"Also in
+ * Gist"*, *"Also in More and Most"* — or `null` for a stop in this pass only,
+ * which needs no words. It names the others, not the pass being drawn: the
+ * reader knows which pass they are in.
+ */
+export function alsoIn(passes: readonly SkimPass[], drawn: SkimDepth | null): string | null {
+  const others = passes.filter((p) => p.on && p.depth !== drawn).map((p) => p.label);
+  return others.length === 0 ? null : `Also in ${others.join(" and ")}`;
+}
+
+/**
+ * **Which passes the stop is in** — one small pip per pass the route offers,
+ * shallowest first, filled when the stop is walked there. Greg, 2026-10-03
+ * (spya-ms9d69): *"some kind of subtle visual indicator that indicates which of
+ * the three it shows up for ... if possible, we want to avoid text labels ...
+ * the visual indicator is a way for me to see whether I've probably read it or
+ * not."* On every row of a route that carries any stop, so it is one glyph to
+ * learn: one filled pip is this pass only, more than one is "also in Gist".
+ *
+ * **Not a control** (Sol, plan 261003l review F3): the number column is inside
+ * the row's own button and `.skim-where` already lies over the position line
+ * below, so a third trigger would nest or collide. Plain marks, drawn for the
+ * eye; the words go in the row's name, and the legend in the band's (i) —
+ * `pipsLegend` — because a phone has no hover.
+ */
+function StopPasses({ passes, drawn }: { passes: readonly SkimPass[]; drawn: SkimDepth | null }) {
+  const said = alsoIn(passes, drawn);
+  return (
+    <>
+      <span className="skim-pips" aria-hidden="true">
+        {passes.map((p) => (
+          <span key={p.depth} className={`skim-pip${p.on ? " on" : ""}`} />
+        ))}
+      </span>
+      {said && <span className="skim-pips-said sr-only">{said}</span>}
+    </>
+  );
+}
+
+/** What the pips mean, for the band's (i) — shown only when they are drawn. */
+export function pipsLegend(passes: readonly SkimPass[]): string {
+  return (
+    `The dots under a stop's number show which passes it is in — ${passes.map((p) => p.label).join(", ")}. ` +
+    "A stop with more than one filled is one you may have read already."
+  );
+}
+
+/**
  * **The honest promise**, in the tooltip of the head's info button — the
  * foot's first line until SPIDERYARN-READING2-52. The first half is what the
  * mode can prove — the passages are the Quotes' own, checked against the
@@ -207,9 +273,9 @@ export function skimPromise(profiled: boolean): string {
 /**
  * At Most, how much of the Quotes offered to this route the three passes walk
  * between them — *"every one of the N quotes offered to this route"*, or *"M of
- * N"*. **All three, not Most alone**: since plan 260929e each pass walks only
- * its own stops, so Most by itself is the last tranche, and "this pass" would
- * undercount. The denominator is the route's stored `offered`, not today's raw
+ * N"*. **All three, not Most alone**: since plan 260929e a pass does not
+ * contain the ones before it (it may carry a few of their stops since plan
+ * 261003l, never all), so Most by itself would undercount. The denominator is the route's stored `offered`, not today's raw
  * Quotes count: abstract quotes were deliberately never offered. `null` below
  * Most, or with no Quotes.
  */
@@ -530,9 +596,12 @@ export function SkimPanel({ access, view, away }: Props) {
   const routed = ready && total > 0 && view.depth !== null;
   const coverage = atMost ? coverageNote(route.stops.length, route.offered) : null;
   const made = owner?.skim ?? null;
+  /* All rows carry the pips or none does (`SkimRow.passes`). */
+  const pips = routed ? (view.rows[0]?.passes ?? null) : null;
   const about = routed ? (
     <>
       <p>{promise}</p>
+      {pips && <p>{pipsLegend(pips)}</p>}
       {coverage && <p>{coverage}</p>}
       {made && (
         <AboutMade
@@ -644,6 +713,7 @@ export function SkimPanel({ access, view, away }: Props) {
                       >
                         <span className="skim-n">
                           {row.n}
+                          {row.passes && <StopPasses passes={row.passes} drawn={view.depth} />}
                           {row.position !== null && <StopPosition at={row.position} current={row.current} />}
                         </span>
                         <span className="skim-what">
@@ -681,7 +751,10 @@ export function SkimPanel({ access, view, away }: Props) {
                         data-stop={row.quoteId}
                         {...{ [FOLLOW_ATTR]: row.quoteId }}
                       >
-                        <div className="skim-line">
+                        {/* `piped`: the pips sit between the number and the
+                            position line, so the line and the button laid over
+                            it move down by their height (skim.css § .skim-pips). */}
+                        <div className={`skim-line${row.passes ? " piped" : ""}`}>
                         {/* Always wrapped, enabled only while the row is cut, so the
                             button is never remounted as its row becomes current.
                             Controlled, which makes it mouse-only: a tap's
@@ -908,7 +981,7 @@ export function SkimDoor({
           <button
             type="button"
             className="skim-door-btn"
-            title={`Go on to ${door.deeper}: the stops the passes before it left out`}
+            title={`Go on to ${door.deeper}: the next pass, in more detail`}
             onClick={onDeeper}
           >
             More detail ›

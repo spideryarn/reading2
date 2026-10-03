@@ -115,6 +115,7 @@ const VIEW: SkimView = {
       position: null,
       words: null,
       where: [],
+      passes: null,
     },
   ],
   position: 1,

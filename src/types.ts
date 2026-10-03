@@ -1309,6 +1309,18 @@ export interface SkimStop {
    * written before `trajectory/5`.
    */
   cue?: string | null;
+  /**
+   * **The deeper passes this stop is walked in again** — each deeper than
+   * `depth`, ascending, unique, and only a depth some stop is first placed at.
+   * `depth` stays the shallowest pass the stop belongs to; a stop is walked in
+   * pass *d* when `depth === d` or this includes *d* (`walkedIn`,
+   * src/web/skim-route.ts). Greg, 2026-10-03 (spya-ms9d69): *"it's not a
+   * guarantee, but nor is it excluded that something in a coarser level shows
+   * up in a more detailed level."* **Absent** on routes written before
+   * `skim/9`, which walk each pass as only its own stops (plan 260929e).
+   * docs/plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md.
+   */
+  again?: SkimDepth[];
 }
 
 /**
@@ -1342,6 +1354,12 @@ export interface SkimDrops {
    * had no cue; read it as 0.
    */
   badCue?: number;
+  /**
+   * `again` entries dropped: not 2 or 3, not deeper than the stop's own depth,
+   * repeated, or naming a depth no stop is first placed at. The stop is kept.
+   * Optional, as `badCue` is: routes before `skim/9` have none.
+   */
+  badAgain?: number;
   /** Stops past a cumulative cap, dropped in route order — never demoted. */
   overCap: number;
 }

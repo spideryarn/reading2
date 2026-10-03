@@ -439,8 +439,11 @@ export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
  * A depth the route does not offer is not refused here — this parser cannot see
  * the route — but `effectiveDepth` (src/web/skim-route.ts) draws the
  * deepest offered pass below it. **A `?stop=` on the route wins over this**
- * (`locate`): each pass walks only its own stops (plan 260929e), so the stop's
- * own pass is drawn whatever the depth says.
+ * (`locate`): the asked pass is drawn only when the stop is walked in it, and
+ * otherwise the stop's own — the shallowest it is in. A stop is in one pass
+ * (plan 260929e) unless the route carries it into a deeper one too (`again`,
+ * plan 261003l), so on a route with no carried stop the depth never matters
+ * once a stop is named.
  */
 export const depthParam = createParser<SkimDepth>({
   parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : null),
@@ -453,8 +456,9 @@ export const depthParam = createParser<SkimDepth>({
  *
  * `replace`: stepping along the route is traversal, and twenty stops must not
  * cost twenty presses of Back — comment-jump.ts's argument for its arrows. A
- * stop on the route draws its own pass; one on no pass (a stale link, a quote
- * chosen again) falls back to the asked pass's first stop, in `locate`.
+ * stop on the route draws the asked pass when it is walked there, else its own
+ * (see `depthParam`); one on no pass (a stale link, a quote chosen again) falls
+ * back to the asked pass's first stop, in `locate`.
  */
 export const stopParam = parseAsBlockId.withOptions({ history: "replace" });
 

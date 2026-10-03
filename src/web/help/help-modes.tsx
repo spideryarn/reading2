@@ -764,6 +764,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </li>
         <li>Each stop has a short cue above it: what to <em>look for</em> in the passage, never what it found.</li>
         <li>
+          A deeper pass is mostly new stops, with a few earlier ones kept where the new ones lean on
+          them. When a route has any, small dots under each stop’s number show which passes it is in,
+          shallowest first: more than one filled, and you may have read it already.
+        </li>
+        <li>
           Under the current stop, a card gathers what other modes have already found there:{" "}
           <strong>Terms it uses</strong> and <strong>Ideas it bears on</strong>.
         </li>
