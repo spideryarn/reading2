@@ -193,3 +193,10 @@ inline editor, `article-tags.ts` as the one client write. Changed from the plan:
 - **No highlight until the reader types or uses the arrows**, so Enter in a freshly focused empty
   box does not add the first suggestion — found writing the "empty Enter" test.
 
+**Stage 3 (filter) — done.** `ShelfTagFilter.tsx` above Topics, `?tags=`, `tagFacets` in
+shelf-narrow.ts feeding the same `topicMembers` / `withTopics` / `topicCountsForVisible`, so a tag and
+a topic narrow by one AND and every chip in both rows counts the same visible set. Changed from the
+plan: **each row has its own Clear** rather than one Clear for both — it is the row the reader is
+looking at, and it needs nothing shared between two components. The "nothing left" sentence names
+tags when they did it.
+
