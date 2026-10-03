@@ -51,6 +51,10 @@ const SHARED = new Set([
      and the date order read it again, so both sides keep one reading. Imports
      `types.js` and nothing else. Plan 261001a, stages 5 and 6. */
   "registry-work.js",
+  /* Scholar's search address and first-author text, extracted from the
+     server's citations.ts for Reception. Imports nothing; the purity check
+     below now covers it too. Plan 261003o, F4. */
+  "scholar-search.js",
   /* Which influence a Citations row shows — the web one from a kept *Dig
      deeper* answer, else the list's own — read by the band and by chat's
      `article_citations` tool, so the two cannot disagree. Imports `types.js`

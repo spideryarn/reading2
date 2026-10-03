@@ -11,6 +11,7 @@ import {
   selectedThread,
   shownInThread,
   threadsOf,
+  threadsWithin,
 } from "../src/web/debate-threads.js";
 import { debateThreadParam } from "../src/web/params.js";
 import type { DebateSynthesis } from "../src/types.js";
@@ -60,6 +61,32 @@ describe("selecting and filtering", () => {
   it("maps each key row to its reason", () => {
     expect(keyByRow(made).get("spya-r00003")?.role).toBe("origin");
     expect(keyByRow({ kind: "failed" }).size).toBe(0);
+  });
+});
+
+/* Plan 261003o, step 6: Reception and Claims each draw their own rows, so a
+   thread is offered in a sub-mode only when it has a **stored** row there.
+   One whose rows there are merely hidden by the bar is still offered (the
+   panel disables it and says why). */
+describe("scoped to a sub-mode's stored rows", () => {
+  const threads = threadsOf(made);
+  const reception = [{ id: "spya-r00003" }];
+  const claims = [{ id: "spya-r00001" }, { id: "spya-r00002" }];
+
+  it("offers a thread only where it has a stored row", () => {
+    expect(threadsWithin(threads, reception).map((t) => t.id)).toEqual([KEY_THREAD]);
+    expect(threadsWithin(threads, claims).map((t) => t.id)).toEqual(["spya-thm002"]);
+    expect(threadsWithin(threads, [])).toEqual([]);
+  });
+
+  it("does not select a thread the address names when it has no stored row here", () => {
+    /* An old `debatethread=key` link whose key sources are all in the other
+       sub-mode must not empty this one, and must not be drawn as selected. */
+    const here = threadsWithin(threads, claims);
+    expect(selectedThread(here, KEY_THREAD)).toBeNull();
+    expect(inThread(claims, selectedThread(here, KEY_THREAD))).toEqual(claims);
+    /* The positive control: where it has a row, it is selected. */
+    expect(selectedThread(threadsWithin(threads, reception), KEY_THREAD)?.id).toBe(KEY_THREAD);
   });
 });
 

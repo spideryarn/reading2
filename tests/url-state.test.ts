@@ -39,7 +39,10 @@ import {
   spineParam,
   TERM_SORTS,
   sortParam,
-  nameParam,
+  DEBATE_ORDERS,
+  DEBATE_VIEWS,
+  debateOrderParam,
+  debateParam,
 } from "../src/web/params.js";
 import { NEVER_REMEMBERED, REMEMBERED } from "../src/web/last-view.js";
 
@@ -283,53 +286,43 @@ describe("referee mode parameters", () => {
   });
 });
 
-describe("debate mode's identification bar", () => {
+describe("debate mode's sub-mode and order", () => {
   /**
-   * **`?name=` carries the word, and that is the whole design decision.**
-   *
-   * The three siblings — `?gate=`, `?bar=`, `?conf=` — carry numbers because
-   * the fact under them is a score. The fact under this one is the *name of the
-   * strongest evidence* that a page is about this piece, and a number here would
-   * be our rank dressed as a measurement: the composite the plan's § 2 refused.
+   * **`?debate=` is which search's rows the band draws** — Reception (the
+   * default, and absent from the address) or Claims. Plan 261003o.
    */
-  it("reads the three levels and nothing else", () => {
-    expect(nameParam.parse("named")).toBe("named");
-    expect(nameParam.parse("quoted")).toBe("quoted");
-    expect(nameParam.parse("linked")).toBe("linked");
-    for (const level of ["named", "quoted", "linked"] as const) {
-      expect(nameParam.serialize(level)).toBe(level);
+  it("reads the two sub-modes, and anything else as Reception", () => {
+    expect([...DEBATE_VIEWS]).toEqual(["reception", "claims"]);
+    expect(debateParam.parse("claims")).toBe("claims");
+    expect(debateParam.parse("reception")).toBe("reception");
+    for (const junk of ["Claims", "claim", "", "cited", "1"]) {
+      expect(debateParam.parse(junk), `?debate=${junk}`).toBeNull();
     }
+    expect(debateParam.defaultValue).toBe("reception");
   });
 
-  it("treats an unreadable value as an untouched bar rather than an error", () => {
-    /* `null` is what an absent one means too — *nobody has touched this* — which
-       the panel resolves to `DEBATE_LEVEL_DEFAULT`. A hand-edited URL, or a link
-       from a version with a fourth level, opens the mode at the default rather
-       than a blank band. */
-    for (const junk of ["NAMED", "quotes", "", "1", "linked,named", "0.5"]) {
-      expect(nameParam.parse(junk), `?name=${junk}`).toBeNull();
-    }
+  it("pushes, because switching sub-mode is an act Back should undo", () => {
+    expect(debateParam.history).toBe("push");
   });
 
-  it("has no default of its own, so the constant lives in one file", () => {
-    /* Exactly `?gate=`, `?bar=` and `?conf=`: giving the parser a default would
-       put the starting level in two files and make *the reader chose the
-       default* indistinguishable from *the reader chose nothing* — which is the
-       difference the slider's reset button is drawn from. */
-    /* The cast is the point rather than a workaround: nuqs only puts
-       `defaultValue` on a parser that has been given one, so `nameParam` does
-       not have the property **in its type** — `npm run typecheck` fails on a
-       bare `nameParam.defaultValue`, which is a stronger guard than this line. */
-    expect((nameParam as { defaultValue?: unknown }).defaultValue).toBeUndefined();
-    expect(nameParam.history).toBe("replace");
+  /* `claim` left the order vocabulary on 2026-10-03: by claim is the Claims
+     sub-mode now, and an old `?debateby=claim` is lifted to `?debate=claims`
+     before anything parses it (router.ts § `liftLegacyDebateBy`). */
+  it("reads Reception's three orders, and no longer `claim`", () => {
+    expect([...DEBATE_ORDERS]).toEqual(["prioritised", "date", "stance"]);
+    for (const order of DEBATE_ORDERS) expect(debateOrderParam.parse(order)).toBe(order);
+    expect(debateOrderParam.parse("claim")).toBeNull();
+    expect(debateOrderParam.defaultValue).toBe("prioritised");
   });
 
-  it("is remembered when an article is reopened, like the other thresholds", () => {
+  it("remembers the sub-mode, and no longer the retired identification threshold", () => {
     /* It is how you are looking at the list, and arriving with it set draws a
        view and asks nothing of the server — the test that guards the two lists
-       is tests/last-view.test.ts. */
-    expect(REMEMBERED).toContain("name");
-    expect(NEVER_REMEMBERED).not.toContain("name");
+       is tests/last-view.test.ts. `?name=` was the identification slider's,
+       which went with the slider. */
+    expect(REMEMBERED).toContain("debate");
+    expect(NEVER_REMEMBERED).not.toContain("debate");
+    expect(REMEMBERED).not.toContain("name");
   });
 });
 

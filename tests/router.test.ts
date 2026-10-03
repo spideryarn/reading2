@@ -23,6 +23,7 @@ import {
   carriedSearch,
   CONTACT_HREF,
   HELP_HREF,
+  liftedLegacyHref,
   liftedTweetsHref,
   navigate,
   PRIVACY_HREF,
@@ -469,6 +470,56 @@ describe("lifting the old Tweets addresses", () => {
     expect(liftedTweetsHref(`/read/x?${THREAD}`)).toBeNull();
     expect(liftedTweetsHref("/read/x/metadata")).toBeNull();
     expect(liftedTweetsHref("/read/x")).toBeNull();
+  });
+
+  /**
+   * **Debate's *by claim* order became the Claims sub-mode** on 2026-10-03
+   * (plan 261003o; GPT Sol's F7). The old value is rewritten once, here, so
+   * nothing downstream reads it: a legacy fallback inside the panel would
+   * bounce a reader who pressed Reception straight back to Claims, since
+   * Reception is the absent parameter.
+   */
+  describe("lifting Debate's old by-claim order", () => {
+    it("sends `debateby=claim` to the Claims sub-mode, and removes it", () => {
+      expect(settleAddress("/read/x", "?mode=debate&debateby=claim", "")).toBe("/read/x?mode=debate&debate=claims");
+      expect(settleAddress("/read/x", "?mode=debate&%64ebateby=claim&at=spya-k3m9qt", "")).toBe(
+        "/read/x?mode=debate&at=spya-k3m9qt&debate=claims",
+      );
+      expect(settleAddress("/read/x/metadata", "?debateby=claim", "")).toBe("/read/x/metadata?debate=claims");
+    });
+
+    it("lets an explicit `debate=` win, and still removes the old order", () => {
+      expect(settleAddress("/read/x", "?debate=reception&debateby=claim", "")).toBe("/read/x?debate=reception");
+      expect(settleAddress("/read/x", "?debateby=claim&debate=claims", "")).toBe("/read/x?debate=claims");
+    });
+
+    it("leaves Reception's own orders alone, and Claims with one of them carried", () => {
+      expect(settleAddress("/read/x", "?mode=debate&debateby=stance", "")).toBeNull();
+      expect(settleAddress("/read/x", "?mode=debate&debateby=date", "")).toBeNull();
+      /* `debate=claims&debateby=date` is Claims; `debateby` is Reception's and
+         waits there. Nothing to rewrite. */
+      expect(settleAddress("/read/x", "?debate=claims&debateby=date", "")).toBeNull();
+      expect(settleAddress("/read/x", "?find=debateby%3Dclaim", "")).toBeNull();
+    });
+
+    /* What makes the rewrite settle, and what keeps Reception reachable: the
+       address a press on Reception writes from a lifted link has no `debate`
+       and no `debateby`, and it is left exactly so. */
+    it("settles: the lifted address, and the one Reception then writes, are both left alone", () => {
+      const lifted = settleAddress("/read/x", "?mode=debate&debateby=claim", "") ?? "";
+      const at = lifted.indexOf("?");
+      expect(settleAddress(lifted.slice(0, at), lifted.slice(at), "")).toBeNull();
+      expect(settleAddress("/read/x", "?mode=debate", "")).toBeNull();
+    });
+
+    it("is lifted on Back and on `navigate()` too, through `liftedLegacyHref`", () => {
+      expect(liftedLegacyHref("/read/x?mode=debate&debateby=claim#h")).toBe("/read/x?mode=debate&debate=claims#h");
+      expect(liftedLegacyHref("/read/x?mode=debate&debateby=stance")).toBeNull();
+      /* Both old spellings on one link. */
+      expect(liftedLegacyHref("/read/x/tweets?debateby=claim")).toBe(`/read/x?${THREAD}&debate=claims`);
+      expect(liftedLegacyHref("/read/x/tweets")).toBe(`/read/x?${THREAD}`);
+      expect(liftedLegacyHref("/read/x")).toBeNull();
+    });
   });
 
   describe("navigate()", () => {

@@ -126,6 +126,7 @@ import {
   refereeParam,
   summaryParam,
   structureParam,
+  debateParam,
   type Mode,
 } from "../params.js";
 import { subModeParams } from "../sub-modes.js";
@@ -887,6 +888,7 @@ export function Reader({
     referee: refereeParam,
     summary: summaryParam,
     structure: structureParam,
+    debate: debateParam,
   });
   const inQuiz = useRef(false);
   const nowInQuiz = quizNav.mode === "remember" && quizNav.remember === "quiz" && quizNav.thread === null;
@@ -1774,7 +1776,7 @@ export function Reader({
   );
 
   /**
-   * **Each block's position in the article** — Debate's *by claim* order puts
+   * **Each block's position in the article** — Debate's Claims sub-mode puts
    * its claims in the order the piece makes them, and the artefact does not
    * carry that; the blocks do. Built once here and handed to both debate
    * bands. docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F8.
@@ -2649,9 +2651,18 @@ export function Reader({
               onJump={bandJump}
               blockOrder={blockOrder}
               publishedAt={publishedAt}
+              articleTitle={article.meta.title}
             />
           ) : null;
-        return <DebateBand slug={slug} onJump={bandJump} blockOrder={blockOrder} publishedAt={publishedAt} />;
+        return (
+          <DebateBand
+            slug={slug}
+            onJump={bandJump}
+            blockOrder={blockOrder}
+            publishedAt={publishedAt}
+            articleTitle={article.meta.title}
+          />
+        );
       /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
          until a public article's stored Skim was refused to a signed-out
          reader (SPIDERYARN-READING2-56); a stored list is the same case. The

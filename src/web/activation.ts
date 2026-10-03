@@ -642,7 +642,8 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  *  - Referee: `REFEREE_TARGET`;
  *  - Summary: `activationForSummary` of the view **the row names** — `simple`
  *    for Brief and Fuller, nothing for Thread (SummaryMode.tsx §
- *    `SummaryControls`, and `bandTarget` below).
+ *    `SummaryControls`, and `bandTarget` below);
+ *  - Debate: `debate` for both, the mode's own target.
  *
  * `bandTarget` below gives the same answer for the band that mounts, which is
  * what lets a token armed here be claimed — tests/command-bar-sub-modes.test.tsx holds
@@ -661,6 +662,14 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
     /* Nothing to generate in either view: the tree is in the page's payload. */
     case "structure":
       return null;
+    /* **The one `debate` run, whichever sub-mode the row names** — the mode
+       row's own answer (`MODE_TARGET.debate`), because Reception and Claims
+       are two views of one stored search, not two searches to buy. One token
+       under one key, so opening either can never arm a second (plan 261003o,
+       step 10). The band's own segments arm nothing: they are drawn only once
+       a debate is stored. */
+    case "debate":
+      return "debate";
     default: {
       const unhandled: never = sub;
       throw new Error(`unhandled sub-mode: ${JSON.stringify(unhandled)}`);

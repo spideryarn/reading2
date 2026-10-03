@@ -1,7 +1,7 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
  * band: Remember's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's four views,
- * Summary's Brief | Fuller | Thread.
+ * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Debate's Reception | Claims.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):
  *
@@ -27,7 +27,7 @@
  */
 import type { Mode } from "../modes.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
-import type { RememberView, StructureView, SummaryView } from "./params.js";
+import type { DebateView, RememberView, StructureView, SummaryView } from "./params.js";
 import { REFEREE_VIEWS, type RefereeView } from "./referee-views.js";
 
 /**
@@ -40,7 +40,8 @@ export type SubMode =
   | { readonly mode: "diagram"; readonly view: DiagramKind }
   | { readonly mode: "referee"; readonly view: RefereeView }
   | { readonly mode: "summary"; readonly view: SummaryView }
-  | { readonly mode: "structure"; readonly view: StructureView };
+  | { readonly mode: "structure"; readonly view: StructureView }
+  | { readonly mode: "debate"; readonly view: DebateView };
 
 /** The modes that have sub-modes. */
 export type ModeWithSubModes = SubMode["mode"];
@@ -196,7 +197,28 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
   },
 };
 
-/** The words for one sub-mode. A `switch` so a sixth mode with sub-modes fails to compile here. */
+/**
+ * Debate's two sub-modes, one per search. The band's segmented control,
+ * DebatePanel.tsx § `DebateViews`; Reception first because it is the default.
+ * Greg, 2026-10-03 (spya-caue42): *"there could be a claims submode … And then
+ * there's a section, a separate submode besides claims for reception"*.
+ * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
+ */
+export const DEBATE_SUB_MODES: Readonly<Record<DebateView, SubModeWords>> = {
+  reception: {
+    label: "Reception",
+    description:
+      "What others have written about this piece itself: replies, reviews, and work that cites it and says something about it",
+    experimental: false,
+  },
+  claims: {
+    label: "Claims",
+    description: "What has been written about the claims it makes, by people who may never have read it",
+    experimental: false,
+  },
+};
+
+/** The words for one sub-mode. A `switch` so a seventh mode with sub-modes fails to compile here. */
 export function subModeWords(sub: SubMode): SubModeWords {
   switch (sub.mode) {
     case "remember":
@@ -209,6 +231,8 @@ export function subModeWords(sub: SubMode): SubModeWords {
       return SUMMARY_SUB_MODES[sub.view];
     case "structure":
       return STRUCTURE_SUB_MODES[sub.view];
+    case "debate":
+      return DEBATE_SUB_MODES[sub.view];
     default: {
       const never: never = sub;
       return never;
@@ -236,6 +260,8 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
       return (Object.keys(SUMMARY_SUB_MODES) as SummaryView[]).map((view) => ({ mode, view }));
     case "structure":
       return (Object.keys(STRUCTURE_SUB_MODES) as StructureView[]).map((view) => ({ mode, view }));
+    case "debate":
+      return (Object.keys(DEBATE_SUB_MODES) as DebateView[]).map((view) => ({ mode, view }));
     default:
       return [];
   }
@@ -261,6 +287,7 @@ export interface SubModeParams {
   readonly referee?: RefereeView | null;
   readonly summary?: SummaryView | null;
   readonly structure?: StructureView | null;
+  readonly debate?: DebateView | null;
 }
 
 export function subModeParams(sub: SubMode): SubModeParams {
@@ -294,6 +321,8 @@ export function subModeParams(sub: SubMode): SubModeParams {
       return { mode: "summary", summary: sub.view === "brief" ? null : sub.view };
     case "structure":
       return { mode: "structure", structure: sub.view === "fisheye" ? null : sub.view };
+    case "debate":
+      return { mode: "debate", debate: sub.view === "reception" ? null : sub.view };
     default: {
       const never: never = sub;
       return never;

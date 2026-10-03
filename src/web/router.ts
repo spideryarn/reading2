@@ -1059,6 +1059,7 @@ export function settleAddress(pathname: string, search: string, hash: string): s
   at = liftLegacyAnchor(at);
   at = liftLegacySlug(at);
   at = liftLegacyTweets(at);
+  at = liftLegacyDebateBy(at);
   at = liftLegacyAbout(at);
   /* `liftStrandedText` stood here from 2026-09-05 to 2026-09-29, rewriting
      `?mode=hierarchy&text=0` to Structure and dropping every `text=0`. Both
@@ -1304,6 +1305,64 @@ function liftLegacyTweets(at: Address): Address {
 const SUMMARY_THREAD = "mode=summary&summary=thread";
 
 /**
+ * **Debate's old *by claim* order, to the sub-mode it became**:
+ * `?debateby=claim` → `?debate=claims`, with `debateby` removed.
+ *
+ * *By claim* was one of four orders over Debate's one mixed list from
+ * 2026-09-29 until 2026-10-03, when the two searches became two sub-modes and
+ * grouping by claim became the whole of Claims
+ * (docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md).
+ *
+ * **Lifted here, once, rather than interpreted in the panel** (GPT Sol's F7).
+ * Reception is the *absent* parameter, so a panel that read a lingering
+ * `debateby=claim` as "Claims" would bounce a reader who pressed Reception
+ * straight back. After this nothing downstream knows the word:
+ * `debateOrderParam` (params.ts) has three values.
+ *
+ * **An explicit `debate=` wins**: the old order is removed either way, and the
+ * sub-mode the link already names is left as it is. Every other pair is kept
+ * exactly as written. An old by-claim link no longer shows the rows about the
+ * piece above the claims; that is the intended change.
+ *
+ * Only the first `debateby` pair is read, as every reader of the address reads
+ * it (`get("debateby")`); a `debateby=date` or `=stance` is Reception's own and
+ * is left alone.
+ */
+function liftLegacyDebateBy(at: Address): Address {
+  const first = queryPairs(at.search).find((pair) => hasKey(pair, "debateby"));
+  if (first === undefined || !first.includes("=")) return at;
+  /* Decoded as the parser decodes it, for `hasKey`'s reason; a malformed
+     escape is not the word and must not throw. */
+  let value = first.slice(first.indexOf("=") + 1);
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    return at;
+  }
+  if (value !== "claim") return at;
+  const rest = withoutPairs(at.search, (pair) => hasKey(pair, "debateby"));
+  const named = queryPairs(rest).some((pair) => hasKey(pair, "debate"));
+  const search = named ? rest : rest ? `${rest}&${DEBATE_CLAIMS}` : DEBATE_CLAIMS;
+  return { pathname: at.pathname, search: search ? `?${search}` : "", hash: at.hash };
+}
+
+/** Where an old `debateby=claim` lands: Debate's Claims sub-mode. */
+const DEBATE_CLAIMS = "debate=claims";
+
+/**
+ * **Every old spelling `settleAddress` lifts that can also arrive after
+ * boot** — `liftedTweetsHref`'s job, for the thread's old addresses and
+ * Debate's old order together. `navigate()` and Back/Forward (`useRoute`) ask
+ * this, so a tab open across a deploy lands where a fresh load would. `null`
+ * when the address carries neither.
+ */
+export function liftedLegacyHref(href: string): string | null {
+  const at = splitHref(href);
+  const lifted = liftLegacyDebateBy(liftLegacyTweets(at));
+  return lifted === at ? null : `${lifted.pathname}${lifted.search}${lifted.hash}`;
+}
+
+/**
  * Go somewhere, without a page load.
  *
  * Scrolls to the top, because `history.scrollRestoration` is `manual` (see
@@ -1329,8 +1388,9 @@ export function navigate(
 ): void {
   /* The thread's old page, and its old mode word, are Summary's Thread view
      now; an old link goes there rather than to *not found* or to Summary at
-     Brief. § `liftedTweetsHref`. */
-  const lifted = liftedTweetsHref(to);
+     Brief. § `liftedTweetsHref`. Debate's old by-claim order goes to its Claims
+     sub-mode the same way (§ `liftedLegacyHref`). */
+  const lifted = liftedLegacyHref(to);
   const href = lifted ?? to;
   /* The hash counts only for a lifted link — GPT Sol's code review found an old
      hashless link could otherwise leave a stale hash behind. Every other
@@ -1851,11 +1911,14 @@ export function useRoute(): Route {
      changes no pathname and would never re-run this effect — leaving
      `?mode=tweets` to parse as Summary at Brief (GPT Sol, F4 of the 261003l
      review). Only history can put an old spelling on the address after boot
-     without `navigate()`, so `popstate` is the whole of the gap. */
+     without `navigate()`, so `popstate` is the whole of the gap.
+
+     Debate's old `debateby=claim` is query state too and takes the same road
+     (`liftedLegacyHref` lifts both). */
   // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the subscribed signal; the effect must rewrite the complete address as it stands when the effect runs.
   useEffect(() => {
     const lift = () => {
-      const lifted = liftedTweetsHref(`${location.pathname}${location.search}${location.hash}`);
+      const lifted = liftedLegacyHref(`${location.pathname}${location.search}${location.hash}`);
       if (lifted !== null) history.replaceState(history.state, "", lifted);
     };
     lift();

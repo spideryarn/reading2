@@ -29,9 +29,8 @@
  * `popstate` for everything else. One query string, one listener.
  */
 import { createParser, debounce } from "nuqs";
-import type { DebateBears, IdentificationLevel, SkimDepth } from "../types.js";
+import type { DebateBears, SkimDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
-import { isIdentificationLevel } from "./debate-levels.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
 import { DEFAULT_BY } from "./library-columns.js";
@@ -1336,57 +1335,56 @@ export const rememberParam = createParser<RememberView>({
 /* --------------------------------------------------------------- debate -- */
 
 /**
- * **How firmly a page has to identify this article to stay on Debate's list** —
- * `?name=named`, `?name=quoted` or `?name=linked`.
+ * **Which of Debate's two searches the band draws** — `?debate=claims`, since
+ * 2026-10-03 (docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md).
  *
- * The fourth threshold in the app and the first categorical one, and that is the
- * only thing about it that is new. `?gate=`, `?bar=` and `?conf=` all carry a
- * number because the fact under them is a score; the fact under this one is
- * **the name of the strongest evidence found** that a page is about this piece —
- * it links the address, it quotes the article's own words, or it names the title
- * — so the word is what a link carries. There is a rank inside the panel,
- * because `applyThreshold` needs one, and it is deliberately not in the URL: a
- * number here would be our arithmetic dressed as a measurement, which is the
- * composite this whole feature refused
- * (docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md § 2).
+ * `reception` is what others have written about the piece itself; `claims` is
+ * what has been written about the claims it makes. *Which thing, within this
+ * mode*, so the shape of `?summary=` and `?referee=`: in the URL, because it
+ * changes the whole band, and pushed, because switching is a deliberate act
+ * Back should undo. **`reception` is the default** and is omitted from the
+ * address; an unknown value reads as Reception.
  *
- * **A word needs none of what `?bar=` needs.** `snapToStop` exists because a
- * hand-written `?bar=0.63` lands between two real scores and the thumb and the
- * list then disagree about where the bar is (`QuotesPanel.tsx`). A word is a
- * stop or it is nothing, so an unrecognised `?name=` parses to `null` — which is
- * the same thing an absent one means, *nobody has touched it*, resolved by the
- * panel to `DEBATE_LEVEL_DEFAULT`.
+ * **Writing it never spends.** Debate searches when its owner presses — the
+ * mode's button, or either sub-mode's command-bar row, which arm the one
+ * `debate` run (activation.ts § `subModeTarget`). Back, a pasted link and a
+ * last-view restore arrive here and buy nothing.
  *
- * **No parser default, deliberately**, the call `?gate=`, `?bar=` and `?conf=`
- * all make: the constant stays in one file, and *the reader chose the default*
- * stays distinguishable from *the reader chose nothing*, which is what the
- * slider's reset button is drawn from.
- *
- * `replace` and **not debounced**: there are three stops, so a drag writes at
- * most twice and there is nothing to rate-limit — but Back should still undo the
- * `?mode=debate` that got you here rather than a step of the slider.
+ * `?name=` stood here until the same day: the identification threshold
+ * (`named`, `quoted`, `linked`), whose default hid the rows the search was
+ * changed to find. It is read by nothing now, so a link carrying it shows
+ * every row. debate-levels.ts has the story.
  */
-export const nameParam = createParser<IdentificationLevel>({
-  parse: (v) => (isIdentificationLevel(v) ? v : null),
+export const DEBATE_VIEWS = ["reception", "claims"] as const;
+export type DebateView = (typeof DEBATE_VIEWS)[number];
+
+export const debateParam = createParser<DebateView>({
+  parse: (v) => ((DEBATE_VIEWS as readonly string[]).includes(v) ? (v as DebateView) : null),
   serialize: (v) => v,
-}).withOptions({ history: "replace" });
+})
+  .withDefault("reception")
+  .withOptions({ history: "push" });
 
 /**
- * **How Debate's list is ordered** — `?debateby=`, since 2026-09-29
+ * **How Reception's list is ordered** — `?debateby=`, since 2026-09-29
  * (SPIDERYARN-READING2-5P, docs/plans/260929h-debate-mode-clearer-sources-and-orders.md).
  *
- * `prioritised`, `claim` (*by claim*), `date` or `stance`. The parser's default
- * is `prioritised`, as Greg asked — and on a debate whose rows cannot support
- * it (every one before stage 2's `debate/3`, and every visitor's) the panel
- * draws *by claim* instead (debate-order.ts § `effectiveDebateOrder`), which is
- * Glossary's `?sort=` arrangement. An unknown value parses to the default.
+ * `prioritised` (*as found*, the default and absent), `date` or `stance`. The
+ * panel draws what the rows can support (debate-order.ts §
+ * `effectiveReceptionOrder`), which is Glossary's `?sort=` arrangement. An
+ * unknown value parses to the default. **Claims ignores it**: that sub-mode is
+ * always grouped by claim.
+ *
+ * `claim` was a fourth value until 2026-10-03, when *by claim* became the
+ * Claims sub-mode. An old `?debateby=claim` never reaches this parser: it is
+ * rewritten to `?debate=claims` first (router.ts § `liftLegacyDebateBy`).
  *
  * **Its own key**, for `citeby`'s reason: every parameter survives a mode
  * switch, so a shared `?sort=` would carry one mode's order into another. `push`,
  * like `?citeby=`: changing the order is a deliberate act on the view, and Back
  * should undo it.
  */
-export const DEBATE_ORDERS = ["prioritised", "claim", "date", "stance"] as const satisfies readonly DebateOrder[];
+export const DEBATE_ORDERS = ["prioritised", "date", "stance"] as const satisfies readonly DebateOrder[];
 /* And the other way: every `DebateOrder` is in the list, or this line stops compiling. */
 const _everyDebateOrderListed: Exclude<DebateOrder, (typeof DEBATE_ORDERS)[number]> extends never ? true : never =
   true;
@@ -1400,17 +1398,21 @@ export const debateOrderParam = createParser<DebateOrder>({
   .withOptions({ history: "push" });
 
 /**
- * **How directly a page has to bear on its claim to stay on Debate's list** —
+ * **How directly a page has to bear on its claim to stay on Claims' list** —
  * `?bears=loosely`, `?bears=partly` or `?bears=directly`; the relevance bar,
- * shown only while *prioritised* is the order drawn.
+ * shown in Claims when some row carries the judgment.
  *
- * `?name=`'s shape exactly, for `?name=`'s reasons: **the word, not a number**
- * (three named stops of one model judgment — a number would read as a
- * measurement), **no parser default** (absent is *nobody has touched it*,
- * which the panel resolves to `RELEVANCE_DEFAULT` in debate-order.ts — and that
- * default is `loosely`, which hides nothing), an unknown word parses to `null`,
- * and `replace`, not debounced. It filters claim rows only; `?name=` owns the
- * rows about this piece. docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F5, F7.
+ * **The word, not a number**: these are three named stops of one model
+ * judgment, and a number would read as a measurement. **No parser default**,
+ * the call `?gate=`, `?bar=` and `?conf=` all make: absent is *nobody has
+ * touched it*, which the panel resolves to `RELEVANCE_DEFAULT` in
+ * debate-order.ts (`loosely`, which hides nothing), so the constant stays in
+ * one file and *the reader chose the default* stays distinguishable from *the
+ * reader chose nothing* — which is what the slider's reset button is drawn
+ * from. An unknown word parses to `null`. `replace` and not debounced: there
+ * are three stops, so a drag writes at most twice, but Back should still undo
+ * the `?mode=debate` that got you here rather than a step of the slider.
+ * docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F5, F7.
  */
 export const DEBATE_BEARS_WORDS = ["directly", "partly", "loosely"] as const satisfies readonly DebateBears[];
 /* And the other way: every `DebateBears` is in the list, or this stops compiling. */

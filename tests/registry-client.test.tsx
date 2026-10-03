@@ -17,7 +17,7 @@ import type { UseDebate } from "../src/web/useDebate.js";
 
 const { CitationsPanel, byLineOf, registryConflictNote, workByLine } = await import("../src/web/CitationsPanel.js");
 const { DebatePanel, rowWork } = await import("../src/web/DebatePanel.js");
-const { debateOrderOptions, orderDebateRows, rowYear } = await import("../src/web/debate-order.js");
+const { orderReceptionRows, receptionOrderOptions, rowYear } = await import("../src/web/debate-order.js");
 
 const AT = "spya-k3m9qt" as BlockId;
 
@@ -239,10 +239,12 @@ describe("Debate's by-line and date order", () => {
       claim("undated", { url: "https://blog.example.org/x" }),
     ];
     expect(rowYear(rows[1] as ClaimDebateRow)).toBe(2010);
-    const groups = orderDebateRows([], rows, "date", new Map([[AT, 0]]));
+    /* *Date* is one of Reception's orders since 2026-10-03 (plan 261003o); the
+       rule reads any row's year, so these fixtures serve as they are. */
+    const groups = orderReceptionRows(rows, "date");
     expect(groups.map((g) => g.rows.map((r) => r.id))).toEqual([["registry-dated", "ai-dated"], ["undated"]]);
     const onlyRegistry = [claim("a", { registry: RECORD }), claim("b", { lean: "leans-for" })];
-    expect(debateOrderOptions([], onlyRegistry, new Map([[AT, 0]]))).toContain("date");
+    expect(receptionOrderOptions([onlyRegistry])).toContain("date");
   });
 });
 
@@ -300,9 +302,11 @@ describe("a Debate row on screen", () => {
         createElement(DebatePanel, {
           access: { kind: "owner", owner: debateOwner(row) },
           onJump: () => {},
-          level: "named",
-          onLevel: () => {},
-          order: "claim",
+          /* The fixture is a claim row, so Claims is the sub-mode that draws it. */
+          view: "claims",
+          onView: () => {},
+          articleTitle: null,
+          order: "prioritised",
           onOrder: () => {},
           blockOrder: new Map([[AT, 0]]),
           relevance: null,
