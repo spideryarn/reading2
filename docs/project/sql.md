@@ -107,6 +107,32 @@ disagree with the first.
 The same shape is worth reaching for anywhere a boolean is really an event: archived, published,
 confirmed, dismissed.
 
+## Store when it happened
+
+Every table says when its rows happened — the rule and Greg's words for it are in
+[AGENTS.md § Writing code](../../AGENTS.md) ("Store when it happened"). In practice that is a
+`created_at timestamptz default now()` which no store names, so the database stamps every writer,
+including the next one, and an upsert's `do update` cannot move it.
+[`tests/action-tables-have-created-at.test.ts`](../../tests/action-tables-have-created-at.test.ts)
+holds it: a table with no `created_at` fails unless it is listed there with the timestamp column
+that plays that part, or with the reason it needs none.
+
+**Adding one to a table that already has rows is two statements, not the one drizzle generates:**
+
+```sql
+ALTER TABLE … ADD COLUMN "created_at" timestamp with time zone;
+ALTER TABLE … ALTER COLUMN "created_at" SET DEFAULT now();
+```
+
+`ADD COLUMN … DEFAULT now()` writes the migration's own time into every existing row — an invented
+time, indistinguishable afterwards from a real one. Added bare, the old rows stay `null`, which
+means "before we kept this", and the column stays nullable for good. Hand-edit the generated `.sql`
+and leave the snapshot alone (it should say nullable, default `now()`); the same test refuses the
+one-statement form in any migration. Because nothing fails when such a default goes missing — the
+insert succeeds and writes `null` — `npm run db:check` reports a lost default on a nullable column
+too ([`src/db/schema-drift.ts`](../../src/db/schema-drift.ts)). The audit that started this is
+[261003j](../plans/261003j-store-when-it-happened-timestamp-audit.md).
+
 ## Columns, not JSON — with an exception that has to argue for itself
 
 A field you filter, sort, join or constrain on is a column. JSON is what you reach for when the

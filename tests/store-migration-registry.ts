@@ -2743,6 +2743,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      went away; what it asserts now is *which database* the ledger lands in,
      and that needs one. */
   "tests/cost-store-under-test.test.ts": "private-postgres",
+  "tests/created-at-on-action-tables.test.ts": "private-postgres",
   "tests/db-error-scrub.test.ts": "private-postgres",
   "tests/db-referee-criteria.test.ts": "private-postgres",
   "tests/db-schema-drift.test.ts": "private-postgres",

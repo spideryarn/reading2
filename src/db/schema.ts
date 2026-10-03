@@ -3837,6 +3837,15 @@ export const glossaryLookups = spideryarn.table(
      * docs/plans/261002f-glossary-add-a-looked-up-term.md.
      */
     addedName: text("added_name"),
+    /**
+     * **When this row was first written** — the first lookup, and for a reader-added term the moment the reader added it. `at` is re-stamped by
+     * a later re-run, which overwrites the row; this keeps the first, because
+     * the upsert in the store never names it. Filled by the database default,
+     * so every writer is covered. **Null means before 2026-10-03, when we
+     * started keeping it** — nullable on purpose, since no row is given an
+     * invented time. AGENTS.md § Writing code, "Store when it happened".
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
@@ -3915,6 +3924,15 @@ export const citationFinds = spideryarn.table(
     lookupContextHash: text("lookup_context_hash"),
     /** R-4: the result's URL, title and extract. Provenance only. */
     lookupEvidenceHash: text("lookup_evidence_hash"),
+    /**
+     * **When this row was first written** — the first find of this work. `found_at` is re-stamped by
+     * a later re-run, which overwrites the row; this keeps the first, because
+     * the upsert in the store never names it. Filled by the database default,
+     * so every writer is covered. **Null means before 2026-10-03, when we
+     * started keeping it** — nullable on purpose, since no row is given an
+     * invented time. AGENTS.md § Writing code, "Store when it happened".
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
@@ -4047,6 +4065,15 @@ export const citationInvestigations = spideryarn.table(
      * survived the check.
      */
     paperPassages: jsonb("paper_passages").$type<PaperPassage[]>(),
+    /**
+     * **When this row was first written** — the first press of *Investigate* on this work. `at` is re-stamped by
+     * a later re-run, which overwrites the row; this keeps the first, because
+     * the upsert in the store never names it. Filled by the database default,
+     * so every writer is covered. **Null means before 2026-10-03, when we
+     * started keeping it** — nullable on purpose, since no row is given an
+     * invented time. AGENTS.md § Writing code, "Store when it happened".
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
@@ -4236,8 +4263,12 @@ export const readingTime = spideryarn.table(
  *   `reading_time` has: an entry id is minted from the same alphabet as a
  *   block id but is not one.
  * - **No `owner_id`**, like `reading_time`: only the owner writes, and
- *   ownership is inherited through the article. **No timestamp**: nothing reads
- *   when (GPT Sol's plan review, finding 6).
+ *   ownership is inherited through the article.
+ * - **`created_at` is when the reader hid it**, and nothing reads it yet. The
+ *   table was made without a time because nothing read one (GPT Sol's plan
+ *   review, finding 6); the rule since is Greg's, 2026-10-03 — AGENTS.md
+ *   § Writing code, "Store when it happened". A second hide is `do nothing`,
+ *   so it keeps the first; un-hiding deletes the row and its time with it.
  *
  * Attached to the owner's read as `hidden: true` in `loadGlossary`; the public
  * read never touches this table.
@@ -4249,6 +4280,12 @@ export const glossaryHiddenEntries = spideryarn.table(
       .notNull()
       .references(() => articles.id, { onDelete: "cascade" }),
     entryId: text("entry_id").notNull(),
+    /**
+     * When the reader hid the entry, from the database default. **Null means
+     * hidden before 2026-10-03, when we started keeping it** — nullable on
+     * purpose, since no row is given an invented time.
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
@@ -4305,6 +4342,16 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
    */
   experimentalSince: timestamp("experimental_since", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * **When the row was first written** — the reader's first profile text or
+   * first flip of the switch above, whichever came first. `updated_at` moves
+   * on every write; this does not, because neither upsert in
+   * src/store/pg-reader.ts names it and the database default fills it in.
+   * **Null means a row from before 2026-10-03, when we started keeping it** —
+   * nullable on purpose, since no row is given an invented time. AGENTS.md
+   * § Writing code, "Store when it happened".
+   */
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
 /**
