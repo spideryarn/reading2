@@ -1,6 +1,6 @@
 # GPT-Live alongside Realtime for live conversation
 
-**Status: Stages 0 and 1 landed; plan reviewed by GPT Sol ([review](261003a-gpt-live-alongside-realtime-plan-review-sol.md)) and revised; Stage 2 next.**
+**Status: Stages 0–3 built and merged with `dev`; stage 3 under GPT Sol review; stage 4 (real browser, land) in progress.**
 
 ## What this is for
 
@@ -180,7 +180,7 @@ One new route, `POST /api/chat/:slug/:threadId/live-session`, body `{sdp, placem
 It builds the config, journals the session row **before** calling OpenAI's create (the create bills
 15 s, so the row must exist first — the reverse of the token route's order, where the mint is
 free), does the SDP exchange, records how the create went (the provider's session id and the
-15 s it billed on success; a failure closes the row with a reason), and returns `{sdp, sessionId, liveSessionId, tailId, expiresAt}`. No
+15 s it billed on success; a failure closes the row with a reason), and returns `{sdp, sessionId, liveSessionId, tailId}`. No
 instructions, tools or article reach the browser in that response. (They can reach it in the
 `session.started` snapshot; prompts are not secrets here, and the allowlist keeps lifecycle
 snapshots to the ones the hook needs.)
