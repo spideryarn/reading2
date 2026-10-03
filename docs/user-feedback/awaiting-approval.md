@@ -13,6 +13,13 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-03 · SPIDERYARN-READING2-AX (spya-thpsnd, part 3 of 3) · should the reader's reason for
+  reading feed the command bar, so it proposes a set of actions at once (a few searches, a mode to
+  try, a Debate started with a lens), and should Debate take a text box to steer it? Noted, nothing
+  built; qi-wjb27jre ·
+  [261003k § Noted, not built](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md#noted-not-built) ·
+  [note](261003_1010-fewer-modes-part-3-why-you-are-reading-feeds-the-bar.md)
+
 - 2026-10-01 · SPIDERYARN-READING2-9D (the report itself shipped as stage 1; this is its stage 2)
   · may Debate send an article's DOI to a citation index, to list every work that cites it? OpenAlex
   is licence-compatible today (CC0; a free key and a daily budget) and gives the list but not what

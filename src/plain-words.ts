@@ -113,6 +113,8 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/relations.ts":
     "writes a block id and one of ten fixed words per paragraph; the words a reader sees for them are the app's own",
   "src/pdf-read.ts": "transcribes a PDF verbatim; a transcriber told to prefer common words is invited to tidy",
+  "src/command-pick-call.ts":
+    "picks one of the command bar's own rows, then copies words out of the reader's sentence verbatim; neither call writes prose",
   "src/transcribe.ts": "speech to text, verbatim, with no prompt at all",
   "src/messages-stream.ts": "the wire every Messages call goes through, not a prompt",
   "src/ai-call.ts": "the wire every OpenRouter call goes through, not a prompt",

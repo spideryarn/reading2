@@ -338,7 +338,7 @@ has three stops, so a drag across the whole track writes twice and there is noth
 `?term=` is in the URL for a reason worth stating: **a selected term underlines every one of its
 occurrences in the prose**, so "the article as I am currently looking at it" is not fully described
 without it. Sending someone a link to a term sends them the underlines too. `?find=` and `?run=` are
-there for exactly the same reason, and it is the same reason a fourth time: a search washes the
+there for exactly the same reason, and it is the same reason a fourth time: a search outlines the
 passages that match, so a URL without it shows you a different page from the one you were sent.
 
 **Search mode has four parameters and every other mode has one or two**, which is worth explaining

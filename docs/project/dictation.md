@@ -394,6 +394,11 @@ sits *after* the bar's own status line, because the strip is a live region and t
 has to stay the first one. With no article around it the context is `{ kind: "profile" }`, which no
 production mount reaches today. Tests: `tests/command-bar-arguments.test.tsx`.
 
+A dictated sentence is in the box like a typed one, so when it matches no row it takes the typed
+one's path: Enter asks what it meant
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). The same
+guard refuses that Enter while the microphone is busy.
+
 ## The hook does not know which server it is talking to
 
 **Since 2026-09-08, `useDictation` takes a `transcribe` function rather than importing one**, and is

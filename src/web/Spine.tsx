@@ -284,9 +284,9 @@ interface Props {
    */
   reading?: ReadonlyMap<BlockId, ReadReach> | undefined;
   /**
-   * The quotes the prose outlines, as each block's brightest alpha —
+   * The quotes the prose fills, as each block's brightest alpha —
    * `quoteAlphaByBlock` in spine-marks.ts. **In every mode**, because the
-   * outlines are: unlike `matches`, this is not something the reader asked for
+   * fills are: unlike `matches`, this is not something the reader asked for
    * by opening a band, it is the rail showing what the prose already wears.
    * Drawn as its own strip, never a lane (spine-marks.ts § `quoteRailMarks`).
    */

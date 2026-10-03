@@ -116,7 +116,7 @@ export const NEVER_REMEMBERED = [
      not put the reader back into a conversation mode at all, either. */
   "thread",
   /* Search mode's matcher, the thing being matched, and the ordering of its
-     results. A search *washes* the passages that match, so replaying last
+     results. A search *outlines* the passages that match, so replaying last
      week's over the prose changes what the article looks like on arrival.
      Excluded as a block so the rule is one sentence rather than six. */
   "match",

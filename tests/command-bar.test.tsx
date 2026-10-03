@@ -29,7 +29,7 @@ import { MODES, type Mode } from "../src/modes.js";
 import { PUBLIC_SHELF_LABEL } from "../src/messages.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { modeGenerates, pendingActivation, resetActivations } from "../src/web/activation.js";
-import { GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
+import { ASK_HINT, GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
 import { Dock } from "../src/web/Dock.js";
 import { FeedbackHost } from "../src/web/FeedbackButton.js";
 import { CHANGELOG_LABEL } from "../src/web/router.js";
@@ -401,15 +401,21 @@ describe("a query that matches nothing", () => {
    * search as a fallback row. An honest empty state was preferred to a helpful
    * guess, so a later "did you mean" or "search the article instead" has to
    * come back through him.
+   *
+   * **It came back through him on 2026-10-03** (spya-t0dg9u, plan 261003k): a
+   * signed-in reader is told Enter will ask what they meant. Still no guess —
+   * nothing is drawn, and nothing is asked, until that Enter.
+   * tests/command-bar-pick.test.tsx holds what happens then.
    */
-  it("says `No command matches.` and draws no rows", () => {
+  it("says `No command matches.`, that Enter asks, and draws no rows", () => {
     reading();
     openBar();
     type("zzzq");
     expect(rows()).toEqual([]);
     const empty = dialog().querySelector(".cmdbar-empty");
-    expect(empty?.textContent).toBe(NO_MATCH);
+    expect(empty?.textContent).toBe(`${NO_MATCH} ${ASK_HINT}`);
     expect(NO_MATCH).toBe("No command matches.");
+    expect(ASK_HINT).toBe("Press Enter to ask what you meant.");
     /* Nothing else in the panel below the box: no list, no fallback row, no
        "everything" list quietly restored. */
     expect(dialog().querySelector('[role="listbox"]')).toBeNull();

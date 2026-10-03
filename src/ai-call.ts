@@ -286,8 +286,8 @@ export type OpenRouterPath =
      and `dictation` is the only job routed to it. */
   | "/v1/audio/transcriptions"
   /* Decisions — typed probabilities rather than text. `openRouterDecisions`
-     below is the only thing that sends here, and `search-quick` is the only
-     job routed to it. **Not under `/v1`**: OpenRouter serves it only as
+     below is the only thing that sends here, and `search-quick` and
+     `command-pick` are the jobs routed to it. **Not under `/v1`**: OpenRouter serves it only as
      `POST /api/alpha/decisions` (spike 261002o), so the base's `/api` is all
      it shares with the others. */
   | "/alpha/decisions";
@@ -316,13 +316,14 @@ export type ImageJob = "illustrate";
 export type TranscriptionJob = "dictation";
 
 /**
- * **The job whose answer is a set of probabilities** — one member, excluded
- * from `ChatJob` for `illustrate`'s reason: the Decisions answer is
- * `{answers: {<key>: {noul}}}` with no `choices`, so every chat parser would
- * read it as an empty reply. `openRouterDecisions` takes this and nothing else
- * takes it.
+ * **The jobs whose answer is a set of probabilities** — excluded from
+ * `ChatJob` for `illustrate`'s reason: the Decisions answer is
+ * `{answers: {<key>: {…}}}` with no `choices`, so every chat parser would
+ * read it as an empty reply. `openRouterDecisions` takes these and nothing
+ * else takes them. Quick search asks `noul` questions; the command bar's
+ * pick asks one `choice` (since 2026-10-03, plan 261003k).
  */
-export type DecisionJob = "search-quick";
+export type DecisionJob = "search-quick" | "command-pick";
 
 /** Every job with a row in `AI_JOB_ROUTE`: everything this file can send. */
 export type RoutedJob = ChatJob | ImageJob | TranscriptionJob | DecisionJob;
@@ -724,6 +725,24 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "decisions",
     provider: null,
   },
+  /* **The command bar's sentence, picked** (src/command-pick-call.ts, plan
+     261003k). `search-quick`'s row for its reason: the eval's 600-odd calls
+     carried `model`, `state` and `questions` and nothing else. */
+  "command-pick": {
+    path: "/alpha/decisions",
+    wire: "decisions",
+    provider: null,
+  },
+  /* **And its words, copied out** by the quick tier's model. The policy the
+     eval's `luna` arm was measured with (evals/command-pick/run.ts §
+     `CHAT_ARMS`), and nothing more: an upstream that dropped `reasoning` or
+     `response_format` would think for a second or answer in prose. No
+     `order`: nothing here is cached. */
+  "command-pick-words": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
   pdf: {
     path: "/v1/chat/completions",
     wire: "chat",
@@ -1025,6 +1044,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      judged DeepSeek against Luna ran at this setting:
      evals/results/paper-metadata-2026-10-01.md. */
   "paper-metadata": { effort: "none" },
+  /* Copying two words out of one sentence needs no thinking, and the reader
+     is watching the bar. The setting every chat arm of the eval ran at, with
+     no reasoning token spent on any of 600 answers
+     (docs/investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md). */
+  "command-pick-words": { effort: "none" },
   eval: {
     providerDefault:
       "Through the gateway an eval call takes the provider default. An eval comparing efforts " +
@@ -1153,6 +1177,9 @@ export type ChatJob = Exclude<
      must be a compile error rather than a set of probabilities read as an
      empty reply. Its entry point is `openRouterDecisions`. Plan 261002e. */
   | "search-quick"
+  /* The command bar's pick, on the same wire for the same reason. Its words
+     (`command-pick-words`) are a chat completion and stay in. Plan 261003k. */
+  | "command-pick"
 >;
 
 /**
@@ -2635,15 +2662,35 @@ export async function openRouterTranscription(
  *    (`"context-exceeded"`), and the body goes no further than that, for this
  *    file's usual reason: it may echo the article back.
  *
- * Only `noul` (a yes/no answered as a probability) is typed here, because it
- * is the only question the app asks. `choice` and `score` exist on the wire and
- * were ruled out by the spike; adding one is a member of `DecisionQuestion` and
- * a branch in `readDecisions`.
+ * Two kinds of question are typed here, because they are the two the app
+ * asks: `noul` (a yes/no answered as a probability — quick search) and, since
+ * 2026-10-03, `choice` (one of several named options, with a probability for
+ * each — the command bar's pick, plan 261003k; its answer's shape is the one
+ * evals/command-pick/ saved 600 of). `score` exists on the wire and was ruled
+ * out by the spike; adding it is a member of `DecisionQuestion` and a branch in
+ * `readDecisions`.
  */
-export interface DecisionQuestion {
-  type: "noul";
-  /** The question, in words, naming the part of `state` it is about. */
-  instructions: string;
+export type DecisionQuestion =
+  | {
+      type: "noul";
+      /** The question, in words, naming the part of `state` it is about. */
+      instructions: string;
+    }
+  | {
+      type: "choice";
+      instructions: string;
+      /** Each option's key, and the words that say when to choose it. */
+      criteria: Record<string, string>;
+    };
+
+/** One `choice` question's answer. */
+export interface DecisionChoice {
+  /** The key the model chose — **not checked against `criteria` here**; the caller knows what it offered. */
+  choice: string;
+  /** How sure, in [0, 1]. */
+  confidence: number;
+  /** Every option the model gave a probability in [0, 1], by key. */
+  probabilities: Record<string, number>;
 }
 
 /** What a caller asks for. Named fields, for `ImageRequest`'s reason. */
@@ -2664,6 +2711,11 @@ export interface DecisionCall {
    * caller can count the gap against what it asked.
    */
   noul: Record<string, number>;
+  /**
+   * Each `choice` question's answer, keyed as asked — and absent, for the
+   * reason above, unless it named a choice and a confidence in [0, 1].
+   */
+  choice: Record<string, DecisionChoice>;
   answeredBy: string | null;
   generationId: string | null;
   /** The meter's own reading of `usage`, so a caller logs the figure the ledger holds. */
@@ -2671,7 +2723,10 @@ export interface DecisionCall {
   outputTokens: number | null;
 }
 
-function readDecisions(body: unknown): Record<string, number> {
+const isProbability = (p: unknown): p is number =>
+  typeof p === "number" && Number.isFinite(p) && p >= 0 && p <= 1;
+
+function readDecisions(body: unknown): Pick<DecisionCall, "noul" | "choice"> {
   const answers = (body as { answers?: unknown } | null)?.answers;
   /* Its own class, for `readTranscript`'s reason: "answered nonsense" and
      "never answered" are different failures, and a `{}` read as "nothing
@@ -2679,12 +2734,24 @@ function readDecisions(body: unknown): Record<string, number> {
      body. */
   if (!isRecord(answers))
     throw new UnreadableAnswer("the decisions answer had no answers object");
-  const out: Record<string, number> = {};
+  const noul: Record<string, number> = {};
+  const choice: Record<string, DecisionChoice> = {};
   for (const [key, answer] of Object.entries(answers)) {
-    const p = isRecord(answer) ? answer.noul : undefined;
-    if (typeof p === "number" && Number.isFinite(p) && p >= 0 && p <= 1) out[key] = p;
+    if (!isRecord(answer)) continue;
+    if (isProbability(answer.noul)) noul[key] = answer.noul;
+    /* A choice with no confidence is not read as a sure one, or as an unsure
+       one: it is left out, and the caller sees the gap. */
+    if (typeof answer.choice === "string" && isProbability(answer.confidence)) {
+      const probabilities: Record<string, number> = {};
+      if (isRecord(answer.probabilities)) {
+        for (const [option, p] of Object.entries(answer.probabilities)) {
+          if (isProbability(p)) probabilities[option] = p;
+        }
+      }
+      choice[key] = { choice: answer.choice, confidence: answer.confidence, probabilities };
+    }
   }
-  return out;
+  return { noul, choice };
 }
 
 export async function openRouterDecisions(
@@ -2743,7 +2810,7 @@ export async function openRouterDecisions(
       throw new ProviderRefused(response.status, text, response.headers);
     }
     return {
-      noul: readDecisions(record),
+      ...readDecisions(record),
       answeredBy: meter.answeredBy,
       generationId: meter.generationId,
       inputTokens: meter.inputTokens,

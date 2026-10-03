@@ -264,8 +264,19 @@ what he asked for. A passage jump and an "ask this article" each needed the bar 
 **argument** — *which* passage, *which* question — when it has one text box and that box is the
 filter. Arguments have since arrived, each behind a verb the reader types (below), and with them the
 passage jump; an "ask this article" is still out. A query that matches
-nothing says `No command matches.` and nothing else: no search fallback, no "did you mean", an honest
+nothing says `No command matches.` and, by itself, guesses nothing: no search fallback, an honest
 empty state preferred to a helpful guess.
+
+**Since 2026-10-03 a signed-in reader can ask what a sentence meant**
+([261003k](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md)).
+When nothing matches, the empty line adds *Press Enter to ask what you meant.*, and Enter sends the
+sentence to a fast model that picks among the bar's own rows — *what's changed on this site*, *is
+consciousness mentioned anywhere*. Nothing is guessed until that Enter. A pick the model is sure of,
+of a row that only moves the reader, runs at once. Everything else — a less sure pick, anything that
+writes, spends or generates, and every command that takes words — is drawn as the bar's ordinary
+rows under *Did you mean* and waits for a fresh press. Signed out, the empty line is as before and
+nothing is sent. The models, the measurement and what is not built:
+[chat-llm-help-commands-vision.md § Where we are](chat-llm-help-commands-vision.md#where-we-are).
 
 **Sub-modes have rows of their own since 2026-10-01** — Greg, SPIDERYARN-READING2-77: *"In the
 Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram, etc."* *Remember › Quiz*,
