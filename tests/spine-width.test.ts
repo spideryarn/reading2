@@ -2,8 +2,8 @@
  * **The rail's width, on both sides of a boundary the compiler cannot cross.**
  *
  * `SPINE_W` in layout.ts and `--spine-w` in styles.css are the same number
- * written twice, and two `@media` queries are *derived* from it by hand —
- * both of them `GIST_MIN + PROSE_MIN + SPINE_W - 1` — because a media query
+ * written twice, and three `@media` queries are *derived* from it by hand —
+ * all of them `GIST_MIN + PROSE_MIN + SPINE_W - 1` — because a media query
  * cannot read a custom property and `@custom-media` is not shipped anywhere.
  *
  * **There was a third copy, in `scroll.ts` as a `matchMedia` string, and it went
@@ -64,7 +64,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { readerCss } from "./helpers/stylesheets.js";
+import { enclosing, readerCss } from "./helpers/stylesheets.js";
 import { GIST_MIN, MODE_MIN, MODE_PROSE_FLOOR, PROSE_MIN, SPINE_W, fitView } from "../src/web/layout.js";
 
 const SCROLL_PATH = new URL("../src/web/scroll.ts", import.meta.url);
@@ -180,9 +180,10 @@ describe("--spine-w in styles.css is SPINE_W in layout.ts", () => {
 });
 
 describe("the derived breakpoints are the sums they say they are", () => {
-  it("has both markers, each followed directly by its query", () => {
+  it("has all three markers, each followed directly by its query", () => {
     /* Pinned, so that deleting a marker is a failure rather than a way to make
-       this file stop asking. Two: § a narrow window and § a small device.
+       this file stop asking. Three: § a narrow window, the breadcrumb's copy
+       of that query, and § a small device.
 
        **It was three until 2026-09-03**, and losing one is the fix rather than a
        regression: § a band with no room was `@media (max-width: 843px)`, a
@@ -190,7 +191,7 @@ describe("the derived breakpoints are the sums they say they are", () => {
        moves with `?spine=0`. It keys off `.band-covers` now — see the last
        describe in this file, which is what stops the query coming back. */
     const found = markers();
-    expect(found.length).toBe(2);
+    expect(found.length).toBe(3);
     for (const m of found) expect(m.widths.length).toBe(1);
   });
 
@@ -313,33 +314,6 @@ describe("§ a small device's query", () => {
    under it (postmortem 261002a). The three lines are what is unique to this
    rule: its twin, mode-band.css's herald slot, has the first two as well. */
 const FULL_WIDTH_BAND = "right: var(--safe-right);\n  width: auto;\n  border-right: none;";
-
-/**
- * The at-rule preludes enclosing `index`, innermost first, plus the rule's own
- * selector at position 0.
- *
- * Walks backwards counting braces rather than parsing: an unmatched `{` seen
- * from inside is an enclosing block, and the text back to the previous `}`,
- * `{` or `;` is its prelude.
- */
-function enclosing(source: string, index: number): string[] {
-  const out: string[] = [];
-  let depth = 0;
-  for (let i = index; i >= 0; i--) {
-    const ch = source[i];
-    if (ch === "}") depth++;
-    else if (ch === "{") {
-      if (depth > 0) {
-        depth--;
-        continue;
-      }
-      let j = i - 1;
-      while (j >= 0 && source[j] !== "}" && source[j] !== "{" && source[j] !== ";") j--;
-      out.push(source.slice(j + 1, i).trim());
-    }
-  }
-  return out;
-}
 
 function coversRule(): { selector: string; gates: string[] } {
   const idx = cssCode.indexOf(FULL_WIDTH_BAND);

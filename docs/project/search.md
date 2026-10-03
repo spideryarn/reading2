@@ -47,8 +47,8 @@ empty one:
   [§ The counts in the log line](#the-counts-in-the-log-line).
 - **The text in the box was replaced** by a saved run's criterion arriving late:
   [§ And the fetch](#and-the-fetch-which-can-still-take-the-text-away).
-- **A quick search** shows only paragraphs Jev scored at 0.7 or more, never a heading, and at
-  most twenty: [§ Quick search](#quick-search-a-meaning-search-in-about-a-second).
+- **A quick search** shows only paragraphs Jev scored at 0.7 or more (or, when there are none,
+  the best eight at 0.5 or more), never a heading, and at most twenty: [§ Quick search](#quick-search-a-meaning-search-in-about-a-second).
 - **On the shelf**, only gistable blocks are indexed for passages (`searchLibrary` in
   [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts)), so a heading or a figure is never a hit;
   [library.md § Finding an article](library.md#finding-an-article-and-finding-a-passage-in-one).
@@ -161,7 +161,9 @@ none in the other, rather than a disabled one that invites you to wonder what yo
 [261002e-quick-search-v1.md](../plans/261002e-quick-search-v1.md) and every number below was
 measured in [261002o-quick-search-spike.md](../investigations/261002o-quick-search-spike.md), and
 again on 2026-10-03, when the question's wording changed, in
-[261003c](../investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md).
+[261003c](../investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md),
+and a third time the same day, for the fallback floor, in
+[261003f](../investigations/261003f-quick-search-category-words-score-under-the-floor.md).
 
 > I really love the idea of our kind of search that can search by concepts or ideas or questions,
 > but it's quite slow. And so I was wondering about using TypeSafe.ai's Jev model through OpenRouter
@@ -198,6 +200,22 @@ from that shape:
   about the whole piece. On the new wording, up to 94 of 505 blocks cleared 0.7 in the eval.
   Floors of 0.6 and 0.65 found no more literal targets on its short-topic set and let in more
   known wrong paragraphs; 0.5 recovered three more target opportunities with more junk.
+- **When nothing clears 0.7, the best eight at 0.5 or more are shown instead**
+  (`QUICK_FALLBACK_FLOOR`, `QUICK_FALLBACK_HITS`), since 2026-10-03, from Greg's report
+  `spya-jp5nxn`: *"The quick search still doesn't seem to find enough"*, on a search for "results"
+  in a paper. Its best paragraphs scored 0.52–0.57 and were the right ones. A bare word naming a
+  kind of passage or a field ("results", "examples", "linear algebra") scores the paragraphs that
+  are instances of it under the floor: 62 of 111 such searches came back empty. The fallback
+  fills 50 of them, with 71% of what it shows judged right, and it cannot change a search that
+  finds anything, because it is read only when the list is empty. Its hits print their own scores
+  and nothing else marks them; because the score is rounded to an integer, a value just under 0.7
+  can print as 70. What it costs: a word with no clear referent in the piece,
+  or a neighbouring topic the piece does not cover, can now show a few wrong paragraphs where it
+  showed none (13 of 50 new lists held nothing right; 4 of 75 absent and near-miss searches showed
+  something). The same thing typed as a question already scores far higher ("what were the
+  results?": 0.93). All of it, with the rules passed over, is in
+  [261003f](../investigations/261003f-quick-search-category-words-score-under-the-floor.md); the
+  plan is [261003o](../plans/261003o-quick-search-falls-back-to-a-lower-floor-when-nothing-clears-it.md).
 - **The question says *mention or discuss*, not *match*** — since 2026-10-03, from Greg's report
   `spya-ats9dk`: a quick search for *Buddhism* found nothing in an article with a paragraph on
   Buddhist no-self. In the eval that target was Jev's top answer at 0.70–0.75 on the old wording;

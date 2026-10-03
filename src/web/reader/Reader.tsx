@@ -137,7 +137,8 @@ import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { modePress } from "./mode-press.js";
-import { bandCoversProse, bandShapeFor, chatDock, fitView } from "../layout.js";
+import { bandCoversProse, bandShapeFor, chatDock, fitView, NARROW_WINDOW_MAX } from "../layout.js";
+import { media } from "../media.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
 import { BandBackChip } from "../BandBackChip.js";
@@ -547,11 +548,15 @@ export function Reader({
    * shell's guard would pin the bar over the band, and the band is what is on
    * screen. That includes the band *stepped aside* (`bandAway`), deliberately
    * for v1: drawing the bar the moment a band link is followed would push the
-   * prose down 44px in the middle of that jump, before its position write has
-   * landed (GPT Sol, plan review of 261002h, finding 2).
+   * prose down by the bar's height in the middle of that jump, before its
+   * position write has landed (GPT Sol, plan review of 261002h, finding 2).
    *
-   * **Not for a tree with nothing to name** either, or the bar is 44px of
-   * blank. A tree where no part has a title or a navLabel is the case.
+   * **Not for a tree with nothing to name** either, or the bar is a blank
+   * strip. A tree where no part has a title or a navLabel is the case.
+   *
+   * **On a narrow window it also sets the bar's height**: three lines, in a
+   * taller bar, while this is true (crumbs.css § a narrow window) — which is
+   * why it is in `layoutKey` below.
    *
    * The tree itself is not built while the switch is off. `Reader` renders for
    * every scroll-independent state change, and an experimental feature should
@@ -589,12 +594,28 @@ export function Reader({
   // medium width rewrapped the article under an unchanged key (GPT Sol, F2 on
   // docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md).
   //
-  // `showBar` since 2026-10-02: the controls bar is 44px in flow above the
-  // table, and it now comes and goes with the experimental switch, which loads
-  // after the article and can be pressed mid-read. That moves every row down
-  // without resizing the table, so the table's ResizeObserver hears nothing
-  // (GPT Sol, plan review of 261002h, finding 1).
-  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}`;
+  // `showBar` since 2026-10-02: the controls bar is in flow above the table
+  // (`--bar-h`, 44px by default), and it now comes and goes with the
+  // experimental switch, which loads after the article and can be pressed
+  // mid-read. That moves every row down without resizing the table, so the
+  // table's ResizeObserver hears nothing (GPT Sol, plan review of 261002h,
+  // finding 1).
+  //
+  // `tallCrumbsBar` since 2026-10-03: on a narrow window the bar is taller
+  // while it holds the breadcrumb (crumbs.css § a narrow window), so its
+  // height follows this state rather than `showBar`. A signed-in reader of
+  // somebody else's article keeps the View-only chip's bar while the
+  // breadcrumb comes and goes, and the rows move under an unchanged `showBar`
+  // (GPT Sol, plan review of 261003n, F1).
+  //
+  // The width predicate is the CSS media query's, not `windowWidth`: that
+  // value is the page beside a classic scrollbar, while media queries ask the
+  // viewport. Raw `showCrumbs` was briefly keyed here and made a wide visitor's
+  // one-line breadcrumb look like a reflow, restoring `?at=` and moving them to
+  // the section start under an unchanged 44px bar (261003h postmortem).
+  const tallCrumbsBar =
+    showCrumbs && media(`(max-width: ${NARROW_WINDOW_MAX}px)`);
+  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${tallCrumbsBar ? 1 : 0}`;
 
   /**
    * **Is the prose on screen, for the reading-time recorder** — only this
@@ -2996,7 +3017,8 @@ export function Reader({
       {/* **And since 2026-09-08 it is not drawn at all when that leaves it
           empty**, which on a reading view is most of the time: `showBar` above
           decides whether the element exists, and shell.css then stops reserving
-          its 44px. It was no longer "the one piece of chrome that
+          its height (44px, or more on a narrow window while it holds the
+          breadcrumb). It was no longer "the one piece of chrome that
           is on screen at every scroll position" — the sentence below is kept
           because it is still the ordering rule for what goes *in* the bar, and
           the Dock is what that claim is now true of.
@@ -3029,7 +3051,7 @@ export function Reader({
               in", and that is still true: the Dock is the answer to it now.
   
               They could not stay: this bar is drawn only when it has content
-              (`showBar` above), so a refused delete would have summoned 44px of
+              (`showBar` above), so a refused delete would have summoned a bar of
               chrome and pushed the article down mid-read. **Not deleted** — GPT
               Sol's G3 on 260905g refused that, because `error` is not the
               drawer's `loadError`: that one is about the fetch that fills the

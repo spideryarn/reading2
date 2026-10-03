@@ -1,0 +1,261 @@
+{
+ "arxiv-2610-spya-bfrbaj|results": {
+  "candidates": [
+   "spya-rmssw4",
+   "spya-jaxsn0",
+   "spya-cgga04",
+   "spya-zwruz8",
+   "spya-f2g408",
+   "spya-dcepy8",
+   "spya-fnwmpt",
+   "spya-q7xf2d",
+   "spya-cwmmvf",
+   "spya-z4h4rv",
+   "spya-egznrr",
+   "spya-pgpck8",
+   "spya-yeye7k",
+   "spya-mqs6fj",
+   "spya-y8zhee"
+  ],
+  "decoys": [
+   "spya-p399vv",
+   "spya-gk05nx",
+   "spya-r3eb4q",
+   "spya-x52p57",
+   "spya-hp848g"
+  ]
+ },
+ "arxiv-2610-spya-bfrbaj|linear algebra": {
+  "candidates": [
+   "spya-ft0zvv",
+   "spya-y5e8ck",
+   "spya-kc7qcw",
+   "spya-hbx0rq",
+   "spya-zubvtq",
+   "spya-xtvpa0",
+   "spya-bkcvuq",
+   "spya-csux0a",
+   "spya-w94mj8",
+   "spya-w8dggn",
+   "spya-hwk7bz",
+   "spya-cgga04",
+   "spya-dy4aud",
+   "spya-wjs5qx"
+  ],
+  "decoys": [
+   "spya-esjsrv",
+   "spya-wc22vh",
+   "spya-smkcxb",
+   "spya-dcepy8",
+   "spya-uc08b6"
+  ]
+ },
+ "arxiv-2610-spya-bfrbaj|human memory": {
+  "candidates": [
+   "spya-zwruz8",
+   "spya-z79m3x",
+   "spya-fenz04",
+   "spya-ft0zvv",
+   "spya-q7xf2d",
+   "spya-jaxsn0",
+   "spya-y5e8ck",
+   "spya-f2g408",
+   "spya-rmssw4",
+   "spya-cgga04",
+   "spya-kc7qcw"
+  ],
+  "decoys": [
+   "spya-dtt39z",
+   "spya-p2yuuk",
+   "spya-kvfyeu",
+   "spya-r3eb4q"
+  ]
+ },
+ "constitution|examples": {
+  "candidates": [
+   "spya-m5228n",
+   "spya-v2n4fx",
+   "spya-tabzzj",
+   "spya-gnvhk6"
+  ],
+  "decoys": [
+   "spya-aj4dr2",
+   "spya-x78cfu"
+  ]
+ },
+ "constitution|definitions": {
+  "candidates": [
+   "spya-hxz0a3",
+   "spya-ctqg0n",
+   "spya-ujk7d4",
+   "spya-bh2faf",
+   "spya-c5kghx",
+   "spya-p4a4rd",
+   "spya-dqx7dn",
+   "spya-sw3v9u",
+   "spya-vby4sy",
+   "spya-nuqt3t",
+   "spya-kgzqvu",
+   "spya-uqedqz",
+   "spya-kgdywh",
+   "spya-ahd063",
+   "spya-enueab"
+  ],
+  "decoys": [
+   "spya-hek4mp",
+   "spya-n58h2w",
+   "spya-mn286g",
+   "spya-b54jrm",
+   "spya-d3ytg6"
+  ]
+ },
+ "constitution|philosophy": {
+  "candidates": [
+   "spya-aj4dr2",
+   "spya-ctqg0n",
+   "spya-tabzzj"
+  ],
+  "decoys": [
+   "spya-rgrzer",
+   "spya-pu5fda"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|criticism": {
+  "candidates": [
+   "spya-cqh2pq",
+   "spya-pbcr03",
+   "spya-qu7j89",
+   "spya-ymbpwn",
+   "spya-fdefb5",
+   "spya-ahtr6e",
+   "spya-t29n67",
+   "spya-y4vjdg",
+   "spya-wepmnr",
+   "spya-n0bnf9",
+   "spya-qwvjwn",
+   "spya-vnkr36",
+   "spya-mcaa4g",
+   "spya-d89xf7",
+   "spya-gvzuc4",
+   "spya-k6fpme",
+   "spya-k850tu",
+   "spya-cv97j7",
+   "spya-p4vmm0",
+   "spya-yverz7",
+   "spya-x63ycg",
+   "spya-p8ky7g",
+   "spya-mxxutn",
+   "spya-d9a0wr",
+   "spya-xm96be",
+   "spya-her4zk",
+   "spya-uwxe4h",
+   "spya-n393ru",
+   "spya-jvrmrh",
+   "spya-tb4wr2",
+   "spya-nv6tp0",
+   "spya-c5ve5t",
+   "spya-vs0vpj",
+   "spya-kqs33c",
+   "spya-t54yqa",
+   "spya-da9tvt",
+   "spya-hj5y6s"
+  ],
+  "decoys": [
+   "spya-gamzr3",
+   "spya-u6w37a",
+   "spya-b59nm2",
+   "spya-z4bud7",
+   "spya-gp3g6s",
+   "spya-rn8y3y",
+   "spya-hzp9yz",
+   "spya-dp8sem",
+   "spya-fyrb7m",
+   "spya-cfbkp2",
+   "spya-va8qxr",
+   "spya-sq7un9",
+   "spya-vys3vj"
+  ]
+ },
+ "openai-huggingface|methods": {
+  "candidates": [
+   "spya-m24kgb",
+   "spya-zfbcb4",
+   "spya-ast6bs",
+   "spya-ckcyzp",
+   "spya-vfq66b",
+   "spya-xvkm3j",
+   "spya-gy8fb4",
+   "spya-d6p0aa",
+   "spya-cc5uhs",
+   "spya-w9ctpd",
+   "spya-asbjy9",
+   "spya-vpd027",
+   "spya-gj5bbr",
+   "spya-acvnjw",
+   "spya-cx56k0",
+   "spya-nayjhs",
+   "spya-rnag5c",
+   "spya-m45y0k"
+  ],
+  "decoys": [
+   "spya-dgcfnd",
+   "spya-z83ezv",
+   "spya-chdu2z",
+   "spya-hz50qg",
+   "spya-tq02vk",
+   "spya-peudft"
+  ]
+ },
+ "openai-huggingface|results": {
+  "candidates": [
+   "spya-gb7ze2",
+   "spya-c2ck7h",
+   "spya-b0wbhk",
+   "spya-g9tjds",
+   "spya-cbv8uf",
+   "spya-wtguds",
+   "spya-m4gku9",
+   "spya-vqcwj0",
+   "spya-nayjhs",
+   "spya-bgtdqz",
+   "spya-c2bkgz",
+   "spya-ebtbnm",
+   "spya-khwx0h",
+   "spya-vsujby",
+   "spya-z6c3dr",
+   "spya-sjjbur",
+   "spya-peudft",
+   "spya-pfkdk4",
+   "spya-ugwnw2",
+   "spya-d6p0aa"
+  ],
+  "decoys": [
+   "spya-krknwc",
+   "spya-qvg86h",
+   "spya-hz50qg",
+   "spya-q33vy8",
+   "spya-rnag5c",
+   "spya-f07bw5",
+   "spya-q62pkz"
+  ]
+ },
+ "openai-huggingface|statistics": {
+  "candidates": [
+   "spya-cbv8uf",
+   "spya-ms8rup"
+  ],
+  "decoys": [
+   "spya-fkg2ny",
+   "spya-tq02vk"
+  ]
+ },
+ "openai-huggingface|government regulation": {
+  "candidates": [
+   "spya-rnag5c"
+  ],
+  "decoys": [
+   "spya-gb7ze2",
+   "spya-c2bkgz"
+  ]
+ }
+}

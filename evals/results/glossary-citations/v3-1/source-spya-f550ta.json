@@ -1,0 +1,63 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A short-lived glowing sphere seen during or near thunderstorms, lasting seconds and vanishing with or without leaving a mark. Its cause is still unexplained, and the term covers a wide range of reported shapes, colours, sizes, and behaviours rather than one agreed phenomenon."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A label for ball lightning research describing how work on the topic is scattered across unconnected individuals and small groups, with no shared data, agreed methods, or unifying theory holding it together."
+    },
+    {
+      "name": "COST Action",
+      "kind": "organization",
+      "aliases": [
+        "COST Action P18"
+      ],
+      "background": "A European-funded research collaboration programme that brings scientists from different countries together on a shared topic without itself funding the research directly."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "Austria's network for detecting and locating lightning strikes, used in this article to check whether reported ball lightning sightings line up in time and place with real recorded lightning strokes."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's lightning detection and location network, used alongside Austria's ALDIS to match ball lightning reports against recorded strikes."
+    },
+    {
+      "name": "Cavendish Laboratory",
+      "kind": "place",
+      "aliases": [],
+      "background": "The physics department of Cambridge University, long one of the world's leading centres for experimental physics, where discoveries such as the electron and the structure of DNA were made."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or numbness in part of the body caused by being near a lightning or ball lightning strike, as distinct from longer-lasting nerve damage or psychological trauma from the same event."
+    }
+  ]
+}

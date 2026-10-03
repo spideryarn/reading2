@@ -1,0 +1,147 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "before-5",
+  "promptVersion": "glossary/8",
+  "sourceSha256": {
+    "glossary.ts": "c0f77fe893b2d17d662dd423edb92f6a2b640a26fea7dd3558fe76164d467e61",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "senseHere": "Credited in this piece with coining the term for the luminous storm phenomenon and with first collecting and reporting eyewitness cases of it.",
+      "background": "French astronomer and physicist of the early 19th century known for work on optics and electromagnetism, and for popularizing new scientific findings to the public."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [
+        "Brand"
+      ],
+      "background": "A German school official whose 1923 book 'Der Kugelblitz' was, for decades, the only full-length German-language study collecting and analyzing reports of the phenomenon."
+    },
+    {
+      "name": "Stanley Singer",
+      "kind": "person",
+      "aliases": [
+        "Singer"
+      ],
+      "background": "Author of a 1971 book-length review of the phenomenon that compiled many early case reports, including several from scientists, and remains a standard reference in the field."
+    },
+    {
+      "name": "Rakov and Uman",
+      "kind": "other",
+      "aliases": [
+        "Rakov",
+        "Uman"
+      ],
+      "background": "Vladimir Rakov and Martin Uman co-wrote a major handbook on lightning physics; their brief, skeptical chapter on this phenomenon is treated as summarizing the field's state of knowledge, and Uman later ran a field experiment using rocket-triggered lightning strikes."
+    },
+    {
+      "name": "Vladimir Lvovich Bychkov",
+      "kind": "person",
+      "aliases": [
+        "Bychkov"
+      ],
+      "background": "A Russian physics professor who maintains a database of Russian eyewitness reports and personally contributed several case accounts, including his own sighting, to this compilation."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "P18"
+      ],
+      "senseHere": "A European research collaboration on lightning physics whose 30 scientists reached consensus that the phenomenon under study is a genuine, if unexplained, occurrence."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [],
+      "senseHere": "The Austrian network of ground sensors that detects and locates lightning strikes, used here to check whether reported sightings coincided with real, measurable lightning discharges."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [],
+      "senseHere": "The German lightning-detection service, analogous to Austria's network, used to confirm the timing and strength of strikes near reported sightings."
+    },
+    {
+      "name": "cloud–ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud-ground stroke",
+        "cloud–cloud stroke"
+      ],
+      "senseHere": "A lightning discharge that travels between a storm cloud and the ground, as opposed to one that stays within or between clouds; the article tracks which type coincided with each sighting."
+    },
+    {
+      "name": "positive and negative strokes",
+      "kind": "term",
+      "aliases": [
+        "positive stroke",
+        "negative stroke"
+      ],
+      "senseHere": "Lightning strikes are classed by the sign of the electric charge they carry to ground, measured in kiloamperes of peak current; the article found an unusually high share of positive strikes linked to sightings."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century Austrian geologist and mineralogist who belonged to the Imperial Academy of Sciences in Vienna and formally reported his own sighting, along with others collected from fellow Viennese residents, to that academy."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A British radio astronomer at the Jodrell Bank Observatory who later became a physics professor; his widely publicized 1963 airplane sighting, reported to the journal Nature, remains one of the best-known cases in the field."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "An 18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences who died while experimenting with atmospheric electricity using an ungrounded rod."
+    },
+    {
+      "name": "Keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived nerve and muscle shutdown caused by a nearby lightning strike, as distinct from longer-lasting psychological or neurological aftereffects such as skin numbness or thunderstorm phobia."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A pioneering French neurologist at the Salpêtrière Hospital in Paris who taught Sigmund Freud and studied the psychological aftereffects of trauma, including in a patient who reported being struck near a glowing ball during a storm."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss theory"
+      ],
+      "senseHere": "An explanation holding that when lightning hits the ground, it vaporizes minerals in the soil, and the resulting glowing cloud of burning particles is what observers see as a floating fireball."
+    },
+    {
+      "name": "Qinghai Plateau spectroscopy case",
+      "kind": "event",
+      "aliases": [
+        "Cen et al. case",
+        "Xining case"
+      ],
+      "senseHere": "A 2012 incident in China where cameras built to photograph lightning spectra accidentally captured and chemically analyzed the light from a real instance of the phenomenon, showing it matched elements found in soil."
+    }
+  ]
+}

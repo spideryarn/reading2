@@ -161,7 +161,7 @@ export function stickyOffset(): number {
    * a row will end up — and by the time anything arrives at the top of the
    * viewport the bar will be stuck across it. Answering "0, it covers nothing
    * right now" would be the more literal reading of the rect and would send
-   * every jump from the top of the article 44px too high.
+   * every jump from the top of the article a bar's height too high.
    *
    * An earlier version of this comment claimed the number was current coverage.
    * It is not, and GPT Sol was right to say so — the value was already what the
@@ -525,7 +525,7 @@ export function watchBarVisibility(): () => void {
    * `--bar-bottom` and `--bar-hide` back **while `data-bars` is still
    * `"hidden"`** — that is the guard that stops the bar sliding out from under
    * a keyboard reader tabbing the granularity pills. So focus alone moves the
-   * bar and the table head 44px, twice, and neither end of it changes an
+   * bar and the table head by the bar's height, twice, and neither end of it changes an
    * attribute on `<html>`.
    *
    * Nothing would have noticed. The fisheye panels take their `top` from the
@@ -606,7 +606,7 @@ let aiming: number | null = null;
  * destination once, from `stickyOffset()`, and then travels. If the travel
  * itself can hide the controls bar — and a jump down the article is a downward
  * scroll, so it can — the clearance the destination was calculated with is no
- * longer the clearance that exists when it arrives, and the row lands 44px
+ * longer the clearance that exists when it arrives, and the row lands a bar's height
  * under the header it was supposed to clear. An upward jump has the mirror
  * fault: it reveals the bar and lands behind it.
  *

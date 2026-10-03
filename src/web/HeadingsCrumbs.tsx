@@ -1,7 +1,8 @@
 /**
- * **The headings breadcrumb** — one line in the controls bar saying where in
- * the article's structure the reader is: part › section. For a reader with
- * Experimental features on; Reader.tsx decides when it is drawn.
+ * **The headings breadcrumb** — the controls bar saying where in the
+ * article's structure the reader is: part › section. One line, or three in a
+ * taller bar on a narrow window (crumbs.css § a narrow window). For a reader
+ * with Experimental features on; Reader.tsx decides when it is drawn.
  *
  * > I sometimes feel as though I lose track of where I am. The structure mode
  * > helps a lot, but then I have to have it open.
@@ -69,8 +70,14 @@ export function HeadingsCrumbs({
                   {...(i === path.length - 1 ? { "aria-current": "location" as const } : {})}
                   onClick={() => onJump(crumb.blockId)}
                 >
-                  {crumb.number ? <span className="crumb-num">{crumb.number}</span> : null}
-                  <span className={withVoice("crumb-text", crumb.voice)}>{crumb.text}</span>
+                  {/* One box for the number and the words: on a narrow window
+                      the button is a taller press target and this is what
+                      truncates or wraps inside it (crumbs.css § a narrow
+                      window). Inert on a wide one. */}
+                  <span className="crumb-label">
+                    {crumb.number ? <span className="crumb-num">{crumb.number}</span> : null}
+                    <span className={withVoice("crumb-text", crumb.voice)}>{crumb.text}</span>
+                  </span>
                 </button>
               </Tooltip>
             </li>

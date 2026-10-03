@@ -1,0 +1,134 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3-9",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A short-lived glowing sphere seen during or near thunderstorms, unexplained by current physics and known mainly from eyewitness accounts rather than instrument recordings. The article treats it as a single label covering a wide range of sizes, colours, durations and behaviours reported by different witnesses, which is part of why no single theory explains all cases."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "Nineteenth-century French astronomer and physicist who wrote an early influential work on thunder and lightning. His writing is credited with establishing the term used ever since for this class of luminous atmospheric phenomena."
+    },
+    {
+      "name": "Fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as scattered across unconnected individuals and small groups rather than organized into one coordinated field. The article uses the phrase to capture how data collection, theorizing, and laboratory simulation have mostly proceeded in isolation from each other."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "P18"
+      ],
+      "background": "A European-funded research collaboration program on the physics of lightning, involving around 30 researchers across Europe. Such COST Actions coordinate scientists from different countries on a shared research topic without funding primary research itself."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "background": "A US network of cameras that photographed the night sky continuously for over a decade to detect meteors and track meteorite falls. Its enormous photographic archive was later searched for incidental captures of other transient sky phenomena."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "The Austrian network of ground sensors that detects and records the location, timing, and electrical strength of lightning strikes across the country. The article uses its data to check whether reported ball lightning sightings line up with real detected lightning strokes nearby."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "The German counterpart to ALDIS, a network that detects and records lightning strikes across Germany. The article cites its detection of a very strong lightning strike to help corroborate a cluster of ball lightning reports from witnesses."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "Austrian geologist and mineralogist who was a member of the Imperial Academy of Sciences at Vienna in the nineteenth century. He made careful measurements of natural phenomena, including determining the angular size of the object he saw in the sky."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "German physics professor known for a famous 1922 experiment demonstrating that electron spin is quantized, done together with Otto Stern. He also happened to witness and carefully analyze a ball lightning event in 1927, applying his training to calculate its speed and trajectory."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "British radio astronomer who worked at the Jodrell Bank Observatory before becoming a professor of physical electronics at the University of Kent. His 1963 account of a glowing sphere seen inside an airplane cabin became one of the most widely publicized ball lightning reports."
+    },
+    {
+      "name": "Positive and negative stroke",
+      "kind": "term",
+      "aliases": [
+        "positive cloud-ground stroke",
+        "negative stroke"
+      ],
+      "senseHere": "A lightning strike is classified by whether it carries positive or negative electrical charge from cloud to ground, with positive strokes being rarer overall but often more powerful. The article notes an unusually high share of positive strokes among lightning events linked in time to ball lightning sightings, which it treats as an unexplained pattern worth further study."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "Baltic German physicist and member of the St Petersburg Academy of Sciences who died in 1753 while experimenting with atmospheric electricity. He was killed by a conventional lightning strike through an ungrounded conductor, though popular legend later depicted him as killed by ball lightning."
+    },
+    {
+      "name": "Keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A temporary paralysis or numbness of a limb caused by a nearby lightning event, without the person being directly struck or injured. Charcot used it to describe short-lived nerve effects, as distinct from longer-lasting psychological trauma from the same experience."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "French physician regarded as the founder of modern neurology, who taught at the University of Paris and trained Sigmund Freud. He is known for using detailed patient case studies, including hysteria and nervous disorders, to classify neurological symptoms."
+    },
+    {
+      "name": "Triggered lightning",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A technique for deliberately causing a lightning strike to occur at a chosen spot, by launching a small rocket trailing a thin grounded wire into a thundercloud. Researchers used this method to study what happens when lightning hits different ground materials, to see if any effects resembled ball lightning."
+    },
+    {
+      "name": "Soil strike theory",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "An explanation proposing that ball lightning forms when a lightning strike vaporizes soil minerals, creating a glowing cloud of burning metal and silicon particles. The article cites a spectroscopic case in China whose chemical signature matched what this theory predicts."
+    }
+  ]
+}

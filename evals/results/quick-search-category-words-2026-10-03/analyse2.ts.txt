@@ -1,0 +1,76 @@
+/* Round 2 analysis (Sol F1, F2, F4). Per list (one run of one query), under
+   each rule: what is shown, and how the second blind judge (with headings)
+   marked it; judge agreement; near-miss negatives; stability across runs.
+   No model calls. Writes summary2.json. */
+import { readFileSync, writeFileSync } from "node:fs";
+import { DIR } from "./lib.ts";
+import { QUERIES } from "./abstract-run.ts";
+import { VARIANTS } from "./round2-run.ts";
+
+const raw = JSON.parse(readFileSync(`${DIR}/abstract-raw.json`, "utf8"));
+const r2 = JSON.parse(readFileSync(`${DIR}/round2-raw.json`, "utf8"));
+const j1 = JSON.parse(readFileSync(`${DIR}/judged-abstract.json`, "utf8"));
+const j2 = JSON.parse(readFileSync(`${DIR}/judged2.json`, "utf8"));
+const key2 = JSON.parse(readFileSync(`${DIR}/pool2-key.json`, "utf8"));
+
+/* Agreement, on ids both judges saw. */
+let both = 0, agree = 0, yy = 0, yn = 0, ny = 0, nn = 0;
+for (const k of Object.keys(j2)) for (const [id, v] of Object.entries(j2[k].verdicts)) {
+  const a = j1[k]?.verdicts[id]; if (!a) continue;
+  both++; if (a === v) agree++;
+  if (a === "y" && v === "y") yy++; else if (a === "y") yn++; else if (v === "y") ny++; else nn++;
+}
+let d2y = 0, d2 = 0;
+for (const [k, v] of Object.entries(key2) as [string, any][]) for (const id of v.decoys) { d2++; if (j2[k].verdicts[id] === "y") d2y++; }
+const agreement = { judgedByBoth: both, agree, "y/y": yy, "judge1 y, judge2 n": yn, "judge1 n, judge2 y": ny, "n/n": nn, decoysJudge2Right: `${d2y} of ${d2}` };
+console.log("agreement:", JSON.stringify(agreement));
+
+type Rule = (s: [string, number][]) => [string, number][];
+const emptyOnly = (F: number, C: number): Rule => (s) => { const k = s.filter(([, p]) => p >= 0.7); return k.length ? k.slice(0, 20) : s.filter(([, p]) => p >= F).slice(0, C); };
+const RULES: Record<string, Rule> = { "production (>=0.7)": (s) => s.filter(([, p]) => p >= 0.7).slice(0, 20) };
+for (const F of [0.45, 0.5, 0.55]) for (const C of [1, 3, 5, 8, 20]) RULES[`empty -> >=${F}, best ${C}`] = emptyOnly(F, C);
+RULES[">=0.7 | (>=0.5 & within 0.15 of best)"] = (s) => { const t = s[0]?.[1] ?? 0; return s.filter(([, p]) => p >= 0.7 || (p >= 0.5 && p >= t - 0.15)).slice(0, 20); };
+RULES["fewer than 3 -> top up to 3 from >=0.5"] = (s) => { const k = s.filter(([, p]) => p >= 0.7); return k.length >= 3 ? k.slice(0, 20) : s.filter(([, p]) => p >= 0.5).slice(0, 3); };
+
+/* The lists: bare-label queries (the 21 + their case/number variants), absent, hard. */
+type Entry = { group: "bare" | "request" | "absent" | "hard"; k: string; q: string; reps: any[] };
+const entries: Entry[] = [];
+for (const Q of QUERIES) entries.push({ group: Q.set === "absent" ? "absent" : "bare", k: `${Q.slug}|${Q.q}`, q: Q.q, reps: raw.find((x: any) => x.slug === Q.slug && x.q === Q.q).reps });
+for (const V of VARIANTS) entries.push({ group: V.how === "request" ? "request" : "bare", k: `${V.slug}|${V.base}`, q: V.q, reps: r2.find((x: any) => x.slug === V.slug && x.q === V.q).reps });
+for (const H of r2.filter((x: any) => x.set === "hard")) entries.push({ group: "hard", k: `${H.slug}|${H.q}`, q: H.q, reps: H.reps });
+
+const verdict = (k: string, id: string, group: string): "y" | "n" | "u" => (j2[k]?.verdicts[id] ?? ((group === "hard" || group === "absent") ? "n" : "u")) as any;
+const table: any[] = [];
+for (const [name, rule] of Object.entries(RULES)) for (const group of ["bare", "absent", "hard"] as const) {
+  const t = { lists: 0, changed: 0, empty: 0, shown: 0, right: 0, wrong: 0, unjudged: 0, top1Right: 0, top1Wrong: 0, wrongInTop3: 0, noneRight: 0, flipQueries: 0, spread: 0, queries: 0 };
+  for (const e of entries.filter((x) => x.group === group)) {
+    const sizes: number[] = []; const modes = new Set<string>();
+    for (const r of e.reps) {
+      const s = (Object.entries(r.scores) as [string, number][]).sort((a, b) => b[1] - a[1]);
+      const base = RULES["production (>=0.7)"]!(s).map(([id]) => id);
+      const ids = rule(s).map(([id]) => id);
+      const fired = base.length === 0;
+      t.lists++; sizes.push(ids.length); modes.add(base.length ? "normal" : "fallback");
+      if (ids.join() !== base.join()) t.changed++;
+      if (!ids.length) { t.empty++; continue; }
+      /* Judged quality is reported only for lists the rule changed (the pool
+         holds what scored >= 0.45 on runs where nothing cleared 0.7). */
+      if (!fired) continue;
+      const vs = ids.map((id) => verdict(e.k, id, group));
+      t.shown += ids.length; t.right += vs.filter((v) => v === "y").length; t.wrong += vs.filter((v) => v === "n").length; t.unjudged += vs.filter((v) => v === "u").length;
+      if (vs[0] === "y") t.top1Right++; else t.top1Wrong++;
+      if (vs.slice(0, 3).includes("n")) t.wrongInTop3++;
+      if (!vs.includes("y")) t.noneRight++;
+    }
+    t.queries++; if (modes.size > 1) t.flipQueries++; t.spread += Math.max(...sizes) - Math.min(...sizes);
+  }
+  table.push({ rule: name, group, lists: t.lists, changed: t.changed, "still empty": t.empty, "fallback lists": t.top1Right + t.top1Wrong, "shown": t.shown, right: t.right, wrong: t.wrong, unjudged: t.unjudged, "top-1 right": t.top1Right, "a wrong one in top 3": t.wrongInTop3, "nothing right": t.noneRight, "mean size spread across runs": +(t.spread / t.queries).toFixed(2), "queries flipping mode": t.flipQueries });
+}
+console.table(table.filter((r) => r.group === "bare"));
+console.table(table.filter((r) => r.group !== "bare" && /production|0\.5, best (3|8)|0\.45, best 8|0\.55, best 8|within/.test(r.rule)));
+
+/* Typing it differently: best score and kept count per intent. */
+const typed = entries.filter((e) => e.group !== "hard" && e.group !== "absent").map((e) => { const tops = e.reps.map((r) => Math.max(...(Object.values(r.scores) as number[]))); const n70 = e.reps.map((r) => (Object.values(r.scores) as number[]).filter((p) => p >= 0.7).length); return { intent: e.k.split("|")[1], article: e.k.slice(0, 10), typed: e.q, best: tops.map((p) => p.toFixed(2)).join(" "), "kept at 0.7": n70.join(" ") }; }).sort((a, b) => (a.article + a.intent).localeCompare(b.article + b.intent));
+console.table(typed);
+writeFileSync(`${DIR}/summary2.json`, JSON.stringify({ agreement, table, typed }, null, 1));
+process.exit(0);

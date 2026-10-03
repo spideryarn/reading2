@@ -1,0 +1,157 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "v3b-4",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "406c56f8eeec02fba123307afd30a72408ef30ed21ed2c5d7b21783a328481f6",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [
+        "Lemoine"
+      ],
+      "background": "A Google engineer who in 2022 publicly claimed that the company's LaMDA chatbot was conscious and had feelings, a claim that drew wide media attention before Google dismissed him for breaching confidentiality rules."
+    },
+    {
+      "name": "David Chalmers",
+      "kind": "person",
+      "aliases": [
+        "Chalmers"
+      ],
+      "background": "Philosopher well known for naming the 'hard problem' of consciousness and for arguing that machine consciousness may be achievable in the near future."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "kind": "person",
+      "aliases": [
+        "Hinton"
+      ],
+      "background": "AI researcher and recent Nobel Prize winner, often called a pioneer of deep learning, who has publicly stated he believes some AI systems are already conscious."
+    },
+    {
+      "name": "Thomas Nagel",
+      "kind": "person",
+      "aliases": [
+        "Nagel"
+      ],
+      "background": "Philosopher famous for the claim that an organism is conscious only if there is 'something it is like' to be that organism, a widely used way of pointing at subjective experience without fully defining it."
+    },
+    {
+      "name": "pareidolia",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The mental habit of seeing familiar patterns, like a face, in random or ambiguous shapes. Seth borrows this, via Adam Becker, to describe why people keep seeing signs of consciousness in AI systems that are not actually there."
+    },
+    {
+      "name": "computational functionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The assumption that running the right kind of computation or information processing is enough, by itself, to produce consciousness. Seth argues this assumption is usually taken for granted rather than defended, and that it may well be false."
+    },
+    {
+      "name": "Alan Turing",
+      "kind": "person",
+      "aliases": [
+        "Turing"
+      ],
+      "background": "Mathematician and computer scientist who defined computation through the abstract 'Turing machine,' laid the groundwork for digital computers, and proposed an early test for machine intelligence."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "universal Turing machine",
+        "Turing computation",
+        "Turing world",
+        "Turing-complete"
+      ],
+      "senseHere": "An abstract device that reads and writes symbols step by step according to fixed rules, which formalizes what an algorithm is. A 'universal' version can simulate any other such machine, which is why software can run on any suitably powerful hardware. Seth uses this idea to argue that digital computers, unlike brains, keep what they do cleanly separable from what they are made of."
+    },
+    {
+      "name": "autopoiesis",
+      "kind": "term",
+      "aliases": [
+        "self-production"
+      ],
+      "senseHere": "A living system's continuous work of maintaining and regenerating its own material structure, down to the level of individual cells. Seth treats this self-sustaining activity, not any detachable algorithm, as possibly the real source of the brain's predictive, conscious activity."
+    },
+    {
+      "name": "mortal computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A computing approach, introduced by Geoffrey Hinton, in which a program is so tightly bound to its particular physical hardware that it effectively 'dies' when that hardware is destroyed, unlike ordinary software that can be copied anywhere. Seth cites it as an example of computation moving away from the hardware-independent 'Turing world' model."
+    },
+    {
+      "name": "biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view, which Seth takes seriously though doesn't fully endorse, that being a living organism is necessary for consciousness, not just having the right pattern of information processing. On this view no arrangement of non-living matter, however cleverly organized, could ever be conscious."
+    },
+    {
+      "name": "John Searle",
+      "kind": "person",
+      "aliases": [
+        "Searle"
+      ],
+      "background": "American philosopher known for arguing that consciousness depends on the brain's specific biological properties rather than on abstract computation, and for the 'Chinese Room' thought experiment against machine understanding."
+    },
+    {
+      "name": "predictive processing",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A theory that the brain constantly generates predictions about the causes of its sensory inputs and treats the mismatch between prediction and input as a signal to be corrected. Seth builds on this to argue that conscious perception, and even selfhood, arise from this constant predictive guesswork rather than from any neutral read-out of the world."
+    },
+    {
+      "name": "controlled hallucination",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Seth's description of ordinary conscious perception as the brain's best guess about the world, continually checked and corrected by incoming senses rather than a direct recording of reality. He contrasts this constant, reality-anchored guessing with uncontrolled hallucination, where the guessing loses its grip on sensory evidence."
+    },
+    {
+      "name": "interoceptive inference",
+      "kind": "term",
+      "aliases": [
+        "interoception"
+      ],
+      "senseHere": "The brain's ongoing best-guessing about the body's internal state, such as heart rate or oxygen level, using the same predictive machinery as perception of the outside world. Seth treats this as the likely source of felt emotion and mood, and so links it closely to why life, not just computation, might be needed for consciousness."
+    },
+    {
+      "name": "simulation hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The idea, associated with Nick Bostrom, that our entire reality might itself be a computer simulation run by a more advanced civilization. Seth points out this idea secretly depends on assuming computational functionalism is true, since it only works if a simulated brain can actually be conscious."
+    },
+    {
+      "name": "Nick Bostrom",
+      "kind": "person",
+      "aliases": [
+        "Bostrom"
+      ],
+      "background": "Philosopher who formulated the simulation hypothesis and has written on existential risk and superintelligent AI, built around statistical arguments about how common simulated minds would be compared to 'real' ones."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "A classic visual illusion in which two equal-length lines look different in length because of arrowheads added to their ends, and knowing the trick does not stop the illusion from working. Seth uses it as a comparison for why people might keep feeling an AI is conscious even after being convinced intellectually that it isn't."
+    },
+    {
+      "name": "Garland test",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A test, named after the director of the film 'Ex Machina,' of whether a person still feels a machine is conscious even after being told plainly that it is just a machine. Seth uses it to separate the question of whether an AI really is conscious from the question of what it takes to convince a human that it is."
+    },
+    {
+      "name": "neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "neuron replacement thought experiment"
+      ],
+      "senseHere": "A hypothetical scenario, associated with David Chalmers, of swapping brain cells one by one for silicon parts that behave identically, meant to show that consciousness could survive the switch and so does not depend on biological material. Seth argues the experiment fails because no silicon part could actually reproduce everything a real neuron does, such as the waste-clearing role of some neurons' firing."
+    }
+  ]
+}

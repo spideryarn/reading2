@@ -234,9 +234,13 @@ reading view saying where in the structure you are, part › section, following 
 > — Greg, 2026-09-29 (spya-m3pteb)
 
 It is the tree [Structure](structure.md) draws and the same "you are here", each crumb jumps to its
-part or section and carries the row's card. It costs 44px at the top of the prose, because it reuses
-the controls bar rather than adding a second piece of sticky chrome, and the bar stops sliding away
-while it holds the breadcrumb. It is not drawn where an open mode covers the prose on a narrow
+part or section and carries the row's card. It reuses the controls bar rather than adding a second
+piece of sticky chrome, and the bar stops sliding away while it holds the breadcrumb. The bar costs
+44px at the top of the prose on a wider window. **On a narrow window it is three lines in a 68px bar, since
+2026-10-03**: the ancestors on one line, the current section on up to two, because one line cut both
+crumbs on a phone in portrait
+([261003n](../plans/261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc.md)).
+It is not drawn where an open mode covers the prose on a narrow
 window, including after a band link steps that mode aside. The reasoning, the patterns looked at and
 what was deferred (one line per heading level, a thinner bar) are
 [261002h](../plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md).

@@ -616,7 +616,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    `<p class="controls">` — `src/sanitize-policy.ts` reserves six class names and
    `controls` is not one of them, verified by running the sanitiser over a forged
    chain rather than by reading the allowlist. Unscoped, such a paragraph makes
-   `:has(.controls)` true and reserves 44px for a bar nobody drew, which is the
+   `:has(.controls)` true and reserves a bar's height for a bar nobody drew, which is the
    reported bug back again on that one article. The direct-child combinator is
    the whole of the defence: article markup lives inside a `<td>` and is never a
    child of `.reader`. `:where()` contributes no specificity, so both rows keep
@@ -655,7 +655,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
      hidden it falls to the inset and no further. */
   --bar-bottom: var(--safe-top);
   /* The bar's own travel, which is NOT the change in `--bar-bottom` — see
-     `--bar-hide` in § tokens for the 44px of chrome that would otherwise be
+     `--bar-hide` in § tokens for the bar's height of chrome that would otherwise be
      left drawn behind the clock. */
   --bar-hide: calc(-1 * (var(--bar-h) + var(--safe-top)));
 }
@@ -728,7 +728,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    docs/plans/plain-mode-and-the-way-out.md § 1.
 
    **The leading `:has(:where(.reader) > .controls)` is not padding.** It does two things at once:
-   it stops this guard reserving 44px for a bar that is not rendered — which is
+   it stops this guard reserving its height for a bar that is not rendered — which is
    the whole of the bug a reader reported on 2026-09-07, since `.mode-band` is
    exactly when the bar is empty — and it takes the selector to (0,4,0), above
    the `:root:not(:has(.controls))` rule that then has to win in every other
@@ -766,7 +766,11 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    `:has()`, not a third one chained on: `.controls > .crumbs` is (0,2,0), the
    same as `.controls:focus-within`, so the selector stays (0,4,0). GPT Sol,
    plan review of 261002h. A covering band never has crumbs (Reader.tsx §
-   `showCrumbs`), so this cannot pin a bar over one. */
+   `showCrumbs`), so this cannot pin a bar over one.
+
+   **The bar it pins is taller on a narrow window**, since 2026-10-03: the same
+   `> .controls > .crumbs` raises `--bar-h` there (crumbs.css § a narrow
+   window), and both declarations below read it. */
 :root:has(:where(.reader) > .controls):has(
     :where(.reader) > .controls:focus-within,
     :where(.reader) > .controls > .crumbs,
