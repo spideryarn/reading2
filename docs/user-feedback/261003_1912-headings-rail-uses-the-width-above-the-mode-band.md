@@ -30,8 +30,8 @@ Plan, GPT Sol's two reviews, the measurements and the before and after shots:
   is whole. At the very top of an article the rail stays where it was, because there it is level
   with the panel and its first words would be behind it. So the path moves sideways once as the
   title leaves; there is no slide.
-- **The section you are in no longer loses its last two letters to an ellipsis when it fits.** A
-  rounding in how the crumbs shared a shortfall cost it about 6px even with room to spare.
+- **The section you are in no longer loses its last two letters to an ellipsis when it fits.** The
+  way the crumbs shared a shortfall cost it about 6px even with room to spare.
 - A phone is unchanged.
 
 ## For Greg to look at

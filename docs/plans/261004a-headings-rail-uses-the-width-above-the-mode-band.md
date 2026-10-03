@@ -192,7 +192,10 @@ A Sonnet subagent with Playwright, same article and URL, real wheel scrolling. S
 for a crumb that wanted 892, the crumb was still cut by 6px (4 at 1366, 9 at 1024). The ancestors
 shrank "a hundred times faster", but flex shares the shortfall in proportion to length times that
 factor, so the current section still paid about 1% of it: an ellipsis and two letters. The factor is
-now 100000, the current crumb is whole at all three widths, and the ancestor takes what is left
+now 1000000 (measured at 100000; GPT Sol's
+[second code review](261004a-headings-rail-uses-the-width-above-the-mode-band-code-review-2-sol.md)
+raised it tenfold, because WebKit rounds to 1/64px and 0.009px could still round up to an
+ellipsis in Safari), the current crumb is whole at all three widths, and the ancestor takes what is left
 (214px at 1180, 58px at 1024, where it reads only "7 Mos…"). Where the current crumb alone is wider
 than the bar (800×600 with a band) it still ends in an ellipsis inside the bar. The narrow rules are
 untouched by this: there the current crumb is out of the flex row.
