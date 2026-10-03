@@ -178,7 +178,7 @@ import {
   loadTweets,
   fetchAllowanceStore,
 } from "./store/index.js";
-import { defaultShelfTopicsDeps, shelfTopics } from "./shelf-topics.js";
+import { defaultShelfTopicSetDeps, shelfTopicSet } from "./shelf-topic-sets.js";
 /* **Pure functions only**, and that is the whole reason this import survived
    step 10 while the writes beside it did not. `withRetry` and `withEdit` take a
    snapshot and return what the result would be, so they can be run as a gate
@@ -8028,18 +8028,24 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res, query } }) => {
       /* `=== "1"`, as `/api/library` does. Here it widens to active + archived. */
       const archived = query.get("archived") === "1";
-      const { response, refresh } = await shelfTopics(archived, defaultShelfTopicsDeps());
+      const { response, refresh } = await shelfTopicSet(archived, defaultShelfTopicSetDeps());
       const terms: LibraryTermsResponse = response;
       /* The reader's own words, derived: never a shared cache's (Sol F10). */
-      res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, terms);
       /* **After the answer, and still inside the handler** — plan 260929c R1.
-         The reader already has the program's list (or the stored pick); the
-         model call runs now and is awaited, so its spend lands in this
-         request's collector against this reader rather than as a late finish,
-         and a Vercel function stays alive until it is done. `refresh` never
-         throws. src/shelf-topics.ts. */
-      if (refresh) await refresh();
+         The reader already has the stored topics (or the phrase pills); the
+         model's work — filing new articles, or a re-think of the whole tree,
+         which can take a couple of minutes — runs now and is awaited, so its
+         spend lands in this request's collector against this reader rather
+         than as a late finish, and a Vercel function stays alive until it is
+         done. `refresh` never throws. The `finally` also spends or releases
+         the already-taken allowance and claim if serialising/sending the
+         answer itself fails. src/shelf-topic-sets.ts, plan 261003f. */
+      try {
+        res.setHeader("Cache-Control", "private, no-store");
+        send(res, 200, terms);
+      } finally {
+        if (refresh) await refresh();
+      }
     },
   },
 

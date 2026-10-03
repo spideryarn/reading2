@@ -2151,8 +2151,20 @@ export interface LibraryTermsResponse {
     /** Lowercased, plural-folded — what `?topics=` names. */
     key: string;
     label: string;
-    /** Every member article, by how often it uses the phrase, then slug. */
-    articles: { slug: string; count: number }[];
+    /**
+     * Every member article. A phrase topic's are ordered by how often each uses
+     * the phrase, then slug, and carry that `count`. **A model-named topic's
+     * are newest first and carry no `count`**: there is no phrase to count
+     * (plan 261003f), and a made-up 1 would print "used 1 time".
+     */
+    articles: { slug: string; count?: number }[];
+    /**
+     * How coarse or fine the topic is, 0 (a broad subject) towards 1. Only on
+     * a model-named topic; the list arrives broad first. Greg, 2026-10-03.
+     */
+    granularity?: number;
+    /** The `key` of the broader topic this one is inside, when it has one. */
+    within?: string;
   }[];
   scope: {
     /** The whole visible shelf, including skipped and pending articles. */
@@ -2162,7 +2174,11 @@ export interface LibraryTermsResponse {
     /** Read articles the extractor skipped — not English, or no prose. */
     skipped: number;
   };
-  /** In-scope articles not yet read; ask again until this is 0. */
+  /**
+   * Articles not yet read; ask again until this is 0. Normally the visible
+   * scope. While preparing one model tree over active + archived together it
+   * can temporarily include archived articles outside the current view.
+   */
   pending: number;
   /**
    * Whose ranking `terms` is: `"model"` when a stored model score for this
@@ -2176,6 +2192,13 @@ export interface LibraryTermsResponse {
    * bounded number of times — and the model's pick will be in the answer.
    */
   refreshing: boolean;
+  /**
+   * How many articles in this view are not in the model's topics yet because
+   * they arrived after it was last worked out. They are sorted in by
+   * themselves; until then they are missing under a chosen topic, so the row
+   * says so. Absent when there are none, and on the phrase row.
+   */
+  sorting?: number;
 }
 
 /**

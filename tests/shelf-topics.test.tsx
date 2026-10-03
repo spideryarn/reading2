@@ -741,6 +741,200 @@ describe("Tags and Topics on the real shelf", () => {
   });
 });
 
+/* Topics a model named as a broad-to-fine tree (plan 261003f): no phrase
+   counts, a marker on the finer pills, the broader topic named in the card,
+   and the finer topics inside a chosen one moved up beside it. */
+describe("topics a model named", () => {
+  const named = (label: string, granularity: number, within: string | undefined, ...slugs: string[]) => ({
+    key: label.toLowerCase(),
+    label,
+    articles: slugs.map((slug) => ({ slug })),
+    granularity,
+    ...(within === undefined ? {} : { within }),
+  });
+  /* Broad first, as the server sends them. *Business* shares mem-brain with
+     *Neuroscience*, so it survives that choice and the ordering has work to do. */
+  const NAMED_TERMS: LibraryTermsResponse = {
+    terms: [
+      named("Neuroscience", 0, undefined, "mem-brain", "neurons", "palaces"),
+      named("Business", 0, undefined, "startups", "mem-brain"),
+      named("Memory", 0.5, "neuroscience", "palaces", "mem-brain"),
+      named("Mnemonics", 0.75, "memory", "palaces"),
+    ],
+    scope: { articles: 4, works: 4, skipped: 0 },
+    pending: 0,
+    chosenBy: "model",
+    refreshing: false,
+  };
+  const labels = () => chips().map((b) => b.getAttribute("aria-label")?.split(" ")[0]);
+  const marked = () => chips().filter((b) => b.querySelector("[data-topic-finer]")).map((b) => b.getAttribute("aria-label")?.split(" ")[0]);
+  async function hover(target: HTMLElement) {
+    await act(async () => {
+      target.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+      target.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true, pointerType: "mouse" }));
+      target.focus();
+    });
+  }
+
+  beforeEach(() => {
+    answer = async () => NAMED_TERMS;
+  });
+
+  it("draws them broad first, marks only the finer ones, and puts the labels in the model's face", async () => {
+    await show("/");
+    expect(labels()).toEqual(["Neuroscience", "Business", "Memory", "Mnemonics"]);
+    expect(marked()).toEqual(["Memory", "Mnemonics"]);
+    for (const b of chips()) expect(b.querySelector(".voice-ai")?.textContent).toBe(b.getAttribute("aria-label")?.split(" ")[0]);
+    /* The marker is decoration: the accessible name is still the label first. */
+    expect(chip("Memory").querySelector("[data-topic-finer]")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("leaves a phrase topic unmarked and in the app's own face", async () => {
+    answer = async () => ACTIVE_TERMS;
+    await show("/");
+    expect(marked()).toEqual([]);
+    expect(host.querySelector("button[aria-pressed] .voice-ai")).toBeNull();
+  });
+
+  it("moves the finer topics inside a chosen subject up beside it", async () => {
+    await show("/");
+    click(chip("Neuroscience"));
+    await settle();
+    expect(params().get("topics")).toBe("neuroscience");
+    expect(labels()).toEqual(["Neuroscience", "Memory", "Business", "Mnemonics"]);
+    click(chip("Memory"));
+    await settle();
+    expect(labels()).toEqual(["Neuroscience", "Memory", "Mnemonics", "Business"]);
+  });
+
+  it("says which broader topic a finer one is inside, and never 'used N times'", async () => {
+    await show("/");
+    await hover(chip("Memory"));
+    await waitFor(() => document.body.textContent?.includes("match this view") ?? false, "the tooltip");
+    const text = document.body.textContent ?? "";
+    expect(document.body.querySelector("[data-topic-inside]")?.textContent).toBe("Inside Neuroscience");
+    expect(text).toContain("2 match this view · 2 of 4 on the shelf");
+    /* Members in the order sent (newest first), with nothing after the title. */
+    expect(text).toContain("Memory palacesMemory and the brain");
+    expect(text).not.toMatch(/used \d* ?times?|used undefined/);
+    expect(text).toContain("Named by a model");
+    expect(text).not.toContain("nobody wrote this list");
+  });
+
+  it("says nothing about a broader topic on a broad subject's card", async () => {
+    await show("/");
+    await hover(chip("Neuroscience"));
+    await waitFor(() => document.body.textContent?.includes("match this view") ?? false, "the tooltip");
+    expect(document.body.querySelector("[data-topic-inside]")).toBeNull();
+  });
+
+  it("explains itself on the word Topics: a model named them, broad first, new articles sorted in", async () => {
+    await show("/");
+    const word = [...host.querySelectorAll<HTMLElement>("span[tabindex]")].find((s) => s.textContent === "Topics");
+    expect(word).toBeTruthy();
+    await hover(word as HTMLElement);
+    await waitFor(() => document.body.textContent?.includes("a model named") ?? false, "the Topics card");
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("titles and summaries of your articles");
+    expect(text).toContain("Broad subjects come first");
+    expect(text).toContain("New articles are sorted into the topics automatically");
+    expect(text).not.toContain("Phrases your articles use");
+  });
+
+  it("keeps the phrase card for phrase topics", async () => {
+    answer = async () => ACTIVE_TERMS;
+    await show("/");
+    const word = [...host.querySelectorAll<HTMLElement>("span[tabindex]")].find((s) => s.textContent === "Topics");
+    await hover(word as HTMLElement);
+    await waitFor(() => document.body.textContent?.includes("Phrases your articles use") ?? false, "the Topics card");
+    expect(document.body.textContent).not.toContain("a model named");
+  });
+
+  it("indents the finer rows of More detail by depth, with the same marker on their chips", async () => {
+    await show("/?topicsView=detail");
+    const rows = [...host.querySelectorAll('[aria-label="Topics in detail"] > li')];
+    expect(rows.map((r) => r.querySelector("[data-topic-depth]")?.getAttribute("data-topic-depth"))).toEqual(["0", "0", "1", "2"]);
+    expect(rows.map((r) => !!r.querySelector("[data-topic-finer]"))).toEqual([false, false, true, true]);
+    /* Newest first, as sent — not re-sorted by a count that is not there. */
+    expect([...(rows[0]?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href"))).toEqual([
+      "/read/mem-brain",
+      "/read/neurons",
+      "/read/palaces",
+    ]);
+  });
+});
+
+/* `?topics=` while a model refresh is under way. A refresh can bring a topic
+   back, so a key missing from a `refreshing` answer is neither applied nor
+   dropped; it goes on the settled answer, or when the asking gives up. */
+describe("a chosen key during a model refresh", () => {
+  const withGone: LibraryTermsResponse = {
+    ...ACTIVE_TERMS,
+    terms: [...ACTIVE_TERMS.terms, term("gone", ["startups", 2])],
+  };
+  async function tick() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESHING_RETRY_MS + 10);
+    });
+    await settle();
+  }
+
+  it("keeps the key through a refreshing answer, and applies it when the refresh brings the topic back", async () => {
+    let calls = 0;
+    answer = async () => (++calls === 1 ? { ...ACTIVE_TERMS, refreshing: true } : withGone);
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await show("/?topics=gone,memory");
+      await settle(200);
+      expect(calls).toBe(1);
+      expect(params().get("topics"), "dropped during the refresh").toBe("gone,memory");
+      /* Not applied either: *memory* alone narrows to three. */
+      expect(cards()).toHaveLength(3);
+      await tick();
+      expect(calls).toBe(2);
+      expect(params().get("topics")).toBe("gone,memory");
+      expect(cards()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops the key when the settled answer still lacks it", async () => {
+    let calls = 0;
+    answer = async () => (++calls === 1 ? { ...ACTIVE_TERMS, refreshing: true } : ACTIVE_TERMS);
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await show("/?topics=gone,memory");
+      await settle(200);
+      expect(params().get("topics")).toBe("gone,memory");
+      await tick();
+      await waitFor(() => params().get("topics") === "memory", "the stale key to be dropped");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops the key once the asking has given up on a refresh that never lands", async () => {
+    let calls = 0;
+    answer = async () => {
+      calls++;
+      return { ...ACTIVE_TERMS, refreshing: true };
+    };
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await show("/?topics=gone,memory");
+      for (let i = 0; i < REFRESHING_RETRIES - 1; i++) await tick();
+      expect(calls).toBe(REFRESHING_RETRIES);
+      expect(params().get("topics"), "dropped while still asking").toBe("gone,memory");
+      await tick();
+      expect(calls).toBe(1 + REFRESHING_RETRIES);
+      await waitFor(() => params().get("topics") === "memory", "the stale key to be dropped");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 /* Pure, so outside the block above: its afterEach unmounts a root this test
    never mounts. */
 describe("shelfKeyOf", () => {
