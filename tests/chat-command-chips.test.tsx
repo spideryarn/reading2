@@ -114,7 +114,7 @@ describe("where a token is a button", () => {
 
   it("does not turn the block id inside a refused token into a citation chip", () => {
     paint("[cmd:glossary-open:spya-k3m9qt]", executor({}));
-    expect(host.querySelector(".cite")).toBeNull();
+    expect(host.querySelector(".cite-chips")).toBeNull();
   });
 
   it("is text where the panel was handed no executor", () => {
@@ -125,7 +125,7 @@ describe("where a token is a button", () => {
 
   it("still draws a citation beside a chip", () => {
     paint("He says so [spya-k3m9qt].\n[cmd:bookmark:spya-k3m9qt]", executor({ bookmark: async () => CLOSE }));
-    expect(host.querySelectorAll(".cite")).toHaveLength(1);
+    expect(host.querySelectorAll(".cite-chips")).toHaveLength(1);
     expect(chips()).toHaveLength(1);
     expect(chips()[0]?.textContent).toBe("Bookmark this passage");
   });

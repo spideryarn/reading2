@@ -562,6 +562,9 @@ Opens are a counter and a timestamp, deliberately **not** an event log. The tool
 6 times, last on Tuesday" and can never say "three times this week". If that second question ever
 matters, the answer is a table of events, not another column.
 
+A rename, a purpose edit, an archive and a Put back each stamp `articles.updated_at` — stored, not
+shown, and the only trace of a Put back, which nulls `archived_at`. An open does not move it.
+
 `POST /api/library/:slug/open` is called by the **client**, from the reading view's mount — not by
 the server from inside `GET /api/article/:slug`. A GET that writes is a GET that a prefetch, a retry
 or a health check inflates without anybody deciding to.
