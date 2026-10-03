@@ -259,6 +259,31 @@ describe("articles.updated_at", () => {
     expect((await read()).updated_at).toBe(before.updated_at);
   });
 
+  it("keeps legacy null when the supplied settings are already in effect", async () => {
+    await set("articles", articleWhere(ARTICLE_ID), sql`title_override = null, purpose = null, archived_at = null, updated_at = null`);
+    await mine(() => pgShelfStore.patch(SLUG, { title: "  ", purpose: "\r\n ", archived: false }));
+    expect((await read()).updated_at).toBeNull();
+  });
+
+  it("keeps the last real change on normalized repeats, including both archive states", async () => {
+    await mine(() => pgShelfStore.patch(SLUG, { title: "Same title", purpose: "Same\npurpose", archived: true }));
+    const archived = await read();
+    await pause();
+    await mine(() => pgShelfStore.patch(SLUG, { title: " Same title ", purpose: " Same\r\npurpose ", archived: true }));
+    expect(await read()).toEqual(archived);
+
+    await mine(() => pgShelfStore.patch(SLUG, { archived: false }));
+    const unarchived = await read();
+    await pause();
+    await mine(() => pgShelfStore.patch(SLUG, { archived: false }));
+    expect(await read()).toEqual(unarchived);
+
+    // One actual change still stamps a patch whose other fields are repeats.
+    await set("articles", articleWhere(ARTICLE_ID), sql`updated_at = ${EARLIER}`);
+    await mine(() => pgShelfStore.patch(SLUG, { title: "Same title", purpose: "Different purpose", archived: false }));
+    expectRecent((await read()).updated_at, "updated_at after the one changed field");
+  });
+
   it("is stamped when the charged switch turns High-powered AI on, and not when it is already on", async () => {
     expect((await read(POWER_ID)).updated_at).toBeNull();
 
@@ -296,6 +321,22 @@ describe("articles.updated_at", () => {
     await pause();
     await runAsOwner(ADMIN_OWNER, () => pgHighPowerStore.switchOnForAdmin(ADMIN_SLUG));
     expect(await read(ADMIN_ARTICLE_ID), "a repeat of a switch already made moved a clock").toEqual(on);
+  });
+
+  it("uses the database clock for the setting change even when the application's clock is behind", async () => {
+    await set("articles", articleWhere(POWER_ID), sql`high_power_since = now(), updated_at = null`);
+    await set("articles", articleWhere(ADMIN_ARTICLE_ID), sql`high_power_since = null, updated_at = null`);
+    // Fake Date only: database IO and its timers must keep running normally.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(EARLIER));
+    try {
+      await mine(() => pgHighPowerStore.switchOff(POWER_SLUG));
+      await runAsOwner(ADMIN_OWNER, () => pgHighPowerStore.switchOnForAdmin(ADMIN_SLUG));
+    } finally {
+      vi.useRealTimers();
+    }
+    expectRecent((await read(POWER_ID)).updated_at, "updated_at after switching off with a slow application clock");
+    expectRecent((await read(ADMIN_ARTICLE_ID)).updated_at, "updated_at after switching on with a slow application clock");
   });
 });
 

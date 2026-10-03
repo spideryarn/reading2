@@ -18,7 +18,7 @@
  * keeps the first `since`.
  */
 
-import { and, isNull, isNotNull } from "drizzle-orm";
+import { and, isNull, isNotNull, sql } from "drizzle-orm";
 
 import { isAdmin } from "../admin.js";
 import { getDb } from "../db/client.js";
@@ -42,17 +42,18 @@ async function writeState(slug: string, on: boolean): Promise<string | null> {
 
      `updated_at` rides in the same conditional statement, so it moves on a real
      transition and not on a repeat — and it is the only thing switching *off*
-     leaves behind, since that nulls `high_power_since`. */
+     leaves behind, since that nulls `high_power_since`. Use the database wall
+     clock rather than an application clock read before sending the query. */
   if (on) {
     const at = new Date();
     await db
       .update(articles)
-      .set({ highPowerSince: at, updatedAt: at })
+      .set({ highPowerSince: at, updatedAt: sql`clock_timestamp()` })
       .where(and(ownedSlug(slug), isNull(articles.highPowerSince)));
   } else {
     await db
       .update(articles)
-      .set({ highPowerSince: null, updatedAt: new Date() })
+      .set({ highPowerSince: null, updatedAt: sql`clock_timestamp()` })
       .where(and(ownedSlug(slug), isNotNull(articles.highPowerSince)));
   }
   const [row] = await db
