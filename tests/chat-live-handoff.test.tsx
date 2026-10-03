@@ -89,6 +89,10 @@ function fakeLive(phase: LiveApi["phase"]): { api: LiveApi; finish: () => void }
     reconnect: () => { events.push("reconnect"); },
     step: null,
     reconnecting: false,
+    talkMode: "hands-free" as LiveApi["talkMode"],
+    enterTapToTalk: () => { events.push("tap-to-talk"); },
+    talk: () => { events.push("talk"); },
+    doneTalking: () => { events.push("done"); },
   } satisfies LiveApi;
   return { api, finish: () => release() };
 }
@@ -645,6 +649,37 @@ describe("the live session in the shipping chat composer", () => {
     expect(host.textContent).toMatch(/paused the microphone/);
     act(() => reconnect()?.click());
     expect(events).toContain("reconnect");
+  });
+
+  it("offers tap to talk when noise holds the turn open, and then Talk, Done and Hands-free", () => {
+    /* spya-kzdmhb, plan 261003d: Reconnect alone sends a reader in a street
+       back into the same street. */
+    const { api } = fakeLive("live");
+    const button = (label: string) => [...host.querySelectorAll("button")].find((b) => b.textContent === label);
+    paint(api);
+    expect(button("Tap to talk"), "offered before anything went wrong").toBeUndefined();
+    expect(host.querySelector(".mic-level"), "the meter this test later expects gone was never here").not.toBeNull();
+    paint({ ...api, stall: "no-reply" });
+    expect(button("Tap to talk"), "offered for a stall noise does not cause").toBeUndefined();
+    paint({ ...api, stall: "open-turn" });
+    act(() => button("Tap to talk")?.click());
+    expect(events).toContain("tap-to-talk");
+    paint({ ...api, talkMode: "tap-idle" });
+    expect(host.querySelector(".chat-live-state")?.textContent).toBe("Ready");
+    expect(host.textContent).toMatch(/isn’t listening/);
+    expect(host.querySelector(".mic-level, [class*='mic-level']"), "a meter showing a street nobody hears").toBeNull();
+    act(() => button("Talk")?.click());
+    expect(events).toContain("talk");
+    paint({ ...api, talkMode: "tap-idle", quietInput: true });
+    expect(host.textContent, "the meter's clone is still capturing, but nothing is being sent").not.toMatch(/No sound detected/);
+    paint({ ...api, talkMode: "tap-idle", speaking: true });
+    expect(button("Talk")?.disabled, "Talk over a reply that cannot be interrupted").toBe(true);
+    paint({ ...api, talkMode: "tap-sending" });
+    expect(button("Talk")?.disabled, "Talk before the last turn's reply began").toBe(true);
+    paint({ ...api, talkMode: "tap-talking" });
+    expect(host.textContent).toMatch(/tap Done/);
+    act(() => button("Done")?.click());
+    expect(events).toContain("done");
   });
 
   it("does not offer Reconnect, or a stall, when the call is not live", () => {

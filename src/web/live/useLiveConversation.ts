@@ -150,6 +150,41 @@ export interface LiveToolRun {
   ms: number;
 }
 
+/**
+ * **Who decides when the reader's turn starts and ends.**
+ *
+ * `hands-free` is the conversation as it has always been: the microphone is
+ * open and OpenAI's voice detector decides. In a street that detector can hear
+ * the traffic as somebody who has not finished, and hold the turn open for
+ * ever (spya-kzdmhb; the one `LiveStall-open-turn` event, 2026-09-30, was a
+ * 74-second turn that never closed). So the `open-turn` notice offers **tap to
+ * talk**, which is OpenAI's documented push-to-talk: `turn_detection: null`, a
+ * clear when the reader taps Talk, and a commit when they tap Done, with the
+ * microphone track disabled in between so noise never reaches the service.
+ *
+ * **Not** "disable the track and let the detector close the turn on the
+ * silence". The first draft did that; nothing documents that a disabled WebRTC
+ * track sends silence rather than nothing, or that semantic VAD closes an
+ * unfinished-sounding turn on it. GPT Sol, plan review, 2026-10-03.
+ * docs/plans/261003d-tap-to-talk-when-noise-holds-the-live-turn-open.md.
+ *
+ * It lasts for the call and survives a Reconnect, including the pickers'; a
+ * start the reader makes themselves is hands-free again. There is no way back
+ * within a call, because that would need a second copy of the server's
+ * turn-detection settings.
+ */
+export type TalkMode =
+  | "hands-free"
+  /** Ready: the detector is off and nothing is being sent. */
+  | "tap-idle"
+  /** Between Talk and Done. */
+  | "tap-talking"
+  /**
+   * From Done until the reply begins. Nothing else says the companion is busy
+   * in that gap, and Talk in it would start a turn over the one being sent.
+   */
+  | "tap-sending";
+
 export interface LiveApi {
   phase: LivePhase;
   /** While `connecting`, the step it is on. See `LiveStep`. */
@@ -224,6 +259,14 @@ export interface LiveApi {
    * the restart — `stop` does that. GPT Sol, plan review 261002j.
    */
   reconnecting: boolean;
+  /** § TalkMode. Hands-free unless the reader chose otherwise during this call. */
+  talkMode: TalkMode;
+  /** Turn the detector off for this call. Hands-free and `live` only; a no-op otherwise. */
+  enterTapToTalk: () => void;
+  /** Open the microphone. Tap to talk, and not while the companion is answering. */
+  talk: () => void;
+  /** Close it and send the turn. */
+  doneTalking: () => void;
 }
 
 /** How this hook is wired to our own server, and to the thread. */
@@ -334,9 +377,25 @@ const STALL_TICK_MS = 1_000;
  */
 const STALL_REPORT_AFTER_MS = 5_000;
 
+/**
+ * Done waits this long after closing the microphone before it commits, so the
+ * frames already in flight land in this turn rather than the next one's clear.
+ */
+const TAP_TAIL_MS = 300;
+/** A Done sooner than this after Talk is a double tap, and commits nothing. */
+const TAP_MIN_MS = 500;
+/** Every tap-to-talk client event's `event_id` starts with this. See the `error` handler. */
+const TAP_EVENT = "spya-tap-";
+
 /** The counts a stall report carries. Numbers only — never a word the reader said. */
 interface StallTally {
   speechStarted: number;
+  /**
+   * Counted because the one open-turn event so far (SPIDERYARN-READING2-6Y)
+   * could not say whether the detector ever heard the sound stop: a
+   * `speech_stopped` with no commit behind it would look the same. 261003d.
+   */
+  speechStopped: number;
   committed: number;
   responses: number;
   cancelled: number;
@@ -346,6 +405,7 @@ interface StallTally {
 
 const freshTally = (): StallTally => ({
   speechStarted: 0,
+  speechStopped: 0,
   committed: 0,
   responses: 0,
   cancelled: 0,
@@ -451,6 +511,19 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const reconnectSeq = useRef(0);
   /** Whether this session opened a real microphone, so a reconnect does the same. */
   const microphoneWanted = useRef(true);
+  const [talkMode, setTalkModeState] = useState<TalkMode>("hands-free");
+  const talkModeRef = useRef<TalkMode>("hands-free");
+  /** Set by a reconnect just before its start, so that start keeps tap to talk. */
+  const keepTalkMode = useRef(false);
+  /** Tap to talk's own client events, numbered so an `error` can name which one it refused. */
+  const tapSeq = useRef(0);
+  /** The `session.update` that turned the detector off; refusing it means back to hands-free. */
+  const tapEntryEvent = useRef<string | null>(null);
+  const talkStartedAt = useRef(0);
+  /** Done's short wait for the last frames already in flight, before the commit. */
+  const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** A tap commit is out, so the next `committed` asks for the reply. */
+  const tapCommitPending = useRef(false);
   const toolResponses = useRef(new ToolResponses());
   const toolRequests = useRef(new Set<AbortController>());
   const startup = useRef<{ timer: ReturnType<typeof setTimeout>; abort: AbortController } | null>(null);
@@ -689,6 +762,29 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     if (channel?.readyState === "open") channel.send(JSON.stringify(msg));
   }, []);
 
+  /** Send one of tap to talk's events, under an id the `error` handler can recognise. */
+  const sendTap = useCallback((msg: Record<string, unknown>): string => {
+    tapSeq.current += 1;
+    const id = `${TAP_EVENT}${tapSeq.current}`;
+    send({ ...msg, event_id: id });
+    return id;
+  }, [send]);
+
+  /**
+   * **Turn this session's voice detector off, and the microphone with it.**
+   * A partial `session.update`: only `turn_detection` changes, and everything
+   * else the session was minted with (src/live.ts § liveSession) stays. Then a
+   * clear, so nothing the detector was holding becomes the first tap turn.
+   */
+  const detectorOff = useCallback(() => {
+    if (micTrack.current) micTrack.current.enabled = false;
+    tapEntryEvent.current = sendTap({
+      type: "session.update",
+      session: { type: "realtime", audio: { input: { turn_detection: null } } },
+    });
+    sendTap({ type: "input_audio_buffer.clear" });
+  }, [sendTap]);
+
   /** A reply is now owed, if one was not already. `StallFacts.owedSince`. */
   const owe = useCallback(() => {
     if (owedSince.current === null) owedSince.current = Date.now();
@@ -752,6 +848,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       live_cancelled: t.cancelled,
       live_mutes: t.mutes,
       live_disconnects: t.disconnects,
+      live_speech_stopped: t.speechStopped,
+      live_tap_to_talk: talkModeRef.current === "hands-free" ? 0 : 1,
     });
   }, []);
 
@@ -1058,6 +1156,15 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
            else did or did not arrive, and one lost event must not pin
            "Listening…" for the rest of the session. */
         setHearing(false);
+        /* **Tap to talk asks for its reply here, not beside the commit.** With
+           the detector off nothing else will, and a commit the service refused
+           — an empty buffer — must not still produce an answer to nothing. The
+           reply was owed from the commit, so a `committed` that never comes is
+           still `no-reply`. */
+        if (tapCommitPending.current) {
+          tapCommitPending.current = false;
+          sendTap({ type: "response.create" });
+        }
       }
 
       if (type === "conversation.item.created" || type === "conversation.item.added") {
@@ -1160,7 +1267,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         midSentence.current = true;
         return setHearing(true);
       }
-      if (type === "input_audio_buffer.speech_stopped") return setHearing(false);
+      if (type === "input_audio_buffer.speech_stopped") {
+        tally.current.speechStopped += 1;
+        return setHearing(false);
+      }
       if (type === "output_audio_buffer.started") {
         speakingNow.current = true;
         return setSpeaking(true);
@@ -1181,7 +1291,35 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       }
 
       if (type === "error") {
-        const detail = e.error as { message?: string } | undefined;
+        const detail = e.error as { message?: string; event_id?: unknown } | undefined;
+        /* **An error against one of tap to talk's own events is a notice.**
+           Every other provider error ends the session, which is right for
+           errors nobody planned for. These are planned for: a Done over an
+           empty buffer, a `session.update` the service will not take. Hanging
+           up on the reader for either would be worse than the noise was. */
+        const refused = typeof detail?.event_id === "string" ? detail.event_id : "";
+        if (refused.startsWith(TAP_EVENT)) {
+          tapCommitPending.current = false;
+          if (refused === tapEntryEvent.current) {
+            tapEntryEvent.current = null;
+            talkModeRef.current = "hands-free";
+            setTalkModeState("hands-free");
+            if (micTrack.current) micTrack.current.enabled = true;
+            setNotice("Tap to talk couldn’t start, so the conversation is listening as before.");
+          } else {
+            /* A refused clear, commit or reply: back to Ready, whatever it was.
+               Not recording onto a buffer whose state is unknown, and not
+               owing a reply to a turn the service never took. */
+            if (micTrack.current) micTrack.current.enabled = false;
+            if (talkModeRef.current !== "hands-free") {
+              talkModeRef.current = "tap-idle";
+              setTalkModeState("tap-idle");
+            }
+            owedSince.current = null;
+            setNotice(`Tap to talk: ${detail?.message ?? "that didn’t go through"}. Tap Talk to try again.`);
+          }
+          return;
+        }
         failSession(detail?.message ?? "The live session reported an error. Try again or carry on typing.", "provider-error");
         return;
       }
@@ -1195,6 +1333,12 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
            goes silent is `StallFacts.responseActive`'s question. */
         if (midSentence.current) responseStartedDuringTurn.current = true;
         owedSince.current = null;
+        /* The reply to a tap turn has begun; from here `thinking` and
+           `speaking` keep Talk waiting, as they do for any reply. */
+        if (talkModeRef.current === "tap-sending") {
+          talkModeRef.current = "tap-idle";
+          setTalkModeState("tap-idle");
+        }
         tally.current.responses += 1;
         const id = (e.response as { id?: unknown } | undefined)?.id;
         if (typeof id === "string" && id !== "") {
@@ -1252,7 +1396,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         continueAfterTools();
       }
     },
-    [answerTool, put, adopt, commit, meterEvent, failSession, continueAfterTools, accountUserReply],
+    [answerTool, put, adopt, commit, meterEvent, failSession, continueAfterTools, accountUserReply, sendTap],
   );
 
   /**
@@ -1591,6 +1735,18 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       reconnecting.current = 0;
       setReconnectPending(false);
       microphoneWanted.current = microphone;
+      /* A reconnect keeps tap to talk — the street is still there — but not
+         mid-turn: the new call starts with the microphone off, and Talk opens
+         it. Any other start is the reader's own, and hands-free. */
+      const nextMode: TalkMode =
+        keepTalkMode.current && talkModeRef.current !== "hands-free" ? "tap-idle" : "hands-free";
+      keepTalkMode.current = false;
+      talkModeRef.current = nextMode;
+      setTalkModeState(nextMode);
+      tapEntryEvent.current = null;
+      tapCommitPending.current = false;
+      if (doneTimer.current) clearTimeout(doneTimer.current);
+      doneTimer.current = null;
 
       /**
        * **This session's number, and the check that goes after every `await`.**
@@ -1813,8 +1969,12 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
               void stopRef.current();
               return;
             }
+            /* A reconnect from tap to talk: this session was minted with the
+               detector on, like every session, so turn it off before the
+               microphone would have opened. */
+            if (talkModeRef.current !== "hands-free") detectorOff();
             if (micTrack.current) {
-              micTrack.current.enabled = true;
+              micTrack.current.enabled = talkModeRef.current === "hands-free";
               /* Already metering the clone since the microphone opened; only
                  a browser with no `clone` meters from here. */
               if (!meterTrack.current) setInputTrack(micTrack.current);
@@ -2083,7 +2243,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         }
       })();
     },
-    [onEvent, slug, updateLines, failSession, enableAudio, checkStall],
+    [onEvent, slug, updateLines, failSession, enableAudio, checkStall, detectorOff],
   );
 
   const say = useCallback(
@@ -2239,6 +2399,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       reconnecting.current = 0;
       setReconnectPending(false);
       if (failed.current) return;
+      keepTalkMode.current = true;
       start({ threadId: thread, microphone });
     });
     reconnecting.current = mine;
@@ -2258,6 +2419,74 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     }
     return stop();
   }, [stop]);
+
+  /**
+   * § TalkMode, the three actions. Each is refused outside a live call: during
+   * seeding the barrier owns the track, and during a hang-up the grace window
+   * does.
+   */
+  const isLive = useCallback(() => Boolean(pc.current) && seeding.current.done && !closing.current, []);
+
+  const enterTapToTalk = useCallback(() => {
+    if (!isLive() || talkModeRef.current !== "hands-free") return;
+    talkModeRef.current = "tap-idle";
+    setTalkModeState("tap-idle");
+    detectorOff();
+    /* **The turn the noise was holding open is dropped, not answered.** The
+       reader has just been told that sound is holding it open; answering half
+       a minute of street is worse than asking them to say it again. Its local
+       state goes with it, and so does the stall's report dwell, which would
+       otherwise report a hands-free stall as a tap-to-talk one. */
+    midSentence.current = false;
+    turnOpenSince.current = null;
+    responseStartedDuringTurn.current = false;
+    stallSeen.current = null;
+    setHearing(false);
+    checkStall();
+  }, [isLive, detectorOff, checkStall]);
+
+  /**
+   * **Not while the companion is answering.** Talking over a reply would need
+   * `response.cancel`, `output_audio_buffer.clear` and the interruption
+   * bookkeeping `speech_started` does in hands-free; it is a walkie-talkie
+   * until somebody asks for more. Nor during Done's tail, whose commit is
+   * still to go.
+   */
+  const talk = useCallback(() => {
+    if (!isLive() || talkModeRef.current !== "tap-idle" || doneTimer.current) return;
+    if (toolResponses.current.inProgress || speakingNow.current || toolRequests.current.size > 0) return;
+    sendTap({ type: "input_audio_buffer.clear" });
+    if (micTrack.current) micTrack.current.enabled = true;
+    talkStartedAt.current = Date.now();
+    lastHeard.current = Date.now();
+    talkModeRef.current = "tap-talking";
+    setTalkModeState("tap-talking");
+  }, [isLive, sendTap]);
+
+  const doneTalking = useCallback(() => {
+    if (!isLive() || talkModeRef.current !== "tap-talking") return;
+    if (micTrack.current) micTrack.current.enabled = false;
+    talkModeRef.current = "tap-idle";
+    setTalkModeState("tap-idle");
+    lastHeard.current = Date.now();
+    if (Date.now() - talkStartedAt.current < TAP_MIN_MS) {
+      sendTap({ type: "input_audio_buffer.clear" });
+      return;
+    }
+    talkModeRef.current = "tap-sending";
+    setTalkModeState("tap-sending");
+    /* Bound to this session: `start` cancels it, and a callback that outlived
+       its call must not commit into the next one's buffer. A hang-up inside
+       the tail drops the turn, as a hang-up while talking does. */
+    const mine = sessionNo.current;
+    doneTimer.current = setTimeout(() => {
+      doneTimer.current = null;
+      if (sessionNo.current !== mine || !isLive() || talkModeRef.current !== "tap-sending") return;
+      tapCommitPending.current = true;
+      sendTap({ type: "input_audio_buffer.commit" });
+      owe();
+    }, TAP_TAIL_MS);
+  }, [isLive, sendTap, owe]);
 
   /* The meter reads from the moment the microphone opens (see `meterTrack`),
      so it is shown while connecting too; the panel says the conversation is
@@ -2291,5 +2520,9 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     stall,
     reconnect,
     reconnecting: reconnectPending,
+    talkMode,
+    enterTapToTalk,
+    talk,
+    doneTalking,
   };
 }
