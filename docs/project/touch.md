@@ -792,6 +792,10 @@ The rules it keeps:
 5. An Apple Pencil, which should behave as a finger does.
 6. Android Chrome, which nobody has looked at. It has its own selection toolbar, also above.
 
+**One known limit, seen in emulation:** when the selected words are on the last visible line above
+the bottom bar, the clamp pushes the button up over those words. It hides them until the reader
+scrolls a little. Flipping it above the selection would put it under the iOS callout, so it is left.
+
 No colour dots and no copy button in it. The colours are in the box it opens; a copy button is a
 separate decision.
 
