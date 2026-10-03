@@ -1,5 +1,6 @@
 ---
 reports: spya-s2rsxy
+parts: 2
 ending: shipped
 ---
 # High-powered AI, per article
