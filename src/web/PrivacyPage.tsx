@@ -427,9 +427,9 @@ export function PrivacyPage() {
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
           aids, chat and search, and Opus or a similar frontier model in its place on an article
           switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
-          <code>gpt-6-luna</code> to choose the topics above your shelf, for which it is shown your
-          articles’ titles and one-line summaries, the candidate topics, and your profile if you wrote
-          one;{" "}
+          <code>gpt-6-luna</code> to name the topics above your shelf and sort your articles into them,
+          for which it is shown your articles’ titles and one-line summaries (a paper’s abstract, when
+          it has no summary yet) and your profile if you wrote one;{" "}
           <code>voyage-4</code> to turn passages into the numbers that make search-by-meaning work;{" "}
           <code>jev-1.13</code>, TypeSafe’s, through OpenRouter, for quick search, for which it is
           shown the article’s passages and the words you searched for, and to work out which command

@@ -372,7 +372,7 @@ describe("the list of surfaces is derived, and the derivation found something", 
     /* Not the list back again, and not a naming convention either: `RefereeView`
        is the vocabulary the switch is exhaustive over, so a fifth sub-mode
        raises this floor by itself. The band also renders the source-scan notice
-       above the chips, so the real number is one higher — the inequality is
+       inside Notices, so the real number is one higher — the inequality is
        what makes that harmless. */
     expect(
       RENDERED_BY_THE_BAND.length,

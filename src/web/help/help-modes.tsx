@@ -325,7 +325,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     reading: (
       <>
         <p>
-          <strong>Hidden instructions</strong>, at the top, checks the original web page for text a
+          <strong>Hidden instructions</strong>, behind the Notices button, checks the original web page for text a
           person would not see but an AI would read — text the colour of its background, too small to
           read, invisible characters, instructions written to a model. It reports and blocks nothing.
           “Nothing found” is not a clean bill: PDFs and some parts of a page are not checked, and it
@@ -658,8 +658,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
       <>
         <p>
           In <strong>Fisheye</strong>, where a column has no room for every row it says how many come
-          earlier or later. <strong>Expanded</strong> follows you only when you move into another
-          section, so if you scroll it by hand it keeps your place until then. Press any row to jump
+          earlier or later. As one list, Fisheye always shows the sections directly under the part
+          you are in and the available summary of the current one; when that will not all fit, the
+          list scrolls. Use <strong>Expanded</strong> to see deeper subsections too. Both scrolling
+          lists follow you only when you move into another section, so if you scroll one by hand it
+          keeps your place until then. Press any row to jump
           there.
         </p>
         <p>

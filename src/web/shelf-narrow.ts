@@ -199,6 +199,82 @@ export function availableTopics<T extends { key: string }>(
 }
 
 /**
+ * **Whether these topics were named by a model as a coarse-to-fine tree**
+ * (plan 261003f) rather than picked from the articles' own phrases: some topic
+ * carries a `granularity`. A phrase topic never does, and `chosenBy: "model"`
+ * alone does not say — a model also *scores* phrase topics.
+ */
+export function isModelNamed(terms: readonly Pick<ShelfTerm, "granularity">[]): boolean {
+  return terms.some((t) => t.granularity !== undefined);
+}
+
+/**
+ * **How many broader topics a topic is inside**: 0 for a broad subject and for
+ * every phrase topic, 1 for a topic inside a subject, 2 for one inside that.
+ *
+ * Read off the `within` chain, which is the structure, rather than off the
+ * `granularity` number, which is a judgement — but a finer topic
+ * (`granularity > 0`) whose parent did not arrive is still 1, so it never
+ * looks like a broad subject. Capped at `MAX_TOPIC_DEPTH`, which also ends a
+ * chain that loops.
+ */
+export const MAX_TOPIC_DEPTH = 2;
+export function topicDepth(
+  term: Pick<ShelfTerm, "granularity" | "within">,
+  byKey: ReadonlyMap<string, Pick<ShelfTerm, "within">>,
+): number {
+  if (!term.granularity || term.granularity <= 0) return 0;
+  let depth = 1;
+  let parent = term.within === undefined ? undefined : byKey.get(term.within);
+  while (parent?.within !== undefined && depth < MAX_TOPIC_DEPTH) {
+    depth++;
+    parent = byKey.get(parent.within);
+  }
+  return depth;
+}
+
+/**
+ * **The topics inside a chosen one come straight after it.** Greg,
+ * 2026-10-03: *"if I pick neuroscience, then it'll hide all of the
+ * non-neuroscience-related topic pills. And then I can easily filter down
+ * within those at sort of increasing levels of granularity."*
+ *
+ * Hiding the zeros (`availableTopics`) does most of that, but not all: the
+ * list arrives broad first, so with *Neuroscience* chosen, every other broad
+ * subject that shares one article with it (*AI*, *Philosophy*) still sits
+ * ahead of *Vision* and *Memory*, which are the next step down. So the topics
+ * **directly** `within` a chosen one are gathered, in the order the server
+ * sent them (broad first), just after the last chosen pill that is not itself
+ * inside a chosen one. Nothing else moves, and the rest follow in rank order.
+ * A topic two levels down waits until its parent is chosen.
+ *
+ * **A pill never moves when it is pressed.** One chosen at the top level is
+ * the anchor, in its own place. One chosen from the gathered group stays in
+ * the group, where it already was — which is why the group holds the chosen
+ * and the unchosen alike, rather than only the unchosen: sending a pressed
+ * *Vision* back to its rank place would jump it out from under the pointer.
+ *
+ * With nothing chosen, and for phrase topics (no `within`), it is the
+ * identity. Applied after `availableTopics` and before the row takes its
+ * first twelve.
+ */
+export function withinChosenFirst<T extends { key: string; within?: string }>(
+  terms: readonly T[],
+  chosen: ReadonlySet<string>,
+): T[] {
+  const inside = (t: T) => t.within !== undefined && chosen.has(t.within);
+  let last = -1;
+  for (let i = 0; i < terms.length; i++) {
+    const t = terms[i] as T;
+    if (chosen.has(t.key) && !inside(t)) last = i;
+  }
+  if (last < 0) return [...terms];
+  const head = terms.slice(0, last + 1).filter((t) => !inside(t));
+  const tail = terms.slice(last + 1).filter((t) => !inside(t));
+  return [...head, ...terms.filter(inside), ...tail];
+}
+
+/**
  * **The reader's own tags as filter facets** — one per tag on any entry in
  * scope, shaped like a topic so `topicMembers`, `withTopics` and
  * `topicCountsForVisible` serve both rows and every rule above holds for tags

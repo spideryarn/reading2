@@ -199,8 +199,9 @@ Then the residue, which is why this page exists:
   can act on; a count beside the control it describes (a threshold's "8 of 24"); navigation
   ("Question 3 of 8"); and a caveat the visible rows cannot be read without — Timeline's *"Everything
   dated here is in 2026"*, because its rows leave the year out. A head row whose only content was a
-  count goes, and gives the space back. The one band without a corner (i) is Referee, whose *how
-  this works* card is too long for a tooltip and opens inside the band instead.
+  count goes, and gives the space back. Every band has a corner (i); Referee was the one exemption
+  until 2026-10-03, when its *how this works* card became its (i)
+  ([referee-mode.md](referee-mode.md)).
 
   **Your top row has to leave the corner clear.** The (i) is out of flow (`position: absolute` in
   the band), and the band gets `has-about`, which sets `--band-about-room`. `.band-head` and

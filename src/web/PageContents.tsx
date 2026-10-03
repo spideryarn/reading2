@@ -44,7 +44,7 @@
  * > machinery).
  *
  * Both go through one verb, `reveal`: tell the section to open
- * (`SECTION_REVEAL`, which Metadata.tsx § Section listens for), scroll to it,
+ * (`SECTION_REVEAL`, which PageSection.tsx § Section listens for), scroll to it,
  * and flash it once the scroll has stopped (flash.ts § scrollToAndFlash, the
  * reading view's flash). The search itself is page-search.ts, which reads the
  * same `[data-section]` elements this list does, plus their `data-keywords`.
@@ -87,7 +87,7 @@ function reveal(root: HTMLElement | null, id: string): (() => void) | null {
   const el = sectionIn(root, id);
   if (!el) return null;
   /* The section commits its open state synchronously on this event
-     (Metadata.tsx § Section, `flushSync`), so its body is in the DOM before the
+     (PageSection.tsx § Section, `flushSync`), so its body is in the DOM before the
      scroll is asked for — near the foot of the page a shut section may not
      leave the scroll range to bring its heading up. Sol, plan review. */
   el.dispatchEvent(new CustomEvent(SECTION_REVEAL));
@@ -119,7 +119,7 @@ function reveal(root: HTMLElement | null, id: string): (() => void) | null {
  * on success, id change or unmount.
  *
  * **Tried from a timer and from the observer, never inside the effect.** The
- * section opens itself with `flushSync` (Metadata.tsx § Section), and React
+ * section opens itself with `flushSync` (PageSection.tsx § Section), and React
  * will not flush from inside its own effect pass.
  *
  * A reveal already under way is left to finish when the id goes to `null` —

@@ -1724,10 +1724,10 @@ export const libraryTopicsViewParam = createParser<"detail">({
  * (docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
  *
  * **A closed list, not any section's id.** A section is otherwise local state
- * — open or shut is not worth linking to (Metadata.tsx § Section says why) —
+ * — open or shut is not worth linking to (PageSection.tsx § Section says why) —
  * so this is an address only for the places something in the app sends a
  * reader, and each one is a decision. The value is the section's id without
- * its `sec-` prefix (Metadata.tsx § `sectionId`), which
+ * its `sec-` prefix (PageSection.tsx § `sectionId`), which
  * tests/metadata-section-param.test.tsx holds against the page itself, so a
  * renamed heading cannot leave a value here that opens nothing. Anything else
  * parses to `null` and does nothing, as a mangled `?at=` does.

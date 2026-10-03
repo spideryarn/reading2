@@ -142,16 +142,17 @@ describe("Referee's sub-mode chips", () => {
     expect(armed("claims")).toBe(true);
   });
 
-  it("arms Candidates when the Candidates chip is pressed", () => {
+  it("arms nothing when the Candidates chip is pressed", () => {
     /* **The dearest press in the mode, and the only one that reaches a search
-       engine.** It sat behind a labelled button until 2026-09-06 precisely
-       because it used to fire on *mount*; what makes the chip acceptable is that
-       a chip is a person and a mount is not, plus the disclosure that is now
-       drawn above the chips whether the notice is open or shut
-       (src/messages.ts § REFEREE_CANDIDATES_REACHES_SEARCH). */
+       engine**, so it is back behind its own labelled button since 2026-10-03.
+       The chip started it from 2026-09-06, and what paid for that was a warning
+       drawn above the chips in all four sub-modes — one of the notices Greg
+       met as burying the mode (`spya-vbeyse`). With the chip inert the warning
+       sits beside the button that causes the thing it warns about
+       (CandidatesPanel.tsx § StartBrief), and nowhere else has to carry it. */
     mountRefereeChips("criteria");
     click(chip("Candidates"));
-    expect(armed("candidates")).toBe(true);
+    expect(armed("candidates")).toBe(false);
   });
 
   it("arms nothing for Criteria or Mirror", () => {

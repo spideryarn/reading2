@@ -35,6 +35,13 @@ is [structure-step.md](structure-step.md).
 >
 > — Greg, 2026-10-01, spya-gxyhcc, in [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md)
 
+> at the very least I want all the headings for this subsection and its siblings to be visible. I
+> mean, I think I'd also like to see the summary for this lowest level subsection, even if that does
+> mean that it can't show the whole top-level structure visibly, that I'd have to scroll in structure
+> mode to see the whole of the top-level structure.
+>
+> — Greg, 2026-10-03, spya-s46j8f, in [261003k](../plans/261003k-structure-fisheye-list-always-shows-the-current-sections-and-summary-and-scrolls.md)
+
 Open this doc to find your way in; the plans below are still where the design and its reasoning
 live.
 
@@ -43,8 +50,8 @@ live.
 Two views, chosen by chips in the band's head row and kept in `?structure=`
 ([url-state.md](url-state.md)). **Fisheye**, the default, is everything below: the two faces, each
 opened up around where you are reading. **Expanded** is one list in every band width — every part
-and every section under it, at any depth, each with its gist, and each part's arc — and it is the
-one time this band scrolls. It is the list face's own component with an `expanded` prop
+and every section under it, at any depth, each with its gist, and each part's arc — and its list
+always scrolls. It is the list face's own component with an `expanded` prop
 (`OutlinePanel`), built by the same `outlineProjection`, so the rows, the marks and the keyboard are
 the list's. It follows the reader only when they cross into another section, so a reader who
 scrolls the column by hand keeps their place until then. No paragraph rows: the summaries Greg
@@ -57,7 +64,18 @@ it are [keyboard.md § ← / → in Structure](keyboard.md).
 Where the band is
 wide enough (609px border-box, a 1165px window — [narrow-windows.md](narrow-windows.md)) it is two linked columns: every part on the left, the sections of
 the one you are in on the right. Where it is not, it is a nested list, deep where you are reading
-and shallow everywhere else. [260910g](../plans/260910g-structure-mode-subsumes-outline.md) is the two faces;
+and shallow everywhere else.
+
+**The list has a floor, and scrolls rather than go below it** (since 2026-10-03,
+[261003k](../plans/261003k-structure-fisheye-list-always-shows-the-current-sections-and-summary-and-scrolls.md)).
+It always draws every part, the sections directly under the part you are in, and the available
+summary of the current one. Deeper subsections still need Expanded; that extension is
+[deferred in the plan](../plans/261003k-structure-fisheye-list-always-shows-the-current-sections-and-summary-and-scrolls.md#not-in-this-change).
+With room to spare it adds the part's arc and then the section's paragraphs. Without
+room for the floor it draws the floor anyway and the list scrolls, following the reader as
+Expanded does and keeping the whole of the current part's block in view when that fits. Before
+that the list never scrolled and dropped the sections and the summary instead, and from 2026-09-10
+it cut titles to one line as a last resort; both went. The two columns still never scroll. [260910g](../plans/260910g-structure-mode-subsumes-outline.md) is the two faces;
 [260907c](../plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md) is the
 two columns, built behind the switch on 2026-09-06 so the three structural modes could be compared;
 and [260828aw](../plans/260828aw-outline-mode.md) is the nested list, which was **Outline mode**

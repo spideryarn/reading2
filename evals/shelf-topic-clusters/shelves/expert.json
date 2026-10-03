@@ -1,0 +1,1590 @@
+{
+  "id": "expert",
+  "description": "One specialist's reading list: a computational neuroscientist whose shelf is dominated by ten tightly related neuroscience sub-areas, with a small tail of Buddhism and carpentry. It tests whether topic clustering can split a large single-field shelf finely while still isolating the tiny unrelated areas.",
+  "profile": "Computational neuroscientist. Also reads a little about Buddhism and does carpentry at weekends.",
+  "articles": [
+    {
+      "slug": "border-ownership-and-figure-ground-signals-in-v2",
+      "title": "Border Ownership and Figure-Ground Signals in V2",
+      "gist": "Describes neurons that signal which side of an edge belongs to the object, and discusses whether feedback from higher areas supplies that information.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex",
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "pupil-linked-arousal-and-learning-rate-adaptation",
+      "title": "Pupil-Linked Arousal and Learning Rate Adaptation",
+      "gist": "Pupil dilation tracks surprise in changing environments and predicts how strongly people update beliefs, suggesting noradrenergic regulation of the learning rate.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine",
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "metacognitive-confidence-as-second-order-prediction",
+      "title": "Metacognitive Confidence as Second-Order Prediction",
+      "gist": "Proposes that confidence reports track the estimated precision of one's own perceptual inference and reviews human fMRI and behavioural evidence from prefrontal regions.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "successor-representations-and-the-hippocampus-striatum-dialogue",
+      "title": "Successor Representations and the Hippocampus-Striatum Dialogue",
+      "gist": "Argues that predictive maps of future state occupancy bridge model-free and model-based control, and reviews behavioural dissociations in humans that support the idea.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "local-sleep-in-awake-cortex-neuronal-off-periods",
+      "title": "Local Sleep in Awake Cortex: Neuronal Off Periods After Prolonged Wakefulness",
+      "gist": "Shows that patches of cortex briefly go silent in rats kept awake, linking local sleep to errors in performance.",
+      "area": "Neuroscience",
+      "sub": [
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "pattern-separation-in-the-dentate-gyrus-sparse-codes",
+      "title": "Pattern Separation in the Dentate Gyrus: Sparse Codes and Adult Neurogenesis",
+      "gist": "Examines how dentate granule cells decorrelate similar inputs and what newly born neurons add, including modelling and behavioural discrimination tasks.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "expectation-suppression-without-attention-a-repetition-study-in",
+      "title": "Expectation Suppression Without Attention: A Repetition Study in Macaque IT",
+      "gist": "Shows that responses in inferotemporal cortex shrink for expected image pairs even when attention is held constant, dissociating prediction effects from simple adaptation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "brain-computer-interfaces-for-paralysis-ten-years-of",
+      "title": "Brain-Computer Interfaces for Paralysis: Ten Years of Intracortical Decoding",
+      "gist": "Surveys intracortical decoders that let people with paralysis control cursors and robot arms, and asks what learning on the part of the user contributes.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "human-single-neuron-recordings-of-concept-cells",
+      "title": "Human Single-Neuron Recordings of Concept Cells",
+      "gist": "Describes neurons in the human medial temporal lobe responding to specific people or places across photographs and names, and what that suggests about episodic encoding.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "population-codes-for-natural-movies-in-mouse-v1",
+      "title": "Population Codes for Natural Movies in Mouse V1",
+      "gist": "Analyses large-scale recordings during natural movie viewing and shows how stimulus information is spread across a distributed population with substantial shared variability.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex",
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "resting-state-networks-real-organisation-or-artifact-of",
+      "title": "Resting-State Networks: Real Organisation or Artifact of Motion?",
+      "gist": "Reviews the debate over head motion and physiological noise in functional connectivity, and the preprocessing strategies that reduce spurious correlations.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neuroimaging methods"
+      ]
+    },
+    {
+      "slug": "cognitive-control-conflict-and-the-anterior-cingulate-cortex",
+      "title": "Cognitive Control, Conflict and the Anterior Cingulate Cortex",
+      "gist": "Evaluates conflict monitoring accounts of the anterior cingulate and alternatives based on expected value of control, with recordings and imaging.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "memory-for-reward-context-dopamine-modulation-of-hippocampal",
+      "title": "Memory for Reward Context: Dopamine Modulation of Hippocampal Encoding",
+      "gist": "Examines how dopamine from the ventral tegmental area enhances hippocampal memory for surprising or rewarding events and the controversy over its source.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory",
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "why-do-cortical-responses-get-sparser-as-stimuli",
+      "title": "Why Do Cortical Responses Get Sparser as Stimuli Become Familiar?",
+      "gist": "Examines familiarity-driven sparsening of population responses, comparing explanations from efficient coding, error minimisation and inhibitory plasticity in recordings from rodent sensory cortex.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "sensorimotor-noise-and-why-practice-reduces-variability",
+      "title": "Sensorimotor Noise and Why Practice Reduces Variability",
+      "gist": "Argues that skill acquisition reshapes the structure of motor variability, shifting it into dimensions that do not hurt task performance.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "dopamine-gated-plasticity-at-corticostriatal-synapses",
+      "title": "Dopamine-Gated Plasticity at Corticostriatal Synapses",
+      "gist": "Describes how dopamine receptor subtypes on direct and indirect pathway neurons convert coincident spiking into long-term potentiation or depression, and why the timing window matters.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine",
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "credit-assignment-without-backprop-dopamine-and-eligibility-traces",
+      "title": "Credit Assignment Without Backprop: Dopamine and Eligibility Traces",
+      "gist": "Examines synaptic eligibility traces that let a delayed dopamine signal strengthen the right inputs, with evidence from striatal slice recordings.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "neural-trajectories-during-reaching-are-conserved-across-animals",
+      "title": "Neural Trajectories During Reaching Are Conserved Across Animals",
+      "gist": "Aligns population activity from different monkeys and shows that the underlying dynamics are shared, enabling decoders to transfer across individuals.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control",
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "decoding-mental-content-with-multivoxel-pattern-analysis-possibilities",
+      "title": "Decoding Mental Content With Multivoxel Pattern Analysis: Possibilities and Pitfalls",
+      "gist": "Explains classifiers, searchlights and cross-validation errors, with examples of circular analyses that inflated apparent decoding performance.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neuroimaging methods"
+      ]
+    },
+    {
+      "slug": "neuropixels-and-the-new-scale-of-systems-neuroscience",
+      "title": "Neuropixels and the New Scale of Systems Neuroscience",
+      "gist": "A long-form piece on how recording thousands of neurons at once is changing experiments, data handling and what questions are even worth asking.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "the-forward-model-doing-its-job-corollary-discharge",
+      "title": "The Forward Model Doing Its Job: Corollary Discharge in Saccades",
+      "gist": "Shows how the brain compensates for self-generated eye movement and what disruption of the corollary discharge pathway does to visual stability.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control",
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "computational-psychiatry-of-anhedonia-reduced-reward-sensitivity-or",
+      "title": "Computational Psychiatry of Anhedonia: Reduced Reward Sensitivity or Learning Rates?",
+      "gist": "Fits reinforcement learning models to depressed patients and finds blunted sensitivity rather than slower learning, with implications for how behavioural tasks are interpreted.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "nagarjuna-s-emptiness-without-mysticism",
+      "title": "Nagarjuna's Emptiness Without Mysticism",
+      "gist": "A readable introduction to the Madhyamaka argument that nothing has intrinsic existence, with discussion of how the idea has been misread as nihilism.",
+      "area": "Buddhism",
+      "sub": [
+        "Buddhism"
+      ]
+    },
+    {
+      "slug": "grid-cells-and-the-geometry-of-thought",
+      "title": "Grid Cells and the Geometry of Thought",
+      "gist": "Surveys evidence that entorhinal grid codes extend beyond space to abstract conceptual dimensions, and asks what the hexagonal pattern buys for generalisation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "dendrites-as-prediction-machines-apical-inputs-and-context",
+      "title": "Dendrites as Prediction Machines: Apical Inputs and Context",
+      "gist": "Reviews the idea that apical dendrites of layer 5 pyramidal cells carry contextual predictions that gate somatic output, with evidence from calcium spikes during behaviour.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "recollection-versus-familiarity-two-processes-or-one-strength",
+      "title": "Recollection Versus Familiarity: Two Processes or One Strength?",
+      "gist": "A review of the dual-process debate, evaluating receiver operating characteristic analyses, lesion patterns and imaging dissociations across perirhinal and hippocampal regions.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "synaptic-changes-in-motor-cortex-during-skill-learning",
+      "title": "Synaptic Changes in Motor Cortex During Skill Learning",
+      "gist": "Imaging of dendritic spines in mouse motor cortex reveals rapid formation of new spines during a lever-press task that persist in the long term.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control",
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "the-bayesian-brain-is-not-a-calculator-approximate",
+      "title": "The Bayesian Brain Is Not a Calculator: Approximate Inference in Neural Circuits",
+      "gist": "Argues that real circuits approximate posterior inference with sampling or variational shortcuts, and surveys what each scheme predicts about variability, noise correlations and response timing.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "local-learning-rules-that-approximate-backprop-in-cortex",
+      "title": "Local Learning Rules That Approximate Backprop in Cortex",
+      "gist": "Reviews biologically plausible schemes in which prediction errors propagate through dendritic compartments, allowing deep networks to learn without symmetric weight transport.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "magnetoencephalography-and-the-timing-of-cognition",
+      "title": "Magnetoencephalography and the Timing of Cognition",
+      "gist": "Introduces MEG source reconstruction for tracking fast neural events, comparing its spatial limits with EEG and fMRI.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neuroimaging methods"
+      ]
+    },
+    {
+      "slug": "foraging-decisions-and-the-marginal-value-theorem-in",
+      "title": "Foraging Decisions and the Marginal Value Theorem in the Brain",
+      "gist": "Humans and monkeys decide when to leave a depleting patch, and anterior cingulate activity tracks the average reward rate that the theorem says should guide leaving.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "what-does-the-bold-signal-really-measure",
+      "title": "What Does the BOLD Signal Really Measure?",
+      "gist": "A primer on neurovascular coupling, covering oxygenation, blood volume and flow, and the conditions under which BOLD diverges from neural spiking.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neuroimaging methods"
+      ]
+    },
+    {
+      "slug": "cerebellar-learning-and-climbing-fibre-error-signals",
+      "title": "Cerebellar Learning and Climbing Fibre Error Signals",
+      "gist": "Examines how Purkinje cells use climbing fibre inputs as teaching signals to recalibrate movements, with evidence from eyeblink conditioning and saccade adaptation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "interoception-and-the-predictive-self",
+      "title": "Interoception and the Predictive Self",
+      "gist": "A long-form essay on how inferences about bodily states may ground emotion and self-experience, drawing on heartbeat-evoked potentials and insular cortex recordings.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "metaplasticity-and-the-bcm-rule-a-sliding-threshold",
+      "title": "Metaplasticity and the BCM Rule: A Sliding Threshold",
+      "gist": "Revisits the idea that the threshold for potentiation shifts with prior activity, covering experimental tests and relevance for stability of learning.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "a-thalamic-pacemaker-for-sleep-spindles",
+      "title": "A Thalamic Pacemaker for Sleep Spindles",
+      "gist": "Traces spindle generation to interactions between thalamic reticular nucleus and thalamocortical relay cells, with modelling and pharmacological manipulations.",
+      "area": "Neuroscience",
+      "sub": [
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "active-inference-in-practice-what-a-generative-model",
+      "title": "Active Inference in Practice: What a Generative Model Buys You",
+      "gist": "A tutorial-style post building a toy agent that picks actions by minimising expected free energy, with candid notes on where the maths hides engineering choices.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "a-mathematical-reading-of-rao-and-ballard-s",
+      "title": "A Mathematical Reading of Rao and Ballard's 1999 Model",
+      "gist": "Walks through the original hierarchical predictive coding network line by line, noting which assumptions have survived two decades of physiology and which have quietly been dropped.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "long-term-potentiation-is-not-memory-notes-on",
+      "title": "Long-Term Potentiation Is Not Memory: Notes on a Slippery Equivalence",
+      "gist": "An essay asking when it is legitimate to treat synaptic strengthening in a slice as a model for memory in behaving animals, and what evidence would settle it.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "local-error-signals-drive-dendritic-plasticity",
+      "title": "Local Error Signals Drive Dendritic Plasticity",
+      "gist": "Shows that plasticity at apical synapses depends on top-down mismatch signals and links the biophysics to credit assignment in deep cortical hierarchies.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity",
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "cortical-magnification-and-the-cost-of-foveal-vision",
+      "title": "Cortical Magnification and the Cost of Foveal Vision",
+      "gist": "Argues that overrepresentation of the fovea in cortex shapes crowding and acuity, with fMRI measurements across the visual field.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "spinal-central-pattern-generators-and-the-locomotor-rhythm",
+      "title": "Spinal Central Pattern Generators and the Locomotor Rhythm",
+      "gist": "Describes how interneuron circuits in the spinal cord produce alternating limb movements, and how descending commands modulate speed and gait.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "pattern-completion-as-inference-a-generative-view-of",
+      "title": "Pattern Completion as Inference: A Generative View of Recall",
+      "gist": "Frames memory retrieval as inference in a learned generative model, linking hippocampal completion with cortical priors and explaining systematic gist-based distortions in recall.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding",
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "natural-image-statistics-and-the-design-of-early",
+      "title": "Natural Image Statistics and the Design of Early Vision",
+      "gist": "Shows that sparse coding of natural scenes yields Gabor-like filters, and examines how well later predictions about higher-order statistics hold up.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "time-cells-in-ca1-and-the-representation-of",
+      "title": "Time Cells in CA1 and the Representation of Elapsed Intervals",
+      "gist": "Records sequences of neurons that fire at successive moments during delays, and tests whether they encode time itself or the progression of ongoing events.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "attentional-modulation-of-visual-responses-gain-normalisation-and",
+      "title": "Attentional Modulation of Visual Responses: Gain, Normalisation and Noise",
+      "gist": "Compares how attention changes firing rates and correlated variability across the visual hierarchy, and what readout of those changes explains behavioural improvement.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex",
+        "Attention"
+      ]
+    },
+    {
+      "slug": "the-hippocampus-as-a-predictive-map",
+      "title": "The Hippocampus as a Predictive Map",
+      "gist": "Develops the successor representation as an account of place cell firing and shows it explains the influence of behaviour on field shape.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "attention-as-precision-optimisation-testing-the-equivalence",
+      "title": "Attention as Precision Optimisation: Testing the Equivalence",
+      "gist": "Tests whether spatial attention behaves like a change in the precision assigned to prediction errors, using orientation discrimination and gain measures in early visual cortex.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding",
+        "Attention"
+      ]
+    },
+    {
+      "slug": "mind-wandering-and-the-default-mode-network",
+      "title": "Mind Wandering and the Default Mode Network",
+      "gist": "Shows how activity in default mode regions rises as attention drifts from a task, and argues for a more nuanced view of what mind wandering does.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "efference-copy-and-the-cerebellum-a-forward-model",
+      "title": "Efference Copy and the Cerebellum: A Forward-Model Primer",
+      "gist": "Explains how motor commands generate predicted sensory consequences, why tickling yourself fails, and what cerebellar lesions reveal about the forward model's neural basis.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding",
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "how-the-brain-tracks-tool-use-body-schema",
+      "title": "How the Brain Tracks Tool Use: Body Schema in Parietal Cortex",
+      "gist": "Reviews neurons that treat a held tool as an extension of the arm and the broader question of how body representation updates during action.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "the-reliability-of-fmri-test-retest-problems-in",
+      "title": "The Reliability of fMRI: Test-Retest Problems in Individual Differences",
+      "gist": "Shows that many task activation measures have poor test-retest reliability, which undermines brain-behaviour correlations, and proposes ways to measure reliability.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neuroimaging methods"
+      ]
+    },
+    {
+      "slug": "functional-ultrasound-imaging-a-new-window-on-the",
+      "title": "Functional Ultrasound Imaging: A New Window on the Awake Brain",
+      "gist": "Describes a method that tracks cerebral blood volume at high resolution through the skull of moving animals, and the questions it makes tractable.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neuroimaging methods"
+      ]
+    },
+    {
+      "slug": "colour-in-the-cortex-double-opponent-cells-and",
+      "title": "Colour in the Cortex: Double-Opponent Cells and Beyond",
+      "gist": "Reviews the cell types that carry hue information from retina to cortex and the unresolved question of where unique hues are represented.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "why-do-we-sleep-the-synaptic-homeostasis-hypothesis",
+      "title": "Why Do We Sleep? The Synaptic Homeostasis Hypothesis Under Scrutiny",
+      "gist": "Evaluates the proposal that sleep downscales synapses that wakefulness strengthened, with ultrastructural data, proteomics and critiques about alternative functions.",
+      "area": "Neuroscience",
+      "sub": [
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "pulvinar-contributions-to-attention-and-cortical-communication",
+      "title": "Pulvinar Contributions to Attention and Cortical Communication",
+      "gist": "Examines the thalamic pulvinar as a regulator of information flow between visual areas and tests the effect of inactivation on attention-related synchrony.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "optimal-feedback-control-as-a-theory-of-reaching",
+      "title": "Optimal Feedback Control as a Theory of Reaching",
+      "gist": "Introduces a framework in which the brain minimises a cost under noise and corrects only errors that matter, accounting for variability patterns in human arm movements.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "frontal-eye-fields-and-the-priority-map",
+      "title": "Frontal Eye Fields and the Priority Map",
+      "gist": "Reviews a spatial priority map integrating bottom-up salience and top-down goals, and the evidence from microstimulation that frontal activity directs covert attention.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "is-dopamine-a-reward-prediction-error-or-a",
+      "title": "Is Dopamine a Reward Prediction Error or a Movement Signal?",
+      "gist": "Reviews the debate over whether striatal dopamine release tracks prediction error, motivation or vigor, using fibre photometry during self-paced locomotion and cued tasks.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "homeostatic-scaling-how-neurons-keep-their-firing-rate",
+      "title": "Homeostatic Scaling: How Neurons Keep Their Firing Rate in Check",
+      "gist": "Describes multiplicative scaling of synaptic strength after activity blockade and the signalling pathways that implement it, with in vivo evidence from visual cortex.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "retinotopy-beyond-v1-mapping-human-visual-field-maps",
+      "title": "Retinotopy Beyond V1: Mapping Human Visual Field Maps With Population Receptive Fields",
+      "gist": "Describes methods for estimating receptive field size and position across visual areas and what the results say about hierarchy and eccentricity bias.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "motion-integration-in-area-mt-pattern-and-component",
+      "title": "Motion Integration in Area MT: Pattern and Component Cells",
+      "gist": "Investigates how neurons in the middle temporal area combine local motion signals into the perceived direction of a moving object, with microstimulation causality tests.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "noise-correlations-and-the-limits-of-population-coding",
+      "title": "Noise Correlations and the Limits of Population Coding",
+      "gist": "Reviews how shared variability among neurons restricts information in large populations, and which kinds of correlations help or hurt a downstream decoder.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "learning-the-statistics-of-natural-sounds-in-auditory",
+      "title": "Learning the Statistics of Natural Sounds in Auditory Cortex",
+      "gist": "Shows that neurons in auditory cortex tune to temporal regularities of ecological sounds and update quickly as the acoustic environment changes across recording sessions.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "cross-modal-attention-sounds-that-sharpen-sight",
+      "title": "Cross-Modal Attention: Sounds That Sharpen Sight",
+      "gist": "Shows that a sound at a location transiently enhances visual processing there, with ERP and fMRI evidence for early modulation in sensory cortex.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "locus-coeruleus-and-adaptive-gain-noradrenaline-in-focus",
+      "title": "Locus Coeruleus and Adaptive Gain: Noradrenaline in Focus",
+      "gist": "Argues that noradrenergic neurons tune the balance between exploitation and exploration, and shows how pupil diameter tracks their activity.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "sleep-dependent-synaptic-remodelling-in-mouse-cortex",
+      "title": "Sleep-Dependent Synaptic Remodelling in Mouse Cortex",
+      "gist": "Imaging reveals that spine formation after learning needs subsequent sleep, and suggests slow oscillations facilitate selective strengthening of recently active connections.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity",
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "hierarchical-gaussian-filtering-for-learning-under-volatility",
+      "title": "Hierarchical Gaussian Filtering for Learning Under Volatility",
+      "gist": "Introduces a hierarchical model where beliefs about environmental volatility set the learning rate, then applies it to behaviour and pupil data in changing reward environments.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "reading-out-memories-from-hippocampal-fmri-with-representational",
+      "title": "Reading Out Memories From Hippocampal fMRI With Representational Similarity",
+      "gist": "Applies pattern similarity analyses to high-resolution imaging of hippocampal subfields to test whether remembered episodes leave distinguishable multivoxel traces.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory",
+        "Neuroimaging methods"
+      ]
+    },
+    {
+      "slug": "predictive-processing-and-the-psychosis-continuum",
+      "title": "Predictive Processing and the Psychosis Continuum",
+      "gist": "Reviews proposals that aberrant precision weighting of priors versus sensory evidence explains hallucinations and delusions, and weighs the supporting behavioural evidence against failed replications.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "dendritic-computation-nmda-spikes-and-nonlinear-integration",
+      "title": "Dendritic Computation: NMDA Spikes and Nonlinear Integration",
+      "gist": "Argues that local dendritic nonlinearities make single neurons far more powerful than point units, and what that means for learning rules.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "catastrophic-forgetting-and-how-synapses-avoid-it",
+      "title": "Catastrophic Forgetting and How Synapses Avoid It",
+      "gist": "Compares synaptic consolidation models that make important weights harder to change with continual learning methods in machine learning.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "blindsight-and-the-unconscious-pathways-of-vision",
+      "title": "Blindsight and the Unconscious Pathways of Vision",
+      "gist": "Reviews patients with V1 damage who respond to stimuli they cannot see and what the residual pathways through the superior colliculus tell us.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "neural-manifolds-what-does-dimensionality-reduction-actually-show",
+      "title": "Neural Manifolds: What Does Dimensionality Reduction Actually Show?",
+      "gist": "A critical essay cautioning that low dimensionality can reflect stimulus smoothness or analysis choices rather than circuit constraints, and proposing controls.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "attention-as-learned-action-reinforcement-learning-of-where",
+      "title": "Attention as Learned Action: Reinforcement Learning of Where to Look",
+      "gist": "Argues that attentional deployment can be trained by reward, reviewing value-driven attentional capture and neural correlates in visual cortex and the superior colliculus.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine",
+        "Attention"
+      ]
+    },
+    {
+      "slug": "representational-drift-stable-behaviour-changing-neurons",
+      "title": "Representational Drift: Stable Behaviour, Changing Neurons",
+      "gist": "Surveys findings that tuning of individual neurons changes across days even though behaviour does not, and the computational proposals for maintaining a stable readout.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "habit-formation-and-dorsolateral-striatum-a-reappraisal",
+      "title": "Habit Formation and Dorsolateral Striatum: A Reappraisal",
+      "gist": "Questions the clean split between goal-directed and habitual control, reviewing lesion and recording studies suggesting the dorsolateral striatum encodes action chunks more than stimulus-response links.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "contour-integration-and-association-fields",
+      "title": "Contour Integration and Association Fields",
+      "gist": "Shows how long-range horizontal connections in V1 link collinear edges, and links the anatomy to psychophysical findings about detecting curves in clutter.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "motor-adaptation-fast-and-slow-states-of-learning",
+      "title": "Motor Adaptation: Fast and Slow States of Learning",
+      "gist": "Models learning of force-field perturbations as two parallel processes with different time constants and explains savings and spontaneous recovery.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "excitatory-inhibitory-balance-and-chaotic-cortical-activity",
+      "title": "Excitatory-Inhibitory Balance and Chaotic Cortical Activity",
+      "gist": "Describes balanced networks that produce irregular firing without tuning, and what such models predict about response to perturbation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "boundary-cells-object-vector-cells-and-the-building",
+      "title": "Boundary Cells, Object Vector Cells and the Building Blocks of Cognitive Maps",
+      "gist": "Catalogues the zoo of spatially tuned cells beyond place and grid cells and discusses how they might be combined into flexible maps.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "attention-and-encoding-why-distracted-learning-leaves-weak",
+      "title": "Attention and Encoding: Why Distracted Learning Leaves Weak Memories",
+      "gist": "Reviews how divided attention at study impairs hippocampal encoding and tests the claim that attentional lapses reduce subsequent memory through theta power.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory",
+        "Attention"
+      ]
+    },
+    {
+      "slug": "negative-prediction-errors-and-the-lateral-habenula",
+      "title": "Negative Prediction Errors and the Lateral Habenula",
+      "gist": "Reviews how the lateral habenula signals disappointment and punishment through rostromedial tegmental nucleus, inhibiting dopamine cells and shaping avoidance learning.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "dreaming-as-generative-replay-a-neural-network-perspective",
+      "title": "Dreaming as Generative Replay: A Neural Network Perspective",
+      "gist": "An essay asking whether dreams function like synthetic data for training, with parallels to wake-sleep algorithms and overfitting-prevention hypotheses.",
+      "area": "Neuroscience",
+      "sub": [
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "low-rank-recurrent-networks-and-the-dimensionality-of",
+      "title": "Low-Rank Recurrent Networks and the Dimensionality of Neural Computation",
+      "gist": "Links the rank of connectivity in trained recurrent networks to the dimensionality of their activity, offering a framework for interpreting population recordings.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "canonical-microcircuits-for-predictive-coding-in-laminar-cortex",
+      "title": "Canonical Microcircuits for Predictive Coding in Laminar Cortex",
+      "gist": "Maps prediction and prediction-error units onto the layers of a cortical column, and reviews laminar recordings that partly support the proposed assignment of superficial and deep pyramidal cells.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "motor-learning-with-reward-only-reinforcement-without-error",
+      "title": "Motor Learning With Reward Only: Reinforcement Without Error Feedback",
+      "gist": "Participants learn reaching movements guided solely by binary success signals, and the paper asks how reward-driven learning differs from error-based adaptation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control",
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "surround-suppression-varies-with-contrast-a-normalisation-account",
+      "title": "Surround Suppression Varies With Contrast: A Normalisation Account",
+      "gist": "Fits divisive normalisation models to responses in cat and macaque V1 and shows that a single canonical computation can explain many context effects.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "camkii-and-the-molecular-basis-of-long-term",
+      "title": "CaMKII and the Molecular Basis of Long-Term Memory",
+      "gist": "Traces the autophosphorylation story of CaMKII as a memory switch, and discusses its persistence, turnover and the doubts raised by recent knockdown studies.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "perception-as-controlled-hallucination-notes-from-a-skeptic",
+      "title": "Perception as Controlled Hallucination: Notes From a Skeptic",
+      "gist": "A blog post questioning the popular slogan, separating the sound core of generative models from the loose metaphors that have grown around it in popular science.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "motor-cortex-is-not-a-muscle-map-the",
+      "title": "Motor Cortex Is Not a Muscle Map: The Dynamical Systems Turn",
+      "gist": "Argues that motor cortex generates movement through rotational population dynamics rather than encoding muscle activity directly, reviewing the rise of that view and its remaining puzzles.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "mixed-selectivity-in-prefrontal-neurons-enables-flexible-cognition",
+      "title": "Mixed Selectivity in Prefrontal Neurons Enables Flexible Cognition",
+      "gist": "Argues that neurons responding to nonlinear mixtures of task variables give the population high-dimensional representations that linear readouts can exploit.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "model-based-planning-in-rodents-what-the-two",
+      "title": "Model-Based Planning in Rodents: What the Two-Step Task Can and Cannot Tell Us",
+      "gist": "A critique of the two-step task, showing that apparent model-based behaviour can arise from simpler strategies, with simulations of the confounds and suggested redesigns.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "behavioural-timescale-plasticity-creates-place-fields-in-a",
+      "title": "Behavioural Timescale Plasticity Creates Place Fields in a Single Trial",
+      "gist": "Shows that a plateau potential in CA1 dendrites can establish a place field in one lap, with a plasticity rule extending across seconds.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory",
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "notes-from-a-ten-day-vipassana-retreat",
+      "title": "Notes From a Ten-Day Vipassana Retreat",
+      "gist": "A first-person account of silent meditation, covering the boredom, the physical pain, shifts in attention and what the author took home afterwards.",
+      "area": "Buddhism",
+      "sub": [
+        "Buddhism"
+      ]
+    },
+    {
+      "slug": "vigor-dopamine-and-the-cost-of-moving-fast",
+      "title": "Vigor, Dopamine and the Cost of Moving Fast",
+      "gist": "A model in which tonic dopamine reports average reward rate, setting the opportunity cost of time and therefore how vigorously animals perform actions.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine",
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "memory-indexing-theory-after-forty-years",
+      "title": "Memory Indexing Theory After Forty Years",
+      "gist": "A retrospective on the proposal that hippocampus stores pointers to cortical patterns rather than content, and how modern recordings have refined or challenged it.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "the-four-noble-truths-as-a-medical-framework",
+      "title": "The Four Noble Truths as a Medical Framework",
+      "gist": "Argues that the Buddha's teaching has the structure of a diagnosis, aetiology, prognosis and treatment, and considers what that says about the aims of practice.",
+      "area": "Buddhism",
+      "sub": [
+        "Buddhism"
+      ]
+    },
+    {
+      "slug": "inattentional-blindness-how-much-do-we-really-miss",
+      "title": "Inattentional Blindness: How Much Do We Really Miss?",
+      "gist": "A long-form piece on classic invisible gorilla experiments, with neuroscience of why unattended stimuli are poorly encoded and what that means for everyday perception.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "structural-plasticity-dendritic-spine-turnover-in-learning",
+      "title": "Structural Plasticity: Dendritic Spine Turnover in Learning",
+      "gist": "Longitudinal two-photon imaging shows that spines appear and vanish during learning, with a subset stabilising over months.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "visual-recognition-memory-in-the-perirhinal-cortex",
+      "title": "Visual Recognition Memory in the Perirhinal Cortex",
+      "gist": "Shows that neurons in the perirhinal cortex respond differently to novel and familiar images, linking ventral stream representation to memory judgements.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex",
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "synaptic-tagging-and-capture-making-early-plasticity-last",
+      "title": "Synaptic Tagging and Capture: Making Early Plasticity Last",
+      "gist": "Explains how a weakly stimulated synapse can acquire late-phase potentiation if a nearby synapse triggers protein synthesis, and considers behavioural analogues.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "attention-shapes-population-noise-shared-variability-in-area",
+      "title": "Attention Shapes Population Noise: Shared Variability in Area V4",
+      "gist": "Finds that attention reduces noise correlations among neurons and argues the resulting boost in population information exceeds gains from firing rate changes alone.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics",
+        "Attention"
+      ]
+    },
+    {
+      "slug": "mindfulness-meditation-without-the-metaphysics-a-secular-critique",
+      "title": "Mindfulness Meditation Without the Metaphysics: A Secular Critique",
+      "gist": "Examines how clinical mindfulness programmes were abstracted from Buddhist context, and asks what is gained and lost when ethics and doctrine are removed.",
+      "area": "Buddhism",
+      "sub": [
+        "Buddhism"
+      ]
+    },
+    {
+      "slug": "the-calcium-control-hypothesis-of-synaptic-plasticity",
+      "title": "The Calcium Control Hypothesis of Synaptic Plasticity",
+      "gist": "Explains how the amplitude and duration of postsynaptic calcium decide between potentiation and depression, with models fit to slice experiments.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "spike-timing-dependent-plasticity-beyond-the-pairing-protocol",
+      "title": "Spike-Timing-Dependent Plasticity: Beyond the Pairing Protocol",
+      "gist": "Reviews how STDP behaves with natural spike trains, finding the simple pair-based rule inadequate and proposing triplet and calcium-based alternatives.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "inhibitory-plasticity-and-excitation-inhibition-balance",
+      "title": "Inhibitory Plasticity and Excitation-Inhibition Balance",
+      "gist": "Shows how plasticity at inhibitory synapses can restore balance after learning and explains how it may protect memories from overwriting.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "rem-sleep-and-emotional-memory-processing",
+      "title": "REM Sleep and Emotional Memory Processing",
+      "gist": "Reviews evidence that REM, with low noradrenaline, depotentiates the emotional charge of memories, and presents mixed findings from human sleep deprivation studies.",
+      "area": "Neuroscience",
+      "sub": [
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "whatever-happened-to-the-free-energy-principle-a",
+      "title": "Whatever Happened to the Free-Energy Principle? A Skeptical Ten-Year Audit",
+      "gist": "A critical review asking what the free-energy principle has actually predicted, which claims were falsifiable, and why many experimentalists treat it as a framework rather than a testable theory.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "unihemispheric-sleep-in-dolphins-and-birds",
+      "title": "Unihemispheric Sleep in Dolphins and Birds",
+      "gist": "Describes animals that sleep with half the brain at a time and what the phenomenon reveals about the local control of sleep need.",
+      "area": "Neuroscience",
+      "sub": [
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "reward-prediction-errors-meet-sensory-prediction-errors-one",
+      "title": "Reward Prediction Errors Meet Sensory Prediction Errors: One Signal or Two?",
+      "gist": "Compares dopaminergic reward errors with cortical sensory prediction errors and asks whether a shared computational motif could explain both under a single learning framework.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding",
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "zen-koans-as-training-in-non-conceptual-attention",
+      "title": "Zen Koans as Training in Non-Conceptual Attention",
+      "gist": "Explores how koan practice is used to break habitual thinking, drawing on classical commentary and modern accounts of what the practice feels like.",
+      "area": "Buddhism",
+      "sub": [
+        "Buddhism"
+      ]
+    },
+    {
+      "slug": "surprise-signals-in-mouse-visual-cortex-after-visuomotor",
+      "title": "Surprise Signals in Mouse Visual Cortex After Visuomotor Mismatch",
+      "gist": "Two-photon imaging shows layer 2/3 neurons respond strongly when visual flow fails to match running speed, interpreted as evidence for mismatch error neurons learned through experience.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "engram-cells-and-the-search-for-the-physical",
+      "title": "Engram Cells and the Search for the Physical Memory Trace",
+      "gist": "Reviews tagging and reactivation experiments that label cells active during learning, asking whether silenced or artificially activated engrams are the memory or merely its access key.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "working-memory-without-persistent-activity-activity-silent-traces",
+      "title": "Working Memory Without Persistent Activity: Activity-Silent Traces",
+      "gist": "Proposes that short-term synaptic dynamics can hold information between bursts of spikes, and reviews decoding studies that find reactivation by non-specific pulses.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "orexin-neurons-and-the-switch-between-wake-and",
+      "title": "Orexin Neurons and the Switch Between Wake and Sleep",
+      "gist": "Explains how hypothalamic orexin cells stabilise wakefulness, how their loss causes narcolepsy, and how flip-flop models of state transitions have been revised.",
+      "area": "Neuroscience",
+      "sub": [
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "place-cells-remap-without-moving-contextual-drift-across",
+      "title": "Place Cells Remap Without Moving: Contextual Drift Across Weeks",
+      "gist": "Chronic calcium imaging in CA1 shows place fields shift gradually over days even in an unchanged environment, raising questions about what a stable spatial memory actually is.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "reward-prediction-errors-in-the-human-midbrain-high",
+      "title": "Reward Prediction Errors in the Human Midbrain: High-Field fMRI Evidence",
+      "gist": "Reports signals consistent with prediction errors in the human ventral tegmental area using 7T imaging, with careful handling of physiological noise.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "diffusion-mri-tractography-and-the-problem-of-false",
+      "title": "Diffusion MRI Tractography and the Problem of False Positives",
+      "gist": "Evaluates how well tractography reconstructs known anatomy, using phantom and tracer comparisons, and cautions against reading white matter maps as wiring diagrams.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neuroimaging methods"
+      ]
+    },
+    {
+      "slug": "experience-dependent-plasticity-in-the-visual-cortex-critical",
+      "title": "Experience-Dependent Plasticity in the Visual Cortex: Critical Periods",
+      "gist": "Reviews ocular dominance plasticity, the role of inhibitory maturation in opening and closing critical periods, and reactivation in adulthood.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex",
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "systems-consolidation-reconsidered-do-memories-ever-leave-the",
+      "title": "Systems Consolidation Reconsidered: Do Memories Ever Leave the Hippocampus?",
+      "gist": "Weighs standard consolidation against multiple-trace and transformation accounts using lesion timing, imaging of remote recall and the persistence of detail.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "retinotopic-mapping-at-ultra-high-field-laminar-responses",
+      "title": "Retinotopic Mapping at Ultra-High Field: Laminar Responses",
+      "gist": "Uses 7T fMRI to resolve depth-dependent responses in human V1, discussing draining-vein confounds and what laminar profiles can say about feedback.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex",
+        "Neuroimaging methods"
+      ]
+    },
+    {
+      "slug": "precision-weighting-and-neuromodulators-acetylcholine-as-a-gain",
+      "title": "Precision-Weighting and Neuromodulators: Acetylcholine as a Gain Knob",
+      "gist": "Proposes that cholinergic tone sets the relative weight of bottom-up evidence against priors, and tests the idea with pharmacology and auditory oddball paradigms.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "binocular-disparity-and-the-neural-basis-of-stereo",
+      "title": "Binocular Disparity and the Neural Basis of Stereo Depth",
+      "gist": "Records disparity-tuned neurons in V1 and V2 and tests which of them correlate with perceptual judgments in a depth discrimination task.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "extra-classical-receptive-fields-as-evidence-for-feedback",
+      "title": "Extra-Classical Receptive Fields as Evidence for Feedback Prediction",
+      "gist": "Argues that end-stopping and surround suppression in V1 reflect top-down predictions from higher areas, reviewing cooling and optogenetic feedback manipulations.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding",
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "motor-preparation-without-movement-null-space-dynamics",
+      "title": "Motor Preparation Without Movement: Null Space Dynamics",
+      "gist": "Shows that preparatory activity in premotor cortex lies in dimensions that do not drive muscles, explaining how plans can build up silently before an action.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "sharpening-chisels-and-plane-irons-without-obsession",
+      "title": "Sharpening Chisels and Plane Irons Without Obsession",
+      "gist": "A practical piece on getting a sharp edge with just a few stones and a strop, arguing that fussing over mirror polish wastes workshop time.",
+      "area": "Carpentry",
+      "sub": [
+        "Carpentry"
+      ]
+    },
+    {
+      "slug": "orientation-selectivity-in-v1-feedforward-or-recurrent",
+      "title": "Orientation Selectivity in V1: Feedforward or Recurrent?",
+      "gist": "Revisits the origin of orientation tuning, comparing the classic Hubel and Wiesel wiring with recurrent amplification models in light of intracellular recordings and silencing experiments.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "replay-and-reward-how-sharp-wave-ripples-shape",
+      "title": "Replay and Reward: How Sharp-Wave Ripples Shape Value Learning",
+      "gist": "Shows that hippocampal replay preferentially visits rewarded locations and may train value estimates in striatum, linking offline memory reactivation to reinforcement learning.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine",
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "dynamical-systems-for-decision-making-from-drift-diffusion",
+      "title": "Dynamical Systems for Decision Making: From Drift Diffusion to Networks",
+      "gist": "Compares accumulation-to-bound models with attractor networks, asking what the neural recordings from parietal cortex can and cannot discriminate between.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "hand-cut-dovetails-layout-sawing-and-paring",
+      "title": "Hand-Cut Dovetails: Layout, Sawing and Paring",
+      "gist": "A step-by-step guide to cutting tight half-blind and through dovetail joints with hand tools, including marking gauges, sawing to the line and chisel work.",
+      "area": "Carpentry",
+      "sub": [
+        "Carpentry"
+      ]
+    },
+    {
+      "slug": "schema-prior-knowledge-and-fast-learning-in-rodents",
+      "title": "Schema, Prior Knowledge and Fast Learning in Rodents",
+      "gist": "Rats learning new flavour-place pairs consolidate within a day if a schema exists, challenging the long timescale of classic systems consolidation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "serotonin-and-patience-reward-waiting-in-the-dorsal",
+      "title": "Serotonin and Patience: Reward Waiting in the Dorsal Raphe",
+      "gist": "Optogenetic stimulation of raphe neurons increases waiting for delayed rewards, and the paper considers whether serotonin encodes a time horizon or a punishment expectation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "attractor-dynamics-in-head-direction-circuits",
+      "title": "Attractor Dynamics in Head Direction Circuits",
+      "gist": "Shows that head direction cells form a ring attractor whose activity persists in the dark, using Drosophila and rodent recordings to test the predicted connectivity.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "manifold-structure-in-hippocampal-population-activity-during-navigation",
+      "title": "Manifold Structure in Hippocampal Population Activity During Navigation",
+      "gist": "Uses dimensionality reduction on large-scale recordings to show that hippocampal activity traces a low-dimensional manifold that reorganises across environments.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory",
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "feature-based-attention-spreads-across-the-visual-field",
+      "title": "Feature-Based Attention Spreads Across the Visual Field",
+      "gist": "Reports that attending to a colour or direction in one location boosts matching neurons everywhere, supporting a global feature similarity gain model.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "deep-convolutional-networks-as-models-of-ventral-stream",
+      "title": "Deep Convolutional Networks as Models of Ventral Stream Responses",
+      "gist": "Compares layers of trained networks with neural responses in V4 and inferotemporal cortex, and asks which findings survive when stimuli and training sets are changed.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "building-a-workbench-from-construction-lumber",
+      "title": "Building a Workbench From Construction Lumber",
+      "gist": "A weekend project: a sturdy Roubo-style bench built from construction-grade timber, with notes on flattening, joinery and the vises worth paying for.",
+      "area": "Carpentry",
+      "sub": [
+        "Carpentry"
+      ]
+    },
+    {
+      "slug": "offline-rl-for-neuroscientists-learning-from-a-fixed",
+      "title": "Offline RL for Neuroscientists: Learning From a Fixed Dataset",
+      "gist": "A blog post explaining why standard temporal difference learning fails without exploration, and whether animals might use analogous conservative strategies when replaying past experience.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "prediction-errors-in-population-geometry-a-low-dimensional",
+      "title": "Prediction Errors in Population Geometry: A Low-Dimensional View",
+      "gist": "Examines whether prediction-error responses occupy a distinct subspace in population activity, so that downstream readouts can separate surprise from stimulus identity.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding",
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "dopamine-neurons-encode-a-distribution-of-future-rewards",
+      "title": "Dopamine Neurons Encode a Distribution of Future Rewards",
+      "gist": "Shows that different dopamine neurons have different optimism levels, collectively representing the full reward distribution as in distributional reinforcement learning, tested in mice with variable reward sizes.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "slow-oscillations-and-spindles-the-coupling-that-consolidates",
+      "title": "Slow Oscillations and Spindles: The Coupling That Consolidates",
+      "gist": "Reports that nesting of sleep spindles within slow oscillation up-states predicts overnight memory retention, and discusses causal tests using acoustic stimulation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "sharp-wave-ripples-are-necessary-for-spatial-memory",
+      "title": "Sharp-Wave Ripples Are Necessary for Spatial Memory Consolidation",
+      "gist": "Closed-loop disruption of ripples after learning impairs later performance in rats, giving causal evidence that offline replay does real work.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory",
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "targeted-memory-reactivation-through-odour-and-sound-cues",
+      "title": "Targeted Memory Reactivation Through Odour and Sound Cues During Sleep",
+      "gist": "Participants who received learning-associated cues while asleep showed improved recall afterwards, supporting the idea that reactivation drives consolidation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory",
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "biased-competition-and-the-neural-basis-of-selective",
+      "title": "Biased Competition and the Neural Basis of Selective Attention",
+      "gist": "Revisits the theory in which stimuli compete for neural representation and attention biases the outcome, using single-unit recordings from V2 and V4.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "small-samples-and-brain-wide-association-studies",
+      "title": "Small Samples and Brain-Wide Association Studies",
+      "gist": "Demonstrates that reproducible associations between brain imaging and behaviour need thousands of participants, with consequences for how studies should be planned.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neuroimaging methods"
+      ]
+    },
+    {
+      "slug": "neuromodulation-of-plasticity-acetylcholine-and-learning-windows",
+      "title": "Neuromodulation of Plasticity: Acetylcholine and Learning Windows",
+      "gist": "Describes how cholinergic tone opens windows for cortical plasticity and why this matters for perceptual learning and recovery after injury.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "value-representations-in-orbitofrontal-population-codes",
+      "title": "Value Representations in Orbitofrontal Population Codes",
+      "gist": "Analyses high-dimensional orbitofrontal activity during economic choice and finds value is encoded in a stable low-dimensional axis alongside context-dependent dimensions.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine",
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "the-mind-in-early-buddhism-what-the-pali",
+      "title": "The Mind in Early Buddhism: What the Pali Discourses Actually Say",
+      "gist": "A close reading of early canonical texts on consciousness and mental factors, separating the original claims from later scholastic elaboration.",
+      "area": "Buddhism",
+      "sub": [
+        "Buddhism"
+      ]
+    },
+    {
+      "slug": "criticality-in-the-brain-evidence-and-controversy",
+      "title": "Criticality in the Brain: Evidence and Controversy",
+      "gist": "Examines whether neuronal avalanches imply a critical state, and highlights statistical pitfalls in fitting power laws to recordings.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "face-patches-and-the-origin-of-category-selectivity",
+      "title": "Face Patches and the Origin of Category Selectivity",
+      "gist": "Reviews macaque face patch recordings and the debate about whether such regions arise from experience, innate wiring or both, citing face-deprived rearing studies.",
+      "area": "Neuroscience",
+      "sub": [
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "mismatch-negativity-revisited-adaptation-prediction-or-both",
+      "title": "Mismatch Negativity Revisited: Adaptation, Prediction or Both?",
+      "gist": "Reconsiders the auditory mismatch response with roving-oddball designs that separate stimulus-specific adaptation from genuine violations of learned regularities.",
+      "area": "Neuroscience",
+      "sub": [
+        "Predictive coding"
+      ]
+    },
+    {
+      "slug": "the-attentional-blink-and-the-limits-of-temporal",
+      "title": "The Attentional Blink and the Limits of Temporal Selection",
+      "gist": "Reconsiders why a second target is missed within about half a second of the first, comparing resource depletion and selection-gating accounts.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "no-self-and-the-neuroscience-of-self-models",
+      "title": "No-Self and the Neuroscience of Self-Models",
+      "gist": "An essay comparing the Buddhist doctrine of anatta with scientific accounts of the self as a constructed model, and where the analogy breaks down.",
+      "area": "Buddhism",
+      "sub": [
+        "Buddhism"
+      ]
+    },
+    {
+      "slug": "sleep-deprivation-and-cognitive-performance-a-meta-analysis",
+      "title": "Sleep Deprivation and Cognitive Performance: A Meta-Analysis",
+      "gist": "Aggregates studies of attention, working memory and decision-making after sleep loss, with notes on publication bias and the heterogeneity of tasks.",
+      "area": "Neuroscience",
+      "sub": [
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "meta-reinforcement-learning-in-prefrontal-networks",
+      "title": "Meta-Reinforcement Learning in Prefrontal Networks",
+      "gist": "Shows that recurrent networks trained on many tasks learn their own learning algorithm, and suggests prefrontal dynamics and dopamine together implement similar fast adaptation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "exploration-is-not-noise-directed-uncertainty-seeking-in",
+      "title": "Exploration Is Not Noise: Directed Uncertainty-Seeking in Humans",
+      "gist": "Behavioural modelling shows people add information bonuses to uncertain options rather than simply choosing at random, with frontopolar activity tracking relative uncertainty.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "basal-ganglia-loops-and-the-initiation-of-voluntary",
+      "title": "Basal Ganglia Loops and the Initiation of Voluntary Movement",
+      "gist": "Reviews direct and indirect pathway models of movement selection and the observation that both pathways are active during initiation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "the-basal-ganglia-as-a-selection-machine-actor",
+      "title": "The Basal Ganglia as a Selection Machine: Actor-Critic Mappings",
+      "gist": "Revisits the proposal that dorsal striatum implements the actor and ventral striatum the critic, weighing anatomical, lesion and recording evidence.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "alpha-oscillations-as-a-gating-mechanism-for-visual",
+      "title": "Alpha Oscillations as a Gating Mechanism for Visual Attention",
+      "gist": "Reviews evidence that alpha power increases over cortex representing ignored locations, and asks whether this reflects active inhibition or passive idling.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "why-do-we-forget-interference-decay-and-active",
+      "title": "Why Do We Forget? Interference, Decay and Active Erasure",
+      "gist": "Contrasts theories of forgetting and argues that some forgetting is adaptive and regulated, citing dopamine-driven forgetting in flies and rodent work on engram accessibility.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "the-glymphatic-system-does-the-sleeping-brain-take",
+      "title": "The Glymphatic System: Does the Sleeping Brain Take Out the Trash?",
+      "gist": "A critical look at claims that cerebrospinal fluid flow clears metabolites during sleep, disputing measurements and discussing the role of anaesthetics.",
+      "area": "Neuroscience",
+      "sub": [
+        "Sleep"
+      ]
+    },
+    {
+      "slug": "attention-deficits-in-adhd-a-systems-view",
+      "title": "Attention Deficits in ADHD: A Systems View",
+      "gist": "A review of dopaminergic and noradrenergic hypotheses, cortical development findings and attention network measures in people diagnosed with ADHD.",
+      "area": "Neuroscience",
+      "sub": [
+        "Attention"
+      ]
+    },
+    {
+      "slug": "representational-geometry-of-object-categories-in-it-population",
+      "title": "Representational Geometry of Object Categories in IT Population Responses",
+      "gist": "Uses geometry methods to show that category manifolds become more linearly separable along the ventral stream, with comparisons to deep networks.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics",
+        "Visual cortex"
+      ]
+    },
+    {
+      "slug": "astrocytes-and-synaptic-modulation-more-than-support-cells",
+      "title": "Astrocytes and Synaptic Modulation: More Than Support Cells?",
+      "gist": "Reviews tripartite synapse claims, calcium signalling in astrocytes and the controversy over gliotransmission.",
+      "area": "Neuroscience",
+      "sub": [
+        "Synaptic plasticity"
+      ]
+    },
+    {
+      "slug": "temporal-difference-learning-beyond-the-single-trial",
+      "title": "Temporal Difference Learning Beyond the Single Trial",
+      "gist": "Extends the classic temporal difference account to long timescales, discussing eligibility traces, credit assignment across delays and how dopamine ramps might reflect value gradients.",
+      "area": "Neuroscience",
+      "sub": [
+        "Reinforcement learning & dopamine"
+      ]
+    },
+    {
+      "slug": "mortise-and-tenon-strength-what-the-tests-show",
+      "title": "Mortise and Tenon Strength: What the Tests Show",
+      "gist": "Summarises destructive tests of traditional joints against screws and dowels, discussing glue surface, draw-boring and the real limits of furniture joinery.",
+      "area": "Carpentry",
+      "sub": [
+        "Carpentry"
+      ]
+    },
+    {
+      "slug": "cortical-dynamics-during-speech-production",
+      "title": "Cortical Dynamics During Speech Production",
+      "gist": "Analyses ECoG and Neuropixels recordings from human speech cortex to show that articulation is generated through structured rotational dynamics.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics",
+        "Motor control"
+      ]
+    },
+    {
+      "slug": "understanding-wood-movement-before-you-build-a-table",
+      "title": "Understanding Wood Movement Before You Build a Table",
+      "gist": "Explains seasonal expansion across the grain, how to orient boards and attach tabletops with figure-8 fasteners, and what happens when you ignore these rules.",
+      "area": "Carpentry",
+      "sub": [
+        "Carpentry"
+      ]
+    },
+    {
+      "slug": "latent-variable-models-of-spiking-data-gaussian-process",
+      "title": "Latent Variable Models of Spiking Data: Gaussian Process Factor Analysis",
+      "gist": "A methods tutorial on extracting smooth trajectories from simultaneously recorded neurons, with practical advice on regularisation and model selection.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics"
+      ]
+    },
+    {
+      "slug": "theta-sequences-and-the-planning-of-routes",
+      "title": "Theta Sequences and the Planning of Routes",
+      "gist": "Shows that compressed sweeps of place-cell activity within each theta cycle look ahead of the animal at choice points, with implications for deliberation.",
+      "area": "Neuroscience",
+      "sub": [
+        "Hippocampus & memory"
+      ]
+    },
+    {
+      "slug": "connectivity-constraints-on-network-dynamics-learning-in-spiking",
+      "title": "Connectivity Constraints on Network Dynamics: Learning in Spiking Models",
+      "gist": "Shows how local plasticity rules sculpt the recurrent connectivity that supports stable sequences and what that implies for the structure of trained networks.",
+      "area": "Neuroscience",
+      "sub": [
+        "Neural population dynamics",
+        "Synaptic plasticity"
+      ]
+    }
+  ]
+}

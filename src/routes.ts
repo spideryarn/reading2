@@ -180,7 +180,7 @@ import {
   loadTweets,
   fetchAllowanceStore,
 } from "./store/index.js";
-import { defaultShelfTopicsDeps, shelfTopics } from "./shelf-topics.js";
+import { defaultShelfTopicSetDeps, shelfTopicSet } from "./shelf-topic-sets.js";
 /* **Pure functions only**, and that is the whole reason this import survived
    step 10 while the writes beside it did not. `withRetry` and `withEdit` take a
    snapshot and return what the result would be, so they can be run as a gate
@@ -457,6 +457,7 @@ import {
   NON_TASK_MODELS,
   powerFor,
   type Provider,
+  type Wire,
   STAGE_EFFORT,
   TASK_TIER,
   displayName,
@@ -562,9 +563,9 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
 /**
  * The second one, and the same argument as the first.
  *
- * A bug report may carry a screenshot the reader pasted in, which is ~300 KB
- * downscaled and 400 KB at the ceiling the database enforces — four figures past
- * what the other forty routes need. So it is a parameter on `readBody` too, and
+ * A bug report may carry a screenshot the reader pasted in, which is a few
+ * hundred kilobytes for flat UI and two megabytes at the ceiling the database
+ * enforces — far past what the other routes need. So it is a parameter on `readBody` too, and
  * `MAX_BODY_BYTES` stays where it is: widening the shared limit to admit one
  * caller gives away the thing the limit was for.
  *
@@ -6463,12 +6464,13 @@ function modelsInUse(): { tasks: ModelReport[] } {
     /* A standard article: this page reports the app's configuration, not one
        article's — High-powered AI is per article (plan 260930f). Through
        `powerFor`, so a task on Opus for every article is reported as Opus. */
-    const { id, provider, source } = resolveModel(task, powerFor(task, "standard"));
+    const { id, provider, wire, source } = resolveModel(task, powerFor(task, "standard"));
     return {
       task,
       model: displayName(id),
       id,
       provider,
+      wire,
       source,
       ...(effort ? { effort } : {}),
     };
@@ -6499,6 +6501,8 @@ type ModelReport = {
   /** The exact string sent on the wire. */
   id: string;
   provider: Provider;
+  /** Which API shape the call speaks. Absent on the rows that are not `Task`s. */
+  wire?: Wire;
   /** `"override"` when an environment variable, rather than the code, put that id there. */
   source: "default" | "override";
   effort?: string;
@@ -8307,18 +8311,24 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res, query } }) => {
       /* `=== "1"`, as `/api/library` does. Here it widens to active + archived. */
       const archived = query.get("archived") === "1";
-      const { response, refresh } = await shelfTopics(archived, defaultShelfTopicsDeps());
+      const { response, refresh } = await shelfTopicSet(archived, defaultShelfTopicSetDeps());
       const terms: LibraryTermsResponse = response;
       /* The reader's own words, derived: never a shared cache's (Sol F10). */
-      res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, terms);
       /* **After the answer, and still inside the handler** — plan 260929c R1.
-         The reader already has the program's list (or the stored pick); the
-         model call runs now and is awaited, so its spend lands in this
-         request's collector against this reader rather than as a late finish,
-         and a Vercel function stays alive until it is done. `refresh` never
-         throws. src/shelf-topics.ts. */
-      if (refresh) await refresh();
+         The reader already has the stored topics (or the phrase pills); the
+         model's work — filing new articles, or a re-think of the whole tree,
+         which can take a couple of minutes — runs now and is awaited, so its
+         spend lands in this request's collector against this reader rather
+         than as a late finish, and a Vercel function stays alive until it is
+         done. `refresh` never throws. The `finally` also spends or releases
+         the already-taken allowance and claim if serialising/sending the
+         answer itself fails. src/shelf-topic-sets.ts, plan 261003f. */
+      try {
+        res.setHeader("Cache-Control", "private, no-store");
+        send(res, 200, terms);
+      } finally {
+        if (refresh) await refresh();
+      }
     },
   },
 

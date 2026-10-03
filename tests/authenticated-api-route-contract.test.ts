@@ -306,7 +306,7 @@ import type { Verifier, VerifyResult } from "../src/auth.js";
 import { WEBHOOK_PATH } from "../src/billing/webhook.js";
 import { loadEnvLocal } from "../src/env.js";
 import { UNEXPECTED_FAILURE } from "../src/messages.js";
-import { modelFor, powerFor } from "../src/models.js";
+import { modelFor, powerFor, TASK_TIER, wireFor, type Task } from "../src/models.js";
 import { isPublicNamespace } from "../src/public/routes.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
@@ -2636,6 +2636,23 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
       const simple = (reply.body.tasks as { task: string; id: string }[]).find((t) => t.task === "simple");
       expect(simple?.id).toBe(modelFor("simple", powerFor("simple", "standard")));
       expect(simple?.id).toBe(modelFor("simple", "high"));
+    });
+
+    it("sends each task's wire in the real model response", async () => {
+      const reply = await call("GET", "/api/models");
+      expect(reply.status).toBe(200);
+      const rows = reply.body.tasks as { task: string; wire?: string }[];
+      /* The Profile fixture supplies this field itself. Only the HTTP reply
+         catches a resolver value that modelsInUse forgot to put on the wire. */
+      for (const task of Object.keys(TASK_TIER) as Task[]) {
+        expect(rows.find((row) => row.task === task)?.wire, task).toBe(wireFor(task));
+      }
+      /* Independent witnesses for both API shapes, and a row with no task. */
+      expect(rows.find((row) => row.task === "glossary")?.wire).toBe("messages");
+      expect(rows.find((row) => row.task === "chat")?.wire).toBe("chat");
+      const pdf = rows.find((row) => row.task === "pdf");
+      expect(pdf).toBeDefined();
+      expect(pdf).not.toHaveProperty("wire");
     });
 
     it("still refuses a method that is not, and quotes the raw URL back", async () => {
