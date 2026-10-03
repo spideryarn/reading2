@@ -1,6 +1,6 @@
 /**
- * **Structure mode's list face** — the whole document as one nested list that
- * never scrolls. It was Outline mode, 2026-08-28 to 2026-09-10; it is now what
+ * **Structure mode's list face** — the whole document as one nested list,
+ * which scrolls only when the floor of its ladder does not fit. It was Outline mode, 2026-08-28 to 2026-09-10; it is now what
  * `StructureBand` draws when the band is too narrow for Structure's two columns
  * (src/web/modes/structure/StructureMode.tsx § `structureFace`), and the
  * names here — this file, `outline.ts`, `.outln-*` — are the ones it had.
@@ -27,6 +27,12 @@ import { onFontsChanged } from "./fonts.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useTapReveal } from "./useTapReveal.js";
 import { withVoice } from "./voice.js";
+
+/**
+ * The least the fisheye list draws: every part, the current part's sections,
+ * and the current section's summary (outline.ts § `Rung`). `fit` below.
+ */
+const FLOOR: Rung = 3;
 
 interface Props {
   /** The tree, nested and numbered. Null if it is unusable. */
@@ -114,29 +120,29 @@ export function OutlinePanel({
   /** The visible list, whose top is where the fit's room starts. */
   const listRef = useRef<HTMLOListElement>(null);
   /**
-   * **What the fit chose: a rung, and whether its titles are cut to one line.**
+   * **What the fit chose: a rung, and whether the list has to scroll to show it.**
    *
-   * Titles wrap since 2026-09-10 (outline-mode.css § `.outln-text`), which is
-   * the whole of Greg's 2Q. That broke one promise the ladder made — rung 1,
-   * "every part, one line each — if this will not fit, nothing will" — because
-   * a whole title can be three lines, and a band that held every part at one
-   * line each may not hold them at three. The panel does not scroll, so an
-   * over-tall rung 1 would silently drop the last parts off the foot. GPT Sol's
-   * review of the plan, P1-2.
+   * Rung 3 is the floor — every part, the sections of the part the reader is
+   * in, and the summary of the section they are in. Until 2026-10-03 the floor
+   * was rung 1 and the panel never scrolled, so a band too short for rung 3
+   * showed the parts and nothing about where the reader was inside one. Greg,
+   * spya-s46j8f:
    *
-   * So the one-line clamp stays, as the **floor**: every rung is measured both
-   * whole and clamped, a whole-title rung that fits always beats a clamped one
-   * (whole titles over more detail — the trade 2Q asked for), and the clamped
-   * set is only reached when not even rung 1 fits whole. Then the reader gets
-   * exactly what they had before 2026-09-10, which is the list that fitted.
+   * > at the very least I want all the headings for this subsection and its
+   * > siblings to be visible. I mean, I think I'd also like to see the summary
+   * > for this lowest level subsection, even if that does mean that it can't
+   * > show the whole top-level structure visibly, that I'd have to scroll in
+   * > structure mode
+   *
+   * So when rung 3 does not fit it is drawn anyway and the list scrolls, as
+   * Expanded's does. Titles are always whole: the one-line clamp that was the
+   * old floor (2026-09-10, Greg's 2Q) went with the rule it was protecting.
+   * docs/plans/261003k-structure-fisheye-list-always-shows-the-current-sections-and-summary-and-scrolls.md
    */
-  const [fit, setFit] = useState<{ rung: Rung; clamp: boolean }>({ rung: 1, clamp: false });
+  const [fit, setFit] = useState<{ rung: Rung; scroll: boolean }>({ rung: FLOOR, scroll: false });
   const rung = fit.rung;
 
   /**
-   * Every candidate, always built. Cheap — a few hundred objects — and building
-   * all five is what lets the fit be *measured* rather than estimated.
-   */
   /**
    * Whether the band is covering the article rather than sitting beside it,
    * **measured rather than derived from a width.**
@@ -169,7 +175,9 @@ export function OutlinePanel({
    */
   const allowParagraphs = beside && paragraphLabels;
 
-  /* None in Expanded, which draws everything and scrolls, so there is no fit to
+  /* Every candidate, always built. Cheap — a few hundred objects — and building
+     all five is what lets the fit be *measured* rather than estimated. None in
+     Expanded, which draws everything and scrolls, so there is no fit to
      measure — and no hidden copies for it to lay out. */
   const candidates = useMemo(
     () =>
@@ -208,8 +216,8 @@ export function OutlinePanel({
    * a line budget from character counts and recorded GPT's dissent; the trade
    * inverts here and Sol's review of this plan said so. There it was five
    * hidden renders for each of three panels and a bad guess left a column
-   * slightly blank. Here it is five for one panel, and a bad guess pushes rows
-   * off a panel that cannot be scrolled. An estimator's own `data-outline-rung`
+   * slightly blank. Here it is five for one panel, and a bad guess either
+   * scrolls a list that would have fitted or clips one that does not. An estimator's own `data-outline-rung`
    * can only ever prove what the estimator chose — the silent-success pattern
    * exactly (docs/reusable/silent-success.md).
    *
@@ -275,27 +283,22 @@ export function OutlinePanel({
          evidence of what the fit chose; a diagnostic that overstates how far
          down the ladder it got is worse than none.
 
-         **Whole titles first, then clamped** — `fit` above says why. One pass
-         per set; the clamped set is only asked when the whole set had nothing
-         that fits, and if neither has, it is clamped rung 1, the old floor. */
-      const bestOf = (clamp: boolean): Rung | null => {
-        let best: Rung | null = null;
-        let bestHeight = -1;
-        for (const child of Array.from(box.children)) {
-          const el = child as HTMLElement;
-          if ((el.dataset.clamp === "1") !== clamp) continue;
-          const r = Number(el.dataset.rung) as Rung;
-          const h = el.scrollHeight;
-          if (h <= avail && h > bestHeight) {
-            best = r;
-            bestHeight = h;
-          }
+         **From the floor up, never below it** — `fit` above says why. If the
+         floor itself does not fit, it is drawn and the list scrolls. */
+      let best: Rung | null = null;
+      let bestHeight = -1;
+      for (const child of Array.from(box.children)) {
+        const el = child as HTMLElement;
+        const r = Number(el.dataset.rung) as Rung;
+        if (r < FLOOR) continue;
+        const h = el.scrollHeight;
+        if (h <= avail && h > bestHeight) {
+          best = r;
+          bestHeight = h;
         }
-        return best;
-      };
-      const whole = bestOf(false);
-      const next = whole !== null ? { rung: whole, clamp: false } : { rung: bestOf(true) ?? 1, clamp: true };
-      setFit((prev) => (prev.rung === next.rung && prev.clamp === next.clamp ? prev : next));
+      }
+      const next = best !== null ? { rung: best, scroll: false } : { rung: FLOOR, scroll: true };
+      setFit((prev) => (prev.rung === next.rung && prev.scroll === next.scroll ? prev : next));
     };
     measure();
 
@@ -325,10 +328,16 @@ export function OutlinePanel({
   }, [candidates]);
 
   const chosen = candidates[rung - 1] ?? candidates[0];
-  const rows = everything?.rows ?? chosen?.rows ?? [];
+  const drawn = everything ?? chosen ?? null;
+  const rows = drawn?.rows ?? [];
+  /** The list is its own scroller: always in Expanded, and in the fisheye only
+   * when the floor does not fit. */
+  const scrolls = expanded || fit.scroll;
 
   /**
-   * **Expanded follows the reader, and only when they cross a boundary.**
+   * **A list that scrolls follows the reader, and only when they cross a
+   * boundary** — Expanded always, and the fisheye when its floor does not fit
+   * (`fit` above).
    * Greg, spya-gxyhcc: "Ideally it would [scroll along with the text]. I
    * suppose that could interfere with the fact that ideally the user would be
    * able to scroll independently within the column … Let's try and avoid too
@@ -351,18 +360,55 @@ export function OutlinePanel({
    * its old scroll with the reader somewhere else. GPT Sol's plan review,
    * 261001q, finding 7.
    */
-  const nowId = everything?.currentId ?? null;
+  const nowId = drawn?.currentId ?? null;
   useLayoutEffect(() => {
     const list = listRef.current;
-    if (!expanded || !list) return;
+    if (!scrolls || !list) return;
     const follow = () => {
       if (nowId === null || list.clientHeight <= 0) return;
       const row = list.querySelector<HTMLElement>(`#${CSS.escape(`outln-${nowId}`)}`);
       if (!row) return;
-      const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+      const listTop = list.getBoundingClientRect().top;
+      const topOf = (el: HTMLElement) => el.getBoundingClientRect().top - listTop + list.scrollTop;
+      const top = topOf(row);
       const bottom = top + row.offsetHeight;
-      const inView = top >= list.scrollTop && bottom <= list.scrollTop + list.clientHeight;
-      if (!inView) list.scrollTop = Math.max(0, top - list.clientHeight / 3);
+      /* **The fisheye wants the whole of the current part's block in view** —
+         the part's row down to its last section — because "all the headings
+         for this subsection and its siblings" is the half of Greg's request
+         that a scroll could otherwise hide (spya-s46j8f). The block is the
+         nearest part row at or above the current row, to the row before the
+         next part. If it is taller than the list, the current row is placed
+         as Expanded places it. */
+      if (!expanded) {
+        const all = Array.from(list.querySelectorAll<HTMLElement>(":scope > .outln-row"));
+        const at = all.indexOf(row);
+        let first = at;
+        while (first > 0 && !all[first]?.classList.contains("lvl-1")) first--;
+        let last = at;
+        while (last + 1 < all.length && !all[last + 1]?.classList.contains("lvl-1")) last++;
+        const head = all[first];
+        const tail = all[last];
+        if (head && tail) {
+          const blockTop = topOf(head);
+          const blockBottom = topOf(tail) + tail.offsetHeight;
+          if (blockBottom - blockTop <= list.clientHeight) {
+            if (blockTop < list.scrollTop) list.scrollTop = blockTop;
+            else if (blockBottom > list.scrollTop + list.clientHeight) {
+              list.scrollTop = blockBottom - list.clientHeight;
+            }
+            return;
+          }
+        }
+      }
+      if (top >= list.scrollTop && bottom <= list.scrollTop + list.clientHeight) return;
+      /* A third of the way down, **but never so far that a row which fits is
+         cut at the foot**: the row carries its summary, and a 250px row put
+         100px down a 300px list loses its last 50px. So the third-down place
+         is held between "the row's foot at the list's foot" and "the row's top
+         at the list's top"; a row taller than the list starts at its top. GPT
+         Sol's plan review, 261003k, F2. */
+      const third = top - list.clientHeight / 3;
+      list.scrollTop = Math.max(0, Math.min(top, Math.max(third, bottom - list.clientHeight)));
     };
     follow();
     let shown = list.clientHeight > 0;
@@ -373,7 +419,7 @@ export function OutlinePanel({
     });
     ro.observe(list);
     return () => ro.disconnect();
-  }, [expanded, nowId]);
+  }, [expanded, scrolls, nowId]);
 
   /**
    * Roving focus over one tab stop — the pattern Diagram mode already uses
@@ -421,13 +467,31 @@ export function OutlinePanel({
     [onJump],
   );
 
+  const rowId = (r: OutlineRow) => `outln-${r.node.id}`;
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (rows.length === 0) return;
     const step = (to: number) => {
       e.preventDefault();
       const i = Math.max(0, Math.min(rows.length - 1, to));
-      setFocusedId(rows[i]?.node.id ?? null);
-      jump(rows[i]);
+      const target = rows[i];
+      setFocusedId(target?.node.id ?? null);
+      /* **Show the row the key chose**, in a list that scrolls. Follow-along
+         only runs when the reader's section changes, so Home pressed while
+         already in the first section would mark a row that is off screen. The
+         least scroll that brings it in, on the list's own `scrollTop` (never
+         `scrollIntoView`, which moves the page too). GPT Sol's plan review,
+         261003k, F3. */
+      const list = listRef.current;
+      /* By id on the document: only the visible rows carry one. */
+      const el = scrolls && target ? list?.ownerDocument.getElementById(rowId(target)) : null;
+      if (list && el && list.clientHeight > 0) {
+        const top = el.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+        const bottom = top + el.offsetHeight;
+        if (top < list.scrollTop || el.offsetHeight > list.clientHeight) list.scrollTop = top;
+        else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+      }
+      jump(target);
     };
     switch (e.key) {
       /* **↑ / ↓ are not this list's any more**, since 2026-10-01: they stepped
@@ -457,11 +521,10 @@ export function OutlinePanel({
     }
   };
 
-  const rowId = (r: OutlineRow) => `outln-${r.node.id}`;
-
   return (
     <ModeSurface
-      /* `outln-expanded` is the one that scrolls (outline-mode.css). */
+      /* What scrolls is keyed on `data-outline-scroll` below, not on this
+         class (outline-mode.css § a list that scrolls). */
       feature={expanded ? "outln outln-expanded" : "outln"}
       head={head}
       /* Structure's narrow face, so Structure's (i) (ModeSurface.tsx § `mode`). */
@@ -483,13 +546,15 @@ export function OutlinePanel({
          `scrollHeight <= clientHeight` reads `0 <= 0` there and passes on any
          code at all. It needs a browser. docs/project/browser-testing.md. */
       data-outline-rung={expanded ? "expanded" : rung}
-      /* And whether the titles had to be cut to fit — `fit` above. */
-      data-outline-clamp={!expanded && fit.clamp ? "1" : "0"}
+      /* And whether the list scrolls: Expanded always, the fisheye when its
+         floor did not fit — `fit` above. The stylesheet keys the scroll on
+         this (outline-mode.css § a list that scrolls). */
+      data-outline-scroll={scrolls ? "1" : "0"}
     >
       <TooltipGroup delay={{ open: 150, close: 90 }} timeoutMs={400}>
         <ol
           ref={listRef}
-          className={listClass(!expanded && fit.clamp)}
+          className="outln-list"
           /* biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: `role="tree"` on a real <ol> is the W3C tree-view pattern — the list IS the widget, owning the single tab stop and the arrow keys. Swapping in a <div> to satisfy the rule would throw away the list semantics for any AT that ignores the role. */
           role="tree"
           aria-label="The article's structure"
@@ -516,29 +581,18 @@ export function OutlinePanel({
           `<ol class="outln-list">` of `<li class="outln-row …">`, because a
           measurement of different markup is a measurement of something else.
           That is the whole point of measuring rather than estimating, and it
-          would be quietly undone by a measuring copy that merely looked alike.
-
-          Each rung twice — titles whole, then titles clamped — because the fit
-          chooses between both sets (`fit` above), and the clamped rows are a
-          different height. */}
+          would be quietly undone by a measuring copy that merely looked alike. */}
       {expanded ? null : (
         <div className="outln-measure" aria-hidden="true" ref={measureRef}>
-          {[false, true].flatMap((clamp) =>
-            candidates.map((c) => (
-              <ol
-                className={listClass(clamp)}
-                key={`${c.rung}-${clamp ? "clamp" : "whole"}`}
-                data-rung={c.rung}
-                data-clamp={clamp ? "1" : "0"}
-              >
-                {c.rows.map((row) => (
-                  <li key={row.node.id} className={rowClass(row, false)}>
-                    <RowBody row={row} />
-                  </li>
-                ))}
-              </ol>
-            )),
-          )}
+          {candidates.map((c) => (
+            <ol className="outln-list" key={c.rung} data-rung={c.rung}>
+              {c.rows.map((row) => (
+                <li key={row.node.id} className={rowClass(row, false)}>
+                  <RowBody row={row} />
+                </li>
+              ))}
+            </ol>
+          ))}
         </div>
       )}
     </ModeSurface>
@@ -608,14 +662,6 @@ function Row({
       </li>
     </Tooltip>
   );
-}
-
-/**
- * The list's classes, written once for the same reason as `rowClass` below:
- * the visible list and the candidate it was measured as must be the same markup.
- */
-function listClass(clamp: boolean): string {
-  return clamp ? "outln-list clamp" : "outln-list";
 }
 
 /**

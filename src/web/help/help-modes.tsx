@@ -651,7 +651,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
       <>
         <p>
           In <strong>Fisheye</strong>, where a column has no room for every row it says how many come
-          earlier or later. <strong>Expanded</strong> follows you only when you move into another
+          earlier or later. As one list, Fisheye always shows the sections of the part you are in and
+          a summary of the section you are reading; when that will not all fit, the list scrolls and
+          follows you. <strong>Expanded</strong> follows you only when you move into another
           section, so if you scroll it by hand it keeps your place until then. Press any row to jump
           there.
         </p>
