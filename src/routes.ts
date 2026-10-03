@@ -5023,9 +5023,20 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
  * empty value would 404 rather than reach a lookup as "undefined".
  *
  * **Not for anything that becomes a path.** See `slugPart`.
+ *
+ * **A capture that will not decode is a 400.** Every pattern admits `%`, and
+ * `decodeURIComponent("%E0")` raises `URIError`, which names no status — so
+ * until 2026-10-03 `serveApi`'s catch made a mistyped address a 500 and a
+ * Sentry report. `slugFrom` in src/public/routes.ts has caught the same throw
+ * since 2026-08-28 and says why at length. Fixed words, and nothing of the
+ * request's in them: an `httpError` message is logged as `reason`.
  */
 function part(m: RegExpExecArray, group: number): string {
-  return decodeURIComponent(m[group] ?? "");
+  try {
+    return decodeURIComponent(m[group] ?? "");
+  } catch {
+    throw httpError(400, "That is not a path we can read.");
+  }
 }
 
 /**
@@ -7495,8 +7506,9 @@ interface ExactAuthRoute {
  * The handler is handed the **raw `RegExpExecArray`**, not a decoded tuple, and
  * that is the point of the discriminated union: dispatch does no decoding. Which
  * happens first — reading the body or decoding the slug — differs per route and
- * is observable from outside as two different status codes for the same two
- * malformed inputs (§ [DECODE] in
+ * is observable from outside as two different answers to the same two
+ * malformed inputs — two status codes until 2026-10-03, two sentences under one
+ * 400 since `part` began catching its own `URIError` (§ [DECODE] in
  * docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md, and two
  * cases in tests/authenticated-api-route-contract.test.ts pin both). A dispatcher
  * that decoded captures for its handlers would have to pick one order for all of
@@ -8126,7 +8138,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      query parameter. `private, no-store` before the await, as
      `/api/admin/feedback` does, because the body is what a reader wrote to us.
      **Picked field by field** rather than passed through, so a store that one
-     day hands back more than four fields still sends four — and a fifth,
+     day hands back more than five fields still sends five — `page` among them
+     since 261003g, the store's label for where the report was filed and never
+     the address it was made from — and a sixth,
      `shipped`, which is ours: whether this build carries a note saying a change
      for the report shipped. `?show=shipped|unshipped` narrows by the same map,
      in the query, so the cap applies after the filter; any other value is a
@@ -8155,11 +8169,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       );
       const counted = page.counts;
       const answer: EarlierFeedbackPage = {
-        reports: page.reports.map(({ id, createdAt, kind, body }) => ({
+        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom }) => ({
           id,
           createdAt,
           kind,
           body,
+          page: filedFrom,
           shipped: isFeedbackShipped(id),
         })),
         more: page.more,

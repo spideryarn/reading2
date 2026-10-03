@@ -276,7 +276,7 @@ import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.j
 import { TagEditor } from "./TagEditor.js";
 import { editArticleTags } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
-import { AuthorNames } from "./AuthorNames.js";
+import { AuthorNames, AuthorSearchLinks } from "./AuthorNames.js";
 import { howLong, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
@@ -981,7 +981,9 @@ export function Metadata({
             *"At the very least, display them in the Metadata section."* Only
             when stage 2 knew the list (`meta.authors`, plan 260929d); otherwise
             the byline is in the facts line under the title, as it always was.
-            The names link to the shelf searched for them, as in the masthead. */}
+            The names link to the shelf searched for them, as in the masthead,
+            and each has two outside searches under it — where a phone reader
+            finds them, since a tap on a name follows it (plan 261003f). */}
         {meta.authors && (
           /* Shut until opened, since 2026-09-30 — Greg, SPIDERYARN-READING2-6Z:
              *"we can have more of the sections be default collapsed, like
@@ -1003,6 +1005,7 @@ export function Metadata({
                       {a}
                     </span>
                   ))}
+                  <AuthorSearchLinks author={author} />
                 </li>
               ))}
             </ol>

@@ -365,10 +365,10 @@ afterEach(() => {
 });
 
 /**
- * **The Earlier tab's read** — the reader's own reports, and only four fields
- * of each. docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
+ * **The Earlier tab's read** — the reader's own reports, and only five fields
+ * of each from the store. docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
  *
- * The fake store hands back rows carrying *more* than the four — an email, an
+ * The fake store hands back rows carrying *more* than the five — an email, an
  * address, diagnostics — which is what makes "the route picks, it does not
  * spread" a thing this file can see rather than a thing the store happens to do.
  */
@@ -381,6 +381,7 @@ describe("GET /api/feedback", () => {
           createdAt: "2026-09-12T10:45:00.000Z",
           kind: "suggestion",
           body: "A tab of what I sent before",
+          page: "/add",
           reporterEmail: "someone@example.invalid",
           url: "https://www.spideryarn.com/add/https://user:secret@example.com/",
           diagnostics: { version: 2, payload: {} },
@@ -399,6 +400,8 @@ describe("GET /api/feedback", () => {
           createdAt: "2026-09-12T10:45:00.000Z",
           kind: "suggestion",
           body: "A tab of what I sent before",
+          /* The store's label, passed on. The `url` beside it in the row is not. */
+          page: "/add",
           shipped: true,
         },
       ],
@@ -411,7 +414,7 @@ describe("GET /api/feedback", () => {
   });
 
   it("says shipped only for a report whose note says shipped — not declined, not waiting, not unknown", async () => {
-    const row = (id: string) => ({ id, createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x" });
+    const row = (id: string) => ({ id, createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x", page: null });
     listAnswer = {
       reports: [row("spya-k3m9qt"), row("spya-dec1ne"), row("spya-wa1t00"), row("spya-unkn0w")],
       more: false,

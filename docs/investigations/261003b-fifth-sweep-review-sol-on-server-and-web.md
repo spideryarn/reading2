@@ -1,0 +1,116 @@
+# GPT Sol's review of the server and web-client investigations
+
+Read-only cross-family review, 2026-10-03. Part of the [fifth sweep](../plans/261003f-fifth-codebase-sweep-umbrella.md); the umbrella carries the corrections. Paths and line numbers are as of `59bd41171`.
+
+Both docs contain useful findings, but **neither is ready to serve unchanged as a build brief**. The strongest defects survive review; several counts, claims of isolation, and proposed abstractions do not.
+
+Reviewed against `59bd411712e4861e3d03a85d25b9f8d88d9797a5`. No files modified. I read tests but did not run the suite, browser, or database. I reproduced the parser disagreements and shelf-link failures using the actual modules.
+
+**Server request layer**
+
+- **R1 — CONFIRMED.** An authenticated article path containing `%E0` matches, `part()` throws `URIError`, and `serveApi` maps it to a reported 500. Evidence: [part](../../src/routes.ts:5025) → `slugPart` → authenticated handler → [catch](../../src/routes.ts:7351), with capture at 7372; the public helper catches decoding failures at [slugFrom](../../src/public/routes.ts:344). I reproduced the matching regex and thrown exception. Reading an existing test’s assertion is **code evidence, not an executed reproduction**. The small local fix is sufficient; R8 is not required.
+
+- **R2 — CONFIRMED.** The actual exported parsers reproduce all five disagreements: `0` gives null/0; `1.5` gives 1500/0; `0x10` gives 16000/null; `-5` and a past date give null/0. Evidence: [AI parser](../../src/ai-call.ts:1241), [fetch parser](../../src/fetch.ts:1961). **Worth its keep:** one shared pure parser deletes competing interpretations. Specify zero and past-date behavior deliberately; the document’s preference for null is a policy choice, not established by the divergence. Preserve the existing fetch parser’s `Date` argument or migrate callers explicitly.
+
+- **R3 — CONFIRMED.** All eight named functions read a key used only by their pre-check; seven duplicate the gateway’s `NOT_CONFIGURED` check, while transcription retains its distinct 503. Evidence: executable `loadEnvLocal()` calls at the eight cited sites; [gateway apiKey](../../src/ai-call.ts:1586); [transcription](../../src/transcribe.ts:203). Deletion is preferable to another helper. The credential-reloading hazard is **latent**, because [db/client’s import-time load](../../src/db/client.ts:73) currently latches the loader. Also, the proposed cleanup does not finish the request-path inventory: see the embeddings omission below.
+
+- **R4 — CONFIRMED, with a wrong count.** There are **16**, not 11, executable inner wrappers in `first-capture` rows: 8619, 8670, 8941, 8962, 8990, 9072, 9229, 9281, 9349, 9509, 9540, **9639, 9721, 9807, 9889, 9952**. Evidence: walking each `withSpendAttribution(` back to its row’s `article` declaration; [dispatcher wrapper](../../src/routes.ts:10443). These duplicate attribution scopes; they **do not charge twice**. Delete all sixteen together.
+
+- **R5 — CONFIRMED, with misleading measurement.** The complete header contains **85** route lines, not 77; 77 is the count obtained by stopping at line 110. Matching header entries against the contract’s witnesses leaves **22 of 106 method/routes unrepresented**, approximately 21%, not “a third.” Evidence: [header](../../src/routes.ts:1), [contract inventory](../../tests/authenticated-api-route-contract.test.ts:351). The deletion remains worthwhile. The spot-check list also abbreviates actual endpoints: for example, hidden glossary entries have a further `:id`, and voucher email retry has `/retry`.
+
+- **R6 — CONFIRMED.** Both exported sentences remain outside the catalogue; `ai-unusable` is already registered. Evidence: [claims constant/comment](../../src/referee-claims-run.ts:227), [criteria constant/comment](../../src/referee-criteria-run.ts:502), [registration](../../src/messages.ts:340). Move the constants and revise the instructions that still tell the next editor to register the code. Do not erase useful historical explanation merely because it describes the earlier failure. This is previously open work, not a newly discovered defect.
+
+- **R7 — CONFIRMED.** The current client has no executable caller; `/find` hits in `useCitations` are historical comments. I also searched `scripts`, `tools`, and TypeScript/JavaScript eval code without finding a caller. The three cited changelog commits explicitly record subsequent production deploys. Evidence: [compatibility row](../../src/routes.ts:8931), [client history](../../src/web/useCitations.ts:19). Delete the route, its inventory entry, route-only tests, and any resulting unused route import; retain the underlying operation used by Investigate.
+
+- **R8 — OVERSTATED.** A small shared decoding/transport leaf is defensible, but the proposed package bundles several independently motivated changes. Nine `httpError` definitions remain unchanged; four `refusedBy` switches share structure but select different domain sentences. Evidence: `rg 'function httpError|function refusedBy' src`; [public send](../../src/public/routes.ts:110) additionally implements HEAD suppression and byte-length reporting, unlike authenticated `send`. **Worth its keep?** Shared decoding passes the deletion test because it removes the demonstrated drift. Moving all nine identical error constructors and parameterising four stable refusal switches has weaker justification. Preserve HEAD behavior, and keep allowance policy out of the transport extraction.
+
+- **R9 — CONFIRMED as legacy cleanup; live harm remains UNVERIFIABLE.** The `ENOENT` fallback does select 404, bypass capture, and pass through its message. Evidence: [mapping](../../src/routes.ts:7351) and [response sentence selection](../../src/routes.ts:7399). The five named filesystem loaders have no production caller in the searched server/script/tool/eval paths. No current request was shown producing the hypothesised missing-asset error. Deletion is reasonable T1 cleanup; it is not a reproduced privacy or correctness incident.
+
+- **R10 — OVERSTATED.** Ten executable `sse(res)` calls exist. **Seven**, not five, omit passing `gone` to model work: the listed five plus citation investigation and Mirror. Search passes it only for quick runs. Evidence: [citation investigation](../../src/routes.ts:2124), [Mirror](../../src/routes.ts:4968). More importantly, the proposed rule is false: Mirror stores nothing but ignores disconnect; glossary Ask stores a completed term but does cancel. The helper already explicitly permits callers to ignore the signal at [its return contract](../../src/routes.ts:1334). Document actual policies rather than inventing a universal stored/ephemeral distinction.
+
+- **R11 — CONFIRMED.** Status-bearing errors containing request values reach `logRequest`’s `reason`. Evidence: [slugPart](../../src/routes.ts:5062) → [expected-error logging](../../src/routes.ts:7101); the other cited store/job/lookup errors also exist. The proposed fixed decoding message addresses only part of the finding. Public `slugFrom` retains the same interpolation at [351](../../src/public/routes.ts:351), and lookup messages include decoded identifiers. Keep the low score, but give the accepted fix a complete census.
+
+- **R12 — OVERSTATED.** Keeping one ordered table while moving handler bodies is a legitimate organizational option, distinct from the previously rejected dispatcher design. However, the claimed isolation is false: [refuseAPaperNotReadYet](../../src/routes.ts:4372), defined in Search’s region, is called by [Referee criteria](../../src/routes.ts:4705). Search also uses Chat’s orphan-grace constant, as acknowledged. **Worth its keep?** A first Chat slice may earn its cost through concentrated ownership and reduced merge contention. A six-to-eight-slice programme is not justified by size alone, and transport extraction is not automatically a prerequisite. Correct the dependency graph and measure after R5 before approving the larger programme.
+
+- **R13 — CONFIRMED.** The two voucher tests assert non-settlement after 400 ms; the visibility race releases its lock after 300 ms without proving both requests reached it. Evidence: [voucher tests](../../tests/billing-vouchers.test.ts:342), [visibility test](../../tests/public-visibility-pg.test.ts:2100). Vacuous historical passes remain hypothetical. The fix must identify **this blocker**, and the visibility case must establish both requests are waiting. Existing [waitUntilBlockedBy](../../tests/store-job-draft.test.ts:160) uses `pg_blocking_pids` expressly to prevent another suite satisfying the probe; reuse that approach.
+
+The server measurements also need two corrections: the table partitions into **69 first-capture + 35 none + 2 handler = 106**, not 71 + 35 + 2; the supplied test-file grep returns **86**, not 84. The 10,616-line size, 192 historical commits, and 81 distinct relative imports are confirmed.
+
+**Web client**
+
+- **W1 — CONFIRMED; prevalence figures UNVERIFIABLE in this review.** The reachable path is [Reader’s depth-3 outline](../../src/web/reader/Reader.tsx:302) → `Spine.measure` section bands → [BandCard](../../src/web/Spine.tsx:1543), which filters only empty labels while `whereForBand` already draws matching titles. Correct the explanation: `buildOutline` defaults to depth 2, but Reader explicitly requests **3**. The local-data counts and 24% prevalence were not independently rerun. The small in-component filter is sufficient; a separate `cardKids` abstraction has not earned its keep. Consider restricting suppression to heading leaves if ordinary paragraph labels that happen to equal a title should remain visible.
+
+- **W2 — CONFIRMED for missing band-level recovery.** All seven listed error paragraphs exist; `retryRead` occurs in exactly four hooks and their four presentations. Evidence: [Ideas error](../../src/web/IdeasPanel.tsx:245) → [opening-read failure](../../src/web/useIdeas.ts:192) → unarmed [useAutoRun](../../src/web/useAutoRun.ts:163). “No in-product way” is too strong: the current Dock explicitly supports close-then-reopen recovery at [1565](../../src/web/Dock.tsx:1565). A direct read-only retry remains worthwhile. **ReadError earns its keep** as shared recovery markup, provided it does not absorb domain parsing/state policy. The file list must include Simple, Skim and Tweets if all eleven presentations migrate.
+
+- **W3 — OVERSTATED.** Six threshold implementations are confirmed, excluding Summary’s different level picker. Glossary and Citations match the existing shared component and can migrate cheaply. Evidence: [ThresholdSlider](../../src/web/ThresholdSlider.tsx:25), [Citations copy](../../src/web/CitationsPanel.tsx:957), [Glossary copy](../../src/web/GlossaryPanel.tsx:1193). The stops-versus-score distinction is **not proved missed-fix drift**: [Search’s fixed track](../../src/web/SearchPanel.tsx:1493) is deliberate. **Worth its keep?** Step 1 clearly is. Step 2 needs a complete interface demonstration covering string-valued Debate levels, label/reset wording, “out of 100” accessibility text, and Debate’s count/class variations. A track union plus `format` alone is insufficient.
+
+- **W4 — CONFIRMED, correctly non-T0.** Eight handwritten event loops and two consuming files for the shared reader are confirmed; the shared reader has **three call sites**, two in Glossary. Evidence: [readMark](../../src/web/useQuiz.ts:75), [readRun](../../src/web/useMirror.ts:82), [shared reader](../../src/web/lib/sse.ts:243). Both private error-frame readers lack the null guard. No reachable server null frame was demonstrated. Reusing the existing reader can be worthwhile when touched, but preserve Quiz’s partial text, verdict, and domain failure sentences; do not introduce another generic stream layer.
+
+- **W5 — OVERSTATED.** There are **nine executable expressions**: four full `bandOpen && modeW === 0` derivations and five bare width checks. Some bare checks are deliberately hypothetical or context-dependent. The wrapper comment at [2704](../../src/web/reader/Reader.tsx:2704) explicitly explains why it remains true in Plain and why CSS also names `.mode-band`; Skim’s props are produced inside its mode arm. Also, `proseVisible` does **not** exist in today’s `layout.ts`. Hoisting and reusing the existing boolean where semantics agree is cheap. A new single-caller `bandCoverage` result object does not earn its indirection.
+
+- **W6 — OVERSTATED.** There are **five state pairs**, exactly the five listed; Quotes is a derived memo, giving six *slots*, not six state pairs. Evidence: [Reader’s states and Quotes explanation](../../src/web/reader/Reader.tsx:1183), existing [PassageSlots](../../src/web/reader/passages.ts:79). The total compiler-checked mapping already exists. A keyed reducer would preserve isolation, but it does not remove the band props or callback wiring claimed, and must preserve independent field updates and callback stability. **Worth its keep?** Not established: current separate state is straightforward and no current drift was found. Reduce value and defer.
+
+- **W7 — OVERSTATED in one claimed difference.** `ago` has three call sites, does not clamp future timestamps, and does not switch to an absolute date. Both it and shared long-form `relativeAgo` use the viewer’s locale, so locale is **not drift**. Evidence: [private formatter](../../src/web/Metadata.tsx:3901), [shared formatter](../../src/web/relative-time.ts:40). Metadata already imports `timeAgo`, `useNow`, and Dock. Reuse is cheap; preserve the invalid-date fallback and sentence grammar. Exporting existing `withPanel` needs no new module.
+
+- **W8 — OVERSTATED.** Eight files and thirteen textual `.writeText(` matches are confirmed, but there are **eight executable writes**; five remaining matches are comments. [ViewportProbe’s optional chain](../../src/web/ViewportProbe.tsx:482) does silently stop when the clipboard is absent. It is not the only silent writer: AccessSharing also has no failure presentation. **Worth its keep?** A small `copyText` primitive is plausible alongside W12, but fixing the probe requires only a guard. A shared hook is T2 work, not a mechanical T1 deletion, and must preserve each caller’s feedback contract.
+
+- **W9 — OVERSTATED.** The supplied grep produces **53** waits of 300–500 ms and **33** waits of 1–200 ms, not 51 and 27. The long waits total **19,950 ms across 23 files** before accounting for loop execution. This is not measured suite wall time. Evidence: rerun of the exact `git grep -hoE 'setTimeout\(r(esolve)?, *[0-9]+' -- 'tests/*.tsx'`. Fake-timer spine tests and the real hang-up wait are confirmed. Convert appropriate tests, but separate hover delays, transitions, layout waits and network polling. No flake reproduction establishes that all share one cause; a universal `openTip` helper is premature.
+
+- **W10 — OVERSTATED as a broad extraction programme.** All five decision regions and the timer observations exist. However, tap recovery is already tested through real hook behavior: [live-session-flow](../../tests/live-session-flow.test.tsx:2283) covers refused response creation, refused entry/update recovery, and earlier-session events. “No pure seam” is accurate; “not testable” would not be. **Worth its keep?** Extracting a substantial tap transition policy may help. Separate helpers for two cap comparisons and a grace-loop predicate add indirection without eliminating the asynchronous lifecycle tests. Fake timers can remove the long wait without `graceVerdict`; another case in `live-tail-handoff` already uses them at [495](../../tests/live-tail-handoff.test.tsx:495).
+
+- **W11 — CONFIRMED and independently reproduced.** Actual `libraryHitHref` → actual `findLiteral` gives zero matches for Gödel, café and eﬃcient, versus one for the plain control. Evidence: [link construction](../../src/web/library-hits.ts:132) → [literal matcher](../../src/web/search-hits.ts:328); the test pins `cafe` at [library-hits.test](../../tests/library-hits.test.ts:87). Sending original spelling is the right direction, but `foldWithMap` currently has the offset defect described below. Also handle a folded multi-character term whose original spelling is a single ligature: `findLiteral` rejects one-unit needles. I reproduced the Greek folding disagreement too.
+
+- **W12 — CONFIRMED for the four named omissions.** AnnotateDialog and BlockGutter have per-press guards; Tweets, ChatPanel, ShelfEntry and AccessSharing do not. Evidence: [AnnotateDialog token](../../src/web/AnnotateDialog.tsx:456), the four write callbacks, and the uncancelled 1500 ms timers in ShelfEntry/AccessSharing. The census is scoped to six selected controls: FeedbackDialog is another asynchronous copy control without a token. **Worth its keep?** A hook owning token and timer can remove repeated lifecycle policy. That is **T2/M**, and a low-level `copyText` function alone does not solve stale completion or reset timers.
+
+- **W13 — OVERSTATED.** The snippet arithmetic and private shelf helpers exist, but the three search predicates answer different questions: card-filter terms, server passage-search eligibility, and visible query presence. Evidence: [Library predicates](../../src/web/Library.tsx:447), [server-search minimum](../../src/web/useLibrarySearch.ts:92). Preserve those distinctions rather than merging them into one eligibility rule. Annotation attributes and `shareStripes` are already exercised through rich output tests, including starvation at [annotate.test](../../tests/annotate.test.ts:763); “untested” is false for that behavior. Extract only a decision whose current tests cannot assess economically. Dictation’s repeated expression is **eight times in five files**, not seven; an existing-hook `busy` field is a reasonable small change.
+
+The client’s **418 TypeScript/TSX files and 176,199 lines** are confirmed. Specify that file filter. Reader has **98 calls to the five named core hooks**, not 109: 109 counts matching lines, including comments/imports. The mode commits contain **12, 18 and 17 client files** respectively; 16/22/approximately 27 mixes server work into the claimed client comparison.
+
+**What the server doc missed**
+
+I found no additional confirmed live server defect beyond R1. Two omissions matter to its proposed work:
+
+1. **Another request-path environment reload:** `/api/similar` and `/api/projection` reach embedding work, whose [apiKeyFromEnv](../../src/embeddings.ts:511) calls `loadEnvLocal`. Its key is used, so retain the check/override semantics while removing library-side loading if R3 is accepted. **T1/S/low–med; latent hazard.**
+2. **An existing, stronger lock-test solution:** `waitUntilBlockedBy` already appears in job-draft, tag and session tests. It identifies the holding backend rather than any database lock waiter. This should be the starting point for R13, including proving both visibility requests arrived. **Incorporate into R13; no new framework.**
+
+**What the client doc missed**
+
+1. **`foldWithMap` indexes code points while its consumers index UTF-16 units.** Reproduction: `foldWithMap("😀 café")` returns six map entries for seven UTF-16 units. Applying W11’s proposed slice yields **“afé”**. [Library’s current snippet](../../src/web/Library.tsx:1414) already uses those same mismatched offsets. The astral test checks the emoji’s span, but never checks a later match. **T0/S/med.**
+2. **AccessSharing silently refuses copies.** [CopyLink](../../src/web/AccessSharing.tsx:855) returns without feedback when the clipboard is absent and maps rejection to `copied=false`, which looks like idle. This is a reader-facing instance of W8’s class, beyond the debugging probe. **T0/S/low–med.**
+3. **Illustrated has the same failed-read recovery gap.** Its failed opening GET becomes `status="error"`; [Empty’s error arm](../../src/web/IllustratedView.tsx:890) returns only a paragraph, with no read-only retry. Include it in the recovery census. **T0/S/med.**
+4. **FeedbackDialog also lacks stale-copy protection.** [Its callback](../../src/web/FeedbackDialog.tsx:954) can complete after body changes or reopening; success/failure flags are reset separately elsewhere. Include it when designing W12’s lifecycle contract rather than declaring the class closed after six controls. **T1/S/low.**
+
+**Prior decisions and “one level up”**
+
+The server’s overall verdict is right: the gate, ordered table, awaited dispatch, ownership context and attribution declaration are sound. R12 preserves that design and therefore does not repeat the rejected per-domain dispatcher proposal. However, R8 **does re-propose unchanged `httpError` consolidation without drift in those constructors**. The new evidence justifies shared decoding; it does not automatically justify the whole bundle. The ranked server work also violates the sweep’s priority rule: **R1 should precede R3**, unless an explicit risk veto is recorded.
+
+The client’s “mostly sound” verdict is also right. W2’s narrow recovery work respects the prior rejection of broad `useArtefactRead`, and W3 revisits an explicitly open migration. Avoid reviving the rejected mode registry or generic stream-policy machinery through the new helpers. The mode-cost conclusion is weaker: heterogeneous commit file counts do not measure implementation effort. The proposed mode matrix is useful for behavioral recovery contracts, but “every threshold uses this component” is an implementation assertion unless paired with the actual reset, track, count and accessibility behavior.
+
+| Finding | Verdict | Corrected tier / effort / value |
+|---|---|---|
+| R1 | CONFIRMED | Unchanged: T0 / S / med; do first |
+| R2 | CONFIRMED | Unchanged |
+| R3 | CONFIRMED | Unchanged; latent hazard |
+| R4 | CONFIRMED | Unchanged; **16 wrappers** |
+| R5 | CONFIRMED | Unchanged; **85 header lines, 22 omissions** |
+| R6 | CONFIRMED | Unchanged |
+| R7 | CONFIRMED | Unchanged |
+| R8 | OVERSTATED | Narrow decoding leaf: T2 / S–M / low–med; broader bundle unearned |
+| R9 | CONFIRMED | T1 / S / low; live harm unverified |
+| R10 | OVERSTATED | T1 / S / low for accurate policy documentation |
+| R11 | CONFIRMED | Unchanged; broaden accepted fix’s census |
+| R12 | OVERSTATED | First slice T2 / M / med, conditional; overall T3 remains unaccepted |
+| R13 | CONFIRMED | T1 / S–M / med; reuse blocker-specific approach |
+| W1 | CONFIRMED | Unchanged; prevalence unverified |
+| W2 | CONFIRMED | Unchanged; band-level gap, broaden census |
+| W3 | OVERSTATED | Step 1: T1 / S / med; step 2: T2 / M / low, conditional |
+| W4 | CONFIRMED | Unchanged; hypothesis-only malformed-frame harm |
+| W5 | OVERSTATED | Local reuse: T1 / S / low; no new coverage abstraction |
+| W6 | OVERSTATED | T2 / M / **low**, defer |
+| W7 | OVERSTATED | T1 / S / low |
+| W8 | OVERSTATED | Guard fix: T1 / S / low; shared lifecycle hook: T2 / M / low–med |
+| W9 | OVERSTATED | T1 / M / med for targeted conversions |
+| W10 | OVERSTATED | Focused tap policy: T2 / M / low–med; broader extraction unearned |
+| W11 | CONFIRMED | T0 / **S–M** / med, including offset-map prerequisite |
+| W12 | CONFIRMED | Shared hook: **T2 / M / low–med** |
+| W13 | OVERSTATED | Dictation field: T1 / S / low; remaining extractions individually unearned |
