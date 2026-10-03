@@ -1015,3 +1015,42 @@ td.text.kind-heading .blk-gutter[data-open] {
   background: var(--ink);
   opacity: calc(var(--read, 0) * (var(--read, 0) + 1) * 0.025);
 }
+
+/* **For a finger, the strip reaches back over the column — underneath its
+   controls.** The strip is at most `--blk-gutter-x` (0.35rem, 5.6px) wide,
+   which a mouse can find and a finger cannot; once a tap opened its card
+   (BlockLinkCard.tsx § `press`, Greg, spya-vskqfn) most taps still missed it.
+   So under a coarse pointer a transparent `::before` widens the target 1.25rem
+   to the left, over the gutter column, and never to the right: that is the
+   prose, whose tap selects the block (docs/project/touch.md).
+
+   **Underneath, by stacking rather than by listing what is visible.** On a row
+   that is not selected the column is mostly empty on a touch screen, but not
+   wholly: a comment or bookmark mark, a chat button on a block with
+   conversations, a failed permalink, a focused control, and an open gutter's
+   controls are all drawn there. Enumerating those in a `:has()` would be a list
+   that falls out of date silently. Instead every control is raised above the
+   strip (`z-index: 1`, positioned so it applies; layout-neutral for an in-flow
+   grid child), so a drawn control wins its own rectangle, and a hidden one
+   already has `pointer-events: none` and lets the tap through to the strip. The
+   "…"'s own `z-index: 1` over the mark (§ the column that truncates) keeps its
+   order, because the tie goes to the later element, as before. GPT Sol, plan
+   review of 261003c.
+
+   **Zero wide on an unread row**, as the strip is: `min(--read, 1)` is 0 or 1,
+   so a paragraph with no line has nothing to tap. An open gutter's strip is
+   `pointer-events: none` (above), and this inherits that. */
+@media (any-pointer: coarse) {
+  .blk-gutter > :is(button, a) {
+    position: relative;
+    z-index: 1;
+  }
+  .blk-gutter > span.blk-read::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: calc(min(var(--read, 0), 1) * (100% + 1.25rem));
+  }
+}

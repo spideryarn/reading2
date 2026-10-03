@@ -24,6 +24,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useCallback,
+  useEffect,
   useRef,
   useState,
 } from "react";
@@ -82,6 +83,27 @@ export function useTapReveal(commits: boolean): TapReveal {
     },
     [open],
   );
+
+  /**
+   * **A card a finger opened does not survive a scroll** — touch.md's rule for
+   * the spine and the glossary. A finger is not resting on the control, so the
+   * card would ride with it to the edge of its scroller and stay there.
+   * Capture on `document`, because a scroll does not bubble and the control
+   * may be inside a panel with a scroller of its own (Structure's band). Only
+   * while such a card is open, so nobody else pays for it. Plan 261003c.
+   */
+  const byTouch = armed?.byTouch ?? false;
+  useEffect(() => {
+    if (!byTouch) return;
+    const close = () => {
+      /* The press too: one begun with the card open and scrolled before its
+         click would otherwise commit blind. GPT Sol, plan review of 261003c. */
+      press.current = null;
+      setArmed((prev) => (prev?.byTouch ? null : prev));
+    };
+    document.addEventListener("scroll", close, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", close, { capture: true });
+  }, [byTouch]);
 
   const onPointerCancel = useCallback(() => {
     press.current = null;

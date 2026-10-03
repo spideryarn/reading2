@@ -25,6 +25,7 @@ import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { NodeId, TreeNode } from "../types.js";
 import { onFontsChanged } from "./fonts.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { useTapReveal } from "./useTapReveal.js";
 import { withVoice } from "./voice.js";
 
 interface Props {
@@ -547,12 +548,18 @@ export function OutlinePanel({
 /**
  * One row.
  *
- * **The tooltip is uncontrolled, and that is load-bearing.** The spine's cards
- * stopped working for a day because fifty triggers were made controlled off one
- * shared piece of state: `useDelayGroup` closes every *other* member the moment
- * one opens, and `useHover` schedules a departing trigger's close without
- * checking whether it is still the open one. Both are correct against a tooltip
- * that owns its own state. docs/postmortems/260828g-spine-hover-cards.md.
+ * **The tooltip owns its own state, and that is load-bearing.** The spine's
+ * cards stopped working for a day because fifty triggers were made controlled
+ * off one shared piece of state: `useDelayGroup` closes every *other* member
+ * the moment one opens, and `useHover` schedules a departing trigger's close
+ * without checking whether it is still the open one. Both are correct against
+ * a tooltip that owns its own state. docs/postmortems/260828g-spine-hover-cards.md.
+ *
+ * It was uncontrolled until 2026-10-03, and is now controlled by state that is
+ * still this row's alone (`useTapReveal`), so that a finger's first tap can
+ * open the card and its second go there — docs/project/touch.md; Greg,
+ * spya-a868zs; plan 261003c. The keyboard path is the tree's Enter, which
+ * calls `onJump` directly and never meets this.
  */
 function Row({
   row,
@@ -565,15 +572,20 @@ function Row({
   focused: boolean;
   onJump(): void;
 }) {
+  const reveal = useTapReveal(true);
   return (
     <Tooltip
       placement="right"
       keepSide
+      open={reveal.open}
+      onOpenChange={reveal.onOpenChange}
       content={
         <div className="outln-card">
           <div className="outln-card-crumb">{row.number}</div>
           <div className={withVoice("outln-card-title", row.voice)}>{row.text}</div>
           {row.node.gist ? <p className="outln-card-gist">{row.node.gist}</p> : null}
+          {/* The spine's words, and only for a finger (StructurePanel.tsx § RowCard). */}
+          {reveal.tap !== undefined && <div className="tip-tap">Tap again to go here</div>}
         </div>
       }
     >
@@ -586,7 +598,11 @@ function Row({
         aria-current={row.now ? "location" : undefined}
         aria-selected={focused}
         className={rowClass(row, focused)}
-        onClick={onJump}
+        onPointerDown={reveal.onPointerDown}
+        onPointerCancel={reveal.onPointerCancel}
+        onClick={(e) => {
+          if (reveal.commit(e)) onJump();
+        }}
       >
         <RowBody row={row} />
       </li>

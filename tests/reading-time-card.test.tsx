@@ -231,3 +231,84 @@ describe("the reading-time line", () => {
     expect(card()).toBeNull();
   });
 });
+
+/**
+ * **A tap opens the card** (Greg, spya-vskqfn; plan 261003c). On a touch screen
+ * nothing hovers, so before this the line could not explain itself on an iPad.
+ * A finger's tap fires the hover events too — `pointerover` at the press, and
+ * `pointerout` at the lift, *before* the click (docs/project/touch.md § a lift
+ * fires the hover events) — so the test replays that whole order, and the
+ * click says `mouse`, as iOS 18.2 and later reports it.
+ */
+describe("a tap on the reading-time line", () => {
+  function finger(el: Element, clientY = 10): void {
+    const opts = { bubbles: true, pointerType: "touch", clientY, pointerId: 7 };
+    el.dispatchEvent(new PointerEvent("pointerover", opts));
+    el.dispatchEvent(new PointerEvent("pointerdown", opts));
+    el.dispatchEvent(new PointerEvent("pointerup", opts));
+    el.dispatchEvent(new PointerEvent("pointerout", { ...opts, relatedTarget: null }));
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1, clientY });
+    Object.defineProperty(click, "pointerType", { value: "mouse" });
+    el.dispatchEvent(click);
+  }
+
+  it("opens the card, and the lift's pointerout does not take it away", async () => {
+    const line = paint(2);
+    await act(async () => finger(line));
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()?.textContent).toContain("Reading time");
+  });
+
+  it("closes when a finger taps somewhere else", async () => {
+    const line = paint(2);
+    await act(async () => finger(line));
+    await act(async () => finger(document.body));
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()).toBeNull();
+  });
+
+  /* A mouse can click inside the 240ms hover delay; the delayed hover open
+     must not then overwrite the click's card and its close-on-scroll. GPT Sol,
+     plan review of 261003c. */
+  it("a click inside the hover delay still closes on a scroll", async () => {
+    const line = paint(2);
+    line.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse", clientY: 10 }));
+    await act(async () => {
+      line.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1, clientY: 10 }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()).not.toBeNull();
+    await act(async () => {
+      document.dispatchEvent(new Event("scroll"));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()).toBeNull();
+  });
+
+  it("closes on a scroll, since no finger is resting on it", async () => {
+    const line = paint(2);
+    await act(async () => finger(line));
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()).not.toBeNull();
+    await act(async () => {
+      document.dispatchEvent(new Event("scroll"));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(AFTER_THE_DELAY);
+    });
+    expect(card()).toBeNull();
+  });
+});
