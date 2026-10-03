@@ -237,7 +237,7 @@ import { isStorableColour } from "./searches.js";
 /* The one media type this route serves, from the file that names it for the
    writer too — so what goes into the bucket and what comes out of it cannot be
    described two different ways. */
-import type { IllustratedImage } from "./illustrated-plate.js";
+import { checkIllustrationNote, type IllustratedImage } from "./illustrated-plate.js";
 import { blobStore, CONTENT_TYPE } from "./store/blobs.js";
 /* The download's two halves: the zip itself, and the one error a route has to
    turn into a 404 rather than let travel to the catch-all as a 500. Both come
@@ -2888,6 +2888,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
   const askingRemember = (storedKind ?? wantedKind) === "remember";
+  /* Tutorial is dictated too, so it shares Remember's long cap rather than
+     chat's 4,000 — the same mistake `MAX_REMEMBER_CHARS` exists to avoid. */
+  const longInput = askingRemember || (storedKind ?? wantedKind) === "tutorial";
   /* **Chat only.** Remember's prompt tells the model not to guess how far the
      reader has got, and a screenful is exactly that guess; Candidates sends no
      position at all. The thread's kind decides, as it does for the cap below. */
@@ -2904,11 +2907,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   const beginKind = !wantsRetry && !wantsEdit
     ? (wantedKind ?? (visible !== undefined ? "chat" : undefined))
     : undefined;
-  const cap = askingRemember ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
+  const cap = longInput ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
       413,
-      askingRemember
+      longInput
         ? `What you wrote may be at most ${MAX_REMEMBER_CHARS} characters`
         : `A question may be at most ${MAX_QUESTION_CHARS} characters`,
     );
@@ -5295,6 +5298,24 @@ export function parseVisibilityRequest(body: unknown): {
 }
 
 /**
+ * **The Illustrated note on a job request**, checked — or `undefined` for none.
+ *
+ * **Refused, never cut**, and the message names a length rather than the
+ * text: an `httpError`'s message is logged as `reason`, and the note is the
+ * reader's own words. A note on a job that does not paint is refused too —
+ * nothing else reads it, and a field that does nothing is a request that meant
+ * something else. Plan 261002j.
+ */
+function parseIllustrationNote(raw: unknown, steps: StepName[] | undefined): string | undefined {
+  const note = checkIllustrationNote(raw);
+  if ("bad" in note) throw httpError(400, note.bad);
+  if (note.ok !== undefined && !steps?.includes("illustrated")) {
+    throw httpError(400, "illustrationNote goes with a job that names the illustrated step");
+  }
+  return note.ok;
+}
+
+/**
  * The body of `POST /api/article/:slug/reset`: `{ regenerate: boolean }`, and
  * nothing else. A boolean and not a list on purpose — which extras to make
  * again is the server's to read off the revision, not the client's to name
@@ -5348,18 +5369,31 @@ export function parseJobRequest(body: unknown): {
    * the stored file, admitted like an ingest (plan 261001m).
    */
   readThis?: true;
+  /**
+   * **The reader's note on how the Illustrated picture should come out** —
+   * only with `steps` naming `illustrated`, checked by `checkIllustrationNote`
+   * (src/illustrated-plate.ts) and frozen onto the job. Unlike the profile this
+   * *is* the caller's to say: it is the reader's own instruction about their
+   * own picture, on an article `enqueue` has already checked is theirs.
+   * docs/plans/261002j-illustrated-steering-note.md.
+   */
+  illustrationNote?: string;
 } {
-  const { url, slug, steps, force, useProfile, uploadId, readThis } = (body ?? {}) as Record<
-    string,
-    unknown
-  >;
+  const { url, slug, steps, force, useProfile, uploadId, readThis, illustrationNote } = (body ??
+    {}) as Record<string, unknown>;
   const level = parseUploadLevel(body);
   if (level !== undefined && uploadId === undefined) {
     throw httpError(400, "level goes with an uploadId");
   }
   if (readThis !== undefined) {
     if (readThis !== true) throw httpError(400, "readThis must be true, or left out");
-    if (url !== undefined || uploadId !== undefined || steps !== undefined || force !== undefined) {
+    if (
+      url !== undefined ||
+      uploadId !== undefined ||
+      steps !== undefined ||
+      force !== undefined ||
+      illustrationNote !== undefined
+    ) {
       throw httpError(400, "readThis goes with a slug and nothing else");
     }
     if (!isSlug(slug)) throw httpError(400, "readThis needs the slug of the paper to read");
@@ -5383,6 +5417,7 @@ export function parseJobRequest(body: unknown): {
     throw httpError(400, "useProfile must be true or false");
   }
   const parsedUseProfile = useProfile;
+  const note = parseIllustrationNote(illustrationNote, parsedSteps);
 
   /* The three optional fields, spelled once. They were written out at each of
      the three `return`s, which is three chances for one of them to be quietly
@@ -5400,6 +5435,7 @@ export function parseJobRequest(body: unknown): {
     ...(parsedSteps ? { steps: parsedSteps } : {}),
     ...(parsedForce ? { force: parsedForce } : {}),
     ...(parsedUseProfile !== undefined ? { useProfile: parsedUseProfile } : {}),
+    ...(note !== undefined ? { illustrationNote: note } : {}),
   };
 
   /* Before the URL branch. `checkUploadOrigin` refuses every combination rather
@@ -6031,11 +6067,20 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
  * GPT Sol's review of the built code, 2026-08-26.
  *
  */
-function publicJob(job: Job): Omit<Job, "profile" | "ownerId"> {
+function publicJob(job: Job): Omit<Job, "profile" | "ownerId" | "illustrationNote"> {
   /* `ownerId` goes too. The client never needs it — it can only ever be looking
      at its own jobs now — and an `auth.users` uuid on the wire is one more
      thing that has to not end up in a log, a bug report or a screenshot. */
-  const { profile: _hidden, ownerId: _whose, reset, ...rest } = job;
+  /* The Illustrated note too, for the profile's reason: the reader's own
+     words, polled every eight seconds, and nothing on the client reads it off
+     a job — the panel reads it off the picture. */
+  const {
+    profile: _hidden,
+    ownerId: _whose,
+    illustrationNote: _note,
+    reset,
+    ...rest
+  } = job;
   /* A reset's profile snapshot is the same text as `profile`, so it goes for
      the same reason; which extras it will make again stays, because that is a
      fact about the job a card can say. */

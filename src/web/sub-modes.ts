@@ -1,6 +1,6 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
- * band: Remember's Recall | Quiz, Diagram's five pictures, Referee's four views,
+ * band: Remember's Recall | Tutorial | Quiz, Diagram's five pictures, Referee's four views,
  * Summary's three plain-words levels.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):
@@ -60,11 +60,16 @@ export interface SubModeWords {
   readonly experimental: boolean;
 }
 
-/** Remember's two halves. The chip's words, QuizPanel.tsx § `RememberSubModeToggle`. */
+/** Remember's three parts. The chip's words, QuizPanel.tsx § `RememberSubModeToggle`. */
 export const REMEMBER_SUB_MODES: Readonly<Record<RememberView, SubModeWords>> = {
   recall: {
     label: "Recall",
     description: "Say what you took from the piece, and find out where it holds up",
+    experimental: false,
+  },
+  tutorial: {
+    label: "Tutorial",
+    description: "Short turns: a little of the piece at a time, then a question for you to answer in your own words",
     experimental: false,
   },
   quiz: {
@@ -238,10 +243,25 @@ export interface SubModeParams {
 
 export function subModeParams(sub: SubMode): SubModeParams {
   switch (sub.mode) {
-    case "remember":
-      return sub.view === "quiz"
-        ? { mode: "remember", remember: "quiz", thread: null }
-        : { mode: "remember", remember: null };
+    case "remember": {
+      /* Each view by name: Recall is the default and so absent, Quiz clears
+         `thread` (rule 1), and Tutorial keeps it as Recall does — its band
+         overrules a stale one and writes its own. Mapping "not quiz" to Recall
+         was right with two views and silently wrong with three. */
+      const view = sub.view;
+      switch (view) {
+        case "quiz":
+          return { mode: "remember", remember: "quiz", thread: null };
+        case "tutorial":
+          return { mode: "remember", remember: "tutorial" };
+        case "recall":
+          return { mode: "remember", remember: null };
+        default: {
+          const unknown: never = view;
+          throw new Error(`unknown Remember view: ${String(unknown)}`);
+        }
+      }
+    }
     case "diagram":
       return { mode: "diagram", diagram: sub.view === "sketch" ? null : sub.view };
     case "referee":

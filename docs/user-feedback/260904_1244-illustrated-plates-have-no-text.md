@@ -5,7 +5,8 @@ ending: shipped
 # The illustrated plates have no text in them
 
 **[SPIDERYARN-READING2-12](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-12)** · reported
-2026-09-04 12:44 UTC · resolved 2026-09-04 · *legibility shipped; the prompt box deferred*
+2026-09-04 12:44 UTC · resolved 2026-09-04 · *legibility shipped 2026-09-04; the prompt box with a
+microphone shipped 2026-10-03*
 
 ## What the reader said
 
@@ -91,7 +92,10 @@ is at the edge and still legible; nine is comfortable.
 Two honest residuals, both recorded: the model still draws pseudo-glyphs on scrolls and banners in an
 article *about* transcripts, and it occasionally duplicates a scene and so its caption.
 
-## Deferred: the prompt box with a microphone
+## The prompt box with a microphone — deferred on 2026-09-04, shipped 2026-10-03
+
+What follows is why it was deferred, kept as written; the box itself is under
+[§ Shipped on 2026-10-03](#shipped-on-2026-10-03) below.
 
 Not laziness — it is a provenance change wearing a text field. `guidance` was **deliberately**
 removed from the job API, from `Job` and from `sameWork`, because a job freezes its inputs so that a
@@ -99,3 +103,21 @@ restart or a dedupe cannot change an artefact. Threading transient UI text into 
 break retry-after-restart, dedupe, freshness and `npm run illustrated` from a slug — all four. It
 needs an article-scoped *stored* instruction, frozen at enqueue, in `sameWork`, and in the
 fingerprint: a migration and a public-projection decision, which is its own stage.
+
+## Shipped on 2026-10-03
+
+Found unbuilt by the 2026-10-02 re-check of every report (Overseer queue item `qi-26wg8tdv`) and
+built by plan [261002j](../plans/261002j-illustrated-steering-note.md). Under the picture, and in
+the empty state, there is now a box, *How should it come out?*, with the shared microphone. What is
+in it goes with the next paint, and *Paint again* beside an existing picture uses it.
+
+It took the shape this section asked for, with one difference worth knowing: the instruction is
+stored **on the job** (`jobs.illustration_note`, one nullable column) and on the picture it
+produced, rather than on the article. It is frozen at enqueue, part of the dedupe key and the
+fingerprint only when present, and carried by Retry. The one thing given up is a command-line run,
+which repaints plainly. The plan says why that was the simpler of the two designs.
+
+Measured on Noema, the same article twice: asked for *"an antique sea chart … no more than five
+scenes … large lettering"*, the brief chose a sea chart, drew five scenes where the plain run drew
+eleven, and lettered them visibly larger, all spelt correctly. Both GPT Sol reviews ran; their
+findings and fixes are in the plan.

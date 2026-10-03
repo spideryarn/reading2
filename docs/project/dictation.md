@@ -3,9 +3,10 @@
 Up: [reading-view-overview.md](reading-view-overview.md)
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on six boxes today — both profile boxes, the chat composer, the comment follow-up, the
-quiz answer box ([quiz.md](quiz.md)) and the Feedback dialog ([feedback.md](feedback.md)) — and
-adding it to a seventh is three lines.
+box. It is on eight boxes today — both profile boxes, the chat composer, the comment follow-up, the
+annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
+([feedback.md](feedback.md)) and the note under an Illustrated picture
+([illustrated.md](illustrated.md#steering)) — and adding it to a ninth is three lines.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:

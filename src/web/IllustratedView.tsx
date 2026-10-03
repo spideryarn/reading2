@@ -57,8 +57,12 @@ import {
   Maximize2,
   Minimize2,
 } from "lucide-react";
-import type { IllustratedPlate } from "../illustrated-plate.js";
+import { type IllustratedPlate, MAX_ILLUSTRATION_NOTE_CHARS } from "../illustrated-plate.js";
 import type { Block, BlockId } from "../types.js";
+import { Button } from "@/components/ui/button";
+import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { keepDictation } from "./dictation-keep.js";
+import { sendForTranscription } from "./dictation-upload.js";
 import { JobProgress } from "./JobProgress.js";
 import { apiFetch } from "./lib/api.js";
 /* The Sketch's own wait, imported rather than restated — see
@@ -71,6 +75,7 @@ import { SKETCH_WAIT } from "./sketch-cost.js";
 import { laterClickOfMany, pressEnlarges } from "./enlargePress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { type UseIllustrated, useIllustrated } from "./useIllustrated.js";
+import { type UseDictationField, useDictationField } from "./useDictationField.js";
 
 /**
  * **What a press buys, in one phrase, in exactly one place** — the work and
@@ -299,9 +304,141 @@ interface Props {
   onJump(id: BlockId): void;
 }
 
+/**
+ * **The reader's note on how the picture should come out** — the box under it,
+ * with the shared microphone (docs/project/dictation.md § Adding it to a box).
+ * Report spya-wxd4nq; plan 261002j.
+ *
+ * **Nothing here stores it.** The note rides on the job that paints
+ * (`Job.illustrationNote`) and is recorded on the picture it produced, which
+ * is where the box is filled from: open a noted picture and its note is in the
+ * box, so *Paint again* untouched keeps the steer and clearing it paints plain.
+ * Once the reader has typed, a picture arriving does not overwrite them.
+ *
+ * Lives in `IllustratedView` rather than in the box, because the box is drawn
+ * in whichever of the band, the overlay and the empty state is showing, and
+ * what the reader typed must not be lost moving between them.
+ */
+interface SteerNote {
+  note: string;
+  change(next: string): void;
+  box: React.RefObject<HTMLTextAreaElement | null>;
+  dictate: UseDictationField;
+  /** Over the cap: refused by the server, so not sent. */
+  tooLong: boolean;
+  /**
+   * **No paint while the microphone is involved, or with a note the server
+   * would refuse** — `armed` and `readOnly` both, which is the guard
+   * dictation.md says everybody forgets the second half of.
+   */
+  blocked: boolean;
+}
+
+function useSteerNote(slug: string, painted: string | undefined): SteerNote {
+  const [note, setNote] = useState(painted ?? "");
+  const touched = useRef(false);
+  useEffect(() => {
+    if (!touched.current) setNote(painted ?? "");
+  }, [painted]);
+  const change = useCallback((next: string) => {
+    touched.current = true;
+    setNote(next);
+  }, []);
+  const box = useRef<HTMLTextAreaElement | null>(null);
+  const dictate = useDictationField({
+    value: note,
+    onChange: change,
+    box,
+    context: { kind: "article", slug },
+    transcribe: sendForTranscription,
+    keep: keepDictation(`illustrated:${slug}`),
+  });
+  const tooLong = note.trim().length > MAX_ILLUSTRATION_NOTE_CHARS;
+  return {
+    note,
+    change,
+    box,
+    dictate,
+    tooLong,
+    blocked: tooLong || dictate.readOnly || dictate.dictation.armed,
+  };
+}
+
+function SteerBox({ steer }: { steer: SteerNote }) {
+  const { dictate } = steer;
+  return (
+    <div className="ill-steer">
+      <label className="ill-steer-label" htmlFor="ill-steer-note">
+        How should it come out? <span className="ill-steer-optional">Optional</span>
+      </label>
+      <div className="ill-steer-row">
+        <textarea
+          id="ill-steer-note"
+          ref={steer.box}
+          className="ill-steer-input"
+          rows={2}
+          value={steer.note}
+          readOnly={dictate.readOnly}
+          onChange={(e) => steer.change(e.target.value)}
+          placeholder="Say it or type it — fewer scenes and bigger lettering, a map rather than a manuscript…"
+        />
+        {dictate.dictation.supported && (
+          <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} />
+        )}
+      </div>
+      <DictationStrip dictation={dictate.dictation} />
+      {steer.tooLong ? (
+        <p className="ill-steer-how ill-steer-long" role="alert">
+          That is {steer.note.trim().length} characters; the note can be at most{" "}
+          {MAX_ILLUSTRATION_NOTE_CHARS}.
+        </p>
+      ) : (
+        <p className="ill-steer-how">
+          Used for the next painting. It can change the style, what comes first and how crowded the
+          page is; everything drawn still comes from the article.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The note a picture was painted with, beside the brief it shaped — or nothing. */
+function YourNote({ note }: { note: string | undefined }) {
+  if (!note) return null;
+  return (
+    <p className="ill-your-note">
+      Your note: <span className="voice-reader">{note}</span>
+    </p>
+  );
+}
+
+/**
+ * **Paint again, beside a picture that is there** — with whatever is in the box.
+ * Forced, because an unforced run would skip a current picture with the same
+ * note while the reader watched a job change nothing.
+ */
+function PaintAgain({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
+  const busy = view.job !== null || view.starting;
+  return (
+    <div className="ill-run">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={steer.blocked || busy}
+        onClick={() => void view.regenerate(steer.note)}
+      >
+        <Brush size={13} />
+        Paint again
+      </Button>
+    </div>
+  );
+}
+
 export function IllustratedView({ slug, blocks, onJump }: Props) {
   const view = useIllustrated(slug, blocks);
   const { illustrated } = view;
+  const steer = useSteerNote(slug, illustrated?.note);
 
   /** Which plate is open, by scene id. `null` is the first — the overview. */
   const [open, setOpen] = useState<string | null>(null);
@@ -384,7 +521,7 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
   if (view.status === "none" || view.status === "error") {
     return (
       <div className="ill-empty">
-        <Empty view={view} />
+        <Empty view={view} steer={steer} />
       </div>
     );
   }
@@ -616,9 +753,17 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
             has to be read without a press. */}
         <details className="ill-brief">
           <summary>What the illustrator was asked for</summary>
+          <YourNote note={illustrated.note} />
           {illustrated.style && <p className="ill-style">{illustrated.style}</p>}
           <p className="ill-prompt">{plate.prompt}</p>
         </details>
+
+        {/* **The box, and a Paint again beside a picture that is there.** The
+            reader asked for exactly this (spya-wxd4nq): a way to say how it
+            should come out and have it painted again. Forced, because an
+            unforced run would skip a current picture with the same note. */}
+        <SteerBox steer={steer} />
+        <PaintAgain view={view} steer={steer} />
       </div>
     </>
   );
@@ -692,6 +837,7 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
                 takes the ones the browser already spends on a scroll box. */}
             {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll box with no control inside it is unreachable from the keyboard without one, and 350 words of brief is exactly that. The rule is aimed at tab stops that lead nowhere; this one leads to the only way to read the text. A labelled <section> rather than a div, so it is a named landmark when focus lands. */}
             <section className="ill-aside-scroll" tabIndex={0} aria-labelledby="ill-aside-head">
+              <YourNote note={illustrated.note} />
               {illustrated.style && <p className="ill-style">{illustrated.style}</p>}
               <p className="ill-aside-prompt">{plate.prompt}</p>
             </section>
@@ -738,7 +884,7 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
  * drawn as *"it cannot be painted from here"* with no spinner, no Stop, and no
  * sign that a four-to-seven-minute paid job was under way. GPT Sol, 2026-09-03.
  */
-function Empty({ view }: { view: UseIllustrated }) {
+function Empty({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
   const { sketch } = view;
 
   if (view.status === "error") {
@@ -813,6 +959,7 @@ function Empty({ view }: { view: UseIllustrated }) {
         <p className="ill-empty-why" data-ill-both-cost="">
           {SKETCH_THEN_PAINT}
         </p>
+        <SteerBox steer={steer} />
         <div className="ill-run">
           {/* **`drawThenPaint`, and unforced.** The Sketch half runs only if
               `stepIsDone` says it is not current — which for all three of these
@@ -830,7 +977,8 @@ function Empty({ view }: { view: UseIllustrated }) {
             starting={view.starting}
             failed={view.failed}
             stalled={view.stalled}
-            onRun={() => view.drawThenPaint()}
+            onRun={() => view.drawThenPaint(steer.note)}
+            runDisabled={steer.blocked}
             onCancel={view.cancel}
             label="Draw the Sketch, then paint"
             step="illustrated"
@@ -869,18 +1017,22 @@ function Empty({ view }: { view: UseIllustrated }) {
         It is an interpretation and cannot be checked. Sketch, one chip to the left, stays the
         diagram of record.
       </p>
+      <SteerBox steer={steer} />
       <div className="ill-run">
         {/* **`ensure`, not `regenerate`.** There is no picture — that is what
             this state means — so the freshness check will agree, and it has to
             be the identical request the automatic run makes: a forced press
             landing inside the auto-start window is a different `work_key`, is
-            not de-duplicated, and buys a second job at this price. */}
+            not de-duplicated, and buys a second job at this price. (A note
+            makes it a different key anyway, deliberately: it is a different
+            request.) */}
         <JobProgress
           job={view.job}
           starting={view.starting}
           failed={view.failed}
           stalled={view.stalled}
-          onRun={() => view.ensure()}
+          onRun={() => view.ensure(steer.note)}
+          runDisabled={steer.blocked}
           onCancel={view.cancel}
           label="Paint the argument"
           step="illustrated"

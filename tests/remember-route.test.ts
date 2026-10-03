@@ -328,6 +328,32 @@ describe("what actually gets stored", () => {
   });
 });
 
+/* Tutorial, Remember's third sub-mode (plan 261002i): its own kind, stored as
+   itself, dictated so it shares Remember's long cap — and it never had a
+   stance, so a stance on one is refused rather than dropped. */
+describe("a Tutorial turn", () => {
+  it("is stored as a Tutorial thread and takes Remember's long cap", async () => {
+    const long = "so what I remember is ".repeat(300);
+    expect(long.length).toBeGreaterThan(4000);
+    const { status } = await post({ threadId: "spya-t7m2wz", question: long, kind: "tutorial" });
+    expect(status).not.toBe(413);
+    expect(status).not.toBe(400);
+    const thread = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.kind === "tutorial");
+    expect(thread?.id).toBe("spya-t7m2wz");
+    expect(thread?.messages[0]?.text).toBe(long.trim());
+  });
+
+  it("refuses a stance", async () => {
+    const { status } = await post({
+      threadId: "spya-t7m3wz",
+      question: "I haven't read it",
+      kind: "tutorial",
+      stance: "balanced",
+    });
+    expect(status).toBe(400);
+  });
+});
+
 /* Report spya-f3b6ab (Greg, 2026-10-01): "I tried editing a previous message in
    Recall mode, hoping that it would then trigger a response to that modified
    message, but it didn't." The request the real client sends for an edit —

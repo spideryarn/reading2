@@ -148,14 +148,18 @@ describe("the gutter's touch reveal is legible on every row it can appear on", (
   it("stays under the ceiling, where the reader's own mark stops leading", () => {
     /* **Not "round it up to be safe".** The gutter's grammar is that the
        reader's mark carries the weight and the affordances do not, so there is a
-       maximum here as well as a minimum: `.blk-cmt` is `--highlight` at 0.75,
-       and above about 0.87 the buttons out-shine the bookmark and the column
-       starts reading as a toolbar. The lead is 1.35:1 at 0.705 — plus a hue,
-       which the affordances have none of. */
+       maximum here as well as a minimum: the buttons must not out-shine the
+       bookmark, or the column starts reading as a toolbar. The mark was
+       `--highlight` at 0.75 until 2026-10-02, when it went to full strength and
+       filled (Greg's 9C, plan 261002j) — so it declares no opacity now, which
+       means 1, and an opacity added back is read and held to the same rule. */
     const bg = Array(3).fill(grey(greyL("background")));
     const ink = Array(3).fill(grey(greyL("muted-foreground")));
-    const markOpacity = Number(/opacity:\s*([\d.]+)/.exec(/^\.blk-cmt\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "")?.[1]);
-    expect(markOpacity, "`.blk-cmt` declares no opacity").toBeGreaterThan(0);
+    const rule = /^\.blk-cmt\s*\{([^}]*)\}/m.exec(css)?.[1];
+    expect(rule, "`.blk-cmt` has a rule of its own").toBeDefined();
+    const declared = /opacity:\s*([\d.]+)/.exec(rule ?? "")?.[1];
+    const markOpacity = declared === undefined ? 1 : Number(declared);
+    expect(markOpacity).toBeGreaterThan(0);
 
     const mark = luminance(composite(hex(token("spideryarn-orange")), bg, markOpacity));
     const affordance = luminance(composite(ink, bg, touchOpacity()));

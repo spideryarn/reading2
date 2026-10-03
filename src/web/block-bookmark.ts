@@ -15,7 +15,7 @@ type CreateBookmark = (input: { id: string; blockId: BlockId }) => Promise<Comme
 
 interface Attempt {
   readonly id: string;
-  pending?: Promise<boolean>;
+  pending?: Promise<string | null>;
 }
 
 /**
@@ -28,7 +28,7 @@ interface Attempt {
 export function makeBlockBookmarker(
   create: CreateBookmark,
   mint: () => string = mintId,
-): (blockId: BlockId) => Promise<boolean> {
+): (blockId: BlockId) => Promise<string | null> {
   const attempts = new Map<BlockId, Attempt>();
 
   return (blockId) => {
@@ -38,9 +38,11 @@ export function makeBlockBookmarker(
 
     const pending = create({ id: attempt.id, blockId })
       .then((comment) => {
-        const stored = comment !== null;
-        if (stored && attempts.get(blockId) === attempt) attempts.delete(blockId);
-        return stored;
+        if (comment !== null && attempts.get(blockId) === attempt) attempts.delete(blockId);
+        /* The stored id, so the caller can open the comment box on it — the
+           way to add words with no AI reply (plan 261002j). `null` is
+           "not confirmed", as before. */
+        return comment === null ? null : comment.id;
       })
       .finally(() => {
         /* A confirmed write removed the whole attempt above. On failure only

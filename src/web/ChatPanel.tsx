@@ -84,12 +84,15 @@ import type {
   ThreadKind,
   ToolRun,
 } from "../types.js";
+import { isSingleThreadKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
 import { LiveStatus } from "./live/LiveStatus.js";
+import { LiveTail } from "./live/LiveTail.js";
+import { liveSize } from "./live/tail.js";
 import type { LiveApi } from "./live/useLiveConversation.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
@@ -229,8 +232,8 @@ interface Props {
    */
   kind: ThreadKind;
   /**
-   * **The Recall | Quiz control**, when this panel is the Recall half of
-   * Remember. Absent in chat mode.
+   * **The Recall | Tutorial | Quiz control**, when this panel is one of
+   * Remember's conversation views. Absent in chat mode.
    *
    * A slot rather than a `subMode` value with a callback, because the control
    * belongs to `RememberBand` (src/web/App.tsx): the navigation rules behind it —
@@ -353,14 +356,19 @@ export function ChatPanel({
   seed,
 }: Props) {
   useRenderCount("ChatPanel");
-  const remember = kind === "remember";
+  /* **Remember's layout, for both of its conversations** — Recall and
+     Tutorial are each one thread per article, dictated into a tall box, with
+     no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
+     is words, decided per kind below. */
+  const remember = isSingleThreadKind(kind);
   const open = threads.find((t) => t.id === threadId) ?? null;
   // A stopped session retains recovery text. It must never appear in a different thread.
   const shownLive: LiveApi | undefined = live && (live.threadId === open?.id || !live.threadId)
     ? live
-    : live ? { ...live, phase: "idle", error: null, lines: [], tools: [], pointers: [],
+    : live ? { ...live, phase: "idle", step: null, error: null, lines: [], tools: [], pointers: [],
       pendingTools: [], deviceLabel: null, notice: null, placement: null, playbackBlocked: false, hasUnsavedLines: false,
-      hearing: false, speaking: false, thinking: false, threadId: null } : undefined;
+      hearing: false, speaking: false, thinking: false, threadId: null, reconnecting: false,
+      measuringInput: false, quietInput: false, stall: null } : undefined;
 
   /**
    * What the reader has typed and not sent yet, per conversation.
@@ -470,7 +478,13 @@ export function ChatPanel({
       feature={`chat${remember ? " remember" : ""}`}
       /* Remember's Recall half is this same panel, so its (i) says Remember's words. */
       mode={remember ? "remember" : "chat"}
-      label={remember ? "Remember what you took from this article" : "Chat about this article"}
+      label={
+        kind === "tutorial"
+          ? "A tutorial on this article"
+          : remember
+            ? "Remember what you took from this article"
+            : "Chat about this article"
+      }
       head={
         <>
           {/* **Remember's header says Remember**, never the thread's title: there
@@ -1109,6 +1123,13 @@ export function Conversation({
    */
   const awayNow = useRef(away);
   awayNow.current = away;
+  /* **The live words are the end of the conversation too** (LiveTail, after
+     the saved turns), so they count as content — an empty thread with a first
+     spoken exchange arriving is not "empty" — and their growth is "new text
+     has been painted". GPT Sol, plan review 261002j. */
+  const liveLines = live?.lines ?? [];
+  const liveChars = liveSize(liveLines);
+  const empty = thread.messages.length === 0 && liveLines.length === 0;
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads a ref, and these are what say "new text has been painted, scroll if we were following"
   useEffect(() => {
     const el = scroller.current;
@@ -1119,7 +1140,7 @@ export function Conversation({
        landscape phone's short band (207px of scroller, 308px of suggestions)
        past the hint and the first question on mount, so they looked clipped off
        the top of the band. Plan 261001n. */
-    if (thread.messages.length === 0) el.scrollTop = 0;
+    if (empty) el.scrollTop = 0;
     else if (stick.current) el.scrollTop = el.scrollHeight;
     /* And this half **only ever clears**, which is the whole discipline.
        Content growing must never decide the reader has scrolled away — that was
@@ -1143,7 +1164,7 @@ export function Conversation({
        ever cleared in here. That is the *same* bug the note above describes,
        surviving its own fix in the dependency array. Found by a GPT-5.6 review,
        2026-08-26. */
-  }, [chars, thread.messages.length, last?.status]);
+  }, [chars, thread.messages.length, last?.status, liveChars, liveLines.length, live?.hasUnsavedLines, live?.phase]);
 
   const toBottom = () => {
     const el = scroller.current;
@@ -1170,13 +1191,19 @@ export function Conversation({
              away from, so no "Latest" pill, and the first question sent from
              halfway down them must still be followed by its answer. */
           const atBottom =
-            thread.messages.length === 0 || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+            empty || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
           stick.current = atBottom;
           setAway(!atBottom);
         }}
       >
-        {thread.messages.length === 0 &&
-          (kind === "remember" ? <RememberInvitation /> : <Suggestions onAsk={(q) => onSend(q)} />)}
+        {empty &&
+          (kind === "tutorial" ? (
+            <TutorialInvitation />
+          ) : kind === "remember" ? (
+            <RememberInvitation />
+          ) : (
+            <Suggestions onAsk={(q) => onSend(q)} />
+          ))}
         {thread.messages.map((m, i) => (
           <Turn
             key={m.id}
@@ -1208,6 +1235,9 @@ export function Conversation({
             discards={thread.messages.length - i - 1}
           />
         ))}
+        {/* The spoken words still on their way to being saved, as the end of
+            this same conversation. ./live/LiveTail.tsx. */}
+        {live && <LiveTail live={live} />}
       </div>
       {/* The jump button sits *outside* the scroller so it does not scroll with
           it, and only exists while the reader is somewhere else — a permanent
@@ -1288,6 +1318,28 @@ function RememberInvitation() {
       <p className="chat-empty-hint">
         Stuck for a way in? Try the argument in one sentence, the part you're least sure of, or what
         you'd tell someone about it.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * **Tutorial's empty state asks the opening question**, so the reader speaks
+ * first and the model never writes an unprompted turn. Greg, `spya-j0scgz`:
+ * *"I think it might start with the sort of basic recall question. You know,
+ * what do you remember about the article? But it may be that the user says
+ * nothing. I haven't read it yet."*
+ */
+function TutorialInvitation() {
+  return (
+    <div className="chat-suggest">
+      <p className="chat-empty-hint">
+        What do you remember about this article? Or say you haven't read it yet — either is a fine
+        place to start.
+      </p>
+      <p className="chat-empty-hint">
+        We'll take short turns: a little of the piece at a time, with a link to the passage, and then
+        a question for you to answer in your own words.
       </p>
     </div>
   );
@@ -1977,7 +2029,8 @@ export function Composer({
      because it outlives this component; this keeps the value because typing
      into it must not repaint the transcript above. */
   const [value, setValue] = useState(draft);
-  const remember = kind === "remember";
+  /* Recall's and Tutorial's box alike: tall, microphone first. */
+  const remember = isSingleThreadKind(kind);
   /**
    * **A short band gets a short box.** On a landscape phone the band is about
    * 338px tall, and six rows at rest took 280 of it — the transcript the reader
@@ -2127,9 +2180,11 @@ export function Composer({
         placeholder={
           busy
             ? "Waiting for the answer…"
-            : remember
-              ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
-              : (placeholder ?? "Ask about this article…")
+            : kind === "tutorial"
+              ? "What do you remember about it? Or say you haven't read it yet."
+              : remember
+                ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
+                : (placeholder ?? "Ask about this article…")
         }
         onChange={(e) => {
           setValue(e.target.value);
@@ -2258,13 +2313,6 @@ export function Composer({
         onRestart={onStartLive}
         blocks={blocks}
         onJump={onJump}
-        onType={() => {
-          void (async () => {
-            if (live.phase !== "idle" && live.phase !== "failed") await live.stop();
-            box.current?.focus();
-          })();
-        }}
-        onDictate={dictate.dictation.supported && !busy && !dictate.readOnly ? toggleDictation : undefined}
       />}
     </form>
   );

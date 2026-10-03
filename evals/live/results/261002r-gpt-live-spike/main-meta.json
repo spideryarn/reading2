@@ -1,0 +1,23 @@
+{
+  "started": "2026-10-02T22:57:23.383Z",
+  "liveSystemSha": "9d3cf0535008",
+  "liveSystemHasWhenToThink": true,
+  "configs": [
+    "A",
+    "B",
+    "C",
+    "Cin"
+  ],
+  "reps": 3,
+  "articles": {
+    "short": {
+      "slug": "article-spya-uzf7vk",
+      "tokens": 9079
+    },
+    "long": {
+      "slug": "scaling-hypothesis",
+      "tokens": 26644
+    }
+  },
+  "voicePromptChars": 1885
+}

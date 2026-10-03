@@ -65,7 +65,7 @@ const EACH: readonly [MarginaliaNote, MargTipKey][] = [
   [{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }, "faq"],
   [{ kind: "debate", items: [claim] }, "debate"],
   [{ kind: "citation", items: [work] }, "citation"],
-  [{ kind: "comment", items: [comment] }, "comment-own"],
+  [{ kind: "comment", items: [{ as: "comment", comment }] }, "comment-own"],
 ];
 
 function paint(notes: MarginaliaNote[], viewer: "owner" | "visitor" = "owner"): void {
@@ -101,7 +101,7 @@ describe("a note in the margin", () => {
   });
 
   it("tells a visitor whose comment it is", async () => {
-    paint([{ kind: "comment", items: [comment] }], "visitor");
+    paint([{ kind: "comment", items: [{ as: "comment", comment }] }], "visitor");
     expect(trigger().getAttribute("data-marg-tip")).toBe("comment-owner");
   });
 
@@ -175,7 +175,7 @@ describe("whose words a shut line is (fonts.md)", () => {
   });
 
   it("a comment is the reader's", () => {
-    paint([{ kind: "comment", items: [comment] }]);
+    paint([{ kind: "comment", items: [{ as: "comment", comment }] }]);
     expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-reader")).toBe(true);
   });
 

@@ -373,6 +373,7 @@ const NEW_THREAD_TITLE: Record<ThreadKind, string> = {
   chat: "New chat",
   remember: "Remembering",
   candidates: "Finding reviewers",
+  tutorial: "Tutorial",
 };
 
 export function useChat(slug: string): ChatApi {

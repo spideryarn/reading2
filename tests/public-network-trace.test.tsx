@@ -723,13 +723,13 @@ const buttonNamed = (label: string): HTMLButtonElement | null =>
   [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === label) ?? null;
 
 /* **The empty-paragraph name.** Since 2026-09-05 a chip with conversations
-   behind it announces itself as *"Open a conversation about this paragraph (n
+   behind it announces itself as *"Open a conversation with the AI about this paragraph (n
    total)"* instead, because the press reopens one — so a case that seeds
    `storedChats` on the block it is counting will not find its chip here. The
    two cases that use this helper have none. */
 const chatButtons = () =>
   [...host.querySelectorAll("button")].filter(
-    (b) => b.getAttribute("aria-label") === "Chat about this paragraph",
+    (b) => b.getAttribute("aria-label") === "Chat with the AI about this paragraph",
   );
 
 /**

@@ -93,6 +93,7 @@ import { isSpideryarnId } from "../../src/ids.js";
 import { currentOwnerId } from "../../src/owner.js";
 import { loadRuns } from "../../src/searches.js";
 import { loadShelf } from "../../src/shelf.js";
+import { isThreadKind } from "../../src/types.js";
 
 /**
  * Find the article row for `slug`, or say which call was missing.
@@ -286,7 +287,7 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
       /* A `chat.json` written before Remember mode has no `kind`, and the column
          is `not null`. `"chat"` is the default `normaliseKind` applies in
          src/chat.ts and the one the column declares. */
-      kind: thread.kind === "remember" ? "remember" : "chat",
+      kind: isThreadKind(thread.kind) ? thread.kind : "chat",
     });
     for (const [ordinal, message] of thread.messages.entries()) {
       await db.insert(chatMessages).values({

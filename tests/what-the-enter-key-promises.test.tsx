@@ -111,6 +111,10 @@ const PROMISES: Record<string, string> = {
   "CommentDialog.tsx › Your comment on this passage": "newline",
   "CriteriaPanel.tsx › crit-text": "newline",
   "FeedbackDialog.tsx › fb-input fb-body": "newline",
+  /* The note on how an Illustrated picture should come out: a sentence or two,
+     often dictated, and the paint it goes with is a $0.40 press that must
+     never be one keystroke away (plan 261002j). */
+  "IllustratedView.tsx › ill-steer-note": "newline",
   "ProfileBox.tsx › prof-box-input": "newline",
   /* Why you are reading, asked on the add page and in Skim (plan 260930e).
      Multi-line; ⌘/Ctrl+Enter is the add page's save, never plain Enter. */

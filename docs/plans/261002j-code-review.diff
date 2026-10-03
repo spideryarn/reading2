@@ -1,0 +1,1704 @@
+diff --git a/docs/plans/261002j-plan-review-prompt.md b/docs/plans/261002j-plan-review-prompt.md
+new file mode 100644
+index 000000000..ee7ba9041
+--- /dev/null
++++ b/docs/plans/261002j-plan-review-prompt.md
+@@ -0,0 +1,18 @@
++You are reviewing a plan before it is built, in the Spideryarn repo (this working tree). Read-only.
++
++Plan: docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md
++
++Read it, then read the code it touches and check its claims against the code, especially:
++- src/web/BlockGutter.tsx (the mark `.blk-cmt`, the bookmark button), src/web/styles/gutter.css
++- src/web/block-bookmark.ts and its use in src/web/reader/Reader.tsx (`bookmarkBlock`, `openCommentDialog`, `askedList`, `openAskedFromDrawer`, the `marginNotes` memo)
++- src/web/CommentDialog.tsx (focus on mount, CommentBody, the follow-up box)
++- src/web/marginalia/notes.ts and MarginaliaColumn.tsx (`CommentNote`, `ShutNote`), src/web/marginalia/tips.ts
++- src/web/comment-nav.ts (`AskedQuestion`, `orderDrawer`), src/web/useChatAnchors.ts (`askedQuestions`), src/web/Dock.tsx (the Comments drawer rows)
++- docs/project/comments.md, docs/project/marginalia.md, src/public-types.ts (what a visitor's comment carries)
++
++Questions:
++1. Is the three-way kind derivation (threadId / status / askedQuestions) correct and complete? Any comment state that gets the wrong label? Is the claim "no stored field needed" right?
++2. Opening the CommentDialog after a bookmark press: races (optimistic row vs confirmed id, a second press, the reader opening something else meanwhile, a failed write), focus restoration (the opener button disappears), and the iPad.
++3. Questions in the margin: owner-only gating, staleness (a thread whose block is gone), and whether `openAskedFromDrawer` is safe to call from the margin in every mode.
++4. Anything simpler that gives Greg the same thing.
++Give findings as P0/P1/P2 with file:line evidence, and say plainly if you find nothing serious. Write nothing to the tree.
+diff --git a/docs/plans/261002j-plan-review-sol.md b/docs/plans/261002j-plan-review-sol.md
+new file mode 100644
+index 000000000..24a0ddbc7
+--- /dev/null
++++ b/docs/plans/261002j-plan-review-sol.md
+@@ -0,0 +1,75 @@
++No P0s. I found three P1s that should be resolved before building, plus two P2 copy/coverage issues.
++
++## P1
++
++1. **“No stored field needed” does not satisfy Greg’s requested distinction: what the reader wanted.**
++
++The checkbox choice is local UI state ([AnnotateDialog.tsx:314](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/AnnotateDialog.tsx:314)). The comment is created without that choice, and only after the save succeeds does Reader open a chat draft ([Reader.tsx:2928](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/reader/Reader.tsx:2928)). If the reader checked *Also ask*, then closes the draft before sending—or chat creation fails—the stored comment is indistinguishable from one where they deliberately chose no AI.
++
++Therefore:
++
++- If the label means **intent** (“wanted an AI response”), a stored provenance field is required.
++- If it means **outcome** (“this comment has/started a conversation”), no new field is needed, but the plan should say it is changing the requested distinction and use outcome-based copy.
++
++The current derivation also mishandles valid edge states:
++
++- Saving with an empty body and *Also ask* is expressly allowed ([AnnotateDialog.tsx:330](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/AnnotateDialog.tsx:330)). Once linked, it has `threadId` but no `body` or `answer`. `commentKind` calls it `comment-ai` ([comment-nav.ts:214](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/comment-nav.ts:214)), but the margin drops it before deriving the kind ([notes.ts:287](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/marginalia/notes.ts:287)).
++- Legacy `pending`/`done`/`error` rows were explanations, not chats; older rows may have no reader words ([types.ts:2890](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/types.ts:2890), [types.ts:2957](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/types.ts:2957)). Calling all of them “Comment + AI chat” is inaccurate.
++- `threadId` remains after its conversation is deleted ([comments.md:193](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/docs/project/comments.md:193)), so “+ AI chat” can appear with no conversation to open.
++
++At minimum, distinguish legacy AI explanations and change the margin exclusion to exclude `commentKind(comment) === "bookmark"`, rather than every row without body/answer.
++
++2. **A slow bookmark response can overwrite whatever the reader opened meanwhile.**
++
++The planned/current path awaits the POST and then unconditionally calls `setNote(id)` ([Reader.tsx:2043](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/reader/Reader.tsx:2043)). There is no foreground-intent token.
++
++Consequences:
++
++- Bookmark A, then open existing comment B: A’s response replaces B.
++- Bookmark A, then bookmark another block: whichever response arrives last wins, not the most recent press.
++- Bookmark, then open chat: the new `note` is hidden because chat wins the overlay; closing chat can reveal the delayed comment dialog unexpectedly.
++
++The gutter’s token cannot prevent this: it checks only after `onBookmark` resolves ([BlockGutter.tsx:766](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/BlockGutter.tsx:766)), while Reader has already performed `setNote` inside that promise.
++
++The failed-write path itself is sound: the optimistic row is removed and `null` returned ([useComments.ts:592](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/useComments.ts:592)); retry retains the id. Same-block double presses are coalesced. What is missing is a Reader-wide “this is still the latest surface-opening intent” guard, invalidated when another comment/chat/editor is opened.
++
++3. **Focus will not return to the bookmark’s replacement mark.**
++
++`create` inserts the optimistic row synchronously ([useComments.ts:543](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/useComments.ts:543)), which replaces `.blk-bookmark` with `.blk-cmt` ([BlockGutter.tsx:593](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/BlockGutter.tsx:593)). Because the dialog waits for server confirmation, its original opener is already gone when it mounts.
++
++`CommentDialog` then commonly records `<body>` as the opener. Since body remains connected, cleanup tries to focus it and returns before the Comments-button fallback ([CommentDialog.tsx:221](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/CommentDialog.tsx:221)). Closing therefore loses the reader’s gutter position.
++
++Use the replacement `.blk-cmt` in the same `tr[data-block]` as the fallback. `ChatDialog` already has the analogous gutter fallback pattern ([ChatDialog.tsx:331](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/ChatDialog.tsx:331), [ChatDialog.tsx:497](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/ChatDialog.tsx:497)).
++
++The iPad keyboard part otherwise looks right: focus goes to the close button, not either text field. The planned 390px Playwright check does not exercise `(hover: none)` or the soft keyboard, so add a focus-restoration component test and at least touch emulation.
++
++## P2
++
++4. **Question marginalia currently inherits a tooltip that describes a comment.**
++
++Questions are grouped into `CommentNote`, which selects `comment-own` ([MarginaliaColumn.tsx:352](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/marginalia/MarginaliaColumn.tsx:352)). That tip says “A comment you left” and promises an AI answer underneath ([tips.ts:58](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/marginalia/tips.ts:58)). A question instead offers *Open the conversation*. Add a question/mixed tip or make the shared tip accurately cover both.
++
++5. **The visitor claim in the plan is too broad.**
++
++A public comment has neither `threadId` nor `status`, but it can carry a legacy `answer` ([public-types.ts:790](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/public-types.ts:790), [public-types.ts:823](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/public-types.ts:823)). Since `commentKind` checks `answer`, such a visitor row becomes “Comment + AI chat,” contrary to plan line 78. Conversely, an empty-body modern comment linked to private chat projects as a bookmark. The docs should describe those actual projections rather than “Comment whatever it was.”
++
++## Questions in the margin
++
++This part otherwise checks out:
++
++- Owner-only gating is sound: visitors receive no chat summaries, and the margin passes `askedList` only on the owner arm ([Reader.tsx:1827](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/reader/Reader.tsx:1827)).
++- A question whose block is gone is skipped by the block-index check ([notes.ts:296](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/marginalia/notes.ts:296)).
++- `openAskedFromDrawer` is safe from the margin in current modes: Remember switches to Chat; Chat uses its band; other modes use the floating dialog ([Reader.tsx:1810](/home/greg/code/spideryarn2/.claude/worktrees/fb9c-9h-comments-without-ai-reply/src/web/reader/Reader.tsx:1810)).
++
++## Simpler option
++
++There is no materially simpler route that gives exactly the planned one-press bookmark plus immediate editing. Reusing `AnnotateDialog` would avoid the delayed-open race, but would no longer store the bookmark in one press and would require widening its selection-only anchor model.
++
++The simplest sound version is the current product shape with:
++
++- a Reader-wide stale-intent guard;
++- focus fallback to the replacement gutter mark;
++- outcome-based labels, unless Greg confirms he wants intent stored;
++- the empty-body linked-comment and legacy-explanation cases handled explicitly.
++
++I wrote nothing to the tree.
+\ No newline at end of file
+diff --git a/docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md b/docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md
+new file mode 100644
+index 000000000..2851297b8
+--- /dev/null
++++ b/docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md
+@@ -0,0 +1,139 @@
++# A visible bookmark, a comment without an AI reply, and each comment's kind in the margin
++
++Two of Greg's suggestions about comments, both admin reports (`feedback-reporter.ts` exit 0), so
++built. Overseer queue item qi-ynaan2cf.
++
++**SPIDERYARN-READING2-9C** (spya-zper0p, 2026-10-01, Summary with the margin open):
++
++> If I bookmark a block using the icon in the gutter, it should be a bit more visible.
++>
++> And it should be possible to comment on a block without wanting an AI-chat-response. Enable that
++> and make a small UI tweak that will make that clear to the user.
++>
++> — Greg, 2026-10-01
++
++**SPIDERYARN-READING2-9H** (spya-m55h94, 2026-10-01, Summary with the margin open):
++
++> Comments should be visible in marginalia mode in the right-hand column, probably default
++> collapsed. And perhaps indicate whether, in general, comments should indicate whether they're a
++> comment from the user that didn't want an AI chat response, or one that did want an AI chat
++> response, or a question with AI chat response.
++>
++> — Greg, 2026-10-01
++
++## What is already there
++
++- **Comments are already in the margin, shut** — fb82 landed it the next morning
++  ([261002b](261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md)): one
++  shut "Note" line per block, a bare bookmark left out. So 9H's first sentence is done; its second
++  (the kind) is not.
++- **A comment without an AI reply already exists, but nobody can find it from the gutter.** A
++  selection opens a comment box where the AI is a tick-box. From the gutter, the bookmark button
++  stores a bare bookmark, and words can be added only by pressing the mark afterwards and typing in
++  the comment dialog's "Add a comment…" box. Greg's report says he did not know that. The gutter's
++  speech bubble, which he has called "comment" before (report 37), opens an **AI chat**.
++- **The three kinds are already in the data**, so nothing new is stored:
++
++  | kind | what it is | how we know |
++  |---|---|---|
++  | Comment | the reader's words, no AI | a comment with no `threadId` and `status: "none"` |
++  | Comment + AI reply | the AI replied: *Also ask the AI* and the chat sent, or an explanation from before 2026-08-28 | a comment with a `threadId`, or an answer in place |
++  | Question | the "?" or *Chat about this*: a conversation, not a comment | an anchored chat no comment points at (`askedQuestions`) |
++
++  `askedQuestions` already drops the chats a comment points at, so the three do not overlap.
++
++## What the reader gets
++
++1. **A bookmark you can see.** The mark at the head of the gutter is drawn **filled**, at full
++   strength, in `--highlight` (it was an outline at 0.75). Nothing else in the gutter is filled, so
++   it reads as state, not as a control.
++2. **Bookmarking opens the comment box.** One press still stores the bookmark, exactly as now. Then
++   the comment dialog opens on it, with its box saying what it is: *"Add a comment — it's yours;
++   the AI doesn't reply"*. Typing and leaving the box saves the words; closing it leaves a bare
++   bookmark. Focus goes to the dialog's close button as for any comment, so an iPad keyboard does
++   not jump up on every bookmark.
++3. **The AI doors say AI.** The gutter's speech bubble becomes *"Chat with the AI about this
++   paragraph"*; the bookmark button *"Bookmark this paragraph, and comment if you like (no AI)"*;
++   the dialog's follow-up box *"Ask the AI about this…"*. That is the small UI tweak Greg asked
++   for: the free door and the paid doors say which they are.
++4. **Each comment says its kind** — in the margin and in the Comments drawer, from one function
++   (`commentKind` in `comment-nav.ts`) and one label table:
++   - the margin's comment line takes the kind as its stamp: `COMMENT`, `COMMENT + AI REPLY`,
++     `QUESTION`; several in one block show *"3 comments"* and each opened row has its own stamp;
++   - **questions join the margin** (owner only — a visitor's payload has no chats), in the same shut
++     line as the comments on that block, opening to *Open the conversation*, which is the drawer's
++     own press (`openAskedFromDrawer`);
++   - the drawer's comment rows gain the same small label the question rows already have
++     (*Comment*, *Comment + AI reply*; a bare bookmark says *Bookmark*).
++
++```
++  gutter                        margin (shut)                 margin (opened)
++  ■ ← filled mark               ▸ COMMENT  check this vs §4   ▾ 3 comments
++  🔗                                                            COMMENT  check this vs §4
++  💬 Chat with the AI…                                          COMMENT + AI REPLY  why n=12?
++  ?  Ask the AI…                                                QUESTION  "the bound holds"
++                                                                  Open the conversation
++```
++
++A visitor's copy carries no `threadId` or `status` (public-types.ts), so to them an owner's comment
++is *Comment + AI reply* only when it carries a legacy answer, and *Comment* otherwise: less than the
++owner sees, never more.
++
++## Simpler options passed over
++
++- **Only relabel the tooltips**, leaving the bookmark-then-press-the-mark route. Cheapest, but Greg
++  asked to *enable* commenting without AI, which says the route is not findable; a tooltip on a
++  button that appears on hover would not change that.
++- **A fifth gutter button, "Comment"**. Clearer still, but the gutter holds four slots and its
++  folding arithmetic (gutter.css, 260905c) is built on four; a fifth reopens it for every short
++  paragraph.
++- **A stored `wantsAi` field.** The brief allowed a migration, but `threadId` and the chat list
++  already say it. The one case they miss: *Save & ask* where the chat call failed before the
++  conversation existed — that comment shows as *Comment*. Small, and honest about what happened.
++- **A popover instead of the dialog** after bookmarking — a second surface for the same box.
++
++## Deferred
++
++- The dialog's prev/next arrows still skip questions (as 260930f left them).
++- A whole-block comment with *Also ask the AI*: `linkThread` is selection-only on purpose
++  (comments.md), and the gutter already has two AI doors.
++- Showing a question's first message in the margin: the summaries' `lastLine` is not live
++  (260930f § Deferred), so the margin shows the passage, as the drawer does.
++
++## Stages
++
++1. **Kinds** (red-first tests): `commentKind` + labels in `comment-nav.ts`; `marginaliaNotes`
++   takes `asked` and groups comments and questions as one kind per block; the margin's
++   `CommentNote` and the drawer render the stamps; Reader threads `askedList` and
++   `openAskedFromDrawer` (owner only).
++2. **The gutter and the dialog**: filled mark; `makeBlockBookmarker` resolves the stored id (or
++   `null`) so Reader opens the dialog on it; the three relabels; tests that pin strings updated.
++3. **Docs**: comments.md (the bookmark opens the box; the three kinds), marginalia.md (questions in
++   the margin), the feedback note.
++
++Browser check (Sonnet, Playwright): bookmark press → filled mark + dialog; type, close, the margin
++shows `COMMENT`; a "?" question shows `QUESTION` and opens its conversation; 390px leaks nothing.
++GPT Sol on this plan (`--sandbox review`) and on the code (`--sandbox workspace-write`).
++
++## GPT Sol on the plan, and what changed
++
++[The review](261002j-plan-review-sol.md): no P0, three P1s, all accepted.
++
++1. **Intent or outcome.** Greg asked whether a comment *wanted* an AI reply; the tick-box is never
++   stored, and a reader can tick it and close the chat draft unsent. Taken as **outcome**: the label
++   is *Comment + AI reply* (it was "+ AI chat", which is wrong for a pre-2026-08-28 explanation), and
++   `commentKind`'s comment says so. Storing the tick is a column, a route change and a payload
++   change for one edge case. **Deferred**, and named for Greg in the feedback note. A wordless
++   comment that did ask (*Save & ask* with an empty box) is no longer dropped from the margin: the
++   exclusion is now `commentKind === "bookmark"`.
++2. **A slow store opening over something else.** The press keeps a copy of what is open (`?note=`,
++   `?thread=`, the chat draft, the selection box) and its own press number; the answer opens the
++   dialog only if neither has moved. Whole-app test: a chat opened while the POST is held is still
++   what is open after it lands.
++3. **Focus on close.** The bookmark button is replaced by the mark before the dialog mounts, so the
++   recorded opener was `<body>`. `CommentDialog` no longer records `<body>`, and falls back to the
++   paragraph's `.blk-cmt` before the Comments button. Tested in the same file.
++4. (P2) The margin's hover card now covers both comments and questions (tips.ts, "Yours").
++5. (P2) The visitor sentence above corrected.
++
++Both new whole-app cases were run red with their fix switched off, then green.
+diff --git a/docs/project/comments.md b/docs/project/comments.md
+index fb84020cc..29da4a907 100644
+--- a/docs/project/comments.md
++++ b/docs/project/comments.md
+@@ -70,6 +70,23 @@ The dialog and the drawer show *Whole paragraph —* and the paragraph's opening
+ pressing the mark and deleting, as for any comment.
+ [260912c](../plans/260912c-gutter-bookmark-button-and-the-second-ellipsis.md).
+ 
++**Since 2026-10-02 the press also opens the comment box on it**, once the store has confirmed the
++bookmark. Greg, SPIDERYARN-READING2-9C:
++
++> If I bookmark a block using the icon in the gutter, it should be a bit more visible.
++>
++> And it should be possible to comment on a block without wanting an AI-chat-response. Enable that
++> and make a small UI tweak that will make that clear to the user.
++>
++> — Greg, 2026-10-01
++
++It was possible — press the mark afterwards and type — and nobody found it. Now the dialog is the
++invitation: its box says *"It's yours: the AI doesn't reply"*, the follow-up box under it says *"Ask
++the AI about this…"*, and the gutter's speech bubble says *Chat with the AI*. Closing the dialog
++leaves a bare bookmark, so one press still bookmarks. The mark itself is drawn **filled** and at full
++strength, the one filled glyph in the column.
++[261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
++
+ `status` says **how the model call went, and nothing else**. Every comment made from 2026-08-28
+ carries `none`: no call was ever attempted. That is also what keeps a bookmark invisible to
+ `sweepOrphaned`, which turns an abandoned `pending` row into an error — a bookmark is not an answer
+@@ -841,6 +858,23 @@ loaded.
+ The comment dialog's arrows still walk comments only.
+ [260930f](../plans/260930f-gutter-questions-listed-in-the-comments-drawer.md) has what was deferred.
+ 
++### Every mark says which of three it is <a id="three-kinds"></a>
++
++> And perhaps indicate whether, in general, comments should indicate whether they're a comment from
++> the user that didn't want an AI chat response, or one that did want an AI chat response, or a
++> question with AI chat response.
++>
++> — Greg, 2026-10-01 (SPIDERYARN-READING2-9H)
++
++Since 2026-10-02 the drawer's rows and the margin's lines carry a label: **Comment**, **Comment + AI
++chat**, **Question** (and **Bookmark** in the drawer, for one with no words). Nothing new is stored:
++`commentKind` in [`comment-nav.ts`](../../src/web/comment-nav.ts) reads it off `threadId` (or an
++answer from before 2026-08-28), and a question is an anchored chat, which `askedQuestions` already
++keeps apart from the comments. *Save & ask* whose chat failed before it existed reads as a plain
++comment, which is what it ended up being; a visitor's copy has no `threadId`, so to them an owner's
++comment is *Comment* unless it carries an answer.
++[261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
++
+ ## Where the code is
+ 
+ | File | What it does |
+diff --git a/docs/project/marginalia.md b/docs/project/marginalia.md
+index 7d93056a1..fb40ea71c 100644
+--- a/docs/project/marginalia.md
++++ b/docs/project/marginalia.md
+@@ -54,6 +54,13 @@ one would otherwise be missed; it would not be, so it is not
+   | Debate | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
+   | Citations | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([citations.md](citations.md)) |
+   | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |
++  | Questions | the block the chat is anchored to | **owner only** (a visitor's payload has no chats); in the same line as that block's comments |
++
++  Each comment and question is stamped with its kind (*Comment*, *Comment + AI reply*, *Question*), and
++  a line holding both counts them apart ("1 comment · 1 question"). A question opens to *Open the
++  conversation*, the Comments drawer's own press. Greg, SPIDERYARN-READING2-9H, 2026-10-01;
++  [comments.md § Every mark says which of three it is](comments.md#three-kinds) and
++  [261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
+ 
+   The quote check is there because a visitor's payload carries no staleness flag (no "this was
+   written against an older version of the article"). A list written before a block changed could
+diff --git a/src/web/BlockGutter.tsx b/src/web/BlockGutter.tsx
+index c353a815f..e6d7ed314 100644
+--- a/src/web/BlockGutter.tsx
++++ b/src/web/BlockGutter.tsx
+@@ -602,7 +602,11 @@ export function BlockGutter({
+           data-tip={markTitle(notesBy, comments?.length ?? 1)}
+           aria-label={markName(notesBy, comments?.length ?? 1)}
+         >
+-          <Bookmark size={GLYPH} aria-hidden="true" />
++          {/* **Filled**, the one filled glyph in the column, so a bookmark
++              reads as state at a glance rather than as one more control —
++              Greg, SPIDERYARN-READING2-9C: *"it should be a bit more
++              visible."* Plan 261002j. */}
++          <Bookmark size={GLYPH} fill="currentColor" aria-hidden="true" />
+           {comments && comments.length > 1 && (
+             <span className="blk-n">{comments.length}</span>
+           )}
+@@ -688,13 +692,13 @@ export function BlockGutter({
+              With no conversation on the block, both are unchanged. */
+           data-tip={
+             chatCount
+-              ? `Open a conversation about this paragraph (${chatCount} total)`
+-              : "Chat about this paragraph"
++              ? `Open a conversation with the AI about this paragraph (${chatCount} total)`
++              : "Chat with the AI about this paragraph"
+           }
+           aria-label={
+             chatCount
+-              ? `Open a conversation about this paragraph (${chatCount} total)`
+-              : "Chat about this paragraph"
++              ? `Open a conversation with the AI about this paragraph (${chatCount} total)`
++              : "Chat with the AI about this paragraph"
+           }
+         >
+           <MessageSquare size={GLYPH} aria-hidden="true" />
+@@ -768,7 +772,7 @@ export function BlockGutter({
+               announce(stored ? "Bookmarked this paragraph." : "Bookmark not confirmed.");
+             });
+           }}
+-          data-tip="Bookmark this paragraph"
++          data-tip="Bookmark this paragraph, and comment if you like (no AI)"
+           aria-label="Bookmark this paragraph"
+         >
+           <Bookmark size={GLYPH} aria-hidden="true" />
+diff --git a/src/web/CommentDialog.tsx b/src/web/CommentDialog.tsx
+index 1925de9e4..940cda1f1 100644
+--- a/src/web/CommentDialog.tsx
++++ b/src/web/CommentDialog.tsx
+@@ -218,9 +218,12 @@ export function CommentDialog({
+   const closeRef = useRef<HTMLButtonElement>(null);
+   const openerRef = useRef<HTMLElement | null>(null);
+   const dialogRef = useRef<HTMLElement>(null);
++  /* The block the dialog is on as it closes, for the fallback below. */
++  const blockRef = useRef(comment.blockId);
++  blockRef.current = comment.blockId;
+   useEffect(() => {
+     const opener = document.activeElement;
+-    openerRef.current = opener instanceof HTMLElement ? opener : null;
++    openerRef.current = opener instanceof HTMLElement && opener !== document.body ? opener : null;
+     closeRef.current?.focus();
+     return () => {
+       const back = openerRef.current;
+@@ -229,6 +232,16 @@ export function CommentDialog({
+         back.focus();
+         return;
+       }
++      /* **The gutter's bookmark button is gone by the time this opened**: the
++         press puts the mark in its place at once and the dialog waits for the
++         store, so the opener recorded is `<body>`, or nothing. The mark on the
++         same paragraph is where the reader was — GPT Sol, P1 on plan 261002j,
++         and ChatDialog's gutter fallback does the same. */
++      const mark = document.querySelector<HTMLElement>(`tr[data-block="${blockRef.current}"] .blk-cmt`);
++      if (mark) {
++        mark.focus();
++        return;
++      }
+       document.querySelector<HTMLButtonElement>('.dock button[aria-label="Comments"]')?.focus();
+     };
+   }, []);
+@@ -563,7 +576,7 @@ export function CommentDialog({
+                 setFollowUp("");
+               }
+             }}
+-            placeholder="Ask a follow-up…"
++            placeholder="Ask the AI about this…"
+             aria-label="Ask a follow-up question about this passage"
+           />
+           {dictate.dictation.supported && (
+@@ -787,7 +800,10 @@ function CommentBody({ body, onSave }: { body: string; onSave(next: string | nul
+           setDraft(saved.current);
+         }
+       }}
+-      placeholder="Add a comment…"
++      /* **Says the box is free**, beside the follow-up box that says it is
++         the AI's: Greg, SPIDERYARN-READING2-9C, *"make a small UI tweak that
++         will make that clear to the user."* Plan 261002j. */
++      placeholder="Add a comment. It’s yours: the AI doesn’t reply"
+       aria-label="Your comment on this passage"
+       rows={2}
+     />
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index d2959b4fc..872cbca0f 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -211,7 +211,7 @@ import {
+ import { MODE_CATALOG } from "../mode-catalog.js";
+ import { MODE_LABEL } from "../title-text.js";
+ import type { BlockId, Comment } from "../types.js";
+-import { type AskedQuestion, type DrawerEntry, orderDrawer, passageOf } from "./comment-nav.js";
++import { type AskedQuestion, type DrawerEntry, MARK_KIND_LABEL, commentKind, orderDrawer, passageOf } from "./comment-nav.js";
+ import { armActivationForMode, armActivationForSubMode } from "./activation.js";
+ import { withSubMode, type SubMode } from "./sub-modes.js";
+ /* **This direction only.** `CommandBar` deliberately imports nothing from this
+@@ -4096,6 +4096,9 @@ function Questions({
+           return (
+           <li key={c.id}>
+             <button type="button" className="dock-question" onClick={() => onOpen(c.id)}>
++              {/* Which of three it is, as the question rows above say theirs —
++                  SPIDERYARN-READING2-9H, plan 261002j. `commentKind`. */}
++              <span className="dock-question-kind">{MARK_KIND_LABEL[commentKind(c)]}</span>
+               {passage}
+               {/* **The reader's own words beat the model's**, which is the whole
+                   ordering principle of this feature — and the list read as broken
+diff --git a/src/web/block-bookmark.ts b/src/web/block-bookmark.ts
+index c786fefcb..6e05da00d 100644
+--- a/src/web/block-bookmark.ts
++++ b/src/web/block-bookmark.ts
+@@ -15,7 +15,7 @@ type CreateBookmark = (input: { id: string; blockId: BlockId }) => Promise<Comme
+ 
+ interface Attempt {
+   readonly id: string;
+-  pending?: Promise<boolean>;
++  pending?: Promise<string | null>;
+ }
+ 
+ /**
+@@ -28,7 +28,7 @@ interface Attempt {
+ export function makeBlockBookmarker(
+   create: CreateBookmark,
+   mint: () => string = mintId,
+-): (blockId: BlockId) => Promise<boolean> {
++): (blockId: BlockId) => Promise<string | null> {
+   const attempts = new Map<BlockId, Attempt>();
+ 
+   return (blockId) => {
+@@ -38,9 +38,11 @@ export function makeBlockBookmarker(
+ 
+     const pending = create({ id: attempt.id, blockId })
+       .then((comment) => {
+-        const stored = comment !== null;
+-        if (stored && attempts.get(blockId) === attempt) attempts.delete(blockId);
+-        return stored;
++        if (comment !== null && attempts.get(blockId) === attempt) attempts.delete(blockId);
++        /* The stored id, so the caller can open the comment box on it — the
++           way to add words with no AI reply (plan 261002j). `null` is
++           "not confirmed", as before. */
++        return comment === null ? null : comment.id;
+       })
+       .finally(() => {
+         /* A confirmed write removed the whole attempt above. On failure only
+diff --git a/src/web/comment-nav.ts b/src/web/comment-nav.ts
+index 1d31125b6..2932046e7 100644
+--- a/src/web/comment-nav.ts
++++ b/src/web/comment-nav.ts
+@@ -187,3 +187,50 @@ export function commentsByBlock(
+   }
+   return byBlock;
+ }
++
++/**
++ * **What kind of mark a comment is**, in the reader's terms — Greg,
++ * SPIDERYARN-READING2-9H: *"a comment from the user that didn't want an AI chat
++ * response, or one that did want an AI chat response, or a question with AI chat
++ * response."*
++ *
++ * **What happened, not what was wanted.** Read off what is already stored,
++ * not a field of its own: *Also ask the AI* links the chat the reader then
++ * sends as `threadId`, and a comment from before 2026-08-28 carries the
++ * model's explanation in place (`status` other than `none`) — so the label is
++ * "+ AI reply", which is true of both, rather than "+ AI chat". A reader who
++ * ticked the box and closed the chat draft unsent, or whose chat failed before
++ * it existed, gets `comment`: that is what they ended up with. Storing the
++ * tick itself would be a column, and is deferred in the plan (GPT Sol, P1 on
++ * the plan). A `threadId` outlives a deleted conversation, so the label can
++ * name a reply that is gone; it is still a reply that happened.
++ *
++ * A visitor's copy carries no `threadId` or `status` (public-types.ts), so an
++ * owner's comment reads to them as `comment-ai` only when it carries a legacy
++ * answer, and as `comment` otherwise — less than the owner sees, never more.
++ *
++ * The question — the gutter's "?" or *Chat about this* — is not a comment at
++ * all but an `AskedQuestion`, and `askedQuestions` already leaves out the chats
++ * a comment points at, so the three never overlap.
++ * docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md.
++ */
++export type CommentKind = "bookmark" | "comment" | "comment-ai";
++export type MarkKind = CommentKind | "question";
++
++export function commentKind(c: {
++  readonly body?: string | null | undefined;
++  readonly answer?: string | undefined;
++  readonly threadId?: string | undefined;
++  readonly status?: string | undefined;
++}): CommentKind {
++  if (c.threadId || c.answer || (c.status !== undefined && c.status !== "none")) return "comment-ai";
++  return c.body ? "comment" : "bookmark";
++}
++
++/** One label per kind, for the drawer and the margin alike. */
++export const MARK_KIND_LABEL: Record<MarkKind, string> = {
++  bookmark: "Bookmark",
++  comment: "Comment",
++  "comment-ai": "Comment + AI reply",
++  question: "Question",
++};
+diff --git a/src/web/marginalia/MarginaliaColumn.tsx b/src/web/marginalia/MarginaliaColumn.tsx
+index 35978291c..adf268ab9 100644
+--- a/src/web/marginalia/MarginaliaColumn.tsx
++++ b/src/web/marginalia/MarginaliaColumn.tsx
+@@ -35,7 +35,8 @@ import { captureClientFailure } from "../monitoring.js";
+ import { useRenderCount } from "../perf.js";
+ import { ControlTip, Tooltip } from "../Tooltip.js";
+ import { useIdeasRead } from "../useIdeas.js";
+-import { type HeadStep, type MarginClaim, type MarginComment, type MarginaliaNote, layoutNotes } from "./notes.js";
++import { type HeadStep, type MarginClaim, type MarginEntry, type MarginaliaNote, layoutNotes } from "./notes.js";
++import { MARK_KIND_LABEL } from "../comment-nav.js";
+ import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN } from "./tips.js";
+ import { type Voice, voiceClass, withVoice } from "../voice.js";
+ 
+@@ -58,14 +59,17 @@ const PROVENANCE_TIP = {
+ export function MarginNotesSlot({
+   notes,
+   viewer,
++  onOpenAsked,
+ }: {
+   notes: readonly MarginaliaNote[];
+   /** Whose comments these are, for their card: the reader's own, or the owner's to a visitor. */
+   viewer: "owner" | "visitor";
++  /** Open a question's conversation — the Comments drawer's own press. Owner only. */
++  onOpenAsked?: ((id: string) => void) | undefined;
+ }) {
+   return (
+     <NoteBoundary>
+-      <MarginNotes notes={notes} viewer={viewer} />
++      <MarginNotes notes={notes} viewer={viewer} onOpenAsked={onOpenAsked} />
+     </NoteBoundary>
+   );
+ }
+@@ -128,7 +132,15 @@ function QuestionNote({ depth, text }: { depth: number; text: string }) {
+ 
+ /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
+     prose never carries them. */
+-function MarginNotes({ notes, viewer }: { notes: readonly MarginaliaNote[]; viewer: "owner" | "visitor" }) {
++function MarginNotes({
++  notes,
++  viewer,
++  onOpenAsked,
++}: {
++  notes: readonly MarginaliaNote[];
++  viewer: "owner" | "visitor";
++  onOpenAsked?: ((id: string) => void) | undefined;
++}) {
+   useRenderCount("MarginNotes");
+   return (
+     <div className="marg-note" data-marg-note="">
+@@ -145,7 +157,7 @@ function MarginNotes({ notes, viewer }: { notes: readonly MarginaliaNote[]; view
+           case "citation":
+             return <CitationNote key="citation" items={note.items} />;
+           case "comment":
+-            return <CommentNote key="comment" items={note.items} viewer={viewer} />;
++            return <CommentNote key="comment" items={note.items} viewer={viewer} onOpenAsked={onOpenAsked} />;
+           default: {
+             const never: never = note;
+             return never;
+@@ -311,28 +323,74 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
+   );
+ }
+ 
+-/** The reader's comments. Bare bookmarks never reach here: notes.ts leaves
+-    them to the gutter's mark. */
+-function CommentNote({ items, viewer }: { items: readonly MarginComment[]; viewer: "owner" | "visitor" }) {
++/**
++ * The reader's comments and the questions they asked here, **each stamped with
++ * its kind** — Greg, SPIDERYARN-READING2-9H: a comment that didn't want an AI
++ * reply, one that did, or a question. One shut line however many there are; a
++ * mixed line counts the two apart. Bare bookmarks never reach here: notes.ts
++ * leaves them to the gutter's mark. Plan 261002j.
++ */
++function CommentNote({
++  items,
++  viewer,
++  onOpenAsked,
++}: {
++  items: readonly MarginEntry[];
++  viewer: "owner" | "visitor";
++  onOpenAsked?: ((id: string) => void) | undefined;
++}) {
+   const only = items.length === 1 ? items[0] : undefined;
++  const questions = items.filter((e) => e.as === "question").length;
++  const comments = items.length - questions;
++  const count = [
++    comments > 0 ? plural(comments, "comment", "comments") : null,
++    questions > 0 ? plural(questions, "question", "questions") : null,
++  ]
++    .filter(Boolean)
++    .join(" · ");
+   return (
+     <ShutNote
+       kind="comment"
+-      stamp="Note"
++      stamp={only ? MARK_KIND_LABEL[only.as] : "Yours"}
+       tip={viewer === "owner" ? "comment-own" : "comment-owner"}
+-      line={only ? (only.body ?? "AI answer") : plural(items.length, "note", "notes")}
+-      lineVoice={only?.body ? "reader" : "ui"}
++      line={only ? entryLine(only) : count}
++      lineVoice={only && only.as !== "question" && only.comment.body ? "reader" : "ui"}
+     >
+-      {items.map((c) => (
+-        <div key={c.id} className="marg-open-item">
+-          {c.body && <p className="marg-cmt-body">{c.body}</p>}
+-          {c.answer && <p className="marg-open-answer">{c.answer}</p>}
+-        </div>
+-      ))}
++      {items.map((e) =>
++        e.as === "question" ? (
++          <div key={`q:${e.asked.id}`} className="marg-open-item">
++            <p className="marg-open-head">
++              <span className="marg-stamp">{MARK_KIND_LABEL.question}</span>{" "}
++              {e.asked.quote !== undefined ? `“${e.asked.quote}”` : "About this paragraph"}
++            </p>
++            {onOpenAsked && (
++              <button type="button" className="linky marg-open-asked" onClick={() => onOpenAsked(e.asked.id)}>
++                Open the conversation
++              </button>
++            )}
++          </div>
++        ) : (
++          <div key={e.comment.id} className="marg-open-item">
++            {!only && (
++              <p className="marg-open-head">
++                <span className="marg-stamp">{MARK_KIND_LABEL[e.as]}</span>
++              </p>
++            )}
++            {e.comment.body && <p className="marg-cmt-body">{e.comment.body}</p>}
++            {e.comment.answer && <p className="marg-open-answer">{e.comment.answer}</p>}
++          </div>
++        ),
++      )}
+     </ShutNote>
+   );
+ }
+ 
++/** The shut line for one entry: the reader's words, or what it is about. */
++function entryLine(e: MarginEntry): string {
++  if (e.as === "question") return e.asked.quote ?? "About this paragraph";
++  return e.comment.body ?? (e.comment.answer ? "AI answer" : "Asked the AI about this passage");
++}
++
+ /**
+  * **An idea's stamp: a real button**, so it can be reached by keyboard, opened
+  * by a tap where there is nothing to hover with, and pressed without the cell's
+diff --git a/src/web/marginalia/notes.ts b/src/web/marginalia/notes.ts
+index c5d253a84..2f0cb166b 100644
+--- a/src/web/marginalia/notes.ts
++++ b/src/web/marginalia/notes.ts
+@@ -29,6 +29,7 @@ import type { PublicClaimDebateRow, PublicComment } from "../../public-types.js"
+ import { findQuote } from "../../quote-match.js";
+ import { blockIndex, sectionNodesOf } from "../../section-path.js";
+ import { titleVoice } from "../tree.js";
++import { type AskedQuestion, type CommentKind, commentKind } from "../comment-nav.js";
+ import type { Voice } from "../voice.js";
+ 
+ /** A Debate claim row, the owner's or a visitor's — every owner row is one. */
+@@ -59,8 +60,19 @@ export type MarginaliaNote =
+   | { kind: "debate"; items: MarginClaim[] }
+   /** Works first cited in this block. Owner only — the caller's rule. */
+   | { kind: "citation"; items: CitedWork[] }
+-  /** The reader's own comments and bookmarks on this block. */
+-  | { kind: "comment"; items: MarginComment[] };
++  /** The reader's own comments on this block, and the questions they asked
++      from it — each with its kind (SPIDERYARN-READING2-9H, plan 261002j). */
++  | { kind: "comment"; items: MarginEntry[] };
++
++/**
++ * **One of the reader's marks, with which of three it is** — a comment, a
++ * comment that also asked the AI, or a question (a conversation started from
++ * the passage). `commentKind` in comment-nav.ts says which; a bare bookmark
++ * never gets here.
++ */
++export type MarginEntry =
++  | { as: Exclude<CommentKind, "bookmark">; comment: MarginComment }
++  | { as: "question"; asked: AskedQuestion };
+ 
+ /**
+  * **What other modes have already stored**, each already filtered by the caller
+@@ -71,6 +83,8 @@ export type MarginSources = {
+   claims?: readonly MarginClaim[] | null;
+   citations?: readonly CitedWork[] | null;
+   comments?: readonly MarginComment[] | null;
++  /** Questions the reader asked from a passage — the owner's only; a visitor's payload has no chats. */
++  asked?: readonly AskedQuestion[] | null;
+ };
+ 
+ type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
+@@ -269,11 +283,19 @@ function groupedNotes(
+      criterion. A visitor's payload never carries one. GPT Sol, F6 on the plan.
+      **Nor is a bare bookmark**: with no words and no answer there is nothing to
+      say, the gutter already marks its block, and in the browser a column of
+-     lone "Bookmark" stamps read as noise (2026-10-02). */
++     lone "Bookmark" stamps read as noise (2026-10-02). "Bare" is
++     `commentKind`'s bookmark, so a wordless comment that asked the AI (it has a
++     `threadId`) still shows — GPT Sol, P1 on plan 261002j. */
+   for (const comment of more.comments ?? []) {
+     if ("criterionId" in comment && comment.criterionId !== undefined) continue;
+-    if (!comment.body && !comment.answer) continue;
+-    if (index.has(comment.blockId)) put(comment.blockId, "comment", comment);
++    const as = commentKind(comment);
++    if (as !== "bookmark" && index.has(comment.blockId)) put(comment.blockId, "comment", { as, comment });
++  }
++  /* **The questions asked from a passage, in the same line as its comments**:
++     Greg named them as the third kind of the same thing (9H), and a second line
++     per block would spend the density 261002b bought. */
++  for (const asked of more.asked ?? []) {
++    if (index.has(asked.blockId)) put(asked.blockId, "comment", { as: "question", asked });
+   }
+ 
+   return inGroupedOrder(grouped);
+diff --git a/src/web/marginalia/tips.ts b/src/web/marginalia/tips.ts
+index 34767210b..929085d4f 100644
+--- a/src/web/marginalia/tips.ts
++++ b/src/web/marginalia/tips.ts
+@@ -56,9 +56,9 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
+     how: "From Citations mode. The title is the work's own; the reason it is cited was written by AI from the article.",
+   },
+   "comment-own": {
+-    head: "Your note",
+-    what: "A comment you left on this passage.",
+-    how: "Written by you, with the AI's answer under it if you asked for one. All your notes are in the drawer at the foot of the window.",
++    head: "Yours",
++    what: "What you left on this passage, each saying which it is: a Comment (no AI reply), a Comment + AI reply (you also asked the AI), or a Question (you asked the AI with ? or Chat about this).",
++    how: "Written by you. All of them are in the Comments drawer at the foot of the window.",
+   },
+   "comment-owner": {
+     head: "A note",
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 767c65c17..f5ccc4e92 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -1530,29 +1530,9 @@ export function Reader({
+       ? (owner.citations.citations?.citations ?? null)
+       : null;
+   const marginRoom = marginOpen && fit.margW > 0;
+-  const marginNotes = useMemo(() => {
+-    if (!marginRoom) return null;
+-    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
+-      faq: marginaliaFaq,
+-      claims: marginaliaClaims,
+-      citations: marginaliaCitations,
+-      comments,
+-    });
+-    const out = new Map<BlockId, ReactElement>();
+-    for (const [blockId, notes] of byBlock)
+-      out.set(blockId, <MarginNotesSlot notes={notes} viewer={capability.kind === "owner" ? "owner" : "visitor"} />);
+-    return out;
+-  }, [
+-    marginRoom,
+-    article.tree,
+-    article.blocks,
+-    marginaliaIdeas,
+-    marginaliaFaq,
+-    marginaliaClaims,
+-    marginaliaCitations,
+-    comments,
+-  ]);
+-  useMarginLayout(marginRoom, marginNotes);
++  /* `marginNotes` itself is built below `openAskedFromDrawer`, because the
++     questions the reader asked sit in the margin too and open through it
++     (plan 261002j). */
+ 
+   /**
+    * Reading order, not ask order — the panel's arrows walk you *down the
+@@ -1835,6 +1815,48 @@ export function Reader({
+     [askedList, openChatThread, jumpTo, mode, setMode],
+   );
+ 
++  /**
++   * **Marginalia: the notes beside each block** — MarginaliaColumn.tsx; the
++   * inputs are gathered above, where `marginRoom` is.
++   *
++   * The owner's comments **and the questions they asked**, each stamped with
++   * its kind, open through the drawer's own press (SPIDERYARN-READING2-9H,
++   * plan 261002j). A visitor's payload has no chats, so `askedList` is empty
++   * for them and there is nothing to open.
++   */
++  const marginViewer = capability.kind === "owner" ? "owner" : "visitor";
++  const openAskedFromMargin = marginViewer === "owner" ? openAskedFromDrawer : undefined;
++  const marginNotes = useMemo(() => {
++    if (!marginRoom) return null;
++    const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
++      faq: marginaliaFaq,
++      claims: marginaliaClaims,
++      citations: marginaliaCitations,
++      comments,
++      asked: marginViewer === "owner" ? askedList : null,
++    });
++    const out = new Map<BlockId, ReactElement>();
++    for (const [blockId, notes] of byBlock)
++      out.set(
++        blockId,
++        <MarginNotesSlot notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />,
++      );
++    return out;
++  }, [
++    marginRoom,
++    article.tree,
++    article.blocks,
++    marginaliaIdeas,
++    marginaliaFaq,
++    marginaliaClaims,
++    marginaliaCitations,
++    comments,
++    askedList,
++    marginViewer,
++    openAskedFromMargin,
++  ]);
++  useMarginLayout(marginRoom, marginNotes);
++
+   /* **A *new* conversation anchored to the whole block** — the other half of
+      what an anchor can be, and the one that draws no mark in the prose. The
+      paragraph's opening words go into the composer so the reader can see which
+@@ -2008,12 +2030,38 @@ export function Reader({
+    *
+    * Memoised on `create`, which is stable for one slug, so the retry memory and
+    * callback survive renders without making memoised `TableView` redraw.
++   *
++   * **And then the comment box opens on it**, since 2026-10-02 — Greg,
++   * SPIDERYARN-READING2-9C: *"it should be possible to comment on a block
++   * without wanting an AI-chat-response."* It always was, by pressing the mark
++   * afterwards, and nobody found it. The bookmark is still stored by the one
++   * press; the dialog is the invitation to add words, which are free, and
++   * closing it leaves a bare bookmark. Only once the store has confirmed, so
++   * the dialog never opens on a row that is about to vanish. Plan 261002j.
++   *
++   * **And only if nothing else has opened since the press, and no later press
++   * has been made.** The store answers after a round trip, and in that time
++   * the reader may have opened a comment, a chat or the selection box — an
++   * answer arriving then must not replace what they chose. `surface` is what
++   * is open now; the press keeps a copy and the answer compares. GPT Sol, P1
++   * on the plan.
+    */
++  const surface = useRef<readonly unknown[]>([]);
++  surface.current = [note, thread, chatDraft, annotating];
++  const bookmarkPress = useRef(0);
+   const createComment = owner?.comments.create;
+-  const bookmarkBlock = useMemo(
+-    () => (createComment ? makeBlockBookmarker(createComment) : undefined),
+-    [createComment],
+-  );
++  const bookmarkBlock = useMemo(() => {
++    if (!createComment) return undefined;
++    const bookmark = makeBlockBookmarker(createComment);
++    return async (blockId: BlockId): Promise<boolean> => {
++      const mine = ++bookmarkPress.current;
++      const before = surface.current;
++      const id = await bookmark(blockId);
++      const unchanged = surface.current.every((v, i) => Object.is(v, before[i]));
++      if (id !== null && mine === bookmarkPress.current && unchanged) void setNote(id);
++      return id !== null;
++    };
++  }, [createComment, setNote]);
+ 
+   const selectProse = useCallback(
+     /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes
+diff --git a/src/web/styles/gutter.css b/src/web/styles/gutter.css
+index 6bb156521..f486893c8 100644
+--- a/src/web/styles/gutter.css
++++ b/src/web/styles/gutter.css
+@@ -789,10 +789,12 @@ td.text.kind-heading .blk-gutter {
+ 
+    `pointer-events: auto` because the container above is `none` and this is the
+    one slot with no reveal rule to hand it back — it is always visible, so it was
+-   the one that would have shipped un-clickable. */
+-.blk-cmt { color: var(--highlight); opacity: 0.75; pointer-events: auto; }
+-.blk-cmt:hover,
+-.blk-cmt:focus-visible { opacity: 1; }
++   the one that would have shipped un-clickable.
++
++   **Full strength, and the glyph filled** (BlockGutter.tsx), since 2026-10-02:
++   it was an outline at 0.75, and Greg's report 9C was that a bookmark should be
++   "a bit more visible". Plan 261002j. */
++.blk-cmt { color: var(--highlight); pointer-events: auto; }
+ .blk-n {
+   font-family: var(--font-mono);
+   font-size: 0.58rem;
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index e391b8d0b..fa640ff5f 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -193,6 +193,11 @@ p.marg-shut {
+   line-clamp: 3;
+   overflow: hidden;
+ }
++/* A question's way back to its conversation (plan 261002j): a `.linky`
++   button, held to its own width rather than stretched across the grid cell. */
++.marg-open-asked {
++  justify-self: start;
++}
+ .marg-open a {
+   color: inherit;
+   text-decoration: underline 1px var(--rule-strong);
+diff --git a/tests/a-gutter-bookmark-opens-the-comment-box.test.tsx b/tests/a-gutter-bookmark-opens-the-comment-box.test.tsx
+new file mode 100644
+index 000000000..db6378f9e
+--- /dev/null
++++ b/tests/a-gutter-bookmark-opens-the-comment-box.test.tsx
+@@ -0,0 +1,371 @@
++// @vitest-environment jsdom
++/**
++ * **Pressing the gutter's bookmark opens the comment box on it.**
++ *
++ * A bookmark used to be a silent mark: one press and nothing on screen said
++ * where to add words, short of selecting text and reaching for the AI. Now the
++ * press stores a whole-block bookmark (one POST, a `blockId` and no `quote`),
++ * and once the store confirms, the comment dialog opens on the new comment with
++ * its own box, whose placeholder says the AI does not reply, and `?note=` names
++ * it. Nothing is sent to chat.
++ *
++ * 1. the owner presses `.blk-bookmark`: one POST, no quote; then `.cmt-dialog`
++ *    is open on that id with the "the AI doesn’t reply" box, and no chat call;
++ * 2. a failed store opens nothing and leaves `?note=` unset.
++ *
++ * Whole app (`App` under `StrictMode`, real nuqs adapter), because the press
++ * crosses BlockGutter, Reader and CommentDialog. Harness cut down from
++ * tests/glossary-ask-in-chat.test.tsx.
++ * docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md,
++ * SPIDERYARN-READING2-9C.
++ */
++import { act, createElement, StrictMode } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { Article } from "../src/types.js";
++import type { PublicArticle } from "../src/public-types.js";
++
++const who = vi.hoisted(() => {
++  let user: { id: string; email: string } | null = null;
++  const listeners = new Set<() => void>();
++  return {
++    get: () => user,
++    set(next: { id: string; email: string } | null) {
++      user = next;
++      for (const fn of [...listeners]) fn();
++    },
++    subscribe(fn: () => void) {
++      listeners.add(fn);
++      return () => {
++        listeners.delete(fn);
++      };
++    },
++  };
++});
++
++vi.mock("../src/web/useSession.js", async () => {
++  const { useSyncExternalStore } = await import("react");
++  return {
++    useSession: () => ({
++      session: null,
++      user: useSyncExternalStore(who.subscribe, who.get, who.get),
++      loading: false,
++    }),
++  };
++});
++
++const authListeners: ((event: string, session: unknown) => void)[] = [];
++
++vi.mock("../src/web/lib/supabase.js", () => ({
++  supabase: {
++    auth: {
++      getSession: async () => ({ data: { session: { access_token: "t" } } }),
++      refreshSession: async () => ({ data: { session: { access_token: "t" } } }),
++      onAuthStateChange: (fn: (event: string, session: unknown) => void) => {
++        authListeners.push(fn);
++        return { data: { subscription: { unsubscribe() {} } } };
++      },
++      signOut: async () => ({ error: null }),
++    },
++  },
++  googleSignInAvailable: false,
++}));
++
++class NoResizeObserver {
++  observe(): void {}
++  unobserve(): void {}
++  disconnect(): void {}
++}
++Object.assign(globalThis, { ResizeObserver: NoResizeObserver });
++Object.defineProperty(window, "matchMedia", {
++  writable: true,
++  value: (query: string) => ({
++    matches: false,
++    media: query,
++    addEventListener() {},
++    removeEventListener() {},
++    addListener() {},
++    removeListener() {},
++    onchange: null,
++    dispatchEvent: () => false,
++  }),
++});
++Object.defineProperty(window, "scrollTo", { writable: true, value: () => {} });
++if (!(globalThis as { CSS?: unknown }).CSS) {
++  (globalThis as { CSS?: unknown }).CSS = { escape: (s: string) => s };
++}
++
++/** Every request the page made, in order, with its body if it had one. */
++const trace: { url: string; method: string; body: unknown }[] = [];
++
++const SLUG = "a-piece";
++const PARAGRAPH = "The first paragraph of the piece.";
++
++const BLOCKS: PublicArticle["blocks"] = [
++  {
++    id: "spya-aaaaaa",
++    tag: "h1",
++    kind: "heading",
++    level: 1,
++    text: "A piece",
++    words: 2,
++    html: "<h1>A piece</h1>",
++    gistable: false,
++  },
++  {
++    id: "spya-bbbbbb",
++    tag: "p",
++    kind: "text",
++    text: PARAGRAPH,
++    words: 6,
++    html: `<p>${PARAGRAPH}</p>`,
++    gistable: true,
++  },
++];
++
++const TREE: PublicArticle["tree"] = {
++  version: "test",
++  generator: "test",
++  slug: SLUG,
++  rootId: "n0",
++  nodes: {
++    n0: {
++      id: "n0",
++      depth: 0,
++      parent: null,
++      children: [],
++      range: ["spya-aaaaaa", "spya-bbbbbb"],
++      title: "A piece",
++      gist: "What the piece says.",
++    },
++  },
++};
++
++const ARTICLE: PublicArticle = {
++  meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
++  blocks: BLOCKS,
++  tree: TREE,
++  comments: [],
++  searches: [],
++  assets: undefined,
++  navLabelStatus: "ready",
++};
++
++const OWNED: Article = {
++  highPowerSince: null,
++  titleOverridden: false,
++  blocks: BLOCKS,
++  tree: TREE,
++  assets: undefined,
++  navLabelStatus: "ready",
++  sourceGuess: undefined,
++  meta: { slug: SLUG, title: "A piece", url: "https://example.com/a" },
++};
++
++/** The status the comments POST answers with. Set per case. */
++let storeStatus = 200;
++/** When set, the comments POST waits for it — a slow store. */
++let held: Promise<void> | null = null;
++
++function json(body: unknown, status = 200): Response {
++  return new Response(JSON.stringify(body), {
++    status,
++    headers: { "content-type": "application/json" },
++  });
++}
++
++function reply(url: string, method: string, body: unknown): Response {
++  if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
++  if (url === `/api/article/${SLUG}`) return json(OWNED);
++  if (url === "/api/reader") return json({ experimentalSince: null });
++  if (url === `/api/comments/${SLUG}` && method === "POST") {
++    if (storeStatus !== 200) return json({ error: "no" }, storeStatus);
++    const b = body as { id: string; blockId: string };
++    return json({
++      comment: {
++        id: b.id,
++        blockId: b.blockId,
++        status: "none",
++        createdAt: "2026-10-02T10:00:00.000Z",
++      },
++    });
++  }
++  if (method === "POST") return new Response(null, { status: 204 });
++  if (url.startsWith("/api/comments/")) return json({ comments: [] });
++  if (url.startsWith("/api/chat/")) return json({ threads: [] });
++  if (url.startsWith("/api/glossary/")) return json({ status: "none", glossary: null });
++  if (url === "/api/jobs") return json({ jobs: [] });
++  return json({});
++}
++
++const { App } = await import("../src/web/App.js");
++const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
++const activation = await import("../src/web/activation.js");
++
++let host: HTMLDivElement;
++let root: Root;
++
++enableHistorySync();
++
++const OWNER = { id: "owner-1", email: "a@example.com" };
++
++beforeEach(() => {
++  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++  trace.length = 0;
++  storeStatus = 200;
++  held = null;
++  who.set(null);
++  activation.resetActivations();
++  resetExperimental();
++  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
++    const url = String(input);
++    const method = init?.method ?? "GET";
++    let body: unknown;
++    try {
++      body = init?.body ? JSON.parse(String(init.body)) : undefined;
++    } catch {
++      body = String(init?.body);
++    }
++    trace.push({ url, method, body });
++    if (held && method === "POST" && url === `/api/comments/${SLUG}`) {
++      return held.then(() => reply(url, method, body));
++    }
++    return Promise.resolve(reply(url, method, body));
++  });
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(async () => {
++  await act(async () => root.unmount());
++  host.remove();
++  vi.unstubAllGlobals();
++});
++
++async function settle(turns = 6): Promise<void> {
++  for (let i = 0; i < turns; i++) {
++    await act(async () => {
++      await new Promise((go) => setTimeout(go, 0));
++    });
++  }
++}
++
++async function open(search: string): Promise<void> {
++  history.replaceState(null, "", `/read/${SLUG}${search}`);
++  await act(async () => {
++    root.render(
++      createElement(StrictMode, null, createElement(NuqsAdapter, null, createElement(App, null))),
++    );
++  });
++  await act(async () => {
++    const user = who.get();
++    const posed = user === null ? null : { user };
++    for (const fn of [...authListeners]) fn(user === null ? "SIGNED_OUT" : "SIGNED_IN", posed);
++  });
++  await settle();
++}
++
++const param = (name: string): string | null => new URLSearchParams(location.search).get(name);
++
++/** `?note=` is written behind nuqs' throttle, so a single read is a race. */
++async function until(check: () => boolean): Promise<void> {
++  for (let i = 0; i < 60 && !check(); i++) {
++    await act(async () => {
++      await new Promise((go) => setTimeout(go, 10));
++    });
++  }
++  await settle();
++}
++
++const commentPosts = () =>
++  trace.filter((r) => r.method === "POST" && r.url === `/api/comments/${SLUG}`);
++const chatRequests = () => trace.filter((r) => r.url.startsWith("/api/chat/") && r.method !== "GET");
++
++async function pressBookmark(): Promise<void> {
++  const button = host.querySelector<HTMLButtonElement>(
++    'tr[data-block="spya-bbbbbb"] .blk-bookmark',
++  );
++  expect(button, "the owner's paragraph offers a bookmark").not.toBeNull();
++  expect(button?.getAttribute("aria-label")).toBe("Bookmark this paragraph");
++  await act(async () => button?.click());
++  await settle();
++}
++
++describe("the gutter's bookmark button", () => {
++  it("stores a whole-block bookmark, then opens the comment box on it", async () => {
++    who.set(OWNER);
++    await open("");
++    await pressBookmark();
++
++    const posts = commentPosts();
++    expect(posts, "exactly one store").toHaveLength(1);
++    const sent = posts[0]?.body as Record<string, unknown>;
++    expect(sent.blockId).toBe("spya-bbbbbb");
++    expect(sent).not.toHaveProperty("quote");
++    expect(sent).not.toHaveProperty("start");
++
++    await until(() => host.querySelector(".cmt-dialog") !== null);
++    const dialog = host.querySelector(".cmt-dialog");
++    expect(dialog, "the comment dialog opened").not.toBeNull();
++    expect(dialog?.getAttribute("aria-label")).toBe("Bookmark");
++    const box = dialog?.querySelector<HTMLTextAreaElement>("textarea.cmt-note");
++    expect(box, "with its comment box").not.toBeNull();
++    expect(box?.placeholder).toContain("the AI doesn’t reply");
++    await until(() => param("note") === sent.id);
++    expect(param("note")).toBe(sent.id);
++    expect(chatRequests(), "nothing was asked of the AI").toHaveLength(0);
++  });
++
++  /* GPT Sol, P1 on plan 261002j: an answer arriving after the reader opened
++     something else must not replace it. */
++  it("does not open over a chat the reader started while the store was answering", async () => {
++    who.set(OWNER);
++    let release!: () => void;
++    held = new Promise<void>((go) => {
++      release = go;
++    });
++    await open("");
++    await pressBookmark();
++    expect(commentPosts()).toHaveLength(1);
++
++    const chat = host.querySelector<HTMLButtonElement>('tr[data-block="spya-bbbbbb"] .block-chat');
++    await act(async () => chat?.click());
++    await settle();
++    expect(host.querySelector(".chat-dialog"), "the chat draft opened").not.toBeNull();
++
++    await act(async () => release());
++    await settle(12);
++    expect(param("note")).toBeNull();
++    expect(host.querySelector(".cmt-dialog")).toBeNull();
++    expect(host.querySelector(".chat-dialog"), "the chat is still what is open").not.toBeNull();
++  });
++
++  /* GPT Sol, P1 on plan 261002j: the button that opened it is gone, replaced
++     by the mark, so closing puts focus on the mark rather than nowhere. */
++  it("hands focus to the paragraph's new mark when the dialog closes", async () => {
++    who.set(OWNER);
++    await open("");
++    await pressBookmark();
++    await until(() => host.querySelector(".cmt-dialog") !== null);
++    const close = host.querySelector<HTMLButtonElement>(".cmt-dialog .cmt-close");
++    await act(async () => close?.click());
++    await until(() => host.querySelector(".cmt-dialog") === null);
++    const mark = host.querySelector('tr[data-block="spya-bbbbbb"] .blk-cmt');
++    expect(mark, "the paragraph has its mark").not.toBeNull();
++    expect(document.activeElement).toBe(mark);
++  });
++
++  it("opens nothing when the store fails", async () => {
++    who.set(OWNER);
++    storeStatus = 500;
++    await open("");
++    await pressBookmark();
++    await settle();
++
++    expect(commentPosts().length, "the press did try to store").toBeGreaterThanOrEqual(1);
++    expect(host.querySelector(".cmt-dialog")).toBeNull();
++    expect(param("note")).toBeNull();
++  });
++});
+diff --git a/tests/asked-questions-in-the-comments-drawer.test.tsx b/tests/asked-questions-in-the-comments-drawer.test.tsx
+index 4a09a6409..0b047ba8a 100644
+--- a/tests/asked-questions-in-the-comments-drawer.test.tsx
++++ b/tests/asked-questions-in-the-comments-drawer.test.tsx
+@@ -165,6 +165,20 @@ describe("the Comments drawer lists the questions the reader asked", () => {
+     expect(row?.textContent).toContain("In 1998 the lab");
+   });
+ 
++  /* SPIDERYARN-READING2-9H, plan 261002j: the comment rows say their kind too. */
++  it("labels each comment row with its kind, beside the question rows' own", () => {
++    paint({
++      comments: [
++        COMMENT,
++        { ...COMMENT, id: "cmt-ai", threadId: "thr-x" },
++        { id: "cmt-bare", blockId: FIRST, quote: "q", start: 0, createdAt: "t", status: "none" },
++      ],
++      questions: [HELP],
++    });
++    const kinds = [...host.querySelectorAll(".dock-question-kind")].map((k) => k.textContent);
++    expect(kinds.sort()).toEqual(["Bookmark", "Comment", "Comment + AI reply", "Question"]);
++  });
++
+   /* No preview line: `lastLine` is not kept live, so a question minted in this
+      visit would say "thinking…" under the answer the reader just read — the
+      report's own sequence. GPT Sol's plan review, finding 2. */
+diff --git a/tests/block-bookmark.test.ts b/tests/block-bookmark.test.ts
+index 5f0a5515e..f220bc434 100644
+--- a/tests/block-bookmark.test.ts
++++ b/tests/block-bookmark.test.ts
+@@ -34,8 +34,8 @@ describe("the whole-paragraph bookmark press", () => {
+       () => ID,
+     );
+ 
+-    expect(await bookmark(BLOCK)).toBe(false);
+-    expect(await bookmark(BLOCK)).toBe(true);
++    expect(await bookmark(BLOCK)).toBe(null);
++    expect(await bookmark(BLOCK)).toBe(ID);
+     expect(sent).toEqual([ID, ID]);
+   });
+ 
+@@ -57,6 +57,6 @@ describe("the whole-paragraph bookmark press", () => {
+     const second = bookmark(BLOCK);
+     expect(sent).toEqual([ID]);
+     release(stored(ID));
+-    expect(await Promise.all([first, second])).toEqual([true, true]);
++    expect(await Promise.all([first, second])).toEqual([ID, ID]);
+   });
+ });
+diff --git a/tests/block-gutter.test.tsx b/tests/block-gutter.test.tsx
+index 8fa362047..77a81e331 100644
+--- a/tests/block-gutter.test.tsx
++++ b/tests/block-gutter.test.tsx
+@@ -16,6 +16,7 @@
+  * measured in a real browser and the numbers are in
+  * docs/plans/prose-gutter-icons.md.
+  */
++import { readFileSync } from "node:fs";
+ import { act } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+@@ -261,6 +262,18 @@ describe("the comment marker", () => {
+     expect(host.querySelector(".blk-gutter")?.hasAttribute("data-marked")).toBe(false);
+   });
+ 
++  /* SPIDERYARN-READING2-9C, Greg, 2026-10-01: *"If I bookmark a block using
++     the icon in the gutter, it should be a bit more visible."* The mark is the
++     one filled glyph in the column, at full strength. Plan 261002j. */
++  it("is drawn filled, and at full strength, so a bookmark is easy to see", () => {
++    paint([comment("c1", 5)]);
++    expect(host.querySelector(".blk-cmt svg")?.getAttribute("fill")).toBe("currentColor");
++    const css = readFileSync("src/web/styles/gutter.css", "utf8");
++    const rule = css.match(/^\.blk-cmt \{([^}]*)\}/m)?.[1] ?? "";
++    expect(rule).toContain("color: var(--highlight)");
++    expect(rule).not.toMatch(/opacity: 0\.\d/);
++  });
++
+   it("is absent on a block with no comments", () => {
+     paint();
+     expect(host.querySelector(".blk-cmt")).toBeNull();
+@@ -334,7 +347,7 @@ describe("the chat button", () => {
+ 
+   it("offers to open one of them, rather than promising a new one", () => {
+     /* **This assertion has been red once on purpose**, the way the "?" copy
+-       below was. Until 2026-09-05 the chip said *"Chat about this paragraph (2
++       below was. Until 2026-09-05 the chip said *"Chat with the AI about this paragraph (2
+        already)"* over a press that started a third — it advertised state it
+        would not show, which is the report that produced the fix
+        (docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md).
+@@ -345,13 +358,13 @@ describe("the chat button", () => {
+        the button reporting more than it does. GPT Sol, F-05. */
+     paint(undefined, 2);
+     const b = host.querySelector(".block-chat") as HTMLButtonElement;
+-    expect(b.getAttribute("data-tip")).toBe("Open a conversation about this paragraph (2 total)");
++    expect(b.getAttribute("data-tip")).toBe("Open a conversation with the AI about this paragraph (2 total)");
+     /* **The same sentence, and that is the fix** — unlike the permalink and the
+        "?", whose two names diverge on purpose. The accessible name here used to
+        be the bare singular, so the number on screen was the one thing a screen
+        reader could not hear. */
+     expect(b.getAttribute("aria-label")).toBe(
+-      "Open a conversation about this paragraph (2 total)",
++      "Open a conversation with the AI about this paragraph (2 total)",
+     );
+   });
+ 
+@@ -360,8 +373,8 @@ describe("the chat button", () => {
+     // count, and the press really does begin a conversation.
+     paint();
+     const b = host.querySelector(".block-chat") as HTMLButtonElement;
+-    expect(b.getAttribute("data-tip")).toBe("Chat about this paragraph");
+-    expect(b.getAttribute("aria-label")).toBe("Chat about this paragraph");
++    expect(b.getAttribute("data-tip")).toBe("Chat with the AI about this paragraph");
++    expect(b.getAttribute("aria-label")).toBe("Chat with the AI about this paragraph");
+   });
+ });
+ 
+@@ -626,6 +639,14 @@ describe("the bookmark button", () => {
+   };
+   const button = () => host.querySelector<HTMLButtonElement>(".blk-bookmark");
+ 
++  /* SPIDERYARN-READING2-9C: *"it should be possible to comment on a block
++     without wanting an AI-chat-response … make a small UI tweak that will make
++     that clear"*. The free door says it is free. Plan 261002j. */
++  it("says a comment can go with the bookmark, and that the AI does not answer it", () => {
++    paint(undefined, 0, { bookmark: stored(true).fn });
++    expect(button()?.getAttribute("data-tip")).toBe("Bookmark this paragraph, and comment if you like (no AI)");
++  });
++
+   it("is drawn only where the callback is — a visitor gets none", () => {
+     paint();
+     expect(button()).toBeNull();
+diff --git a/tests/comment-nav.test.ts b/tests/comment-nav.test.ts
+index 4fcbae3e2..8f5fa9052 100644
+--- a/tests/comment-nav.test.ts
++++ b/tests/comment-nav.test.ts
+@@ -7,6 +7,8 @@
+ import { describe, expect, it } from "vitest";
+ import type { Comment } from "../src/types.js";
+ import {
++  MARK_KIND_LABEL,
++  commentKind,
+   commentsByBlock,
+   orderComments,
+   passageOf,
+@@ -219,3 +221,29 @@ describe("commentsByBlock", () => {
+     expect(commentsByBlock([lost], blocks).get("spya-nowhere")).toHaveLength(1);
+   });
+ });
++
++/* SPIDERYARN-READING2-9H: every comment says which of three it is.
++   docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md. */
++describe("commentKind", () => {
++  it("tells a bookmark, a plain comment and one that asked the AI apart", () => {
++    expect(commentKind({ status: "none" })).toBe("bookmark");
++    expect(commentKind({ status: "none", body: "mine" })).toBe("comment");
++    expect(commentKind({ status: "none", body: "mine", threadId: "t1" })).toBe("comment-ai");
++    expect(commentKind({ status: "none", threadId: "t1" })).toBe("comment-ai");
++    /* A comment from before 2026-08-28 carries its answer in place. */
++    expect(commentKind({ status: "done", answer: "because" })).toBe("comment-ai");
++    expect(commentKind({ status: "error" })).toBe("comment-ai");
++    /* A visitor's copy: no status, no threadId. */
++    expect(commentKind({ body: "theirs" })).toBe("comment");
++    expect(commentKind({ body: "theirs", answer: "an answer" })).toBe("comment-ai");
++  });
++
++  it("has one label per kind, the question's included", () => {
++    expect(MARK_KIND_LABEL).toEqual({
++      bookmark: "Bookmark",
++      comment: "Comment",
++      "comment-ai": "Comment + AI reply",
++      question: "Question",
++    });
++  });
++});
+diff --git a/tests/glossary-ask-in-chat.test.tsx b/tests/glossary-ask-in-chat.test.tsx
+index 489a0b302..de5658f10 100644
+--- a/tests/glossary-ask-in-chat.test.tsx
++++ b/tests/glossary-ask-in-chat.test.tsx
+@@ -431,7 +431,7 @@ describe("Ask in chat, from the glossary's refusal", () => {
+     /* A draft about the paragraph, opened from its gutter — the one kind of
+        chat draft that survives a mode switch, because `Reader` holds it. */
+     const chip = host.querySelector<HTMLButtonElement>(
+-      'tr[data-block="spya-bbbbbb"] button[aria-label="Chat about this paragraph"]',
++      'tr[data-block="spya-bbbbbb"] button[aria-label="Chat with the AI about this paragraph"]',
+     );
+     expect(chip, "the paragraph offers a chat").not.toBeNull();
+     await act(async () => chip?.click());
+diff --git a/tests/gutter-control-card.test.tsx b/tests/gutter-control-card.test.tsx
+index 7658fd90d..c007201d6 100644
+--- a/tests/gutter-control-card.test.tsx
++++ b/tests/gutter-control-card.test.tsx
+@@ -101,7 +101,7 @@ describe("the gutter's controls", () => {
+     for (const [sel, words] of [
+       [".blk-bookmark", "Bookmark this paragraph"],
+       [".blk-permalink", ID],
+-      [".block-chat", "Chat about this paragraph"],
++      [".block-chat", "Chat with the AI about this paragraph"],
+       [".blk-help", "Ask the AI for help with this paragraph"],
+       [".blk-more", "More for this paragraph"],
+     ] as const) {
+diff --git a/tests/marginalia-note-cards.test.tsx b/tests/marginalia-note-cards.test.tsx
+index 2e7c30cda..b1c89f985 100644
+--- a/tests/marginalia-note-cards.test.tsx
++++ b/tests/marginalia-note-cards.test.tsx
+@@ -65,7 +65,7 @@ const EACH: readonly [MarginaliaNote, MargTipKey][] = [
+   [{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }, "faq"],
+   [{ kind: "debate", items: [claim] }, "debate"],
+   [{ kind: "citation", items: [work] }, "citation"],
+-  [{ kind: "comment", items: [comment] }, "comment-own"],
++  [{ kind: "comment", items: [{ as: "comment", comment }] }, "comment-own"],
+ ];
+ 
+ function paint(notes: MarginaliaNote[], viewer: "owner" | "visitor" = "owner"): void {
+@@ -101,7 +101,7 @@ describe("a note in the margin", () => {
+   });
+ 
+   it("tells a visitor whose comment it is", async () => {
+-    paint([{ kind: "comment", items: [comment] }], "visitor");
++    paint([{ kind: "comment", items: [{ as: "comment", comment }] }], "visitor");
+     expect(trigger().getAttribute("data-marg-tip")).toBe("comment-owner");
+   });
+ 
+@@ -175,7 +175,7 @@ describe("whose words a shut line is (fonts.md)", () => {
+   });
+ 
+   it("a comment is the reader's", () => {
+-    paint([{ kind: "comment", items: [comment] }]);
++    paint([{ kind: "comment", items: [{ as: "comment", comment }] }]);
+     expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-reader")).toBe(true);
+   });
+ 
+diff --git a/tests/marginalia-notes.test.ts b/tests/marginalia-notes.test.ts
+index 014e55db1..e832bf953 100644
+--- a/tests/marginalia-notes.test.ts
++++ b/tests/marginalia-notes.test.ts
+@@ -13,8 +13,11 @@ import {
+   arcAt,
+   headPath,
+   layoutNotes,
++  type MarginEntry,
+ } from "../src/web/marginalia/notes.js";
+ 
++const entryId = (e: MarginEntry) => (e.as === "question" ? e.asked.id : e.comment.id);
++
+ const ids = ["spya-aaaaa1", "spya-aaaaa2", "spya-aaaaa3", "spya-aaaaa4", "spya-aaaaa5", "spya-aaaaa6"];
+ /* The first block is a heading, as a part's first block usually is. */
+ const blocks = ids.map((id, i) => ({
+@@ -312,7 +315,47 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
+       { id: "m3", blockId: "spya-aaaaa2", createdAt: "t", body: "a referee note", status: "none", criterionId: "k" },
+     ] as unknown as MarginComment[];
+     const here = marginaliaNotes(null, quoted, null, { comments }).get("spya-aaaaa2") ?? [];
+-    expect(here[0]?.kind === "comment" && here[0].items.map((c) => c.id)).toEqual(["m1"]);
++    expect(here[0]?.kind === "comment" && here[0].items.map(entryId)).toEqual(["m1"]);
++  });
++
++  /* *Save & ask* with an empty box is allowed (AnnotateDialog): no words, no
++     answer, but a conversation. It is not a bare bookmark. GPT Sol, plan 261002j. */
++  it("keeps a wordless comment that asked the AI", () => {
++    const comments = [
++      { id: "m4", blockId: "spya-aaaaa2", createdAt: "t", status: "none", threadId: "t4" },
++    ] as unknown as MarginComment[];
++    const here = marginaliaNotes(null, quoted, null, { comments }).get("spya-aaaaa2") ?? [];
++    expect(here[0]?.kind === "comment" && here[0].items.map((e) => [e.as, entryId(e)])).toEqual([
++      ["comment-ai", "m4"],
++    ]);
++  });
++
++  /* SPIDERYARN-READING2-9H: each says which of three it is, and the questions
++     the reader asked from a passage sit with the comments on it. Plan 261002j. */
++  it("marks each comment's kind, and puts the questions asked here in the same line", () => {
++    const comments = [
++      { id: "m1", blockId: "spya-aaaaa2", createdAt: "t", body: "mine", status: "none" },
++      { id: "m2", blockId: "spya-aaaaa2", createdAt: "t", body: "and ask", status: "none", threadId: "t9" },
++    ] as unknown as MarginComment[];
++    const asked = [
++      { id: "t1", blockId: "spya-aaaaa2", createdAt: "t" },
++      { id: "t2", blockId: "spya-aaaaa4", createdAt: "t", quote: "q", start: 0 },
++      { id: "t3", blockId: "spya-zzzzzz", createdAt: "t" },
++    ];
++    const notes = marginaliaNotes(null, quoted, null, { comments, asked });
++    const here = notes.get("spya-aaaaa2") ?? [];
++    expect(here).toHaveLength(1);
++    expect(here[0]?.kind === "comment" && here[0].items.map((e) => [e.as, entryId(e)])).toEqual([
++      ["comment", "m1"],
++      ["comment-ai", "m2"],
++      ["question", "t1"],
++    ]);
++    const there = notes.get("spya-aaaaa4") ?? [];
++    expect(there[0]?.kind === "comment" && there[0].items.map((e) => [e.as, entryId(e)])).toEqual([
++      ["question", "t2"],
++    ]);
++    /* A question about a block this version no longer has is not drawn. */
++    expect([...notes.keys()].sort()).toEqual(["spya-aaaaa2", "spya-aaaaa4"]);
+   });
+ 
+   it("orders the kinds on one block: question, idea, FAQ, Debate, citations, the reader's own", () => {
+diff --git a/tests/marginalia-shut-notes.test.tsx b/tests/marginalia-shut-notes.test.tsx
+index b8a6be945..3ea9e2eec 100644
+--- a/tests/marginalia-shut-notes.test.tsx
++++ b/tests/marginalia-shut-notes.test.tsx
+@@ -108,13 +108,65 @@ describe("a shut line", () => {
+   it("opens a reader's comment to the whole of it, its line cut at one", () => {
+     const body = "Not sure I buy this claim, and here is a long reason why that will not fit on one line.";
+     const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", body, status: "none" } as unknown as MarginComment;
+-    const el = draw([{ kind: "comment", items: [comment] }]);
++    const el = draw([{ kind: "comment", items: [{ as: "comment", comment }] }]);
+     const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
+-    expect(button?.textContent).toContain("Note");
++    expect(button?.querySelector(".marg-stamp")?.textContent).toBe("Comment");
+     act(() => button?.click());
+     expect(el.querySelector(".marg-open")?.textContent).toContain(body);
+   });
+ 
++  /* SPIDERYARN-READING2-9H, plan 261002j: the stamp is the kind. */
++  it("stamps a comment that asked the AI, and a question, with their kinds", () => {
++    const comment = {
++      id: "c",
++      blockId: "spya-aaaaa1",
++      createdAt: "t",
++      body: "why n=12?",
++      status: "none",
++      threadId: "t9",
++    } as unknown as MarginComment;
++    const ai = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
++    expect(ai.querySelector(".marg-shut-button .marg-stamp")?.textContent).toBe("Comment + AI reply");
++  });
++
++  it("counts comments and questions apart, labels each opened row, and opens a question's conversation", () => {
++    const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", body: "mine", status: "none" } as unknown as MarginComment;
++    const opened: string[] = [];
++    const el = document.createElement("div");
++    host = el;
++    document.body.append(el);
++    const nextRoot = createRoot(el);
++    root = nextRoot;
++    act(() =>
++      nextRoot.render(
++        <MarginNotesSlot
++          viewer="owner"
++          onOpenAsked={(id) => opened.push(id)}
++          notes={[
++            {
++              kind: "comment",
++              items: [
++                { as: "comment", comment },
++                { as: "question", asked: { id: "t1", blockId: "spya-aaaaa1", createdAt: "t", quote: "the bound holds" } },
++              ],
++            },
++          ]}
++        />,
++      ),
++    );
++    const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
++    expect(button?.textContent).toContain("1 comment · 1 question");
++    act(() => button?.click());
++    const stamps = [...el.querySelectorAll(".marg-open .marg-stamp")].map((s) => s.textContent);
++    expect(stamps).toEqual(["Comment", "Question"]);
++    expect(el.querySelector(".marg-open")?.textContent).toContain("the bound holds");
++    const open = [...el.querySelectorAll<HTMLButtonElement>(".marg-open button")].find(
++      (b) => b.textContent === "Open the conversation",
++    );
++    act(() => open?.click());
++    expect(opened).toEqual(["t1"]);
++  });
++
+   it("shows the first lines of an AI answer under the reader's comment", () => {
+     const comment = {
+       id: "c",
+@@ -124,7 +176,7 @@ describe("a shut line", () => {
+       body: "Check this claim.",
+       answer: "The article answers it in the next paragraph.",
+     } as unknown as MarginComment;
+-    const el = draw([{ kind: "comment", items: [comment] }]);
++    const el = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
+     const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
+     act(() => button?.click());
+     expect(el.querySelector(".marg-open-answer")?.textContent).toContain("The article answers it");
+diff --git a/tests/public-network-trace.test.tsx b/tests/public-network-trace.test.tsx
+index cf1b1ef75..8e64ab828 100644
+--- a/tests/public-network-trace.test.tsx
++++ b/tests/public-network-trace.test.tsx
+@@ -723,13 +723,13 @@ const buttonNamed = (label: string): HTMLButtonElement | null =>
+   [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === label) ?? null;
+ 
+ /* **The empty-paragraph name.** Since 2026-09-05 a chip with conversations
+-   behind it announces itself as *"Open a conversation about this paragraph (n
++   behind it announces itself as *"Open a conversation with the AI about this paragraph (n
+    total)"* instead, because the press reopens one — so a case that seeds
+    `storedChats` on the block it is counting will not find its chip here. The
+    two cases that use this helper have none. */
+ const chatButtons = () =>
+   [...host.querySelectorAll("button")].filter(
+-    (b) => b.getAttribute("aria-label") === "Chat about this paragraph",
++    (b) => b.getAttribute("aria-label") === "Chat with the AI about this paragraph",
+   );
+ 
+ /**

@@ -1234,15 +1234,20 @@ export const refereeParam = createParser<RefereeView>({
   .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
-/* ------------------------------------------------ Remember's two sub-modes --
+/* ---------------------------------------------- Remember's three sub-modes --
    docs/plans/260831al-review-quiz-sub-mode.md. */
 
 /** Free recall, or the questions the piece asks you back. */
-export const REMEMBER_VIEWS = ["recall", "quiz"] as const;
+/* In the order the chips are drawn: Recall, Tutorial (since 2026-10-02,
+   docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md),
+   Quiz. */
+export const REMEMBER_VIEWS = ["recall", "tutorial", "quiz"] as const;
 export type RememberView = (typeof REMEMBER_VIEWS)[number];
 
 /**
- * Which half of Remember is open — `recall` (the default, omitted) or `quiz`.
+ * Which part of Remember is open — `recall` (the default, omitted), `tutorial`
+ * or `quiz`. Tutorial is a conversation like Recall, with its own one thread,
+ * so `?thread=` follows it exactly as it follows Recall; only Quiz clears it.
  *
  * **This does not break url-state.md's rule the way `?stance=` would have.** A
  * stance changes nothing on screen and is therefore component state; a sub-mode

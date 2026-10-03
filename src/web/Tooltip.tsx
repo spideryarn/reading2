@@ -457,7 +457,8 @@ function FocusReach({
  * button would not move should not have to read two paragraphs first.
  *
  * Four callers, and the second generalised it. The fourth is the live
- * conversation's **microphone setup** card (LiveButton.tsx), which reports the
+ * conversation's **noise reduction** card (LiveStatus.tsx, under Advanced since
+ * 261002j), which reports the
  * placement actually resolved while the selector beside it may still read
  * `Auto` — not the mid-flight sense, and it was already here when this said
  * three. The bar's **experimental
