@@ -1,6 +1,6 @@
 # Quiz: Answer as an icon, the whole answer on screen, and Next under the mark
 
-**Status: built in one stage; GPT Sol's code review and the browser check follow below.** Evidence: `tests/quiz-panel.test.tsx` § "the answer box" and § "Next is the thing to press once the answer is marked", seen red (11 failing) before the change. Where §§ 1–3 and § After GPT Sol's plan review differ, the later section is what was built.
+**Status: built, reviewed twice by GPT Sol, checked in a browser at three widths, on `dev`.** Evidence: `tests/quiz-panel.test.tsx` § "the answer box" and § "Next is the thing to press once the answer is marked", seen red (11 failing) before the change. Where §§ 1–3 and § After GPT Sol's plan review differ, the later section is what was built.
 
 **Was: plan, not built.** Three reports from Greg, 2026-10-03, all filed from Quiz on the Entropy
 article, all confirmed as an admin's by `scripts/feedback-reporter.ts` (exit 0 on each).
@@ -173,3 +173,44 @@ two differ.
   finished mark matches the box, so there is one filled button at a time: Answer before the mark,
   Next after it. No new guard in `submit`, no new copy. And no `<form>`: the fill is a local class,
   `quiz-go`, beside `chat-send`.
+
+## What landed (2026-10-03)
+
+The stage is `88dd7e84a`; the reviewer's tests, the feedback note and this section are the commit
+after it. The deferred sweep is queue entry `qi-zkt2mtf9` (a proposal until Greg authorises it).
+
+**GPT Sol's code review** of `88dd7e84a`
+([the answer](261003i-quiz-answer-icon-whole-answer-and-next-after-the-mark-code-review-sol.md)):
+*accept with the fixes made*. F1–F4 confirmed done; no P0 or P1. One finding, **F5 (P2,
+established, fixed by the reviewer)**: nothing tested the width-change re-fit — removing
+`watch.observe(el)` left the suite green. It added tests for the same answer across widths, the
+border allowance, a height-only notification not re-measuring, the observer disconnecting and
+re-attaching when the reading filter hides and shows the box, Next keeping keyboard focus as its
+look changes, and re-marking unchanged words; six broken variants seen red. Tests only; no source
+change. One round, so discovery closed there.
+
+**Browser check** (Sonnet, Playwright, `fowler-phrenology`, 1440x900 / 820x1180 / 390x844, at
+`88dd7e84a`):
+
+- Answer: 36px box, 18px icon drawn; outlined and `aria-disabled` on an empty box, filled orange
+  with words in it; the card opens, headed *Answer*, naming the shortcut.
+- The box: a 120-word answer gave `clientHeight == scrollHeight` at every width (276 / 669 / 451px),
+  and re-fitted through 1440 → 820 → 390 → 820 → 1440 with the text unchanged; it shrank back to the
+  four-row 102px when the text was cut. No `ResizeObserver` warnings.
+- After the mark: the order is critique, step row, *Show a reference answer*; Next is the filled
+  36px box and Answer the outline, still pressable; an edit hands the fill back; focus on Next
+  survives the mark landing; Ctrl+Enter submits.
+- **A cost, measured:** with that 120-word answer the grown box pushes the step row below the fold
+  on the iPad and the phone (it is on screen on desktop), so the reader scrolls the band to reach
+  Next. That is "show the whole answer" doing what was asked; at the couple of sentences the box
+  asks for, the row stays on screen. Not auto-scrolled: moving the band while the critique is being
+  read is worse.
+- The chevron inside the promoted Next draws at 16px against the send icon's 18px. Left.
+
+**Gates:** `tests/quiz-panel.test.tsx` 101 passing; `npm run typecheck` clean. The full suite
+(`npm test`, 30,938 tests) had six red files. One was this change's: 
+`tests/chat-send-is-the-primary-control.test.tsx` keeps a reviewed list of every `.chat-send`
+selector, and the two `quiz-go` rules were not on it — which is that guard doing its job. They are
+on it now, with an assertion that they use Send's tokens. The other five are the fresh-worktree
+reds that want `npm run build` and `npm run build:fleet` (`has a build to inspect`, the fleet
+`server.ts wiring` pair, `fleet-composed-access`), not run here and untouched by this change.

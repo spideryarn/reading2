@@ -604,6 +604,103 @@ describe("the answer box", () => {
   });
 });
 
+describe("the whole answer after a width change", () => {
+  const watches: Array<{
+    tick(): void;
+    observe: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+  }> = [];
+
+  beforeEach(() => {
+    watches.length = 0;
+    vi.stubGlobal("ResizeObserver", class {
+      observe = vi.fn();
+      disconnect = vi.fn();
+      constructor(callback: ResizeObserverCallback) {
+        watches.push({
+          tick: () => callback([], this as unknown as ResizeObserver),
+          observe: this.observe,
+          disconnect: this.disconnect,
+        });
+      }
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("fits the unchanged answer on narrower and wider widths, including its borders", () => {
+    paint(owner());
+    type("the same long answer across widths");
+    const box = host.querySelector("textarea")!;
+    let width = 500;
+    let height = 240;
+    // A browser's scrollHeight cannot shrink below a height still set inline.
+    const measure = vi.fn(() => Math.max(height, (Number.parseFloat(box.style.height) || 0) - 2));
+    Object.defineProperties(box, {
+      clientWidth: { configurable: true, get: () => width },
+      scrollHeight: { configurable: true, get: measure },
+      offsetHeight: { configurable: true, get: () => 102 },
+      clientHeight: { configurable: true, get: () => 100 },
+    });
+    const watch = watches.find((w) => w.observe.mock.calls.some(([el]) => el === box));
+    expect(watch, "the mounted box was never observed").toBeDefined();
+    act(() => watch!.tick());
+    expect(box.style.height).toBe("242px");
+
+    // The fit itself delivers a height notification. It must not measure again.
+    measure.mockClear();
+    act(() => watch!.tick());
+    expect(measure).not.toHaveBeenCalled();
+
+    width = 287;
+    height = 640;
+    act(() => watch!.tick());
+    expect(box.style.height).toBe("642px");
+    width = 820;
+    height = 160;
+    act(() => watch!.tick());
+    expect(box.style.height).toBe("162px");
+    expect(box.value).toBe("the same long answer across widths");
+  });
+
+  it("disconnects when the filter hides the box, then fits and observes the new box", () => {
+    vi.spyOn(HTMLTextAreaElement.prototype, "scrollHeight", "get").mockReturnValue(240);
+    const read: ReadSoFar = {
+      levels: new Map([[KNOWN as BlockId, 4 as const]]),
+      status: "loaded",
+      bodyWords: new Map([[KNOWN as BlockId, 100]]),
+    };
+    const o = owner();
+    const paintRead = (readSoFar: ReadSoFar) => act(() => root.render(
+      createElement(QuizPanel, { owner: o, blocks: BLOCKS, readSoFar, onJump: () => {} }),
+    ));
+    paintRead(read);
+    type("an unchanged draft");
+    const first = host.querySelector("textarea")!;
+    const oldWatch = watches.find((w) => w.observe.mock.calls.some(([el]) => el === first))!;
+    expect(oldWatch).toBeDefined();
+
+    paintRead({ ...read, status: "loading" });
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(oldWatch.disconnect).toHaveBeenCalledOnce();
+    paintRead(read);
+    const second = host.querySelector("textarea")!;
+    expect(second).not.toBe(first);
+    expect(second.value).toBe("an unchanged draft");
+    expect(second.style.height).toBe("240px");
+    const newWatch = watches.find((w) => w.observe.mock.calls.some(([el]) => el === second))!;
+    expect(newWatch).toBeDefined();
+    expect(newWatch).not.toBe(oldWatch);
+
+    act(() => root.unmount());
+    expect(newWatch.disconnect).toHaveBeenCalledOnce();
+    root = createRoot(host);
+  });
+});
+
 /* spya-smev24: *"I was expecting there to be a button at the bottom underneath,
    sort of for, you know, next question."* There was one, small and grey, below
    the reference-answer disclosure. So the step row sits under the mark, and
@@ -631,6 +728,7 @@ describe("Next is the thing to press once the answer is marked", () => {
     const step = host.querySelector(".quiz-step");
     const reveal = host.querySelector(".quiz-reveal");
     expect(step && reveal).toBeTruthy();
+    expect(step?.previousElementSibling?.classList.contains("quiz-reply")).toBe(true);
     expect(
       (step as Element).compareDocumentPosition(reveal as Element) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -656,6 +754,8 @@ describe("Next is the thing to press once the answer is marked", () => {
       expect(filled("Answer")).toBe(false);
       /* Quiet, not refused: the same words may still be marked again. */
       expect(off(buttons("Answer")[0])).toBeFalsy();
+      press("Answer");
+      expect(marked).toEqual([{ id: q1.id, answer: TYPED }]);
       press("Next question");
       expect(host.textContent).toContain("Question 2 of 2");
     },
@@ -666,6 +766,17 @@ describe("Next is the thing to press once the answer is marked", () => {
     type(`${TYPED}, and to time`);
     expect(filled("Next question")).toBe(false);
     expect(filled("Answer")).toBe(true);
+  });
+
+  it("keeps keyboard focus on Next as the mark finishes and its look changes", () => {
+    marked_(attempt("marking"));
+    const [next] = buttons("Next question");
+    act(() => next!.focus());
+    expect(document.activeElement).toBe(next);
+    paint(owner({ quiz: batch([q1, q2]), attempt: attempt("done") }));
+    expect(filled("Next question")).toBe(true);
+    expect(buttons("Next question")[0]).toBe(next);
+    expect(document.activeElement).toBe(next);
   });
 
   it("fills nothing on the last question, where there is no next", () => {
