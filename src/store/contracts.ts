@@ -1977,6 +1977,16 @@ export interface RealtimeSession {
   /** The realtime model as OpenAI created it, not as we asked. */
   model: string;
   transcriptionModel: string | null;
+  /** GPT-Live only: the text model behind the voice, and the rate card for `backend` reports. */
+  backendModel: string | null;
+  /** GPT-Live only: OpenAI's id for the session, once its create call has answered. */
+  providerSessionId: string | null;
+  /**
+   * GPT-Live only: the highest cumulative voice-seconds figure already billed.
+   * Zero on a Realtime session. **A copy read outside a lock is stale by the
+   * time you use it** — only `advanceVoiceSeconds` may act on it.
+   */
+  voiceSecondsReported: number;
   issuedAt: string;
   /** The last instant a usage report is accepted. Server-owned; not the token's expiry. */
   acceptsUntil: string;
@@ -1988,7 +1998,7 @@ export interface RealtimeSession {
 /**
  * **The journal of live conversations** — issued, connected, closed.
  *
- * Deliberately four narrow methods rather than a general upsert. Every one of
+ * Deliberately a few narrow methods rather than a general upsert. Every one of
  * them is a fact arriving at a known moment, and there is no operation here that
  * rewrites what a session was: `markConnected` and `close` set a timestamp that
  * was null, and a second call must not move it. A general `update` would make
@@ -2026,6 +2036,45 @@ export interface RealtimeSessionStore {
    * its absence as a session still running.
    */
   close(id: string, ownerId: string, at: string, reason: string | null): Promise<void>;
+  /**
+   * The browser was never given a usable ticket. Sets the close time and
+   * reason, preserving a known provider id even when accounting failed.
+   * Not `close`, which also backfills
+   * `connectedAt` on the reasoning that a session which reached its end must
+   * have connected; this one did not. First close wins, as there.
+   */
+  closeUnopened(id: string, ownerId: string, at: string, reason: string, providerSessionId?: string): Promise<void>;
+  /**
+   * **GPT-Live's voice meter: advance the high-water mark and write the row for
+   * the difference, or do neither.**
+   *
+   * GPT-Live reports voice seconds as a running total, so two reports are not
+   * two bills. This locks the session row, hands the locked row to `rowFor`,
+   * and — when `rowFor` returns a row — inserts it and moves
+   * `voiceSecondsReported` up to `seconds`, all in one transaction. `rowFor`
+   * returning `null` means the report adds nothing (a repeat, or an older
+   * figure): nothing is written and the mark stays.
+   *
+   * `rowFor` is a callback because the pricing lives in src/live.ts and must
+   * see the mark **as read under the lock**; a copy from an earlier `find`
+   * would let two concurrent reports both bill the same seconds. It may throw
+   * to refuse the report, which rolls the transaction back.
+   *
+   * `providerSessionId`, when given, is recorded in the same transaction — the
+   * create route's one write after OpenAI answers.
+   *
+   * Returns the row written, or `null`. Also `null` when there is no such
+   * session for this owner, in which case `rowFor` is never called.
+   */
+  advanceVoiceSeconds(
+    id: string,
+    ownerId: string,
+    opts: {
+      seconds: number;
+      providerSessionId?: string;
+      rowFor: (locked: RealtimeSession) => AiCallRow | null;
+    },
+  ): Promise<AiCallRow | null>;
 }
 
 /* ------------------------------------------------------------- feedback -- */

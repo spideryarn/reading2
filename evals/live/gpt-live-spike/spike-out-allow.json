@@ -1,0 +1,984 @@
+{
+ "notes": {
+  "audioContextState": "running",
+  "sessionHttp": {
+   "status": 201,
+   "sessionId": "live_u1_EUrRCp3oNAW04iwqigqdEYngTq5KnmX7",
+   "raw": {
+    "session": {
+     "id": "live_u1_EUrRCp3oNAW04iwqigqdEYngTq5KnmX7"
+    },
+    "transportType": "webrtc",
+    "topKeys": [
+     "session",
+     "transport"
+    ]
+   },
+   "answerSdpChars": 1680,
+   "offerSdpChars": 1656
+  },
+  "remoteTrack": "audio",
+  "pcState": "connected",
+  "dcOpen": "oai-events"
+ },
+ "events": [
+  {
+   "t": 263,
+   "wall": 1791023962210,
+   "dir": "note",
+   "ev": {
+    "type": "note.audioContextState",
+    "v": "running"
+   }
+  },
+  {
+   "t": 544,
+   "wall": 1791023962490,
+   "dir": "note",
+   "ev": {
+    "type": "note.sessionHttp",
+    "v": {
+     "status": 201,
+     "sessionId": "live_u1_EUrRCp3oNAW04iwqigqdEYngTq5KnmX7",
+     "raw": {
+      "session": {
+       "id": "live_u1_EUrRCp3oNAW04iwqigqdEYngTq5KnmX7"
+      },
+      "transportType": "webrtc",
+      "topKeys": [
+       "session",
+       "transport"
+      ]
+     },
+     "answerSdpChars": 1680,
+     "offerSdpChars": 1656
+    }
+   }
+  },
+  {
+   "t": 545,
+   "wall": 1791023962492,
+   "dir": "note",
+   "ev": {
+    "type": "note.remoteTrack",
+    "v": "audio"
+   }
+  },
+  {
+   "t": 547,
+   "wall": 1791023962493,
+   "dir": "note",
+   "ev": {
+    "type": "note.pcState",
+    "v": "connecting"
+   }
+  },
+  {
+   "t": 1424,
+   "wall": 1791023963371,
+   "dir": "note",
+   "ev": {
+    "type": "note.pcState",
+    "v": "connected"
+   }
+  },
+  {
+   "t": 1680,
+   "wall": 1791023963626,
+   "dir": "note",
+   "ev": {
+    "type": "note.dcOpen",
+    "v": "oai-events"
+   }
+  },
+  {
+   "t": 1806,
+   "wall": 1791023963753,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrRCcE0ewVxBqmlbaLdU",
+    "type": "session.started",
+    "session": {
+     "id": "live_u1_EUrRCp3oNAW04iwqigqdEYngTq5KnmX7",
+     "expires_at": 1791031162,
+     "model": "gpt-live-1",
+     "instructions": "You are a voice companion helping someone read an article. Be brief: one or two short spoken sentences. British English.\n# Delegation Policy\nYou know nothing about the article yourself. Whenever the user asks what the article says about anything, delegate to the backend and never guess. While the backend works you may say you are checking.",
+     "audio": {
+      "output": {
+       "voice": "marin"
+      }
+     },
+     "delegation": {
+      "type": "responses",
+      "responses": {
+       "model": "gpt-6-luna",
+       "instructions": "You are the backend for a live voice conversation about an article. To answer any question about what the article says, you MUST call lookup_passage with the topic, then answer in one plain spoken sentence using only what it returned.",
+       "reasoning": {
+        "effort": "low"
+       },
+       "tools": [
+        {
+         "type": "function",
+         "name": "lookup_passage",
+         "description": "Look up what the article says about a topic",
+         "parameters": {
+          "type": "object",
+          "properties": {
+           "topic": {
+            "type": "string"
+           }
+          },
+          "required": [
+           "topic"
+          ],
+          "additionalProperties": false
+         }
+        }
+       ],
+       "tool_choice": "auto"
+      }
+     },
+     "status": "active",
+     "input": [],
+     "client": {
+      "data_channel": {
+       "allowed_client_events": [
+        "response.item.create",
+        "response.create",
+        "session.close"
+       ],
+       "allowed_server_events": [
+        {
+         "type": "session.started"
+        },
+        {
+         "type": "session.input_transcript.delta"
+        },
+        {
+         "type": "session.output_transcript.delta"
+        },
+        {
+         "type": "session.delegation.created"
+        },
+        {
+         "type": "session.usage.updated"
+        },
+        {
+         "type": "session.closed"
+        },
+        {
+         "type": "error"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.created"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.output_item.done"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.completed"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.incomplete"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.failed"
+        },
+        {
+         "type": "response.event",
+         "response_event": "error"
+        }
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "t": 3308,
+   "wall": 1791023965255,
+   "dir": "out",
+   "ev": {
+    "type": "response.item.create",
+    "item": {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "What does the article say about the lighthouse?"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "t": 3309,
+   "wall": 1791023965255,
+   "dir": "out",
+   "ev": {
+    "type": "response.create"
+   }
+  },
+  {
+   "t": 3474,
+   "wall": 1791023965421,
+   "dir": "in",
+   "ev": {
+    "type": "session.delegation.created",
+    "offset_ms": 1200,
+    "delegation": {
+     "id": "item_EUrRFzNQl03ZP4XAWy4qp",
+     "type": "delegation",
+     "response_id": "resp_023cf341c3f1bf07006ac0db5d69c087d194fe53cdda90854d",
+     "target": "responses"
+    },
+    "event_id": "event_EUrRFItShxb5D8wtzDWn0"
+   }
+  },
+  {
+   "t": 3477,
+   "wall": 1791023965423,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrRFsU65XZsVYn8bAOlu",
+    "type": "response.event",
+    "delegation_id": "item_EUrRFzNQl03ZP4XAWy4qp",
+    "event": {
+     "type": "response.created",
+     "response": {
+      "id": "resp_023cf341c3f1bf07006ac0db5d69c087d194fe53cdda90854d",
+      "object": "response",
+      "created_at": 1791023965,
+      "status": "in_progress",
+      "access_programs": null,
+      "background": false,
+      "completed_at": null,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_023cf341c3f1bf07016ac0db5a8a8487d1a6de8c479d3c7814",
+      "prompt_cache_key": "live:05e77dff676c35f5e0042a443e81f59e1acbb694a761d73996bf919c232",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "auto",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": null,
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 0
+    }
+   }
+  },
+  {
+   "t": 4059,
+   "wall": 1791023966005,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrRGB4SonURgrY1ESxXh",
+    "type": "response.event",
+    "delegation_id": "item_EUrRFzNQl03ZP4XAWy4qp",
+    "event": {
+     "type": "response.output_item.done",
+     "item": {
+      "id": "fc_023cf341c3f1bf07006ac0db5df63887d1827971fa73f6dfce",
+      "type": "function_call",
+      "status": "completed",
+      "arguments": "{\"topic\":\"lighthouse\"}",
+      "call_id": "call_PtkpGDmnPNPz4XGKuHutHcVB",
+      "name": "lookup_passage"
+     },
+     "output_index": 0,
+     "sequence_number": 10
+    }
+   }
+  },
+  {
+   "t": 4091,
+   "wall": 1791023966037,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 1800,
+    "end_ms": 2000,
+    "delta": " Alright",
+    "event_id": "event_EUrRGsYXHC2Z5smMCq8xS"
+   }
+  },
+  {
+   "t": 4195,
+   "wall": 1791023966141,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 2000,
+    "end_ms": 2200,
+    "delta": ",",
+    "event_id": "event_EUrRG4fmcZHsLQg7rqqTl"
+   }
+  },
+  {
+   "t": 4212,
+   "wall": 1791023966159,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrRGUnBveEvOhg4yeGnl",
+    "type": "response.event",
+    "delegation_id": "item_EUrRFzNQl03ZP4XAWy4qp",
+    "event": {
+     "type": "response.completed",
+     "response": {
+      "id": "resp_023cf341c3f1bf07006ac0db5d69c087d194fe53cdda90854d",
+      "object": "response",
+      "created_at": 1791023965,
+      "status": "completed",
+      "access_programs": null,
+      "background": false,
+      "completed_at": 1791023966,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_023cf341c3f1bf07016ac0db5a8a8487d1a6de8c479d3c7814",
+      "prompt_cache_key": "live:05e77dff676c35f5e0042a443e81f59e1acbb694a761d73996bf919c232",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+       "input_tokens": 811,
+       "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 0
+       },
+       "output_tokens": 20,
+       "output_tokens_details": {
+        "reasoning_tokens": 0
+       },
+       "total_tokens": 831
+      },
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 11
+    }
+   }
+  },
+  {
+   "t": 4214,
+   "wall": 1791023966160,
+   "dir": "out",
+   "ev": {
+    "type": "response.item.create",
+    "item": {
+     "type": "function_call_output",
+     "call_id": "call_PtkpGDmnPNPz4XGKuHutHcVB",
+     "output": "The article says the lighthouse was painted teal in 1987."
+    }
+   }
+  },
+  {
+   "t": 4214,
+   "wall": 1791023966160,
+   "dir": "out",
+   "ev": {
+    "type": "response.create"
+   }
+  },
+  {
+   "t": 4379,
+   "wall": 1791023966325,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrRG7X3Ea4QxCdc6QzoO",
+    "type": "response.event",
+    "delegation_id": "item_EUrRFzNQl03ZP4XAWy4qp",
+    "event": {
+     "type": "response.created",
+     "response": {
+      "id": "resp_023cf341c3f1bf07006ac0db5e50ac87d1bd3f0477df083b96",
+      "object": "response",
+      "created_at": 1791023966,
+      "status": "in_progress",
+      "access_programs": null,
+      "background": false,
+      "completed_at": null,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_023cf341c3f1bf07006ac0db5d69c087d194fe53cdda90854d",
+      "prompt_cache_key": "live:05e77dff676c35f5e0042a443e81f59e1acbb694a761d73996bf919c232",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "auto",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": null,
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 0
+    }
+   }
+  },
+  {
+   "t": 4630,
+   "wall": 1791023966576,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 2400,
+    "end_ms": 2600,
+    "delta": " checking",
+    "event_id": "event_EUrRGv1OO85IAZxo8xPG1"
+   }
+  },
+  {
+   "t": 4876,
+   "wall": 1791023966822,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrRGrIdYl1TKnrb9b85n",
+    "type": "response.event",
+    "delegation_id": "item_EUrRFzNQl03ZP4XAWy4qp",
+    "event": {
+     "type": "response.output_item.done",
+     "item": {
+      "id": "msg_023cf341c3f1bf07006ac0db5ebac887d1aabe2a16dea35683",
+      "type": "message",
+      "status": "completed",
+      "content": [
+       {
+        "type": "output_text",
+        "annotations": [],
+        "logprobs": [],
+        "text": "The article says the lighthouse was painted teal in 1987."
+       }
+      ],
+      "phase": "final_answer",
+      "role": "assistant"
+     },
+     "output_index": 0,
+     "sequence_number": 19
+    }
+   }
+  },
+  {
+   "t": 5010,
+   "wall": 1791023966957,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrRGiTzpATUlNT2oY0wx",
+    "type": "response.event",
+    "delegation_id": "item_EUrRFzNQl03ZP4XAWy4qp",
+    "event": {
+     "type": "response.completed",
+     "response": {
+      "id": "resp_023cf341c3f1bf07006ac0db5e50ac87d1bd3f0477df083b96",
+      "object": "response",
+      "created_at": 1791023966,
+      "status": "completed",
+      "access_programs": null,
+      "background": false,
+      "completed_at": 1791023966,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_023cf341c3f1bf07006ac0db5d69c087d194fe53cdda90854d",
+      "prompt_cache_key": "live:05e77dff676c35f5e0042a443e81f59e1acbb694a761d73996bf919c232",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+       "input_tokens": 856,
+       "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 0
+       },
+       "output_tokens": 17,
+       "output_tokens_details": {
+        "reasoning_tokens": 0
+       },
+       "total_tokens": 873
+      },
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 20
+    }
+   }
+  },
+  {
+   "t": 5221,
+   "wall": 1791023967167,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 3000,
+    "end_ms": 3200,
+    "delta": " for",
+    "event_id": "event_EUrRHAfZXPllq6DAlJ97V"
+   }
+  },
+  {
+   "t": 5399,
+   "wall": 1791023967346,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 3200,
+    "end_ms": 3400,
+    "delta": " that",
+    "event_id": "event_EUrRH2fD7oa69K0O28WNG"
+   }
+  },
+  {
+   "t": 5571,
+   "wall": 1791023967517,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 3400,
+    "end_ms": 3600,
+    "delta": " now.",
+    "event_id": "event_EUrRHDMZcbqpMPCCg7QQz"
+   }
+  },
+  {
+   "t": 6410,
+   "wall": 1791023968356,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 4200,
+    "end_ms": 4400,
+    "delta": " The",
+    "event_id": "event_EUrRITSWUkuDRfCfDk8iq"
+   }
+  },
+  {
+   "t": 6551,
+   "wall": 1791023968497,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 4400,
+    "end_ms": 4600,
+    "delta": " article",
+    "event_id": "event_EUrRIUvW9NFHHsrnZid1r"
+   }
+  },
+  {
+   "t": 6996,
+   "wall": 1791023968942,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 4800,
+    "end_ms": 5000,
+    "delta": " says it",
+    "event_id": "event_EUrRIcGLPB4RwbP0jhzrD"
+   }
+  },
+  {
+   "t": 7224,
+   "wall": 1791023969170,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 5000,
+    "end_ms": 5200,
+    "delta": " was",
+    "event_id": "event_EUrRJ0RWskRtrXcrQdNBy"
+   }
+  },
+  {
+   "t": 7439,
+   "wall": 1791023969386,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 5200,
+    "end_ms": 5400,
+    "delta": " painted",
+    "event_id": "event_EUrRJFnDJ9gTvFVb2n26y"
+   }
+  },
+  {
+   "t": 7858,
+   "wall": 1791023969804,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 5600,
+    "end_ms": 5800,
+    "delta": " teal",
+    "event_id": "event_EUrRJnhBk6ONHFtRJ2FcQ"
+   }
+  },
+  {
+   "t": 7976,
+   "wall": 1791023969922,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 5800,
+    "end_ms": 6000,
+    "delta": " in",
+    "event_id": "event_EUrRJ0OqBncTmIveDR4UL"
+   }
+  },
+  {
+   "t": 8168,
+   "wall": 1791023970115,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 6000,
+    "end_ms": 6200,
+    "delta": " ",
+    "event_id": "event_EUrRKUjRhvi0a6r8z1Vm9"
+   }
+  },
+  {
+   "t": 8488,
+   "wall": 1791023970434,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 6200,
+    "end_ms": 6400,
+    "delta": "1987",
+    "event_id": "event_EUrRKY3NKDF46IOOoY5og"
+   }
+  },
+  {
+   "t": 8538,
+   "wall": 1791023970484,
+   "dir": "in",
+   "ev": {
+    "type": "session.output_transcript.delta",
+    "start_ms": 6400,
+    "end_ms": 6600,
+    "delta": ".",
+    "event_id": "event_EUrRKpwOKmrDT1xqrJMnn"
+   }
+  },
+  {
+   "t": 15542,
+   "wall": 1791023977488,
+   "dir": "in",
+   "ev": {
+    "type": "session.usage.updated",
+    "usage": {
+     "seconds": 15
+    },
+    "context_window": {
+     "usage_ratio": 0.0100703125
+    },
+    "event_id": "event_EUrRRgaxColV7zAAuPdSe"
+   }
+  },
+  {
+   "t": 16110,
+   "wall": 1791023978057,
+   "dir": "out",
+   "ev": {
+    "type": "session.close"
+   }
+  },
+  {
+   "t": 16644,
+   "wall": 1791023978591,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrRSYlS9bUa46EL9DdqK",
+    "type": "session.closed",
+    "reason": "close_requested",
+    "session": {
+     "id": "live_u1_EUrRCp3oNAW04iwqigqdEYngTq5KnmX7",
+     "expires_at": 1791031162,
+     "model": "gpt-live-1",
+     "instructions": "You are a voice companion helping someone read an article. Be brief: one or two short spoken sentences. British English.\n# Delegation Policy\nYou know nothing about the article yourself. Whenever the user asks what the article says about anything, delegate to the backend and never guess. While the backend works you may say you are checking.",
+     "audio": {
+      "output": {
+       "voice": "marin"
+      }
+     },
+     "delegation": {
+      "type": "responses",
+      "responses": {
+       "model": "gpt-6-luna",
+       "instructions": "You are the backend for a live voice conversation about an article. To answer any question about what the article says, you MUST call lookup_passage with the topic, then answer in one plain spoken sentence using only what it returned.",
+       "reasoning": {
+        "effort": "low"
+       },
+       "tools": [
+        {
+         "type": "function",
+         "name": "lookup_passage",
+         "description": "Look up what the article says about a topic",
+         "parameters": {
+          "type": "object",
+          "properties": {
+           "topic": {
+            "type": "string"
+           }
+          },
+          "required": [
+           "topic"
+          ],
+          "additionalProperties": false
+         }
+        }
+       ],
+       "tool_choice": "auto"
+      }
+     },
+     "status": "active",
+     "input": [],
+     "client": {
+      "data_channel": {
+       "allowed_client_events": [
+        "response.item.create",
+        "response.create",
+        "session.close"
+       ],
+       "allowed_server_events": [
+        {
+         "type": "session.started"
+        },
+        {
+         "type": "session.input_transcript.delta"
+        },
+        {
+         "type": "session.output_transcript.delta"
+        },
+        {
+         "type": "session.delegation.created"
+        },
+        {
+         "type": "session.usage.updated"
+        },
+        {
+         "type": "session.closed"
+        },
+        {
+         "type": "error"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.created"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.output_item.done"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.completed"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.incomplete"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.failed"
+        },
+        {
+         "type": "response.event",
+         "response_event": "error"
+        }
+       ]
+      }
+     }
+    },
+    "usage": {
+     "seconds": 15
+    }
+   }
+  }
+ ]
+}

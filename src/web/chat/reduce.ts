@@ -481,6 +481,7 @@ function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcom
         ...(op.reply.passages ? { passages: op.reply.passages } : {}),
         ...(op.reply.tools ? { tools: op.reply.tools } : {}),
         ...(op.reply.interrupted ? { interrupted: true } : {}),
+        ...(op.engine && op.engine !== "realtime" ? { engine: op.engine } : {}),
         ...(kind === "chat" || kind === "remember" ? { kind } : {}),
       },
     ],

@@ -77,10 +77,12 @@
  *   POST   /api/chat/:slug/live-tool  { name, args } → one chat tool, for a live session
  *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret, a session
  *                                            id, the thread as seed items, and the tail
+ *   POST   /api/chat/:slug/:threadId/live-session { sdp, placement?, useProfile? }
+ *                                          → GPT-Live: the SDP answer, a session id, the tail
  *   POST   /api/chat/:slug/:threadId/spoken { question, answer, expectedTailId, … }
  *                                          → { thread }, one exchange appended
  *   POST   /api/live/:sessionId/connected  → the data channel opened
- *   POST   /api/live/:sessionId/usage      { kind, providerEventId, … } → one ledger row
+ *   POST   /api/live/:sessionId/usage      { kind, … } → one ledger row (four kinds, two per engine)
  *   POST   /api/live/:sessionId/close      { reason? } → the conversation ended
  *   PATCH  /api/chat/:slug/:threadId   { title }
  *   DELETE /api/chat/:slug/:threadId
@@ -308,6 +310,12 @@ import { isSpideryarnId, isUuid } from "./ids.js";
    a session and gets back a short-lived secret for the browser. */
 import {
   acceptRealtimeUsage,
+  createGptLiveSession,
+  GPT_LIVE_BACKEND_MODEL,
+  GPT_LIVE_CREATE_SECONDS,
+  GPT_LIVE_MODEL,
+  GptLiveCreateFailed,
+  gptLiveCreateFailure,
   LIVE_MODEL,
   LIVE_SERVER_TOOLS,
   LIVE_TRANSCRIBER,
@@ -315,11 +323,12 @@ import {
   liveSeedItems,
   liveSession,
   mintLiveToken,
-  parseRealtimeUsage,
+  parseLiveUsage,
   realtimeCloseReason,
   REPORT_WINDOW_MS,
   SHOW_PASSAGE_TOOL,
 } from "./live.js";
+import { gptLiveSession } from "./live-gpt.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
 import { isWebUrl } from "./urls.js";
 /* The fourth thing a link card can say: what the destination says about itself,
@@ -354,7 +363,9 @@ import {
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
+import { stageFailure } from "./job-failure.js";
 import {
+  LIVE_UPSTREAM,
   NOT_READ_YET,
   NOT_READ_YET_HIGH_POWER,
   placingFailed,
@@ -494,7 +505,15 @@ import type {
 /* Values, not types: the list a placement off the wire is checked against, and
    the guard that does the checking. Both live in types.ts because the browser
    needs the same union and cannot import src/live.ts. */
-import { isMicPlacement, MIC_PLACEMENTS, HIGHLIGHT_COLOURS, isHighlightColour } from "./types.js";
+import {
+  type GptLiveTicket,
+  HIGHLIGHT_COLOURS,
+  isHighlightColour,
+  isLiveEngine,
+  isMicPlacement,
+  LIVE_ENGINES,
+  MIC_PLACEMENTS,
+} from "./types.js";
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
 import { isThreadKind, MAX_VISIBLE_BLOCKS, THREAD_KINDS } from "./types.js";
@@ -3651,7 +3670,7 @@ async function spokenChat(
   threadId: string,
   body: unknown,
 ): Promise<{ thread: ChatThread }> {
-  const { question, answer, passages, tools, interrupted, expectedTailId, kind } = (body ??
+  const { question, answer, passages, tools, interrupted, expectedTailId, kind, engine } = (body ??
     {}) as Record<string, unknown>;
   if (typeof question !== "string" || typeof answer !== "string") {
     throw httpError(400, "Expected { question, answer, expectedTailId }");
@@ -3667,6 +3686,15 @@ async function spokenChat(
      stored thread is `withSpokenTurn`'s 409. `SpokenTurn.kind` in src/chat.ts. */
   if (kind !== undefined && !isSpokenKind(kind)) {
     throw httpError(400, "kind must be chat or remember");
+  }
+  /* **Which engine spoke, and so which model the row is marked with.** The
+     browser names the engine, never the model: the model id is this server's
+     to write, as it always was. Absent means Realtime, which is every call
+     made before the second engine existed. Anything else is refused rather
+     than read as Realtime, because a GPT-Live answer filed under the wrong
+     model is a wrong row nothing would ever flag. */
+  if (engine !== undefined && !isLiveEngine(engine)) {
+    throw httpError(400, `engine must be one of: ${LIVE_ENGINES.join(", ")}`);
   }
   /* An empty question is ordinary — the transcriber fails — and so is an empty
      answer, if the reader hung up mid-breath. Both empty is not a turn, and
@@ -3705,7 +3733,7 @@ async function spokenChat(
       ...(parseSpokenTools(tools) ?? {}),
       ...(interrupted === true ? { interrupted: true } : {}),
       ...(kind !== undefined ? { kind } : {}),
-      model: LIVE_MODEL,
+      model: engine === "gpt-live" ? GPT_LIVE_MODEL : LIVE_MODEL,
     }),
   ).then((t) => t.thread);
 
@@ -3914,6 +3942,11 @@ async function liveChatToken(
        against the wrong rate card for ever. */
     model: minted.model,
     transcriptionModel: LIVE_TRANSCRIBER,
+    /* GPT-Live's three. A Realtime session has no backend, no provider id this
+       server ever learns, and no voice-seconds meter. */
+    backendModel: null,
+    providerSessionId: null,
+    voiceSecondsReported: 0,
     issuedAt: issuedAt.toISOString(),
     /* **The server's own deadline, stored on the row.** Not the token's expiry,
        which admits one connection and is about ten minutes, while a conversation
@@ -3933,6 +3966,176 @@ async function liveChatToken(
     seed: liveSeedItems(thread?.messages ?? []),
     tailId: thread?.messages.at(-1)?.id ?? null,
   };
+}
+
+/**
+ * **One GPT-Live call, created.** `POST /api/chat/:slug/:threadId/live-session`.
+ *
+ * The second engine's counterpart to `liveChatToken` above, and it differs in
+ * the one way the API forces: GPT-Live has no ephemeral client secret, so the
+ * browser cannot open the session itself. It sends its SDP offer here, this
+ * server creates the session with the real key, and the SDP answer goes back.
+ * Audio still never comes through here.
+ *
+ * ## The order is the reverse of the token route's, and the reason is money
+ *
+ * There, the mint is free, so OpenAI is asked first and the row is written
+ * second. Here **the create itself bills fifteen seconds**, so the row is
+ * written first: a billed session with no row would be spend nothing could
+ * ever see. Then, on how the create went:
+ *
+ * - **it worked** — OpenAI's session id, the fifteen seconds and their priced
+ *   `ai_calls` row are written in one transaction, so a call abandoned before
+ *   it connects is still in the ledger, and the browser's first usage report of
+ *   the same cumulative 15 adds nothing;
+ * - A refusal is `create_failed`; a lost response is `create_uncertain`.
+ *   A confirmed but unusable create is charged, then closed `create_unusable`.
+ *   None backfills a connected time.
+ *
+ * ## What the browser gets
+ *
+ * The SDP answer, the two session ids and the tail. Not the instructions, the
+ * tools, the article or the seed: all of that went to OpenAI in the create
+ * request (`gptLiveSession` in src/live-gpt.ts). `tailId` and the seed come
+ * from one read of the thread, for the reason `liveChatToken` gives.
+ */
+async function liveChatSession(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<GptLiveTicket> {
+  const { sdp, placement, useProfile } = (body ?? {}) as Record<string, unknown>;
+  if (typeof sdp !== "string" || sdp.trim() === "") {
+    throw httpError(400, "Expected { sdp }, the browser's SDP offer");
+  }
+  if (sdp.length > MAX_SDP_CHARS) {
+    throw httpError(413, `That SDP offer is longer than ${MAX_SDP_CHARS} characters`);
+  }
+  /* **Checked, then unused.** GPT-Live has no noise-reduction setting for a
+     microphone placement to choose, so there is nothing to map it onto. It is
+     still validated, so the browser can send one body shape to either engine
+     and a wrong value is caught here as it is on the token route. */
+  if (placement !== undefined && !isMicPlacement(placement)) {
+    throw httpError(400, `placement must be one of: ${MIC_PLACEMENTS.join(", ")}`);
+  }
+  if (useProfile !== undefined && typeof useProfile !== "boolean") {
+    throw httpError(400, "useProfile must be true or false");
+  }
+
+  const article = await loadArticle(slug);
+  const thread = (await chatStore.load(slug)).find((t) => t.id === threadId);
+  const owner = currentOwnerId();
+
+  const session = gptLiveSession({
+    meta: article.meta,
+    blocks: article.blocks,
+    tree: article.tree,
+    profile: useProfile === false ? null : await resolveProfile(slug),
+    history: thread?.messages ?? [],
+  });
+
+  /* **Journal first.** If this insert throws, OpenAI is never asked and nothing
+     is billed. */
+  const sessionId = randomUUID();
+  const issuedAt = new Date();
+  await realtimeSessionStore.issue({
+    id: sessionId,
+    ownerId: owner,
+    articleSlug: slug,
+    threadId,
+    /* **What we asked for**, where the token route records what OpenAI
+       created: the create response names no model, and the row has to exist
+       before there is a response at all. `session.started` on the data channel
+       does name it, and it reaches only the browser. */
+    model: GPT_LIVE_MODEL,
+    /* GPT-Live transcribes the reader itself, inside the voice-seconds price. */
+    transcriptionModel: null,
+    backendModel: GPT_LIVE_BACKEND_MODEL,
+    providerSessionId: null,
+    voiceSecondsReported: 0,
+    issuedAt: issuedAt.toISOString(),
+    /* The same server-owned deadline as a Realtime session: the browser's
+       twenty-minute cap, with the tolerance added when a report is checked. */
+    acceptsUntil: new Date(issuedAt.getTime() + REPORT_WINDOW_MS).toISOString(),
+    connectedAt: null,
+    closedAt: null,
+    closeReason: null,
+  });
+
+  let created: Awaited<ReturnType<typeof createGptLiveSession>>;
+  try {
+    created = await createGptLiveSession({ sdp, session });
+  } catch (err) {
+    const outcome = err instanceof GptLiveCreateFailed ? err.outcome : "failed";
+    const providerId = err instanceof GptLiveCreateFailed ? err.providerSessionId : undefined;
+    // A 2xx create bills even if its response has no usable SDP.
+    if (outcome === "created") await recordGptLiveCreateCharge(sessionId, owner, providerId);
+    const reason = outcome === "created" ? "create_unusable" : outcome === "uncertain" ? "create_uncertain" : "create_failed";
+    await realtimeSessionStore
+      .closeUnopened(sessionId, owner, new Date().toISOString(), reason, providerId)
+      .catch(() => {
+        log("model").error({ slug, sessionId, providerSessionId: providerId, reason }, "GPT-Live create outcome could not be journalled");
+      });
+    if (err instanceof GptLiveCreateFailed) {
+      log("model").error(
+        { slug, sessionId, providerStatus: err.upstreamStatus, outcome },
+        "GPT-Live create did not produce a usable ticket",
+      );
+      throw gptLiveCreateFailure(err);
+    }
+    throw err;
+  }
+
+  await recordGptLiveCreateCharge(sessionId, owner, created.providerSessionId);
+
+  return {
+    sdp: created.sdp,
+    sessionId,
+    liveSessionId: created.providerSessionId,
+    tailId: thread?.messages.at(-1)?.id ?? null,
+  };
+}
+
+/**
+ * How long an SDP offer may be. A real one is under two thousand characters
+ * (1,656 in the spike); this is a bound on what a browser can make this server
+ * forward to OpenAI, not a rule a real offer will meet.
+ */
+const MAX_SDP_CHARS = 20_000;
+
+/**
+ * Record the confirmed creation charge atomically. Retry only the transaction,
+ * never the paid create. A lost commit acknowledgement is safe: the locked
+ * high-water mark makes the retry add nothing. If both attempts fail, keep
+ * the provider identity and a reconciliation state, and withhold the ticket.
+ */
+async function recordGptLiveCreateCharge(sessionId: string, owner: string, providerSessionId?: string): Promise<void> {
+  const receivedAt = new Date();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await realtimeSessionStore.advanceVoiceSeconds(sessionId, owner, {
+        seconds: GPT_LIVE_CREATE_SECONDS,
+        ...(providerSessionId === undefined ? {} : { providerSessionId }),
+        rowFor: (locked) => acceptRealtimeUsage({
+          session: locked,
+          usage: { kind: "voice", seconds: GPT_LIVE_CREATE_SECONDS, eventId: "create" },
+          receivedAt,
+        }),
+      });
+      return;
+    } catch {
+      if (attempt === 0) continue;
+      // This separate write retains evidence that the rolled-back transaction lost.
+      await realtimeSessionStore.closeUnopened(
+        sessionId, owner, new Date().toISOString(), "create_accounting_failed", providerSessionId,
+      ).catch(() => undefined);
+      log("model").error(
+        { sessionId, providerSessionId, creationSeconds: GPT_LIVE_CREATE_SECONDS, reason: "create_accounting_failed" },
+        "GPT-Live session was created but its creation charge needs reconciliation",
+      );
+      throw stageFailure(LIVE_UPSTREAM, "GPT-Live was created but its creation charge could not be recorded.");
+    }
+  }
 }
 
 /**
@@ -3999,12 +4202,21 @@ async function liveUsage(sessionId: string, body: unknown): Promise<{ ok: true }
   if (!session) throw httpError(404, "No such live session.");
 
   const receivedAt = new Date();
-  const row = acceptRealtimeUsage({
-    session,
-    usage: parseRealtimeUsage(body),
-    receivedAt,
-  });
-  await costStore.record(row);
+  const usage = parseLiveUsage(body);
+  if (usage.kind === "voice") {
+    /* **GPT-Live's seconds are a running total, so this one is not a plain
+       insert.** The store locks the session row and hands it back; the row is
+       built from the mark as read under that lock, and the mark and the row
+       are written together or not at all. A repeat or an older figure builds
+       no row and writes nothing. `advanceVoiceSeconds` in
+       src/store/realtime-sessions-pg.ts. */
+    await realtimeSessionStore.advanceVoiceSeconds(sessionId, owner, {
+      seconds: usage.seconds,
+      rowFor: (locked) => acceptRealtimeUsage({ session: locked, usage, receivedAt }),
+    });
+  } else {
+    await costStore.record(acceptRealtimeUsage({ session, usage, receivedAt }));
+  }
   /* **A report is also evidence the channel opened**, and the `connected` event
      above is the one thing here that nothing retries. Kept earliest-wins in the
      store, so this weaker inference never overwrites the real moment. */
@@ -9656,6 +9868,22 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { req, res } }, captures) => {
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       send(res, 200, await liveChatToken(slug, id, await readBody(req)));
+    },
+  },
+
+  /* **GPT-Live's counterpart to the ticket above** — the second engine, built
+     beside Realtime (docs/plans/261003a-…). Under the conversation for the
+     same reason: it seeds the session with the thread. It makes no model call
+     through the gateway, so `first-capture` attributes nothing today; the rows
+     it writes take their article off the session row, like `/usage` below. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live-session$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, await liveChatSession(slug, id, await readBody(req)));
     },
   },
 

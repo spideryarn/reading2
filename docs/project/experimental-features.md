@@ -228,6 +228,17 @@ window, including after a band link steps that mode aside. The reasoning, the pa
 what was deferred (one line per heading level, a thinner bar) are
 [261002h](../plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md).
 
+**And the choice of voice engine for a Live conversation, since 2026-10-03** — a select beside the
+Live button, *Realtime* or *GPT-Live (new)*. Switched off, there is no choice and a call is on
+Realtime, as it always was. It is behind the switch because GPT-Live is a second implementation
+built to be compared with the first and then for one of them to be deleted, on a provider API three
+weeks old: its answers about the article come from a second model the voice has to remember to ask,
+and none of that has been tried with a real microphone. Readers who have not asked for unfinished
+things keep the engine that works. **Here the switch is stricter than "hidden, not unreachable"**:
+off, the client starts no GPT-Live call whatever choice was remembered, and turning it off mid-call
+ends one by the ordinary hang-up. That is the client's rule; the `live-session` route is not gated.
+[live-conversation.md § The second engine](live-conversation.md#the-second-engine-gpt-live-behind-experimental).
+
 **And one control on the Metadata page: *Start this article again*** — a block inside *AI
 processing* rather than a section of its own: a reset, and optionally the modes made again. The
 control has been behind the switch since 2026-09-28 and joined this section — then called *Re-run

@@ -240,3 +240,37 @@ plan for it would have to settle:
 could *host* them: hotlinks rot, publishers block by referer, and today every reader's browser
 announces itself to the publisher's CDN on every read. That is a bigger piece of work than this
 question, and it would make this one free.
+
+---
+
+## Q12 — Which live-conversation engine survives? <a id="q12"></a>
+
+Live conversation has two engines: OpenAI Realtime, which every reader gets, and GPT-Live, offered
+beside it with Experimental features on
+([live-conversation.md § The second engine](live-conversation.md#the-second-engine-gpt-live-behind-experimental)).
+They were built side by side to be compared, and the comparison ends:
+
+> But eventually I think we only want one.
+>
+> — Greg, 2026-10-02
+
+**This is Greg's to answer, on real articles with a real microphone.** Everything measured so far
+used a synthetic voice or a silent track, so speech in a room, echo and street noise are untried on
+GPT-Live. What to look at, from the four conditions in
+[261002r](../investigations/261002r-gpt-live-spike.md#recommendation) and GPT Sol's consult for
+[261003a](../plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md):
+
+| | What would count against an engine |
+|---|---|
+| Grounded answers | a claim about the article that no passage backs, or no passage shown |
+| Fulfilled delegations (GPT-Live) | "let me check" and then nothing, or an answer given without asking the backend |
+| Time to a useful answer | the wait before the first words that are the answer, not filler |
+| False interruptions | the reply cut off by a cough, a bystander or its own echo |
+| Stalls | a reply owed and never spoken; a turn held open by noise |
+| Saved-history fidelity | the Chat rows afterwards missing words, or in the wrong order |
+| Cost | per conversation as actually held, pauses for reading included — GPT-Live bills open minutes, Realtime bills turns |
+
+**Recommendation:** none yet. On paper Realtime is ahead on article answers and GPT-Live on quick
+back-and-forth and cost per dense minute; Greg's own report is that GPT-Live "seems to be working
+better" in WhatNext. When it is decided, the loser's files are deleted under a follow-up plan and
+this question goes.
