@@ -210,6 +210,10 @@ export function RefereeFrame({
           placement="bottom"
           keepSide
           className="tip-soon"
+          /* Only while shut: the card says what is inside, and once the box is
+             open it is the box's own first lines the card would be covering —
+             seen in Chrome at 1280 × 800, 2026-10-03. */
+          enabled={!noticesOpen}
           content={
             <ControlTip
               head="Notices"

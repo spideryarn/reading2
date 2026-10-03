@@ -381,10 +381,10 @@ its own scope. Where it deviates:
   from the rows. Everything else in § *The card's words* is used as written; it was checked against
   what stage 1 actually built and the rest of it is still true.
 - **The one bit lives in a hook, not in `RefereeBand`.** `useHowCard` in
-  [`RefereeCard.tsx`](../../src/web/RefereeCard.tsx) holds every read and write of it, so the band
+  `RefereeCard.tsx` (removed 2026-10-03, plan 261003k) holds every read and write of it, so the band
   cannot change the screen and forget to write — which is the failure that would be invisible until
   the next paper. The pure `localStorage` half is
-  [`src/web/referee-card.ts`](../../src/web/referee-card.ts), separate for `install-hint.ts`'s reason.
+  `src/web/referee-card.ts` (removed 2026-10-03, plan 261003k), separate for `install-hint.ts`'s reason.
 - **`RefereeBand`'s docstring is corrected rather than annotated.** It asserted that `localStorage` is
   "banned outright"; it now says what the rule actually is — the URL is for view state, *how you are
   looking at an article*, which must survive a reload and travel when the address is pasted, and a
@@ -413,7 +413,7 @@ own answers for that criterion, not a score* — printed only once a run has ret
 
 | File | Cases | What goes red |
 |---|---|---|
-| [`referee-how-card.test.tsx`](../../tests/referee-how-card.test.tsx) | 9 | a `show` that only calls `setOpen` (the dismissal does not survive a remount); a reopen that writes nothing or writes `"1"` anyway (the button works once); either `try`/`catch` removed from `referee-card.ts` (the band blanks on a browser that refuses storage); the card moved into `.ref-brief` or the header button deleted, asserted against App.tsx's source because no render can see placement |
+| `referee-how-card.test.tsx` (removed 2026-10-03, plan 261003k) | 9 | a `show` that only calls `setOpen` (the dismissal does not survive a remount); a reopen that writes nothing or writes `"1"` anyway (the button works once); either `try`/`catch` removed from `referee-card.ts` (the band blanks on a browser that refuses storage); the card moved into `.ref-brief` or the header button deleted, asserted against App.tsx's source because no render can see placement |
 | [`referee-candidates-press.test.tsx`](../../tests/referee-candidates-press.test.tsx) | 4 | the `useEffect` put back, or `startBrief` called from anywhere but the button (a POST appears on mount); a button wired to nothing (no POST after the press); the cost words removed from the button and its note; a stored thread offered a second start |
 | [`referee-criteria-explained.test.tsx`](../../tests/referee-criteria-explained.test.tsx) | 6 | `disabled` back on the run button; the form's `!ready` guard removed (an empty criterion goes to the server); the stylesheet left on `:disabled` while the markup moved; the rank line deleted, or printed before any run has returned |
 
@@ -659,7 +659,7 @@ from another agent's `260902g-…` plan doc, none from anything touched here.
 
 **Superseded twice; kept as the record of what was proposed.** Stage 3 dropped the red-and-green
 naming (`?refscale=br` makes it false), and stage 5 cut the four sub-mode lines entirely. The words
-that are actually on screen are in [`RefereeCard.tsx`](../../src/web/RefereeCard.tsx).
+that are actually on screen are in `RefereeCard.tsx` (removed 2026-10-03, plan 261003k).
 
 Corrected per Sol's finding 8 — the first draft said marks appear when a criterion runs (they do not;
 `?crits=` starts empty and the tick is what paints), and said "every row is a door into the prose"

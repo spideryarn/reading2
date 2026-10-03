@@ -231,23 +231,25 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.5rem;
+  gap: 0.25rem;
   padding: 0.55rem 0.7rem;
   border-bottom: 1px solid var(--rule);
   flex: none;
 }
 .mode-band.has-about > .ref-top { padding-right: calc(0.7rem + var(--band-about-room)); }
-.ref-views {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  flex: 1 1 auto;
-}
+/* `contents`, so the four chips and the Notices button wrap as one run. As a
+   flex box of its own the group took a whole line once it wrapped, which put
+   Notices alone on a third line of the ~300px band an iPad gives this mode
+   (116px of top row, measured 2026-10-03). The radiogroup role is on the
+   element whatever its box is. */
+.ref-views { display: contents; }
 /* **The notices, as one button.** Quieter than a chip — no fill, no weight —
    because it is not one of the four and must not read as a fifth. The icon is
    the app's ordinary ink, not red: nothing has gone wrong (§ `.ref-notice`). */
 .ref-notices-btn {
   flex: none;
+  /* To the end of whichever line it lands on. */
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;

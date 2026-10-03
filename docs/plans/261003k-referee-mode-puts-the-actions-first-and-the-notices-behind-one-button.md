@@ -12,9 +12,13 @@ The mode is described in [referee-mode.md](../project/referee-mode.md). This pla
 client only. Another session (sweep-c6a) is changing Referee's store and its two route handlers, so
 nothing here touches `src/store/`, the routes, a prompt or the database.
 
-## What is on screen today, top to bottom
+**Status: built, one stage.** Reviews: [the plan, by GPT Sol](261003k-referee-mode-actions-first-plan-review-sol.md)
+(*build after changes*; what each finding changed is in § What the plan review changed), and the
+code review named in § Reviews.
 
-Before the first thing a referee can act on (the criterion box), the band shows:
+## What was on screen, top to bottom
+
+Before the first thing a referee can act on (the criterion box), the band showed:
 
 1. a header row with one button, *How this works*;
 2. a box with the sentence *"This article's text has already been sent to a third-party model
@@ -27,129 +31,211 @@ Before the first thing a referee can act on (the criterion box), the band shows:
    colours mean on a kind of criterion the referee has not written yet;
 7. then the panel.
 
-Measurements and screenshots of this state are in § Before, below.
-
 Each of items 2 to 4 and 6 was added for a reason that is written down, and each was reviewed. Taken
 one at a time they are defensible. Together they are what Greg met: a screen of notices with the
-actions underneath.
+actions underneath. § Before has the measurements.
 
-## What changes
+## What changed
 
-**One: the three notices go behind one button in the header.** The header row gets a second
-button, *Notices*, with a warning-triangle icon, beside *How this works*. Pressing it opens the same
-box that is there today (`.ref-brief`, with its height cap and its scroll), holding the
-confidentiality paragraphs in full and the hidden-instructions scan. Shut, it costs no height.
+```
+before                                   after
+┌──────────────────────────────┐         ┌──────────────────────────────┐
+│ [How this works]             │         │ [Criteria][Claims][Mirror]   │
+│ ┌ text already sent…      ▸ ┐│         │ [Candidates]  ⚠ Notices  (i) │
+│ │ Opening Candidates may…   ││         ├──────────────────────────────┤
+│ └───────────────────────────┘│         │ Write what you have been     │
+│ ┌ HIDDEN INSTRUCTIONS     ▸ ┐│         │ asked to judge this paper…   │
+│ │ Nothing found in the…     ││         │ What are you judging this    │
+│ └───────────────────────────┘│         │ paper against?               │
+│ [Criteria][Claims][Mirror]…  │         │ ┌──────────────────────────┐ │
+│ ┌ How Referee mode works  ✕ ┐│         │ │ Are the controls adequa… │ │
+│ │ You are the referee…      ││         │ └──────────────────────────┘ │
+│ │ What the colours mean…    ││         │ …                            │
+│ └───────────────────────────┘│         │                              │
+│ What are you judging…        │         │                              │
+│ ┌ Are the controls adequa… ┐ │         │                              │
+└──────────────────────────────┘         └──────────────────────────────┘
+```
+
+**One: the notices are behind one button.** The top row is the four chips and a **Notices**
+button with a warning-triangle icon. Pressing it opens the same box that was there before
+(`.ref-brief`, with its height cap and its own scroll), holding the source scan and the
+confidentiality sentences in full. Shut, it costs no height.
 
 - It is a button you press, not a hover tooltip, because a tooltip does not exist on an iPad or a
-  phone. The button also carries a hover card that says in two sentences what is inside.
-- **It opens itself when the scan found something.** That is the rule the scan box already has
-  (open when it looked and found something, shut otherwise), moved up one level. A finding is news
-  about this document; the rest is the same on every paper.
+  phone. It also has a hover card that says in two sentences what is inside.
+- **It opens itself when the scan found something**, including a finding that carries an everyday
+  explanation, and including a scan that lands seconds after the band opened. `sourceScanOpens` in
+  `SourceScanNotice.tsx` is the scan's own "open" rule, exported, so the two cannot disagree.
 - Nothing is remembered: it starts shut on every visit unless the scan found something. So this
-  stays a collapse, not a dismissal, as the present notice is.
-- Inside the open box the confidentiality text is printed in full, with no second chevron to
-  press. The scan keeps its own open/shut control, unchanged; `SourceScanNotice.tsx` is not edited.
+  stays a collapse, not a dismissal.
+- Inside the open box the scan comes first, because when the box opened itself the scan is why,
+  and under three paragraphs a finding would start below the fold of a box capped at 40% of the
+  band.
 
-What this gives up, said plainly: today the one-line fact *"This article's text has already been
-sent to a third-party model provider"* is on screen at all times in Referee mode. After this it is
-one press away. The same fact is still shown at the moment an article is added, before anything is
-sent (`ADDING_SENDS_TEXT_AWAY`). This is question [Q-referee-sent-line] in § Questions for Greg.
+**Two: the Candidates chip no longer starts a run, so its warning leaves the top of the mode.**
+The always-visible Candidates sentence existed for one reason: since 2026-09-06 pressing the
+Candidates chip itself started an AI turn that may run a web search, so the warning had to be on
+screen before the chip was pressed, in all four sub-modes. `src/messages.ts` said what to do if
+that ever changed: *"If Candidates ever goes back behind a button, this line goes with it."*
 
-**Two: the Candidates chip stops starting a run, so its warning can leave the top of the mode.**
-The always-visible Candidates sentence (item 3) exists for one reason: since 2026-09-06 pressing the
-Candidates chip itself starts an AI turn that may run a web search, so the warning had to be on
-screen before the chip was pressed, in all four sub-modes. `src/messages.ts` says what to do if that
-ever changes: *"If Candidates ever goes back behind a button, this line goes with it."*
+Candidates is back behind its button. Pressing the chip opens the panel and runs nothing. The
+panel's *Build the reviewer brief* button was already there, with a visible sentence under it
+naming the search engine; until now it was seen only when the automatic attempt had failed.
 
-So Candidates goes back behind its button. Pressing the chip opens the panel and runs nothing. The
-panel already draws a *Build the reviewer brief* button with a visible sentence under it naming the
-search engine (`StartBrief` in `CandidatesPanel.tsx`), which today is seen only when the automatic
-attempt failed. After this it is what a first visit to Candidates shows. The warning is then beside
-the control that causes the thing it warns about, and nowhere else.
-
-- The change is one entry removed from `REFEREE_TARGET` in `src/web/activation.ts`. The command
-  bar's row for Candidates reads the same table, so it stops starting a run too, and stops showing
-  its "this generates" marker.
+- One entry removed from `REFEREE_TARGET` in `src/web/activation.ts`. The command bar's row for
+  Candidates reads the same table, so it stops starting a run and loses its "this generates" mark.
 - Claims still runs on its chip. It reaches no new third party, and its run is stored.
+- The sentence now reads *"Candidates may send terms…"*, since opening it no longer sends
+  anything. It is printed at the top of the Candidates panel, before and after the first turn,
+  because a follow-up typed into the composer may search too. It is also in the Notices box.
+- A failed read of the thread used to be retried by pressing the chip again. The panel has its own
+  **Try again** now, which re-reads and starts nothing.
 - The simpler option passed over: keep the chip running it and move the sentence into the chip's
-  hover card. That would let a press on a phone, where there is no hover, send terms from an
-  unpublished paper to a search engine with nothing visible having said so. It costs one extra
-  press to avoid that. This reverses, for this one sub-mode, Greg's 2026-09-06 rule that opening a
-  mode starts it; it is [Q-candidates-press] below.
-- `REFEREE_CANDIDATES_REACHES_SEARCH` stays in `src/messages.ts`, unchanged, and is printed inside
-  the Notices box, so the full list of where text goes is still in one place.
+  hover card. On a phone, where there is no hover, a press would then send terms from an
+  unpublished paper to a search engine with nothing visible having said so.
 
-**Three: a line under the chips says what to do in the sub-mode you are in.** Each chip already has
-a hover card whose first sentence says what the sub-mode is for, for example Criteria: *"Write what
-you have been asked to judge this paper against. Each criterion becomes a re-runnable pass that
-marks the passages bearing on it."* That sentence is exactly the guidance Greg asked for, and today
-it is only on hover. It is printed, from the same constant (`REFEREE_VIEW_TIP[view].what`), as one
-quiet line between the chips and the panel. The hover card keeps both sentences.
+**Three: one line under the chips says what to do.** Each chip's hover card already opened with a
+sentence saying what the sub-mode is for; Criteria's is *"Write what you have been asked to judge
+this paper against. Each criterion becomes a re-runnable pass that marks the passages bearing on
+it."* That sentence is printed at the top of the panel, from the same constant
+(`REFEREE_VIEW_TIP[view].what`). The hover card keeps both of its sentences. The two empty-state
+lines that then said the same thing a second time are gone (Criteria's *"Nothing yet. Write what
+you have been asked…"*, Claims' *"The claims this paper makes about its own work…"*), and so is
+the purpose half of the line at the top of Candidates.
 
-Where a panel's own empty-state line then says the same thing a second time, that line goes
-(Criteria's *"Nothing yet. Write what you have been asked to judge…"* and Claims' *"The claims this
-paper makes about its own work…"*).
+**Four: *How Referee mode works* is the (i) in the band's corner.** Every other mode has had an
+(i) in its top-right corner since 2026-10-01, at Greg's asking (*"Each mode should have such an (i)
+icon"*); Referee was the one exemption, because it had this card. The card opened by default,
+above the first control. Now the (i) opens the mode's own two sentences from `MODE_CATALOG` (no
+verdict, no score, no grade) and then *What the colours mean*. A tap toggles it, so it works with
+no hover.
 
-**Four: the *How Referee mode works* card starts shut.** It is two paragraphs of principle and
-colour-key above the first control. *How this works* in the header opens it, as now, and the choice
-is still remembered on the device. The line from change three does the guiding instead. The stored
-bit changes meaning from "the referee shut it" to "the referee opened it", under a new key, so
-nobody's old "shut" is read as "open".
+This deletes code: `RefereeCard.tsx`, `referee-card.ts`, the `localStorage` bit, the focus-return
+hook and their test file. The card's first paragraph (*"You are the referee. Nothing here scores
+the paper…"*) is not carried over word for word; the catalog's sentences say the same thing.
 
-## What does not change, and why
+## What did not change, and why
 
-- **No sentence is reworded and no warning is deleted.** Every notice is still there in full, one
-  press away or beside the control it is about.
 - **The rules printed inside each panel stay** (*a passage takes a claim up, never whether it
   carries it*; *the number is the model's ordering, not a score*; the Mirror evidence note; the
   conflict-of-interest caveat). Most appear only once there are results to read them against, and
-  they are what keeps the mode from reading as a verdict. Thinning them is the natural second pass
-  and is [Q-referee-panel-rules] below; it is not built here.
-- No change to the scan, the stores, the routes, the prompts or the URL parameters.
+  they are what keeps the mode from reading as a verdict. Thinning them is the natural second
+  pass: [Q-referee-panel-rules].
+- The scan itself, the stores, the routes, the prompts and the URL parameters.
+- The auto-run machinery for Candidates (`useAutoRun(slug, "candidates", …)`) is left in place
+  with nothing arming it, so that answering [Q-candidates-press] the other way is one line.
+
+## What this gives up
+
+Said plainly, because each of these reverses something written down earlier.
+
+- **The fact that the text has already been sent is no longer on screen at all times.** Since
+  2026-09-02 the one-line version of it was the label of the notice's collapse, so that *"shutting
+  the box hides the venues and the audience, never that the text has gone"*. It is one press away
+  now. The same fact is still shown when an article is added, before anything is sent.
+- **The scan's headline is no longer on screen in every state.** referee-mode.md said the scan
+  sits above the chips because *"a chip is one more thing a referee can fail to press"*, and that
+  its headline is *"the one thing on screen in every state"*. A finding still opens the box
+  unasked. *Not checked — this article came from a PDF*, a failed check, and *nothing found, which
+  is not a clean bill* are now behind the button. (GPT Sol's plan review, finding 3.)
+- **Candidates takes one more press**, reversing for this one sub-mode Greg's 2026-09-06 rule that
+  opening a mode starts it.
+
+The first two are [Q-referee-notices-hidden], the third is [Q-candidates-press].
 
 ## The simpler option passed over
 
 Only restyle: keep everything where it is and make the notice boxes smaller and greyer. Passed over
-because the complaint is about order and height, not colour: the actions are below the notices, and
-smaller notices would still be above them.
+because the complaint is about order and height, not colour: the actions were below the notices,
+and smaller notices would still be above them.
 
-## Stages
+## What the plan review changed
 
-One stage; it is one screen.
+GPT Sol, read-only, *build after changes*. Each finding was checked against the code.
 
-1. Tests first, seen red: the band shows no notice text when shut; the Notices button opens it and
-   says so with `aria-expanded`; it is open without a press when the scan found something; the
-   Candidates chip arms nothing; the lead line prints the current sub-mode's sentence; the How card
-   is shut on a device that has never seen it.
-2. The change, in `RefereeMode.tsx`, `RefereeCard.tsx`, `referee-card.ts`, `activation.ts`,
-   `CriteriaPanel.tsx`, `ClaimsPanel.tsx`, `styles/referee.css`.
-3. Existing tests that pin the old layout are updated to pin the new one, not deleted:
-   `referee-band-fits`, `referee-how-card`, `pressing-a-chip-arms-it`, `referee-candidates-press`,
-   `command-bar-sub-modes`, and whichever others go red.
-4. `npm test`, `npm run typecheck`, lint on touched files.
-5. Browser check by a Sonnet subagent at 1280×800, 820×1180 and 390×844: the same four states as
-   § Before, the same measurement, and the Notices box opened at each width.
-6. GPT Sol reviews the code. `referee-mode.md`, the docstrings in `messages.ts` and `activation.ts`
-   that describe the old arrangement, and the feedback note are updated in the same commit.
+| Finding | Taken? |
+|---|---|
+| 1. Removing the Candidates target strands a failed read: the chip's press was the only retry | Yes: **Try again** in the panel, and a test |
+| 2. The band needs the scan's own "opens" rule, not `warn`, and must not seed from *loading* | Yes: `sourceScanOpens`, `choice ?? computed` |
+| 3. Hiding the scan headline reverses a written rule the plan did not name | Yes: named above, and in the question for Greg |
+| 4. *"Opening Candidates may send…"* becomes false; follow-up turns have no warning beside them | Yes: reworded, and printed at the top of the panel in every state |
+| 5. Put the lead line inside the scroller; measure short windows; a finding may sit under the paragraphs | Yes: lead is in `.ref-panel`; scan is first in the box; 1280×720 and 900×337 in the browser pass |
+| 6. Assert literal `null` targets for Candidates, not only that two tables agree | Yes |
+| 7. The How card's stored bit | Moot: the card became the (i) and the bit is gone |
+| 8. Candidates repeats its purpose under the lead line | Yes: the purpose half went |
 
-Done means: at 1280×800 the first control in Criteria is within the top third of the band on a
-first visit, every notice is reachable in one press at all three widths, and nothing starts a web
-search without a press on a button that has the warning beside it.
+After the review, and not in the plan it read: change four. The first draft kept the card and
+started it shut. Reading `ModeSurface` showed the corner (i) every other mode has, which is what
+Greg's *"hide them inside the information tooltip"* names.
 
 ## Questions for Greg
 
-Written up in full in the debrief; the build does not wait on them.
+The build does not wait on these. What is built is the first option in each.
 
-- **[Q-referee-sent-line]** whether the one-line *"text has already been sent"* fact should stay
-  permanently visible. Built: behind the Notices button.
-- **[Q-candidates-press]** whether Candidates should start on its chip. Built: it waits for its
-  button.
-- **[Q-referee-panel-rules]** whether to thin the rule sentences inside each panel next. Not built.
+**[Q-referee-notices-hidden]** Two facts used to be on screen at all times in Referee mode and are
+now behind the Notices button: that the article's text has already gone to the model provider, and
+the one-line result of the hidden-instructions check (for a PDF: *not checked*).
+
+- *Behind the button (built).* The top of the mode is the chips and the work. Somebody who never
+  presses Notices never sees either fact in this mode; they did see the first when adding the
+  article.
+- *One quiet line stays.* For example, under the chips in small grey type: *"Text already sent to
+  the model provider · source not checked (PDF) · Notices"*. Costs one line (two on an iPad's
+  narrow band) and brings one of the warnings back.
+- What decides it: whether you think a referee with a confidential manuscript needs reminding in
+  this mode, or whether the sentence at add time is the reminder.
+- Recommendation: leave it behind the button. The add-time sentence is the one that arrives before
+  anything is sent; this one arrives after.
+
+**[Q-candidates-press]** Candidates is the sub-mode for editors: who could review this paper. Its
+first turn may search the web with terms taken from the paper.
+
+- *The chip opens it, a button starts it (built).* You press Candidates, read one sentence about
+  the search engine, and press *Build the reviewer brief*. One more press than before; no warning
+  anywhere else in the mode.
+- *The chip starts it (as it was from 2026-09-06).* One press. Then the search-engine warning has
+  to be visible before the chip is pressed, which means a line at the top of all four sub-modes,
+  as before.
+- What decides it: whether the extra press in the one editor-facing sub-mode bothers you more than
+  a standing warning line in the three referee-facing ones.
+- Recommendation: keep the button. Putting it back is one line in `activation.ts`, plus the
+  warning line above the chips.
+
+**[Q-referee-panel-rules]** Inside each panel there are still sentences that say how to read it:
+Claims opens with *"The model was asked for one thing only: where the paper takes each claim up…"*,
+Mirror with *"The model reads your own comments and remarks on them. It is not given the paper…"*,
+Criteria prints two lines above its list once there are criteria.
+
+- *Leave them (as now).* They are what stops a list of passages reading as a verdict, which is the
+  mode's whole argument.
+- *Move them into each panel's hover cards or the (i).* Shorter panels. The (i) would get long,
+  and a phone has no hover, so some would be seen by nobody.
+- Recommendation: leave them, and look again after you have used the new layout. Not built.
 
 ## Before
 
-_Filled in from the browser pass._
+Measured in Chrome on the box, 2026-10-03, on *How to Write Usefully* (HTML) and a PDF article,
+first visit (How card open). Offsets are from the top of the band to the criterion box.
+
+| Viewport | Band height | Notices boxes | How card | Criterion box starts at |
+|---|---|---|---|---|
+| desktop 1280×800 | 760 | 236 | 237 | **607** |
+| iPad 820×1180 | 1140 | 300 | 314 | **783** |
+| phone 390×844 | 804 | 236 | 256 | **627** |
+
+With the How card shut the box started at 360 (desktop and phone) and 458 (iPad). Roughly 14 lines
+of notice and explanation stood above the first control on desktop, 20 on an iPad.
+
+![before, desktop, Criteria](261003k-shot-before-desktop-criteria.png)
+![before, iPad, Criteria](261003k-shot-before-ipad-criteria.png)
+![before, phone, Criteria](261003k-shot-before-phone-criteria.png)
+![before, desktop, Claims](261003k-shot-before-desktop-claims.png)
 
 ## After
 
 _Filled in from the browser pass._
+
+## Reviews
+
+_The code review is added here when it returns._
