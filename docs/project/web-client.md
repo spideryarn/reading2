@@ -112,6 +112,10 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/relative-time.ts` § `timeAgo` / `relativeAgo`, with `src/web/useNow.ts` § `useNow`** —
   "3 days ago" that stays true while the page is open. `src/web/Metadata.tsx` § `ago` is an older
   private copy with neither the switch to a date nor the clock.
+- **`src/web/stale-shell.ts` § `reloadIfStale`** — code fetched on demand that did not arrive: asks
+  `/build.json` whether a newer build is live and reloads once if so, because a copy opened from a
+  home-screen icon outlives every deploy. `src/web/LazyPage.tsx` is its one caller; `src/web/maths.ts`
+  fetches on demand without it.
 - **`src/web/Tooltip.tsx` § `Tooltip`, `ControlTip`, `TipNote`** — any tip or card on a control
   ([tooltips.md](tooltips.md)); `src/web/useHoverCard.ts` for a card on the prose.
 - **`src/web/voice.ts` § `voiceClass`, `withVoice`** — text whose voice depends on the data (the
