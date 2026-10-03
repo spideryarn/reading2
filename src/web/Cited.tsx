@@ -57,9 +57,10 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import { BlockRef } from "./BlockRef.js";
 import { chipFor } from "./chat-commands.js";
-import { splitCitations, splitLinks } from "./citations.js";
+import { quotesBefore, splitCitations, splitLinks } from "./citations.js";
 import { CommandChip } from "./CommandChip.js";
 import type { CommandExecutor } from "./command-proposal.js";
+import type { JumpAim } from "./flash.js";
 import {
   splitCommandTokens,
   tokensOnOwnLine,
@@ -74,7 +75,13 @@ interface Props {
   text: string;
   /** Every block this article has, id to plain text. Also the "is this real" check. */
   blocks: Map<string, string>;
-  onJump(id: BlockId): void;
+  /**
+   * `aim` arrives only from a chip whose sentence quotes the article, and
+   * carries the quoted words so the landing can paint them rather than the
+   * paragraph (`cited`, below). A caller that ignores it gets the jump it
+   * always got.
+   */
+  onJump(id: BlockId, aim?: JumpAim): void;
   /**
    * The **end** of this text may be half-written — the answer is still arriving.
    *
@@ -118,7 +125,7 @@ interface Props {
 /** Everything the walk below needs, gathered once per render. */
 interface Ctx {
   blocks: Map<string, string>;
-  onJump(id: BlockId): void;
+  onJump(id: BlockId, aim?: JumpAim): void;
   links: boolean;
   commands: CommandExecutor | undefined;
   className: string | undefined;
@@ -597,13 +604,28 @@ function cited(text: string, ctx: Ctx, edges: Edges, end: boolean): ReactNode {
   );
 }
 
-/** The citation chips and the prose between them — one run with no link and no token in it. */
+/**
+ * The citation chips and the prose between them — one run with no link and no token in it.
+ *
+ * **A chip carries the quotations of its own sentence**, so pressing it paints
+ * those words in the block rather than the whole paragraph (a reader's report,
+ * spya-hzpf9b; citations.ts § `quotesBefore` has the rule and what makes it
+ * safe). Only the segment immediately before the chip is asked — the prose
+ * since the previous chip — so a quotation is never handed past one citation
+ * to the next. Every id of one bracket gets them, because `"…" [a, b]` does
+ * not say which of the two the words are from: each block paints what it has,
+ * and one that has none washes whole, as before.
+ */
 function citations(text: string, ctx: Ctx): ReactNode {
-  return splitCitations(text, ctx.blocks).map((seg, i) =>
-    seg.kind === "text" ? (
+  const segs = splitCitations(text, ctx.blocks);
+  return segs.map((seg, i) => {
+    if (seg.kind === "text") {
       // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
-      <Fragment key={`s${i}`}>{seg.text}</Fragment>
-    ) : (
+      return <Fragment key={`s${i}`}>{seg.text}</Fragment>;
+    }
+    const before = segs[i - 1];
+    const quotes = before?.kind === "text" ? quotesBefore(before.text) : [];
+    return (
       <span
         className={["cite", ctx.className].filter(Boolean).join(" ")}
         // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
@@ -615,9 +637,9 @@ function citations(text: string, ctx: Ctx): ReactNode {
             other block link on the page (BlockLinkCard.tsx). It was this
             file's own `CitedBlock`, one `Tooltip` per chip, until 2026-09-28. */}
         {seg.ids.map((id) => (
-          <BlockRef key={id} id={id} onJump={ctx.onJump} />
+          <BlockRef key={id} id={id} onJump={ctx.onJump} {...(quotes.length === 0 ? {} : { quotes })} />
         ))}
       </span>
-    ),
-  );
+    );
+  });
 }

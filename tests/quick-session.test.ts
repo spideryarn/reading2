@@ -142,7 +142,7 @@ describe("what ends a session", () => {
   it.each([
     ["the box emptied", edit("")],
     ["a matcher switch, ↺, a long blur, leaving the mode", { type: "end" } as QuickEvent],
-    ["its row deleted or fleshed out", { type: "rowGone", id: "spya-row002" } as QuickEvent],
+    ["its row deleted or replaced by thorough", { type: "rowGone", id: "spya-row002" } as QuickEvent],
   ])("%s", (_name, event) => {
     const { state, effects } = play([event, edit("why not"), pause], {
       from: opened(),

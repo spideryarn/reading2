@@ -1,0 +1,14 @@
+/* Show each query's literal matches, for the hand reading and to predeclare targets.
+   Prints article text: scratch only. Usage: npx tsx literal.ts [set] */
+import { loadArticle, quickBlocks } from "./lib.ts";
+import { ALL } from "./queries.ts";
+const set = process.argv[2] ?? "short";
+for (const s of ALL.filter((x) => x.set === set)) {
+  const asked = quickBlocks((await loadArticle(s.slug)).blocks);
+  const hits = asked.filter((b: any) => s.literal!.test(b.text));
+  console.log(`\n### ${s.slug.slice(0, 12)} | ${s.q} | literal ${s.literal} -> ${hits.length} of ${asked.length}`);
+  for (const b of hits.slice(0, 8)) {
+    const i = b.text.search(s.literal!);
+    console.log(`  ${b.id} [${b.text.length}] …${b.text.slice(Math.max(0, i - 110), i + 130).replace(/\n/g, " ")}…`);
+  }
+}

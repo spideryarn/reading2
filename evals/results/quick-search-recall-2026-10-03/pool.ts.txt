@@ -1,0 +1,31 @@
+/* Pooled, unlabelled hand judging (Sol F5). Lists every block that any listed arm kept (after the
+   cap, any of its runs) and that is neither in the yardstick nor judged yet — in article order,
+   with no arm name and no score. Prints article text: scratch only.
+   Usage: npx tsx pool.ts <sets> <wordings> <rule> [topN]
+   Judgements go in judged.json as { "<slug>|<query>": { "<blockId>": "y" | "n" } }. LLM arms'
+   answers (llm-raw.json) are pooled in too when present. */
+import { existsSync, readFileSync } from "node:fs";
+import { DIR, loadArticle, quickBlocks } from "./lib.ts";
+import { ALL } from "./queries.ts";
+import { RULES, select, truth } from "./analyse-lib.ts";
+
+const [sets, wordings, ruleName, topN] = [process.argv[2]!.split(","), process.argv[3]!.split(","), process.argv[4]!, Number(process.argv[5] ?? 20)];
+const raw = JSON.parse(readFileSync(`${DIR}/jev-raw.json`, "utf8"));
+const llm = existsSync(`${DIR}/llm-raw.json`) ? JSON.parse(readFileSync(`${DIR}/llm-raw.json`, "utf8")) : {};
+const judged = existsSync(`${DIR}/judged.json`) ? JSON.parse(readFileSync(`${DIR}/judged.json`, "utf8")) : {};
+const rule = RULES.find((r) => r.name === ruleName)!;
+let n = 0;
+for (const s of ALL.filter((q) => sets.includes(q.set))) {
+  const asked = quickBlocks((await loadArticle(s.slug)).blocks);
+  const { Y } = truth(s);
+  const pool = new Set<string>();
+  for (const w of wordings) for (const rep of raw[`${w}|${s.slug}|${s.q}`]?.reps ?? []) for (const id of select(rep.scores, s.slug, rule).ids.slice(0, topN)) pool.add(id);
+  for (const e of Object.values(llm) as any[]) if (e.slug === s.slug && e.q === s.q) for (const rep of e.reps) for (const id of (rep.ids ?? []).slice(0, topN)) pool.add(id);
+  const j = judged[`${s.slug}|${s.q}`] ?? {};
+  const todo = asked.filter((b: any) => pool.has(b.id) && !Y.has(b.id) && !j[b.id]);
+  if (!todo.length) continue;
+  console.log(`\n### ${s.slug}|${s.q}   (${todo.length} to judge)`);
+  for (const b of todo) { n++; console.log(`  ${b.id} ${b.text.slice(0, Number(process.env.SNIP ?? 260)).replace(/\n/g, " ")}`); }
+}
+console.log(`\n${n} blocks to judge`);
+process.exit(0);

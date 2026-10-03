@@ -235,6 +235,8 @@
     .cmt-followup input,
     .annotate-dialog textarea,
     .dock-question-state.own,
+    /* the reader's note on their own highlight, in the Quotes band's card */
+    .quotes-yours-note,
     .mir-yours,
     .quiz-answer,
     .srch-input,

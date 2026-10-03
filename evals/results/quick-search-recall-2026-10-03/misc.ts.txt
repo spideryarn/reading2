@@ -1,0 +1,16 @@
+/* Cold (nothing cached) against warm LLM latency, spend by arm, and worst floods. No spend. */
+import { readFileSync } from "node:fs";
+import { DIR, median, pct } from "./lib.ts";
+const llm = JSON.parse(readFileSync(`${DIR}/llm-raw.json`, "utf8"));
+for (const m of new Set(Object.values(llm).map((e: any) => e.model)) as Set<string>) {
+  for (const long of [false, true]) {
+    const cold: number[] = [], warm: number[] = [], coldF: number[] = [], warmF: number[] = [];
+    for (const e of Object.values(llm) as any[]) if (e.model === m && e.slug.startsWith("replication") === long) for (const r of e.reps) { (r.usage?.cached ? warm : cold).push(r.msDone); if (r.msFirstId !== null) (r.usage?.cached ? warmF : coldF).push(r.msFirstId); }
+    console.log(`${m.padEnd(30)} ${long ? "long" : "typ "} cold n=${cold.length} first ${median(coldF)} done med ${median(cold)} p90 ${pct(cold, 0.9)} | warm n=${warm.length} first ${median(warmF)} done med ${median(warm)} p90 ${pct(warm, 0.9)}`);
+  }
+  const floods = (Object.values(llm) as any[]).filter((e) => e.model === m && e.set !== "old").map((e) => `${e.q}:${e.reps.map((r: any) => r.ids.length).join("/")}`).filter((s) => /1\d|20/.test(s.split(":")[1]!));
+  console.log(`   floods on short/holdout: ${floods.join("  ")}`);
+}
+const by: Record<string, number> = {};
+for (const l of readFileSync(`${DIR}/spend.jsonl`, "utf8").trim().split("\n")) { const j = JSON.parse(l); by[j.arm] = (by[j.arm] ?? 0) + (j.cost ?? 0); }
+console.log(by, "total", Object.values(by).reduce((s, x) => s + x, 0).toFixed(4));

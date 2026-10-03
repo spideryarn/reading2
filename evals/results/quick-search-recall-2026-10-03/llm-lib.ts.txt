@@ -1,0 +1,75 @@
+/* The ids-only LLM arm (Greg's suggestion): the article as id-tagged blocks plus the query, and
+   the model answers a JSON array of block ids, best first. Streamed, so the first usable hit can
+   be timed. Same eligible blocks as Jev (quickBlocks), at most 20 unique valid ids (Sol F7). */
+import { KEY, spent, type B } from "./lib.ts";
+
+export const SYSTEM = `You find passages in an article for a reader who typed a search query.
+The article is given as blocks, each on its own line as [id] text.
+Return the ids of every block that is about the query or mentions it, even in passing. Include synonyms and closely related ideas, but not blocks that are merely on the article's general subject.
+Answer with a JSON array of ids only, best match first, at most 20, for example ["spya-abc123","spya-def456"]. If nothing matches, answer []. No other text.`;
+
+export function userPrompt(q: string, bs: B[]) {
+  return `<article>\n${bs.map((b) => `[${b.id}] ${b.text.replace(/\s*\n\s*/g, " ")}`).join("\n")}\n</article>\n\nQuery: ${q}`;
+}
+
+export interface LlmRun { ok: boolean; status: number; error?: string; msFirstByte: number | null; msFirstId: number | null; msDone: number; ids: string[]; invalid: number; dupes: number; rawLen: number; usage: any; cost: number | null; provider?: string; reasoningChars: number }
+
+export async function llmSearch(model: string, q: string, bs: B[], extra: Record<string, unknown> = {}, timeoutMs = 90_000): Promise<LlmRun> {
+  const valid = new Set(bs.map((b) => b.id));
+  const t0 = performance.now();
+  const out: LlmRun = { ok: false, status: 0, msFirstByte: null, msFirstId: null, msDone: 0, ids: [], invalid: 0, dupes: 0, rawLen: 0, usage: null, cost: null, reasoningChars: 0 };
+  try {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, stream: true, usage: { include: true }, max_tokens: 2000, temperature: 0, messages: [{ role: "system", content: SYSTEM }, { role: "user", content: userPrompt(q, bs) }], ...extra }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    out.status = r.status;
+    if (!r.ok || !r.body) { out.error = (await r.text()).slice(0, 400); out.msDone = Math.round(performance.now() - t0); return out; }
+    let text = "", buf = "";
+    const seen = new Set<string>();
+    const dec = new TextDecoder();
+    for await (const chunk of r.body as any) {
+      buf += dec.decode(chunk, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const d = line.slice(5).trim();
+        if (d === "[DONE]") continue;
+        let j: any;
+        try { j = JSON.parse(d); } catch { continue; }
+        if (j.error) out.error = JSON.stringify(j.error).slice(0, 300);
+        if (j.usage) { out.usage = j.usage; out.cost = j.usage.cost ?? null; }
+        if (j.provider) out.provider = j.provider;
+        const delta = j.choices?.[0]?.delta;
+        if (delta?.reasoning) out.reasoningChars += String(delta.reasoning).length;
+        if (delta?.content) {
+          if (out.msFirstByte === null) out.msFirstByte = Math.round(performance.now() - t0);
+          text += delta.content;
+          /* A usable hit is a COMPLETE quoted id that is a block we asked about — not a fragment. */
+          for (const m of text.matchAll(/"(spya-[a-z0-9]{6})"/g)) {
+            const id = m[1]!;
+            if (seen.has(id)) continue;
+            seen.add(id);
+            if (!valid.has(id)) { out.invalid++; continue; }
+            if (out.ids.length < 20) out.ids.push(id);
+            if (out.msFirstId === null) out.msFirstId = Math.round(performance.now() - t0);
+          }
+        }
+      }
+    }
+    out.msDone = Math.round(performance.now() - t0);
+    out.rawLen = text.length;
+    out.dupes = [...text.matchAll(/"(spya-[a-z0-9]{6})"/g)].length - seen.size;
+    /* The whole answer must parse as a JSON array, or it is a failure the app would have to handle. */
+    try { out.ok = Array.isArray(JSON.parse(text.trim().replace(/^```(?:json)?\s*|\s*```$/g, ""))); } catch { out.ok = false; out.error ??= `unparseable: ${text.slice(0, 120)}`; }
+  } catch (e) {
+    out.error = String(e).slice(0, 300);
+    out.msDone = Math.round(performance.now() - t0);
+  }
+  spent(`llm:${model}`, out.cost);
+  return out;
+}

@@ -1,0 +1,23 @@
+/* Step 2: reproduce the "Buddhism" miss exactly as production sends it. SPENDS (Jev, well under 1 cent). */
+import { writeFileSync } from "node:fs";
+import { DIR, ENTROPY, jevSearch, loadArticle, quickBlocks, chunkBlocks, totalSpend } from "./lib.ts";
+
+const TARGET = "spya-p2wrn0";
+const { blocks } = await loadArticle(ENTROPY);
+const asked = quickBlocks(blocks);
+const chunks = chunkBlocks(asked);
+console.log(`blocks ${blocks.length}, asked ${asked.length}, chunks ${chunks.length} (${chunks.map((c: any[]) => c.length).join("/")}); target asked: ${asked.some((b: any) => b.id === TARGET)}; target chunk: ${chunks.findIndex((c: any[]) => c.some((b) => b.id === TARGET))}`);
+const out: any[] = [];
+for (const q of ["Buddhism", "buddhism", "Buddhist", "Buddhist no-self", "Buddhism and no-self", "no-self", "Evolution", "evolution"]) {
+  for (let i = 0; i < 3; i++) {
+    const r = await jevSearch("plain", q, blocks);
+    const sorted = Object.entries(r.scores).sort((a, b) => b[1] - a[1]);
+    const rank = sorted.findIndex(([id]) => id === TARGET) + 1;
+    const kept = sorted.filter(([, v]) => v >= 0.7);
+    out.push({ q, rep: i, ms: r.ms, inputTokens: r.inputTokens, cost: r.cost, model: r.calls[0]?.model, target: r.scores[TARGET], rank, kept: kept.map(([id, v]) => [id, +v.toFixed(3)]), top5: sorted.slice(0, 5).map(([id, v]) => [id, +v.toFixed(3)]), scores: r.scores });
+    console.log(`${q.padEnd(22)} #${i} target ${r.scores[TARGET]?.toFixed(3)} rank ${rank}/${sorted.length} kept>=0.7: ${kept.length} top: ${sorted.slice(0, 4).map(([id, v]) => `${id.slice(5)}=${v.toFixed(2)}`).join(" ")} ${r.ms}ms ${r.inputTokens}tok`);
+  }
+}
+writeFileSync(`${DIR}/out-repro.json`, JSON.stringify(out, null, 1));
+console.log(`spend so far $${totalSpend().toFixed(4)}`);
+process.exit(0);

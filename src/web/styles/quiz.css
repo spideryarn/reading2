@@ -117,8 +117,23 @@
      behind it and looked right by accident against the band. */
   background: var(--page);
   color: var(--ink);
-  resize: vertical;
+  /* The height is the words' (QuizPanel.tsx § `fitBox`), so there is nothing
+     to drag and nothing to scroll: the whole answer is on screen and the band
+     is what scrolls. spya-qnrxuw. */
+  resize: none;
+  overflow-y: hidden;
 }
+
+/* The fill, on whichever of Answer and Next is the thing to press: Answer
+   until its answer is marked, Next after. `.chat-send` (mode-band.css) is the
+   box and its "not yet" grey; chat keys its own fill on `[type="submit"]`, and
+   neither of these is in a form. The same tokens and the same hover. */
+.chat-send.quiz-go:not([aria-disabled="true"]) {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.chat-send.quiz-go:not([aria-disabled="true"]):hover { filter: brightness(1.1); }
 
 .quiz-actions {
   display: flex;

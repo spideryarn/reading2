@@ -116,6 +116,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { useSlow } from "./useSlow.js";
+import { putKeyboardAway } from "./useVisualViewport.js";
 import { isImeComposing } from "./key-chord.js";
 import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
 
@@ -186,7 +187,10 @@ export type SearchAccess =
       error: string | null;
       /** Requests this tab started and still has in flight, by run id. */
       running: ReadonlySet<string>;
-      /** Ask a question; flesh-out identifies the quick row it came from. */
+      /**
+       * Ask a question. `sourceId` is *thorough*'s: the quick row this
+       * meaning search replaces, which the owner of the rows deletes.
+       */
       onAsk(criterion: string, kind: SearchKind, sourceId?: string): void;
       onRetry(id: string): void;
       /**
@@ -436,7 +440,7 @@ export function SearchPanel({
  * How a question still out from this tab is told apart from another: its
  * trimmed words **and its kind**. A quick search and a meaning search for the
  * same words are two questions, so the box can ask meaning while quick is
- * still running. *Flesh out* appears on a finished quick row (plan 261002e,
+ * still running. *Thorough* appears on a finished quick row (plan 261002e,
  * review F5). `useSearch.isRunning` keys its ref the same way.
  */
 function runningKey(criterion: string, kind: SearchKind): string {
@@ -573,6 +577,9 @@ const Box = forwardRef<
     if (!ready || asking === null) return;
     if (session) session.flush(draft);
     else onAsk(draft, asking);
+    /* Enter and find share the accepted search: let go of a soft keyboard
+       so the hits can be read. A refused search keeps the caret. */
+    putKeyboardAway(box.current);
   };
 
   /**
@@ -641,7 +648,9 @@ const Box = forwardRef<
                question (keyboard.md § Enter in a text box; Sol's D9). */
             if (e.key === "Enter" && !isImeComposing(e)) {
               e.preventDefault();
-              if (ready) ask();
+              if (ready) {
+                ask();
+              }
               /* Words mode has nothing to ask — the hits arrived as the reader
                  typed — so Enter dismisses the keyboard instead. On a phone that
                  is the whole point of the press; on a desktop it hands the arrow
@@ -802,7 +811,9 @@ const Box = forwardRef<
  *
  * ## The dot is not the only thing saying which colour this is
  *
- * It is a dot **and** the row's own left edge, in the same hue. One is easy to
+ * It is the box, a swatch beside the words **and** the row's own left edge, in
+ * the same hue; the swatch and the edge are at full strength whether or not
+ * the row is ticked (2026-10-03, `spya-fwcwun`). One is easy to
  * miss at 11px, and colour discrimination in a small field is exactly where
  * this fails first — the same reason the granularity columns' tints run down
  * lightness as well as chroma (styles.css § --depth-0). Neither is load-bearing
@@ -951,10 +962,10 @@ function Saved({
           const checked = active.includes(run.id);
           const slot = slots.get(run.id);
           const retryAlreadyRunning = running.has(runningKey(run.criterion, run.kind));
-          /* *Flesh out*: the same words as a full meaning search, on a quick
+          /* *Thorough*: the same words as a full meaning search, on a quick
              row that has finished. Refused while that meaning search is
              already out from this tab, the same rule as Find. */
-          const fleshing = running.has(runningKey(run.criterion, "meaning"));
+          const thoroughRunning = running.has(runningKey(run.criterion, "meaning"));
           return (
             <li
               key={run.id}
@@ -1000,7 +1011,17 @@ function Saved({
                 title={`${run.criterion}\n\nMark only this search`}
                 onClick={() => onSolo(run.id)}
               >
-                <span className="srch-saved-criterion">{run.criterion}</span>
+                {/* **The colour key** — Greg, `spya-fwcwun`, 2026-10-03: *"it's
+                    not obvious enough next to the search terms which color
+                    they correspond to."* A solid swatch beside the words, at
+                    full strength whether or not the row is ticked: the tick's
+                    accent only shows when ticked, and a reader choosing which
+                    search to switch on is looking at the unticked ones.
+                    Decoration inside the row's own button, not a control. */}
+                <span className="srch-saved-words">
+                  <span className="srch-saved-swatch" aria-hidden />
+                  <span className="srch-saved-criterion">{run.criterion}</span>
+                </span>
                 <span className="srch-saved-meta">
                   {/* Which matcher answered it, for a visitor as much as for
                       the owner: a quick row's passages are whole paragraphs
@@ -1088,13 +1109,16 @@ function Saved({
                 ))}
               {/* Fourth control on a row that already had three, in a band
                   288px wide — so it is an icon in the same group rather than a
-                  coloured dot of its own. A dot would have been the more direct
-                  affordance and was rejected on two counts: the row already
-                  says its colour twice (the box and the left edge, § The dot is
-                  not the only thing), so a third coloured thing is noise; and a
-                  swatch pressed to *open* a menu sits a few pixels from a box
-                  that means something else entirely, which is the arrangement
-                  .srch-saved-tick's own comment warns about. */}
+                  coloured dot to press. A pressable dot was rejected on two
+                  counts, and one of them has since been overturned: *the row
+                  already says its colour twice, so a third coloured thing is
+                  noise* — Greg's report `spya-fwcwun` (2026-10-03) is the
+                  evidence that twice was not enough, and the row now carries a
+                  swatch beside its words (above). The other count stands, which
+                  is why that swatch is decoration and the picker is still this
+                  icon: a swatch pressed to *open* a menu sits a few pixels from
+                  a box that means something else entirely, which is the
+                  arrangement .srch-saved-tick's own comment warns about. */}
               {/* **All three go for a visitor**, and each for its own reason
                   rather than for one blanket one. The colour is a choice
                   written to `search_runs.colour`, so it is a write. ↺ puts the
@@ -1102,29 +1126,29 @@ function Saved({
                   somebody else's row. What is left is the tick and the row
                   itself, which is exactly *see the ones they have already
                   created*. */}
-              {/* **Flesh out** — the owner's, on a finished quick row only. It
+              {/* **Thorough** — the owner's, on a finished quick row only. It
                   asks the same words as a meaning search, a new row with quotes
-                  and reasons, and unticks this one so the two do not paint
-                  over each other; this row stays for comparison until it is
-                  deleted. A visitor has no way to ask anything, so no button
-                  (plan 261002e, review F6). */}
+                  and reasons, which **replaces** this one: this row is deleted
+                  at the press and the new one wears its colour (plan 261003i
+                  B2; it was *flesh out*, and kept both rows, until 2026-10-03).
+                  A visitor has no way to ask anything, so no button (plan
+                  261002e, review F6). */}
               {own && run.kind === "quick" && run.status === "done" && (
                 <button
                   type="button"
-                  className="srch-flesh"
-                  disabled={fleshing}
+                  className="srch-thorough"
+                  disabled={thoroughRunning}
                   title={
-                    fleshing
-                      ? "Already running the full search for this"
-                      : "Run the full meaning search for these words — exact quotes and reasons, about half a minute"
+                    thoroughRunning
+                      ? "Already running the thorough search for this"
+                      : "Run the thorough (meaning) search for these words: exact quotes and reasons, about half a minute. It replaces this quick search."
                   }
                   onClick={() => {
-                    if (fleshing) return;
+                    if (thoroughRunning) return;
                     own.onAsk(run.criterion, "meaning", run.id);
-                    onToggle(run.id, false);
                   }}
                 >
-                  flesh out
+                  thorough
                 </button>
               )}
               {own && (

@@ -882,6 +882,10 @@ comment whose private conversation link was stripped, and the margin leaves it o
 bare bookmark.
 [261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
 
+**A coloured comment on a selection is also a row in the Quotes band**, in its colour and marked
+*yours*, for the article's owner — unless it is a Referee placement:
+[quotes.md § Your highlights are rows too](quotes.md#your-highlights-are-rows-too).
+
 ## Where the code is
 
 | File | What it does |

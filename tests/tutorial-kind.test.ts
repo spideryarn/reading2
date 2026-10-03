@@ -90,6 +90,31 @@ describe("Tutorial's prompt", () => {
     expect(String(messages[2]?.content)).toMatch(/what do you remember about it/i);
   });
 
+  /* Greg, `spya-hw8mhz`, 2026-10-03: the reader should not have to say they
+     have not read it; they are told it is fine. The on-screen invitation and
+     the placeholder (src/web/ChatPanel.tsx) say it the same way. */
+  it("tells the reader it is fine not to have read it, and does not ask them to say so", () => {
+    const greeting = String(buildConverseMessages({ ...base, kind: "tutorial" })[2]?.content);
+    expect(greeting).toMatch(/it's fine if you haven't read it yet, or haven't finished/i);
+    expect(greeting).not.toMatch(/haven't you read|say you haven't/i);
+    expect(systemOf("tutorial")).toMatch(/do not ask whether they have read it/i);
+    /* GPT Sol's plan review, PR-1: a terse first message that names a goal
+       must not be read as "has not read it". */
+    expect(systemOf("tutorial")).toMatch(/names a goal is a goal/i);
+  });
+
+  /* Greg, `spya-mtsf0y`, 2026-10-03: "a tiny nudge towards tutorial mode
+     focusing more on retention of the article rather than helping me explore my
+     own thoughts." The measurement is the eval
+     (docs/investigations/261003c-tutorial-prompt-leans-to-retention.md); this only holds the rule in the prompt. */
+  it("puts the author's argument first, and rations questions about the reader's own view", () => {
+    const tutorial = systemOf("tutorial");
+    expect(tutorial).toContain("THEIR OWN VIEW IS THE EXCEPTION");
+    expect(tutorial).toMatch(/never in your first two/i);
+    expect(tutorial).toMatch(/what the author is saying/i);
+    expect(systemOf("remember")).not.toContain("THEIR OWN VIEW IS THE EXCEPTION");
+  });
+
   /* The shared rules, by interpolation: Recall's spoken-input and citing
      sections, and chat's security rules about tools and fetched pages. GPT
      Sol's plan review, P1: a Tutorial answer runs through the same renderer and

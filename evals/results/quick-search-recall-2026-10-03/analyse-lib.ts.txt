@@ -1,0 +1,39 @@
+/* The yardstick and the selection rules, shared by analyse.ts, pool.ts and llm-analyse.ts. */
+import { readFileSync } from "node:fs";
+import { DIR, WT, loadArticle, quickBlocks } from "./lib.ts";
+import { ALL, type Q } from "./queries.ts";
+
+export const CAP = 20;
+const refShort = JSON.parse(readFileSync(`${DIR}/ref-short.json`, "utf8"));
+const SPIKE = `${WT}/evals/results/quick-search-spike-2026-10-02`;
+
+export type Rule = { name: string; keep: (p: number, top: number) => boolean };
+export const RULES: Rule[] = [
+  ...[0.5, 0.6, 0.65, 0.7, 0.75, 0.8].map((f) => ({ name: `>=${f}`, keep: (p: number) => p >= f })),
+  { name: ">=0.7|top-0.05&>=0.6", keep: (p, top) => p >= 0.7 || (p >= 0.6 && p >= top - 0.05) },
+  { name: ">=0.7|top-0.10&>=0.55", keep: (p, top) => p >= 0.7 || (p >= 0.55 && p >= top - 0.1) },
+  { name: "top-0.15&>=0.5", keep: (p, top) => p >= 0.5 && p >= top - 0.15 },
+  { name: "top-0.15(no floor)", keep: (p, top) => p >= top - 0.15 },
+];
+
+export const asked: Record<string, any[]> = {};
+for (const slug of new Set(ALL.map((q) => q.slug))) asked[slug] = quickBlocks((await loadArticle(slug)).blocks);
+
+/** R: Sonnet's hits on quick-eligible blocks. L: literal targets, predeclared. Y: their union. */
+export function truth(s: Q) {
+  const ids = new Set(asked[s.slug]!.map((b) => b.id));
+  let ref: string[] = [];
+  if (s.set === "old") ref = (JSON.parse(readFileSync(`${SPIKE}/reference-${s.slug}.json`, "utf8"))[s.q].hits ?? []).map((h: any) => h.blockId);
+  else if (s.set === "short") ref = (refShort[`${s.slug}|${s.q}`]?.hits ?? []).map((h: any) => h.blockId);
+  const R = new Set(ref.filter((id) => ids.has(id)));
+  const L = new Set(s.literal ? asked[s.slug]!.filter((b) => s.literal!.test(b.text)).map((b) => b.id) : []);
+  return { R, L, Y: new Set([...R, ...L]) };
+}
+
+/** Production's selection with a pluggable rule: keep, sort best first (ties in article order), cap. */
+export function select(scores: Record<string, number>, slug: string, rule: Rule) {
+  const order = new Map(asked[slug]!.map((b, i) => [b.id, i]));
+  const top = Math.max(...Object.values(scores));
+  const kept = Object.entries(scores).filter(([, p]) => rule.keep(p, top)).sort((a, b) => b[1] - a[1] || order.get(a[0])! - order.get(b[0])!);
+  return { uncapped: kept.length, ids: kept.slice(0, CAP).map(([id]) => id) };
+}
