@@ -6,14 +6,32 @@ run the same evening. This compares two prompts, `skim/8` and `skim/9`, on the s
 (`power: "standard"`, Sonnet) and the same stored Quotes and Ideas. Results are in
 `evals/results/skim-coverage-2026-10-03T18-10-38*`.
 
-**There were two rounds, the same evening.** Round one measured the first `skim/9` wording
-(**NEW-a**) against `skim/8` (**OLD**). It found that a carried stop lands at the top of More as a
-recap, so the prompt gained one paragraph telling the model to mix the depths in one order, and
-round two measured that wording (**NEW-b**) against the same OLD routes. Sections 1 to 4 below are
-round one, left as written. [Round two](#round-two-new-b-the-route-is-one-order-with-the-depths-mixed)
-and the [conclusion](#conclusion) follow them.
+**There were three rounds, the same evening**, each against the same `skim/8` routes (**OLD**):
 
-**Both rounds in one paragraph.** NEW-b does what it was changed to do: carried stops now sit
+| | what it is | file hash | results stem |
+|---|---|---|---|
+| **NEW-a** | the first `skim/9` wording | `3c55882b` | `…T18-10-38` |
+| **NEW-b** | plus a paragraph: the route is one order with the depths mixed | `286b40ca` | `…T18-18-47` |
+| **NEW-c** | plus a cap in code, `maxCarried(own) = ceil(own / 2)`, and one sentence saying so | `b7e31dcc` | `…T19-01-33` |
+
+Sections 1 to 4 below are round one, left as written. Then
+[round two](#round-two-new-b-the-route-is-one-order-with-the-depths-mixed),
+[round three](#round-three-new-c-a-cap-on-what-a-pass-carries) and the [conclusion](#conclusion).
+
+**All three in one paragraph.** NEW-c, the version with the cap, is the best of the three on
+everything measured. It carries about what NEW-a did (26% of More, 20% of Most), keeps NEW-b's
+placement (carried stops sit among More's own in 8 of 12 runs), never carried all of Gist or none
+of it, and nothing failed. The cap itself almost never fired: twice in 12 runs. So the narrower
+spread is the model following the new sentence, not the code cutting, and 12 runs is a small basis
+for saying the spread is fixed. The blind judge preferred NEW-c's More for a reader who starts
+there in 12 of 12. For a reader coming from Gist, which is Greg's complaint, it came out 8 to 2
+with 2 ties, and two runs of the *old* prompt against each other came out 5 to 0, so **that is
+still not shown** by the headline number. What points the right way is a pattern found after the
+fact across all three rounds: the runs that put a carried stop beside its pair never lost (14 wins,
+2 ties in 16), and the runs that put it at the head as a recap won 8, lost 6 and tied 4. **No
+person has read any of this**, and carrying into Most was never judged blind.
+
+**Rounds one and two in one paragraph.** NEW-b does what it was changed to do: carried stops now sit
 among More's own stops in 7 of 11 runs, against 1 of 11. It is as valid as NEW-a, and the Gist walk
 and aggregate Idea coverage hold. First-placed pass sizes changed in four matched runs: three moved
 one stop and one moved two. It also carries **more**: a third of More and a fifth of
@@ -423,10 +441,230 @@ Six of the nine repeats are `fowler`'s: the closing line *"the mind that makes t
 into More are still not next to their pair, by this reading; most of those are a framing stop at
 the head of the walk, which every later stop leans on and none sits beside.
 
+## Round three: NEW-c, a cap on what a pass carries
+
+**What changed**, after GPT Sol's code review refused to land the uncapped carrying (its F7):
+
+- **code:** `maxCarried(own) = ceil(own / 2)` in `src/skim.ts`. A pass carries at most half as many
+  earlier stops as it has of its own. `validateRoute` rule 8 keeps the earliest in route order and
+  drops the other `again` entries, counted in `dropped.overCarried`. The stop is always kept.
+- **prompt:** one sentence in the "Do not carry" bullet: *"Carry into a pass at most half as many
+  stops as it has of its own: one or two into a pass of four, never as many as it adds."*
+
+```
+npx tsx scripts/eval/skim-again-cap.ts evals/results/skim-coverage-2026-10-03T18-18-47.json
+npx tsx scripts/eval/skim-coverage-eval.ts --runs=2 --new-only --new-version=skim/9 \
+  --allow-outdated-ideas vb-spya-vu3xen cargocult-spya-rz663q entropy-24-00930-spya-pywwkq \
+  source-spya-furjgs best-spya-ny2pgx fowler-phrenology
+npx tsx scripts/eval/skim-again-pairs.ts evals/results/skim-coverage-2026-10-03T19-01-33.json \
+  --old-from=evals/results/skim-coverage-2026-10-03T18-10-38.json
+npx tsx scripts/eval/skim-route-order.ts evals/results/skim-coverage-2026-10-03T19-01-33.json
+```
+
+**The scripts and the reader agree on what a walk is.** Sol's fix made `scripts/skim-coverage.ts`
+walk a pass through the client's `passRoute`. The eval script now calls `passRoute` too and throws
+if its own count differs; it did not, in any of the 12 runs.
+
+### The cap, applied to the NEW-b routes with no model call
+
+[`scripts/eval/skim-again-cap.ts`](../../scripts/eval/skim-again-cap.ts) applies production's
+`maxCarried` to the stored round-two routes the way rule 8 does.
+
+| | carried before | after | share before → after | walks the cap touched |
+|---|---|---|---|---|
+| More | 29 | 26 | 33% → 31% | 3 of 11 |
+| Most | 30 | 28 | 22% → 21% | 1 of 10 |
+
+The largest More share falls from 50% to 40%, the largest Most from 42% to 35%. **On its own the
+cap changes little**: it cuts 5 entries of 59.
+
+Which five, by round two's classification:
+
+| | kept | dropped |
+|---|---|---|
+| bridge, next to its pair | 33 | **4** |
+| bridge, not next to its pair | 12 | 0 |
+| redundant repeat | 8 | **1** |
+| superseded | 1 | 0 |
+
+- **"The earliest keep" does not pick the good ones.** Four of the five it cut were bridges
+  sitting next to their pair, and eight of the nine repeats stayed. It could not do otherwise: it
+  knows a stop's position, not its worth. In a route that follows the article's order it simply
+  cuts whatever comes last in the article (`cargocult`'s repeatability case, `best`'s "evergreen"
+  requirement, the last two of `entropy`'s findings).
+- **Five entries is too few to say the rule is wrong**, and no rule this data can test is better.
+  The one computable candidate, cutting first the carried stops with none of the pass's own stops
+  beside them, would not have chosen differently in the three More walks: every carried stop there
+  was beside one. Keeping the *latest* would cut the definition or framing question at the head,
+  which is what makes the starting-at-More result. So the rule stays arbitrary, and what matters
+  is how seldom it fires.
+
+### NEW-c, run for real
+
+Each cell is **walk length · carried · share**.
+
+| Article | run | More | Most | Gist carried into More | `overCarried` | `badAgain` |
+|---|---|---|---|---|---|---|
+| vb | 1 | 4 · 1 · 25% | 5 · 2 · **40%** | 1 of 2 | 0 | 0 |
+| | 2 | 5 · 1 · 20% | 3 · 1 · 33% | 1 of 2 | 0 | 0 |
+| cargocult | 1 | 5 · 2 · **40%** | 7 · 2 · 29% | 2 of 3 | **1** | 0 |
+| | 2 | 5 · 2 · **40%** | 5 · 0 · 0% | 2 of 3 | 0 | 0 |
+| entropy | 1 | 7 · 1 · 14% | 13 · 3 · 23% | 1 of 4 | 0 | 0 |
+| | 2 | 8 · 3 · 38% | 17 · 6 · 35% | 3 of 4 | **1** | 0 |
+| source | 1 | 5 · 1 · 20% | 6 · 0 · 0% | 1 of 3 | 0 | 0 |
+| | 2 | 5 · 1 · 20% | 7 · 1 · 14% | 1 of 3 | 0 | 0 |
+| best | 1 | 10 · 3 · 30% | 13 · 2 · 15% | 3 of 5 | 0 | 0 |
+| | 2 | 8 · 1 · 13% | 15 · 4 · 27% | 1 of 5 | 0 | 0 |
+| fowler | 1 | 10 · 3 · 30% | 22 · 3 · 14% | 3 of 5 | 0 | 0 |
+| | 2 | 8 · 2 · 25% | 24 · 4 · 17% | 2 of 5 | 0 | 0 |
+
+All four arms side by side:
+
+| | OLD | NEW-a | NEW-b | NEW-c |
+|---|---|---|---|---|
+| More, all runs: walk · carried · share | 48 · 0 · 0% | 83 · 21 · 25% | 88 · 29 · 33% | **80 · 21 · 26%** |
+| Most, all runs | 75 · 0 · 0% | 123 · 17 · 14% | 138 · 30 · 22% | **137 · 28 · 20%** |
+| Gist stops carried into More | 0 | 21 of 44 | 29 of 45 | 21 of 44 |
+| Largest share in any More walk | 0% | 42% | 50% | 40% |
+| Largest share in any Most walk | 0% | 33% | 42% | 40% |
+| Runs that carried no Gist stop into More | 12 | 1 | 1 | **0** |
+| Runs that carried every Gist stop into More | 0 | 1 | 2 | **0** |
+| Widest swing between two runs of one article | – | 0 of 5 and 5 of 5 | 0 of 3 and 3 of 3 | 1 of 5 and 3 of 5 |
+| `overCarried` (entries the code cut) | – | – | (5 if the cap had applied) | **2** |
+| `badAgain`, other drops, failed routes, truncations | 0 | 0 | 0 | 0 |
+| Thinking tokens per call (runs that thought) | 297 (6) | 626 (7) | 812 (8) | 1,139 (10) |
+| Cost per route | $0.026 | $0.031 | $0.033 | $0.037 |
+
+- **The model obeyed the sentence; the code cut twice.** One entry in `cargocult` run 1 (More has
+  3 of its own, so room for 2) and one in `entropy` run 2 (Most). Which stop lost its entry is not
+  recorded, only the count. Applying the cap again to the stored NEW-c routes cuts nothing, as it
+  should.
+- **The amount came back to NEW-a's**, and the none-to-all swing did not appear. That is what the
+  sentence did, since the cap alone would have left NEW-b at 31%. It is 12 runs.
+- **The ceiling is 40%, not a third.** A pass with 3 of its own may carry 2. `ceil` rounds up, so
+  the comment's "at least two-thirds new" holds only for an even number of own stops.
+- **Most is where it carries most freely**: 28 entries against More's 21, and a 17-stop Most with 6
+  seen before. The cap leaves that alone, because Most has many stops of its own.
+- **It costs more.** NEW-c thinks in 10 runs of 12 and a route costs about 43% more than OLD's.
+  Still under four cents.
+
+**Pass sizes.** Three runs move one stop between passes (`vb` 2/3/3, `entropy` 4/5/11, `fowler`
+5/6/20); the rest match OLD. As in round two, that is a small change and not no change.
+
+**Idea coverage**, summed (39):
+
+| | OLD 1 | OLD 2 | NEW-c 1 | NEW-c 2 |
+|---|---|---|---|---|
+| by Gist | 21 | 20 | 21 | 19 |
+| by More | 30 | 31 | 32 | 30 |
+| by Most | 32 | 32 | 32 | 32 |
+
+It holds. One Gist figure is one under OLD's range and one More figure one over it.
+
+**Placement.** Quotes at the same first depth, of 106: control 90; NEW-c run 1 v run 2, 89; NEW-c
+against OLD, 82 to 86, mean 84, the same as NEW-b. The long paper is still placed differently from
+OLD (9 of 13 in all four pairings), and now also differently between its own two runs (9 of 13).
+
+**Interleaving and the Gist walk:**
+
+| | OLD | NEW-a | NEW-b | NEW-c |
+|---|---|---|---|---|
+| Routes listing every Gist stop before any deeper stop | 9 of 12 | 8 of 12 | 4 of 12 | 3 of 12 |
+| Carrying runs where every carried stop precedes every new one in More | n/a | 10 of 11 | 4 of 11 | **4 of 12** |
+| Gist walks wholly in the article's order | 8 of 12 | 10 of 12 | 10 of 12 | 11 of 12 |
+| Whole-route steps forward in the article | 165 of 200 | 175 of 200 | 179 of 200 | 182 of 200 |
+
+The placement NEW-b won is kept. The four NEW-c runs that still recap each carry a single stop.
+The Gist walk is not disturbed: it is the same stops in the article's order, as in every arm. By
+eye, one Gist is a little odd (`source` run 1 puts the "childhood witnesses" detail in Gist).
+The routes are now very nearly the article's order with a depth marked on each stop; `entropy`'s
+route opens with three depth-3 stops because they come first in the paper.
+
+### The blind read, round three
+
+Same format and seed, a fresh Opus judge with only the pairs file. Key: NEW-c on side A in 7,
+side B in 5.
+
+| | (a) after Gist | (b) starting at More |
+|---|---|---|
+| **NEW-c v OLD** (12 pairs) | NEW 8 · OLD 2 · tie 2 | **NEW 12 · OLD 0 · tie 0** |
+| NEW-b v OLD | NEW 8 · OLD 3 · tie 1 | NEW 11 · OLD 1 · tie 0 |
+| NEW-a v OLD | NEW 6 · OLD 2 · tie 4 | NEW 12 · OLD 0 · tie 0 |
+| OLD 1 v OLD 2, the control (6 pairs) | run 2 5 · run 1 0 · tie 1 | run 2 3 · run 1 1 · tie 2 |
+
+Side picks for NEW-c: (a) A 6, B 4; (b) A 7, B 5.
+
+- **(b) holds a third time.** 35 of 36 across the rounds.
+- **(a) is still inside the control**, taken as a headline number: 8 to 2 against a control of
+  5 to 0.
+- **(a) sorted by where the carried stop sits**, all three rounds, sorted after the fact:
+
+  | NEW's More … | runs | NEW won | tie | OLD won |
+  |---|---|---|---|---|
+  | puts carried stops among its own | 16 | **14** | 2 | **0** |
+  | puts them all at the head (a recap) | 18 | 8 | 4 | 6 |
+  | carries nothing | 2 | 0 | 1 | 1 |
+
+  This is the nearest thing here to evidence for Greg's case. It is not a controlled comparison:
+  the routes that interleave also differ in other ways (they follow the article's order more
+  closely, which the judge often gave as its reason), and the sorting was chosen after seeing the
+  results.
+
+**The carried stops, one by one** (fresh Sonnet subagent, not blind):
+
+| Carried into | bridge or main point | redundant repeat | superseded | next to its pair |
+|---|---|---|---|---|
+| More (21) | 21 | 0 | 0 | 15 of 21 |
+| Most (28) | 25 | 3 | 0 | 22 of 28 |
+| **NEW-c, all (49)** | **46** | **3** | **0** | **37 of 49** |
+| NEW-b, all (59) | 49 | 9 | 1 | 40 of 59 |
+| NEW-a, all (38) | 30 | 8 | 0 | not asked |
+
+Fewer repeats than either earlier round, all three of them in `fowler`'s Most. This classifier has
+called 125 of 146 stops a bridge, so its "bridge" is weak evidence; the falling repeat count is
+the part to read.
+
 ## Conclusion
 
-**NEW-b is not worse than NEW-a on validity, on the Gist walk or on coverage.** It is worse on one
-thing that matters: it carries more, and more of it into Most.
+**The cap's drop rule first.** "The earliest in route order keep" is arbitrary: applied to
+round two's routes it cut four good bridges and one repeat. But it cut 5 entries of 59 there and
+2 in 12 runs of NEW-c, and no rule this data can test would choose better. It is a backstop that
+seldom fires, and as one it is fine. If it began to fire often, the thing to change would be the
+prompt, not the order of cutting.
+
+**NEW-c is the one to keep.** Against NEW-a and NEW-b it is no worse on anything measured and
+better on the two things that were wrong:
+
+1. **All three are valid**: no failed route, no bad `again`, no truncation. Aggregate coverage
+   holds in all three. First-placed pass sizes change by a stop in a few runs of NEW-b and NEW-c;
+   the old prompt also varied, but “pass sizes did not move” would be too strong.
+2. **Amount**: 26% of More and 20% of Most, against NEW-b's 33% and 22%. No run carried all of
+   Gist or none. The largest share in any walk is 40%.
+3. **Placement**: carried stops sit among More's own in 8 of 12 runs, as in NEW-b, against 1 of 11
+   in NEW-a.
+4. **All three clearly help the reader who opens More without walking Gist** (35 of 36; control
+   3 to 1). Nobody asked for that, but it is real.
+
+**What is still not shown:**
+
+- **That it fixes what Greg reported**, the walk from Gist into More. The headline (a) numbers,
+  6 to 2, 8 to 3 and 8 to 2, are each inside a control of 5 to 0. The interleaved runs never lost
+  in 16, which points the right way; it was found by sorting after the fact.
+- **That a person finds it less disjointed, or not annoying.** Every judgment is a model's, of the
+  same family as the model that wrote the routes, and the read is blind to the side but not really
+  to the arm: a More stop that repeats a Gist stop is visibly the new one. A reader coming from
+  Gist still meets about half of Gist again (21 of 44 stops).
+- **That the spread is fixed.** One round of 12 runs with no none-to-all swing. The cap bounds the
+  top at 40% of a walk; nothing bounds the bottom, and NEW-a and NEW-b each had a run that carried
+  nothing.
+- **Anything about Most.** It was never judged blind. It is where most entries are carried (28
+  against 21), where every repeat in this round sits, and where the cap does least. Not carrying
+  into Most at all remains the simpler option, untested.
+- **Any other reader or power.** `profile: null`, standard power, six articles, all of whose
+  routes largely follow the article's own order whatever the prompt says about that.
+
+The original conclusion's first three points, corrected by GPT Sol's review, stand for NEW-a and
+NEW-b and are kept below.
 
 1. **Both wordings are valid**: no failed route, no bad `again`, no truncation. Aggregate coverage
    holds. NEW-b changes first-placed pass sizes in four matched runs; the old prompt also varied,
@@ -442,10 +680,11 @@ thing that matters: it carries more, and more of it into Most.
    nesting. Greg found nesting annoying. A reader coming from Gist meets two thirds of Gist again.
 6. **The amount is unstable in both**: all of Gist in one run, none in the next, on one article.
 
-**Which to keep.** NEW-b's paragraph, because a carried stop beside its pair is what the feature
-is for and a recap is not. But not as it stands: the amount needs a limit, and wording has now
-gone the wrong way on it once. The plan already names the fallback, a cap in `validateRoute`. Two
-that this data would support, neither tried here:
+**Which to keep, as it stood after round two** (round three then built the second of these, as a
+cap against the pass's own stops and not against Gist). NEW-b's paragraph, because a carried stop
+beside its pair is what the feature is for and a recap is not. But not as it stands: the amount
+needs a limit, and wording has now gone the wrong way on it once. The plan already names the
+fallback, a cap in `validateRoute`. Two that this data would support, neither tried in round two:
 
 - **do not carry into Most.** It is the weaker half in both rounds (most of the repeats, the
   longest walks), and the report was about Gist and More;
@@ -457,9 +696,10 @@ more cautious one: it repeats less, and the gain from NEW-b's placement is not y
 
 ## Cost
 
-$1.089 in route calls, the gateway's own figures summed by the script: $0.687 for round one's 24
-(OLD $0.310, NEW-a $0.377) and $0.402 for round two's 12. The five judging subagents ran inside the
-Claude session, about 600k tokens between them, and are not in that figure.
+$1.532 in route calls, the gateway's own figures summed by the script: $0.687 for round one's 24
+(OLD $0.310, NEW-a $0.377), $0.402 for round two's 12 and $0.443 for round three's 12. The seven
+judging subagents ran inside the Claude session, about 850k tokens between them, and are not in
+that figure.
 
 ## Files
 
@@ -479,3 +719,6 @@ Round two, with the stem `skim-coverage-2026-10-03T18-18-47`: `.json` (NEW-b onl
 `-again-stats.md` (NEW-b beside round one's OLD), `-again-blind-{pairs.md,key.json,judgment.json}`,
 `-again-carried.md`, `-again-carried-classes.json`, and `-again-control-{pairs.md,key.json}`, which
 are byte for byte round one's; the control judgment was not repeated.
+
+Round three, with the stem `skim-coverage-2026-10-03T19-01-33`: the same set of files for NEW-c.
+Its `.json` records `dropped.overCarried` for each run.

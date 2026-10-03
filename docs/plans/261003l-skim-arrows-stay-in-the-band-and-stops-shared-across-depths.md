@@ -248,7 +248,6 @@ desktop, iPad and phone-portrait shows a re-planned route with a carried stop ma
 - **The mark on the prose's door**, for a phone where the band is aside.
 - **Re-planning stored routes.** Old routes walk the old way until re-planned from Metadata;
   no banner, by 260929c.
-- **A cap on carried stops in code** — only if the measurement shows wording cannot hold it.
 
 ## Questions for Greg (asked in the debrief; defaults taken)
 
@@ -257,10 +256,9 @@ desktop, iPad and phone-portrait shows a re-planned route with a carried stop ma
 - **[Q-mark-every-row]** The pips are on every row of a route that has any carried stop. The
   alternative is to draw them only on the carried rows, which is quieter but makes the mark appear
   and disappear down the list. Built: every row.
-- **[Q-carry-cap]** The model carries about a third of More on average, but anywhere from none
-  to all of the Gist stops on one article between two runs. A cap in code (say, at most half of
-  Gist carried into More, or nothing carried into Most) would narrow that. Built: no cap, because
-  his words were "many of or some of".
+- **[Q-carry-cap]** A pass may carry at most half as many earlier stops as it has new ones (so a
+  More of six new stops repeats at most three). Built after Sol's F7. The alternatives are a
+  tighter cap, or nothing carried into Most at all, where the repeats that looked redundant sat.
 - **[Q-read-mark]** Whether to also build the reading-time version of the mark.
 
 ## GPT Sol's plan review (2026-10-03)
@@ -305,3 +303,15 @@ check each by id.
 - What the build changed from the plan: the mark's hidden words name only the *other* passes
   ("Also in Gist"); the pips are off when no stop is walked in more than one *offered* pass; the
   door's *More detail ›* title no longer says "the stops the passes before it left out".
+- 2026-10-03: [GPT Sol's code review](261003l-skim-code-review-sol.md) of `4478eee77`: *do not
+  land* on F7, and four fixes of its own (F6 the held-flash drop ran after the incoming band's
+  landing, now a layout effect with a test; F8 `scripts/skim-coverage.ts` walked passes the old way;
+  F9 the prompt demanded a pass the targets cannot fill; F10 five overclaims in docs). F7 accepted:
+  `maxCarried` and the prompt sentence, red first. Round three of the measurement is with both: 26%
+  of More, 20% of Most, no run carrying none or all, the code cutting 2 entries in 12 runs. The
+  cap cuts the latest in route order, which on round two's routes would have cut 4 useful entries
+  of 5 — arbitrary, and left so because it rarely fires and no better rule is testable on 5.
+- Browser check (Sonnet, Playwright, 1280 / 820 / 390): all ten points passed on a tree before
+  the cap and Sol's fixes; screenshots `261003l-shot-1` to `-5`. Notes: the pips are clear on a
+  phone and at the lower limit of legible at desktop 1x; a deep link whose `?depth=` its stop is
+  not walked in keeps the stale `depth` in the address until the first step (as before this plan).

@@ -356,15 +356,19 @@ when each pass walked only its own. So:
   offering one depth, or one with no carried stop.
 - **The prompt is `skim/9`**: it asks the model which earlier stops to carry, and when not to
   (src/skim.ts). A route planned before it has no `again`, is not announced as out of date
-  (260929c), and walks as it did until planned again from Metadata. Measured on six articles
-  ([261003e](../investigations/261003e-skim-again-carried-stops-eval.md)): about a third of a More
-  walk and a fifth of a Most walk are carried stops, against 43% under full nesting. Aggregate Idea
-  coverage held; four corresponding OLD/NEW-b runs changed first-placed pass sizes (three by one
-  stop, one by two). A blind read preferred the new More for a reader who starts there in
-  11 of 12 pairs. For a reader coming from Gist it was preferred 8 to 3, which is inside what two
-  runs of the old prompt differ by, so that half is not shown. The prompt also says the route is one
-  order with the depths mixed, because the first wording put every carried stop at the head of More
-  as a recap. The amount varies a lot from run to run (none to all of Gist), and no cap is set.
+  (260929c), and walks as it did until planned again from Metadata. Measured on six articles, three
+  rounds ([261003e](../investigations/261003e-skim-again-carried-stops-eval.md)). As shipped: about
+  a quarter of a More walk and a fifth of a Most walk are carried stops (the most in any one walk,
+  40%), against 43% under full nesting; aggregate Idea coverage held, and three of twelve runs moved
+  one stop between passes. A blind read preferred the new More for a reader who starts there in 12
+  of 12 pairs. For a reader coming from Gist it was preferred 8 to 2, which is inside what two runs
+  of the old prompt differ by, so **that half — the walk Greg reported — is not shown**.
+- **Two things the measurement changed.** The first wording put every carried stop at the head of
+  More, as a recap, because the old prompt already listed Gist stops first; the prompt now says the
+  route is one order with the depths mixed. And wording alone let one run carry every Gist stop and
+  the next none, so **a pass carries at most half as many earlier stops as it has of its own**
+  (`maxCarried`, src/skim.ts), said in the prompt and enforced in `validateRoute` (GPT Sol, code
+  review F7). The model kept under it in 10 of 12 runs once told.
 
 Not built, and named in the plan: a mark for "I have actually read this", from reading time — the
 other thing he offered — and the pips on the prose's door.

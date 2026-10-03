@@ -111,6 +111,7 @@ const { blockIndex } = await import("../../src/section-path.js");
 const { isBody } = await import("../../src/block-policy.js");
 const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
 const NEW = await import("../../src/skim.js");
+const { passRoute } = await import("../../src/web/skim-route.js");
 /* The old module, loaded by path so nothing in the repo imports a file that
    exists only for the length of one eval. */
 type RunOut = Promise<{ skim: Skim; offered: number; inputTokens: number; outputTokens: number; elapsedMs: number }>;
@@ -341,6 +342,12 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     walks: ([1, 2, 3] as const).map((depth) => {
       const own = stopBlocks.filter((s) => s.depth === depth).length;
       const carried = stopBlocks.filter((s) => s.again.includes(depth)).length;
+      /* The reader's own rule (`passRoute`, src/web/skim-route.ts) must give
+         the same walk, or this script is measuring a walk nobody takes. */
+      const drawn = passRoute(skim.stops, depth).length;
+      if (drawn !== own + carried) {
+        throw new Error(`${slug} ${arm}#${run}: pass ${depth} is ${own + carried} stops here and ${drawn} by passRoute`);
+      }
       return { depth, length: own + carried, own, carried };
     }),
     model: report.calls[0]?.model ?? null,

@@ -777,15 +777,20 @@ export function validateRoute(
 
 /**
  * **How many earlier stops a pass may carry: half as many as it has of its
- * own, rounded up.** So a deeper walk is at least two-thirds new passages once
- * it has more than a stop or two of its own, which is what the prompt's
- * "mostly NEW passages" asks and what wording alone did not hold: measured
+ * own, rounded up.** So a deeper walk is mostly new passages — at most a third
+ * carried when its own count is even, up to 40% when it is odd (two carried
+ * into a pass of three), half only for a pass of one — which is what the
+ * prompt's "mostly NEW passages" asks and what wording alone did not hold: measured
  * uncapped, one More was half carried stops and two routes carried every Gist
  * stop, while another run of the same article carried none
  * (docs/investigations/261003e-skim-again-carried-stops-eval.md; GPT Sol, code
  * review F7). Greg found full nesting annoying (SPIDERYARN-READING2-4P) and
  * no carrying disjointed (spya-ms9d69); this is the bound between them. A
- * number to measure, like `targetsFor`, not a product constant.
+ * number to measure, like `targetsFor`, not a product constant. Which entries
+ * go — the latest in route order — is arbitrary: it knows position, not which
+ * carried stop is the useful one. Measured, the model keeps under the cap
+ * itself once the prompt states it (2 entries cut in 12 runs), so this is a
+ * backstop; if it starts cutting often, change the prompt, not the cut order.
  */
 export function maxCarried(ownStops: number): number {
   return Math.ceil(ownStops / 2);

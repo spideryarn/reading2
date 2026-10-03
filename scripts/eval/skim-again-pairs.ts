@@ -113,8 +113,8 @@ out.push(`# skim/8 vs skim/9: what the results file says`, "", `From \`${file}\`
 
 out.push("## 1. How much the NEW routes carry", "");
 out.push("Walk length = own stops + carried stops. Share = carried / walk length.", "");
-out.push("| Article | offered | run | More: walk · carried · share | Most: walk · carried · share | carried Gist→More | Gist→Most | More→Most | badAgain |");
-out.push("|---|---|---|---|---|---|---|---|---|");
+out.push("| Article | offered | run | More: walk · carried · share | Most: walk · carried · share | carried Gist→More | Gist→Most | More→Most | badAgain | overCarried |");
+out.push("|---|---|---|---|---|---|---|---|---|---|");
 for (const slug of slugs) {
   for (const run of [1, 2]) {
     const r = find(slug, "new", run);
@@ -126,7 +126,7 @@ for (const slug of slugs) {
     const cell = (d: Depth) => `${w(d).length} · ${w(d).carried} · ${pct(w(d).carried, w(d).length)}`;
     const n = (from: Depth, to: Depth) => r.stops.filter((s) => s.depth === from && s.again.includes(to)).length;
     out.push(
-      `| ${slug} | ${r.offered} | ${run} | ${cell(2)} | ${cell(3)} | ${n(1, 2)} of ${r.stops.filter((s) => s.depth === 1).length} | ${n(1, 3)} | ${n(2, 3)} of ${r.stops.filter((s) => s.depth === 2).length} | ${r.dropped.badAgain ?? 0} |`,
+      `| ${slug} | ${r.offered} | ${run} | ${cell(2)} | ${cell(3)} | ${n(1, 2)} of ${r.stops.filter((s) => s.depth === 1).length} | ${n(1, 3)} | ${n(2, 3)} of ${r.stops.filter((s) => s.depth === 2).length} | ${r.dropped.badAgain ?? 0} | ${r.dropped.overCarried ?? 0} |`,
     );
   }
 }
@@ -216,17 +216,17 @@ for (const [arm, t] of orderTally) {
 }
 
 out.push("", "## 4. Validity and cost", "");
-out.push("| Arm | calls | failures | badAgain | other drops (not `collapsed`) | cost | input tokens / call | output tokens / call | thinking tokens / call | model |", "|---|---|---|---|---|---|---|---|---|---|");
+out.push("| Arm | calls | failures | badAgain | overCarried | other drops (not `collapsed`) | cost | input tokens / call | output tokens / call | thinking tokens / call | model |", "|---|---|---|---|---|---|---|---|---|---|---|");
 for (const arm of ["old", "new"] as const) {
   const rs = results.filter((r) => r.arm === arm);
   const mean = (f: (r: Run) => number) => Math.round(rs.reduce((n, r) => n + f(r), 0) / Math.max(1, rs.length));
   const other = rs.reduce(
-    (n, r) => n + Object.entries(r.dropped).reduce((m, [k, v]) => (k === "collapsed" || k === "badAgain" ? m : m + v), 0),
+    (n, r) => n + Object.entries(r.dropped).reduce((m, [k, v]) => (k === "collapsed" || k === "badAgain" || k === "overCarried" ? m : m + v), 0),
     0,
   );
   const thinking = rs.every((r) => r.reasoningTokens === null) ? "not reported" : String(mean((r) => r.reasoningTokens ?? 0));
   out.push(
-    `| ${arm} (${rs[0]?.version ?? "?"}) | ${rs.length} | ${(data.failures ?? []).filter((f) => f.arm === arm).length} | ${rs.reduce((n, r) => n + (r.dropped.badAgain ?? 0), 0)} | ${other} | $${(rs.reduce((n, r) => n + r.costNanos, 0) / 1e9).toFixed(4)} | ${mean((r) => r.inputTokens)} | ${mean((r) => r.outputTokens)} | ${thinking} | ${[...new Set(rs.map((r) => r.model))].join(", ")} |`,
+    `| ${arm} (${rs[0]?.version ?? "?"}) | ${rs.length} | ${(data.failures ?? []).filter((f) => f.arm === arm).length} | ${rs.reduce((n, r) => n + (r.dropped.badAgain ?? 0), 0)} | ${rs.reduce((n, r) => n + (r.dropped.overCarried ?? 0), 0)} | ${other} | $${(rs.reduce((n, r) => n + r.costNanos, 0) / 1e9).toFixed(4)} | ${mean((r) => r.inputTokens)} | ${mean((r) => r.outputTokens)} | ${thinking} | ${[...new Set(rs.map((r) => r.model))].join(", ")} |`,
   );
 }
 for (const f of data.failures ?? []) out.push("", `FAILED ${f.slug} ${f.arm}#${f.run}: ${f.message}`);
