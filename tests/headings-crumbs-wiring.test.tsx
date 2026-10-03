@@ -69,6 +69,22 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   googleSignInAvailable: false,
 }));
 
+/**
+ * Every `layoutKey` the reading view hands its position tracker, in order.
+ * The real hook still runs; this only overhears the third argument, which is
+ * the one thing that tells the trackers the page's geometry moved.
+ */
+const layoutKeys = vi.hoisted(() => [] as string[]);
+
+vi.mock("../src/web/reader/useReadingPosition.js", async (original) => {
+  const real = await original<typeof import("../src/web/reader/useReadingPosition.js")>();
+  const useReadingPosition: typeof real.useReadingPosition = (sections, blocks, layoutKey) => {
+    layoutKeys.push(layoutKey);
+    return real.useReadingPosition(sections, blocks, layoutKey);
+  };
+  return { ...real, useReadingPosition };
+});
+
 class NoResizeObserver {
   observe(): void {}
   unobserve(): void {}
@@ -196,6 +212,8 @@ const OWNED: Article = {
 
 /** The experimental switch, off unless a case turns it on. */
 let experimentalSince: string | null = null;
+/** Whether the signed-in reader owns the article; a case may say not. */
+let owns = true;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -206,7 +224,7 @@ function json(body: unknown, status = 200): Response {
 
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
-  if (url === `/api/article/${SLUG}`) return json(OWNED);
+  if (url === `/api/article/${SLUG}`) return owns ? json(OWNED) : json({ error: "not found" }, 404);
   if (url === "/api/reader") return json({ experimentalSince });
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
@@ -228,6 +246,8 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   who.set({ id: "crumbs-owner", email: "owner@example.com" });
   experimentalSince = null;
+  owns = true;
+  layoutKeys.length = 0;
   resetExperimental();
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
     Promise.resolve(reply(String(input), init?.method ?? "GET")),
@@ -321,5 +341,37 @@ describe("the headings breadcrumb", () => {
        pushing `?at=` (keynav.ts § beginJump). Either is the jump arriving. */
     const at = new URLSearchParams(location.search).get("at");
     expect(at === "spya-bbbbbb" || cell?.className !== before, "the press reached jumpTo").toBe(true);
+  });
+
+  /**
+   * **The bar's height follows the breadcrumb, so `layoutKey` has to.** On a
+   * narrow window the bar is taller while it holds the breadcrumb (crumbs.css).
+   * A signed-in reader of somebody else's article has the View-only chip, so
+   * their bar stays drawn while the breadcrumb comes and goes — a mode opening
+   * over the prose hides it — and every row moves with nothing resizing. The
+   * key carried only "is there a bar", which does not change here. GPT Sol F1,
+   * plan review of 261003n.
+   *
+   * A phone's width, posed: jsdom lays nothing out, so `pageWidth` falls back
+   * to `innerWidth`, and at 390 a mode's band covers the prose.
+   */
+  it("a signed-in visitor's breadcrumb coming and going changes layoutKey, the chip's bar staying", async () => {
+    vi.stubGlobal("innerWidth", 390);
+    owns = false;
+    experimentalSince = "2026-10-02T00:00:00.000Z";
+    await open();
+    expect(host.querySelector(".reader > .controls > .mode.on"), "the View-only chip").not.toBeNull();
+    expect(crumbs(), "Plain: the breadcrumb beside the chip").not.toBeNull();
+    const withCrumbs = layoutKeys.at(-1);
+    expect(withCrumbs).toBeDefined();
+
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await open("?mode=summary");
+    expect(host.querySelector(".reader > .controls > .mode.on"), "the chip keeps the bar").not.toBeNull();
+    expect(crumbs(), "a band over the prose: no breadcrumb").toBeNull();
+    const without = layoutKeys.at(-1);
+
+    expect(without, "the bar changed height, so the key must change").not.toBe(withCrumbs);
   });
 });

@@ -77,7 +77,9 @@ listed here; the names under each are files in `docs/project/`.
   `links.md` (hover cards on the article's own hyperlinks) ·
   `cross-references.md` (the article linked to itself, claim to the passage behind it) ·
   `tooltips.md` · `keyboard.md` ·
-  `touch.md` · `url-state.md` · `library.md` (the shelf) ·
+  `touch.md` ·
+  `phone-and-touch.md` (the map for a phone, an iPad and a finger: what Greg asked for, and where
+  the code branches) · `url-state.md` · `library.md` (the shelf) ·
   `shelf-terms.md` (the topics above it, picked without a model) ·
   `public-shelf.md` (the other one: `/read/public`, for strangers) ·
   `public-readable-sharing.md` (what we tell the author of a republished article) · `page-titles.md` ·

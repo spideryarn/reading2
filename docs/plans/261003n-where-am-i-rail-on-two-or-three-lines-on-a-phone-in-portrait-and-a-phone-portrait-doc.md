@@ -78,6 +78,42 @@ else, because from 768 up the line already holds a hundred characters and a land
 short of height, not width. The three-column iPad case, where the rail is only as wide as the
 middle column, is report `spya-ft2cgg` and its own session (`qi-53x37gaw`), which builds on this.
 
+## What the experiment found, and the choice
+
+Two fixture articles (`openai-huggingface`, `noema-mythology-of-conscious-ai`), four positions each,
+eight widths, Chrome; the phone shapes again in WebKit at 390. Both articles have two-level paths;
+their section titles run 16 to 42 characters, median 30. Crumbs cut, of 16, and current-section
+crumbs cut, of 8:
+
+| width | today (44px) | A, two lines (52px) | B, three lines (68px) | C, free wrap (68px) |
+|---|---|---|---|---|
+| 320 | 12, 4 | 5, 4 | 1, 0 | broken: four lines, the top clipped |
+| 390 | 11, 4 | 0, 0 by the metric; the longest title is visibly cut | 0, 0 | 0, 0 |
+| 430 | 10, 4 | 0, 0 | 0, 0 | 0, 0 |
+| 844×390, 768, 820, 1180, 1440 | 0, 0 | 0, 0 | 0, 0 | 0, 0 |
+
+![today at eight widths](261003n-shot-today-all-widths.png)
+![the candidates at 320](261003n-shot-320-candidates.png)
+![the candidates at 390](261003n-shot-390-candidates.png)
+
+- **Today is worse than "truncated"**: at every phone width the part is cut to its number alone
+  (`4`, or `4 T…` at 430), and every long section title is cut too.
+- **Only a phone in portrait needs it.** From 768 up, and on a landscape phone, the whole path
+  already fits on one line. So the rule is the narrow-window query and nothing else, and no other
+  device changes. (The three-column iPad, where the rail is as wide as the middle column only, is
+  `spya-ft2cgg`.)
+- **Three lines, B.** Two lines still cut the section the reader is in at 320, and at 390 on the
+  longest title; three never do. It costs 24px over today against 8, which on a phone is a little
+  under one line of prose. C is out: it breaks at 320 and cuts the end of the path first.
+- **Changed from the candidate:** the chevron goes to the end of the ancestors' line. At the start
+  of line two it cost two characters and looked orphaned. And the ancestors must hold to one line
+  for any number of them; the candidate CSS only did for one.
+- **Not measured:** a real iPhone (no safe-area insets in emulation), and a path three deep, which
+  no local article has; stage 2 injects one.
+
+`A` at 56px with the chevron moved is the version passed over. It is the open question for Greg:
+two lines is 12px cheaper and reads whole on most titles at 390 and up.
+
 ## Stage 2: build the chosen shape
 
 - **CSS only, in `crumbs.css`, inside `@media (max-width: 731px)`** — narrow-window.css's own
@@ -122,6 +158,32 @@ trawl finds that neither doc mentions is added to whichever owns it. The simpler
 over is a section inside `touch.md`: it is already the longest doc in the area, and its title is
 about a swipe.
 
+## GPT Sol's plan review, and what changed
+
+[The review](261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc-plan-review-sol.md)
+refused on F1. All six findings are accepted; one round, because the refusal's own fix is taken
+as written and the code review checks it.
+
+- **F1 (P1, established): stage 2 is not CSS-only.** `layoutKey` in `Reader.tsx` carries `showBar`
+  but the bar's height now follows `showCrumbs`. A signed-in reader of somebody else's article has
+  the View-only chip, so `showBar` stays true while the crumbs come and go, and the bar would
+  change height under an unchanged key. `showCrumbs` goes into `layoutKey`, with a regression test
+  for that reader.
+- **F2 (P1, reasoned): 24px rows are not a press size.** Taken into the stage 1 decision: the
+  rows are sized so the ancestors' row and the current section's row are separate full-width
+  targets, and what they measure is reported. It stays below touch.md's 44px and that is said in
+  the doc and put to Greg as a question, since the only fix is more height on the screen that has
+  least. No real phone is available to this run.
+- **F3 (P1, reasoned): the View-only chip shares the bar.** The signed-in non-owner state is added
+  to the 320 and 390 browser checks.
+- **F4 (P2): prove what is pinned under the bar.** The browser check asserts the table head, the
+  spine and the fade start at the taller bar's bottom edge and that a pressed crumb's destination
+  clears it; `tests/mobile-chrome.test.ts` gets a taller-bar case.
+- **F5 (P2): the doc is a map, not an inventory.** It names owning sections and symbols and copies
+  no breakpoint values. It is called `phone-and-touch.md` rather than `phone-portrait.md`, because
+  Greg asked for touch devices first and the phone second, and one map answers both.
+- **F6 (P3): comments that say the bar is always 44px** get swept in stage 2.
+
 ## Done
 
 Rail: shots in this folder, the choice written here with its numbers, tests green, GPT Sol's code
@@ -131,3 +193,18 @@ review answered, browser check at three widths. Doc: `tests/doc-links.test.ts` g
 ## Progress
 
 - 2026-10-03: plan written; trawl for stage 3 started.
+- 2026-10-03: stages 2 and 3 built. **How the layout ended up:** no grid and no count from React.
+  The list stays the one-line row it is on a wide window, 28px tall; the current section's `li` is
+  taken out of flow and laid under it, so no number of ancestors can push it down. One DOM change:
+  a `.crumb-label` span inside each button, so the button can be a taller press target while the
+  label cuts or wraps. Measured in Chrome at 320, 390, 430 and in WebKit at 390: bar 68px, table
+  head and spine start at 68, nothing cut at 390 and 430, only the ancestor cut at 320; 44px and
+  pixel-identical to before at 768 and 1440; with `--safe-top` forced to 47px everything moves
+  together to 115. Press rows 28 and 39px, no dead strip. Three and four crumbs (injected) hold
+  line one. With the View-only chip the crumbs take what is left of the row
+  ([shot](261003n-shot-after-390-view-only.png)). After:
+  [320](261003n-shot-after-320.png), [390](261003n-shot-after-390.png),
+  [430](261003n-shot-after-430.png), [768](261003n-shot-after-768.png).
+  Not verified: a real phone; the top fade, which this article does not draw.
+- 2026-10-03: experiment done; B chosen (above). Stage 2 dispatched.
+- 2026-10-03: Sol plan review in, refused on F1, all six accepted (above). Trawl back; doc drafted.

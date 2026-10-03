@@ -5,6 +5,9 @@
 > doc is still the map — the stylesheets in load order, which mechanism owns what, the colour
 > tokens. This is one area of the territory.
 
+**For the map of everything that differs on a phone or under a finger**, and Greg's words on each,
+start at [phone-and-touch.md](phone-and-touch.md); this doc owns what a narrow window gives up.
+
 ## Narrow windows: wrap, do not shrink
 
 There are no breakpoints on the shelf and it does not need any — `max-w-4xl` makes the page fluid
@@ -171,6 +174,10 @@ Three things worth carrying to whatever is built next:
   `controlsBar()` in [`src/web/scroll.ts`](../../src/web/scroll.ts) — and every rule keyed on the
   bar's *presence* now has a state where it is absent.
   [260908a](../plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md).
+  **And its height is not one number**, since 2026-10-03: 44px with only the chip, 68px on a narrow
+  window while it holds the breadcrumb, which runs to three lines there
+  ([`styles/crumbs.css`](../../src/web/styles/crumbs.css) § a narrow window raises `--bar-h`;
+  [261003n](../plans/261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc.md)).
 - **`.controls` moves by `transform`; everything under it moves by `top`.** A bullet here used to
   say a transform on that bar computed to identity and could not be used. That was wrong, and it was
   wrong for the reason [browser-testing.md § a hidden tab](browser-testing.md) now describes: a CSS

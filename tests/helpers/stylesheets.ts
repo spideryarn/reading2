@@ -266,3 +266,33 @@ export function mediaBlock(css: string, query: string, mustContain: string): str
   }
   throw new Error(`no \`@media ${query}\` block containing \`${mustContain}\``);
 }
+
+/**
+ * The at-rule preludes enclosing `index`, innermost first, plus the rule's own
+ * selector at position 0.
+ *
+ * Walks backwards counting braces rather than parsing: an unmatched `{` seen
+ * from inside is an enclosing block, and the text back to the previous `}`,
+ * `{` or `;` is its prelude. Give it comment-stripped CSS.
+ *
+ * Here since 2026-10-03, from tests/spine-width.test.ts, when
+ * tests/crumbs-narrow.test.ts became the second file to ask it.
+ */
+export function enclosing(source: string, index: number): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  for (let i = index; i >= 0; i--) {
+    const ch = source[i];
+    if (ch === "}") depth++;
+    else if (ch === "{") {
+      if (depth > 0) {
+        depth--;
+        continue;
+      }
+      let j = i - 1;
+      while (j >= 0 && source[j] !== "}" && source[j] !== "{" && source[j] !== ";") j--;
+      out.push(source.slice(j + 1, i).trim());
+    }
+  }
+  return out;
+}

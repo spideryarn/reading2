@@ -64,7 +64,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { readerCss } from "./helpers/stylesheets.js";
+import { enclosing, readerCss } from "./helpers/stylesheets.js";
 import { GIST_MIN, MODE_MIN, MODE_PROSE_FLOOR, PROSE_MIN, SPINE_W, fitView } from "../src/web/layout.js";
 
 const SCROLL_PATH = new URL("../src/web/scroll.ts", import.meta.url);
@@ -313,33 +313,6 @@ describe("§ a small device's query", () => {
    under it (postmortem 261002a). The three lines are what is unique to this
    rule: its twin, mode-band.css's herald slot, has the first two as well. */
 const FULL_WIDTH_BAND = "right: var(--safe-right);\n  width: auto;\n  border-right: none;";
-
-/**
- * The at-rule preludes enclosing `index`, innermost first, plus the rule's own
- * selector at position 0.
- *
- * Walks backwards counting braces rather than parsing: an unmatched `{` seen
- * from inside is an enclosing block, and the text back to the previous `}`,
- * `{` or `;` is its prelude.
- */
-function enclosing(source: string, index: number): string[] {
-  const out: string[] = [];
-  let depth = 0;
-  for (let i = index; i >= 0; i--) {
-    const ch = source[i];
-    if (ch === "}") depth++;
-    else if (ch === "{") {
-      if (depth > 0) {
-        depth--;
-        continue;
-      }
-      let j = i - 1;
-      while (j >= 0 && source[j] !== "}" && source[j] !== "{" && source[j] !== ";") j--;
-      out.push(source.slice(j + 1, i).trim());
-    }
-  }
-  return out;
-}
 
 function coversRule(): { selector: string; gates: string[] } {
   const idx = cssCode.indexOf(FULL_WIDTH_BAND);
