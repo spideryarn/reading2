@@ -86,6 +86,7 @@ import type {
 } from "../types.js";
 import { isSingleThreadKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
+import { useChatCommands } from "./CommandChip.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -1941,6 +1942,10 @@ function Answer({
      is the one every block link shares (BlockLinkCard.tsx), which also moves
      from chip to chip without a second wait — what a `TooltipGroup` here used
      to do. */
+  /* The executor a command chip presses through, where the reading view put
+     one round this panel — chat and the chat dialog, never Remember. `null`
+     everywhere else, and a `[cmd:…]` is then plain text. CommandChip.tsx. */
+  const commands = useChatCommands() ?? undefined;
   return (
     <CitedMarkdown
       text={text}
@@ -1957,6 +1962,7 @@ function Answer({
          for plain sentences and has neither. Cited.tsx § links,
          Cited.tsx § CitedMarkdown. */
       links
+      commands={commands}
     />
   );
 }

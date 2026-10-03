@@ -21,6 +21,7 @@
  * destroy or publish from a sentence.* `RISK` is that line, per id.
  */
 import { ASKED_TERM_REFUSED, parseAskedTerm } from "../asked-term.js";
+import { COMMAND_TOKEN_SOURCE } from "../command-token.js";
 import { isSpideryarnId } from "../ids.js";
 import { normaliseTag } from "../tags.js";
 import type { BlockId, GlossaryEntry } from "../types.js";
@@ -138,7 +139,9 @@ function encodeArgument(argument: string): string {
   );
 }
 
-const TOKEN = /^\[cmd:([a-z-]+):([A-Za-z0-9%-]*)\]$/;
+/* The shape is src/command-token.ts's, shared with the server's citation
+   counters; anchored here, since this parses exactly one token. */
+const TOKEN = new RegExp(`^${COMMAND_TOKEN_SOURCE}$`);
 
 /**
  * **The stored form of a proposal**: `[cmd:<id>:<encoded argument>]`, the
@@ -361,6 +364,34 @@ export function runProposal(runners: ProposalRunners, proposal: CommandProposal)
     }
   }
 }
+
+/**
+ * **What the bar and a chat chip say when a row's runner went between drawing
+ * and pressing** — the executor is rebuilt on every Reader render, so a row
+ * drawn a moment ago may find its page no longer offers it (a comments read
+ * that failed since).
+ */
+export const NOT_HERE = "That can't be done from here any more.";
+
+/**
+ * **What a reader is told about a row that would start work**, and it is one
+ * plain verb rather than a glyph or a figure.
+ *
+ * Fable's reasoning, 2026-09-07, arbitrating GPT Sol's F1: a glyph needs a
+ * tooltip to mean anything and *"a tooltip is not read by anybody in a hurry"*
+ * (this repo's own words, 260906b); a coin would make it about money, which
+ * readers do not pay per call since they hold slots; a spark would read as "AI
+ * magic", which is the flattening voice vision.md rejects. `generates` names
+ * what happens.
+ *
+ * Which rows carry it is `commandGenerates` in CommandBar.tsx. For a mode that
+ * is `modeGenerates` in activation.ts, derived from a table that is already
+ * total — so mode fifteen gets its marker decided by the row it must already
+ * write. That docblock has what the marker deliberately does not say, and
+ * where it over-warns. Here rather than in CommandBar.tsx since 2026-10-03,
+ * because chat's chips draw it too (CommandChip.tsx).
+ */
+export const GENERATES_MARKER = "generates";
 
 /** Whether there is a runner for this id here — the bar's gate on drawing a row. */
 export function canRun(runners: ProposalRunners, id: ProposalId): boolean {

@@ -121,6 +121,8 @@ import {
   type CommandExecutor,
   type ProposalRunners,
   type ProposedRow,
+  GENERATES_MARKER,
+  NOT_HERE,
   canRun,
   formatProposalToken,
   proposalWords,
@@ -657,14 +659,10 @@ const SEARCH_KEYS = new Set(["mode", "match", "find", "run", "runs", "order", "c
  * reason (router.ts).
  */
 function findRow(article: CommandBarArticle, words: string): Command {
-  const kept = searchWithoutAny(article.search, SEARCH_KEYS);
-  const search = [kept, "mode=search", "match=words", `find=${encodeURIComponent(words)}`]
-    .filter(Boolean)
-    .join("&");
   const { label, description, generates } = proposalWords({ id: "find", words });
   return {
     kind: "page",
-    href: readHref(article.slug, search, "article"),
+    href: findHref(article.slug, article.search, words),
     label,
     description,
     aliases: [],
@@ -673,11 +671,17 @@ function findRow(article: CommandBarArticle, words: string): Command {
 }
 
 /**
- * **What the bar says when a row's runner went between drawing and pressing** —
- * the executor is rebuilt on every Reader render, so a row drawn a moment ago
- * may find its page no longer offers it (a comments read that failed since).
+ * **The address a words search for `words` is** — the find row's, and the one
+ * chat's *Find “X”* chip goes to (Reader.tsx § `chatCommands`), so the two
+ * cannot open different searches. `carried` is already through `carriedSearch`.
  */
-const NOT_HERE = "That can't be done from here any more.";
+export function findHref(slug: string, carried: string, words: string): string {
+  const kept = searchWithoutAny(carried, SEARCH_KEYS);
+  const search = [kept, "mode=search", "match=words", `find=${encodeURIComponent(words)}`]
+    .filter(Boolean)
+    .join("&");
+  return readHref(slug, search, "article");
+}
 
 /**
  * **The rows a query with an argument offers** (plan 261003f, Stage 1) —
@@ -924,24 +928,10 @@ const APP_PAGES: readonly Extract<Command, { kind: "page" }>[] = [
   },
 ];
 
-/**
- * **What a reader is told about a row that would start work**, and it is one
- * plain verb rather than a glyph or a figure.
- *
- * Fable's reasoning, 2026-09-07, arbitrating GPT Sol's F1: a glyph needs a
- * tooltip to mean anything and *"a tooltip is not read by anybody in a hurry"*
- * (this repo's own words, 260906b); a coin would make it about money, which
- * readers do not pay per call since they hold slots; a spark would read as "AI
- * magic", which is the flattening voice vision.md rejects. `generates` names
- * what happens.
- *
- * Which rows carry it is `commandGenerates` below. For a mode that is
- * `modeGenerates` in activation.ts, derived from a table that is already total
- * — so mode fifteen gets its marker decided by the row it must already write.
- * That docblock has what the marker deliberately does not say, and where it
- * over-warns.
- */
-export const GENERATES_MARKER = "generates";
+/* `GENERATES_MARKER` — the one plain verb a row that would start work carries —
+   is command-proposal.ts's since 2026-10-03, because chat's chips draw it too.
+   Which rows carry it is `commandGenerates` below. */
+export { GENERATES_MARKER };
 
 /**
  * **Whether pressing this row may start a model call**, and the one place that

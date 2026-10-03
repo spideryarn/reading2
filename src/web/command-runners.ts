@@ -173,3 +173,46 @@ export function readingExecutor({
     sources: glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } },
   };
 }
+
+/**
+ * **What a chip in a chat answer can press** (plan 261003f, Stage 2) — the
+ * reading view's executor above, widened for a surface that has no bar around
+ * it:
+ *
+ *  - **the reading view's own runners, by reference**: the bookmark is the
+ *    memoised one (F6), the glossary pair the gated one (F1) — never a second
+ *    copy made for chat;
+ *  - **the tags**, which the bar takes from its shelf row instead (F4);
+ *  - **a find**, which in the bar is an address rather than a runner;
+ *  - **the jump of the surface the chat is drawn in** — the band's, which
+ *    steps a covering band aside on a phone, or the dialog's plain one.
+ *
+ * Chat is the owner's, so this is only ever built for one.
+ */
+export function chatExecutor({
+  reading,
+  blocks,
+  jump,
+  tags,
+  find,
+}: {
+  reading: CommandExecutor;
+  blocks: Block[];
+  jump(blockId: BlockId): void;
+  tags: TagsControl;
+  /** Open Search on these words — CommandBar.tsx § `findHref`. */
+  find(words: string): void;
+}): CommandExecutor {
+  return {
+    runners: {
+      ...reading.runners,
+      ...tagRunners(tags),
+      "jump-first": jumpFirstRunner(blocks, jump),
+      find: ({ words }) => {
+        find(words);
+        return CLOSE;
+      },
+    },
+    sources: reading.sources,
+  };
+}

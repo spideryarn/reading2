@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Block } from "../src/types.js";
 import {
   bookmarkRunner,
+  chatExecutor,
   glossaryRunners,
   jumpFirstRunner,
   readingExecutor,
@@ -212,5 +213,58 @@ describe("the reading view's executor", () => {
     const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump });
     await executor.runners["jump-first"]?.({ id: "jump-first", words: "free energy" });
     expect(jump).toHaveBeenCalledWith("spya-aaabaz");
+  });
+});
+
+/* Stage 2: what a chat chip's press reaches. The reading view's own runners —
+   the same bookmark function, not a second one (F6) — plus the tags, a find,
+   and the jump of the surface the chat is drawn in. */
+describe("chat's executor", () => {
+  const reading = (bookmark?: (id: string) => Promise<boolean>) =>
+    readingExecutor({
+      slug: "a-piece",
+      blocks: BLOCKS,
+      jump: vi.fn(),
+      glossary: { ready: true, terms: [], openTerm: vi.fn(), openGlossary: vi.fn() },
+      bookmark,
+    });
+
+  it("keeps the reading view's runners and its glossary, and adds the tags and the find", () => {
+    const base = reading(vi.fn(async () => true));
+    const chat = chatExecutor({ reading: base, blocks: BLOCKS, jump: vi.fn(), tags: { edit: vi.fn() }, find: vi.fn() });
+    expect(Object.keys(chat.runners).sort()).toEqual(
+      ["bookmark", "find", "glossary-ask", "glossary-open", "jump-first", "tag-add", "tag-remove"].sort(),
+    );
+    expect(chat.runners.bookmark).toBe(base.runners.bookmark);
+    expect(chat.runners["glossary-ask"]).toBe(base.runners["glossary-ask"]);
+    expect(chat.sources).toBe(base.sources);
+  });
+
+  it("has no bookmark where the reading view has none", () => {
+    const chat = chatExecutor({ reading: reading(), blocks: BLOCKS, jump: vi.fn(), tags: { edit: vi.fn() }, find: vi.fn() });
+    expect(chat.runners.bookmark).toBeUndefined();
+  });
+
+  it("jumps through its own surface's jump, not the bar's", async () => {
+    const base = reading();
+    const jump = vi.fn();
+    const chat = chatExecutor({ reading: base, blocks: BLOCKS, jump, tags: { edit: vi.fn() }, find: vi.fn() });
+    expect(await chat.runners["jump-first"]?.({ id: "jump-first", words: "free energy" })).toEqual({ kind: "close" });
+    expect(jump).toHaveBeenCalledWith("spya-aaabaz");
+  });
+
+  it("opens the search on the words, once", async () => {
+    const find = vi.fn();
+    const chat = chatExecutor({ reading: reading(), blocks: BLOCKS, jump: vi.fn(), tags: { edit: vi.fn() }, find });
+    expect(await chat.runners.find?.({ id: "find", words: "free energy" })).toEqual({ kind: "close" });
+    expect(find).toHaveBeenCalledTimes(1);
+    expect(find).toHaveBeenCalledWith("free energy");
+  });
+
+  it("writes a tag through the controller it was handed", async () => {
+    const edit = vi.fn(async () => ["to read"]);
+    const chat = chatExecutor({ reading: reading(), blocks: BLOCKS, jump: vi.fn(), tags: { edit }, find: vi.fn() });
+    await chat.runners["tag-add"]?.({ id: "tag-add", tag: "to read" });
+    expect(edit).toHaveBeenCalledWith({ add: ["to read"] });
   });
 });

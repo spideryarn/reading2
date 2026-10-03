@@ -43,7 +43,7 @@ import { blocksOnScreenNow } from "../on-screen.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import type { ReadSoFar } from "../read-filter.js";
 import { countsTowardReadingTime } from "../../block-policy.js";
-import { addressWithout, useAddress } from "../router.js";
+import { addressWithout, carriedSearch, navigate, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
 import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
@@ -96,7 +96,9 @@ import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
 import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
-import { readingExecutor, type TagsControl } from "../command-runners.js";
+import { chatExecutor, readingExecutor, type TagsControl } from "../command-runners.js";
+import { ChatCommands } from "../CommandChip.js";
+import { findHref } from "../CommandBar.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
   blockHues,
@@ -2156,6 +2158,22 @@ export function Reader({
     () => ({ edit: (change) => editArticleTags(slug, change) }),
     [slug],
   );
+  /**
+   * **What a command chip in a chat answer presses through** (plan 261003f,
+   * Stage 2; CommandChip.tsx) — `executor` above, plus the tags and a find,
+   * which the bar gets from its shelf row and from an address. One per surface
+   * because the jump differs: the band's steps a covering band aside, the
+   * dialog's does not. Who gets what is command-runners.ts § `chatExecutor`.
+   *
+   * The find reads the address at the press, not at the render: it carries
+   * `?at=`, which the reader's scrolling rewrites.
+   */
+  const chatCommands = useMemo(() => {
+    const find = (words: string) => navigate(findHref(slug, carriedSearch(window.location.search), words));
+    const forJump = (jump: (blockId: BlockId) => void) =>
+      chatExecutor({ reading: executor, blocks: article.blocks, jump, tags: tagsControl, find });
+    return { band: forJump(bandJump), dialog: forJump(jumpTo) };
+  }, [slug, executor, article.blocks, tagsControl, bandJump, jumpTo]);
 
   const selectProse = useCallback(
     /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes
@@ -2269,16 +2287,21 @@ export function Reader({
            switch, the reader carries the other conversation across. See
            ConversationBand. */
         return owner ? (
-          <ConversationBand
-            key={mode}
-            slug={slug}
-            blocks={blockText}
-            onJump={bandJump}
-            kind="chat"
-            onScreen={chatOnScreen}
-            handoff={chatHandoff}
-            onHandoffTaken={handoffTaken}
-          />
+          /* Chat's answers may carry command chips; Remember's and
+             Candidates' prompts never ask for one, so only this arm and the
+             chat dialog below are given the executor. CommandChip.tsx. */
+          <ChatCommands executor={chatCommands.band}>
+            <ConversationBand
+              key={mode}
+              slug={slug}
+              blocks={blockText}
+              onJump={bandJump}
+              kind="chat"
+              onScreen={chatOnScreen}
+              handoff={chatHandoff}
+              onHandoffTaken={handoffTaken}
+            />
+          </ChatCommands>
         ) : null;
       /* **Remember is two bands behind one mode**, and the choice between them
          is `?remember=`. The wrapper exists so that the parameter and its
@@ -3078,46 +3101,48 @@ export function Reader({
           be visible at the branch, not inferred from two other pieces of state
           being empty. */}
       {owner && overlay && (
-        <ChatDialog
-          slug={slug}
-          target={overlay}
-          at={at}
-          blocks={blockText}
-          onJump={jumpTo}
-          onClose={() => {
-            setChatDraft(null);
-            void setThread(null);
-          }}
-          onThread={(id) => {
-            /* The draft has become a conversation. Cleared in the same commit
-               that names the thread, so the slot never holds both — the panel
-               becomes the conversation rather than closing and reopening. */
-            /* **And the comment learns which conversation it started.** The
-               link itself was written by the server, which is the only place a
-               real thread id exists; this is the browser catching up, so the
-               mark and the dialog are right *now* rather than after a reload.
-               Read `chatDraft` before it is cleared — it is the only thing that
-               knows this conversation came from a comment. Fires again with the
-               server's correction if the id we guessed was overruled, and the
-               last word wins. */
-            const from = chatDraft?.kind === "draft" ? chatDraft.sourceCommentId : undefined;
-            if (from) owner.comments.noteThread(from, id);
-            setChatDraft(null);
-            void setThread(id);
-          }}
-          onOpenFull={() => {
-            /* One id, so this is the whole of it: the band reads the same
-               `?thread=` the panel was reading. */
-            setChatDraft(null);
-            void setMode("chat");
-          }}
-          /* **The draft branch, on purpose**, not `chatAboutBlock` — which
-             would find this very conversation and reopen it, so the button
-             would do nothing. ChatDialog.tsx § `onNewConversation`. */
-          onNewConversation={startChatAboutBlock}
-          onCreated={owner.chatAnchors.add}
-          onDropped={owner.chatAnchors.drop}
-        />
+        <ChatCommands executor={chatCommands.dialog}>
+          <ChatDialog
+            slug={slug}
+            target={overlay}
+            at={at}
+            blocks={blockText}
+            onJump={jumpTo}
+            onClose={() => {
+              setChatDraft(null);
+              void setThread(null);
+            }}
+            onThread={(id) => {
+              /* The draft has become a conversation. Cleared in the same commit
+                 that names the thread, so the slot never holds both — the panel
+                 becomes the conversation rather than closing and reopening. */
+              /* **And the comment learns which conversation it started.** The
+                 link itself was written by the server, which is the only place a
+                 real thread id exists; this is the browser catching up, so the
+                 mark and the dialog are right *now* rather than after a reload.
+                 Read `chatDraft` before it is cleared — it is the only thing that
+                 knows this conversation came from a comment. Fires again with the
+                 server's correction if the id we guessed was overruled, and the
+                 last word wins. */
+              const from = chatDraft?.kind === "draft" ? chatDraft.sourceCommentId : undefined;
+              if (from) owner.comments.noteThread(from, id);
+              setChatDraft(null);
+              void setThread(id);
+            }}
+            onOpenFull={() => {
+              /* One id, so this is the whole of it: the band reads the same
+                 `?thread=` the panel was reading. */
+              setChatDraft(null);
+              void setMode("chat");
+            }}
+            /* **The draft branch, on purpose**, not `chatAboutBlock` — which
+               would find this very conversation and reopen it, so the button
+               would do nothing. ChatDialog.tsx § `onNewConversation`. */
+            onNewConversation={startChatAboutBlock}
+            onCreated={owner.chatAnchors.add}
+            onDropped={owner.chatAnchors.drop}
+          />
+        </ChatCommands>
       )}
       {/* **Mounted for a visitor too, since 2026-09-04**, with an `access` of
           `{ kind: "visitor" }` — which carries none of the eight verbs below,

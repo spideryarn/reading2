@@ -49,6 +49,7 @@
  */
 import { fromMarkdown } from "mdast-util-from-markdown";
 import type { Nodes } from "mdast";
+import { withoutCommandTokens } from "./command-token.js";
 import { withoutWebLinks } from "./urls.js";
 
 /**
@@ -75,6 +76,21 @@ const MAX_DEPTH = 12;
  * and a caller can still say where in the answer it found something.
  */
 export function citableText(answer: string): string {
+  /* A command token (`[cmd:bookmark:spya-k3m9qt]`, src/command-token.ts) is
+     lifted out of the link-free prose before the renderer looks for citations,
+     so the block id inside is a button's argument and never a chip. */
+  return withoutCommandTokens(linkFreeProse(answer));
+}
+
+/**
+ * **The text a command token can be found in**: ordinary text nodes, with link
+ * labels, code and bare addresses blanked — `citableText` one step earlier,
+ * before the tokens themselves are blanked. The renderer finds tokens in
+ * exactly this (src/web/Cited.tsx § `cited`); the eval that counts what a
+ * model proposed reads it so that it counts what a reader would be shown
+ * (evals/chat-commands/run.ts).
+ */
+export function linkFreeProse(answer: string): string {
   const kept = new Array<string>(answer.length).fill(" ");
   const visit = (node: Nodes, opaque: boolean, depth: number) => {
     /* The same cap the renderer draws to (src/web/Cited.tsx § MAX_DEPTH), for

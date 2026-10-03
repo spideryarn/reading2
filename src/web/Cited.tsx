@@ -56,7 +56,11 @@ import { createElement, Fragment, useMemo, type ReactElement, type ReactNode } f
 import { fromMarkdown } from "mdast-util-from-markdown";
 import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import { BlockRef } from "./BlockRef.js";
+import { chipFor } from "./chat-commands.js";
 import { splitCitations, splitLinks } from "./citations.js";
+import { CommandChip } from "./CommandChip.js";
+import type { CommandExecutor } from "./command-proposal.js";
+import { splitCommandTokens, tokensOnOwnLine, unfinishedTokenAt } from "../command-token.js";
 import type { BlockId } from "../types.js";
 import { hasCredentials, hostOf, isWebUrl } from "../urls.js";
 
@@ -94,6 +98,14 @@ interface Props {
    * can reach. Raised by a GPT Sol review, 2026-08-27.
    */
   links?: boolean;
+  /**
+   * Draw command tokens as buttons, pressed through this executor. **Absent by
+   * default**, and for `links`' reason: a button built from model output is
+   * allowed only where a prompt governs it (converse.ts § OFFERING AN ACTION)
+   * and a page has runners to give — chat, for the article's owner. Everywhere
+   * else a `[cmd:…]` is the characters the model wrote. CommandChip.tsx.
+   */
+  commands?: CommandExecutor | undefined;
   /** Class for the chip wrapper, so each band can size its own. */
   className?: string;
 }
@@ -103,6 +115,7 @@ interface Ctx {
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
   links: boolean;
+  commands: CommandExecutor | undefined;
   className: string | undefined;
   /** The source, for drawing a node as the characters the model wrote. */
   source: string;
@@ -143,6 +156,7 @@ function Drawn({
   onJump,
   partial = false,
   links = false,
+  commands,
   className,
   flat,
 }: Props & { flat: boolean }): ReactElement {
@@ -155,6 +169,7 @@ function Drawn({
     blocks,
     onJump,
     links,
+    commands,
     className,
     source: text,
     tail: partial ? lastText(tree, text) : null,
@@ -304,7 +319,7 @@ function drawBlock(node: RootContent, ctx: Ctx, flat: boolean, depth = 0): React
   // Past the cap nothing is structure — see MAX_DEPTH.
   if (depth >= MAX_DEPTH) return sourceOf(node, ctx);
   if (node.type === "paragraph") {
-    const inner = inline(node.children, ctx);
+    const inner = inline(node.children, ctx, false, true);
     /* In flat mode a paragraph is its own contents; the blank line between one
        paragraph and the next is `drawBlocks`'s, which `.quiz-reply`'s
        `pre-wrap` shows. */
@@ -371,7 +386,7 @@ function drawList(node: RootContent & { type: "list" }, ctx: Ctx, depth: number)
       // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
       <li key={`i${i}`}>
         {only?.type === "paragraph"
-          ? inline(only.children, ctx)
+          ? inline(only.children, ctx, false, true)
           : drawBlocks(item.children, ctx, false, depth + 1)}
       </li>
     );
@@ -385,18 +400,40 @@ function drawList(node: RootContent & { type: "list" }, ctx: Ctx, depth: number)
   );
 }
 
-/** The marks inside a block. `label` renders a link's own words — see `drawLink`. */
-function inline(nodes: PhrasingContent[], ctx: Ctx, label = false): ReactNode[] {
+/**
+ * **Whether a text node's first and last characters sit at a line's edge** —
+ * what a command token needs to know to be a button (src/command-token.ts §
+ * `tokensOnOwnLine`). Only a paragraph's own children can: a node inside a
+ * bold run, a heading or a link's label is never a line.
+ */
+interface Edges {
+  readonly starts: boolean;
+  readonly ends: boolean;
+}
+const MID_LINE: Edges = { starts: false, ends: false };
+
+/**
+ * The marks inside a block. `label` renders a link's own words — see
+ * `drawLink`. `lines` says these are a paragraph's own children, so the first,
+ * the last, and whatever sits beside a hard break is at a line's edge.
+ */
+function inline(nodes: PhrasingContent[], ctx: Ctx, label = false, lines = false): ReactNode[] {
+  const edge = (i: number): boolean => {
+    const beside = nodes[i];
+    return beside === undefined || beside.type === "break";
+  };
   return nodes.map((node, i) => (
     // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
-    <Fragment key={`p${i}`}>{drawPhrase(node, ctx, label)}</Fragment>
+    <Fragment key={`p${i}`}>
+      {drawPhrase(node, ctx, label, lines ? { starts: edge(i - 1), ends: edge(i + 1) } : MID_LINE)}
+    </Fragment>
   ));
 }
 
-function drawPhrase(node: PhrasingContent, ctx: Ctx, label: boolean): ReactNode {
+function drawPhrase(node: PhrasingContent, ctx: Ctx, label: boolean, edges: Edges): ReactNode {
   switch (node.type) {
     case "text":
-      return label ? node.value : leaf(node, ctx);
+      return label ? node.value : leaf(node, ctx, edges);
     case "strong":
       return <strong>{inline(node.children, ctx, label)}</strong>;
     case "emphasis":
@@ -426,15 +463,21 @@ function drawPhrase(node: PhrasingContent, ctx: Ctx, label: boolean): ReactNode 
  * `splitCitations` matches a bare run of ids by *shape*, and
  * `https://example.com/notes/spya-k3m9qt` carries that shape inside its path.
  */
-function leaf(node: Text, ctx: Ctx): ReactNode {
-  if (!ctx.links) return cited(node.value, ctx);
-  return splitLinks(node.value, node === ctx.tail).map((run, i) =>
+function leaf(node: Text, ctx: Ctx, edges: Edges): ReactNode {
+  const tail = node === ctx.tail;
+  if (!ctx.links) return cited(node.value, ctx, edges, tail);
+  const runs = splitLinks(node.value, tail);
+  const last = runs.length - 1;
+  return runs.map((run, i) =>
     run.kind === "link" ? (
       // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
       <Fragment key={`l${i}`}>{anchor(run.text, run.url)}</Fragment>
     ) : (
       // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
-      <Fragment key={`t${i}`}>{cited(run.text, ctx)}</Fragment>
+      <Fragment key={`t${i}`}>
+        {/* A run beside a link is mid-line on that side, whatever the node is. */}
+        {cited(run.text, ctx, { starts: edges.starts && i === 0, ends: edges.ends && i === last }, tail && i === last)}
+      </Fragment>
     ),
   );
 }
@@ -494,8 +537,50 @@ function anchor(label: ReactNode, url: string): ReactElement {
   );
 }
 
-/** The citation chips and the prose between them — one link-free run of text. */
-function cited(text: string, ctx: Ctx): ReactNode {
+/**
+ * One link-free run of text: the command tokens in it, and the citations
+ * between them.
+ *
+ * **Tokens come out before citations, and the order is load-bearing** for the
+ * reason links come out before both: `[cmd:bookmark:spya-k3m9qt]` carries the
+ * shape of a block id, and citations-first would tear it into a chip and two
+ * scraps of syntax. `citableText` (src/citable.ts) blanks the same span, so the
+ * server's counters agree.
+ *
+ * A token is a button only where the caller handed in an executor, it stands
+ * **on a line of its own** (src/command-token.ts § `tokensOnOwnLine` — a token
+ * mid-sentence is one being talked about, not offered) **and** `chipFor`
+ * accepts it (chat-commands.ts). Otherwise it is the characters the model
+ * wrote, whole — an invalid token's id is still not a citation.
+ *
+ * `end` says this run is the tail of an answer still arriving. A half-arrived
+ * token there is left undrawn until it closes (src/command-token.ts §
+ * `unfinishedTokenAt`), and only where it could become a button.
+ */
+function cited(text: string, ctx: Ctx, edges: Edges, end: boolean): ReactNode {
+  const commands = ctx.commands;
+  const cut = end && commands !== undefined ? unfinishedTokenAt(text) : -1;
+  const runs = splitCommandTokens(cut === -1 ? text : text.slice(0, cut));
+  const ownLine = tokensOnOwnLine(runs, edges.starts, edges.ends);
+  let token = 0;
+  return runs.map((run, i) =>
+    run.kind === "text" ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <Fragment key={`r${i}`}>{citations(run.text, ctx)}</Fragment>
+    ) : ownLine[token++] === true &&
+      commands !== undefined &&
+      chipFor(run.raw, commands, ctx.blocks) !== null ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <CommandChip key={`k${i}`} raw={run.raw} commands={commands} blocks={ctx.blocks} />
+    ) : (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <Fragment key={`k${i}`}>{run.raw}</Fragment>
+    ),
+  );
+}
+
+/** The citation chips and the prose between them — one run with no link and no token in it. */
+function citations(text: string, ctx: Ctx): ReactNode {
   return splitCitations(text, ctx.blocks).map((seg, i) =>
     seg.kind === "text" ? (
       // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole

@@ -223,3 +223,31 @@ dictation.md's list of boxes, the Help page, url-state.md if a param changes. A 
     carries a live region of its own, and before the bar's it took the place every existing test
     (and a screen reader) looks for the bar's sentence in. With no article the context is
     `{ kind: "profile" }`.
+- 2026-10-03: **Stage 2 landed** — command chips in chat. `src/command-token.ts` (the token's
+  shape, shared with the server's citation counters), `src/web/chat-commands.ts` (`chipFor`: which
+  tokens are a button), `src/web/CommandChip.tsx` (the button and its press), `chatExecutor` in
+  `command-runners.ts`, a `commands` prop on `Cited.tsx`, the `OFFERING AN ACTION` section of chat's
+  prompt, and the eval ([261003b](../investigations/261003b-chat-proposes-commands-as-chips.md):
+  15 of 17 wanted buttons right, none unsolicited on an ordinary question, $1.86). Divergences:
+  - **Chat may propose six ids, not seven.** `glossary-open` takes an entry id the model is never
+    shown; chat writes `glossary-ask` with the term and `chipFor` turns it into *open the entry*
+    when the visible glossary has it (the bar's own match).
+  - **A token is a button only on a line of its own**, added after the eval: every token written
+    for the reader was, and the one that was not was a hostile article's, quoted by a model
+    refusing it.
+  - **A token-shaped run is never citation text**, valid or not, on both sides (`citableText`
+    blanks it), so the id in `[cmd:bookmark:spya-…]` is not counted as a citation.
+  - **No executor, plain text; an executor without that runner, a disabled chip.** Remember,
+    Tutorial and Candidates get no executor (and their prompts no section). The bookmark before the
+    comments read lands is drawn disabled rather than as raw brackets.
+  - **The executor reaches the answer through a context** (`ChatCommands`, provided by Reader round
+    chat and the chat dialog), not five layers of props — `BlockLinkCard`'s reason.
+  - **Chat's executor adds what the bar gets elsewhere**: the tags runners (the bar's come from its
+    shelf row) and a `find` runner (the bar's is an address; `findHref` is now shared). Its jump is
+    the band's, which steps a covering band aside on a phone.
+  - **A half-arrived token at the end of a streaming answer is held back** until it closes; block
+    chips do not do this (they have no syntax to be half of), bare links do.
+  - `GENERATES_MARKER` and `NOT_HERE` moved from `CommandBar.tsx` to `command-proposal.ts`, so the
+    chip does not import the bar.
+  - Not done here, for Stage 3: *Copy answer* copies the raw token; `evals/README.md` has no entry
+    for `evals/chat-commands/` yet.

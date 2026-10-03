@@ -697,6 +697,38 @@
   overflow-wrap: break-word;
 }
 
+/* A command the answer proposed, as a button — the command bar's row, drawn in
+   the transcript (CommandChip.tsx). Ours, so the app's face: the sentence is a
+   fixed one we wrote, and only the quoted argument inside it is the model's
+   (`.voice-ai`, fonts.md). Bordered and filled so it reads as something to
+   press rather than as a citation chip, which goes somewhere; this does
+   something. The marker is the bar's `generates`, in the bar's quiet ink. */
+.cmd-chip-wrap { font-family: var(--font-ui); }
+.cmd-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5em;
+  max-width: 100%;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9em;
+  text-align: left;
+  cursor: pointer;
+}
+.cmd-chip:hover:not(:disabled) {
+  border-color: var(--highlight);
+  color: var(--highlight-ink);
+}
+.cmd-chip:disabled { color: var(--ink-faint); cursor: default; }
+.cmd-chip[aria-busy="true"] { cursor: progress; }
+.cmd-chip-name { min-width: 0; overflow-wrap: anywhere; }
+.cmd-chip-generates { flex-shrink: 0; color: var(--ink-faint); font-size: 0.85em; }
+.cmd-chip-said { margin-left: 0.5em; color: var(--ink-faint); font-size: 0.85em; }
+
 /* ---- what the model did before it answered ----
    A strip ABOVE the answer, not below it. Sources sit below because they are
    where the answer came from and you want them after reading it; this is what
