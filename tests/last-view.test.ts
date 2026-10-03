@@ -74,6 +74,11 @@ describe("rememberableSearch", () => {
     expect(restoredHref("/read/x", "", "?mode=debate&name=linked")).toBe("/read/x?mode=debate");
   });
 
+  it("lets an old link carrying only `name` win over a remembered view", () => {
+    expect(hasArticleState("?name=linked")).toBe(true);
+    expect(restoredHref("/read/x", "?name=linked", "?mode=debate&debate=claims&bears=directly")).toBeNull();
+  });
+
   it("keeps each pair byte-for-byte, so a comma list is not reserialised", () => {
     /* `URLSearchParams` would hand back `crits=spya-a%2Cspya-b`, which parses
        to the same thing and reads as somebody else's URL. Same reason

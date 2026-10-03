@@ -28,6 +28,30 @@ the panel draws that is not a row is a disclosure.
 >
 > — Greg, 2026-09-30 (SPIDERYARN-READING2-6M), in [260930j](../plans/260930j-debate-themes-and-key-sources.md)
 
+> So there could be a claims submode. … And then there's a section, a separate submode besides
+> claims for reception or critiques or responses or something. Yeah, reception sounds about right,
+> which talks about, you know, other people who have—what have they said about this?
+>
+> — Greg, 2026-10-03 (report `spya-caue42`), in [261003o](../plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md)
+
+## What the reader sees
+
+Two sub-modes, one per search, on a segmented control (`?debate=claims`; Reception is the default):
+
+- **Reception**: what others have written about the piece itself, including work that cites it and
+  says something about it. Pages that link or quote the piece come first; pages that only name it
+  by title follow under a heading that says so. Nothing is hidden by default, and there is no
+  identification slider any more: the old default hid the published replies and citing papers the
+  search exists to find
+  ([postmortem 261003h](../postmortems/261003h-debate-default-bar-hides-the-citing-papers-the-search-was-changed-to-find.md)).
+  It ends with a Google Scholar search for who cites the piece. Listing every citer needs a
+  citation index, which waits on Greg (261002i stage 2).
+- **Claims**: what has been written about the claims the piece makes. One open disclosure per
+  claim, in article order, headed by the article's own words; the relevance bar belongs here.
+
+Threads and key sources narrow whichever sub-mode is on screen. The reader cannot yet choose which
+claim is checked or steer the search; that is an open question for Greg in 261003o.
+
 Open this doc to find your way in; the plans below are still where the design and its reasoning
 live.
 
@@ -54,6 +78,10 @@ throwing away correctly copied replies
 ([261002i](../plans/261002i-debate-leads-with-who-has-cited-this-article.md),
 [postmortem 261002g](../postmortems/261002g-debate-refused-quotes-from-a-later-extract-of-the-same-page.md)).
 Listing every citer from a citation index is that plan's stage 2, and waits on Greg.
+Since 2026-10-03 the panel is two sub-modes, Reception and Claims, and the identification slider
+is a headed group ([261003o](../plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md);
+what the evals behind it measured is
+[investigation 261003g](../investigations/261003g-debate-on-a-thinly-received-paper-what-reception-finds-and-how-claims-spread.md)).
 
 How the mode was evaluated, and what that found:
 [260906b](../plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md), with the stage-0

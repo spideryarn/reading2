@@ -678,6 +678,30 @@ describe("the empty states are different sentences, in each sub-mode", () => {
     expect(handoff()?.textContent).toBe("See the 3 sources on what it claims");
   });
 
+  it("clears Claims narrowing on hand-over so every advertised source can be seen", () => {
+    const debate = artefact({
+      direct: { rows: [], counts: counts(EMPTY) },
+      claims: {
+        rows: [claim({ bears: "partly" }), claim({ id: "spya-c7w2d3", bears: "loosely" })],
+        counts: counts({ reportedRows: 2, keptRows: 2 }),
+      },
+      synthesis: {
+        kind: "made",
+        themes: [],
+        key: [{ rowId: "spya-c7w2dn", role: "origin", why: "Where it comes from." }],
+      },
+    });
+    paint(owner({ debate }), "reception", "prioritised", new Map(), { relevance: "directly", thread: "key" });
+    expect(segments()).toEqual(["Reception0", "Claims0"]);
+    expect(handoff()?.textContent).toBe("See the 2 sources on what it claims");
+    press(handoff());
+    expect(relevanced).toEqual([null]);
+    expect(threaded).toEqual([null]);
+    expect(viewed).toEqual(["claims"]);
+    paint(owner({ debate }), "claims");
+    expect(rowTitles()).toHaveLength(2);
+  });
+
   it("offers no hand-over when Claims has nothing either, or when Reception has a row, or in Claims", () => {
     const none = { rows: [], counts: counts(EMPTY) };
     paint(owner({ debate: artefact({ direct: none, claims: none }) }));
@@ -1705,6 +1729,17 @@ describe("Claims, and the relevance bar", () => {
     expect(line?.textContent).toMatch(/^AIbears directly·qualifies/);
   });
 
+  it("labels the claim rows that have no relevance judgment, including at a restrictive bar", () => {
+    paint(owner({ debate: judged() }), "claims", "prioritised", new Map(), { relevance: "directly" });
+    const items = [...host.querySelectorAll(".dbt-item")];
+    expect(items[0]?.querySelector(".dbt-ai-line")?.textContent).not.toContain("Not judged for relevance by the AI");
+    expect(items[1]?.querySelector(".dbt-ai-line")?.textContent).toContain("Not judged for relevance by the AI");
+    paint(owner(), "claims");
+    expect(host.querySelector(".dbt-ai-line")?.textContent).toContain("Not judged for relevance by the AI");
+    paint(owner(), "reception");
+    expect(host.querySelector(".dbt-ai-line")?.textContent).not.toContain("Not judged for relevance by the AI");
+  });
+
   /* A bar speaks only when it hides something (plan 261003o, step 8):
      *"Nothing is hidden by this threshold."* is gone. */
   it("hides nothing until the reader moves it, and says nothing while it hides nothing", () => {
@@ -2013,6 +2048,24 @@ describe("DebatePanel — threads", () => {
         synthesis,
       } as Partial<Debate>);
     const labels = () => [...host.querySelectorAll(".dbt-thread .dbt-thread-name")].map((b) => b.textContent);
+
+    it("offers only orders that change the Reception rows left by a thread", () => {
+      const supportive = direct({ id: "spya-d2w4r2", title: "Supportive", lean: "leans-for" });
+      const critical = direct({ id: "spya-d2w4r3", title: "Critical", publishedYear: 2024 });
+      const debate = artefact({
+        direct: { rows: [supportive, critical], counts: counts({ reportedRows: 2, keptRows: 2 }) },
+        synthesis: {
+          kind: "made", themes: [],
+          key: [{ rowId: supportive.id, role: "responds", why: "The reply." }],
+        },
+      });
+      paint(owner({ debate }), "reception", "date", new Map(), { thread: "key" });
+      expect(rowTitles()).toEqual(["Supportive"]);
+      expect(host.querySelector(".gloss-sort")).toBeNull();
+      expect(host.querySelector(".dbt-gap")).toBeNull();
+      paint(owner({ debate }), "reception");
+      expect(host.querySelector(".gloss-sort")).not.toBeNull();
+    });
 
     it("offers no thread in a sub-mode where none has a stored row", () => {
       paint(owner({ debate: mixed(made) }));

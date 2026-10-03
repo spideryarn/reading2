@@ -2,7 +2,7 @@
 
 Up: [debate.md](../project/debate.md)
 
-**Status:** plan reviewed by GPT Sol; building. Report `spya-caue42`, Greg (admin), 2026-10-03, on Levin 2024,
+**Status:** built and on `dev` (2026-10-04). The claims picker and the citation index wait on Greg. Report `spya-caue42`, Greg (admin), 2026-10-03, on Levin 2024,
 *Self-Improvising Memory* (Entropy 26(6), 481).
 
 ## What Greg asked for
@@ -242,3 +242,31 @@ pick, and adds its sources as another claim (one extra search each, about 10–2
 piece's claims first and search nothing until the reader picks. Recommended: (b), after (a) has been
 used for a few days, because it is also the "steer the debate" box from `spya-thpsnd` and reuses
 pass B whole.
+
+## What landed (2026-10-04)
+
+Built as planned by an Opus subagent (commit `4b502174a`), then reviewed and fixed by GPT Sol:
+[261003o-debate-reception-and-claims-code-review-sol.md](261003o-debate-reception-and-claims-code-review-sol.md).
+Verdict: land with the fixes it made. I read each fix and ran the gates; all five accepted.
+
+| | Finding | Fix |
+|---|---|---|
+| F10 | the handoff button promised N sources that Claims' bar or thread could then hide | the press clears both |
+| F11 | Reception offered an order that changed nothing once a thread narrowed the list | orders are asked of the rows on screen |
+| F12 | a claim row the AI did not judge no longer said so | "Not judged for relevance by the AI" is back, on the row |
+| F13 | a link carrying only the retired `?name=` could have a remembered view restored over it | `name` joins `NEVER_REMEMBERED` |
+| F14 | the new browser-safe Scholar module was not in the client import manifest | registered |
+
+Sol also wrote two short postmortems for F10 and F13/F14 (261003i, 261003j). One review round: the
+fixes are small, each came with a test seen red, and nothing was overruled, so no second round.
+
+Departures from the plan, kept: the Scholar link searches the title only (a byline is not
+surname-first, which `firstAuthor` expects); the control reuses Summary's classes.
+
+Browser check (Sonnet, Playwright, on real stored debates for two papers): every numbered check
+passed at 1440, 820 and 390 wide. Screenshots: `261003o-shot-<width>-<reception|claims>.png` beside
+this file. Minor roughness left as is: a segment's tooltip card stays open after a mouse press
+until the pointer moves; the jump link's label is the block id, as elsewhere.
+
+**Questions for Greg are below the build section; the fuller versions are in the session's
+debrief to the Overseer.**

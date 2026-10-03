@@ -138,6 +138,7 @@ import {
   DEBATE_CLAIMS_NONE_SHARED,
   DEBATE_RESPONSES_NONE_SHARED,
   DEBATE_TITLE_ONLY,
+  DEBATE_UNJUDGED,
   DEBATE_UNDATED,
   DEBATE_THREADS_FAILED,
   debateClaimsHandoff,
@@ -891,30 +892,30 @@ export function DebatePanel({
    * title-only rows by default, and those are the citing papers
    * (debate-levels.ts).
    *
-   * Which order is drawn and which are offered are asked of the **stored**
-   * groups, so pressing a thread cannot make the order bar come and go; the
-   * thread then narrows each group, and the order arranges what is left.
+   * Which order is drawn and which are offered are asked of the groups the
+   * **thread left on screen**: an order whose distinction depended on rows
+   * outside the thread would be an inert button over this list.
    */
-  const stored = useMemo(() => receptionSections(directRows), [directRows]);
-  const storedSections = useMemo(() => [stored.confirmed, stored.titleOnly], [stored]);
-  const order = useMemo(
-    () => effectiveReceptionOrder(storedSections, requestedOrder, articleYear),
-    [storedSections, requestedOrder, articleYear],
-  );
-  const orders = useMemo(
-    () => receptionOrderOptions(storedSections, articleYear),
-    [storedSections, articleYear],
-  );
   const receptionThreads = useMemo(() => threadsWithin(threads, directRows), [threads, directRows]);
   const receptionThread = selectedThread(receptionThreads, threadParam);
   const receptionShown = useMemo(() => inThread(directRows, receptionThread), [directRows, receptionThread]);
+  const sections = useMemo(() => receptionSections(receptionShown), [receptionShown]);
+  const shownSections = useMemo(() => [sections.confirmed, sections.titleOnly], [sections]);
+  const order = useMemo(
+    () => effectiveReceptionOrder(shownSections, requestedOrder, articleYear),
+    [shownSections, requestedOrder, articleYear],
+  );
+  const orders = useMemo(
+    () => receptionOrderOptions(shownSections, articleYear),
+    [shownSections, articleYear],
+  );
   const confirmed = useMemo(
-    () => orderReceptionRows(inThread(stored.confirmed, receptionThread), order, articleYear),
-    [stored, receptionThread, order, articleYear],
+    () => orderReceptionRows(sections.confirmed, order, articleYear),
+    [sections, order, articleYear],
   );
   const titleOnly = useMemo(
-    () => orderReceptionRows(inThread(stored.titleOnly, receptionThread), order, articleYear),
-    [stored, receptionThread, order, articleYear],
+    () => orderReceptionRows(sections.titleOnly, order, articleYear),
+    [sections, order, articleYear],
   );
 
   /**
@@ -1156,7 +1157,13 @@ export function DebatePanel({
                 the way to what the other search did find. */}
             {empty !== null && <p className="gloss-quiet dbt-empty">{empty}</p>}
             {handoff && (
-              <button type="button" className="dbt-handoff" onClick={() => onView("claims")}>
+              <button type="button" className="dbt-handoff" onClick={() => {
+                /* The button promises every stored source. Normal segment
+                   presses preserve narrowing; this explicit handoff shows all. */
+                onRelevance(null);
+                onThread(null);
+                onView("claims");
+              }}>
                 {debateClaimsHandoff(claimRows.length)}
               </button>
             )}
@@ -1973,9 +1980,9 @@ function Row({
         <span className="dbt-ai-tag" title="The AI's reading of this page — nothing in what the search returned checks it">
           AI
         </span>
-        {bears && (
+        {(bears !== null || direct === null) && (
           <>
-            <span className="dbt-bears">{BEARS_LABEL[bears]}</span>
+            <span className="dbt-bears">{bears === null ? DEBATE_UNJUDGED : BEARS_LABEL[bears]}</span>
             <span aria-hidden="true" className="dbt-dot">
               ·
             </span>

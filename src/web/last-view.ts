@@ -154,6 +154,9 @@ export const NEVER_REMEMBERED = [
      remembered view would be restored over a link somebody had just opened.
      GPT Sol's plan review of 261001p, P1. */
   "deep",
+  /* Debate's retired identification threshold still marks an explicit old
+     link. As with `deep`, do not restore another view over it. */
+  "name",
 ] as const;
 
 /** Every parameter this app puts on an article's address. */

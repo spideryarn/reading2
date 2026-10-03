@@ -4686,6 +4686,9 @@ export const DEBATE_BEFORE_SEARCH =
   "Claims: what has been written about the claims it makes. It takes about a minute and " +
   "costs real money. Many pieces have no reception at all. Searched once and kept.";
 
+/** A claim row without `bears` survives every bar without clearing its judgment. */
+export const DEBATE_UNJUDGED = "Not judged for relevance by the AI";
+
 /**
  * Where Debate's threads box would be, when the call that makes it failed
  * (plan 260930j). Says the list is whole, because the reader's next question is
