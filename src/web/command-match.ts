@@ -317,6 +317,27 @@ export function commandId(command: Command): string {
 }
 
 /**
+ * **One row as a model is shown it**: the id the answer comes back as, and the
+ * three kinds of words the bar itself matches on. Nothing a row *does* — no
+ * closure, no href beyond what the id already holds — so it serialises.
+ *
+ * The command bar's natural-language fallback sends these, and an answer is
+ * only ever one of the ids sent (plan 261003k, decision 2). The eval that chose
+ * the model reads the same function: evals/command-pick/README.md.
+ */
+export interface PickOption {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly aliases: readonly string[];
+}
+
+export function pickOption(command: Command): PickOption {
+  const { label, description, aliases } = commandText(command);
+  return { id: commandId(command), label, description, aliases: [...aliases] };
+}
+
+/**
  * **A mode, as a command**, and the one place that conversion happens.
  *
  * `CommandBar` builds its list with this and so do the ranking tests, which is

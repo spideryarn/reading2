@@ -260,3 +260,26 @@ Every finding checked against the code and accepted.
 ## Progress
 
 - 2026-10-03: plan drafted; Sol's plan review (F1–F7) folded in. The eval is running.
+- 2026-10-03: **Stage 1 landed** — the eval
+  ([261003e](../investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md),
+  $1.87). 192 requests, 186 of which the bar cannot answer itself. On those: Jev picks the right
+  row or argument kind 94% of the time at a p90 of 0.34 s; GPT Luna alone is 96% right at 1.39 s;
+  Jev's per-word trick for the argument fails (33 of 48). **The frozen rule selects Jev for the
+  pick and a small model for the words only when the pick takes them** (94%, p90 1.1–1.2 s, and
+  0.3 s for the three quarters of requests that take no words). What Stage 2 takes from it:
+  - **The extractor is GPT Luna** (`QUICK_MODEL_OPENROUTER`). Luna and Haiku were both 48 of 48
+    and 0.1 s apart; Luna is the tier the app already has.
+  - **The run-at-once cut is 0.95**: of Jev's picks that would run at once, 5 of 56 were wrong
+    with no cut, 4 of 42 at 0.8, 1 of 37 at 0.9, none of 35 at 0.95. Five errors, so a starting
+    point. None of the five did harm (each opened a page).
+  - **Below the cut, draw Jev's top three**: when its first pick was wrong the right row was in
+    its top three 11 times of 11.
+  - **A model's own confidence is no gate**: every model picked Archive for some request that
+    should be nothing (Luna, *archive everything on my shelf*, 0.98). Only the row's risk class
+    stops that — which is the rule already in this plan.
+  - **Keys must not carry the slug**: a page row's id is its address (`page:/read/<slug>/metadata`),
+    so the key the browser sends and the server holds replaces the article's slug with a fixed
+    word.
+  - Found on the way, and fixed in Stage 2: `find mentions of dopamine` looks for
+    *mentions of dopamine*.
+

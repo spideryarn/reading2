@@ -774,8 +774,10 @@ export function experimentalCommand(on: boolean, run: () => ActionOutcome | Prom
  * `set` while one is in flight, so the inverse row would do nothing. The press
  * is the store's own `set`, the one the Dock's switch and /profile call,
  * awaited: a refusal keeps the bar open with the reason.
+ *
+ * Exported for tests/command-pick-catalogue.test.ts, as `subModeRows` is.
  */
-function experimentalRows(experimental: CommandBarExperimental): readonly Command[] {
+export function experimentalRows(experimental: CommandBarExperimental): readonly Command[] {
   const { on, loaded, signedIn, saving, set } = experimental;
   if (!loaded || !signedIn || saving) return [];
   return [
@@ -979,8 +981,11 @@ function commandGenerates(command: Command): boolean {
  * **Plus the picture `?diagram=` names**, experimental or not — the chip row's
  * own second rule, so with the switch off and a shared `diagram=trail` link
  * open, the bar offers Trail exactly where the chips do. GPT Sol, plan review.
+ *
+ * Exported for tests/command-pick-catalogue.test.ts, which writes the list the
+ * command-pick eval measures against from the functions the bar itself calls.
  */
-function subModeRows(
+export function subModeRows(
   modes: readonly Mode[],
   experimentalOn: boolean,
   diagram: DiagramKind,
