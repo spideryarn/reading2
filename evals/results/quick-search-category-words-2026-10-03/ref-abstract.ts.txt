@@ -1,0 +1,43 @@
+/* The reference for the queries the fallback fires on: the thorough search once
+   (findPassages, standard power). Greg's own saved production runs serve for his
+   article. SPENDS (Sonnet, about 3-7 cents a query). Writes ref-abstract.json. */
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { DIR, WT, fixture, spent } from "./lib.ts";
+import { BFR, QUERIES } from "./abstract-run.ts";
+
+const { findPassages } = await import(`${WT}/src/search.ts`);
+const { withLedger } = await import(`${WT}/src/cli-ledger.ts`);
+const P = `${DIR}/ref-abstract.json`;
+const ref: Record<string, any> = existsSync(P) ? JSON.parse(readFileSync(P, "utf8")) : {};
+const raw = JSON.parse(readFileSync(`${DIR}/abstract-raw.json`, "utf8"));
+const prod = JSON.parse(readFileSync(`${DIR}/bfrbaj.json`, "utf8"));
+
+/* Fires = any run with nothing at 0.7. */
+const fires = (q: any) => raw.find((e: any) => e.slug === q.slug && e.q === q.q).reps.some((r: any) => Math.max(...(Object.values(r.scores) as number[])) < 0.7);
+
+await withLedger("eval", async () => {
+  for (const s of QUERIES.filter(fires)) {
+    const key = `${s.slug}|${s.q}`;
+    if (ref[key]?.hits) continue;
+    if (s.slug === BFR) {
+      const run = prod.searchRuns.find((r: any) => r.kind === "meaning" && r.criterion.toLowerCase() === s.q.toLowerCase());
+      if (run) { ref[key] = { source: `production run ${run.id}`, model: run.model, hits: run.hits.map((h: any) => ({ blockId: h.blockId, confidence: h.confidence })) }; console.log(`ref ${key} — production, ${run.hits.length} hits`); writeFileSync(P, JSON.stringify(ref, null, 1)); continue; }
+      console.log(`ref ${key} — no production run; skipped (no thorough search of a reader's article from here)`);
+      continue;
+    }
+    const { meta, blocks } = fixture(s.slug);
+    const t0 = performance.now();
+    try {
+      const r = await findPassages({ power: "standard", meta, blocks, criterion: s.q });
+      const u = r.usage ?? {};
+      const cost = (((u.promptTokens ?? 0) - (u.cacheReadTokens ?? 0) - (u.cacheWriteTokens ?? 0)) * 3 + (u.cacheWriteTokens ?? 0) * 3.75 + (u.cacheReadTokens ?? 0) * 0.3 + (u.completionTokens ?? 0) * 15) / 1e6;
+      spent("sonnet-reference-est", cost);
+      ref[key] = { ms: Math.round(performance.now() - t0), model: r.model, estCost: cost, hits: r.hits.map((h: any) => ({ blockId: h.blockId, confidence: h.confidence, reasoning: h.reasoning })) };
+    } catch (e) {
+      ref[key] = { ms: Math.round(performance.now() - t0), error: String(e) };
+    }
+    console.log(`ref ${key.slice(0, 50)} — ${ref[key].ms} ms, ${ref[key].hits?.length ?? "ERR " + ref[key].error} hits, ~$${ref[key].estCost?.toFixed(3)}`);
+    writeFileSync(P, JSON.stringify(ref, null, 1));
+  }
+});
+process.exit(0);

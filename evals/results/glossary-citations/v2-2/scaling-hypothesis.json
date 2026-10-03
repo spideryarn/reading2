@@ -1,0 +1,165 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "v2-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "63e6d6736ae1e82c08ebf0b9d71dfb3fae211bdbc795ef200808fc9e5b3676f7",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "scaling hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "strong scaling hypothesis"
+      ],
+      "senseHere": "The claim that once you have a flexible enough neural network design, simply making it and its training data much bigger will keep generating smarter, more general behavior on its own, without inventing new algorithms, and that this path leads all the way to humanlike or superhuman intelligence."
+    },
+    {
+      "name": "GPT-3",
+      "kind": "work",
+      "aliases": [
+        "GPT3"
+      ],
+      "senseHere": "The 175-billion-parameter language model the piece treats as proof that simply scaling up an old, unmodified architecture produces qualitatively new abilities, especially learning new tasks from a few examples at runtime rather than needing retraining.",
+      "background": "Released by OpenAI in May 2020, it was at the time the largest neural network ever trained, over 100 times larger than its predecessor GPT-2."
+    },
+    {
+      "name": "meta-learning",
+      "kind": "concept",
+      "aliases": [
+        "learning to learn"
+      ],
+      "senseHere": "A model's ability, after being trained once, to pick up a brand-new task on the spot just from a short description or a few examples shown to it, rather than requiring separate retraining for each task; the piece treats GPT-3's few-example task-following as the clearest evidence of this."
+    },
+    {
+      "name": "GPT-2",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "The smaller predecessor model the piece uses as a baseline to show how much GPT-3's extra scale changed what the model could do, from merely summarizing text to learning tasks on the fly."
+    },
+    {
+      "name": "Transformer",
+      "kind": "concept",
+      "aliases": [
+        "self-attention"
+      ],
+      "senseHere": "The neural network design (built around a mechanism called self-attention) that GPT-3 and similar models use; the piece treats it mainly as a convenient, scalable building block rather than anything cleverly tailored to language."
+    },
+    {
+      "name": "blessings of scale",
+      "kind": "concept",
+      "aliases": [
+        "blessing of scale"
+      ],
+      "senseHere": "The author's name for the pattern where, unlike most engineering problems, neural networks actually get easier to train well and more likely to generalize, generate, and even meta-learn as they and their training data are made larger, rather than running into added difficulty."
+    },
+    {
+      "name": "Hans Moravec",
+      "kind": "person",
+      "aliases": [
+        "Moravec"
+      ],
+      "senseHere": "Cited by the author as having correctly forecast decades in advance, using Moore's-law-style hardware cost curves, that affordable computers wouldn't be powerful enough for serious AI until roughly the 2010s–2020s.",
+      "background": "A robotics researcher and early connectionist who argued AI progress was gated mainly by cheap-enough computing power rather than by missing ideas."
+    },
+    {
+      "name": "OpenAI LP",
+      "kind": "organization",
+      "aliases": [
+        "OA LP",
+        "OA"
+      ],
+      "senseHere": "The for-profit arm OpenAI created, under its nonprofit's control, so it could take outside investment to fund the very large, expensive scaling bets like GPT-3 that the author argues no one else was willing to make."
+    },
+    {
+      "name": "Jukebox",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "An OpenAI model for generating raw audio music, including realistic voices and instruments, cited as another recent example of scale producing capabilities that quietly went underappreciated."
+    },
+    {
+      "name": "AlphaGo Zero",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "A game-playing system the piece cites as an early example of simply scaling up network depth and compute ('just stack moar layers') producing superhuman performance without hand-crafted knowledge.",
+      "background": "Developed by DeepMind, it learned to play Go at a superhuman level purely through self-play, without being trained on any human game records."
+    },
+    {
+      "name": "MuZero",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "A successor system the piece uses to show that a network can learn to plan ahead ('tree search') implicitly, just by being trained end-to-end to predict rewards on enough data, beating a predecessor that used explicit search.",
+      "background": "A DeepMind reinforcement-learning system that learned to master games like Go, chess, and Atari without being given the rules in advance."
+    },
+    {
+      "name": "AlphaStar",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "A game-playing system the piece cites as reaching human level by training hundreds of competing copies of itself against each other, used as an example of scale covering a wide range of possible strategies.",
+      "background": "A DeepMind system that reached top human-level play in the real-time strategy game StarCraft II."
+    },
+    {
+      "name": "DeepMind",
+      "kind": "organization",
+      "aliases": [
+        "DM"
+      ],
+      "senseHere": "The research lab the piece contrasts with OpenAI as holding a 'weak' version of the scaling hypothesis: believing intelligence needs many separately-engineered brain-like modules scaled up piece by piece, rather than one architecture scaled all at once.",
+      "background": "A Google-owned AI research lab known for game-playing systems like AlphaGo and large reinforcement-learning research programs, with heavy neuroscience influence."
+    },
+    {
+      "name": "Dactyl",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "A robotic hand-control system cited as an example where training on millions of randomized simulated environments produced a network that implicitly learns to probe and adapt to its environment at runtime, much like GPT-3's meta-learning.",
+      "background": "An OpenAI project that trained a robotic hand to manipulate objects using reinforcement learning in simulation."
+    },
+    {
+      "name": "OA5",
+      "kind": "work",
+      "aliases": [
+        "OpenAI Five"
+      ],
+      "senseHere": "An OpenAI game-playing system cited as evidence that training stabilizes, rather than breaks, when batch sizes are scaled up to the millions.",
+      "background": "An OpenAI system that learned to play the video game Dota 2 as a team through large-scale reinforcement learning."
+    },
+    {
+      "name": "pretraining thesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The argument that training a model to predict text as well as a human can requires it to eventually acquire genuine world knowledge and reasoning, because the only way to close the remaining small gap in prediction accuracy is to stop guessing and start truly understanding."
+    },
+    {
+      "name": "hardware overhang",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The situation where sufficiently powerful computers already exist (or could soon cheaply exist) to run a breakthrough AI method, but nobody has yet applied them that way, so progress can suddenly jump once someone does."
+    },
+    {
+      "name": "Ilya Sutskever",
+      "kind": "person",
+      "aliases": [],
+      "senseHere": "Quoted by the author as one of the few researchers who held firm conviction, before the evidence was in, that applying existing algorithms at enough scale and data would simply work.",
+      "background": "A deep learning researcher and co-founder of OpenAI, known for early work on scaling neural networks."
+    },
+    {
+      "name": "intentional stance",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Treating a system as if it has beliefs, goals, and wants, as a useful shortcut for predicting its behavior, rather than tracking every low-level physical detail; the author argues a model trained to predict text might adopt exactly this shortcut for genuinely non-agentic systems too, which is how agency could leak in.",
+      "background": "A term from philosopher Daniel Dennett for one of three ways to predict a system's behavior: by treating it as a rational agent pursuing goals, rather than purely as physics or as a designed mechanism."
+    },
+    {
+      "name": "Conway's Game of Life",
+      "kind": "concept",
+      "aliases": [
+        "GoL",
+        "Game of Life"
+      ],
+      "senseHere": "Used by the author as a test case for whether agent-like thinking can emerge even in a system with no biology or evolution, since its patterns naturally get seen as moving 'creatures' like gliders surviving or dying rather than as grids of cells following fixed rules.",
+      "background": "A simple grid-based simulation where cells turn on or off each step according to fixed rules based on their neighbors, famous for producing complex self-propagating patterns from very simple rules."
+    }
+  ]
+}

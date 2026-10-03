@@ -1,0 +1,159 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "noema-before-1",
+  "promptVersion": "glossary/8",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [],
+      "background": "A Google engineer who in 2022 publicly claimed that the company's LaMDA chatbot was sentient and had feelings, a claim reported by The Washington Post. Google fired him for breaching confidentiality rules rather than directly addressing his claim about the system's consciousness."
+    },
+    {
+      "name": "David Chalmers",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher known for formulating the \\u2018hard problem\\u2019 of consciousness and for arguing that conscious machines could plausibly exist in the near future. He is closely associated with the neuron-by-neuron replacement thought experiment used to argue that consciousness could transfer to a different material substrate."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "kind": "person",
+      "aliases": [],
+      "background": "A computer scientist often called a founding figure of modern deep learning, awarded a Nobel Prize for this work, who has publicly stated that he believes some AI systems are already conscious. He also introduced the concept of mortal computation as a more energy-efficient alternative to standard software."
+    },
+    {
+      "name": "Artificial general intelligence",
+      "kind": "term",
+      "aliases": [
+        "AGI",
+        "artificial superintelligence",
+        "ASI"
+      ],
+      "senseHere": "AI that matches or exceeds the full range of human cognitive abilities, as opposed to AI that is only good at narrow tasks. The essay warns that treating this threshold as a point where consciousness will automatically appear is itself a symptom of assuming humans are special, rather than a real argument."
+    },
+    {
+      "name": "Pareidolia",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The tendency to see familiar patterns, like a face, in random or unrelated shapes, such as a face in burnt toast. The essay borrows this idea from Adam Becker's book to describe people projecting consciousness onto AI systems where none may exist."
+    },
+    {
+      "name": "Computational functionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The assumption that running the right kind of computation or information processing is enough, by itself, to produce consciousness, regardless of what the computer is made of. The essay argues this assumption is usually taken for granted rather than defended, and that if it is false, machines built like today's computers cannot be conscious at all."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "universal Turing machine",
+        "Turing computation"
+      ],
+      "senseHere": "An abstract device that reads and writes symbols step by step according to fixed rules, used to define what counts as an algorithm. A universal version can simulate any other such machine, and the essay uses this to explain why standard computers treat software as separable from hardware \\u2014 a separation it argues does not hold for brains.",
+      "background": "Alan Turing introduced this idea in the 1930s as a way of formally capturing what it means to compute, and it underlies the design of every modern digital computer."
+    },
+    {
+      "name": "McCulloch-Pitts neuron",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A simplified mathematical model of a brain cell that sums weighted inputs and produces an output, shown decades ago to be capable, in networks, of carrying out any computation a Turing machine can. The essay traces today's artificial neural networks back to this model, and argues that treating real neurons as if they were just this simple is what encourages mistaking brains for computers.",
+      "background": "The model was introduced in a 1943 paper by the logician Walter Pitts and neurophysiologist Warren McCulloch, and it became a foundation for later work in artificial neural networks."
+    },
+    {
+      "name": "Autopoiesis",
+      "kind": "term",
+      "aliases": [
+        "self-production"
+      ],
+      "senseHere": "A living system's continual work of maintaining and regenerating itself, down to the level of individual cells. The essay treats this self-sustaining activity as a mark of life that silicon computers lack, and as a possible foundation for why life, not just computation, matters to consciousness."
+    },
+    {
+      "name": "Generative entrenchment",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The idea that a brain's parts are so tightly interwoven across many scales that you cannot swap one part for a different material and expect everything else to keep working the same way. The essay uses this to argue that a biological neuron cannot be perfectly replaced by a silicon equivalent without reinventing much of what makes it biological."
+    },
+    {
+      "name": "Mortal computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A form of computation whose process is tied so closely to one particular physical device that the computation effectively stops existing when that device is destroyed, unlike ordinary software that can run on any compatible machine. The essay cites this as an example of computing approaches that are less separable from their material basis than standard digital computation.",
+      "background": "The term was introduced by the AI researcher Geoffrey Hinton as part of proposals to make learning systems more energy-efficient by abandoning the strict separation between software and hardware."
+    },
+    {
+      "name": "Watt governor",
+      "kind": "concept",
+      "aliases": [
+        "steam engine governor"
+      ],
+      "senseHere": "A simple mechanical device that regulates a steam engine's speed using swinging weights and valves, with no calculation or symbol-processing involved. The essay uses it, following the cognitive scientist Tim van Gelder, as an example of a system that does something useful and regulatory without being usefully described as a computer at all."
+    },
+    {
+      "name": "Biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being alive, not just having the right information processing, is necessary for consciousness, even if life alone might not be enough to guarantee it. The essay treats this as a serious possibility rather than a proven fact, noting that everything currently agreed to be conscious is also alive.",
+      "background": "The term was coined by the philosopher John Searle, who argued that consciousness is a biological phenomenon produced by specific properties of brain tissue rather than by abstract computation."
+    },
+    {
+      "name": "Predictive processing",
+      "kind": "concept",
+      "aliases": [
+        "controlled hallucination"
+      ],
+      "senseHere": "The theory that conscious experience is the brain's best guess about the causes of its sensory signals, constantly adjusted by incoming data rather than read directly off the world. The essay extends this to bodily feelings like mood and emotion, and uses it to argue that experience may be tied to the living body's need to regulate itself, not to abstract computation."
+    },
+    {
+      "name": "Interoceptive inference",
+      "kind": "term",
+      "aliases": [
+        "interoception"
+      ],
+      "senseHere": "The brain's best-guessing about the body's own internal state, such as heart rate or energy levels, which the essay links to feelings like emotion and mood. This process is presented as part of why embodied, living systems may be needed for consciousness rather than any system that merely processes information."
+    },
+    {
+      "name": "Simulation hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The proposal that our entire reality might itself be a computer simulation run by a more advanced civilization. The essay argues this idea secretly depends on computational functionalism being true, since it only makes sense if a sufficiently detailed simulation of a brain would actually be conscious.",
+      "background": "The hypothesis is most closely associated with the philosopher Nick Bostrom, who argued on statistical grounds that simulated minds, if possible, would vastly outnumber minds in base reality."
+    },
+    {
+      "name": "Garland test",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A test, named after the film this scene comes from, of whether a person still feels a machine is conscious even after being told, and shown, that it is just a machine. The essay distinguishes this from any genuine test of machine consciousness itself, calling it instead a test of human persuasion."
+    },
+    {
+      "name": "Neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "gradual neuron replacement"
+      ],
+      "senseHere": "A hypothetical scenario where brain neurons are replaced one by one with silicon parts that behave identically, commonly used to argue that mind and consciousness could survive in a different material. The essay rejects the thought experiment, arguing it assumes a perfect silicon replacement is possible when, given how entangled brain tissue is with its own biology, no such replacement could actually function the same way."
+    },
+    {
+      "name": "M\\u00fcller-Lyer illusion",
+      "kind": "concept",
+      "aliases": [
+        "Muller-Lyer illusion"
+      ],
+      "senseHere": "A visual illusion in which two equal-length lines look different in length because of arrow-like marks added to their ends, and this impression persists even once you know the lines are equal. The essay uses it as an analogy for how a feeling that an AI is conscious might persist even once someone understands, intellectually, that it is not."
+    },
+    {
+      "name": "\\u201csomething it is like to be\\u201d",
+      "kind": "concept",
+      "aliases": [
+        "Nagel's definition of consciousness"
+      ],
+      "senseHere": "A philosopher's way of defining consciousness: a being is conscious if there is some subjective quality to being that creature, some inner experience rather than mere mechanical function. The essay uses this as its working definition of consciousness throughout, contrasting it with intelligence, which is about doing rather than experiencing.",
+      "background": "The phrase comes from the philosopher Thomas Nagel's influential 1974 essay on the subjective nature of experience."
+    }
+  ]
+}

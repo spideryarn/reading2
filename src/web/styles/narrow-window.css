@@ -139,7 +139,8 @@
   .controls {
     overflow-x: auto;
     overflow-y: hidden;
-    /* The bar is 44px tall with no room for a scrollbar inside it, and this is
+    /* The bar is 44px tall (68px while it holds the headings breadcrumb,
+       crumbs.css § a narrow window) with no room for a scrollbar inside it, and this is
        a touch surface where scrollbars are overlays anyway. */
     scrollbar-width: none;
     /* **This was `calc(--feedback-w + 0.75rem)`, and it became wrong rather

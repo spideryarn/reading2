@@ -1,0 +1,65 @@
+/* 261003o: the "category word" shape. A reader types a word that names a KIND of
+   passage (results, limitations, methods, examples) or a field (linear algebra,
+   neuroscience). The right paragraphs are instances of it and rarely say it.
+   Queries were written before any of them was run, except the three Greg ran
+   himself (results, Limitations, linear algebra) and the reproduced "dreaming".
+   SPENDS: Jev only, 3 runs per query, about $0.0005 a run. */
+import { readFileSync, writeFileSync } from "node:fs";
+import { DIR, fixture, jevSearch, pool, totalSpend } from "./lib.ts";
+
+export const BFR = "arxiv-2610-spya-bfrbaj";
+export const QUERIES: { slug: string; q: string; set: "greg" | "abstract" | "absent" }[] = [
+  { slug: BFR, q: "results", set: "greg" },
+  { slug: BFR, q: "linear algebra", set: "greg" },
+  { slug: BFR, q: "Limitations", set: "greg" },
+  { slug: BFR, q: "related work", set: "abstract" },
+  { slug: BFR, q: "experiments", set: "abstract" },
+  { slug: BFR, q: "method", set: "abstract" },
+  { slug: BFR, q: "future work", set: "abstract" },
+  { slug: BFR, q: "baselines", set: "abstract" },
+  { slug: BFR, q: "math", set: "abstract" },
+  { slug: BFR, q: "dreaming", set: "absent" },
+  { slug: BFR, q: "sleep", set: "absent" },
+  { slug: BFR, q: "human memory", set: "absent" },
+  { slug: "constitution", q: "examples", set: "abstract" },
+  { slug: "constitution", q: "definitions", set: "abstract" },
+  { slug: "constitution", q: "risks", set: "abstract" },
+  { slug: "constitution", q: "philosophy", set: "abstract" },
+  { slug: "noema-mythology-of-conscious-ai", q: "history", set: "abstract" },
+  { slug: "noema-mythology-of-conscious-ai", q: "science fiction", set: "abstract" },
+  { slug: "noema-mythology-of-conscious-ai", q: "neuroscience", set: "abstract" },
+  { slug: "noema-mythology-of-conscious-ai", q: "criticism", set: "abstract" },
+  { slug: "noema-mythology-of-conscious-ai", q: "recipes", set: "absent" },
+  { slug: "openai-huggingface", q: "methods", set: "abstract" },
+  { slug: "openai-huggingface", q: "results", set: "abstract" },
+  { slug: "openai-huggingface", q: "ethics", set: "abstract" },
+  { slug: "openai-huggingface", q: "statistics", set: "abstract" },
+  { slug: "openai-huggingface", q: "gardening", set: "absent" },
+];
+
+export function load(slug: string) {
+  if (slug === BFR) {
+    const d = JSON.parse(readFileSync(`${DIR}/bfrbaj.json`, "utf8"));
+    return d.blocks.map((b: any) => ({ ...b, treatment: b.treatment ?? undefined, role: b.role ?? undefined }));
+  }
+  return fixture(slug).blocks;
+}
+
+if (process.argv[1]!.endsWith("abstract-run.ts")) {
+  const out: any[] = [];
+  await pool(QUERIES, 4, async (Q) => {
+    const blocks = load(Q.slug);
+    const reps = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await jevSearch("mention", Q.q, blocks);
+      reps.push({ ms: r.ms, cost: r.cost, model: r.calls[0]?.model, scores: r.scores });
+    }
+    out.push({ ...Q, reps });
+    const line = reps.map((r) => { const s = Object.values(r.scores).sort((a, b) => b - a); return `top ${s[0]!.toFixed(2)} n70=${s.filter((p) => p >= 0.7).length} n50=${s.filter((p) => p >= 0.5).length}`; }).join(" | ");
+    console.log(`[${Q.set}] ${Q.slug.slice(0, 12)} | ${Q.q}: ${line}`);
+  });
+  out.sort((a, b) => QUERIES.findIndex((q) => q.slug === a.slug && q.q === a.q) - QUERIES.findIndex((q) => q.slug === b.slug && q.q === b.q));
+  writeFileSync(`${DIR}/abstract-raw.json`, JSON.stringify(out, null, 1));
+  console.log(`spend so far $${totalSpend().toFixed(4)}`);
+  process.exit(0);
+}

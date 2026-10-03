@@ -1,0 +1,511 @@
+diff --git a/docs/investigations/261003g-glossary-citation-entries-before-and-after-the-rule.md b/docs/investigations/261003g-glossary-citation-entries-before-and-after-the-rule.md
+new file mode 100644
+index 000000000..4def977c7
+--- /dev/null
++++ b/docs/investigations/261003g-glossary-citation-entries-before-and-after-the-rule.md
+@@ -0,0 +1,124 @@
++# Glossary: citation entries before and after the "a cited work is not a term" rule
++
++Up: [investigations.md](../project/investigations.md) · the plan:
++[261003o](../plans/261003o-glossary-keeps-cited-works-out-citations-are-not-terms.md) · the feature:
++[glossary.md § A cited work is not a term](../project/glossary.md#a-cited-work-is-not-a-term)
++
++**Question.** Greg, 2026-10-03 (spya-zn97q5): *"I don't think the glossary should include citations.
++That's what citations are for."* Does a rule in the glossary prompt keep cited works out, and what
++does it cost?
++
++**Short answer.** Yes, nearly. On the one local paper where the old prompt named a cited book as an
++entry in three runs of five, the shipped prompt did so in none of ten. Citations used as aliases
++fell from five in five runs to two in ten. **The cost is on the same paper:** its list is two or
++three entries shorter on average, and two runs in ten came back much shorter than the old prompt
++ever did. Essays were unchanged, and people the pieces talk about were kept.
++
++## What was run
++
++`evals/glossary-citations.ts`, 2026-10-03, on the box, against the local database. It calls
++production's `generateGlossary` (Sonnet, no profile, a first pass) and stores each list under
++`evals/results/glossary-citations/<arm>/`, with the prompt version and a hash of the prompt's
++source files. `report` prints the table, every name or alias containing "et al" or a year, and
++every person and work entry, to be read by hand. Nothing blind: the question is which entries
++exist, and the lists are read against the paper's own text.
++
++| Arm | Prompt | What it is |
++|---|---|---|
++| `before`, `before-2` … `before-5` | `glossary/8`, the tree before the change | The old prompt, five times: the control for wobble |
++| `after`, `after-2` … `after-5` | first wording | A plain rule, no test and no worked example |
++| `v2-1` … `v2-5` | first wording plus one clause | Tried and dropped, below |
++| `v3-1` … `v3-10` | **the shipped wording** | The "what is the name's job" test, and a worked example |
++| `noema-before-1` … `-3` | `glossary/8` | The old prompt on the essay with people in it |
++
++The `before`, `after` and `v2` arms were separated in time, each run on the tree as it then stood.
++`noema-before-*` was run later, from a temporary copy of the committed `src/glossary.ts`
++(`git show HEAD:…`), because by then the tree had moved; it is the same file, loaded by another
++name. **The "et al." guard in code was in place for the `v3` arms and not for the others**, so a
++`v3` list is what a reader would get; the old prompt produced one "et al." alias in five runs, so
++the guard accounts for very little of the difference.
++
++Pieces: `source-spya-f550ta` (a review paper on ball lightning, dense with author-and-year
++citations and with historical people), `entropy-24-00930-spya-pywwkq` (a methods paper),
++`scaling-hypothesis` and `noema-mythology-of-conscious-ai` (essays, with people and works they
++talk about and no author-and-year citations), and `analog-cognition-…` (a paper, first two arms
++only: it showed nothing either way).
++
++## Citations as entries or aliases
++
++Read by hand from the report, on `source-spya-f550ta`:
++
++| | old prompt, 5 runs | shipped prompt, 10 runs |
++|---|---|---|
++| An entry named for a cited book ("Rakov and Uman", "Stenhoff") | 5 entries, in 3 runs | 0 |
++| An alias that is a citation | 5, in 4 runs ("Rakov and Uman (2003)" ×3, "Stenhoff (1999)", "Cen et al. case") | 2, in 2 runs ("Brand (1923, 2010)" on the book *Der Kugelblitz*; "fragmented science (2001)") |
++
++The paper cites Stenhoff thirteen times and only ever as "(Stenhoff, 1999)" or "Stenhoff's book
++(1999)"; "Rakov and Uman (2003)" likewise. Those are citations by any reading. On `entropy` the old
++prompt gave "Williams and Beer" as a person in one run of five, and the shipped prompt in none of
++five. The runs 261003d recorded earlier the same day under `glossary/8`
++(`evals/results/paperwork-modes/after*/`) show the same shapes and more: "Turner (2001)" as an alias
++of "fragmented science", "Hill et al. 2008 experiment".
++
++Authors who appear in some old-prompt lists and may be citation-only (Uman, Bychkov, Nikitin,
++Singer, Cen) still turn up now and then under the shipped prompt (Uman twice, Bychkov and Nikitin
++once in ten runs). I did not read the paper's text for those five, so they are not counted either
++way.
++
++## What it cost
++
++On `source-spya-f550ta`:
++
++| | old prompt (5 runs) | first wording (5) | shipped wording (10) |
++|---|---|---|---|
++| Entries | 19, 17, 19, 18, 17 — mean 18.0 | 15, 16, 17, 14, 19 — mean 16.2 | 7, 17, 18, 17, 16, 14, 17, 12, 16, 18 — mean 15.2 |
++| Person entries | 9, 9, 7, 9, 8 — mean 8.4 | 8, 4, 5, 2, 7 — mean 5.2 | 0, 8, 7, 8, 9, 5, 7, 2, 6, 8 — mean 6.0 |
++| François Arago | 5 of 5 | 1 of 5 | 6 of 10 |
++| Richmann, Charcot | 5 of 5 each | 5 of 5 each | 9 of 10 each |
++
++Losing about two entries a run is the rule working: that is how many were citations. **The two
++short lists (7 and 12 entries) are not.** The old prompt never went under 17 on this paper in these
++five runs, or in the three 261003d recorded. The prompt says "fewer is fine", and with more to
++leave out the model sometimes leaves out much more. *Find more* is what a reader has for a short
++list.
++
++Arago is the borderline case: the paper tells what he did and also cites him as "Arago (1837)".
++The first wording dropped him four times in five. The shipped wording says a person the piece both
++tells about and cites keeps their entry, and he is back in six of ten.
++
++**Elsewhere nothing was lost:**
++
++| | old prompt | shipped prompt |
++|---|---|---|
++| `noema` people (3 runs each) | 3, 2, 3 | 4, 4, 6 |
++| `scaling-hypothesis` people; works (2 runs each) | 2, 4; 6, 4 | 3, 1; 4, 4 |
++| `entropy` entries (5 runs each) | 19, 19, 20, 20, 21 | 20, 21, 20, 23, 19 |
++
++## Two wordings that were dropped
++
++- **The first wording used the eval paper's own citations as its examples** ("Rakov and Uman
++  (2003)", "Turner (2001)", "Hill et al. 2008 experiment"), which I had copied from the recorded
++  runs into the prompt. Its clean result (no citation entry or alias in five runs) is therefore
++  not evidence: the prompt named the answers. The shipped wording uses invented examples from
++  another field.
++- **`v2`** added *"a year or a reference beside the name does not change that"* to win Arago back.
++  `f550ta` came back with 12, 17, 15, 10, 13 entries and 1, 6, 7, 8, 2 people: no better on people
++  and shorter overall.
++
++GPT Sol's plan review asked for an operational test (*what is the name's job in the piece?*) and
++worked BAD/GOOD cases. That is the shipped wording, and it is the one that kept the people.
++
++## What was decided
++
++- Ship the `v3` wording as `glossary/9`, with the "et al." guard in code behind it.
++- The Citations cross-check the plan held in reserve (drop any entry or alias matching a cited
++  work's in-text label) is not built. What still gets through is two aliases in ten runs on the
++  densest paper we have, which does not pay for joining two pipeline steps.
++- The shorter lists are named to Greg in the plan as the cost.
++
++## What this does not show
++
++- It is one citation-dense paper. The cost is measured there and nowhere else.
++- The production article in the report (`arxiv-2610-spya-bfrbaj`) was not run; it is not in the
++  local database.
++- Nobody judged the quality of the entries that remain; this counted which entries exist.
+diff --git a/docs/project/glossary.md b/docs/project/glossary.md
+index 62f6f5991..1445d0646 100644
+--- a/docs/project/glossary.md
++++ b/docs/project/glossary.md
+@@ -642,6 +642,41 @@ the article**, and those two entries only found their blocks because `JFK` and `
+ aliases. The prompt now names both as examples of what not to do, and the re-run gave
+ *John F. Kennedy* and *Martin Luther King Jr.*
+ 
++### A cited work is not a term
++
++> It looks as though there is at least one glossary item in this article that's actually a paper,
++> Saha et al. I don't think the glossary should include citations. That's what citations are for.
++>
++> — Greg, 2026-10-03, spya-zn97q5
++
++The prompt invited it: *"works … named without introduction"* earn entries, and a paper cited as
++"Saha et al." is one. Since `glossary/9` the prompt draws the line at **cited against discussed**. A
++work the piece only points at as a source, and its authors where they are named only as that
++citation, get no entry and may not be an alias; [Citations](citations.md) lists them. The test the
++prompt gives is the name's job in the piece: only there to say where a claim came from, or
++something the reader needs to know to follow it. A person the piece tells about, and a work it
++examines, still get entries, and a person it both tells about and cites keeps theirs. An idea a
++cited paper introduced gets an entry only under a name the piece itself uses for it.
++
++The alias half matters as much as the entry half: an alias is what the prose underlines, so
++`Turner (2001)` as an alias of a real term put a glossary underline on a citation.
++
++Behind the prompt, `citesByEtAl` in [`src/glossary.ts`](../../src/glossary.ts) drops any model
++entry whose name is a name followed by "et al", and any such alias. That shape needs no judgment:
++nothing is called "Saha et al." but a citation. Author-and-year forms are left to the prompt: code
++cannot tell "Stenhoff (1999)" from "Blade Runner (1982)".
++
++**What it does and costs**, measured in
++[261003g](../investigations/261003g-glossary-citation-entries-before-and-after-the-rule.md): on a
++review paper dense with citations, entries named for a cited book went from three runs in five to
++none in ten, and citation aliases from five to two. The list is two or three entries shorter there,
++and now and then much shorter. Essays were unchanged.
++
++A term the reader [looks up themselves](#looking-a-term-up) is not filtered: that is their request.
++A list written before `glossary/9` keeps its citation entries until its step next runs
++([Staleness](#staleness-and-the-force-cascade)); **Hide** removes one meanwhile. Plan:
++[261003o](../plans/261003o-glossary-keeps-cited-works-out-citations-are-not-terms.md).
++
+ <a id="checking-a-term-on-the-web"></a>
+ 
+ ### Digging deeper into a term
+diff --git a/docs/user-feedback/261003_1913-glossary-lists-a-cited-paper.md b/docs/user-feedback/261003_1913-glossary-lists-a-cited-paper.md
+new file mode 100644
+index 000000000..4ff94e666
+--- /dev/null
++++ b/docs/user-feedback/261003_1913-glossary-lists-a-cited-paper.md
+@@ -0,0 +1,32 @@
++---
++reports: spya-zn97q5
++ending: shipped
++---
++# Glossary lists a cited paper ("Saha et al.") as a term
++
++Greg's suggestion from the Feedback dialog (he is admin), filed 2026-10-03 19:13 on
++`arxiv-2610-spya-bfrbaj`, relayed by the Overseer (queue item `qi-gbcjdnyj`). Sentry:
++SPIDERYARN-READING2-BN. Not built before (checked `git log origin/dev`, `docs/plans/`, this
++directory and `gjd-remote ls` on 2026-10-03).
++
++> It looks as though there is at least one glossary item in this article that's actually a paper,
++> Saha et al. I don't think the glossary should include citations. That's what citations are for.
++
++**Shipped.** The glossary prompt (`glossary/9`) no longer gives an entry to a work the piece only
++cites, or uses a citation as another name for a term; people and works the piece actually talks
++about keep theirs. Behind the prompt, code drops any entry or alias of the form "Name et al.".
++Measured on a local paper dense with citations: entries named for a cited book went from three runs
++in five to none in ten. Plan, measurement and GPT Sol's reviews:
++[261003o](../plans/261003o-glossary-keeps-cited-works-out-citations-are-not-terms.md),
++[261003g](../investigations/261003g-glossary-citation-entries-before-and-after-the-rule.md).
++
++Three things for Greg, all in the plan's questions:
++
++- **The article in the report keeps "Saha et al." until its glossary is made again.** After the
++  deploy, press **Find terms again** on it. Production was not touched.
++- On a citation-heavy paper the list comes out two or three entries shorter, and now and then much
++  shorter.
++- Works the piece discusses (a book it analyses, GPT-3) still get entries. Say if you want none.
++
++The Sentry status write is left for the next sweep: this session ran on a pool account with no
++Sentry sign-in.
+diff --git a/evals/glossary-citations.ts b/evals/glossary-citations.ts
+new file mode 100644
+index 000000000..52f0c3d21
+--- /dev/null
++++ b/evals/glossary-citations.ts
+@@ -0,0 +1,133 @@
++/**
++ * **Does the glossary list the works a piece cites?** It should not: Citations
++ * lists those (Greg, 2026-10-03, spya-zn97q5;
++ * docs/plans/261003o-glossary-keeps-cited-works-out-citations-are-not-terms.md).
++ *
++ * ```
++ * npx tsx evals/glossary-citations.ts generate --arm before   <slug>...   # paid, on the commit before the change
++ * npx tsx evals/glossary-citations.ts generate --arm before-2 <slug>...   # the same prompt again: the wobble
++ * npx tsx evals/glossary-citations.ts generate --arm after    <slug>...   # paid, on the commit with the change
++ * npx tsx evals/glossary-citations.ts report                              # free: the screens, per arm
++ * ```
++ *
++ * **The arms are separated in time, not in code**, as in
++ * evals/plain-words/run.ts: `generate` calls production's `generateGlossary`
++ * (no profile, a first pass) and records a hash of the prompt's source files
++ * beside the answer. There is no copy of the prompt in here to drift.
++ *
++ * Reads the local database, writes nothing there beyond the `ai_calls` rows
++ * every call records. Output under `evals/results/glossary-citations/<arm>/`.
++ *
++ * **What the screen cannot say.** `looksCited` is a regex over names and
++ * aliases: it flags "Blade Runner (1982)" and "Tokyo 2020" as readily as
++ * "Stenhoff (1999)". Every hit is printed so it can be read, and so is every
++ * person and work entry, because the regression to watch is the other way
++ * round: people and works the piece talks about, dropped
++ * (docs/project/prompting-guide.md § Measuring a prompt change, step 8).
++ */
++
++import fs from "node:fs";
++import path from "node:path";
++import { createHash } from "node:crypto";
++import { loadEnvLocal } from "../src/env.js";
++import { isMain } from "../src/is-main.js";
++
++const REPO = path.join(import.meta.dirname, "..");
++const OUT = path.join(REPO, "evals", "results", "glossary-citations");
++const SOURCES = ["glossary.ts", "paperwork.ts", "plain-words.ts"];
++
++/** "et al", or a year: the two marks of an author-and-year citation. A screen, not a verdict. */
++export function looksCited(text: string): boolean {
++  return /\bet\s+al\b/i.test(text) || /\b(1[5-9]|20)\d\d[a-z]?\b/.test(text);
++}
++
++interface Entry {
++  name: string;
++  kind: string;
++  aliases: string[];
++  senseHere?: string;
++  background?: string;
++}
++
++interface ArmFile {
++  slug: string;
++  arm: string;
++  promptVersion: string;
++  sourceSha256: Record<string, string>;
++  entries: Entry[];
++}
++
++async function generate(arm: string, slugs: string[]): Promise<void> {
++  loadEnvLocal();
++  const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
++  const { loadArticle } = await import("../src/store/index.js");
++  const { generateGlossary, PROMPT_VERSION } = await import("../src/glossary.js");
++  const sourceSha256 = Object.fromEntries(
++    SOURCES.map((f) => [f, createHash("sha256").update(fs.readFileSync(path.join(REPO, "src", f))).digest("hex")]),
++  );
++  fs.mkdirSync(path.join(OUT, arm), { recursive: true });
++  await runAsOwner(environmentOwnerId(), async () => {
++    await Promise.all(
++      slugs.map(async (slug) => {
++        const out = path.join(OUT, arm, `${slug}.json`);
++        /* Never overwrite an arm: a second run under the same name would replace
++           the evidence the first one was. */
++        if (fs.existsSync(out)) throw new Error(`${out} exists; pick another arm name`);
++        const article = { ...(await loadArticle(slug)), slug };
++        const run = await generateGlossary({ power: "standard", article, previous: null, profile: null });
++        const entries: Entry[] = run.glossary.entries.map((e) => ({
++          name: e.name,
++          kind: e.kind,
++          aliases: e.aliases,
++          ...(e.senseHere ? { senseHere: e.senseHere } : {}),
++          ...(e.background ? { background: e.background } : {}),
++        }));
++        const file: ArmFile = { slug, arm, promptVersion: PROMPT_VERSION, sourceSha256, entries };
++        fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
++        console.log(`${arm} ${slug}: ${entries.length} entries written`);
++      }),
++    );
++  });
++}
++
++function report(): void {
++  const arms = fs.existsSync(OUT)
++    ? fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory()).sort()
++    : [];
++  const rows = ["arm\tslug\tprompt\tentries\tpeople\tworks\tcited-names\tcited-aliases"];
++  const hits: string[] = [];
++  const named: string[] = [];
++  for (const arm of arms) {
++    for (const f of fs.readdirSync(path.join(OUT, arm)).filter((x) => x.endsWith(".json")).sort()) {
++      const file = JSON.parse(fs.readFileSync(path.join(OUT, arm, f), "utf8")) as ArmFile;
++      const people = file.entries.filter((e) => e.kind === "person");
++      const works = file.entries.filter((e) => e.kind === "work");
++      const citedNames = file.entries.filter((e) => looksCited(e.name));
++      const citedAliases = file.entries.flatMap((e) =>
++        e.aliases.filter(looksCited).map((alias) => `${alias}  (alias of [${e.kind}] ${e.name})`),
++      );
++      rows.push(
++        [arm, file.slug, file.promptVersion, file.entries.length, people.length, works.length, citedNames.length, citedAliases.length].join("\t"),
++      );
++      for (const e of citedNames) hits.push(`[name]  ${arm} ${file.slug}: [${e.kind}] ${e.name}`);
++      for (const a of citedAliases) hits.push(`[alias] ${arm} ${file.slug}: ${a}`);
++      named.push(
++        `${arm} ${file.slug}\n  people: ${people.map((e) => e.name).join(" | ") || "(none)"}\n  works:  ${works.map((e) => e.name).join(" | ") || "(none)"}`,
++      );
++    }
++  }
++  console.log(rows.join("\n"));
++  console.log(`\n=== every name or alias the screen flagged (read them: a year is not always a citation) ===\n${hits.join("\n") || "(none)"}`);
++  console.log(`\n=== every person and work entry (read them: these are what must not be lost) ===\n${named.join("\n")}`);
++}
++
++async function main(): Promise<void> {
++  const [command, ...rest] = process.argv.slice(2);
++  if (command === "report") return report();
++  if (command === "generate" && rest[0] === "--arm" && rest[1] && rest.length > 2) {
++    return generate(rest[1], rest.slice(2));
++  }
++  throw new Error("usage: glossary-citations.ts generate --arm <name> <slug>... | report");
++}
++
++if (isMain(import.meta.url)) await main();
+diff --git a/src/glossary.ts b/src/glossary.ts
+index da9100a01..74e930bf9 100644
+--- a/src/glossary.ts
++++ b/src/glossary.ts
+@@ -114,8 +114,13 @@ import type { ArtifactStore } from "./store/artifacts.js";
+  * `glossary/8`, 2026-10-03: the prompt gained the shared paperwork section,
+  * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
+  * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
++ *
++ * `glossary/9`, 2026-10-03: a work the piece only cites is not a term, and a
++ * citation is never an alias (Greg, spya-zn97q5: *"I don't think the glossary
++ * should include citations. That's what citations are for."*
++ * docs/plans/261003o-glossary-keeps-cited-works-out-citations-are-not-terms.md).
+  */
+-export const PROMPT_VERSION = "glossary/8";
++export const PROMPT_VERSION = "glossary/9";
+ 
+ /**
+  * The most entries one call may return.
+@@ -276,6 +281,23 @@ function text(value: unknown): string {
+   return typeof value === "string" ? value.trim() : "";
+ }
+ 
++/**
++ * Is this name or alias a citation written with "et al."?
++ *
++ * **A cited work is not a term**: Citations lists those (Greg, 2026-10-03,
++ * spya-zn97q5, on an entry named "Saha et al."). The prompt is what tells a
++ * citation from a work the piece discusses, and it is only a request. This is
++ * the one shape that needs no judgment, because nothing is *called* "et al.",
++ * so `toEntries` drops it whatever the model did. Author-and-year forms
++ * ("Stenhoff (1999)") are left to the prompt: in code they cannot be told from
++ * "Blade Runner (1982)". docs/project/glossary.md § A cited work is not a term.
++ */
++export function citesByEtAl(value: string): boolean {
++  /* A name before it, so a piece about the abbreviation itself, or a work
++     titled "Et Al.", keeps its entry (GPT Sol's plan review, finding 1). */
++  return /\S\s+et\s+al\b/i.test(value);
++}
++
+ /**
+  * Turn what the model said into entries, believing as little of it as possible.
+  *
+@@ -322,6 +344,7 @@ function toEntries(
+       .filter(Boolean)
+       .join(" ");
+     if (!name || (!senseHere && !background)) continue;
++    if (citesByEtAl(name)) continue;
+ 
+     const kindText = text(item.kind).toLowerCase();
+     const kind = (KINDS.has(kindText) ? kindText : "other") as GlossaryKind;
+@@ -335,7 +358,7 @@ function toEntries(
+     for (const alias of Array.isArray(item.aliases) ? item.aliases : []) {
+       const value = text(alias);
+       const key = normaliseTerm(value);
+-      if (!key || seen.has(key)) continue;
++      if (!key || seen.has(key) || citesByEtAl(value)) continue;
+       seen.add(key);
+       aliases.push(value);
+     }
+@@ -1030,6 +1053,16 @@ WHAT DOES NOT
+ - terms you can define only from general knowledge and which the piece does not
+   actually depend on. This is a glossary FOR this article, not an encyclopaedia
+   entry that happens to be adjacent to it.
++- a work the piece only cites as a source: a paper, book or report pointed at
++  by its authors and a year, by "et al.", or by a number in brackets ("Saha et
++  al.", "Kahneman and Tversky (1979)", "[12]"). Nor its authors, where the
++  piece names them only as that citation. The reader has a separate list of
++  every work the piece cites. The test is the name's job in the piece. If it
++  is only there to say where a claim came from ("Saha et al. found that ...",
++  "(Okafor, 2011)"), it is a citation. If the reader needs to know who or what
++  it is to follow the piece — a person the piece tells about, a work it
++  examines rather than points at — it earns an entry under its own name. A
++  person the piece both tells about and cites keeps their entry.
+ 
+ WHAT AN ENTRY SUPPLIES
+ 
+@@ -1137,6 +1170,22 @@ though working together leaves both better off."
+ There is no "senseHere": once the reader knows the game, the article's ordinary
+ comparison is already in front of them.
+ 
++A psychology paper writes "losses loom larger than gains (Kahneman and Tversky,
++1979)", calls that "loss aversion" from then on, and spends a section on what
++Stanley Milgram did in his obedience experiments, citing "Milgram (1963)".
++
++BAD — an entry named "Kahneman and Tversky", or "loss aversion" with the alias
++"Kahneman and Tversky (1979)".
++Those names are only there to say where a claim came from. They are citations,
++and the reader has them in a separate list.
++
++GOOD — "loss aversion" has an entry, because the paper uses that phrase, and no
++citation is among its aliases. "Stanley Milgram" has one, with the alias
++"Milgram": the paper tells what he did, so the reader needs to know who he is,
++and being cited as well does not take that away. The cited papers have none.
++If the paper had never named "loss aversion", there would be no entry for it:
++do not make up a name the piece does not use.
++
+ NAMES AND ALIASES
+ 
+ "name" is the canonical and unambiguous way to refer to it (usually the longest
+@@ -1157,6 +1206,12 @@ aliases finds all and only references to the entity (if possible). A one- or
+ two-letter alias, or a common English word, will match half the article: leave
+ it out.
+ 
++An alias is never a citation. "Kuhn (1962)" is not another name for an idea
++that book introduced, and "the Okafor et al. 2011 study" is not another name
++for an experiment. Leave such forms out even where the article uses them:
++every alias is marked in the article as the term, and a citation is not the
++term.
++
+ SCORES
+ 
+ "difficulty" 0-1: how likely a well-read non-specialist is to be stopped by it.
+diff --git a/tests/glossary.test.ts b/tests/glossary.test.ts
+index a7239ba18..f77150efd 100644
+--- a/tests/glossary.test.ts
++++ b/tests/glossary.test.ts
+@@ -379,6 +379,40 @@ describe("buildGlossary", () => {
+     expect(g.entries.find((e) => e.name === "Qualia")?.difficulty).toBeUndefined();
+   });
+ 
++  it("drops an entry that is a citation, and an alias that is one", () => {
++    // Greg, 2026-10-03 (spya-zn97q5): "Saha et al." was listed as a term. Cited
++    // works belong to Citations. "et al" is only ever a citation, so the code
++    // drops it whatever the prompt managed; plan 261003o.
++    const g = buildGlossary(
++      {
++        entries: [
++          { name: "Saha et al.", kind: "work", background: "A paper on protein folding." },
++          { name: "Hill et al. (2008)", kind: "event", background: "A triggered-lightning experiment." },
++          { name: "Smith ET AL", kind: "person", background: "Authors of a survey." },
++          {
++            name: "Camp Blanding experiment",
++            kind: "event",
++            aliases: ["Hill et al. 2008 experiment", "Camp Blanding"],
++            background: "A triggered-lightning experiment.",
++          },
++          { name: "Georg Wilhelm Richmann", kind: "person", aliases: ["Richmann"], background: "A physicist killed by lightning." },
++          // The letters alone are not the mark: only the two words are.
++          { name: "Metal alloy", kind: "term", aliases: ["et alia"], background: "A mixture of metals." },
++          { name: "Étalon", kind: "term", background: "A pair of mirrors used to pick out one colour." },
++          // A piece about the abbreviation itself: with no name before it, it is a term.
++          { name: "et al.", kind: "term", background: "Latin for 'and others', used to shorten a list of authors." },
++        ],
++      },
++      opts,
++    );
++    expect(g.entries.map((e) => e.name).sort()).toEqual(
++      ["Camp Blanding experiment", "Georg Wilhelm Richmann", "Metal alloy", "Étalon", "et al."].sort(),
++    );
++    expect(g.entries.find((e) => e.name === "Camp Blanding experiment")?.aliases).toEqual(["Camp Blanding"]);
++    expect(g.entries.find((e) => e.name === "Georg Wilhelm Richmann")?.aliases).toEqual(["Richmann"]);
++    expect(g.entries.find((e) => e.name === "Metal alloy")?.aliases).toEqual(["et alia"]);
++  });
++
+   it("fills in the occurrences itself", () => {
+     const g = buildGlossary({ entries: [{ name: "Seth", gloss: "The author." }] }, opts);
+     expect(g.entries[0]?.blocks).toEqual(["spya-aaaaaa"]);

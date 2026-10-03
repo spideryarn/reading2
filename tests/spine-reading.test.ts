@@ -73,7 +73,7 @@ describe("readingRuns", () => {
     ]);
   });
 
-  it("keeps neighbours a sixteenth apart as two runs — the line has to step", () => {
+  it("keeps neighbours a sixteenth apart as two runs — the curve must show both reaches", () => {
     const reach = new Map<string, number>([
       ["b0", 9],
       ["b1", 10],
@@ -107,55 +107,173 @@ describe("readingRuns", () => {
 });
 
 describe("readingAreaPaths", () => {
+  /* A document 2000px tall, so an ease reaches at most 20px either side of a boundary. */
+  const DOC = 2000;
+  /** Every coordinate in a path: `M`, `C` and `V` are all it has. */
+  const points = (d: string): { xs: number[]; ys: number[] } => {
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (const m of d.matchAll(/([MCV])([^MCVZ]*)/g)) {
+      const nums = (m[2] ?? "").trim().split(/[ ,]+/).map(Number);
+      if (m[1] === "V") ys.push(nums[0] ?? Number.NaN);
+      else nums.forEach((n, i) => {
+        (i % 2 === 0 ? xs : ys).push(n);
+      });
+    }
+    return { xs, ys };
+  };
+
   it("is two empty paths when nothing has been read", () => {
-    expect(readingAreaPaths([])).toEqual({ area: "", edge: "" });
+    expect(readingAreaPaths([], DOC)).toEqual({ area: "", edge: "" });
   });
 
-  it("fills each run from the left edge out to its reach, and lines its right-hand side only", () => {
-    expect(readingAreaPaths([{ top: 100, height: 200, reach: 6 }])).toEqual({
-      area: "M0 100H6V300H0Z",
-      /* No stroke along the top, the bottom or the left: only the water level. */
-      edge: "M6 100V300",
+  it("draws nothing for zero-height runs, rather than a stroke across the rail", () => {
+    const rows = new Map<string, Row>([
+      ["b0", { index: 0, top: 40, height: 0 }],
+      ["b1", { index: 1, top: 40, height: 0 }],
+    ]);
+    const runs = readingRuns(rows, new Map([["b0", 16], ["b1", 4]]));
+    expect(readingAreaPaths(runs, DOC)).toEqual({ area: "", edge: "" });
+  });
+
+  it("zero-height runs at stretch ends or between visible runs do not change the curve", () => {
+    const visible = [
+      { top: 0, height: 50, reach: 4 },
+      { top: 50, height: 50, reach: 12 },
+    ];
+    const rows = new Map<string, Row>([
+      ["b0", { index: 0, top: 0, height: 0 }],
+      ["b1", { index: 1, top: 0, height: 50 }],
+      ["b2", { index: 2, top: 50, height: 0 }],
+      ["b3", { index: 3, top: 50, height: 50 }],
+      ["b4", { index: 4, top: 100, height: 0 }],
+    ]);
+    const reach = new Map([["b0", 16], ["b1", 4], ["b2", 16], ["b3", 12], ["b4", 16]]);
+    expect(readingAreaPaths(readingRuns(rows, reach), DOC)).toEqual(readingAreaPaths(visible, DOC));
+  });
+
+  it("eases out from the left edge, runs straight down at the reach, and eases back", () => {
+    expect(readingAreaPaths([{ top: 100, height: 200, reach: 6 }], DOC)).toEqual({
+      /* The area is the edge, closed down the rail's left side. */
+      area: "M0 100C0 110 6 110 6 120V280C6 290 0 290 0 300Z",
+      edge: "M0 100C0 110 6 110 6 120V280C6 290 0 290 0 300",
     });
   });
 
-  it("joins neighbouring runs of different reach with a horizontal step, in one subpath", () => {
-    const paths = readingAreaPaths([
-      { top: 0, height: 100, reach: 5 },
-      { top: 100, height: 50, reach: 12 },
-      { top: 150, height: 50, reach: 4 },
-    ]);
-    expect(paths.edge).toBe("M5 0V100H12V150H4V200");
-    expect(paths.area).toBe("M0 0H5V100H0ZM0 100H12V150H0ZM0 150H4V200H0Z");
+  it("joins neighbouring runs of different reach with a curve centred on their boundary, never a step", () => {
+    const paths = readingAreaPaths(
+      [
+        { top: 0, height: 100, reach: 5 },
+        { top: 100, height: 50, reach: 12 },
+        { top: 150, height: 50, reach: 4 },
+      ],
+      DOC,
+    );
+    expect(paths.edge).toBe(
+      "M0 0C0 10 5 10 5 20V80C5 100 12 100 12 120V130C12 150 4 150 4 170V180C4 190 0 190 0 200",
+    );
+    expect(paths.area).toBe(`${paths.edge}Z`);
+    /* The skyline was the `H`s (spya-bguwsn). */
+    expect(paths.edge).not.toContain("H");
   });
 
-  it("breaks the line across an unread gap, and draws nothing along it", () => {
-    const paths = readingAreaPaths([
-      { top: 0, height: 100, reach: 8 },
-      { top: 300, height: 100, reach: 8 },
-    ]);
-    expect(paths.edge).toBe("M8 0V100M8 300V400");
-    expect(paths.area).toBe("M0 0H8V100H0ZM0 300H8V400H0Z");
-    /* Nothing in either path has a y between the two stretches. */
-    const ys = [...`${paths.area}${paths.edge}`.matchAll(/[V ](\d+(?:\.\d+)?)/g)].map((m) => Number(m[1]));
-    expect(ys.some((y) => y > 100 && y < 300)).toBe(false);
+  it("breaks across an unread gap, and draws nothing in it", () => {
+    const paths = readingAreaPaths(
+      [
+        { top: 0, height: 100, reach: 8 },
+        { top: 300, height: 100, reach: 8 },
+      ],
+      DOC,
+    );
+    expect(paths.edge).toBe("M0 0C0 10 8 10 8 20V80C8 90 0 90 0 100M0 300C0 310 8 310 8 320V380C8 390 0 390 0 400");
+    expect(paths.area).toBe("M0 0C0 10 8 10 8 20V80C8 90 0 90 0 100ZM0 300C0 310 8 310 8 320V380C8 390 0 390 0 400Z");
+    /* Nothing in either path has a y between the two stretches: a curve that
+       reached into the gap would say the reader had read what they skipped. */
+    expect(points(paths.edge).ys.some((y) => y > 100 && y < 300)).toBe(false);
+  });
+
+  it("caps an ease at a hundredth of the document, so a long run keeps a straight side", () => {
+    const paths = readingAreaPaths(
+      [
+        { top: 0, height: 5000, reach: 16 },
+        { top: 5000, height: 5000, reach: 4 },
+      ],
+      10000,
+    );
+    /* 100px either side of the boundary, not 2500. */
+    expect(paths.edge).toBe("M0 0C0 50 16 50 16 100V4900C16 5000 4 5000 4 5100V9900C4 9950 0 9950 0 10000");
+  });
+
+  it("gives a run too short for two full eases half of itself to each", () => {
+    /* One isolated block, 10px tall: up over the first half, back over the second. */
+    expect(readingAreaPaths([{ top: 40, height: 10, reach: 16 }], DOC).edge).toBe(
+      "M0 40C0 42.5 16 42.5 16 45C16 47.5 0 47.5 0 50",
+    );
   });
 
   it("still joins two neighbours whose measured edges differ by a fraction of a pixel", () => {
     /* Row tops come from `getBoundingClientRect`, so a neighbour's top is not
        always exactly the row above's bottom. A skipped row is far taller. */
-    const paths = readingAreaPaths([
-      { top: 0, height: 100.25, reach: 8 },
-      { top: 100.5, height: 99.5, reach: 12 },
-    ]);
-    expect(paths.edge).toBe("M8 0V100.25H12V200");
+    const paths = readingAreaPaths(
+      [
+        { top: 0, height: 100.25, reach: 8 },
+        { top: 100.5, height: 99.5, reach: 12 },
+      ],
+      DOC,
+    );
+    expect(paths.edge.match(/M/g)).toHaveLength(1);
+    expect(paths.edge).toContain("C8 100.5 12 100.5 12 120.5");
   });
 
-  it("reaches the viewBox's far side at full reach — the half-pixel inset is the stylesheet's", () => {
-    expect(readingAreaPaths([{ top: 0, height: 100, reach: 16 }])).toEqual({
-      area: "M0 0H16V100H0Z",
-      edge: "M16 0V100",
-    });
+  it.each([
+    ["a gap", 24.75],
+    ["an overlap", 23.25],
+  ])("never goes back up the rail when joined runs' edges disagree by %s (GPT Sol's F1)", (_what, secondTop) => {
+    /* Two rows a line of text tall, with a cap above half of either: every
+       ease takes its whole half-run, so a boundary that is not where the run
+       above ended is the case where two eases could cross. */
+    const { ys } = points(
+      readingAreaPaths(
+        [
+          { top: 0, height: 24, reach: 16 },
+          { top: secondTop, height: 24, reach: 4 },
+          { top: secondTop + 24, height: 0, reach: 12 },
+        ],
+        20000,
+      ).edge,
+    );
+    expect(ys).toEqual([...ys].sort((a, b) => a - b));
+    expect(ys.every((y) => y >= 0 && y <= secondTop + 24)).toBe(true);
+  });
+
+  it("never goes back up the rail even when an overlap is larger than the rows it joins", () => {
+    /* Not a measurement a real page gives (a row is a line of text tall or
+       folded to nothing), but the tolerance admits it, so the path must too. */
+    const { ys } = points(
+      readingAreaPaths(
+        [
+          { top: 0, height: 0.5, reach: 16 },
+          { top: -0.3, height: 0.5, reach: 4 },
+        ],
+        20000,
+      ).edge,
+    );
+    expect(ys).toEqual([...ys].sort((a, b) => a - b));
+  });
+
+  it("never leaves the rail or its own stretch, and never goes back up it", () => {
+    const runs = [
+      { top: 10, height: 3, reach: 16 },
+      { top: 13, height: 60, reach: 4 },
+      { top: 73, height: 1, reach: 16 },
+      { top: 74, height: 200, reach: 9 },
+      { top: 500, height: 2, reach: 16 },
+    ];
+    const { xs, ys } = points(readingAreaPaths(runs, DOC).edge);
+    expect(Math.min(...xs)).toBe(0);
+    expect(Math.max(...xs)).toBe(16);
+    expect(ys.every((y) => (y >= 10 && y <= 274) || (y >= 500 && y <= 502))).toBe(true);
+    expect(ys).toEqual([...ys].sort((a, b) => a - b));
   });
 });
 
@@ -259,7 +377,9 @@ describe("the reading layer in the spine", () => {
 
     const paths = [...svg.querySelectorAll("path")];
     expect(paths.map((p) => p.getAttribute("class"))).toEqual(["spine-read-area"]);
-    expect(paths[0]?.getAttribute("d")).toBe("M0 0H16V400H0ZM0 400H5V500H0ZM0 700H9V800H0Z");
+    expect(paths[0]?.getAttribute("d")).toBe(
+      "M0 0C0 10 16 10 16 20V380C16 400 5 400 5 420V480C5 490 0 490 0 500ZM0 700C0 710 9 710 9 720V780C9 790 0 790 0 800Z",
+    );
 
     /* The edge is a layer of its own, on the same ruler — the order test below
        says why. */
@@ -269,7 +389,9 @@ describe("the reading layer in the spine", () => {
     expect(line?.getAttribute("aria-hidden")).toBe("true");
     const edges = [...(line?.querySelectorAll("path") ?? [])];
     expect(edges.map((p) => p.getAttribute("class"))).toEqual(["spine-read-edge"]);
-    expect(edges[0]?.getAttribute("d")).toBe("M16 0V400H5V500M9 700V800");
+    expect(edges[0]?.getAttribute("d")).toBe(
+      "M0 0C0 10 16 10 16 20V380C16 400 5 400 5 420V480C5 490 0 490 0 500M0 700C0 710 9 710 9 720V780C9 790 0 790 0 800",
+    );
   });
 
   it("keeps a full-reach edge inside the rail rather than half clipped (GPT Sol's F3)", () => {
@@ -286,6 +408,14 @@ describe("the reading layer in the spine", () => {
     expect(edge).toMatch(/stroke-width:\s*1px/);
     expect(edge).toMatch(/fill:\s*none/);
     expect(edge).toMatch(/stroke:\s*var\(--read-time\)/);
+  });
+
+  it("keeps the reading chart quieter at the chosen area and edge opacities", () => {
+    const css = readFileSync("src/web/styles/spine.css", "utf8");
+    const area = /\.spine-read-area\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    const edge = /\.spine-read-edge\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(area).toMatch(/fill-opacity:\s*0\.22\s*;/);
+    expect(edge).toMatch(/stroke-opacity:\s*0\.8\s*;/);
   });
 
   it("paints after the parts and under the section fill, the hairlines and the search marks", async () => {

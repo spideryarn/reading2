@@ -1,0 +1,151 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3-3",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A short-lived, glowing, roughly spherical light seen during or near thunderstorms, lasting a few seconds before vanishing with or without a trace. It appears unpredictably, has no agreed scientific explanation, and is known mainly from eyewitness accounts rather than instrument recordings."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [
+        "Brand"
+      ],
+      "background": "A German senior school official who wrote the 1923 monograph \"Der Kugelblitz,\" the only German-language book devoted entirely to ball lightning, later reissued in 2010."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "A 19th-century French astronomer and physicist whose 1837 work on thunder, \"Sur le tonnerre,\" gave the phenomenon its name, foudre globulaire, the French original of \"ball lightning.\""
+    },
+    {
+      "name": "fragmented science",
+      "kind": "term",
+      "aliases": [
+        "fragmented science (2001)"
+      ],
+      "senseHere": "A description of ball lightning research as scattered and disconnected, with different people collecting data, building theories, and running lab experiments without coordinating with one another. The author returns to this label to explain why no single, agreed theory of ball lightning has emerged."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "background": "A US network of cameras that photographed the night sky continuously for over a decade to catch meteor falls; its huge photographic archive was later searched for possible ball lightning images."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "background": "Austria's network of ground sensors that detects and locates lightning strikes across the country in real time, giving each stroke a position, timing, and current strength."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "background": "Germany's equivalent lightning-detection network, used by researchers to match reported ball lightning sightings to real, located lightning strokes."
+    },
+    {
+      "name": "cloud–ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud-ground strokes",
+        "cloud–cloud stroke",
+        "cloud-cloud strokes"
+      ],
+      "senseHere": "A lightning discharge that travels between a cloud and the ground, as opposed to a cloud–cloud stroke, which stays within or between clouds and never reaches the ground. The article counts how often each type coincided with reported ball lightning sightings."
+    },
+    {
+      "name": "angular diameter",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "How large an object appears to the eye, measured as an angle rather than an actual size, because its true size cannot be known without knowing its distance. Haidinger measured his ball lightning's angular diameter at 0.83 degrees to record how big it looked from his window."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century Austrian geologist and mineralogist and member of the Imperial Academy of Sciences at Vienna, who gave one of the earliest detailed scientific reports of a ball lightning sighting, in 1868."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physics professor famous for the 1922 Stern-Gerlach experiment demonstrating that particles' magnetic properties come in discrete quantized values. He witnessed and mathematically analyzed a 1927 ball lightning sighting near his institute."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A British radio astronomer at Jodrell Bank Observatory who later became a professor of physical electronics. His detailed 1963 report of ball lightning on a passenger aircraft, published in Nature, drew wide international media attention."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "An 18th-century Baltic German physicist at the St Petersburg Academy of Sciences who was killed in 1753 by an ungrounded lightning conductor while studying atmospheric electricity. A popular engraving later falsely depicted him being struck by a ball of lightning, cementing a deadly, dramatic image of the phenomenon in public imagination."
+    },
+    {
+      "name": "Keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived loss of movement or feeling in a limb caused by a lightning or ball lightning strike, without any burn or physical wound. Charcot used it to describe the temporary paralysis of his 1889 patient, distinct from the longer-lasting nervous symptoms that followed."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A pioneering French neurologist at the Salpêtrière Hospital in Paris who taught Sigmund Freud. He studied a patient's lightning injury to separate immediate paralysis from lasting psychological trauma."
+    },
+    {
+      "name": "triggered lightning",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Lightning deliberately set off by launching a small rocket trailing a thin metal wire up into a thunderstorm, giving researchers a lightning strike at a known place and time. Uman's group used it at a Florida test site to fire real lightning into various ground materials and study what kinds of glowing effects resulted."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss soil strike theory"
+      ],
+      "senseHere": "The idea that ball lightning forms when a lightning strike hits soil, vaporizing silicon-containing minerals that then burn slowly in air to create a glowing fireball. The spectrum from the Qinghai Plateau sighting, showing iron, calcium, silicon, nitrogen, and oxygen, was read as supporting this explanation."
+    },
+    {
+      "name": "slitless spectroscopy",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A way of capturing the color spectrum of a light source using a diffraction grating but no narrow slit, letting researchers record the spectrum of a fast-moving, unpredictable object like ball lightning on video. It let the Chinese research team identify the chemical elements glowing in their recorded ball lightning event."
+    }
+  ]
+}

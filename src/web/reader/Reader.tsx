@@ -87,7 +87,7 @@ import { formsOf } from "../../term-match.js";
 import { horizontalInset, safeAreaInsets } from "../safe-area.js";
 import type { ArchiveControl } from "../useArchive.js";
 import { Spine } from "../Spine.js";
-import { AnnotateDialog } from "../AnnotateDialog.js";
+import { AnnotateDialog, annotateKey } from "../AnnotateDialog.js";
 import { TouchSelectionChip } from "../TouchSelectionChip.js";
 import { CommentDialog } from "../CommentDialog.js";
 import { Masthead } from "../Masthead.js";
@@ -138,7 +138,8 @@ import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { modePress } from "./mode-press.js";
-import { bandCoversProse, bandShapeFor, fitView } from "../layout.js";
+import { bandCoversProse, bandShapeFor, fitView, NARROW_WINDOW_MAX } from "../layout.js";
+import { media } from "../media.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
 import { BandBackChip } from "../BandBackChip.js";
@@ -548,11 +549,15 @@ export function Reader({
    * shell's guard would pin the bar over the band, and the band is what is on
    * screen. That includes the band *stepped aside* (`bandAway`), deliberately
    * for v1: drawing the bar the moment a band link is followed would push the
-   * prose down 44px in the middle of that jump, before its position write has
-   * landed (GPT Sol, plan review of 261002h, finding 2).
+   * prose down by the bar's height in the middle of that jump, before its
+   * position write has landed (GPT Sol, plan review of 261002h, finding 2).
    *
-   * **Not for a tree with nothing to name** either, or the bar is 44px of
-   * blank. A tree where no part has a title or a navLabel is the case.
+   * **Not for a tree with nothing to name** either, or the bar is a blank
+   * strip. A tree where no part has a title or a navLabel is the case.
+   *
+   * **On a narrow window it also sets the bar's height**: three lines, in a
+   * taller bar, while this is true (crumbs.css § a narrow window) — which is
+   * why it is in `layoutKey` below.
    *
    * The tree itself is not built while the switch is off. `Reader` renders for
    * every scroll-independent state change, and an experimental feature should
@@ -590,12 +595,28 @@ export function Reader({
   // medium width rewrapped the article under an unchanged key (GPT Sol, F2 on
   // docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md).
   //
-  // `showBar` since 2026-10-02: the controls bar is 44px in flow above the
-  // table, and it now comes and goes with the experimental switch, which loads
-  // after the article and can be pressed mid-read. That moves every row down
-  // without resizing the table, so the table's ResizeObserver hears nothing
-  // (GPT Sol, plan review of 261002h, finding 1).
-  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}`;
+  // `showBar` since 2026-10-02: the controls bar is in flow above the table
+  // (`--bar-h`, 44px by default), and it now comes and goes with the
+  // experimental switch, which loads after the article and can be pressed
+  // mid-read. That moves every row down without resizing the table, so the
+  // table's ResizeObserver hears nothing (GPT Sol, plan review of 261002h,
+  // finding 1).
+  //
+  // `tallCrumbsBar` since 2026-10-03: on a narrow window the bar is taller
+  // while it holds the breadcrumb (crumbs.css § a narrow window), so its
+  // height follows this state rather than `showBar`. A signed-in reader of
+  // somebody else's article keeps the View-only chip's bar while the
+  // breadcrumb comes and goes, and the rows move under an unchanged `showBar`
+  // (GPT Sol, plan review of 261003n, F1).
+  //
+  // The width predicate is the CSS media query's, not `windowWidth`: that
+  // value is the page beside a classic scrollbar, while media queries ask the
+  // viewport. Raw `showCrumbs` was briefly keyed here and made a wide visitor's
+  // one-line breadcrumb look like a reflow, restoring `?at=` and moving them to
+  // the section start under an unchanged 44px bar (261003h postmortem).
+  const tallCrumbsBar =
+    showCrumbs && media(`(max-width: ${NARROW_WINDOW_MAX}px)`);
+  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${tallCrumbsBar ? 1 : 0}`;
 
   /**
    * **Is the prose on screen, for the reading-time recorder** — only this
@@ -2251,8 +2272,8 @@ export function Reader({
       /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
          call the reader had not asked for; then it opened an ask box; since
          2026-08-28 it opens a *comment* box, where saving is free and the model
-         is a tick-box. Greg's call — see
-         docs/plans/260828a-comments-and-bookmarks.md. */
+         is opt-in (a tick-box then, the Ask AI button since 2026-10-03). Greg's
+         call — see docs/plans/260828a-comments-and-bookmarks.md. */
       void setNote(null);
       void setThread(null);
       setChatDraft(null);
@@ -2982,7 +3003,8 @@ export function Reader({
       {/* **And since 2026-09-08 it is not drawn at all when that leaves it
           empty**, which on a reading view is most of the time: `showBar` above
           decides whether the element exists, and shell.css then stops reserving
-          its 44px. It was no longer "the one piece of chrome that
+          its height (44px, or more on a narrow window while it holds the
+          breadcrumb). It was no longer "the one piece of chrome that
           is on screen at every scroll position" — the sentence below is kept
           because it is still the ordering rule for what goes *in* the bar, and
           the Dock is what that claim is now true of.
@@ -3015,7 +3037,7 @@ export function Reader({
               in", and that is still true: the Dock is the answer to it now.
   
               They could not stay: this bar is drawn only when it has content
-              (`showBar` above), so a refused delete would have summoned 44px of
+              (`showBar` above), so a refused delete would have summoned a bar of
               chrome and pushed the article down mid-read. **Not deleted** — GPT
               Sol's G3 on 260905g refused that, because `error` is not the
               drawer's `loadError`: that one is about the fetch that fills the
@@ -3137,6 +3159,11 @@ export function Reader({
       )}
       {owner && annotating && (
         <AnnotateDialog
+          /* **One box per passage, by key.** A new selection unmounts the box
+             that was open, whose cleanup stores its draft against its own
+             passage, and mounts an empty one — AnnotateDialog.tsx §
+             `annotateKey`. Read by tests/annotate-dialog-keeps-a-draft.test.tsx. */
+          key={annotateKey(annotating)}
           anchor={annotating}
           /* **Referee mode only**, and all four of its sub-modes: the criteria
              are fetched inside the section rather than lifted out of the
@@ -3164,15 +3191,11 @@ export function Reader({
              tests/opening-read-gates-writes.test.tsx reads this line. */
           loaded={owner.comments.loaded}
           onCancel={() => setAnnotating(null)}
-          onSave={(id, body, ask, mark, colour) => {
-            const anchor = annotating;
-            setAnnotating(null);
-            /* **The free thing is stored first, and the paid thing waits for
-               it.** If the chat call fails, or the reader closes the panel
-               before sending, their words are already on disk. The reverse
-               order — open the chat, save afterwards — loses the comment for
-               exactly the reader who typed the most into it. */
-            void owner.comments.create({
+          onSave={({ anchor, id, body, ask, mark, colour, leaving }) => {
+            /* **The box's anchor, never `annotating`**: a draft stored because
+               the reader selected something else arrives after that state has
+               moved on to the new passage. */
+            const comment = {
               id,
               blockId: anchor.blockId,
               quote: anchor.quote,
@@ -3183,7 +3206,24 @@ export function Reader({
               mark,
               /* And the highlight colour, for the same reason. */
               ...(colour ? { colour } : {}),
-            }).then((stored) => {
+            };
+            /* The page is going (`pagehide`): the request that survives it, and
+               nothing else — the box stays as it is, because the page may yet
+               come back from the back/forward cache. */
+            if (leaving) {
+              owner.comments.createOnLeave(comment);
+              return;
+            }
+            /* **Close only the box that saved.** For the same reason as the
+               anchor: an unconditional `null` here closed the box the new
+               selection had just opened. */
+            setAnnotating((cur) => (cur && annotateKey(cur) === annotateKey(anchor) ? null : cur));
+            /* **The free thing is stored first, and the paid thing waits for
+               it.** If the chat call fails, or the reader closes the panel
+               before sending, their words are already on disk. The reverse
+               order — open the chat, save afterwards — loses the comment for
+               exactly the reader who typed the most into it. */
+            void owner.comments.create(comment).then((stored) => {
               if (!ask || !stored) return;
               /* The conversation opens on the same words, pre-filled with what
                  they wrote. `sourceComment` travels with it so the *server*

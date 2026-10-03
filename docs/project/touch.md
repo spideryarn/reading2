@@ -5,6 +5,9 @@
 > natively everywhere. The design, the reasons and the accident notes below are history, kept for the
 > next time somebody wants stepped touch scrolling.
 
+**For the map of everything that differs on a phone or under a finger**, and Greg's words on each,
+start at [phone-and-touch.md](phone-and-touch.md); this doc owns the detail of what a finger does.
+
 > We're going to want to read on an iPad a lot.
 >
 > Can we play with the way touch-scrolling works so that it jumps step-by-step if I scroll within a

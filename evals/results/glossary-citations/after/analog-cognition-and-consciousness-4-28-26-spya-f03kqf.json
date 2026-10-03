@@ -1,0 +1,153 @@
+{
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "arm": "after",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "ca281278da17c7ad6fd52995ef8c0c21f438e65eb7bb0e296fa9265b4d57e796",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Analog computation",
+      "kind": "concept",
+      "aliases": [
+        "analog computing",
+        "analog wave computation"
+      ],
+      "senseHere": "Solving a problem by letting continuous physical quantities, like overlapping wave patterns, interact directly according to physical laws, producing an answer all at once rather than through step-by-step digital calculation.",
+      "background": "Early analog machines such as mechanical tide predictors and differential analyzers used physical motion to solve equations, long before digital computers existed."
+    },
+    {
+      "name": "Connectionism",
+      "kind": "concept",
+      "aliases": [
+        "connectionist models",
+        "connectionist approach",
+        "connectionist framework"
+      ],
+      "senseHere": "The classical view that the brain processes information through fixed feedforward networks in which each neuron has a stable, specialized role, with increasingly complex features built up layer by layer toward a final concept."
+    },
+    {
+      "name": "Mixed selectivity",
+      "kind": "concept",
+      "aliases": [
+        "nonlinear mixed selectivity",
+        "mixed-selectivity neurons"
+      ],
+      "senseHere": "A single neuron's firing reflects combinations of task variables (like object identity and sequence order) rather than just one variable alone, so the same neuron responds differently depending on context."
+    },
+    {
+      "name": "Ephaptic coupling",
+      "kind": "term",
+      "aliases": [
+        "ephaptic interactions",
+        "ephaptic effects"
+      ],
+      "senseHere": "Neurons influencing each other's electrical activity directly through the extracellular electric field they generate, without using synapses at all.",
+      "background": "This is a recognized but less-studied form of neural communication, distinct from the chemical and electrical synapses usually emphasized in neuroscience."
+    },
+    {
+      "name": "Local field potentials",
+      "kind": "term",
+      "aliases": [
+        "LFPs",
+        "LFP"
+      ],
+      "senseHere": "Electrical signals recorded from inside the brain that capture the combined oscillatory activity of many nearby neurons, rather than single-cell spikes."
+    },
+    {
+      "name": "Gamma oscillations",
+      "kind": "term",
+      "aliases": [
+        "gamma rhythms",
+        "gamma"
+      ],
+      "senseHere": "Faster brain waves, roughly 30-80 Hz, linked in the article to feedforward sensory and motor signals and increased local spiking."
+    },
+    {
+      "name": "Spatial Computing theory",
+      "kind": "concept",
+      "aliases": [
+        "Spatial Computing",
+        "spatiotemporal computing theory"
+      ],
+      "senseHere": "The authors' proposed model in which spatially patterned alpha/beta waves act like a stencil that suppresses gamma-driven spiking in some cortical locations while leaving others active, thereby controlling which neurons express which information at any moment."
+    },
+    {
+      "name": "Alpha/beta oscillations",
+      "kind": "term",
+      "aliases": [
+        "alpha/beta rhythms",
+        "beta rhythms",
+        "beta oscillations"
+      ],
+      "senseHere": "Brain waves in roughly the 10-30 Hz range that the article treats as carrying top-down, feedback-related control signals, generally suppressing activity in targeted cortical locations."
+    },
+    {
+      "name": "Subspace coding",
+      "kind": "concept",
+      "aliases": [
+        "activity subspace",
+        "orthogonal subspaces",
+        "coding subspace"
+      ],
+      "senseHere": "The idea that a population of neurons' joint activity patterns for a given task or variable occupy a limited, structured region within the full space of possible firing patterns, and different variables occupy separate such regions to avoid interference."
+    },
+    {
+      "name": "Traveling waves",
+      "kind": "concept",
+      "aliases": [
+        "traveling wave"
+      ],
+      "senseHere": "Brain oscillations that physically sweep across the surface of the cortex over time, rather than staying fixed in one location, changing which neurons are excited or suppressed as they pass."
+    },
+    {
+      "name": "Binding problem",
+      "kind": "concept",
+      "aliases": [],
+      "background": "The long-standing puzzle in neuroscience of how separate, distributed neural signals for different features of a stimulus or thought get combined into one unified perception or experience."
+    },
+    {
+      "name": "Global Neuronal Workspace Theory",
+      "kind": "concept",
+      "aliases": [
+        "GNWT",
+        "Global Workspace",
+        "GW"
+      ],
+      "background": "A leading theory of consciousness holding that information becomes conscious when it is broadcast widely across a distributed network of brain regions, making it globally available for use by many cognitive processes."
+    },
+    {
+      "name": "Integrated Information Theory",
+      "kind": "concept",
+      "aliases": [
+        "IIT"
+      ],
+      "background": "A theory proposing that consciousness corresponds to a system's capacity to integrate information in a way that cannot be reduced to its separate parts, often associated with a specific posterior \"hot zone\" of cortex."
+    },
+    {
+      "name": "Higher-Order Theories",
+      "kind": "concept",
+      "aliases": [
+        "HOTs",
+        "Higher-Order Theory"
+      ],
+      "background": "Theories holding that a mental state becomes conscious only when another, higher-level brain state represents or monitors it, often attributed to frontal cortex."
+    },
+    {
+      "name": "Predictive coding",
+      "kind": "concept",
+      "aliases": [
+        "predictive coding theories"
+      ],
+      "background": "A framework in which the brain constantly generates top-down predictions about incoming sensory input and updates its internal models based on the mismatch, or error, between prediction and actual input."
+    },
+    {
+      "name": "Nested observer model",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A theory of consciousness proposing that oscillatory brain dynamics create a layered hierarchy of observer-like processes, each level representing and organizing the one below it."
+    }
+  ]
+}
