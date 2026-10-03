@@ -447,6 +447,31 @@ describe("the Postgres comment store", () => {
     expect(stored?.quote).toBe("the first one");
   });
 
+  it("refuses changed words under the same id and anchor", async () => {
+    /* The exact bfcache hazard from plan 261003i: pagehide stored this draft,
+       then a restored builder reused its id after the reader changed the body.
+       The client now closes that builder on pageshow, and the store remains the
+       final defence — changed words are an edit, not an idempotent create. */
+    await pgCommentStore.create(SLUG, {
+      id: "spya-cks678",
+      blockId: BLOCK_ID,
+      quote: "the same passage",
+      start: 4,
+      body: "before leaving",
+    });
+    await expect(
+      pgCommentStore.create(SLUG, {
+        id: "spya-cks678",
+        blockId: BLOCK_ID,
+        quote: "the same passage",
+        start: 4,
+        body: "changed after returning",
+      }),
+    ).rejects.toBeInstanceOf(CommentIdTaken);
+    const stored = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-cks678");
+    expect(stored?.body).toBe("before leaving");
+  });
+
   it("refuses a second answer while one is already running", async () => {
     await pgCommentStore.create(SLUG, {
       id: "spya-run999",

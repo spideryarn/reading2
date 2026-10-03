@@ -826,6 +826,13 @@ export type Task =
    */
   | "citation-paper-passages"
   /**
+   * **A cited work's influence, read from the press's own search results** —
+   * one non-streamed JSON call inside a *Dig deeper* press
+   * (src/citation-influence.ts, plan 261003m stage 2). Its own job so the
+   * ledger shows what it adds to a press; no tools.
+   */
+  | "citation-influence"
+  /**
    * ***Dig deeper*'s forced search** (src/dig-deeper.ts, plan 261001p): one
    * web search with `tool_choice: "required"`, run before the answer because
    * the high-power model that writes the answer cannot be made to search. It
@@ -1103,6 +1110,9 @@ export const TASK_TIER: Record<Task, Tier> = {
   /* The quick check's tier (`citations-find`), as plan 261001a says: weighing
      a few passages of a paper against one claim. Code checks every quote. */
   "citation-paper-passages": "capable",
+  /* The tier of the press it runs inside. The press itself passes
+     `DIG_DEEPER_MODEL`, as it does to every call whose output the reader reads. */
+  "citation-influence": "capable",
   /**
    * **The first `quick` row in this table**, and the one place its two
    * unmeasured caveats got measured. `openai/gpt-5.6-luna` at roughly a tenth
@@ -1350,6 +1360,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "citation-investigate": "chat",
   /* Chat, the wire of the press it runs inside; no tools, one JSON answer. */
   "citation-paper-passages": "chat",
+  /* Chat, for the same reason: no tools, one JSON answer, inside that press. */
+  "citation-influence": "chat",
   /* Chat, for `citations-find`'s reason — the web-search server tool — and
      the quick tier's only wire. */
   "dig-deeper-search": "chat",
@@ -1471,6 +1483,10 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      would quietly make the two calls diverge while the UI and plan still said
      they were the same model. The spend row remains its own job. */
   "citation-paper-passages": "SPIDERYARN_CITATIONS_FIND_MODEL",
+  /* Shares the press's own override rather than adding a name: the call is
+     only ever made with `DIG_DEEPER_MODEL` passed in (src/citation-investigate.ts),
+     so this entry is never what picks its model. */
+  "citation-influence": "SPIDERYARN_CITATION_INVESTIGATE_MODEL",
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",

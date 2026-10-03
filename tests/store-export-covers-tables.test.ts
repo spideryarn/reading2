@@ -546,6 +546,13 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         paperSelectionVersion: "paper-selection/1",
         paperReadAt: new Date(),
         paperPassages: [{ chunk: "c2", page: 2, text: "A passage the code found.", bears: "supports" }],
+        /* Plan 261003m stage 2: a kept web influence, so each of its columns
+           is filled and seen to leave in the zip. */
+        influence: 0.8,
+        influenceQuote: "widely cited as a seminal work in its field",
+        influenceSourceUrl: "https://example.org/about-a-cited-paper",
+        influenceSourceTitle: "A cited paper - Example",
+        influenceVersion: "citation-influence/1",
       });
     },
     /* On the block `beforeAll` gave an identity row: the composite foreign key
@@ -921,6 +928,23 @@ describe("what the record calls exported, both exports were watched writing", ()
       expect(text).toContain(LOOKUP_SENTINEL);
       expect(text).toContain("fedcba9876543210");
       expect(text).toContain('"assessed"');
+    }
+  });
+
+  /* The same hole for `citation_investigations`: the rollback names its columns
+     by hand, and the answer sentinel passes without the influence columns
+     (plan 261003m stage 2). Each of the five, in both outputs. */
+  it("carries an investigation's web influence into both outputs", async () => {
+    const rollback = await readFile(path.join(out, SLUG, "citation-investigations.json"), "utf8");
+    const bundle = bundled.get(ARTICLE_TABLE_COVERAGE.citation_investigations.bundle.exported
+      ? ARTICLE_TABLE_COVERAGE.citation_investigations.bundle.into
+      : "");
+    for (const text of [rollback, bundle]) {
+      expect(text).toMatch(/"influence":\s*0\.8/);
+      expect(text).toContain("widely cited as a seminal work in its field");
+      expect(text).toContain("https://example.org/about-a-cited-paper");
+      expect(text).toContain("A cited paper - Example");
+      expect(text).toContain("citation-influence/1");
     }
   });
 

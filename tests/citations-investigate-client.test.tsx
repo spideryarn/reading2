@@ -303,6 +303,58 @@ describe("investigate", () => {
     }
   });
 
+  it("takes a done whose web influence is whole, and refuses one whose influence is not (plan 261003m stage 2)", async () => {
+    const influence = {
+      value: 0.8,
+      quote: "widely cited as a seminal work on scaling",
+      sourceUrl: "https://en.wikipedia.org/wiki/Scaling_laws",
+      sourceTitle: "Scaling Laws - Wikipedia",
+      version: "citation-influence/1",
+    };
+    const at = "2026-10-03T10:00:00.000Z";
+    const { sourceTitle: _title, ...untitled } = influence;
+    for (const [sent, kept] of [
+      [{ ...investigation(at), influence }, true],
+      [{ ...investigation(at), influence: untitled }, true],
+      [{ ...investigation(at), influence: { ...influence, value: 0 } }, true],
+      /* A number that would draw a bar from nothing, or past the scale. */
+      [{ ...investigation(at), influence: { ...influence, value: "0.8" } }, false],
+      [{ ...investigation(at), influence: { ...influence, value: 8000 } }, false],
+      [{ ...investigation(at), influence: { ...influence, value: -0.1 } }, false],
+      [{ ...investigation(at), influence: { ...influence, value: null } }, false],
+      /* A number with no words, no source or no version is not drawn as sourced. */
+      [{ ...investigation(at), influence: { ...influence, quote: "" } }, false],
+      [{ ...investigation(at), influence: { ...influence, sourceUrl: undefined } }, false],
+      [{ ...investigation(at), influence: { ...influence, version: undefined } }, false],
+      /* An address that is not a web page's never reaches the row. */
+      [{ ...investigation(at), influence: { ...influence, sourceUrl: "javascript:alert(1)" } }, false],
+      [{ ...investigation(at), influence: 0.8 }, false],
+      [{ ...investigation(at), influence: null }, false],
+    ] as const) {
+      await open();
+      let pressed: Promise<void> | undefined;
+      await act(async () => {
+        pressed = hook?.investigate(ID);
+      });
+      await flush();
+      listed = kept ? ({ ...WORK, investigation: sent } as CitedWork) : WORK;
+      await act(async () => {
+        push?.("done", { investigation: sent });
+        end?.();
+      });
+      await act(async () => {
+        await pressed;
+      });
+      await flush();
+      if (kept) {
+        expect(hook?.investigateFailed, JSON.stringify(sent.influence)).toBeNull();
+        expect(row()?.investigation).toEqual(sent);
+      } else {
+        expect(hook?.investigateFailed?.message, JSON.stringify(sent.influence)).toBeTruthy();
+      }
+    }
+  });
+
   it("a stream that just stops is a failure, not an answer", async () => {
     await open();
     let pressed: Promise<void> | undefined;

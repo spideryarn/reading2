@@ -19,5 +19,27 @@ lists already made are drawn the new way. A list made from now on also drops an 
 article never gives (one stored row in 194 had an author from the model's memory). Plan, measurement and GPT Sol's reviews:
 [261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md).
 
-Two questions are left for Greg in the plan: whether the model should stop writing the sentence at
-all, and whether the *influence* bar still belongs on a row.
+One question is left for Greg in that plan: whether the model should stop writing the sentence at
+all.
+
+## The influence bar: Greg's answer, and what was built
+
+The other question, whether the *influence* bar still belongs on a row, Greg answered on
+2026-10-03:
+
+> Q-influence Hmmm, I'm torn. Maybe if the model is confident (e.g. because it's well-known), but if
+> in doubt default to Unknown. And if we do a deeper dive on a Citation, try and populate it then.
+
+**Shipped, with one part that works less well than hoped.** A list made from now on gives a work an
+influence score only when the model is confident it knows the work; otherwise the row says
+*influence unknown*, which on a long list is about half the rows or more. The threshold bar judges
+such a row on its relevance alone, and the influence order puts them after the scored rows, most
+relevant first. A list made earlier keeps its numbers until it is made again from the Metadata
+page. *Dig deeper* now also looks for the work's influence in what its web search finds, and when a
+page about the work says, the row shows it marked *from the web* with the page's words. In a probe
+of 13 well-known works it found nothing for any of them, because a search for a paper returns the
+paper and not a statement of how famous it is. Plan, measurements and GPT Sol's reviews:
+[261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md).
+
+Two questions are left for Greg in that plan: whether a row with a DOI should show a real citation
+count from Crossref, and whether the threshold bar should go by relevance alone for every row.

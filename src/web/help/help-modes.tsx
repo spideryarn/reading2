@@ -130,7 +130,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Select some words</strong> to get a comment box with an{" "}
-            <strong>Also ask the AI about it</strong> tick-box.
+            <strong>Ask AI</strong> button.
           </li>
         </ul>
         <p>Chat is only for whoever added the article; on someone else’s shared article its button is dimmed.</p>
@@ -728,7 +728,19 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             Two small bars: <strong>relevance</strong> to this piece, and <strong>influence</strong> in
-            its field.
+            its field. Influence is the model’s memory of the work, not a citation count. New lists
+            give a number only when the model is confident it knows the work; a low number then means
+            a work it knows and thinks minor. If relevance was scored but influence has no usable score, the row says{" "}
+            <em>influence unknown</em>. Older lists keep their numbers, including low scores that could
+            mean the model did not know the work, until regenerated from Metadata.
+          </li>
+          <li>
+            <strong>Dig deeper</strong> also looks for a work’s influence on the web. When one of the
+            pages its search finds is about the work and says how well known it is, the row’s influence
+            bar is drawn from that and marked <em>from the web</em>; point at those words, or tap
+            them, to see the site, the day and the page’s own words. It is an AI estimate from web
+            evidence, not a citation count, and the page’s words may be about something else on that
+            page. Often no page says, and the row stays as it was.
           </li>
           <li>
             <strong>first cited</strong> jumps to where the article first cites it.{" "}
@@ -745,7 +757,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </ul>
         <p>
           Orders: <strong>prioritised</strong> (the default, with a slider), <strong>first cited</strong>,{" "}
-          <strong>relevance</strong> and <strong>influence</strong>.
+          <strong>relevance</strong> and <strong>influence</strong>. The slider hides the works that
+          score lowest on relevance and influence together, relevance counting double; a work whose
+          influence is unknown is judged on its relevance alone when available. Ordered by influence, the unknown
+          ones come last, the most relevant first.
         </p>
       </>
     ),

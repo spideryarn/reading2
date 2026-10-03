@@ -114,6 +114,21 @@
   font-size: 0.77rem;
 }
 .cite-scores { font-variant-numeric: tabular-nums; }
+/* *influence unknown*, where the influence bar would be: the app's own words
+   in the line's own faint ink and UI face, kept on one line so it wraps as a
+   piece. A button so the explanation can be opened by touch or keyboard too.
+   *from the web*, beside a bar whose number Dig deeper read off a page, is the
+   same thing said the other way round, and drawn the same. */
+.cite-influence-unknown,
+.cite-influence-web {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: help;
+}
 /* A search is not the work's address, and it should not look like one: the one
    link on a searched row, in the faint ink of the line it sits on. */
 .cite-search { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }

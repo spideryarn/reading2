@@ -44,6 +44,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SavedCriterion } from "../src/saved-criteria.js";
 import type { Comment } from "../src/types.js";
+import type { AnnotateDraft } from "../src/web/AnnotateDialog.js";
 
 /**
  * `apiFetch` and `fetchOk`, and both are needed.
@@ -368,7 +369,7 @@ function AnnotateHarness({ placing }: { placing: boolean }) {
     /* The hook's own flag, as `Reader` passes it — Save waits for the list. */
     loaded: comments.loaded,
     onCancel: () => {},
-    onSave: (id: string, body: string, _ask: boolean, mark) => {
+    onSave: ({ id, body, mark }: AnnotateDraft) => {
       void comments.create({
         id,
         blockId: ANCHOR.blockId,
@@ -562,7 +563,7 @@ function pick(value: string): void {
 }
 
 function save(): void {
-  press("Save comment");
+  press("Save");
 }
 
 /** The position the instrument says is chosen, in its own words. */

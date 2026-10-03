@@ -6,6 +6,9 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import { HELP_MODES } from "../src/web/help/help-modes.js";
+import { HELP_FAQ } from "../src/web/help/help-faq.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { PublicCitations } from "../src/public-types.js";
@@ -13,6 +16,7 @@ import type { BlockId, Citations, CitedWork, InvestigatedPaper, Job } from "../s
 import type { UseCitations } from "../src/web/useCitations.js";
 import type { CiteOrder } from "../src/web/params.js";
 import { citePassageKey } from "../src/web/rows.js";
+import { INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
 
 const {
   CAPPED_NOTE,
@@ -27,6 +31,10 @@ const {
   CITING_WORDS_MAX,
   CitationsPanel,
   INFLUENCE_NOTE,
+  INFLUENCE_WEB_NOTE,
+  INFLUENCE_UNKNOWN_NOTE,
+  barTop,
+  barMax,
   citingWordsOf,
   quotedCitingWords,
   byLineOf,
@@ -39,6 +47,7 @@ const {
   citeReadPaper,
   citeReadUnreadable,
   effectiveOrder,
+  influenceIsUnknown,
   orderWorks,
   priorityOf,
   publicationYear,
@@ -46,6 +55,7 @@ const {
   scoresOf,
   sourceOf,
   verdictText,
+  visibleWorks,
 } = await import("../src/web/CitationsPanel.js");
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`. docs/project/block-ids.md. */
@@ -67,12 +77,16 @@ function work(over: Partial<CitedWork> & Pick<CitedWork, "id" | "title">): Cited
 }
 
 /* In first-cited order, as the artefact stores them. Priorities:
-   central 0.80, famous 0.50 — (2·0.3 + 0.9)/3 — passing 0.20, unscored none. */
+   central 0.80, famous 0.50 — (2·0.3 + 0.9)/3 — passing 0.20, and unknown 0.60:
+   its influence is unknown, so it is judged on its relevance alone (plan
+   261003m). BARE has no relevance either, and is the one row with no priority;
+   it is outside WORKS so the drawn list keeps its four rows. */
 const CENTRAL = work({ id: "spya-a2b3c4", title: "Central", relevance: 0.8, influence: 0.8 });
 const FAMOUS = work({ id: "spya-d5e6f7", title: "Famous", relevance: 0.3, influence: 0.9 });
 const PASSING = work({ id: "spya-g8h9j2", title: "Passing", relevance: 0.2, influence: 0.2 });
-const UNSCORED = work({ id: "spya-k2m3n4", title: "Unscored", relevance: 0.6 });
-const WORKS = [CENTRAL, FAMOUS, PASSING, UNSCORED];
+const UNKNOWN = work({ id: "spya-k2m3n4", title: "Unknown", relevance: 0.6 });
+const BARE = work({ id: "spya-b2r3e5", title: "Bare" });
+const WORKS = [CENTRAL, FAMOUS, PASSING, UNKNOWN];
 
 const RUNNING: Job = {
   id: "job-citations",
@@ -87,16 +101,39 @@ const RUNNING: Job = {
 const titles = (ws: CitedWork[]) => ws.map((w) => w.title);
 
 describe("the prioritised score", () => {
-  it("is two parts relevance to one part influence, and needs both", () => {
+  it("is two parts relevance to one part influence", () => {
     expect(priorityOf(CENTRAL)).toBeCloseTo(0.8);
     expect(priorityOf(FAMOUS)).toBeCloseTo(0.5);
-    expect(priorityOf(UNSCORED)).toBeUndefined();
   });
 
-  it("hides what is under the bar, keeps first-cited order, and never hides an unscored work", () => {
-    expect(titles(orderWorks(WORKS, "prioritised", 0.4))).toEqual(["Central", "Famous", "Unscored"]);
-    expect(titles(orderWorks(WORKS, "prioritised", 1))).toEqual(["Unscored"]);
-    expect(titles(orderWorks(WORKS, "prioritised", 0))).toEqual(titles(WORKS));
+  it("is the relevance alone when the influence is unknown, and nothing without a relevance", () => {
+    expect(priorityOf(UNKNOWN)).toBe(0.6);
+    expect(priorityOf(work({ id: "spya-z3r4s5", title: "Zero", relevance: 0 })), "zero is a score").toBe(0);
+    expect(priorityOf(BARE)).toBeUndefined();
+    /* An influence with no relevance is still unscored: the bar is mostly relevance. */
+    expect(priorityOf(work({ id: "spya-f3m4s5", title: "Fame only", influence: 0.9 }))).toBeUndefined();
+  });
+
+  it("hides what is under the bar, keeps first-cited order, and never hides a work with no relevance", () => {
+    const list = [...WORKS, BARE];
+    expect(titles(orderWorks(list, "prioritised", 0.4))).toEqual(["Central", "Famous", "Unknown", "Bare"]);
+    expect(titles(orderWorks(list, "prioritised", 1))).toEqual(["Bare"]);
+    expect(titles(orderWorks(list, "prioritised", 0))).toEqual(titles(list));
+  });
+
+  it("thresholds an unknown-influence work on its relevance: 0.2 is hidden at 0.25, and 0.3 shows", () => {
+    const low = work({ id: "spya-u3k4n5", title: "Unknown low", relevance: 0.2 });
+    const high = work({ id: "spya-u3k4n6", title: "Unknown high", relevance: 0.3 });
+    /* Sol's F8, pinned as the intended direction: at relevance 0.3 a work known
+       to be minor scores (0.6 + 0.1) / 3 = 0.23 and goes; the unknown one stays. */
+    const minor = work({ id: "spya-m3n4r5", title: "Known minor", relevance: 0.3, influence: 0.1 });
+    const out = visibleWorks([low, high, minor], CITATION_BAR_DEFAULT);
+    expect(titles(out.visible)).toEqual(["Unknown high"]);
+    expect(out.hiddenCount).toBe(2);
+    expect(out.unscoredCount, "an unknown influence with a relevance IS scored by the bar").toBe(0);
+    expect(visibleWorks([low, BARE], 1).unscoredCount).toBe(1);
+    /* A list of unknowns can be prioritised at all, which it could not before. */
+    expect(canPrioritise([low, high])).toBe(true);
   });
 
   it("is inclusive at the bar", () => {
@@ -110,12 +147,73 @@ describe("the prioritised score", () => {
     expect(effectiveOrder(WORKS, "prioritised")).toBe("prioritised");
     expect(effectiveOrder(WORKS, "relevance")).toBe("relevance");
   });
+
+  it("falls back from a relevance order no row can honour, as the menu that omits it does (Sol F14)", () => {
+    const fameOnly = work({ id: "spya-f3m4s6", title: "Fame only", influence: 0.9 });
+    expect(effectiveOrder([BARE, fameOnly], "relevance")).toBe("document");
+    expect(effectiveOrder([], "relevance")).toBe("document");
+    expect(effectiveOrder([BARE, UNKNOWN], "relevance")).toBe("relevance");
+  });
+
+  it("falls back from an unavailable influence order, including a saved URL on an all-unknown list", () => {
+    const low = { ...UNKNOWN, relevance: 0.1 };
+    expect(effectiveOrder([low, BARE, UNKNOWN], "influence")).toBe("document");
+    expect(effectiveOrder([CENTRAL, UNKNOWN], "influence")).toBe("influence");
+    expect(effectiveOrder([], "influence")).toBe("document");
+  });
+
+  it("uses relevance for an all-unknown track, keeps a URL's high bar, and has no useful track for a flat list", () => {
+    const low = { ...UNKNOWN, relevance: 0.2 };
+    expect(barTop([low, UNKNOWN, BARE])).toBe(0.6);
+    expect(barMax([low, UNKNOWN], 0.9)).toBe(0.9);
+    expect(barMax([BARE], 0)).toBe(0.01);
+    expect(canPrioritise([UNKNOWN, { ...UNKNOWN, relevance: 0.6 }, BARE])).toBe(false);
+    expect(effectiveOrder([UNKNOWN, BARE], "prioritised")).toBe("document");
+  });
 });
 
 describe("the score orders", () => {
+  it("qualifies threshold advice by the order where a threshold applies", () => {
+    expect(INFLUENCE_UNKNOWN_NOTE).toMatch(/in (?:the )?prioritised order/i);
+    expect(INFLUENCE_NOTE).toMatch(/in (?:the )?prioritised order/i);
+  });
+
+  it("Help distinguishes new confident scores from older lists and treats absence as no usable score", () => {
+    const modes = renderToStaticMarkup(createElement("div", null, HELP_MODES.citations.reading));
+    expect(modes).toMatch(/new lists/i);
+    expect(modes).toMatch(/older lists/i);
+    expect(modes).toMatch(/relevance was scored/i);
+    const faq = renderToStaticMarkup(createElement("div", null, HELP_FAQ["faq-beyond-the-article"].body));
+    expect(faq).toMatch(/no usable.*score/i);
+  });
   it("sort descending, with a work missing that score last", () => {
-    expect(titles(orderWorks(WORKS, "relevance"))).toEqual(["Central", "Unscored", "Famous", "Passing"]);
-    expect(titles(orderWorks(WORKS, "influence"))).toEqual(["Famous", "Central", "Passing", "Unscored"]);
+    expect(titles(orderWorks([...WORKS, BARE], "relevance"))).toEqual(["Central", "Unknown", "Famous", "Passing", "Bare"]);
+    expect(titles(orderWorks(WORKS, "influence"))).toEqual(["Famous", "Central", "Passing", "Unknown"]);
+  });
+
+  it("influence: known first, then the unknown by relevance, no relevance last, first cited on a tie", () => {
+    const u = (id: string, title: string, relevance?: number) =>
+      work({ id, title, ...(relevance === undefined ? {} : { relevance }) });
+    const list = [
+      u("spya-u4a5b6", "Unknown 0.2", 0.2),
+      BARE,
+      PASSING,
+      u("spya-u4a5b7", "Unknown 0.7 first", 0.7),
+      u("spya-u4a5b8", "Unknown 0.9", 0.9),
+      FAMOUS,
+      u("spya-u4a5b9", "Unknown 0.7 second", 0.7),
+    ];
+    expect(titles(orderWorks(list, "influence"))).toEqual([
+      "Famous",
+      "Passing",
+      "Unknown 0.9",
+      "Unknown 0.7 first",
+      "Unknown 0.7 second",
+      "Unknown 0.2",
+      "Bare",
+    ]);
+    /* A known influence of 0.2 still comes before an unknown at relevance 0.9:
+       the tail is ordered among itself, never mixed into the known. */
   });
 
   it("break ties in first-cited order", () => {
@@ -232,7 +330,7 @@ describe("a row's numbers and its source", () => {
       ["relevance", 0.3],
       ["influence", 0.9],
     ]);
-    expect(scoresOf(UNSCORED).map((s) => s.key)).toEqual(["relevance"]);
+    expect(scoresOf(UNKNOWN).map((s) => s.key)).toEqual(["relevance"]);
     expect(scoresOf(work({ id: "spya-z2a3b4", title: "None" }))).toEqual([]);
   });
 
@@ -604,7 +702,94 @@ describe("CitationsPanel", () => {
     expect(CITATION_BAR_DEFAULT).toBe(0.25);
     expect(host.querySelector(`[data-citation-id="${PASSING.id}"]`)).toBeNull();
     expect(host.textContent).toContain("1 citation is hidden by this threshold.");
-    expect(row(UNSCORED.id).getAttribute("title")).toContain("Not scored");
+    /* A row with a relevance is scored by the bar even when its influence is
+       unknown, so it no longer carries the "not scored" title; a row with no
+       relevance still does. */
+    expect(row(UNKNOWN.id).getAttribute("title")).toBeNull();
+    await draw(owner({ citations: artefact([...WORKS, BARE]) }));
+    expect(row(BARE.id).getAttribute("title")).toContain("Not scored");
+  });
+
+  it("says `influence unknown` in words where a row has a relevance and no influence", async () => {
+    await draw(owner({ citations: artefact([...WORKS, BARE]) }));
+    const unknown = row(UNKNOWN.id).querySelector(".cite-influence-unknown");
+    expect(unknown?.textContent).toBe("influence unknown");
+    /* After the relevance bar, on the quiet line; never a bar at zero. */
+    const meta = row(UNKNOWN.id).querySelector(".cite-meta")!;
+    const bars = meta.querySelector(".score-bars")!;
+    expect(bars.querySelectorAll(".score-bar")).toHaveLength(1);
+    expect(bars.getAttribute("aria-label")).not.toMatch(/influence/);
+    expect(bars.compareDocumentPosition(unknown!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    /* A known influence is a bar and no words; a row with neither score says
+       nothing, as before. */
+    expect(row(FAMOUS.id).querySelector(".cite-influence-unknown")).toBeNull();
+    expect(row(FAMOUS.id).textContent).not.toContain("influence unknown");
+    expect(row(BARE.id).querySelector(".cite-influence-unknown")).toBeNull();
+    expect(row(BARE.id).querySelector(".score-bars")).toBeNull();
+    /* The card says why, and — true since plan 261003m stage 2 — that Dig
+       deeper looks for it on the web. It promises a look, not a number. */
+    const card = await cardFor(unknown!);
+    const said = `${card.head} ${card.body}`;
+    expect(said).toMatch(/not confident/i);
+    expect(said).toMatch(/no usable.*score/i);
+    expect(said).toMatch(/Dig deeper looks on the web/);
+    expect(said).not.toMatch(/Dig deeper (will|fills)/i);
+  });
+
+  it("a visitor's row says it too", async () => {
+    const { key: _key, ...shared } = UNKNOWN;
+    await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
+    expect(row(UNKNOWN.id).querySelector(".cite-influence-unknown")?.textContent).toBe("influence unknown");
+    /* Without the owner's sentence: a visitor has no Dig deeper to press. */
+    const card = await cardFor(row(UNKNOWN.id).querySelector(".cite-influence-unknown")!);
+    expect(card.body).toMatch(/no usable.*score/i);
+    expect(`${card.head} ${card.body}`).not.toMatch(/dig deeper/i);
+  });
+
+  it("an all-unknown list filters and counts on relevance for owners and visitors", async () => {
+    const low = { ...UNKNOWN, id: "spya-u3k4n5", relevance: 0.2 };
+    const list = [low, UNKNOWN, BARE];
+    for (const visitor of [false, true]) {
+      if (visitor) await drawVisitor({ capped: false, citations: list } as PublicCitations);
+      else await draw(owner({ citations: artefact(list) }));
+      const slider = host.querySelector<HTMLInputElement>("#cite-bar")!;
+      expect(slider.value).toBe("0.25");
+      expect(slider.max).toBe("0.6");
+      expect(host.querySelector(".gloss-gate-value")?.textContent).toBe("0.25 · 2 of 3");
+      expect(host.querySelector(".gloss-gate-note")?.textContent).toContain("1 citation is hidden");
+      expect(host.querySelector(`[data-citation-id="${low.id}"]`)).toBeNull();
+      expect(row(BARE.id).title).toContain("Not scored");
+    }
+  });
+
+  it("a saved influence order with no known scores draws first cited, and presses its offered button", async () => {
+    const low = { ...UNKNOWN, id: "spya-u3k4n5", relevance: 0.2 };
+    const list = [low, UNKNOWN, BARE];
+    for (const visitor of [false, true]) {
+      if (visitor) await drawVisitor({ capped: false, citations: list } as PublicCitations, "influence");
+      else await draw(owner({ citations: artefact(list) }), null, undefined, "influence");
+      expect([...host.querySelectorAll(".cite-item")].map((r) => r.getAttribute("data-citation-id"))).toEqual(list.map((w) => w.id));
+      expect(host.querySelector('.gloss-sort-btn[aria-pressed="true"]')?.textContent).toBe("first cited");
+      expect(host.querySelector("#cite-bar")).toBeNull();
+    }
+  });
+
+  it("does not invent why an old or rejected score is absent, and qualifies threshold advice outside prioritised", async () => {
+    await draw(owner({ citations: { ...artefact([UNKNOWN, CENTRAL]), version: "citations/5" } }), null, undefined, "document");
+    const card = await cardFor(row(UNKNOWN.id).querySelector(".cite-influence-unknown")!);
+    expect(card.body).toMatch(/no usable.*score/i);
+    expect(card.body).not.toMatch(/The model was not confident|so it gave no score/);
+    expect(card.body).toMatch(/in (?:the )?prioritised order/i);
+  });
+
+  it("opens an unknown-influence explanation on touch, including an iPad's mouse click, and dismisses on scroll", async () => {
+    await draw(owner({ citations: artefact([UNKNOWN]) }));
+    const label = row(UNKNOWN.id).querySelector(".cite-influence-unknown")!;
+    await press(label, "touch", "mouse");
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toMatch(/no usable.*score/i);
+    await act(async () => document.dispatchEvent(new Event("scroll")));
+    for (const _ of [0, 1]) await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
   });
 
   it("draws the raw scores on a row, and not the number it was barred on", async () => {
@@ -667,6 +852,10 @@ describe("CitationsPanel", () => {
     let text = await card();
     expect(text).not.toContain(CAPPED_NOTE);
     expect(text).toContain(INFLUENCE_NOTE);
+    /* The owner's (i) says what Dig deeper adds (plan 261003m stage 2). */
+    expect(text).toContain(INFLUENCE_WEB_NOTE);
+    expect(INFLUENCE_WEB_NOTE).toMatch(/an AI estimate/);
+    expect(INFLUENCE_NOTE).not.toMatch(/dig deeper/i);
     await draw(owner({ citations: artefact(WORKS, true) }));
     text = await card();
     expect(text).toContain(CAPPED_NOTE);
@@ -1951,5 +2140,131 @@ describe("a row whose work is already an article here", () => {
     await drawVisitor(citations);
     expect(row(leaked.id).querySelector(".cite-here")).toBeNull();
     expect(host.textContent).not.toContain("Private copy");
+  });
+});
+
+/* Plan 261003m stage 2: *Dig deeper* may keep an influence read from one page
+   of its web search. Everything that reads a work's influence — the bar, the
+   threshold, the influence order, whether that order is offered — reads the
+   effective one (src/citation-effective-influence.ts), and the row says where
+   it came from. */
+describe("an influence Dig deeper found on the web", () => {
+  const WEB = {
+    value: 0.9,
+    quote: "widely cited as a seminal work on scaling in deep learning",
+    sourceUrl: "https://en.wikipedia.org/wiki/Scaling_laws",
+    sourceTitle: "Scaling Laws - Wikipedia",
+    version: INFLUENCE_VERSION,
+  };
+  /** Unknown on the list; found on the web. Priority (2 × 0.2 + 0.9) / 3 = 0.43, not the 0.2 its relevance alone gives. */
+  const DUG = work({ id: "spya-w2e3b4", title: "Dug on the web", relevance: 0.2, investigation: { ...INVESTIGATION, influence: WEB } });
+  /** Known on the list as minor; the web says otherwise, and wins. */
+  const DUG_KNOWN = work({
+    id: "spya-w2e3b5",
+    title: "Dug and known",
+    relevance: 0.3,
+    influence: 0.1,
+    investigation: { ...INVESTIGATION, influence: WEB },
+  });
+  /** A number from an older prompt or older checks: not read. */
+  const DUG_STALE = work({
+    id: "spya-w2e3b6",
+    title: "Dug, stale",
+    relevance: 0.2,
+    investigation: { ...INVESTIGATION, influence: { ...WEB, version: "citation-influence/0" } },
+  });
+
+  it("feeds the threshold: the web number is the influence in (2r + i) / 3", () => {
+    expect(priorityOf(DUG)).toBeCloseTo((2 * 0.2 + 0.9) / 3);
+    expect(priorityOf(DUG_KNOWN), "the web one replaces the list's 0.1").toBeCloseTo((2 * 0.3 + 0.9) / 3);
+    expect(priorityOf(DUG_STALE), "a stale version is not read").toBe(0.2);
+    /* At the default bar, relevance 0.2 alone is hidden; with the web influence it shows. */
+    expect(titles(orderWorks([DUG, DUG_STALE], "prioritised"))).toEqual(["Dug on the web"]);
+  });
+
+  it("feeds the influence order, and makes it available on a list with no other influence", () => {
+    expect(effectiveOrder([UNKNOWN, DUG], "influence")).toBe("influence");
+    expect(effectiveOrder([UNKNOWN, DUG_STALE], "influence")).toBe("document");
+    expect(titles(orderWorks([UNKNOWN, PASSING, DUG], "influence"))).toEqual(["Dug on the web", "Passing", "Unknown"]);
+    expect(titles(orderWorks([FAMOUS, DUG_KNOWN, CENTRAL], "influence")), "0.9 from the web ties Famous's 0.9; first cited breaks it").toEqual([
+      "Famous",
+      "Dug and known",
+      "Central",
+    ]);
+  });
+
+  it("draws the web number as the influence bar, labelled as an estimate from web evidence", () => {
+    expect(scoresOf(DUG_KNOWN)).toEqual([
+      { key: "relevance", label: "relevance to this piece", value: 0.3 },
+      { key: "influence", label: "influence in its field (an AI estimate from web evidence)", value: 0.9 },
+    ]);
+    expect(scoresOf(FAMOUS)[1]?.label).toBe("influence in its field (the model's memory)");
+    expect(influenceIsUnknown(DUG)).toBe(false);
+    expect(influenceIsUnknown(DUG_STALE)).toBe(true);
+  });
+
+  it("says *from the web* beside the bar, and nothing of the kind on a row with the list's own or none", async () => {
+    await draw(owner({ citations: artefact([DUG, FAMOUS, UNKNOWN, DUG_STALE]) }), 0);
+    const meta = row(DUG.id).querySelector(".cite-meta")!;
+    const bars = meta.querySelector(".score-bars")!;
+    expect(bars.querySelectorAll(".score-bar")).toHaveLength(2);
+    expect(bars.getAttribute("aria-label")).toContain("influence in its field (an AI estimate from web evidence) 90 out of 100");
+    const from = meta.querySelector(".cite-influence-web");
+    expect(from?.textContent).toBe("from the web");
+    expect(bars.compareDocumentPosition(from!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(row(DUG.id).querySelector(".cite-influence-unknown")).toBeNull();
+    expect(row(FAMOUS.id).querySelector(".cite-influence-web")).toBeNull();
+    expect(row(UNKNOWN.id).querySelector(".cite-influence-web")).toBeNull();
+    /* A stale one is drawn as unknown, with the answer still kept beside it. */
+    expect(row(DUG_STALE.id).querySelector(".cite-influence-web")).toBeNull();
+    expect(row(DUG_STALE.id).querySelector(".cite-influence-unknown")?.textContent).toBe("influence unknown");
+    expect(row(DUG_STALE.id).querySelector(".cite-inv")).not.toBeNull();
+  });
+
+  it("its card says an AI estimate from web evidence, the host, the page's words and the day", async () => {
+    await draw(owner({ citations: artefact([DUG]) }), 0);
+    const card = await cardFor(row(DUG.id).querySelector(".cite-influence-web")!);
+    const said = `${card.head} ${card.body}`;
+    expect(said).toContain("an AI estimate from web evidence");
+    expect(said).toContain("en.wikipedia.org");
+    expect(said).toContain(WEB.quote);
+    expect(said).toContain("30 September 2026");
+    expect(said).not.toContain("https://");
+  });
+
+  it("marks the quoted words as the page's, inside our sentence", async () => {
+    await draw(owner({ citations: artefact([DUG]) }), 0);
+    const label = row(DUG.id).querySelector(".cite-influence-web")!;
+    await press(label, "mouse");
+    const quote = document.querySelector('[role="tooltip"] q.cite-influence-quote');
+    expect(quote?.textContent).toBe(WEB.quote);
+    await act(async () => document.dispatchEvent(new Event("scroll")));
+    for (const _ of [0, 1]) await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+  });
+
+  it("opens by touch and by keyboard focus's click, and closes on scroll", async () => {
+    await draw(owner({ citations: artefact([DUG]) }), 0);
+    const label = row(DUG.id).querySelector(".cite-influence-web")!;
+    expect(label.tagName).toBe("BUTTON");
+    await press(label, "touch", "mouse");
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain("an AI estimate from web evidence");
+    await act(async () => document.dispatchEvent(new Event("scroll")));
+    for (const _ of [0, 1]) await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+  });
+
+  it("offers the influence order when the only influence on the list came from the web", async () => {
+    await draw(owner({ citations: artefact([UNKNOWN, DUG]) }), 0, undefined, "influence");
+    const labels = [...host.querySelectorAll(".gloss-sort-btn")].map((b) => b.textContent);
+    expect(labels).toContain("influence");
+    expect(host.querySelector('.gloss-sort-btn[aria-pressed="true"]')?.textContent).toBe("influence");
+    expect([...host.querySelectorAll(".cite-item")].map((r) => r.getAttribute("data-citation-id"))).toEqual([DUG.id, UNKNOWN.id]);
+  });
+
+  it("a visitor's row, which never has a Dig deeper answer, draws the list's own", async () => {
+    const { key: _key, investigation: _inv, ...shared } = DUG_KNOWN;
+    await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
+    expect(row(DUG_KNOWN.id).querySelector(".cite-influence-web")).toBeNull();
+    expect(row(DUG_KNOWN.id).querySelector(".score-bars")?.getAttribute("aria-label")).toContain("(the model's memory) 10 out of 100");
   });
 });

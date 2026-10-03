@@ -47,6 +47,13 @@
  *   chunk each names. The stream is told the paper's state, and when read is
  *   sent the chunks and passages to paraphrase; it still may not quote, and
  *   the guard's allowed texts are unchanged (Sol P-1).
+ * - **How influential the work is, when a page of the search says** (plan
+ *   261003m stage 2): beside the paper read, one small JSON call
+ *   (src/citation-influence.ts) is shown the forced search's pages and asked
+ *   for a number, the page it rests on and the words. Code keeps it only when
+ *   that page's title names the work and the words are in its extract. It is
+ *   settled before the answer starts, is stored on the answer's own row, and a
+ *   failure of it never fails the press. The streamed answer is not told it.
  *
  * ## Which result is the work (Sol Q-3, then plan 260930d)
  *
@@ -79,6 +86,7 @@
  */
 import type { AiRequestBody } from "./ai-call.js";
 import { lookupWork } from "./bibliographic.js";
+import { findInfluence, INFLUENCE_TIMEOUT_MS, type InfluenceDeps, type InfluenceOutcome } from "./citation-influence.js";
 import {
   findPaperPassages,
   PASSAGES_TIMEOUT_MS,
@@ -219,6 +227,15 @@ export const PAPER_REGISTRY_MS = 30_000;
  * the cache — plan 261001p § The cost line has what that means. The budget is
  * $0.80, about two and a half times the measured press, for longer papers and
  * the passages call.
+ *
+ * **Plan 261003m stage 2 adds the influence call**, not yet measured: at most
+ * five search extracts of 1,500 characters and the prompt, about 3k tokens in,
+ * and at most 1,000 out (`INFLUENCE_ANSWER_TOKENS`). On Opus at $4 and $20 a
+ * million tokens that is 3k × $4/M + 1k × $20/M = $0.012 + $0.020, **about
+ * 3¢ at the very worst**, and nothing when no page is about the work. The
+ * measured press ($0.314) plus the passages call (4¢) plus this (3¢) is about
+ * $0.39, so $0.80 is still twice a press. **The budget and the fuse do not
+ * move.**
  */
 export const INVESTIGATE_PRESS_BUDGET_USD = 0.8;
 
@@ -243,13 +260,17 @@ export const INVESTIGATE_RATE_POLICY: RatePolicy = {
      plan 260930d P-6: the lookup (up to its own deadline), then — plan
      261001a stage 3, Sol P-5 — the registry and the paper read (its own 25 s)
      and the passages call (its own deadline), then the reading. Each deadline,
-     plus the margin. */
+     plus the margin. Plan 261003m stage 2: the influence call's deadline is
+     in the sum too. It runs beside the paper read, which is longer, so it
+     adds no time to a press; counting it keeps the rule *every deadline in a
+     press* true if the two are ever put in sequence. */
   leaseMs:
     DIG_SEARCH_TIMEOUT_MS +
     FIND_TIMEOUT_MS +
     PAPER_REGISTRY_MS +
     PAPER_READ_MS +
     PASSAGES_TIMEOUT_MS +
+    INFLUENCE_TIMEOUT_MS +
     INVESTIGATE_TIMEOUT_MS +
     30_000,
   /* 62 × $0.80, twice the one measured cold press on a long article, is $49.60. */
@@ -748,6 +769,9 @@ export interface InvestigateCitationDeps {
   /** The passages call (`findPaperPassages`'s). Overridable so a test spends nothing. */
   readonly passagesCall?: PassagesDeps["call"];
   readonly passagesTimeoutMs?: number;
+  /** The influence call (`findInfluence`'s, plan 261003m stage 2). Overridable so a test spends nothing. */
+  readonly influenceCall?: InfluenceDeps["call"];
+  readonly influenceTimeoutMs?: number;
   readonly now?: () => string;
   readonly timeoutMs?: number;
   readonly stallMs?: number;
@@ -826,6 +850,27 @@ function paperLogFields(
     fields.passagesFailed = outcome.why;
   }
   return fields;
+}
+
+/** What the log says of the influence call: whether a number was kept, and why not. Never the number's source or words. */
+function influenceLogFields(outcome: InfluenceOutcome): Record<string, string | boolean> {
+  return outcome.kind === "kept" ? { influenceKept: true } : { influenceKept: false, influenceWhy: outcome.why };
+}
+
+/**
+ * **What the forced search is told it is looking for**: the work as the
+ * article gives it — title, authors, year, and its own link when the article
+ * gave one. Exported so the influence probe (evals/citations-influence-dig.ts)
+ * aims its search exactly as a press does.
+ */
+export function digSubject(context: InvestigateContext): string {
+  const given = context.linkFrom === "doi" || context.linkFrom === "arxiv" || context.linkFrom === "article";
+  return [
+    context.title,
+    context.authors ? `, by ${context.authors}` : "",
+    context.year ? ` (${context.year})` : "",
+    given ? ` — ${context.url}` : "",
+  ].join("");
 }
 
 export interface InvestigationRun {
@@ -1003,6 +1048,35 @@ export function makeInvestigateCitation(
     }
 
     /**
+     * **How influential the work is, from the forced search's own pages**
+     * (plan 261003m stage 2) — on `prepared.context`, the row as it is after
+     * the final re-read, so the pages are judged against the title and authors
+     * the answer is saved under (Sol F3). `findInfluence` never throws and
+     * ends by its own deadline; the `catch` is for a fault in this wrapper.
+     */
+    async function readTheInfluence(
+      { context, model }: Awaited<ReturnType<typeof prepare>>,
+      findings: DigFindings,
+    ): Promise<InfluenceOutcome> {
+      try {
+        return await findInfluence(
+          findings.sources,
+          { title: context.title, authors: context.authors, year: context.year },
+          {
+            ...(deps.influenceCall ? { call: deps.influenceCall } : {}),
+            /* The reader reads the number and the words, so the answer's model (Sol F3 of 261001p). */
+            model,
+            ...(deps.influenceTimeoutMs === undefined ? {} : { timeoutMs: deps.influenceTimeoutMs }),
+            line,
+          },
+        );
+      } catch (err) {
+        line.error({ ...errorFields(err) }, "citation investigate: the influence step failed");
+        return { kind: "none", why: "error", model };
+      }
+    }
+
+    /**
      * ***Dig deeper*'s forced search, first of all** (plan 261001p stage 2) —
      * before the lookup, so a search that fails costs nothing else: the
      * press's promise is a web search, and without one there is nothing to
@@ -1018,16 +1092,9 @@ export function makeInvestigateCitation(
     async function digFirst(): Promise<DigFindings> {
       const text = new Map(firstArticle.blocks.map((b) => [b.id as string, b.text]));
       const context = investigateContext(row, (id) => text.get(id));
-      const given = context.linkFrom === "doi" || context.linkFrom === "arxiv" || context.linkFrom === "article";
-      const subject = [
-        context.title,
-        context.authors ? `, by ${context.authors}` : "",
-        context.year ? ` (${context.year})` : "",
-        given ? ` — ${context.url}` : "",
-      ].join("");
       return searchFirst({
         slug,
-        subject,
+        subject: digSubject(context),
         article: {
           title: firstArticle.meta.title,
           author: firstArticle.meta.byline,
@@ -1057,9 +1124,24 @@ export function makeInvestigateCitation(
           prepared = await prepare();
         }
         yield { type: "stage", stage: "reading-paper" };
-        const paper = await readThePaper(prepared);
+        /* **Both settled before the answer starts** (plan 261003m stage 2,
+           Sol F4): `reading` releases the allowance when its stream ends.
+           `allSettled` awaits the influence result even when the paper read
+           throws. On timeout, that result means the wait ended and the request
+           was aborted; a transport ignoring abort can continue in the background. */
+        const [paperRead, influence] = await Promise.allSettled([
+          readThePaper(prepared),
+          readTheInfluence(prepared, findings),
+        ]);
+        if (paperRead.status === "rejected") throw paperRead.reason;
+        const paper = paperRead.value;
         yield { type: "stage", stage: "reading" };
-        yield* reading(prepared, paper, findings);
+        yield* reading(
+          prepared,
+          paper,
+          findings,
+          influence.status === "fulfilled" ? influence.value : { kind: "none", why: "error", model: prepared.model },
+        );
       } finally {
         await freeLease();
       }
@@ -1069,6 +1151,8 @@ export function makeInvestigateCitation(
       { article, context, matched, model, contextHash, allowed }: Awaited<ReturnType<typeof prepare>>,
       paper: Awaited<ReturnType<typeof readThePaper>>,
       findings: DigFindings,
+      /** Already settled, including a timeout result; late request results are ignored. */
+      influence: InfluenceOutcome,
     ): AsyncGenerator<InvestigateEvent> {
       const request = investigateRequest({
         meta: article.meta,
@@ -1214,6 +1298,8 @@ export function makeInvestigateCitation(
         contextHash,
         promptVersion: CITATION_INVESTIGATE_VERSION,
         paper: paper.stored,
+        /* Only a number code kept; absent otherwise, so the row keeps the list's own. */
+        ...(influence.kind === "kept" ? { influence: influence.influence } : {}),
       };
       /* **Awaited before `done`** — a save that fails is the stream's error,
          and the row is never drawn as kept when it was not. */
@@ -1239,6 +1325,7 @@ export function makeInvestigateCitation(
             cacheReadTokens: end.usage?.prompt_tokens_details?.cached_tokens ?? null,
             answerChars: answer.length,
             ...paper.fields,
+            ...influenceLogFields(influence),
           },
           "investigated a cited work",
         );
