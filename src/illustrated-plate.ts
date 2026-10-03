@@ -529,6 +529,14 @@ export const MAX_ILLUSTRATION_NOTE_CHARS = 400;
 export function checkIllustrationNote(v: unknown): { ok: string | undefined } | { bad: string } {
   if (v === undefined || v === null) return { ok: undefined };
   if (typeof v !== "string") return { bad: "illustrationNote must be a string" };
+  /* Check the value before trimming it. `String.trim()` removes U+FEFF, so
+     checking afterwards would silently cut a forbidden format character when
+     it sat at either edge. Carriage return is allowed in the model-written
+     plate prose below, but not in this request field: its contract permits
+     newline and tab as the only controls. */
+  if (v.includes("\r") || FORBIDDEN.test(v)) {
+    return { bad: "The note contains a control or invisible formatting character." };
+  }
   const s = v.trim();
   if (!s) return { ok: undefined };
   if (s.length > MAX_ILLUSTRATION_NOTE_CHARS) {
@@ -536,7 +544,6 @@ export function checkIllustrationNote(v: unknown): { ok: string | undefined } | 
       bad: `The note is ${s.length} characters; it can be at most ${MAX_ILLUSTRATION_NOTE_CHARS}.`,
     };
   }
-  if (FORBIDDEN.test(s)) return { bad: "The note contains a control or invisible formatting character." };
   return { ok: s };
 }
 

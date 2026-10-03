@@ -891,6 +891,10 @@ describe("one press that draws and then paints", () => {
  * **Mutation.** Run 2026-10-03: dropping `ctx.illustrationNote` from the step's
  * `stamp` (src/pipeline.ts) reddens all three cases here and nothing else in
  * the file.
+ *
+ * **Blind to.** Whether the note ever reaches `ctx` — that is the job store's
+ * and `runStep`'s, and tests/jobs.test.ts holds the request half; and the two
+ * read sites, which tests/illustrated-run.test.ts § `isStale` covers.
  */
 describe("the reader's steering note", () => {
   const NOTE = "Fewer scenes, and bigger lettering.";

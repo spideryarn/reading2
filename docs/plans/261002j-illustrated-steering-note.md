@@ -181,3 +181,15 @@ they are the *"glyph-shapes that are not words"* that [illustrated.md](../projec
 already records under *Don't compose scenes made of writing*, not a misspelt caption. A note that
 picks a register full of lettering (charts, ledgers, scrolls) will invite more of it. Nothing is
 built against that: the register is the reader's choice, and the captions stay correct.
+
+## Code review
+
+GPT Sol, 2026-10-03 ([answer](261002j-illustrated-steering-note-code-review-sol.md) — its summary;
+the run wrote the summary over the findings file it had been asked to write first). Two findings,
+both fixed by Sol with a test it saw go red: **P1** Retry stayed pressable while dictation was
+armed (`JobProgress` now disables Retry under `runDisabled` too; harmless either way, since a Retry
+re-sends the failed job's own note, but it is the dictation rule); **P2** `trim()` removed a
+`U+FEFF` at the edge before the character check could see it, and a carriage return was accepted
+(the check now runs on the untrimmed value, and refuses `\r`). Everything else it was asked —
+every path a job is built or copied, the three freshness sites, the route's branches, the pre-fill,
+the automatic run, the dictation key, the reader's font — it found matching the plan.

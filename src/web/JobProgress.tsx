@@ -202,9 +202,11 @@ export function JobProgress({
   stalled: boolean;
   onRun(): Promise<void>;
   /**
-   * **The run button is drawn but cannot be pressed** — a box beside it is
+   * **The offered action is drawn but cannot be pressed** — a box beside it is
    * still taking dictation, say (docs/project/dictation.md: disable the button
-   * as well as guarding the press). Absent: pressable, as it always was.
+   * as well as guarding the press). This applies to Retry too: it starts work
+   * just as immediately as the ordinary run button. Absent: pressable, as it
+   * always was.
    */
   runDisabled?: boolean;
   onCancel(id: string): void;
@@ -314,6 +316,7 @@ export function JobProgress({
           /* The visible word first, then what it is about — see `about`. */
           aria-label={about ? `Retry — ${about}` : undefined}
           aria-describedby={describedBy}
+          disabled={runDisabled}
           onClick={failed.retry ?? undefined}
         >
           <RotateCw size={13} />

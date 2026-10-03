@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, BlockId, Tree } from "../src/types.js";
 import { DiagramPanel } from "../src/web/DiagramPanel.js";
 import { IllustratedView } from "../src/web/IllustratedView.js";
+import { JobProgress } from "../src/web/JobProgress.js";
 import { pendingActivation, resetActivations } from "../src/web/activation.js";
 import { jobEngine } from "../src/web/jobEngine.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
@@ -1261,6 +1262,26 @@ function buttonSaying(text: string): HTMLButtonElement | undefined {
 
 /** Report spya-wxd4nq, plan 261002j: a box under the picture to steer how it comes out. */
 describe("the reader's steering note", () => {
+  it("disables Retry while the steering box cannot submit", async () => {
+    await act(async () => {
+      root.render(
+        <JobProgress
+          job={null}
+          failed={{ message: "The paint failed.", retryable: true, retry: () => undefined }}
+          stalled={false}
+          onRun={async () => undefined}
+          runDisabled
+          onCancel={() => undefined}
+          label="Paint the argument"
+          step="illustrated"
+          icon={null}
+          runningLabel="Painting…"
+        />,
+      );
+    });
+    expect(buttonSaying("Retry")?.disabled).toBe(true);
+  });
+
   it("sends what the reader typed, trimmed, with the first paint", async () => {
     serving({ noArtefact: true, sketch: { stale: false, profileChanged: false } });
     await mount();

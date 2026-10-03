@@ -809,7 +809,15 @@ describe("the reader's steering note", () => {
     });
     expect(checkIllustrationNote("x".repeat(MAX_ILLUSTRATION_NOTE_CHARS + 1))).toHaveProperty("bad");
     expect(checkIllustrationNote(42)).toHaveProperty("bad");
-    for (const sneaky of ["a\u0007b", "a\u200Bb", "a\u202Eb", "a\u2066b", "a\uFEFFb"]) {
+    for (const sneaky of [
+      "a\u0007b",
+      "a\rb",
+      "a\u200Bb",
+      "a\u202Eb",
+      "a\u2066b",
+      "a\uFEFFb",
+      "\uFEFFat the edge",
+    ]) {
       expect(checkIllustrationNote(sneaky), JSON.stringify(sneaky)).toHaveProperty("bad");
     }
   });
