@@ -5,9 +5,6 @@
  * while the bar holds the headings breadcrumb, which is the only bar that
  * reads the answer (crumbs.css § above the band).
  *
- * A block box, so it is as wide as `.reader` and a sideways scroll cannot take
- * it out of the window on its own.
- *
  * docs/plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md
  */
 import { useEffect, useRef } from "react";

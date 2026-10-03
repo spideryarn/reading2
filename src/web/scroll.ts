@@ -64,10 +64,10 @@ export function controlsBar(): HTMLElement | null {
  * crumbs.css § above the band is the one rule that reads this.
  *
  * `sentinel` is a zero-height element directly before the bar
- * (BarStuckSentinel.tsx). It has left by the top exactly when the bar has
- * stuck. An observer rather than a rect read in `watchBarVisibility`, whose
- * callback is deliberately free of DOM reads; and an attribute rather than
- * React state, for `data-bars`'s reason.
+ * (BarStuckSentinel.tsx). Its top distinguishes leaving above from sitting
+ * below the viewport. An observer rather than a rect read in
+ * `watchBarVisibility`, whose callback is deliberately free of DOM reads; and
+ * an attribute rather than React state, for `data-bars`'s reason.
  *
  * **Late is safe and early is not.** The root margin is `0px`, not
  * `--safe-top`, so in the installed app the attribute arrives a few pixels
