@@ -1,0 +1,3600 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "before",
+  "sourceSha256": {
+    "sketch.ts": "a39d3ee288abfdb67c17338659063009c71e0267380f4bb19ced7ce8aad2f516",
+    "illustrated.ts": "cf2d52f262ed7fce4674378b7f14b6d26dccfd050bc846d253de8bf3a6e6937f",
+    "faq.ts": "a0eda48d79eb6548010c050a2667b1c37b7f9f2da161ba0affb946fd6b18f552",
+    "quiz.ts": "509e161ec1f8268066d3903fe255d03d1eaf65744f249342a09f9ac212b1e89f",
+    "ideas.ts": "1c1bf2d4355c428dd32719356a7898d9e6434671878f064ae14a8d364a4e5d64",
+    "quotes.ts": "ac319763692f731d87c66d73cdf28a49380b360f92844cbe9354ee695213df15",
+    "glossary.ts": "79e98d5c7e062bea53faba7d32c49ae8f44ec833d6f192bab8c4d8e04ed6f8b7",
+    "timeline.ts": "875d6b2ea695b41091ebb72f3e87a72b256d0e28fdaa8c6365743cf3f39912dc",
+    "arc.ts": "d53bc0fe597ae160a0e90711787ac7d584e20a7877b721b1975ba33e841d7f57",
+    "paperwork.ts": "6cb0986a2c70eaab9fb28704c9084b8a198d8e875c3ecebcd860608fea900b22"
+  },
+  "outputs": {
+    "sketch": {
+      "sketch": {
+        "version": "sketch/4",
+        "title": "Funnel into case spine",
+        "caption": "The piece funnels from background and method into a long spine of eyewitness-case groups, which converge into a statistical synthesis and a set of benchmark cases, then close on a call for coordinated research.",
+        "scenes": [
+          {
+            "id": "overview",
+            "title": "Overview",
+            "height": 1180,
+            "items": [
+              {
+                "kind": "node",
+                "id": "hist",
+                "shape": "box",
+                "x": 280,
+                "y": 40,
+                "w": 220,
+                "h": 70,
+                "text": "'Ball lightning' coined, but field stays unproven",
+                "size": "sm",
+                "block": "spya-duju25"
+              },
+              {
+                "kind": "node",
+                "id": "method",
+                "shape": "hex",
+                "x": 280,
+                "y": 140,
+                "w": 220,
+                "h": 70,
+                "text": "Rare on camera — so compile expert eyewitness reports",
+                "size": "sm",
+                "block": "spya-zbq6a4"
+              },
+              {
+                "kind": "region",
+                "x": 40,
+                "y": 250,
+                "w": 680,
+                "h": 430,
+                "style": "band",
+                "label": "3–4: SCIENTISTS & TRAINED OBSERVERS",
+                "tone": 1,
+                "muted": true
+              },
+              {
+                "kind": "node",
+                "id": "sci1",
+                "shape": "box",
+                "x": 60,
+                "y": 290,
+                "w": 300,
+                "h": 64,
+                "text": "Haidinger's 1868 Vienna multi-sighting",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-jq0hzy"
+              },
+              {
+                "kind": "node",
+                "id": "sci2",
+                "shape": "box",
+                "x": 400,
+                "y": 290,
+                "w": 300,
+                "h": 64,
+                "text": "Marsh, Bellido and early professional witnesses",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-u7qm50"
+              },
+              {
+                "kind": "node",
+                "id": "sci3",
+                "shape": "box",
+                "x": 60,
+                "y": 370,
+                "w": 300,
+                "h": 64,
+                "text": "Gerlach, Durward, Dolezalek: speed & damage calculations",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-q8aywm"
+              },
+              {
+                "kind": "node",
+                "id": "sci4",
+                "shape": "box",
+                "x": 400,
+                "y": 370,
+                "w": 300,
+                "h": 64,
+                "text": "Breitenecker, Jennison, Dmitriev: motion and ozone traces",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-mcvhbj"
+              },
+              {
+                "kind": "node",
+                "id": "sci5",
+                "shape": "box",
+                "x": 60,
+                "y": 450,
+                "w": 300,
+                "h": 64,
+                "text": "More cases: Mickelson to Wustinger & Kuzmin",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-wjfv3z",
+                "opens": "scientists-zoom"
+              },
+              {
+                "kind": "node",
+                "id": "sci6",
+                "shape": "box",
+                "x": 400,
+                "y": 450,
+                "w": 300,
+                "h": 64,
+                "text": "Childhood sightings of later scientists (e.g. Wittmann)",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-usdfft"
+              },
+              {
+                "kind": "node",
+                "id": "trained",
+                "shape": "box",
+                "x": 60,
+                "y": 540,
+                "w": 300,
+                "h": 64,
+                "text": "Weather observers & coastguards (Pikes Peak to Fishguard)",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-yt230r"
+              },
+              {
+                "kind": "node",
+                "id": "amateur",
+                "shape": "box",
+                "x": 400,
+                "y": 540,
+                "w": 300,
+                "h": 64,
+                "text": "Amateur astronomers, military, business witnesses",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-qtqp22"
+              },
+              {
+                "kind": "node",
+                "id": "synth",
+                "shape": "diamond",
+                "x": 280,
+                "y": 700,
+                "w": 220,
+                "h": 90,
+                "text": "41 cases: thunderstorm-timed, but sizes & behavior vary widely",
+                "size": "sm",
+                "block": "spya-k02vg9"
+              },
+              {
+                "kind": "region",
+                "x": 40,
+                "y": 820,
+                "w": 680,
+                "h": 220,
+                "style": "band",
+                "label": "6: BENCHMARK & NOTABLE CASES",
+                "tone": 2,
+                "muted": true
+              },
+              {
+                "kind": "node",
+                "id": "notable",
+                "shape": "box",
+                "x": 60,
+                "y": 860,
+                "w": 300,
+                "h": 64,
+                "text": "Richmann, Charcot's patient D-cy: myth vs. medical record",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-c2m4vk",
+                "opens": "notable-zoom"
+              },
+              {
+                "kind": "node",
+                "id": "evidence",
+                "shape": "box",
+                "x": 400,
+                "y": 860,
+                "w": 300,
+                "h": 64,
+                "text": "Dorstone, Poughquag, modern spectroscopy & field tests",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-qxb4e2"
+              },
+              {
+                "kind": "node",
+                "id": "conclusion",
+                "shape": "ellipse",
+                "x": 240,
+                "y": 1070,
+                "w": 280,
+                "h": 80,
+                "text": "Call for coordinated, evidence-based ball lightning research",
+                "size": "md",
+                "block": "spya-reyd2w"
+              },
+              {
+                "kind": "edge",
+                "from": "hist",
+                "to": "method",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "method",
+                "to": "sci1",
+                "via": "elbow",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "sci5",
+                "to": "synth",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "sci6",
+                "to": "synth",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "trained",
+                "to": "synth",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "amateur",
+                "to": "synth",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "synth",
+                "to": "notable",
+                "via": "elbow",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "synth",
+                "to": "evidence",
+                "via": "elbow",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "notable",
+                "to": "conclusion",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "evidence",
+                "to": "conclusion",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              }
+            ],
+            "caption": "Historical and methodological setup narrows into case collection, which spines through observer groups, converges into synthesis and benchmark cases, and ends in a call to action."
+          },
+          {
+            "id": "scientists-zoom",
+            "title": "Inside: scientist & trained observer reports",
+            "height": 760,
+            "items": [
+              {
+                "kind": "node",
+                "id": "z1",
+                "shape": "box",
+                "x": 40,
+                "y": 40,
+                "w": 320,
+                "h": 64,
+                "text": "Haidinger (1868): multi-district Vienna sightings, sketch",
+                "size": "sm",
+                "block": "spya-jq0hzy"
+              },
+              {
+                "kind": "node",
+                "id": "z2",
+                "shape": "box",
+                "x": 400,
+                "y": 40,
+                "w": 320,
+                "h": 64,
+                "text": "Marsh (1878) & Bellido (1890): ship & power-station balls",
+                "size": "sm",
+                "block": "spya-u7qm50"
+              },
+              {
+                "kind": "node",
+                "id": "z3",
+                "shape": "box",
+                "x": 40,
+                "y": 130,
+                "w": 320,
+                "h": 64,
+                "text": "Gerlach (1927): calculated 1200 m/s trajectory",
+                "size": "sm",
+                "block": "spya-q8aywm"
+              },
+              {
+                "kind": "node",
+                "id": "z4",
+                "shape": "box",
+                "x": 400,
+                "y": 130,
+                "w": 320,
+                "h": 64,
+                "text": "Durward & Dolezalek: flight and Tübingen pylon damage",
+                "size": "sm",
+                "block": "spya-q8aywm"
+              },
+              {
+                "kind": "node",
+                "id": "z5",
+                "shape": "box",
+                "x": 40,
+                "y": 220,
+                "w": 320,
+                "h": 64,
+                "text": "Breitenecker (1955,1975): ball through mortuary wall",
+                "size": "sm",
+                "block": "spya-mcvhbj"
+              },
+              {
+                "kind": "node",
+                "id": "z6",
+                "shape": "box",
+                "x": 400,
+                "y": 220,
+                "w": 320,
+                "h": 64,
+                "text": "Jennison (1963): ball drifting down aircraft aisle",
+                "size": "sm",
+                "block": "spya-dusdxq"
+              },
+              {
+                "kind": "node",
+                "id": "z7",
+                "shape": "box",
+                "x": 40,
+                "y": 310,
+                "w": 320,
+                "h": 64,
+                "text": "Dmitriev (1965): measured elevated ozone in ball's wake",
+                "size": "sm",
+                "block": "spya-vnu5me"
+              },
+              {
+                "kind": "node",
+                "id": "z8",
+                "shape": "box",
+                "x": 400,
+                "y": 310,
+                "w": 320,
+                "h": 64,
+                "text": "Mickelson (1967): ball caused temporary arm paralysis",
+                "size": "sm",
+                "block": "spya-wjfv3z"
+              },
+              {
+                "kind": "node",
+                "id": "z9",
+                "shape": "box",
+                "x": 40,
+                "y": 400,
+                "w": 320,
+                "h": 64,
+                "text": "Pippard (1982), Kuzmin (1997): Cambridge & Moscow balls",
+                "size": "sm",
+                "block": "spya-b8vtdu"
+              },
+              {
+                "kind": "node",
+                "id": "z10",
+                "shape": "box",
+                "x": 400,
+                "y": 400,
+                "w": 320,
+                "h": 64,
+                "text": "Bychkov (2002): physicist's own California sighting",
+                "size": "sm",
+                "block": "spya-uh4ywe"
+              },
+              {
+                "kind": "node",
+                "id": "z11",
+                "shape": "box",
+                "x": 220,
+                "y": 490,
+                "w": 320,
+                "h": 64,
+                "text": "Childhood memories: Wittmann's fragmenting sphere (1951)",
+                "size": "sm",
+                "block": "spya-vg957u"
+              },
+              {
+                "kind": "edge",
+                "from": "z1",
+                "to": "z3",
+                "via": "straight",
+                "line": "dotted",
+                "arrow": "none"
+              },
+              {
+                "kind": "edge",
+                "from": "z2",
+                "to": "z4",
+                "via": "straight",
+                "line": "dotted",
+                "arrow": "none"
+              },
+              {
+                "kind": "edge",
+                "from": "z3",
+                "to": "z5",
+                "via": "straight",
+                "line": "dotted",
+                "arrow": "none"
+              },
+              {
+                "kind": "edge",
+                "from": "z4",
+                "to": "z6",
+                "via": "straight",
+                "line": "dotted",
+                "arrow": "none"
+              },
+              {
+                "kind": "edge",
+                "from": "z5",
+                "to": "z7",
+                "via": "straight",
+                "line": "dotted",
+                "arrow": "none"
+              },
+              {
+                "kind": "edge",
+                "from": "z6",
+                "to": "z8",
+                "via": "straight",
+                "line": "dotted",
+                "arrow": "none"
+              },
+              {
+                "kind": "edge",
+                "from": "z7",
+                "to": "z9",
+                "via": "straight",
+                "line": "dotted",
+                "arrow": "none"
+              },
+              {
+                "kind": "edge",
+                "from": "z8",
+                "to": "z10",
+                "via": "straight",
+                "line": "dotted",
+                "arrow": "none"
+              },
+              {
+                "kind": "edge",
+                "from": "z9",
+                "to": "z11",
+                "via": "straight",
+                "line": "dotted",
+                "arrow": "none"
+              },
+              {
+                "kind": "edge",
+                "from": "z10",
+                "to": "z11",
+                "via": "straight",
+                "line": "dotted",
+                "arrow": "none"
+              }
+            ],
+            "caption": "A spine of individual eyewitness cases, grouped by era and type of professional, each contributing a distinct observational detail."
+          },
+          {
+            "id": "notable-zoom",
+            "title": "Inside: myth versus material evidence",
+            "height": 620,
+            "items": [
+              {
+                "kind": "label",
+                "x": 150,
+                "y": 40,
+                "text": "LEGEND & MEDICAL RECORD",
+                "size": "xs",
+                "align": "middle"
+              },
+              {
+                "kind": "label",
+                "x": 560,
+                "y": 40,
+                "text": "PHYSICAL EVIDENCE",
+                "size": "xs",
+                "align": "middle"
+              },
+              {
+                "kind": "node",
+                "id": "n1",
+                "shape": "box",
+                "x": 40,
+                "y": 70,
+                "w": 260,
+                "h": 70,
+                "text": "Richmann (1753): popular 'ball lightning' myth, actually ordinary lightning",
+                "size": "sm",
+                "block": "spya-bbtuzu"
+              },
+              {
+                "kind": "node",
+                "id": "n2",
+                "shape": "box",
+                "x": 40,
+                "y": 170,
+                "w": 260,
+                "h": 80,
+                "text": "Charcot's patient D-cy (1889): keraunoparalysis vs. lasting traumatic neurosis",
+                "size": "sm",
+                "block": "spya-ugmxk8"
+              },
+              {
+                "kind": "node",
+                "id": "e1",
+                "shape": "box",
+                "x": 460,
+                "y": 70,
+                "w": 260,
+                "h": 70,
+                "text": "Dorstone tub (1936): energy estimate from boiled water",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-qxb4e2"
+              },
+              {
+                "kind": "node",
+                "id": "e2",
+                "shape": "box",
+                "x": 460,
+                "y": 170,
+                "w": 260,
+                "h": 70,
+                "text": "Poughquag glass door (2008): fluorescence measurement",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-dtt3v9"
+              },
+              {
+                "kind": "node",
+                "id": "e3",
+                "shape": "box",
+                "x": 460,
+                "y": 270,
+                "w": 260,
+                "h": 70,
+                "text": "Uman's triggered-lightning field tests (2008)",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-mbqwhj"
+              },
+              {
+                "kind": "node",
+                "id": "e4",
+                "shape": "box",
+                "x": 460,
+                "y": 370,
+                "w": 260,
+                "h": 70,
+                "text": "Cen (2012) & Nikitin (2015): spectra and video triangulation",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-nacbjs"
+              },
+              {
+                "kind": "node",
+                "id": "out",
+                "shape": "ellipse",
+                "x": 240,
+                "y": 480,
+                "w": 280,
+                "h": 80,
+                "text": "Both kinds of case anchor theory-testing against reality",
+                "size": "md",
+                "block": "spya-zz7g2q"
+              },
+              {
+                "kind": "edge",
+                "from": "n2",
+                "to": "out",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "e4",
+                "to": "out",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              }
+            ],
+            "caption": "Two columns run side by side: famous but poorly documented legends, and cases with physical traces that let researchers calculate real numbers."
+          }
+        ],
+        "generator": "claude-sonnet-5",
+        "slug": "source-spya-f550ta",
+        "sourceHash": "c31f4450dfe07f04.0b8856e5ed5c12e3.1eefce3cf3aa7392",
+        "profileHash": null
+      },
+      "raw": "{\"caption\":\"The piece funnels from background and method into a long spine of eyewitness-case groups, which converge into a statistical synthesis and a set of benchmark cases, then close on a call for coordinated research.\",\"title\":\"Funnel into case spine\",\"scenes\":[{\"id\":\"overview\",\"title\":\"Overview\",\"caption\":\"Historical and methodological setup narrows into case collection, which spines through observer groups, converges into synthesis and benchmark cases, and ends in a call to action.\",\"height\":1180,\"items\":[{\"kind\":\"node\",\"id\":\"hist\",\"shape\":\"box\",\"x\":280,\"y\":40,\"w\":220,\"h\":70,\"text\":\"'Ball lightning' coined, but field stays unproven\",\"size\":\"sm\",\"block\":\"spya-duju25\"},{\"kind\":\"node\",\"id\":\"method\",\"shape\":\"hex\",\"x\":280,\"y\":140,\"w\":220,\"h\":70,\"text\":\"Rare on camera — so compile expert eyewitness reports\",\"size\":\"sm\",\"block\":\"spya-zbq6a4\"},{\"kind\":\"region\",\"x\":40,\"y\":250,\"w\":680,\"h\":430,\"label\":\"3–4: SCIENTISTS & TRAINED OBSERVERS\",\"style\":\"band\",\"tone\":1,\"muted\":true},{\"kind\":\"node\",\"id\":\"sci1\",\"shape\":\"box\",\"x\":60,\"y\":290,\"w\":300,\"h\":64,\"text\":\"Haidinger's 1868 Vienna multi-sighting\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-jq0hzy\"},{\"kind\":\"node\",\"id\":\"sci2\",\"shape\":\"box\",\"x\":400,\"y\":290,\"w\":300,\"h\":64,\"text\":\"Marsh, Bellido and early professional witnesses\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-u7qm50\"},{\"kind\":\"node\",\"id\":\"sci3\",\"shape\":\"box\",\"x\":60,\"y\":370,\"w\":300,\"h\":64,\"text\":\"Gerlach, Durward, Dolezalek: speed & damage calculations\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-q8aywm\"},{\"kind\":\"node\",\"id\":\"sci4\",\"shape\":\"box\",\"x\":400,\"y\":370,\"w\":300,\"h\":64,\"text\":\"Breitenecker, Jennison, Dmitriev: motion and ozone traces\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-mcvhbj\"},{\"kind\":\"node\",\"id\":\"sci5\",\"shape\":\"box\",\"x\":60,\"y\":450,\"w\":300,\"h\":64,\"text\":\"More cases: Mickelson to Wustinger & Kuzmin\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-wjfv3z\",\"opens\":\"scientists-zoom\"},{\"kind\":\"node\",\"id\":\"sci6\",\"shape\":\"box\",\"x\":400,\"y\":450,\"w\":300,\"h\":64,\"text\":\"Childhood sightings of later scientists (e.g. Wittmann)\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-usdfft\"},{\"kind\":\"node\",\"id\":\"trained\",\"shape\":\"box\",\"x\":60,\"y\":540,\"w\":300,\"h\":64,\"text\":\"Weather observers & coastguards (Pikes Peak to Fishguard)\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-yt230r\"},{\"kind\":\"node\",\"id\":\"amateur\",\"shape\":\"box\",\"x\":400,\"y\":540,\"w\":300,\"h\":64,\"text\":\"Amateur astronomers, military, business witnesses\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-qtqp22\"},{\"kind\":\"node\",\"id\":\"synth\",\"shape\":\"diamond\",\"x\":280,\"y\":700,\"w\":220,\"h\":90,\"text\":\"41 cases: thunderstorm-timed, but sizes & behavior vary widely\",\"size\":\"sm\",\"block\":\"spya-k02vg9\"},{\"kind\":\"region\",\"x\":40,\"y\":820,\"w\":680,\"h\":220,\"label\":\"6: BENCHMARK & NOTABLE CASES\",\"style\":\"band\",\"tone\":2,\"muted\":true},{\"kind\":\"node\",\"id\":\"notable\",\"shape\":\"box\",\"x\":60,\"y\":860,\"w\":300,\"h\":64,\"text\":\"Richmann, Charcot's patient D-cy: myth vs. medical record\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-c2m4vk\",\"opens\":\"notable-zoom\"},{\"kind\":\"node\",\"id\":\"evidence\",\"shape\":\"box\",\"x\":400,\"y\":860,\"w\":300,\"h\":64,\"text\":\"Dorstone, Poughquag, modern spectroscopy & field tests\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-qxb4e2\"},{\"kind\":\"node\",\"id\":\"conclusion\",\"shape\":\"ellipse\",\"x\":240,\"y\":1070,\"w\":280,\"h\":80,\"text\":\"Call for coordinated, evidence-based ball lightning research\",\"size\":\"md\",\"block\":\"spya-reyd2w\"},{\"kind\":\"edge\",\"from\":\"hist\",\"to\":\"method\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"method\",\"to\":\"sci1\",\"via\":\"elbow\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"sci5\",\"to\":\"synth\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"sci6\",\"to\":\"synth\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"trained\",\"to\":\"synth\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"amateur\",\"to\":\"synth\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"synth\",\"to\":\"notable\",\"via\":\"elbow\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"synth\",\"to\":\"evidence\",\"via\":\"elbow\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"notable\",\"to\":\"conclusion\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"evidence\",\"to\":\"conclusion\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"}]},{\"id\":\"scientists-zoom\",\"title\":\"Inside: scientist & trained observer reports\",\"caption\":\"A spine of individual eyewitness cases, grouped by era and type of professional, each contributing a distinct observational detail.\",\"height\":760,\"items\":[{\"kind\":\"node\",\"id\":\"z1\",\"shape\":\"box\",\"x\":40,\"y\":40,\"w\":320,\"h\":64,\"text\":\"Haidinger (1868): multi-district Vienna sightings, sketch\",\"size\":\"sm\",\"block\":\"spya-jq0hzy\"},{\"kind\":\"node\",\"id\":\"z2\",\"shape\":\"box\",\"x\":400,\"y\":40,\"w\":320,\"h\":64,\"text\":\"Marsh (1878) & Bellido (1890): ship & power-station balls\",\"size\":\"sm\",\"block\":\"spya-u7qm50\"},{\"kind\":\"node\",\"id\":\"z3\",\"shape\":\"box\",\"x\":40,\"y\":130,\"w\":320,\"h\":64,\"text\":\"Gerlach (1927): calculated 1200 m/s trajectory\",\"size\":\"sm\",\"block\":\"spya-q8aywm\"},{\"kind\":\"node\",\"id\":\"z4\",\"shape\":\"box\",\"x\":400,\"y\":130,\"w\":320,\"h\":64,\"text\":\"Durward & Dolezalek: flight and Tübingen pylon damage\",\"size\":\"sm\",\"block\":\"spya-q8aywm\"},{\"kind\":\"node\",\"id\":\"z5\",\"shape\":\"box\",\"x\":40,\"y\":220,\"w\":320,\"h\":64,\"text\":\"Breitenecker (1955,1975): ball through mortuary wall\",\"size\":\"sm\",\"block\":\"spya-mcvhbj\"},{\"kind\":\"node\",\"id\":\"z6\",\"shape\":\"box\",\"x\":400,\"y\":220,\"w\":320,\"h\":64,\"text\":\"Jennison (1963): ball drifting down aircraft aisle\",\"size\":\"sm\",\"block\":\"spya-dusdxq\"},{\"kind\":\"node\",\"id\":\"z7\",\"shape\":\"box\",\"x\":40,\"y\":310,\"w\":320,\"h\":64,\"text\":\"Dmitriev (1965): measured elevated ozone in ball's wake\",\"size\":\"sm\",\"block\":\"spya-vnu5me\"},{\"kind\":\"node\",\"id\":\"z8\",\"shape\":\"box\",\"x\":400,\"y\":310,\"w\":320,\"h\":64,\"text\":\"Mickelson (1967): ball caused temporary arm paralysis\",\"size\":\"sm\",\"block\":\"spya-wjfv3z\"},{\"kind\":\"node\",\"id\":\"z9\",\"shape\":\"box\",\"x\":40,\"y\":400,\"w\":320,\"h\":64,\"text\":\"Pippard (1982), Kuzmin (1997): Cambridge & Moscow balls\",\"size\":\"sm\",\"block\":\"spya-b8vtdu\"},{\"kind\":\"node\",\"id\":\"z10\",\"shape\":\"box\",\"x\":400,\"y\":400,\"w\":320,\"h\":64,\"text\":\"Bychkov (2002): physicist's own California sighting\",\"size\":\"sm\",\"block\":\"spya-uh4ywe\"},{\"kind\":\"node\",\"id\":\"z11\",\"shape\":\"box\",\"x\":220,\"y\":490,\"w\":320,\"h\":64,\"text\":\"Childhood memories: Wittmann's fragmenting sphere (1951)\",\"size\":\"sm\",\"block\":\"spya-vg957u\"},{\"kind\":\"edge\",\"from\":\"z1\",\"to\":\"z3\",\"via\":\"straight\",\"line\":\"dotted\",\"arrow\":\"none\"},{\"kind\":\"edge\",\"from\":\"z2\",\"to\":\"z4\",\"via\":\"straight\",\"line\":\"dotted\",\"arrow\":\"none\"},{\"kind\":\"edge\",\"from\":\"z3\",\"to\":\"z5\",\"via\":\"straight\",\"line\":\"dotted\",\"arrow\":\"none\"},{\"kind\":\"edge\",\"from\":\"z4\",\"to\":\"z6\",\"via\":\"straight\",\"line\":\"dotted\",\"arrow\":\"none\"},{\"kind\":\"edge\",\"from\":\"z5\",\"to\":\"z7\",\"via\":\"straight\",\"line\":\"dotted\",\"arrow\":\"none\"},{\"kind\":\"edge\",\"from\":\"z6\",\"to\":\"z8\",\"via\":\"straight\",\"line\":\"dotted\",\"arrow\":\"none\"},{\"kind\":\"edge\",\"from\":\"z7\",\"to\":\"z9\",\"via\":\"straight\",\"line\":\"dotted\",\"arrow\":\"none\"},{\"kind\":\"edge\",\"from\":\"z8\",\"to\":\"z10\",\"via\":\"straight\",\"line\":\"dotted\",\"arrow\":\"none\"},{\"kind\":\"edge\",\"from\":\"z9\",\"to\":\"z11\",\"via\":\"straight\",\"line\":\"dotted\",\"arrow\":\"none\"},{\"kind\":\"edge\",\"from\":\"z10\",\"to\":\"z11\",\"via\":\"straight\",\"line\":\"dotted\",\"arrow\":\"none\"}]},{\"id\":\"notable-zoom\",\"title\":\"Inside: myth versus material evidence\",\"caption\":\"Two columns run side by side: famous but poorly documented legends, and cases with physical traces that let researchers calculate real numbers.\",\"height\":620,\"items\":[{\"kind\":\"label\",\"x\":150,\"y\":40,\"text\":\"LEGEND & MEDICAL RECORD\",\"size\":\"xs\",\"align\":\"middle\"},{\"kind\":\"label\",\"x\":560,\"y\":40,\"text\":\"PHYSICAL EVIDENCE\",\"size\":\"xs\",\"align\":\"middle\"},{\"kind\":\"node\",\"id\":\"n1\",\"shape\":\"box\",\"x\":40,\"y\":70,\"w\":260,\"h\":70,\"text\":\"Richmann (1753): popular 'ball lightning' myth, actually ordinary lightning\",\"size\":\"sm\",\"block\":\"spya-bbtuzu\"},{\"kind\":\"node\",\"id\":\"n2\",\"shape\":\"box\",\"x\":40,\"y\":170,\"w\":260,\"h\":80,\"text\":\"Charcot's patient D-cy (1889): keraunoparalysis vs. lasting traumatic neurosis\",\"size\":\"sm\",\"block\":\"spya-ugmxk8\"},{\"kind\":\"node\",\"id\":\"e1\",\"shape\":\"box\",\"x\":460,\"y\":70,\"w\":260,\"h\":70,\"text\":\"Dorstone tub (1936): energy estimate from boiled water\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-qxb4e2\"},{\"kind\":\"node\",\"id\":\"e2\",\"shape\":\"box\",\"x\":460,\"y\":170,\"w\":260,\"h\":70,\"text\":\"Poughquag glass door (2008): fluorescence measurement\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-dtt3v9\"},{\"kind\":\"node\",\"id\":\"e3\",\"shape\":\"box\",\"x\":460,\"y\":270,\"w\":260,\"h\":70,\"text\":\"Uman's triggered-lightning field tests (2008)\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-mbqwhj\"},{\"kind\":\"node\",\"id\":\"e4\",\"shape\":\"box\",\"x\":460,\"y\":370,\"w\":260,\"h\":70,\"text\":\"Cen (2012) & Nikitin (2015): spectra and video triangulation\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-nacbjs\"},{\"kind\":\"node\",\"id\":\"out\",\"shape\":\"ellipse\",\"x\":240,\"y\":480,\"w\":280,\"h\":80,\"text\":\"Both kinds of case anchor theory-testing against reality\",\"size\":\"md\",\"block\":\"spya-zz7g2q\"},{\"kind\":\"edge\",\"from\":\"n2\",\"to\":\"out\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"e4\",\"to\":\"out\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"}]}]}",
+      "report": {
+        "faults": [],
+        "written": 58,
+        "kept": 58,
+        "inferred": 1
+      },
+      "score": {
+        "scenes": 3,
+        "unreachable": 0,
+        "inferred": 1,
+        "nodes": 32,
+        "linked": 32,
+        "reach": 0.1134020618556701,
+        "flow": 0.9721393650372075,
+        "overlap": 0,
+        "overflowing": 1,
+        "faults": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 34326,
+      "outputTokens": 4532,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 41938
+    },
+    "illustrated": {
+      "illustrated": {
+        "version": "illustrated/5",
+        "style": "An illuminated manuscript page: hand-inked vignettes in gilded medallion frames linked by thin painted pathways down a parchment leaf, fitting the article's long, century-spanning chain of individual eyewitness case-histories.",
+        "plates": [
+          {
+            "sceneId": "overview",
+            "title": "The Chain of Witnesses",
+            "prompt": "An illuminated manuscript leaf on aged cream parchment, sepia ink linework with muted gold, red-ochre and blue pigment washes, bordered by a thin gilt rule and no other ornament. Read top to bottom as a single chain of small framed medallions joined by delicate painted gold pathways, each medallion a complete little scene with its title lettered in small roman capitals directly beneath it, and no other words anywhere on the page. At the top, BUTTI'S FIREBALL, MILAN 1841: a man at a window over a rainy street crowd beneath a reddish-yellow fireball. A path leads down to 12,000 PHOTOGRAPHS, TWO BALLS: a robed figure poring over trays of small night-sky photographic plates. From this a path enters a large gilt-bordered enclosure labelled by its drawn contents alone (no caption) holding five medallions in a vertical sequence joined by connecting lines: HAIDINGER'S WINDOW BALL, 1868 (a man at a window watching a glowing ball hover outside the pane); GERLACH CALCULATES THE SPEED (a scholar with chalk and diagram tracing a ball's straight path across the sky); WITTMANN'S CHILDHOOD SPHERE, 1951 (a boy in a doorway watching a yellow-white ball sink into a tree); PIKES PEAK WOODSHED BALL (a mountain-station worker in a woodshed as a ball passes through); BAGNALL'S BEDSIDE ORB, 1974 (a man sitting up in bed watching an orange sphere hover near a window). Lines from the last two medallions converge beneath the enclosure into SIZES FROM 1.5 CM TO 15 M: an unrolled measuring scroll showing circles of greatly different sizes. From this convergence point two gold paths fork into a second, smaller gilt enclosure holding two side-by-side medallions: RICHMANN'S LEGENDARY BALL, 1753 (an engraved-looking scene of a man struck by a dramatic fiery sphere) and DORSTONE'S BOILING TUB, 1936 (a red-hot ball falling toward a wash-tub beneath a cottage window). Both paths descend and meet at the bottom in the final medallion, BUILDING THE SHARED DATABASE: robed scholars at a table laying photographs and notes into one open ledger. Keep the whole composition tall and narrow in the visual chain but let each medallion be wide enough to read clearly, with generous bare parchment around the frames rather than crowding them.",
+            "vignettes": [
+              {
+                "block": "spya-by5gk0",
+                "quote": "people were running in the rain under a reddish-yellow ball of fire",
+                "depicts": "Lorenzo Butti leans from a Milan window in 1841, looking down at a crowd running through rain beneath a reddish-yellow fireball drifting past at window height.",
+                "title": "BUTTI'S FIREBALL, MILAN 1841",
+                "node": "hist"
+              },
+              {
+                "block": "spya-f0dmn4",
+                "quote": "searched about 12 000 photographic records of the US Prairie Meteorite Network",
+                "depicts": "A researcher hunches over trays of small sky-camera photographic plates from a meteor-watching network, sorting thousands of night-sky negatives in search of a single stray fireball.",
+                "title": "12,000 PHOTOGRAPHS, TWO BALLS",
+                "node": "method"
+              },
+              {
+                "block": "spya-g7tbkr",
+                "quote": "It stood maybe 2–3 s in front of the right pane of the window",
+                "depicts": "Wilhelm von Haidinger stands at his Vienna window during a thunderstorm, watching a glowing yellow-red ball hover for a few seconds just outside the right-hand windowpane.",
+                "title": "HAIDINGER'S WINDOW BALL, 1868",
+                "node": "sci1"
+              },
+              {
+                "block": "spya-q8aywm",
+                "quote": "ball lightning had a mean speed of about 1200 m s−1",
+                "depicts": "Physicist Walther Gerlach stands at his institute window with chalk and paper, tracing the straight path of a bright ball across the sky and working out its enormous speed.",
+                "title": "GERLACH CALCULATES THE SPEED",
+                "node": "sci3"
+              },
+              {
+                "block": "spya-vg957u",
+                "quote": "I saw a spherical plasma ball coloured bright yellow white",
+                "depicts": "The boy Axel Wittmann watches from a doorway as a bright yellow-white ball descends vertically into a street tree during a rainstorm.",
+                "title": "WITTMANN'S CHILDHOOD SPHERE, 1951",
+                "node": "sci6"
+              },
+              {
+                "block": "spya-nezgpv",
+                "quote": "a ball of lightning appeared to pass through the storeroom and woodshed",
+                "depicts": "A mountain-station assistant sawing wood looks up as a glowing ball passes through the storeroom and woodshed of the high-altitude weather observatory.",
+                "title": "PIKES PEAK WOODSHED BALL",
+                "node": "trained"
+              },
+              {
+                "block": "spya-u5uj9t",
+                "quote": "an orange sphere of 15 cm which was 60 cm near the window",
+                "depicts": "An amateur astronomer sits up in bed at night, watching a small orange sphere hover near his bedroom window during a thunderstorm.",
+                "title": "BAGNALL'S BEDSIDE ORB, 1974",
+                "node": "amateur"
+              },
+              {
+                "block": "spya-hrcct6",
+                "quote": "range from 1.5 cm to 15 m, with the maximum below 20 cm",
+                "depicts": "A measuring scroll unrolled across a table shows a row of circles of wildly different sizes, from a tiny speck to a vast sphere, gathering the many witnessed balls into one ruled comparison.",
+                "title": "SIZES FROM 1.5 CM TO 15 M",
+                "node": "synth"
+              },
+              {
+                "block": "spya-bbtuzu",
+                "quote": "a popular engraving pictured a lightning ball that hit Richmann",
+                "depicts": "An old-fashioned engraving-within-the-page shows Georg Wilhelm Richmann struck down by a dramatic glowing ball, the legendary image rather than the plain accident it really was.",
+                "title": "RICHMANN'S LEGENDARY BALL, 1753",
+                "node": "notable"
+              },
+              {
+                "block": "spya-qxb4e2",
+                "quote": "a large, red hot ball come down from the sky",
+                "depicts": "A red-hot ball falls from a stormy sky onto a cottage roof at Dorstone, trailing toward a wash-tub of water set beneath the window.",
+                "title": "DORSTONE'S BOILING TUB, 1936",
+                "node": "evidence"
+              },
+              {
+                "block": "spya-zz7g2q",
+                "quote": "systematic multidisciplinary case documentation and discussion can lead to a database",
+                "depicts": "Several robed scholars gather around a long table, laying photographs, sketches and measured notes into one great open ledger.",
+                "title": "BUILDING THE SHARED DATABASE",
+                "node": "conclusion"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "Lorenzo Butti leans from a Milan window in 1841, looking down at a crowd running through rain beneath a reddish-yellow fireball drifting past at window height.",
+                "title": "BUTTI'S FIREBALL, MILAN 1841"
+              },
+              {
+                "where": "A researcher hunches over trays of small sky-camera photographic plates from a meteor-watching network, sorting thousands of night-sky negatives in search of a single stray fireball.",
+                "title": "12,000 PHOTOGRAPHS, TWO BALLS"
+              },
+              {
+                "where": "Wilhelm von Haidinger stands at his Vienna window during a thunderstorm, watching a glowing yellow-red ball hover for a few seconds just outside the right-hand windowpane.",
+                "title": "HAIDINGER'S WINDOW BALL, 1868"
+              },
+              {
+                "where": "Physicist Walther Gerlach stands at his institute window with chalk and paper, tracing the straight path of a bright ball across the sky and working out its enormous speed.",
+                "title": "GERLACH CALCULATES THE SPEED"
+              },
+              {
+                "where": "The boy Axel Wittmann watches from a doorway as a bright yellow-white ball descends vertically into a street tree during a rainstorm.",
+                "title": "WITTMANN'S CHILDHOOD SPHERE, 1951"
+              },
+              {
+                "where": "A mountain-station assistant sawing wood looks up as a glowing ball passes through the storeroom and woodshed of the high-altitude weather observatory.",
+                "title": "PIKES PEAK WOODSHED BALL"
+              },
+              {
+                "where": "An amateur astronomer sits up in bed at night, watching a small orange sphere hover near his bedroom window during a thunderstorm.",
+                "title": "BAGNALL'S BEDSIDE ORB, 1974"
+              },
+              {
+                "where": "A measuring scroll unrolled across a table shows a row of circles of wildly different sizes, from a tiny speck to a vast sphere, gathering the many witnessed balls into one ruled comparison.",
+                "title": "SIZES FROM 1.5 CM TO 15 M"
+              },
+              {
+                "where": "An old-fashioned engraving-within-the-page shows Georg Wilhelm Richmann struck down by a dramatic glowing ball, the legendary image rather than the plain accident it really was.",
+                "title": "RICHMANN'S LEGENDARY BALL, 1753"
+              },
+              {
+                "where": "A red-hot ball falls from a stormy sky onto a cottage roof at Dorstone, trailing toward a wash-tub of water set beneath the window.",
+                "title": "DORSTONE'S BOILING TUB, 1936"
+              },
+              {
+                "where": "Several robed scholars gather around a long table, laying photographs, sketches and measured notes into one great open ledger.",
+                "title": "BUILDING THE SHARED DATABASE"
+              }
+            ]
+          },
+          {
+            "sceneId": "scientists-zoom",
+            "title": "Inside the Chain: Scientists at the Window",
+            "prompt": "The same illuminated parchment leaf, sepia ink and muted gold-red-blue wash, bordered by a single gilt rule, no words anywhere except the small roman-capital titles lettered beneath each medallion. This plate opens with the identical medallion that marked the scientists' enclosure in the overview page, now set at the top as the doorway into this section: HAIDINGER'S WINDOW BALL, 1868, a man at a window watching a ball hover outside the pane. Below it the page divides into two parallel columns of medallions joined by thin gold threads, like two chains of beads running down the leaf and meeting at the bottom. Left column, reading downward: LIGHTNING'S STRONG RAMIFICATIONS (a forked bolt striking down toward a horizon, seen from a window); BALL THROUGH THE MORTUARY WALL (a fist-sized blue-white ball gliding across an old mortuary floor toward an open door); OZONE IN THE BALL'S TRAIL (a figure on a river raft holding glass sample-bulbs up to a smoky trail in the air); MOSCOW'S BLUE JELLYFISH, 1997 (two onlookers on a bridge watching a soft blue sphere drift past their faces). Right column, reading downward beside it: FIREBALL STRIKES THE DECK (a pink ball exploding on a ship's deck, knocking a sailor down); SPHERE DOWN THE AIRCRAFT AISLE (a glowing sphere drifting down a lit aeroplane cabin aisle past a seated passenger). The two gold-thread columns bend inward near the foot of the page and both arrive together at a single larger medallion at the very bottom: SPHERE BREAKS INTO TWELVE, showing a falling plasma ball shattering above a treetop into a dozen smaller glowing spheres scattering toward a wet road. Keep every medallion large enough that the small figures and lightning within it are legible, spacing them generously down the full height and width of the leaf rather than crowding a narrow central strip; the parchment should show bare space between the two columns and around the converging point at the bottom.",
+            "vignettes": [
+              {
+                "block": "spya-g7tbkr",
+                "quote": "It stood maybe 2–3 s in front of the right pane of the window",
+                "depicts": "Wilhelm von Haidinger at his Vienna window watching a glowing ball hover briefly just outside the right-hand pane during a thunderstorm — the same opening scene carried down from the overview.",
+                "title": "HAIDINGER'S WINDOW BALL, 1868",
+                "node": "z1"
+              },
+              {
+                "block": "spya-u7qm50",
+                "quote": "struck the deck with an explosion that knocked down the mate",
+                "depicts": "Aboard a yacht in Southampton harbour, a glowing pink ball drops from the mast and strikes the deck in an explosion that knocks a crewman off his feet.",
+                "title": "FIREBALL STRIKES THE DECK",
+                "node": "z2"
+              },
+              {
+                "block": "spya-q8aywm",
+                "quote": "linear lightning went down with strong ramifications",
+                "depicts": "A branching bolt of lightning forks down toward the northeast horizon as seen from an institute window, the jagged bright branches sketched against the dark sky.",
+                "title": "LIGHTNING'S STRONG RAMIFICATIONS",
+                "node": "z3"
+              },
+              {
+                "block": "spya-mcvhbj",
+                "quote": "a fist-sized, sharply outlined ball descended to the floor, radiating a bluish white light",
+                "depicts": "In an old mortuary during a thunderstorm, a fist-sized ball glowing bluish-white drops from a wall socket to the floor and glides toward the open door.",
+                "title": "BALL THROUGH THE MORTUARY WALL",
+                "node": "z5"
+              },
+              {
+                "block": "spya-dusdxq",
+                "quote": "a glowing sphere a little more than 20 cm in diameter emerged from the pilot’s cabin",
+                "depicts": "Inside a night flight's passenger cabin, a glowing blue-white sphere drifts out of the pilot's cabin and moves slowly down the aisle past a seated passenger.",
+                "title": "SPHERE DOWN THE AIRCRAFT AISLE",
+                "node": "z6"
+              },
+              {
+                "block": "spya-vnu5me",
+                "quote": "contained a maximum of 1.3 mg m−3 ozone",
+                "depicts": "A scientist on a river raft holds up small glass sample bulbs filled from the smoky trail a ball left behind, measuring the air for ozone.",
+                "title": "OZONE IN THE BALL'S TRAIL",
+                "node": "z7"
+              },
+              {
+                "block": "spya-q7yr99",
+                "quote": "a spherical blue jellyfish with a slight yellowish tint",
+                "depicts": "On a city bridge near a monument, two onlookers watch a soft blue sphere with a yellowish tint drift past their faces like a jellyfish floating through air.",
+                "title": "MOSCOW'S BLUE JELLYFISH, 1997",
+                "node": "z9"
+              },
+              {
+                "block": "spya-vg957u",
+                "quote": "disintegrated into 8 to 12 smaller spheres",
+                "depicts": "The large falling plasma ball breaks apart above a treetop into a dozen smaller glowing spheres that scatter down toward the wet roadway below — the point where both observer chains converge.",
+                "title": "SPHERE BREAKS INTO TWELVE",
+                "node": "z11"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "Wilhelm von Haidinger at his Vienna window watching a glowing ball hover briefly just outside the right-hand pane during a thunderstorm — the same opening scene carried down from the overview.",
+                "title": "HAIDINGER'S WINDOW BALL, 1868"
+              },
+              {
+                "where": "Aboard a yacht in Southampton harbour, a glowing pink ball drops from the mast and strikes the deck in an explosion that knocks a crewman off his feet.",
+                "title": "FIREBALL STRIKES THE DECK"
+              },
+              {
+                "where": "A branching bolt of lightning forks down toward the northeast horizon as seen from an institute window, the jagged bright branches sketched against the dark sky.",
+                "title": "LIGHTNING'S STRONG RAMIFICATIONS"
+              },
+              {
+                "where": "In an old mortuary during a thunderstorm, a fist-sized ball glowing bluish-white drops from a wall socket to the floor and glides toward the open door.",
+                "title": "BALL THROUGH THE MORTUARY WALL"
+              },
+              {
+                "where": "Inside a night flight's passenger cabin, a glowing blue-white sphere drifts out of the pilot's cabin and moves slowly down the aisle past a seated passenger.",
+                "title": "SPHERE DOWN THE AIRCRAFT AISLE"
+              },
+              {
+                "where": "A scientist on a river raft holds up small glass sample bulbs filled from the smoky trail a ball left behind, measuring the air for ozone.",
+                "title": "OZONE IN THE BALL'S TRAIL"
+              },
+              {
+                "where": "On a city bridge near a monument, two onlookers watch a soft blue sphere with a yellowish tint drift past their faces like a jellyfish floating through air.",
+                "title": "MOSCOW'S BLUE JELLYFISH, 1997"
+              },
+              {
+                "where": "The large falling plasma ball breaks apart above a treetop into a dozen smaller glowing spheres that scatter down toward the wet roadway below — the point where both observer chains converge.",
+                "title": "SPHERE BREAKS INTO TWELVE"
+              }
+            ]
+          },
+          {
+            "sceneId": "notable-zoom",
+            "title": "Legend and Physical Trace",
+            "prompt": "The same illuminated parchment leaf, sepia ink with muted gold-red-blue wash, single gilt border rule, and no lettering anywhere on the page except the small roman-capital titles beneath each medallion. The page is divided top to bottom into two parallel columns separated by a plain gold vertical rule but without any header text, each column opening with the medallion already shown in the overview for this part. Left column, from top: RICHMANN'S LEGENDARY BALL, 1753 (an engraving-style scene of a man struck by a dramatic fiery sphere), joined by a gold thread down to D-CY'S WHIRLING FIREBALL (a man on a rainy road confronted by a small whirling barrel-shaped fireball). Right column, from top, aligned beside it: DORSTONE'S BOILING TUB, 1936 (a red-hot ball falling toward a wash-tub beneath a cottage window), then FIERY BALL IN THE GLASS DOOR (a woman in a car watching a glowing yellow-flamed ball in her front-door glass), then 33 CM BALL FROM TRIGGERED LIGHTNING (researchers at a test ground watching a ball of light flare from a lightning-struck steel plate), then SPECTRUM OF THE QINGHAI BALL (two cameras on a hillside recording a glowing ball above a power-line tower at night). Thin gold threads run down each column in sequence. Near the foot of the page, a thread from the bottom of the left column (D-CY'S WHIRLING FIREBALL) and a thread from the bottom of the right column (SPECTRUM OF THE QINGHAI BALL) both bend inward and meet at a single final medallion centred at the very bottom: BUILDING THE SHARED DATABASE, showing robed scholars at a table laying a road-sketch and a spectrograph record side by side into one open ledger. Distinguish the two columns only by subtle visual means, such as the left column's medallions having slightly warmer sepia tones suggesting old legend and the right column's medallions having cooler grey-blue ink suggesting instrument record, without adding any text labels. Keep each medallion large and clear, spaced generously across the full width of the leaf so the page does not look like a narrow crowded strip, with plenty of bare parchment left around the two columns and around the converging final scene.",
+            "vignettes": [
+              {
+                "block": "spya-bbtuzu",
+                "quote": "a popular engraving pictured a lightning ball that hit Richmann",
+                "depicts": "An engraving-like medallion shows Georg Wilhelm Richmann struck down by a dramatic fiery sphere during his electrical experiment — the famous but inaccurate legend, carried down from the overview as this column's opening scene.",
+                "title": "RICHMANN'S LEGENDARY BALL, 1753",
+                "node": "n1"
+              },
+              {
+                "block": "spya-qxb4e2",
+                "quote": "a large, red hot ball come down from the sky",
+                "depicts": "A red-hot ball falls from a stormy sky toward a cottage roof at Dorstone, heading for a wash-tub of water below the window — the opening scene of the evidence column, carried down from the overview.",
+                "title": "DORSTONE'S BOILING TUB, 1936",
+                "node": "e1"
+              },
+              {
+                "block": "spya-ugmxk8",
+                "quote": "I saw on the road in 2–3 m a luminous whirling fireball",
+                "depicts": "A walking man on a rainy road stops as a small whirling, barrel-shaped fireball appears just ahead of him, moments before he is struck down.",
+                "title": "D-CY'S WHIRLING FIREBALL",
+                "node": "n2"
+              },
+              {
+                "block": "spya-dtt3v9",
+                "quote": "I saw that fiery ball, yellow-flame appearance in my front door",
+                "depicts": "A woman waiting in her car during heavy rain stares through the windscreen at a yellow-flamed glowing ball hanging in the glass panel of her front door.",
+                "title": "FIERY BALL IN THE GLASS DOOR",
+                "node": "e2"
+              },
+              {
+                "block": "spya-mbqwhj",
+                "quote": "a flashover on the steel surface formed a 33 cm ball of light",
+                "depicts": "On a test ground, a rocket-triggered lightning strike hits a steel plate and a compact 33 cm ball of light flares up from the metal surface, watched by researchers with cameras.",
+                "title": "33 CM BALL FROM TRIGGERED LIGHTNING",
+                "node": "e3"
+              },
+              {
+                "block": "spya-nacbjs",
+                "quote": "recorded a 1.64 s ball lightning episode at 21:55 LT",
+                "depicts": "Two slit-spectrograph cameras on a hillside point toward a distant glowing ball above a power-line tower, recording its brief appearance against the night sky.",
+                "title": "SPECTRUM OF THE QINGHAI BALL",
+                "node": "e4"
+              },
+              {
+                "block": "spya-zz7g2q",
+                "quote": "systematic multidisciplinary case documentation and discussion can lead to a database",
+                "depicts": "Robed scholars gather at a long table, setting the sketch of the whirling road-fireball and the spectrograph record side by side into one shared open ledger.",
+                "title": "BUILDING THE SHARED DATABASE",
+                "node": "out"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "An engraving-like medallion shows Georg Wilhelm Richmann struck down by a dramatic fiery sphere during his electrical experiment — the famous but inaccurate legend, carried down from the overview as t",
+                "title": "RICHMANN'S LEGENDARY BALL, 1753"
+              },
+              {
+                "where": "A red-hot ball falls from a stormy sky toward a cottage roof at Dorstone, heading for a wash-tub of water below the window — the opening scene of the evidence column, carried down from the overview.",
+                "title": "DORSTONE'S BOILING TUB, 1936"
+              },
+              {
+                "where": "A walking man on a rainy road stops as a small whirling, barrel-shaped fireball appears just ahead of him, moments before he is struck down.",
+                "title": "D-CY'S WHIRLING FIREBALL"
+              },
+              {
+                "where": "A woman waiting in her car during heavy rain stares through the windscreen at a yellow-flamed glowing ball hanging in the glass panel of her front door.",
+                "title": "FIERY BALL IN THE GLASS DOOR"
+              },
+              {
+                "where": "On a test ground, a rocket-triggered lightning strike hits a steel plate and a compact 33 cm ball of light flares up from the metal surface, watched by researchers with cameras.",
+                "title": "33 CM BALL FROM TRIGGERED LIGHTNING"
+              },
+              {
+                "where": "Two slit-spectrograph cameras on a hillside point toward a distant glowing ball above a power-line tower, recording its brief appearance against the night sky.",
+                "title": "SPECTRUM OF THE QINGHAI BALL"
+              },
+              {
+                "where": "Robed scholars gather at a long table, setting the sketch of the whirling road-fireball and the spectrograph record side by side into one shared open ledger.",
+                "title": "BUILDING THE SHARED DATABASE"
+              }
+            ]
+          }
+        ],
+        "generator": "claude-sonnet-5",
+        "illustrator": "google/gemini-3.1-flash-image",
+        "slug": "source-spya-f550ta",
+        "profileHash": null
+      },
+      "cancelled": false,
+      "raw": "{\"style\":\"An illuminated manuscript page: hand-inked vignettes in gilded medallion frames linked by thin painted pathways down a parchment leaf, fitting the article's long, century-spanning chain of individual eyewitness case-histories.\",\"plates\":[{\"sceneId\":\"overview\",\"title\":\"The Chain of Witnesses\",\"vignettes\":[{\"node\":\"hist\",\"block\":\"spya-by5gk0\",\"quote\":\"people were running in the rain under a reddish-yellow ball of fire\",\"depicts\":\"Lorenzo Butti leans from a Milan window in 1841, looking down at a crowd running through rain beneath a reddish-yellow fireball drifting past at window height.\",\"title\":\"BUTTI'S FIREBALL, MILAN 1841\"},{\"node\":\"method\",\"block\":\"spya-f0dmn4\",\"quote\":\"searched about 12 000 photographic records of the US Prairie Meteorite Network\",\"depicts\":\"A researcher hunches over trays of small sky-camera photographic plates from a meteor-watching network, sorting thousands of night-sky negatives in search of a single stray fireball.\",\"title\":\"12,000 PHOTOGRAPHS, TWO BALLS\"},{\"node\":\"sci1\",\"block\":\"spya-g7tbkr\",\"quote\":\"It stood maybe 2–3 s in front of the right pane of the window\",\"depicts\":\"Wilhelm von Haidinger stands at his Vienna window during a thunderstorm, watching a glowing yellow-red ball hover for a few seconds just outside the right-hand windowpane.\",\"title\":\"HAIDINGER'S WINDOW BALL, 1868\"},{\"node\":\"sci3\",\"block\":\"spya-q8aywm\",\"quote\":\"ball lightning had a mean speed of about 1200 m s−1\",\"depicts\":\"Physicist Walther Gerlach stands at his institute window with chalk and paper, tracing the straight path of a bright ball across the sky and working out its enormous speed.\",\"title\":\"GERLACH CALCULATES THE SPEED\"},{\"node\":\"sci6\",\"block\":\"spya-vg957u\",\"quote\":\"I saw a spherical plasma ball coloured bright yellow white\",\"depicts\":\"The boy Axel Wittmann watches from a doorway as a bright yellow-white ball descends vertically into a street tree during a rainstorm.\",\"title\":\"WITTMANN'S CHILDHOOD SPHERE, 1951\"},{\"node\":\"trained\",\"block\":\"spya-nezgpv\",\"quote\":\"a ball of lightning appeared to pass through the storeroom and woodshed\",\"depicts\":\"A mountain-station assistant sawing wood looks up as a glowing ball passes through the storeroom and woodshed of the high-altitude weather observatory.\",\"title\":\"PIKES PEAK WOODSHED BALL\"},{\"node\":\"amateur\",\"block\":\"spya-u5uj9t\",\"quote\":\"an orange sphere of 15 cm which was 60 cm near the window\",\"depicts\":\"An amateur astronomer sits up in bed at night, watching a small orange sphere hover near his bedroom window during a thunderstorm.\",\"title\":\"BAGNALL'S BEDSIDE ORB, 1974\"},{\"node\":\"synth\",\"block\":\"spya-hrcct6\",\"quote\":\"range from 1.5 cm to 15 m, with the maximum below 20 cm\",\"depicts\":\"A measuring scroll unrolled across a table shows a row of circles of wildly different sizes, from a tiny speck to a vast sphere, gathering the many witnessed balls into one ruled comparison.\",\"title\":\"SIZES FROM 1.5 CM TO 15 M\"},{\"node\":\"notable\",\"block\":\"spya-bbtuzu\",\"quote\":\"a popular engraving pictured a lightning ball that hit Richmann\",\"depicts\":\"An old-fashioned engraving-within-the-page shows Georg Wilhelm Richmann struck down by a dramatic glowing ball, the legendary image rather than the plain accident it really was.\",\"title\":\"RICHMANN'S LEGENDARY BALL, 1753\"},{\"node\":\"evidence\",\"block\":\"spya-qxb4e2\",\"quote\":\"a large, red hot ball come down from the sky\",\"depicts\":\"A red-hot ball falls from a stormy sky onto a cottage roof at Dorstone, trailing toward a wash-tub of water set beneath the window.\",\"title\":\"DORSTONE'S BOILING TUB, 1936\"},{\"node\":\"conclusion\",\"block\":\"spya-zz7g2q\",\"quote\":\"systematic multidisciplinary case documentation and discussion can lead to a database\",\"depicts\":\"Several robed scholars gather around a long table, laying photographs, sketches and measured notes into one great open ledger.\",\"title\":\"BUILDING THE SHARED DATABASE\"}],\"prompt\":\"An illuminated manuscript leaf on aged cream parchment, sepia ink linework with muted gold, red-ochre and blue pigment washes, bordered by a thin gilt rule and no other ornament. Read top to bottom as a single chain of small framed medallions joined by delicate painted gold pathways, each medallion a complete little scene with its title lettered in small roman capitals directly beneath it, and no other words anywhere on the page. At the top, BUTTI'S FIREBALL, MILAN 1841: a man at a window over a rainy street crowd beneath a reddish-yellow fireball. A path leads down to 12,000 PHOTOGRAPHS, TWO BALLS: a robed figure poring over trays of small night-sky photographic plates. From this a path enters a large gilt-bordered enclosure labelled by its drawn contents alone (no caption) holding five medallions in a vertical sequence joined by connecting lines: HAIDINGER'S WINDOW BALL, 1868 (a man at a window watching a glowing ball hover outside the pane); GERLACH CALCULATES THE SPEED (a scholar with chalk and diagram tracing a ball's straight path across the sky); WITTMANN'S CHILDHOOD SPHERE, 1951 (a boy in a doorway watching a yellow-white ball sink into a tree); PIKES PEAK WOODSHED BALL (a mountain-station worker in a woodshed as a ball passes through); BAGNALL'S BEDSIDE ORB, 1974 (a man sitting up in bed watching an orange sphere hover near a window). Lines from the last two medallions converge beneath the enclosure into SIZES FROM 1.5 CM TO 15 M: an unrolled measuring scroll showing circles of greatly different sizes. From this convergence point two gold paths fork into a second, smaller gilt enclosure holding two side-by-side medallions: RICHMANN'S LEGENDARY BALL, 1753 (an engraved-looking scene of a man struck by a dramatic fiery sphere) and DORSTONE'S BOILING TUB, 1936 (a red-hot ball falling toward a wash-tub beneath a cottage window). Both paths descend and meet at the bottom in the final medallion, BUILDING THE SHARED DATABASE: robed scholars at a table laying photographs and notes into one open ledger. Keep the whole composition tall and narrow in the visual chain but let each medallion be wide enough to read clearly, with generous bare parchment around the frames rather than crowding them.\"},{\"sceneId\":\"scientists-zoom\",\"title\":\"Inside the Chain: Scientists at the Window\",\"vignettes\":[{\"node\":\"z1\",\"block\":\"spya-g7tbkr\",\"quote\":\"It stood maybe 2–3 s in front of the right pane of the window\",\"depicts\":\"Wilhelm von Haidinger at his Vienna window watching a glowing ball hover briefly just outside the right-hand pane during a thunderstorm — the same opening scene carried down from the overview.\",\"title\":\"HAIDINGER'S WINDOW BALL, 1868\"},{\"node\":\"z2\",\"block\":\"spya-u7qm50\",\"quote\":\"struck the deck with an explosion that knocked down the mate\",\"depicts\":\"Aboard a yacht in Southampton harbour, a glowing pink ball drops from the mast and strikes the deck in an explosion that knocks a crewman off his feet.\",\"title\":\"FIREBALL STRIKES THE DECK\"},{\"node\":\"z3\",\"block\":\"spya-q8aywm\",\"quote\":\"linear lightning went down with strong ramifications\",\"depicts\":\"A branching bolt of lightning forks down toward the northeast horizon as seen from an institute window, the jagged bright branches sketched against the dark sky.\",\"title\":\"LIGHTNING'S STRONG RAMIFICATIONS\"},{\"node\":\"z5\",\"block\":\"spya-mcvhbj\",\"quote\":\"a fist-sized, sharply outlined ball descended to the floor, radiating a bluish white light\",\"depicts\":\"In an old mortuary during a thunderstorm, a fist-sized ball glowing bluish-white drops from a wall socket to the floor and glides toward the open door.\",\"title\":\"BALL THROUGH THE MORTUARY WALL\"},{\"node\":\"z6\",\"block\":\"spya-dusdxq\",\"quote\":\"a glowing sphere a little more than 20 cm in diameter emerged from the pilot’s cabin\",\"depicts\":\"Inside a night flight's passenger cabin, a glowing blue-white sphere drifts out of the pilot's cabin and moves slowly down the aisle past a seated passenger.\",\"title\":\"SPHERE DOWN THE AIRCRAFT AISLE\"},{\"node\":\"z7\",\"block\":\"spya-vnu5me\",\"quote\":\"contained a maximum of 1.3 mg m−3 ozone\",\"depicts\":\"A scientist on a river raft holds up small glass sample bulbs filled from the smoky trail a ball left behind, measuring the air for ozone.\",\"title\":\"OZONE IN THE BALL'S TRAIL\"},{\"node\":\"z9\",\"block\":\"spya-q7yr99\",\"quote\":\"a spherical blue jellyfish with a slight yellowish tint\",\"depicts\":\"On a city bridge near a monument, two onlookers watch a soft blue sphere with a yellowish tint drift past their faces like a jellyfish floating through air.\",\"title\":\"MOSCOW'S BLUE JELLYFISH, 1997\"},{\"node\":\"z11\",\"block\":\"spya-vg957u\",\"quote\":\"disintegrated into 8 to 12 smaller spheres\",\"depicts\":\"The large falling plasma ball breaks apart above a treetop into a dozen smaller glowing spheres that scatter down toward the wet roadway below — the point where both observer chains converge.\",\"title\":\"SPHERE BREAKS INTO TWELVE\"}],\"prompt\":\"The same illuminated parchment leaf, sepia ink and muted gold-red-blue wash, bordered by a single gilt rule, no words anywhere except the small roman-capital titles lettered beneath each medallion. This plate opens with the identical medallion that marked the scientists' enclosure in the overview page, now set at the top as the doorway into this section: HAIDINGER'S WINDOW BALL, 1868, a man at a window watching a ball hover outside the pane. Below it the page divides into two parallel columns of medallions joined by thin gold threads, like two chains of beads running down the leaf and meeting at the bottom. Left column, reading downward: LIGHTNING'S STRONG RAMIFICATIONS (a forked bolt striking down toward a horizon, seen from a window); BALL THROUGH THE MORTUARY WALL (a fist-sized blue-white ball gliding across an old mortuary floor toward an open door); OZONE IN THE BALL'S TRAIL (a figure on a river raft holding glass sample-bulbs up to a smoky trail in the air); MOSCOW'S BLUE JELLYFISH, 1997 (two onlookers on a bridge watching a soft blue sphere drift past their faces). Right column, reading downward beside it: FIREBALL STRIKES THE DECK (a pink ball exploding on a ship's deck, knocking a sailor down); SPHERE DOWN THE AIRCRAFT AISLE (a glowing sphere drifting down a lit aeroplane cabin aisle past a seated passenger). The two gold-thread columns bend inward near the foot of the page and both arrive together at a single larger medallion at the very bottom: SPHERE BREAKS INTO TWELVE, showing a falling plasma ball shattering above a treetop into a dozen smaller glowing spheres scattering toward a wet road. Keep every medallion large enough that the small figures and lightning within it are legible, spacing them generously down the full height and width of the leaf rather than crowding a narrow central strip; the parchment should show bare space between the two columns and around the converging point at the bottom.\"},{\"sceneId\":\"notable-zoom\",\"title\":\"Legend and Physical Trace\",\"vignettes\":[{\"node\":\"n1\",\"block\":\"spya-bbtuzu\",\"quote\":\"a popular engraving pictured a lightning ball that hit Richmann\",\"depicts\":\"An engraving-like medallion shows Georg Wilhelm Richmann struck down by a dramatic fiery sphere during his electrical experiment — the famous but inaccurate legend, carried down from the overview as this column's opening scene.\",\"title\":\"RICHMANN'S LEGENDARY BALL, 1753\"},{\"node\":\"e1\",\"block\":\"spya-qxb4e2\",\"quote\":\"a large, red hot ball come down from the sky\",\"depicts\":\"A red-hot ball falls from a stormy sky toward a cottage roof at Dorstone, heading for a wash-tub of water below the window — the opening scene of the evidence column, carried down from the overview.\",\"title\":\"DORSTONE'S BOILING TUB, 1936\"},{\"node\":\"n2\",\"block\":\"spya-ugmxk8\",\"quote\":\"I saw on the road in 2–3 m a luminous whirling fireball\",\"depicts\":\"A walking man on a rainy road stops as a small whirling, barrel-shaped fireball appears just ahead of him, moments before he is struck down.\",\"title\":\"D-CY'S WHIRLING FIREBALL\"},{\"node\":\"e2\",\"block\":\"spya-dtt3v9\",\"quote\":\"I saw that fiery ball, yellow-flame appearance in my front door\",\"depicts\":\"A woman waiting in her car during heavy rain stares through the windscreen at a yellow-flamed glowing ball hanging in the glass panel of her front door.\",\"title\":\"FIERY BALL IN THE GLASS DOOR\"},{\"node\":\"e3\",\"block\":\"spya-mbqwhj\",\"quote\":\"a flashover on the steel surface formed a 33 cm ball of light\",\"depicts\":\"On a test ground, a rocket-triggered lightning strike hits a steel plate and a compact 33 cm ball of light flares up from the metal surface, watched by researchers with cameras.\",\"title\":\"33 CM BALL FROM TRIGGERED LIGHTNING\"},{\"node\":\"e4\",\"block\":\"spya-nacbjs\",\"quote\":\"recorded a 1.64 s ball lightning episode at 21:55 LT\",\"depicts\":\"Two slit-spectrograph cameras on a hillside point toward a distant glowing ball above a power-line tower, recording its brief appearance against the night sky.\",\"title\":\"SPECTRUM OF THE QINGHAI BALL\"},{\"node\":\"out\",\"block\":\"spya-zz7g2q\",\"quote\":\"systematic multidisciplinary case documentation and discussion can lead to a database\",\"depicts\":\"Robed scholars gather at a long table, setting the sketch of the whirling road-fireball and the spectrograph record side by side into one shared open ledger.\",\"title\":\"BUILDING THE SHARED DATABASE\"}],\"prompt\":\"The same illuminated parchment leaf, sepia ink with muted gold-red-blue wash, single gilt border rule, and no lettering anywhere on the page except the small roman-capital titles beneath each medallion. The page is divided top to bottom into two parallel columns separated by a plain gold vertical rule but without any header text, each column opening with the medallion already shown in the overview for this part. Left column, from top: RICHMANN'S LEGENDARY BALL, 1753 (an engraving-style scene of a man struck by a dramatic fiery sphere), joined by a gold thread down to D-CY'S WHIRLING FIREBALL (a man on a rainy road confronted by a small whirling barrel-shaped fireball). Right column, from top, aligned beside it: DORSTONE'S BOILING TUB, 1936 (a red-hot ball falling toward a wash-tub beneath a cottage window), then FIERY BALL IN THE GLASS DOOR (a woman in a car watching a glowing yellow-flamed ball in her front-door glass), then 33 CM BALL FROM TRIGGERED LIGHTNING (researchers at a test ground watching a ball of light flare from a lightning-struck steel plate), then SPECTRUM OF THE QINGHAI BALL (two cameras on a hillside recording a glowing ball above a power-line tower at night). Thin gold threads run down each column in sequence. Near the foot of the page, a thread from the bottom of the left column (D-CY'S WHIRLING FIREBALL) and a thread from the bottom of the right column (SPECTRUM OF THE QINGHAI BALL) both bend inward and meet at a single final medallion centred at the very bottom: BUILDING THE SHARED DATABASE, showing robed scholars at a table laying a road-sketch and a spectrograph record side by side into one open ledger. Distinguish the two columns only by subtle visual means, such as the left column's medallions having slightly warmer sepia tones suggesting old legend and the right column's medallions having cooler grey-blue ink suggesting instrument record, without adding any text labels. Keep each medallion large and clear, spaced generously across the full width of the leaf so the page does not look like a narrow crowded strip, with plenty of bare parchment left around the two columns and around the converging final scene.\"}]}",
+      "report": {
+        "faults": [],
+        "written": 26,
+        "kept": 26,
+        "platesWritten": 3,
+        "platesKept": 3
+      },
+      "model": "claude-sonnet-5",
+      "imageModel": "google/gemini-3.1-flash-image",
+      "inputTokens": 29583,
+      "outputTokens": 25799,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "briefMs": 225571,
+      "draws": [
+        {
+          "sceneId": "overview",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": false,
+          "figures": 0
+        },
+        {
+          "sceneId": "scientists-zoom",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": true,
+          "figures": 0
+        },
+        {
+          "sceneId": "notable-zoom",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": true,
+          "figures": 0
+        }
+      ],
+      "elapsedMs": 225593
+    },
+    "faq": {
+      "faq": {
+        "version": "faq/5",
+        "generator": "claude-sonnet-5",
+        "slug": "source-spya-f550ta",
+        "sourceHash": "c31f4450dfe07f04.0b8856e5ed5c12e3.1eefce3cf3aa7392",
+        "questions": [
+          {
+            "id": "spya-z45at0",
+            "question": "What does it mean for the field's maturity that a lightning handbook finds 2400 ball lightning references \"puzzling\" against 6000 for all lightning topics?",
+            "passages": [
+              {
+                "blockId": "spya-rjnzcc",
+                "quote": "The authors were puzzled by 2400 references in Stenhoff’s book (1999), whereas their handbook on all lightning aspects comprises over 6000.",
+                "start": 109
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.4
+          },
+          {
+            "id": "spya-gdkhh0",
+            "question": "Given how little instrumental evidence exists for ball lightning, why focus specifically on reports from scientists and trained professionals?",
+            "passages": [
+              {
+                "blockId": "spya-rjnzcc",
+                "quote": "Rakov and Uman (2003, p. 656, p. 658) characterized ball lightning as “a phenomenon for which there exists numerous witness reports but little, if any, scientific documentation such as photographs, videotapes, or other scientific recordings.”",
+                "start": 472
+              },
+              {
+                "blockId": "spya-f0dmn4",
+                "quote": "Singer (1971, chap. 5.B.2) and Stenhoff (1999, chap. 10.4) paid special attention to ball lightning reports coming from scientists or trained professionals.",
+                "start": 466
+              }
+            ],
+            "difficulty": 0.2,
+            "centrality": 0.9
+          },
+          {
+            "id": "spya-w4ygsk",
+            "question": "If the author admits the case collection is incomplete, how much weight can its conclusions carry?",
+            "passages": [
+              {
+                "blockId": "spya-fj8hm9",
+                "quote": "it does not claim to be complete but can and will be expanded by forthcoming reports in the future.",
+                "start": 456
+              },
+              {
+                "blockId": "spya-p9uvh9",
+                "quote": "Scientists who read the article and who have not reported their experience are invited to share it with the author.",
+                "start": 546
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.5
+          },
+          {
+            "id": "spya-cf2nqj",
+            "question": "Why bring up famous physicists' secondhand ball lightning stories at all, if they turn out to lack any real data?",
+            "passages": [
+              {
+                "blockId": "spya-vqjb23",
+                "quote": "Several alleged observations (e.g. of Niels Bohr and Victor Weisskopf), often quoted in science or popular journals, were incorrect or lacked data",
+                "start": 127
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.3
+          },
+          {
+            "id": "spya-w942ww",
+            "question": "Why count childhood sightings by people who only later became scientists, if they had no scientific training at the time of the observation?",
+            "passages": [
+              {
+                "blockId": "spya-khrqpm",
+                "quote": "It can be argued that all children have similar observation capabilities. However, scientific training and profession might improve the quality of their recalled eyewitness testimony.",
+                "start": 171
+              }
+            ],
+            "difficulty": 0.5,
+            "centrality": 0.5
+          },
+          {
+            "id": "spya-bfnw75",
+            "question": "If weather stations are being automated and losing human observers, what does that mean for collecting future high-quality sightings?",
+            "passages": [
+              {
+                "blockId": "spya-eyhaer",
+                "quote": "it eliminates high-quality observations of rare phenomena such as ball lightning. Whether this will be compensated by citizen science and the spread of mobile phone and web cameras remains uncertain.",
+                "start": 183
+              }
+            ],
+            "difficulty": 0.4,
+            "centrality": 0.5
+          },
+          {
+            "id": "spya-ehfm89",
+            "question": "If the cases vary so widely in size, duration, and behavior, can they really all be instances of one single phenomenon?",
+            "passages": [
+              {
+                "blockId": "spya-p9uvh9",
+                "quote": "and some outliers are hard to integrate into one general ball lightning model. This has led some researchers (as Rakov and Uman, 2003) to assume several types of ball lightning.",
+                "start": 139
+              }
+            ],
+            "difficulty": 0.6,
+            "centrality": 0.9
+          },
+          {
+            "id": "spya-vvyj8j",
+            "question": "Doesn't exposing Richmann's famous death as ordinary lightning, not a ball lightning strike, undercut trust in other oft-cited classic cases?",
+            "passages": [
+              {
+                "blockId": "spya-bbtuzu",
+                "quote": "From an investigation protocol with autopsy results (Anonymous, 1755, pp. 64–68), it is obvious that it was a conventional lightning accident caused by a non-grounded conductor.",
+                "start": 296
+              }
+            ],
+            "difficulty": 0.5,
+            "centrality": 0.4
+          },
+          {
+            "id": "spya-tkrssw",
+            "question": "If researchers who triggered lightning-induced glowing effects in the field refuse to call them ball lightning, what does that say about ever confirming the phenomenon in a lab?",
+            "passages": [
+              {
+                "blockId": "spya-mbqwhj",
+                "quote": "Uman and colleagues call what was produced not ball lightning but point to interesting effects of different materials under the influence of lightning.",
+                "start": 708
+              }
+            ],
+            "difficulty": 0.6,
+            "centrality": 0.6
+          }
+        ],
+        "dropped": {
+          "unknownIds": 0,
+          "unquoted": 0,
+          "tooLong": 0,
+          "duplicate": 0,
+          "unanchored": 0,
+          "overCap": 0,
+          "malformed": 0
+        },
+        "generatedAt": "2026-10-03T03:53:09.287Z",
+        "elapsedMs": 32750
+      },
+      "blocks": 97,
+      "words": 10003,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 0,
+        "tooLong": 0,
+        "duplicate": 0,
+        "unanchored": 0,
+        "overCap": 0,
+        "malformed": 0
+      },
+      "scoreDrops": {
+        "difficultyAbsent": 0,
+        "difficultyRejected": 0,
+        "centralityAbsent": 0,
+        "centralityRejected": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 26651,
+      "outputTokens": 3670,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "maxTokens": 45920,
+      "elapsedMs": 32755
+    },
+    "quiz": {
+      "quiz": {
+        "version": "quiz/6",
+        "generator": "claude-sonnet-5",
+        "slug": "source-spya-f550ta",
+        "sourceHash": "c31f4450dfe07f04.0b8856e5ed5c12e3.1eefce3cf3aa7392",
+        "batchId": "spya-yputzd",
+        "questions": [
+          {
+            "id": "spya-reguug",
+            "question": "What does the article say the term \"ball lightning\" refers to?",
+            "referenceAnswer": "It refers to a still-unexplained group of short-lived, glowing phenomena in atmospheric electricity that appear seemingly at random in time and place, last only a few seconds, and then vanish, sometimes leaving traces and sometimes not.",
+            "evidence": [
+              {
+                "blockId": "spya-v4ps0c",
+                "quote": "stands for a still unexplained group of metastable luminous phenomena in atmospheric electricity. Ball lightning appears seemingly random in time and space, lasts a few seconds, and disappears with traces or without.",
+                "start": 136
+              }
+            ]
+          },
+          {
+            "id": "spya-y38w0d",
+            "question": "Why does most of the collected material on ball lightning remain anecdotal rather than scientifically documented?",
+            "premise": "Ball lightning appears unpredictably and lasts only a few seconds.",
+            "referenceAnswer": "Because of its unpredictable occurrence in time and place, it is very hard to capture with instruments, so most of what exists is eyewitness testimony rather than recordings or measurements.",
+            "evidence": [
+              {
+                "blockId": "spya-v4ps0c",
+                "quote": "Because of its unpredictable occurrence, most of the collected material remains anecdotal.",
+                "start": 353
+              }
+            ]
+          },
+          {
+            "id": "spya-r9h7xb",
+            "question": "According to Rakov and Uman's 2003 lightning handbook, what is missing despite almost 5000 collected observation reports of ball lightning?",
+            "referenceAnswer": "Scientific documentation such as photographs, videotapes, or other scientific recordings is largely missing, even though witness reports are numerous.",
+            "evidence": [
+              {
+                "blockId": "spya-rjnzcc",
+                "quote": "a phenomenon for which there exists numerous witness reports but little, if any, scientific documentation such as photographs, videotapes, or other scientific recordings.",
+                "start": 543
+              }
+            ]
+          },
+          {
+            "id": "spya-x5fc38",
+            "question": "Why did earlier researchers like Singer and Stenhoff pay special attention to reports from scientists and trained professionals specifically?",
+            "premise": "Rakov and Uman note that ball lightning has thousands of witness reports but almost no scientific documentation.",
+            "referenceAnswer": "Because direct instrumental monitoring of the phenomenon is extremely rare, so reports from scientifically trained observers were treated as a more reliable source of evidence than ordinary eyewitness accounts.",
+            "evidence": [
+              {
+                "blockId": "spya-f0dmn4",
+                "quote": "Therefore, Singer (1971, chap. 5.B.2) and Stenhoff (1999, chap. 10.4) paid special attention to ball lightning reports coming from scientists or trained professionals.",
+                "start": 455
+              }
+            ]
+          },
+          {
+            "id": "spya-dvvaar",
+            "question": "How many total cases does this review compile, and over what countries and years?",
+            "referenceAnswer": "It compiles 41 cases from eight countries, spanning the years 1868 to 2020.",
+            "evidence": [
+              {
+                "blockId": "spya-wtg508",
+                "quote": "Forty-one cases from eight countries, 1868–2020, are presented in abstract form with a synthesis.",
+                "start": 448
+              }
+            ]
+          },
+          {
+            "id": "spya-npa0pt",
+            "question": "Of these 41 cases, how many came from previously published sources, from the author's own records, and from a Russian database?",
+            "premise": "The review compiles 41 cases from eight countries spanning 1868 to 2020.",
+            "referenceAnswer": "Twenty were previously published case histories, fifteen came from the author's own work, and six came from a Russian database.",
+            "evidence": [
+              {
+                "blockId": "spya-fj8hm9",
+                "quote": "the review compiles 20 published case histories, adds 15 from the author’s work and six from a Russian database.",
+                "start": 565
+              }
+            ]
+          },
+          {
+            "id": "spya-hsgweq",
+            "question": "In physicist Walther Gerlach's 1927 Tübingen observation, what surprising calculation did he make about the ball lightning's speed and sound?",
+            "referenceAnswer": "He calculated the ball travelled at roughly 1200 m/s, about Mach 3.6, yet it was observed moving silently without producing the sonic boom such a speed should cause.",
+            "evidence": [
+              {
+                "blockId": "spya-q8aywm",
+                "quote": "His speed calculation of 1225 m s−1 is quite amazing, because it means the object travelled at a speed of Mach 3.6 “soundless”, without an acoustic effect (sonic boom).",
+                "start": 1335
+              }
+            ]
+          },
+          {
+            "id": "spya-bjd9xb",
+            "question": "What physical evidence let astrophysicist Axel Wittmann calculate an energy density for the fireball fragments he saw as a child in 1951?",
+            "referenceAnswer": "The smaller spheres that fell from the main fireball left circular patches of melted asphalt on the wet road, and using the melting point of the asphalt's bitumen and the water layer, he calculated an energy density of at least about 1.9 × 10^7 joules per cubic metre.",
+            "evidence": [
+              {
+                "blockId": "spya-vg957u",
+                "quote": "Wittmann “calculated the energy density of the plasma spheres to be at least 1.9 × 10⁷ J m−3” (Wittmann, 1971, 625).",
+                "start": 1419
+              }
+            ]
+          },
+          {
+            "id": "spya-y9ffq6",
+            "question": "What did atmospheric chemist Dmitriev find when he took air samples after a 1965 ball lightning event near river rafts in Russia?",
+            "referenceAnswer": "The air samples contained ozone and nitrogen dioxide at concentrations 50 to 100 times higher than in normal air.",
+            "evidence": [
+              {
+                "blockId": "spya-vnu5me",
+                "quote": "The samples contained a maximum of 1.3 mg m−3 ozone (O₃) and 1.6 mg m−3 nitrogen dioxide (NO₂), which was 50–100 times higher than in normal air",
+                "start": 744
+              }
+            ]
+          },
+          {
+            "id": "spya-twuanx",
+            "question": "In the statistical synopsis of the 41 cases, what percentage occurred within an ongoing thunderstorm, and what percentage showed no connection to a thunderstorm at all?",
+            "referenceAnswer": "73% occurred within a thunderstorm, while 17% showed no connection to a thunderstorm.",
+            "evidence": [
+              {
+                "blockId": "spya-mj9yck",
+                "quote": "73 % occurred within thunderstorms, 10 % before or after, and 17 % without a connection.",
+                "start": 60
+              }
+            ]
+          },
+          {
+            "id": "spya-asevv6",
+            "question": "Across the cases with reported sizes and durations, what range of object sizes and observation durations did the synopsis find?",
+            "referenceAnswer": "Reported sizes ranged from 1.5 cm to 15 m, with most under 20 cm, while durations ranged from 1.5 to 180 seconds, with most lasting under 3 seconds.",
+            "evidence": [
+              {
+                "blockId": "spya-hrcct6",
+                "quote": "Reported object sizes (28 cases) range from 1.5 cm to 15 m, with the maximum below 20 cm and several cases over 1 m.",
+                "start": 0
+              },
+              {
+                "blockId": "spya-rjs9xh",
+                "quote": "Reported observation durations (25 cases) range from 1.5 to 180 s with the maximum under 3 s but 5–6 cases in the higher categories.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-d0kwhh",
+            "question": "Given this variety, what conclusion does the author draw about trying to define one strict \"ball lightning norm\"?",
+            "premise": "Reported sizes and durations varied enormously across the cases, from under 20 cm to 15 m and from under 3 seconds to 180 seconds.",
+            "referenceAnswer": "He argues it would be epistemologically odd to define a single \"ball lightning norm\" and automatically exclude cases that do not fit it, noting that some researchers instead suggest there may be more than one type of ball lightning.",
+            "evidence": [
+              {
+                "blockId": "spya-p9uvh9",
+                "quote": "Epistemologically, it would be odd to define a “ball lightning norm” and a priori exclude cases that do not meet this definition.",
+                "start": 317
+              },
+              {
+                "blockId": "spya-rjnzcc",
+                "quote": "There may be more than one type of ball lightning and more than one mechanism by which ball lightning is generated",
+                "start": 762
+              }
+            ]
+          },
+          {
+            "id": "spya-y5nn6d",
+            "question": "What does the article reveal about the true cause of physicist Georg Wilhelm Richmann's famous 1753 death, long cited as a ball lightning case?",
+            "referenceAnswer": "Investigation records with autopsy results show he was actually killed by a conventional lightning strike through an ungrounded conductor, not by true ball lightning, although a popular engraving falsely showed a lightning ball hitting him.",
+            "evidence": [
+              {
+                "blockId": "spya-bbtuzu",
+                "quote": "it is obvious that it was a conventional lightning accident caused by a non-grounded conductor. However, a popular engraving pictured a lightning ball that hit Richmann.",
+                "start": 378
+              }
+            ]
+          },
+          {
+            "id": "spya-m7yc8u",
+            "question": "What does the author suggest this myth reveals about ball lightning's popular image?",
+            "premise": "Richmann's famous death, long linked to ball lightning imagery, was actually caused by ordinary lightning rather than a verified ball lightning encounter.",
+            "referenceAnswer": "He suggests ball lightning acquired a deadly, destructive popular image partly fed by injuries and damage actually caused by ordinary cloud-to-ground lightning strikes rather than genuine ball lightning events.",
+            "evidence": [
+              {
+                "blockId": "spya-bbtuzu",
+                "quote": "Ball lightning acquired a deadly and destructive popular image fed by injuries and damage caused by ordinary cloud–ground strokes.",
+                "start": 643
+              }
+            ]
+          },
+          {
+            "id": "spya-uwfmc2",
+            "question": "What physical evidence allowed researchers to estimate the energy involved in the widely cited 1936 Dorstone case, where a fireball was said to have fallen into a tub of water?",
+            "referenceAnswer": "Using the reported amount of water in the tub and the fact that it boiled afterward, researchers calculated that the ball would have needed an energy density of at least about 2000 joules per cubic centimetre.",
+            "evidence": [
+              {
+                "blockId": "spya-qxb4e2",
+                "quote": "the calculations found that at least 2 × 10³ J cm−3 would be involved (Barry, 1980).",
+                "start": 749
+              }
+            ]
+          },
+          {
+            "id": "spya-e0rjtb",
+            "question": "What did the spectroscopic video recording of the 2012 Qinghai Plateau ball lightning event in China reveal about a possible explanation for its formation?",
+            "referenceAnswer": "The recorded spectrum showed lines from iron, calcium, silicon, nitrogen, and oxygen, consistent with a theory that ball lightning can form when a lightning strike vaporizes material from the soil.",
+            "evidence": [
+              {
+                "blockId": "spya-nacbjs",
+                "quote": "The ball lightning spectrum showed lines due to Fe, CA, Si, N, and O consistent with the Abrahamson and Dinniss (2002) soil strike theory.",
+                "start": 500
+              }
+            ]
+          },
+          {
+            "id": "spya-kdmsdh",
+            "question": "How does the author describe the overall state of ball lightning research, borrowing a term from Turner?",
+            "referenceAnswer": "He describes it as a \"fragmented science,\" carried out mostly part-time and by individuals working separately—some collecting data, some building theories, some running laboratory tests—without good coordination between them.",
+            "evidence": [
+              {
+                "blockId": "spya-rjnzcc",
+                "quote": "Turner called ball lightning research a “fragmented science” (2001).",
+                "start": 1127
+              },
+              {
+                "blockId": "spya-yamst5",
+                "quote": "Most ball lightning research was (and still is) part-time and individualized – some people collecting data, some theorizing, some doing laboratory tests.",
+                "start": 675
+              }
+            ]
+          },
+          {
+            "id": "spya-g33s5w",
+            "question": "What does the author see as the key to overcoming this fragmentation and advancing the field going forward?",
+            "premise": "Ball lightning research has long been fragmented, carried out piecemeal by individuals rather than coordinated teams.",
+            "referenceAnswer": "He is optimistic that progress will be faster with better-coordinated international research, using well-documented physical-evidence cases as benchmarks alongside growing mobile phone and webcam footage, to build a systematic database against which ball lightning theories can be tested.",
+            "evidence": [
+              {
+                "blockId": "spya-zz7g2q",
+                "quote": "systematic multidisciplinary case documentation and discussion can lead to a database against which ball lightning theories and simulations can be critically assessed.",
+                "start": 430
+              }
+            ]
+          },
+          {
+            "id": "spya-qssdzt",
+            "question": "What invitation does the author extend to scientists who have personally witnessed ball lightning but never reported it?",
+            "referenceAnswer": "He invites them to share their experience with him, so it can be added to the growing collection of documented cases.",
+            "evidence": [
+              {
+                "blockId": "spya-p9uvh9",
+                "quote": "Scientists who read the article and who have not reported their experience are invited to share it with the author.",
+                "start": 546
+              }
+            ]
+          }
+        ],
+        "dropped": {
+          "unknownIds": 0,
+          "unquoted": 0,
+          "truncated": 0,
+          "overCap": 0,
+          "malformed": 0,
+          "duplicate": 0,
+          "unanchored": 0,
+          "gaps": 0
+        },
+        "generatedAt": "2026-10-03T03:54:04.191Z",
+        "elapsedMs": 87654,
+        "profileHash": null
+      },
+      "blocks": 97,
+      "words": 10003,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 0,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "duplicate": 0,
+        "unanchored": 0,
+        "gaps": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 28766,
+      "outputTokens": 10781,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 87658
+    },
+    "ideas": {
+      "ideas": {
+        "version": "ideas/4",
+        "generator": "claude-sonnet-5",
+        "slug": "source-spya-f550ta",
+        "sourceHash": "c31f4450dfe07f04.0b8856e5ed5c12e3.1eefce3cf3aa7392",
+        "profileHash": null,
+        "ideas": [
+          {
+            "id": "spya-y43smp",
+            "name": "Who gets observed shapes what gets measured",
+            "provenance": "assumed",
+            "statement": "The kind of person doing the observing, and how that group of observers came to be selected, can systematically shift the reported size, duration, and other features of an event, so a difference between two observer groups' statistics can reflect reporting bias rather than a real difference in the phenomenon.",
+            "whyYouNeedIt": "The comparison between the scientist sample's sizes and durations and the general-public databases' figures is only meaningful as a finding if differing observer selection can itself shape the numbers; otherwise the comparison is just two unrelated tallies placed side by side.",
+            "analogy": "It is like comparing average fish-size estimates from scuba divers with tape measures against estimates from anglers telling stories at the dock: the gap tells you as much about who is doing the measuring as about the fish.",
+            "occurrences": [
+              {
+                "blockId": "spya-hrcct6",
+                "quote": "Reported object sizes (28 cases) range from 1.5 cm to 15 m, with the maximum below 20 cm and several cases over 1 m. Compared to 405 ball lightning cases from Austrian and German databases (Keul and Stummer, 2002), the scientists’ size distribution is left skewed.",
+                "reasoning": "Presents a skew between observer groups as a noteworthy result, which only has meaning if observer type can bias the measured distribution.",
+                "start": 0
+              },
+              {
+                "blockId": "spya-rjs9xh",
+                "quote": "Reported observation durations (25 cases) range from 1.5 to 180 s with the maximum under 3 s but 5–6 cases in the higher categories. Mean is 19.5 s, standard deviation is 38.6, median is 4.0, and mode of 2.5 s. The 405 ball lightning cases, 2002, had lower means (7.7–15.4 s), median of 3–5, mode of 2–5, and range of 1–900 s.",
+                "reasoning": "Juxtaposes duration statistics from two differently-selected samples as if the comparison itself were informative about reporting rather than only about the phenomenon.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-q5bfcx",
+            "name": "Trained observers count more than lay witnesses",
+            "provenance": "introduced",
+            "statement": "When a phenomenon cannot be captured instrumentally, the testimony of people with scientific or technical training (physicists, engineers, weather observers, coastguards) deserves special weight compared with ordinary public reports, because their training should make their descriptions more precise and reliable.",
+            "whyYouNeedIt": "The whole project of compiling scientists' and professionals' accounts only makes sense if this kind of witness is assumed to give better data than the general public; otherwise there would be no reason to single them out.",
+            "occurrences": [
+              {
+                "blockId": "spya-wtg508",
+                "quote": "As chances to monitor this transient phenomenon are low, it seems promising to evaluate observation reports by scientists and trained professionals.",
+                "reasoning": "States outright that expert witnesses are worth specially seeking out.",
+                "start": 177
+              },
+              {
+                "blockId": "spya-f0dmn4",
+                "quote": "Therefore, Singer (1971, chap. 5.B.2) and Stenhoff (1999, chap. 10.4) paid special attention to ball lightning reports coming from scientists or trained professionals.",
+                "reasoning": "Shows prior researchers already acting on the premise that expert witnesses merit separate treatment.",
+                "start": 455
+              },
+              {
+                "blockId": "spya-khrqpm",
+                "quote": "It can be argued that all children have similar observation capabilities. However, scientific training and profession might improve the quality of their recalled eyewitness testimony.",
+                "reasoning": "Explicitly claims that professional training upgrades the value of a recollection, justifying inclusion of childhood memories of future scientists.",
+                "start": 171
+              }
+            ]
+          },
+          {
+            "id": "spya-m64per",
+            "name": "Popular imagery can distort a phenomenon's record",
+            "provenance": "introduced",
+            "statement": "A dramatic image or story that captures public imagination can get permanently attached to a phenomenon's reputation, even when the underlying event was something ordinary, and this distorts how the phenomenon is remembered and studied afterward.",
+            "whyYouNeedIt": "Without this idea, bringing up Richmann's death, which was an ordinary lightning strike, inside a history of ball lightning would be a non sequitur rather than an illustration of how a false popular image attached itself to the subject.",
+            "occurrences": [
+              {
+                "blockId": "spya-bbtuzu",
+                "quote": "However, a popular engraving pictured a lightning ball that hit Richmann.",
+                "reasoning": "Shows a popular image creating a false association between an ordinary fatal lightning strike and ball lightning specifically.",
+                "start": 474
+              },
+              {
+                "blockId": "spya-bbtuzu",
+                "quote": "Ball lightning acquired a deadly and destructive popular image fed by injuries and damage caused by ordinary cloud–ground strokes.",
+                "reasoning": "States directly that the phenomenon's popular reputation was shaped by conflation with unrelated ordinary events.",
+                "start": 643
+              },
+              {
+                "blockId": "spya-c4zvkj",
+                "quote": "Here, everyday life theories or mindsets are more influential than science.",
+                "reasoning": "Generalizes the point that public narrative, not scientific finding, often governs how such a phenomenon is understood.",
+                "start": 406
+              }
+            ]
+          },
+          {
+            "id": "spya-z4a5gv",
+            "name": "Uncoordinated individual effort fragments a field",
+            "provenance": "introduced",
+            "statement": "A research topic can remain permanently unresolved not for lack of data or ideas but because the people collecting data, the people building theories, and the people running experiments work separately and are never organized into one coordinated effort.",
+            "whyYouNeedIt": "Without this idea, the catalogue of scattered monographs, unpublished reports, and private databases would read as mere history rather than as a diagnosis of why ball lightning has stayed unsolved for nearly two centuries.",
+            "analogy": "It is like a construction site where one crew pours a foundation, another draws blueprints, and a third tests materials, but none of them are working from the same plan or on the same building.",
+            "occurrences": [
+              {
+                "blockId": "spya-rjnzcc",
+                "quote": "For the same reason, Turner called ball lightning research a \"fragmented science\" (2001).",
+                "reasoning": "Names the disorganization itself as the diagnosis for the field's lack of progress.",
+                "start": 1106
+              },
+              {
+                "blockId": "spya-yamst5",
+                "quote": "Most ball lightning research was (and still is) part-time and individualized – some people collecting data, some theorizing, some doing laboratory tests.",
+                "reasoning": "Attributes the field's stagnation to separation of roles rather than to any lack of effort or evidence.",
+                "start": 675
+              },
+              {
+                "blockId": "spya-zz7g2q",
+                "quote": "Nevertheless, the author is still optimistic that scientific progress will be faster when capacities are better coordinated.",
+                "reasoning": "The proposed remedy (coordination) only makes sense if fragmentation, not scarcity of data, is the real obstacle.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-vnamwf",
+            "name": "One name may cover several distinct phenomena",
+            "provenance": "introduced",
+            "statement": "Reports gathered under a single label may actually describe more than one physically distinct kind of event, each with its own mechanism, rather than one phenomenon that a single theory must explain.",
+            "whyYouNeedIt": "Without entertaining this possibility, the wide spread of sizes, durations, and behaviours in the case collection would look like a failure of observation or theory rather than a hint that 'ball lightning' might not be one single thing.",
+            "occurrences": [
+              {
+                "blockId": "spya-rjnzcc",
+                "quote": "There may be more than one type of ball lightning and more than one mechanism by which ball lightning is generated",
+                "reasoning": "States directly that the category might not correspond to a single underlying mechanism.",
+                "start": 762
+              },
+              {
+                "blockId": "spya-p9uvh9",
+                "quote": "This has led some researchers (as Rakov and Uman, 2003) to assume several types of ball lightning.",
+                "reasoning": "Connects the sample's outlier cases directly to the multiple-types hypothesis as a way of accommodating them.",
+                "start": 218
+              }
+            ]
+          },
+          {
+            "id": "spya-cu2b3t",
+            "name": "Lightning-network data as an independent check",
+            "provenance": "introduced",
+            "statement": "Automated lightning-detection networks that record the time, location, polarity, and current of ordinary strokes can be cross-referenced against eyewitness reports of an unrelated phenomenon to give those reports a kind of instrumental backing they otherwise lack.",
+            "whyYouNeedIt": "Without this idea, citing a precise stroke current and distance alongside a witness's story would be an odd non sequitur rather than a way of partially objectifying an otherwise pure testimony.",
+            "occurrences": [
+              {
+                "blockId": "spya-nwxrm0",
+                "quote": "The upswing of modern lightning location networks (like BLIDS, German lightning information service, or ALDIS, Austrian lightning detection and information system) opened up new options, so recently, a first correlation of 34 central European ball lightning events, 1994–2016, with lightning location data was done together with ALDIS (Keul and Diendorfer, 2018).",
+                "reasoning": "Frames instrumental lightning records as a new resource for validating otherwise unverifiable eyewitness cases.",
+                "start": 453
+              },
+              {
+                "blockId": "spya-nb4g7h",
+                "quote": "ALDIS recorded 10 lightning events during 22:01–22:28 LT for 5 km around Neueßling. At 22:16:28 LT, a strong positive cloud–ground stroke with +170.4 kA happened 0.5 km west in the back of the witnesses.",
+                "reasoning": "Uses an automated network's precise record as corroborating detail for a witness's account.",
+                "start": 966
+              }
+            ]
+          },
+          {
+            "id": "spya-dd6b7b",
+            "name": "Independent witnesses corroborate reality",
+            "provenance": "introduced",
+            "statement": "When several people, in different places or at different moments, independently report seeing closely matching objects, that convergence is treated as evidence the phenomenon was really there rather than a private perceptual or psychological event.",
+            "whyYouNeedIt": "Without this idea, the repeated emphasis on how many separate observers saw a given ball, or how similar successive events looked, would be pointless detail rather than evidence strengthening the case.",
+            "occurrences": [
+              {
+                "blockId": "spya-fpq7bu",
+                "quote": "So we get a 1868 multiple object event with sightings from three inner Vienna districts, Landstrasse, Mariahilf, and Neubau, in a triangle 3.4–1.3–3 km apart, with two similar objects (colour, size, rays) and a different one.",
+                "reasoning": "Treats agreement among three separately located witnesses as itself a notable, evidential fact.",
+                "start": 263
+              },
+              {
+                "blockId": "spya-kde569",
+                "quote": "At around 18:30 and 18:50, two more events occurred (Mathias, 1916) in the same shape and procedure as the first one.",
+                "reasoning": "Repetition of the same pattern across witnesses and times is reported as reinforcing the case rather than as coincidence.",
+                "start": 443
+              },
+              {
+                "blockId": "spya-tdtuvv",
+                "quote": "Among several close cloud–ground flashes, one near the Bragg building caused ball lightning which was noticed by several staff members from the Mott building as a bright object, \"luminous haze\", and as stationary blue-white light. Three more observers saw a ball moving over the ground, bright blue-white light, visible for 4–5 s.",
+                "reasoning": "Multiple independent sightings of the same event are stacked up as corroboration.",
+                "start": 211
+              }
+            ]
+          },
+          {
+            "id": "spya-d839p9",
+            "name": "Leftover damage lets you calculate an unmeasured event",
+            "provenance": "introduced",
+            "statement": "Even without direct instruments trained on a transient event, the physical changes it leaves behind (melted material, boiled water, timing of sounds) can be used after the fact to back-calculate quantities like its energy content or speed.",
+            "whyYouNeedIt": "Without this idea, the melted-asphalt, boiled-water-tub, and thunder-timing passages would just be colourful anecdotes rather than attempts to pin a number on an unphotographed phenomenon.",
+            "analogy": "It is like a fire investigator inferring how hot a blaze burned from which metal fittings melted and which did not, without ever having pointed a thermometer at the flames.",
+            "occurrences": [
+              {
+                "blockId": "spya-vg957u",
+                "quote": "Taking into account water layer and the melting point of B-80 bitumen, Wittmann \"calculated the energy density of the plasma spheres to be at least 1.9 × 10⁷ J m−3\"",
+                "reasoning": "Derives a physical quantity for an unmeasured event purely from the state of melted asphalt it left behind.",
+                "start": 1348
+              },
+              {
+                "blockId": "spya-qxb4e2",
+                "quote": "With different ball diameters, an assumed amount of four gallons (18 L) of water, and a temperature rise from 10–20 to 60 °C, the calculations found that at least 2 × 10³ J cm−3 would be involved (Barry, 1980).",
+                "reasoning": "Reconstructs an energy estimate for the Dorstone ball purely from the boiled water it left behind, with no direct measurement of the object.",
+                "start": 623
+              },
+              {
+                "blockId": "spya-q8aywm",
+                "quote": "Gerlach did his calculations: with a speed of sound of 330 m s−1 and observed times of the lightning’s thunder and the explosion, he got a ball lightning trajectory of 1300 + 1150 = 2450 m.",
+                "reasoning": "Infers the object's trajectory and speed from timing of sounds rather than from watching its motion directly.",
+                "start": 783
+              }
+            ]
+          },
+          {
+            "id": "spya-b3fz2v",
+            "name": "Shock injury and fright trauma are separable",
+            "provenance": "introduced",
+            "statement": "A person struck by an electrical discharge can suffer two different and separable conditions: an immediate physical/neurological injury from the current itself, and a distinct, longer-lasting psychological disturbance caused by the fright, which should not be confused with each other.",
+            "whyYouNeedIt": "Without distinguishing these two effects, the case of the frightened, limping, babbling patient would look like a single mysterious illness rather than two linked but different consequences of the same event.",
+            "occurrences": [
+              {
+                "blockId": "spya-ugmxk8",
+                "quote": "He distinguished the short-lived neurological effects (keraunoparalysis) from a",
+                "reasoning": "Marks the split between a physical electrical injury and something else as the key diagnostic move.",
+                "start": 1464
+              },
+              {
+                "blockId": "spya-srxfmn",
+                "quote": "long-lived traumatic neurosis (skin anaesthesia, motor paralysis, sensory losses, thunderstorm phobia, etc.)",
+                "reasoning": "Names the second, purely psychological condition that must be told apart from the electrical injury to make sense of the patient's lingering symptoms.",
+                "start": 0
+              },
+              {
+                "blockId": "spya-srxfmn",
+                "quote": "Charcot’s discrimination between keraunoparalysis and neuropsychological aftereffects is still made in medicine (Andrews et al., 2017).",
+                "reasoning": "Confirms this is a durable, general distinction being introduced, not just a one-off diagnosis.",
+                "start": 216
+              }
+            ]
+          }
+        ],
+        "generatedAt": "2026-10-03T03:54:43.242Z",
+        "elapsedMs": 126698
+      },
+      "blocks": 97,
+      "words": 10003,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 0,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "unargued": 0,
+        "unanchored": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 27449,
+      "outputTokens": 13252,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 126708
+    },
+    "quotes": {
+      "quotes": {
+        "version": "quotes/8",
+        "generator": "claude-sonnet-5",
+        "slug": "source-spya-f550ta",
+        "sourceHash": "c31f4450dfe07f04.0b8856e5ed5c12e3.7f72fb17c4a6968c",
+        "profileHash": null,
+        "quotes": [
+          {
+            "id": "spya-j8f6d5",
+            "blockId": "spya-wtg508",
+            "text": "With thousands of eyewitness reports, but few instrumental records and no consensus about a theory, ball lightning remains an unsolved problem in atmospheric physics.",
+            "start": 10,
+            "reason": "States the central puzzle the whole article is built around.",
+            "importance": 0.9,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-unmpyg",
+            "blockId": "spya-wtg508",
+            "text": "It is concluded that well-documented cases from trained observers can promote fieldwork and stimulate and evaluate ball lightning theories.",
+            "start": 660,
+            "reason": "The paper's main conclusion stated in its own words.",
+            "importance": 0.8,
+            "striking": 0.3
+          },
+          {
+            "id": "spya-dhqa5q",
+            "blockId": "spya-v4ps0c",
+            "text": "Ball lightning appears seemingly random in time and space, lasts a few seconds, and disappears with traces or without. Because of its unpredictable occurrence, most of the collected material remains anecdotal.",
+            "start": 234,
+            "reason": "Explains why the phenomenon is so hard to study scientifically.",
+            "importance": 0.7,
+            "striking": 0.4
+          },
+          {
+            "id": "spya-c77mg4",
+            "blockId": "spya-c4zvkj",
+            "text": "Ball lightning cases also have a psychological side, when it comes to eyewitness quality, (non-)reporting, and public and media event labelling. Here, everyday life theories or mindsets are more influential than science.",
+            "start": 261,
+            "reason": "Flags the human/psychological complication running through the whole review.",
+            "importance": 0.6,
+            "striking": 0.4
+          },
+          {
+            "id": "spya-b4uagw",
+            "blockId": "spya-vqjb23",
+            "text": "Several alleged observations (e.g. of Niels Bohr and Victor Weisskopf), often quoted in science or popular journals, were incorrect or lacked data: Tuck (1971) only wrote that he heard from Weisskopf that Bohr had once seen ball lightning.",
+            "start": 127,
+            "reason": "Shows the author's critical filtering of famous but unreliable anecdotes.",
+            "importance": 0.6,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-cazns8",
+            "blockId": "spya-q8aywm",
+            "text": "His speed calculation of 1225 m s−1 is quite amazing, because it means the object travelled at a speed of Mach 3.6 “soundless”, without an acoustic effect (sonic boom). This is one of the rare occasions where ball lightning met a gifted experimental physicist.",
+            "start": 1335,
+            "reason": "Highlights one of the most physically puzzling details in the whole collection of cases.",
+            "importance": 0.6,
+            "striking": 0.7
+          },
+          {
+            "id": "spya-rkppct",
+            "blockId": "spya-khrqpm",
+            "text": "A special category of reports is ball lightning encountered by children who, in their later life, followed a scientific career and then described in detail what they saw. It can be argued that all children have similar observation capabilities. However, scientific training and profession might improve the quality of their recalled eyewitness testimony.",
+            "start": 0,
+            "reason": "Introduces and justifies a distinct, carefully reasoned category of evidence.",
+            "importance": 0.5,
+            "striking": 0.3
+          },
+          {
+            "id": "spya-ucbyq8",
+            "blockId": "spya-eyhaer",
+            "text": "The tendency of weather services to do without observers and automate synoptic stations (including German mountaintop observatories) may be justified from an economic standpoint, but it eliminates high-quality observations of rare phenomena such as ball lightning. Whether this will be compensated by citizen science and the spread of mobile phone and web cameras remains uncertain.",
+            "start": 0,
+            "reason": "A concrete worry about the future supply of good evidence, linking past methods to present uncertainty.",
+            "importance": 0.6,
+            "striking": 0.4
+          },
+          {
+            "id": "spya-kbfcbm",
+            "blockId": "spya-p9uvh9",
+            "text": "Thus, even this relatively small sample of educated and trained observers shows a variety of situations, object sizes, and case durations, and some outliers are hard to integrate into one general ball lightning model. This has led some researchers (as Rakov and Uman, 2003) to assume several types of ball lightning.",
+            "start": 0,
+            "reason": "The key finding of the statistical synthesis section.",
+            "importance": 0.8,
+            "striking": 0.4
+          },
+          {
+            "id": "spya-h6j8xm",
+            "blockId": "spya-p9uvh9",
+            "text": "Epistemologically, it would be odd to define a “ball lightning norm” and a priori exclude cases that do not meet this definition. Regardless of all problems with an explanatory theory, detailed case reports should be documented.",
+            "start": 317,
+            "reason": "States the author's methodological stance against prematurely narrowing what counts as a valid case.",
+            "importance": 0.7,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-qeet3n",
+            "blockId": "spya-bbtuzu",
+            "text": "As in the 1818 Frankenstein novel, the grim fate of an avantgarde scientist sounded plausible. Ball lightning acquired a deadly and destructive popular image fed by injuries and damage caused by ordinary cloud–ground strokes.",
+            "start": 548,
+            "reason": "Explains how a famous misattributed death shaped the popular myth of ball lightning.",
+            "importance": 0.6,
+            "striking": 0.7
+          },
+          {
+            "id": "spya-an2rdx",
+            "blockId": "spya-yamst5",
+            "text": "The main difference between modern science and Frankenstein’s laboratory is guiding research paradigms that – in the case of natural phenomena – condition a proper order of systematic data acquisition, formation, and testing of hypotheses and theories, and – if possible – laboratory simulation.",
+            "start": 0,
+            "reason": "A sharp framing of what separates rigorous science from the popular myth evoked earlier.",
+            "importance": 0.7,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-qu9z4h",
+            "blockId": "spya-yamst5",
+            "text": "In the case of ball lightning, the research logic is distorted by a random phenomenon that is hard to observe, irreproducible, and mostly reported by change. Weird popular press stories and a lack of economic (except some military) interest did not encourage scientific community nor weather services to deal with this “unsolved problem in atmospheric physics” (Stenhoff, 1999).",
+            "start": 296,
+            "reason": "Summarizes why the field has stayed fragmented for so long.",
+            "importance": 0.8,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-trpn90",
+            "blockId": "spya-yamst5",
+            "text": "Most ball lightning research was (and still is) part-time and individualized – some people collecting data, some theorizing, some doing laboratory tests.",
+            "start": 675,
+            "reason": "Captures the disorganized state of the field the author wants to fix.",
+            "importance": 0.7,
+            "striking": 0.4
+          },
+          {
+            "id": "spya-wc29k5",
+            "blockId": "spya-zz7g2q",
+            "text": "Nevertheless, the author is still optimistic that scientific progress will be faster when capacities are better coordinated.",
+            "start": 0,
+            "reason": "The author's closing note of hope, setting up the call to action.",
+            "importance": 0.6,
+            "striking": 0.3
+          }
+        ],
+        "discarded": {
+          "unfound": 0,
+          "otherVoice": 0,
+          "wrongLength": 0,
+          "overlapping": 0,
+          "overCap": 0,
+          "malformed": 0
+        },
+        "passes": 1,
+        "lastAdded": 15,
+        "generatedAt": "2026-10-03T03:53:16.751Z",
+        "elapsedMs": 40084
+      },
+      "blocks": 97,
+      "words": 10003,
+      "dropped": {
+        "unfound": 0,
+        "otherVoice": 0,
+        "wrongLength": 0,
+        "overlapping": 0,
+        "overCap": 0,
+        "malformed": 0
+      },
+      "scores": {
+        "importanceAbsent": 0,
+        "importanceRejected": 0,
+        "strikingAbsent": 0,
+        "strikingRejected": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 26384,
+      "outputTokens": 5267,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 40216
+    },
+    "glossary": {
+      "glossary": {
+        "version": "glossary/7",
+        "generator": "claude-sonnet-5",
+        "slug": "source-spya-f550ta",
+        "sourceHash": "c31f4450dfe07f04.0b8856e5ed5c12e3.7f72fb17c4a6968c",
+        "profileHash": null,
+        "entries": [
+          {
+            "id": "spya-cg24s3",
+            "name": "COST Action P18",
+            "kind": "event",
+            "aliases": [
+              "Physics of Lightning"
+            ],
+            "background": "COST Action P18 was a European collaborative research programme bringing together roughly 30 researchers to study the physics of lightning, including unresolved questions like ball lightning.",
+            "difficulty": 0.6,
+            "centrality": 0.2,
+            "blocks": [
+              "spya-rjnzcc"
+            ]
+          },
+          {
+            "id": "spya-xryj3x",
+            "name": "Prairie Meteorite Network",
+            "kind": "organization",
+            "aliases": [],
+            "background": "A US network of automated sky cameras set up to photograph meteors and track falling meteorites across many states, whose decade of continuous images were later searched for possible ball-lightning captures.",
+            "difficulty": 0.5,
+            "centrality": 0.2,
+            "blocks": [
+              "spya-f0dmn4"
+            ]
+          },
+          {
+            "id": "spya-qghvbv",
+            "name": "BLIDS",
+            "kind": "organization",
+            "aliases": [
+              "German lightning information service"
+            ],
+            "background": "BLIDS is a German network of ground sensors that detects and locates lightning strikes across the country in real time, recording details such as timing, position, and current strength.",
+            "difficulty": 0.5,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-nwxrm0",
+              "spya-gckp76"
+            ]
+          },
+          {
+            "id": "spya-quft83",
+            "name": "ALDIS",
+            "kind": "organization",
+            "aliases": [
+              "Austrian lightning detection and information system"
+            ],
+            "background": "ALDIS is Austria's equivalent lightning-detection network, used to pinpoint where and when strokes occur and to measure their electrical polarity and strength.",
+            "difficulty": 0.5,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-nwxrm0",
+              "spya-nb4g7h"
+            ]
+          },
+          {
+            "id": "spya-v3nnwb",
+            "name": "Cloud–ground stroke",
+            "kind": "term",
+            "aliases": [
+              "cloud-cloud stroke",
+              "ground stroke"
+            ],
+            "senseHere": "A lightning discharge that travels between a cloud and the ground, as opposed to one that stays within or between clouds; the article tallies how many ball-lightning sightings coincided with each kind.",
+            "difficulty": 0.4,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-nwxrm0",
+              "spya-gckp76",
+              "spya-nb4g7h",
+              "spya-bbtuzu"
+            ]
+          },
+          {
+            "id": "spya-hthzf8",
+            "name": "Positive and negative lightning strokes",
+            "kind": "term",
+            "aliases": [
+              "positive stroke",
+              "negative stroke"
+            ],
+            "senseHere": "Lightning strokes are classed by the direction their electric charge flows, measured as peak current in kiloamps; the article notes an unusually high share of positive strokes linked to ball-lightning sightings.",
+            "difficulty": 0.5,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-nwxrm0",
+              "spya-nb4g7h"
+            ]
+          },
+          {
+            "id": "spya-mvuvtj",
+            "name": "Pyotr Leonidovich Kapitsa",
+            "kind": "person",
+            "aliases": [
+              "Kapitsa"
+            ],
+            "background": "A Soviet physicist and Nobel laureate known for low-temperature physics, who also proposed a theoretical explanation for how ball lightning might form and sustain itself.",
+            "difficulty": 0.4,
+            "centrality": 0.2,
+            "blocks": [
+              "spya-vqjb23"
+            ]
+          },
+          {
+            "id": "spya-asw8je",
+            "name": "Wilhelm von Haidinger",
+            "kind": "person",
+            "aliases": [
+              "Haidinger"
+            ],
+            "background": "An Austrian geologist and mineralogist at the Imperial Academy of Sciences in Vienna, whose detailed 1868 report and sketch of a ball-lightning sighting is one of the earliest scientific accounts in the article.",
+            "difficulty": 0.4,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-g7tbkr",
+              "spya-p3ct05",
+              "spya-fpq7bu"
+            ]
+          },
+          {
+            "id": "spya-pg4p5h",
+            "name": "Angular diameter",
+            "kind": "term",
+            "aliases": [],
+            "senseHere": "The apparent size of an object measured as an angle across the sky rather than its true physical size, used by witnesses like Haidinger and Wilhelm to later calculate the object's real diameter once its distance is known.",
+            "difficulty": 0.5,
+            "centrality": 0.2,
+            "blocks": [
+              "spya-g7tbkr",
+              "spya-ukyn4d"
+            ]
+          },
+          {
+            "id": "spya-dng56y",
+            "name": "Walther Gerlach",
+            "kind": "person",
+            "aliases": [
+              "Gerlach"
+            ],
+            "background": "A German physicist famous for the Stern-Gerlach experiment demonstrating quantum spin, who also reported and mathematically analyzed his own 1927 ball-lightning sighting.",
+            "difficulty": 0.4,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-q8aywm"
+            ]
+          },
+          {
+            "id": "spya-m2ed4r",
+            "name": "Roger Clifton Jennison",
+            "kind": "person",
+            "aliases": [
+              "Jennison"
+            ],
+            "background": "A British radio astronomer, later a professor of physical electronics, whose widely publicized 1963 account of ball lightning on an aircraft became one of the most cited sightings in the field.",
+            "difficulty": 0.3,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-dusdxq"
+            ]
+          },
+          {
+            "id": "spya-cm75ts",
+            "name": "Georg Wilhelm Richmann",
+            "kind": "person",
+            "aliases": [
+              "Richmann"
+            ],
+            "background": "A Baltic German physicist and member of the St Petersburg Academy of Sciences who was killed in 1753 while experimenting with atmospheric electricity, an incident later mythologized as a ball-lightning death.",
+            "difficulty": 0.5,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-bbtuzu"
+            ]
+          },
+          {
+            "id": "spya-psg3fh",
+            "name": "Keraunoparalysis",
+            "kind": "term",
+            "aliases": [],
+            "senseHere": "A short-lived paralysis or numbness in a limb caused by a nearby lightning strike or an encounter with ball lightning, as distinct from longer-lasting nerve or psychological damage.",
+            "difficulty": 0.6,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-ugmxk8",
+              "spya-srxfmn"
+            ]
+          },
+          {
+            "id": "spya-ydvjy4",
+            "name": "Jean-Martin Charcot",
+            "kind": "person",
+            "aliases": [
+              "Charcot"
+            ],
+            "background": "A pioneering French neurologist at the Salpêtrière Hospital in Paris and teacher of Sigmund Freud, known for studying the nervous aftereffects of trauma, including lightning-related injuries.",
+            "difficulty": 0.4,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-ugmxk8",
+              "spya-zaz2te",
+              "spya-srxfmn"
+            ]
+          },
+          {
+            "id": "spya-yp4qkw",
+            "name": "Triggered lightning",
+            "kind": "term",
+            "aliases": [],
+            "senseHere": "Lightning deliberately set off for research by launching a small rocket trailing a thin grounded wire into a storm cloud, letting scientists study strikes under controlled conditions.",
+            "difficulty": 0.4,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-mbqwhj"
+            ]
+          },
+          {
+            "id": "spya-bwvprz",
+            "name": "Abrahamson and Dinniss soil strike theory",
+            "kind": "concept",
+            "aliases": [
+              "soil strike theory"
+            ],
+            "background": "This theory proposes that when lightning hits soil, it vaporizes minerals into a cloud of tiny burning particles that can hover and glow, producing what looks like a ball of fire.",
+            "difficulty": 0.6,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-nacbjs"
+            ]
+          },
+          {
+            "id": "spya-rhc2z5",
+            "name": "Slitless spectroscopy",
+            "kind": "term",
+            "aliases": [
+              "diffraction grating spectroscopy"
+            ],
+            "senseHere": "A method of capturing the color spectrum of a light source directly on video using a diffraction grating instead of a narrow slit, letting researchers identify the chemical elements glowing in a ball-lightning event.",
+            "difficulty": 0.6,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-nacbjs"
+            ]
+          },
+          {
+            "id": "spya-re5n2u",
+            "name": "\"Fragmented science\"",
+            "kind": "concept",
+            "aliases": [],
+            "background": "A phrase coined by researcher Turner in 2001 to describe how ball-lightning research has scattered into many disconnected theories, observers, and laboratory experiments without a unifying framework.",
+            "difficulty": 0.4,
+            "centrality": 0.3,
+            "blocks": []
+          }
+        ],
+        "passes": 1,
+        "generatedAt": "2026-10-03T03:53:13.543Z",
+        "elapsedMs": 36929
+      },
+      "scores": {
+        "difficultyAbsent": 0,
+        "difficultyRejected": 0,
+        "centralityAbsent": 0,
+        "centralityRejected": 0
+      },
+      "blocks": 97,
+      "words": 10003,
+      "added": 18,
+      "unmatched": 1,
+      "model": "claude-sonnet-5",
+      "inputTokens": 27670,
+      "outputTokens": 4007,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 37006
+    },
+    "timeline": {
+      "timeline": {
+        "version": "timeline/4",
+        "generator": "claude-sonnet-5",
+        "slug": "source-spya-f550ta",
+        "sourceHash": "c31f4450dfe07f04.0b8856e5ed5c12e3.6bc2ce2784deac4a",
+        "events": [
+          {
+            "id": "spya-kbd4y6",
+            "label": "Richmann electrocuted during lightning study",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1753-01-01",
+                "latest": "1753-12-31",
+                "extent": "instant",
+                "phrase": "in 1753",
+                "at": {
+                  "blockId": "spya-bbtuzu",
+                  "start": 287,
+                  "end": 294
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 1,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-bbtuzu",
+                "quote": "is the case of Georg Wilhelm Richmann, a Baltic German physicist and member of the St Petersburg Academy of Sciences, who, during work on atmospheric electricity, was electrocuted in 1753.",
+                "start": 107
+              }
+            ]
+          },
+          {
+            "id": "spya-tc3jr9",
+            "label": "Arago coins term \"ball lightning\"",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1837-01-01",
+                "latest": "1837-12-31",
+                "extent": "instant",
+                "phrase": "1837",
+                "at": {
+                  "blockId": "spya-v4ps0c",
+                  "start": 73,
+                  "end": 77
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 2,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-v4ps0c",
+                "quote": "Since Sur le tonnerre of French astronomer and physicist François Arago (1837), the term ball lightning (Kugelblitz, foudre globulaire) stands for a still unexplained group of metastable luminous phenomena in atmospheric electricity.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-vsp0kt",
+            "label": "Butti sees fireball over Milan",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1841-06-01",
+                "latest": "1841-06-30",
+                "extent": "instant",
+                "phrase": "in June 1841",
+                "at": {
+                  "blockId": "spya-by5gk0",
+                  "start": 231,
+                  "end": 243
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 3,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-by5gk0",
+                "quote": "It was 18:00 LT (local time) in June 1841, with a heavy thunderstorm outside.",
+                "start": 202
+              }
+            ]
+          },
+          {
+            "id": "spya-srcday",
+            "label": "Haidinger's Vienna sighting",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1868-10-20",
+                "latest": "1868-10-20",
+                "extent": "instant",
+                "phrase": "on 20 October 1868",
+                "at": {
+                  "blockId": "spya-g7tbkr",
+                  "start": 179,
+                  "end": 197
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 4,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-g7tbkr",
+                "quote": "Geologist and mineralogist Wilhelm von Haidinger, member of the Imperial Academy of Sciences at Vienna, observed ball lightning from his home at Vienna’s 3rd district Landstrasse on 20 October 1868, in a heavy thunderstorm between 17:15 and 17:30 LT:",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-kwpmub",
+            "label": "Pikes Peak lightning strike, first",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1876-06-16",
+                "latest": "1876-06-16",
+                "extent": "instant",
+                "phrase": "on 16 June 1876",
+                "at": {
+                  "blockId": "spya-nezgpv",
+                  "start": 370,
+                  "end": 385
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 5,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-nezgpv",
+                "quote": "In their daily journal, a lightning strike at 500 ft (152 m) northeast was recorded on 16 June 1876, at 17:30 LT, which affected the observer who sat on a rock outside so that he felt aftereffects for another 15 min.",
+                "start": 286
+              }
+            ]
+          },
+          {
+            "id": "spya-k8ae00",
+            "label": "Marsh's yacht-deck fireball, Southampton",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1878-07-23",
+                "latest": "1878-07-23",
+                "extent": "instant",
+                "phrase": "on 23 July 1878",
+                "at": {
+                  "blockId": "spya-u7qm50",
+                  "start": 202,
+                  "end": 217
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 6,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-u7qm50",
+                "quote": "Othniel Charles Marsh, professor of palaeontology at Yale University, USA, and president of the US National Academy of Sciences, was on board a large yacht in the harbour of Southampton, Hampshire, UK, on 23 July 1878.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-yq4k0c",
+            "label": "Pikes Peak lightning strike, second",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1879-08-12",
+                "latest": "1879-08-12",
+                "extent": "instant",
+                "phrase": "on 12 August 1879",
+                "at": {
+                  "blockId": "spya-nezgpv",
+                  "start": 778,
+                  "end": 795
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 7,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-nezgpv",
+                "quote": "The daily journal records another lightning strike on 12 August 1879, at 17:40 LT: “a bolt of lightning went through an arrester with the report of a rifle, throwing a ball of fire across the room against the stove and tin sheathing.”",
+                "start": 727
+              }
+            ]
+          },
+          {
+            "id": "spya-h3eqq2",
+            "label": "D-cy struck while walking to Paris",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1889-05-07",
+                "latest": "1889-05-07",
+                "extent": "instant",
+                "phrase": "on 7 May 1889",
+                "at": {
+                  "blockId": "spya-ugmxk8",
+                  "start": 494,
+                  "end": 507
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 8,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-ugmxk8",
+                "quote": "He walked on 7 May 1889 from Noisy le Sec northeast of Paris towards the city. Between 15:00 and 16:00 LT, thunder and heavy rain started.",
+                "start": 484
+              }
+            ]
+          },
+          {
+            "id": "spya-n32p5m",
+            "label": "D-cy sent to Charcot's clinic",
+            "dating": {
+              "kind": "words",
+              "phrase": "16 d after his accident"
+            },
+            "order": 9,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-ugmxk8",
+                "quote": "16 d after his accident, he was sent to Charcot’s clinic.",
+                "start": 1274
+              }
+            ]
+          },
+          {
+            "id": "spya-y7xhjn",
+            "label": "Charcot demonstrates D-cy's case",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1889-05-28",
+                "latest": "1889-05-28",
+                "extent": "instant",
+                "phrase": "28 May 1889",
+                "at": {
+                  "blockId": "spya-ugmxk8",
+                  "start": 333,
+                  "end": 344
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 10,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-ugmxk8",
+                "quote": "The latter (1895, pp. 373–399) contain the demonstration of 28 May 1889 of D–cy (anonymized in original source), 45 years, a former marine soldier already suffering from depression and exhaustion from overwork.",
+                "start": 273
+              }
+            ]
+          },
+          {
+            "id": "spya-ms6mud",
+            "label": "D-cy discharged from clinic",
+            "dating": {
+              "kind": "rejected",
+              "reason": "noYearFrame",
+              "phrase": "on 11 July"
+            },
+            "order": 11,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-srxfmn",
+                "quote": "The patient left the clinic on 11 July in a better physical condition but still with neurotic complaints.",
+                "start": 110
+              }
+            ]
+          },
+          {
+            "id": "spya-ddsndw",
+            "label": "Bellido's power-station fireball, Pontevedra",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1890-01-02",
+                "latest": "1890-01-02",
+                "extent": "instant",
+                "phrase": "on 2 January 1890",
+                "at": {
+                  "blockId": "spya-yc2g27",
+                  "start": 140,
+                  "end": 157
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 12,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-yc2g27",
+                "quote": "Ernesto Cabellero Bellido, professor of physics and director of the power station at Pontevedra, Galicia, Spain, gave the following report: on 2 January 1890, at 09:15 LT, a fireball the size of an orange appeared in the power station, oscillated between the switchboard and the dynamo and fragmented at the floor with a noise like a cannon shot.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-gb3920",
+            "label": "Rotch sees ball fall from Eiffel Tower",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1903-01-01",
+                "latest": "1903-12-31",
+                "extent": "instant",
+                "phrase": "in 1903",
+                "at": {
+                  "blockId": "spya-dbp5v8",
+                  "start": 408,
+                  "end": 415
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 13,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-dbp5v8",
+                "quote": "Abbott Lawrence Rotch, US meteorologist, founder of the Blue Hill Observatory south of Boston, and pioneer of kite soundings, saw and described ball lightning after lightning hit the Eiffel Tower in Paris in 1903.",
+                "start": 203
+              }
+            ]
+          },
+          {
+            "id": "spya-hrb5z2",
+            "label": "Bijl's red glowing ball sighting",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1905-01-01",
+                "latest": "1905-12-31",
+                "extent": "instant",
+                "phrase": "in 1905",
+                "at": {
+                  "blockId": "spya-dbp5v8",
+                  "start": 144,
+                  "end": 151
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 14,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-dbp5v8",
+                "quote": "Stanley Singer (1971, pp. 29–33) lists several accounts of natural scientists in his book, starting with Belgian astronomer M. E. Bijl, who saw in 1905 a red glowing ball with halo near his observatory.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-fbtkk4",
+            "label": "Haynard's Puy de Dôme sightings",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1916-04-15",
+                "latest": "1916-04-15",
+                "extent": "instant",
+                "phrase": "On 15 April 1916",
+                "at": {
+                  "blockId": "spya-kde569",
+                  "start": 0,
+                  "end": 16
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 15,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-kde569",
+                "quote": "On 15 April 1916, 18:20 LT, the summit and weather station of Puy de Dôme, a 1465 m high old volcano of Massif Central, Auvergne, France, were in fog, and weather observer Antoine Haynard was sitting at the telegraph when lightning damaged the set and gave him a shock.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-atzdxr",
+            "label": "Tanton's river sighting in Ontario",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1918-01-01",
+                "latest": "1918-12-31",
+                "extent": "instant",
+                "phrase": "in rural Ontario, Canada, 1918",
+                "at": {
+                  "blockId": "spya-vnu5me",
+                  "start": 1033,
+                  "end": 1063
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 16,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-vnu5me",
+                "quote": "Ball lightning over a river was also seen by geologist Thomas Leslie Tanton and members of his team in rural Ontario, Canada, 1918 (Singer, 1971).",
+                "start": 933
+              }
+            ]
+          },
+          {
+            "id": "spya-xhwbjd",
+            "label": "Gerlach observes ball lightning at Tübingen",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1927-05-09",
+                "latest": "1927-05-09",
+                "extent": "instant",
+                "phrase": "On 9 May 1927",
+                "at": {
+                  "blockId": "spya-q8aywm",
+                  "start": 121,
+                  "end": 134
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 17,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-q8aywm",
+                "quote": "On 9 May 1927, 08:00 [LT] I observed ball lightning [at Tübingen] . . . I happened to stand at the window . . .",
+                "start": 121
+              }
+            ]
+          },
+          {
+            "id": "spya-hbssvz",
+            "label": "Durward's son struck at Loch Tummel",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1934-01-01",
+                "latest": "1934-12-31",
+                "extent": "instant",
+                "phrase": "in summer 1934",
+                "at": {
+                  "blockId": "spya-rtyjuy",
+                  "start": 568,
+                  "end": 582
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 18,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-rtyjuy",
+                "quote": "James Durward also reported a ball lightning observation near Loch Tummel, Perthshire, Scotland, in summer 1934, where his 12-year-old son was opening an iron gate for the car passage in heavy rain and a moderate thunderstorm.",
+                "start": 471
+              }
+            ]
+          },
+          {
+            "id": "spya-yvaxhp",
+            "label": "Morris's ball lands in water tub, Dorstone",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 19,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-qxb4e2",
+                "quote": "During a thunderstorm I saw a large, red hot ball come down from the sky.",
+                "start": 139
+              }
+            ]
+          },
+          {
+            "id": "spya-kj0ujj",
+            "label": "Durward's flying-boat encounter en route to Iraq",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1938-01-01",
+                "latest": "1938-12-31",
+                "extent": "instant",
+                "phrase": "in summer 1938",
+                "at": {
+                  "blockId": "spya-rtyjuy",
+                  "start": 171,
+                  "end": 185
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 20,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-rtyjuy",
+                "quote": "James Durward, a British military meteorologist, 1936–1940 director of the Iraq Meteorological Service (Anonymous, 1956), encountered ball lightning on his flight to Iraq in summer 1938.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-w6pyvz",
+            "label": "Belokon's childhood hut sighting, Ukraine",
+            "dating": {
+              "kind": "rejected",
+              "reason": "unparseablePhrase",
+              "phrase": "in July/August 1941, 14–16:00 LT"
+            },
+            "order": 21,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-jt9q6s",
+                "quote": "Valentin A. Belokon, 7 years, later theoretical physicist and mathematician, was in July/August 1941, 14–16:00 LT at Zolotonosha, southeast of Kiev, Ukrainian Republic USSR (now Ukraine), in an old-style Ukrainian hut with a gabled hay-covered roof.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-gs7dzw",
+            "label": "Wieser's childhood sighting at Neumarkt",
+            "dating": {
+              "kind": "rejected",
+              "reason": "unparseablePhrase",
+              "phrase": "in the summer of 1945/1946"
+            },
+            "order": 22,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-t04fgh",
+                "quote": "In his interview, Friedrich Wieser told the author about his observation as a schoolboy in the summer of 1945/1946 at home with his mother in Neumarkt, Salzburg Province, Austria, at 16:00–17:00 LT.",
+                "start": 1009
+              }
+            ]
+          },
+          {
+            "id": "spya-f7dduu",
+            "label": "Rubisoier's first Sonnblick sighting",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1947-01-01",
+                "latest": "1947-12-31",
+                "extent": "instant",
+                "phrase": "in summer of 1947",
+                "at": {
+                  "blockId": "spya-gk9mhb",
+                  "start": 150,
+                  "end": 167
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 23,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-gk9mhb",
+                "quote": "Hermann Rubisoier, weather observer at the Mt Sonnblick summit observatory, 3106 m, Salzburg Province, Austria, told the author, 1988, the following: in summer of 1947, he and a second observer were indoors before 15:00 LT, when during a near thunderstorm a yellow fiery ball of 1 m came from the telephone (which was broken afterwards), crossed the kitchen, got out of a window, and then rolled down the glacier in front of the house to end with a bang.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-jcnbzc",
+            "label": "Naboko sees ball strike power line, Tushino",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1948-07-15",
+                "latest": "1948-07-15",
+                "extent": "instant",
+                "phrase": "on 15 July 1948",
+                "at": {
+                  "blockId": "spya-ek3d9d",
+                  "start": 65,
+                  "end": 80
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 24,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-ek3d9d",
+                "quote": "Idea M. Naboko, 17 years, later physicist and mathematician, was on 15 July 1948, 14–16:00 LT at Tushino, northwest Moscow, Russia, with four people.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-racd4b",
+            "label": "Nikitin's childhood sighting at Belaya Glina",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1948-08-01",
+                "latest": "1948-08-31",
+                "extent": "instant",
+                "phrase": "In mid-August 1948",
+                "at": {
+                  "blockId": "spya-pnfpdu",
+                  "start": 133,
+                  "end": 151
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 25,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-pnfpdu",
+                "quote": "In mid-August 1948, about 20:00 LT, in Belaya Glina, northwest of Krasnodar, south Russia, “I walked along a village street . . . on a hot summer day without rain.”",
+                "start": 133
+              }
+            ]
+          },
+          {
+            "id": "spya-nufb54",
+            "label": "Rubisoier's second Sonnblick sighting",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1949-01-01",
+                "latest": "1949-12-31",
+                "extent": "instant",
+                "phrase": "in summer of 1949",
+                "at": {
+                  "blockId": "spya-gk9mhb",
+                  "start": 550,
+                  "end": 567
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 26,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-gk9mhb",
+                "quote": "A second event happened in summer of 1949 in the afternoon, when the summit was in clouds and a thunderstorm in progress.",
+                "start": 526
+              }
+            ]
+          },
+          {
+            "id": "spya-de9e27",
+            "label": "Dolezalek observes ball lightning at Tübingen",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1951-06-08",
+                "latest": "1951-06-08",
+                "extent": "instant",
+                "phrase": "On 8 June 1951",
+                "at": {
+                  "blockId": "spya-wf7n6s",
+                  "start": 197,
+                  "end": 211
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 27,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-wf7n6s",
+                "quote": "On 8 June 1951, about 17:00 LT, a thunderstorm started.",
+                "start": 197
+              }
+            ]
+          },
+          {
+            "id": "spya-df9zhy",
+            "label": "Wittmann's childhood sighting, Neustadt bei Coburg",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1951-07-08",
+                "latest": "1951-07-08",
+                "extent": "instant",
+                "phrase": "on 8 July 1951",
+                "at": {
+                  "blockId": "spya-vg957u",
+                  "start": 104,
+                  "end": 118
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 28,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-vg957u",
+                "quote": "Axel D. Wittmann, astrophysicist of the Göttingen university observatory, saw ball lightning as a child on 8 July 1951, 17:30 LT, at Neustadt bei Coburg, Bavaria, Germany.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-c7ckbk",
+            "label": "Breitenecker's mortuary sighting at Ternitz",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1955-01-01",
+                "latest": "1955-12-31",
+                "extent": "instant",
+                "phrase": "in the summer of 1955",
+                "at": {
+                  "blockId": "spya-mcvhbj",
+                  "start": 142,
+                  "end": 163
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 29,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-mcvhbj",
+                "quote": "Coroner Leopold Breitenecker, later a forensic medicine professor at Vienna University, encountered ball lightning at Ternitz, Lower Austria, in the summer of 1955, 16–17:00 LT.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-mxscs5",
+            "label": "Jennison's night-flight sighting",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1963-03-19",
+                "latest": "1963-03-19",
+                "extent": "instant",
+                "phrase": "on March 19 1963",
+                "at": {
+                  "blockId": "spya-dusdxq",
+                  "start": 236,
+                  "end": 252
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 30,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-dusdxq",
+                "quote": "Roger Clifton Jennison, a radio astronomer at Jodrell Bank Observatory, UK, from 1965 professor for physical electronics at the University of Kent, Canterbury, travelled with an Eastern Airlines night flight from New York to Washington on March 19 1963.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-j8x6hg",
+            "label": "Fichtelberg observatory crew's sighting",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1965-05-10",
+                "latest": "1965-05-10",
+                "extent": "instant",
+                "phrase": "on 10 May 1965",
+                "at": {
+                  "blockId": "spya-ekza9x",
+                  "start": 192,
+                  "end": 206
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 31,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-ekza9x",
+                "quote": "The crew of the Mt Fichtelberg meteorological mountain observatory, 1215 m, in southern Saxony, Germany, have recorded many atmospheric phenomena (Hinz et al., 2017), including ball lightning on 10 May 1965, during a thunderstorm with gusts of up to wind force 12 and drifting snow.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-dws8vq",
+            "label": "Dmitriev's raft-string sighting, Onega river",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1965-08-23",
+                "latest": "1965-08-23",
+                "extent": "instant",
+                "phrase": "on 23 August 1965",
+                "at": {
+                  "blockId": "spya-vnu5me",
+                  "start": 115,
+                  "end": 132
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 32,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-vnu5me",
+                "quote": "Atmospheric chemist Dmitriev (Dmitriev, 1967) was on an expedition at the Onega river, Arkhangelsk Oblast, Russia, on 23 August 1965, near a string of wooden rafts.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-buds9p",
+            "label": "Mickelson's ball emerges from radio, Riga",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1967-06-07",
+                "latest": "1967-06-07",
+                "extent": "instant",
+                "phrase": "on 7 June 1967",
+                "at": {
+                  "blockId": "spya-wjfv3z",
+                  "start": 102,
+                  "end": 116
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 33,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-wjfv3z",
+                "quote": "Alexander E. Mickelson, doctor of technical sciences, was in a cottage house 17 km from Riga, Latvia, on 7 June 1967, with distant lightning flashes outside but no rain.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-fatudf",
+            "label": "Dunford's sighting at Rutherford Appleton Lab",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1968-04-18",
+                "latest": "1968-04-18",
+                "extent": "instant",
+                "phrase": "on 18 April 1968",
+                "at": {
+                  "blockId": "spya-ukyn4d",
+                  "start": 167,
+                  "end": 183
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 34,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-ukyn4d",
+                "quote": "Eric Dunford, space scientist at the Rutherford Appleton Laboratory, between Harwell and Chilton, Oxfordshire, UK, saw ball lightning with his wife and another person on 18 April 1968, at about 19:15–19:30 LT during a thunderstorm with heavy rain.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-j4sy6d",
+            "label": "Geiswinkler's ball crosses villa room, Wörthersee",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1968-08-01",
+                "latest": "1968-08-31",
+                "extent": "instant",
+                "phrase": "In August 1968",
+                "at": {
+                  "blockId": "spya-cz9xa3",
+                  "start": 0,
+                  "end": 14
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 35,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-cz9xa3",
+                "quote": "In August 1968, graduate engineer Alfred Geiswinkler stayed with his wife at a Maria Wörth villa, Carinthia, Austria, near Wörthersee.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-jajk4y",
+            "label": "Bagnall's bedside sighting at Wallsend",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1974-06-08",
+                "latest": "1974-06-08",
+                "extent": "instant",
+                "phrase": "on 8 June 1974",
+                "at": {
+                  "blockId": "spya-u5uj9t",
+                  "start": 73,
+                  "end": 87
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 36,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-u5uj9t",
+                "quote": "Philip M. Bagnall, network director of the British Meteor Society, awoke on 8 June 1974, at 01:36 LT at Wallsend, Tyne and Wear, UK, during a violent thunderstorm.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-wxetk2",
+            "label": "Vollmann's balcony sighting at Pfaffstätten",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1975-03-28",
+                "latest": "1975-03-28",
+                "extent": "instant",
+                "phrase": "on 28 March 1975",
+                "at": {
+                  "blockId": "spya-bbqsw8",
+                  "start": 214,
+                  "end": 230
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 37,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-bbqsw8",
+                "quote": "Wolfgang Vollmann, amateur astronomer working for the public observatory at Traiskirchen, looked out of the balcony door at his home in a high-rise, Pfaffstätten, Lower Austria, at the end of a thunderstorm shower on 28 March 1975.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-evm7sf",
+            "label": "Breitenecker's second sighting, Attersee",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1975-01-01",
+                "latest": "1975-12-31",
+                "extent": "instant",
+                "phrase": "in the summer of 1975",
+                "at": {
+                  "blockId": "spya-mcvhbj",
+                  "start": 1013,
+                  "end": 1034
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 38,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-mcvhbj",
+                "quote": "Breitenecker saw ball lightning a second time from Mühlbach/Attersee, Upper Austria, in the summer of 1975, late afternoon, looking towards Mt Schafberg in a thunderstorm with many lightning flashes.",
+                "start": 928
+              }
+            ]
+          },
+          {
+            "id": "spya-es8hrt",
+            "label": "Dalton's coastguard sighting near Fishguard",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1977-06-08",
+                "latest": "1977-06-08",
+                "extent": "instant",
+                "phrase": "on 8 June 1977",
+                "at": {
+                  "blockId": "spya-hq9da8",
+                  "start": 111,
+                  "end": 125
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 39,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-hq9da8",
+                "quote": "Anthony Dalton, a coastguard near Fishguard, Wales, UK, sent a report to the Meteorological Office in England: on 8 June 1977, sky cloudy, distant cumulonimbus, he saw at 02:27 LT a “very large (estimated bus sized) brilliant yellow-green transparent ball with fuzzy outline” descend from the base of a towering cumulus (congestus) cloud and float down the hillside of Garn Fawr mountain.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-x99hs6",
+            "label": "Wieser's roadside sighting near Blindenmarkt",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "1977-10-10",
+                "latest": "1977-10-10",
+                "extent": "instant",
+                "phrase": "on 10 October 1977",
+                "at": {
+                  "blockId": "spya-t04fgh",
+                  "start": 150,
+                  "end": 168
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 40,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-t04fgh",
+                "quote": "Friedrich Wieser, Austrian Air Force colonel and member of the Tactical Air Command, drove in his car from Atzelsdorf to Blindenmarkt, Lower Austria, on 10 October 1977, around 19:00 LT.",
+                "start": 0
+              }
+            ]
+          }
+        ],
+        "orderConflicts": 0,
+        "generatedAt": "2026-10-03T03:57:23.521Z",
+        "elapsedMs": 286947
+      },
+      "blocks": 97,
+      "words": 10003,
+      "frame": null,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 0,
+        "truncated": 0,
+        "overCap": 16,
+        "malformed": 0,
+        "datedLabel": 0,
+        "unanchored": 0,
+        "unordered": 0,
+        "unparseablePhrase": 2,
+        "phraseNotInOccurrence": 0,
+        "noDateInPhrase": 1,
+        "noYearFrame": 1,
+        "phraseNotFound": 0,
+        "duplicateOrders": 0,
+        "orderConflicts": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 27011,
+      "outputTokens": 37850,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 286983
+    },
+    "arc": {
+      "arc": {
+        "version": "arc/6",
+        "generator": "claude-sonnet-5",
+        "slug": "source-spya-f550ta",
+        "entries": [
+          {
+            "range": [
+              "spya-ncu3br",
+              "spya-wtg508"
+            ],
+            "text": "Ball lightning has thousands of eyewitness accounts but no agreed theory, and this paper sets out to add scientist testimony to that record."
+          },
+          {
+            "range": [
+              "spya-duju25",
+              "spya-rjnzcc"
+            ],
+            "text": "The name existed before any real consensus formed, leaving a huge literature that still could not settle what ball lightning is."
+          },
+          {
+            "range": [
+              "spya-zbq6a4",
+              "spya-nwxrm0"
+            ],
+            "text": "Since direct recordings are nearly impossible, this review turns to trained observers' testimony as the next best evidence."
+          },
+          {
+            "range": [
+              "spya-ut726q",
+              "spya-weej2g"
+            ],
+            "text": "These firsthand professional accounts supply the detailed, varied raw material the methodology promised, without yet resolving what unites them."
+          },
+          {
+            "range": [
+              "spya-qtga9m",
+              "spya-nb4g7h"
+            ],
+            "text": "Beyond laboratory-trained scientists, ordinary duty-bound observers extend the same body of testimony and its unresolved puzzle."
+          },
+          {
+            "range": [
+              "spya-k02vg9",
+              "spya-p9uvh9"
+            ],
+            "text": "Tallying all these accounts exposes just how little the sightings agree on, undercutting hope for one single explanation."
+          },
+          {
+            "range": [
+              "spya-c2m4vk",
+              "spya-djjxkt"
+            ],
+            "text": "Where witness memory falls short, a few cases with physical traces or instruments offer the firmer evidence the field has lacked."
+          },
+          {
+            "range": [
+              "spya-reyd2w",
+              "spya-zz7g2q"
+            ],
+            "text": "Having gathered testimony and physical benchmarks alike, the case is made for pooling them systematically rather than working alone."
+          },
+          {
+            "range": [
+              "spya-yp8uzp",
+              "spya-rcbx2w"
+            ],
+            "text": "The underlying case material is opened to further use, leaving the theoretical question exactly as unsettled as it began."
+          }
+        ],
+        "sourceHash": "c31f4450dfe07f04.0b8856e5ed5c12e3.7f72fb17c4a6968c"
+      },
+      "model": "claude-sonnet-5",
+      "parts": [
+        {
+          "id": "n0002",
+          "gist": "This front matter presents the article's publication details, title, and abstract summarizing a compiled review of expert ball lightning sightings.",
+          "depth": 1,
+          "range": [
+            "spya-ncu3br",
+            "spya-wtg508"
+          ],
+          "title": "Publication and abstract",
+          "parent": "n0001",
+          "children": [
+            "n0003",
+            "n0005",
+            "n0010",
+            "n0012"
+          ]
+        },
+        {
+          "id": "n0014",
+          "gist": "The historical background traces the coinage of 'ball lightning' from early eyewitness reports to decades of inconclusive scientific review.",
+          "depth": 1,
+          "range": [
+            "spya-duju25",
+            "spya-rjnzcc"
+          ],
+          "title": "1 Historical outline",
+          "parent": "n0001",
+          "children": [
+            "n0015",
+            "n0019"
+          ],
+          "sourceHeading": "1 Historical outline"
+        },
+        {
+          "id": "n0022",
+          "gist": "Lacking instrumental records, the methodology relies on compiling expert eyewitness reports, building on the author's own decades of case work.",
+          "depth": 1,
+          "range": [
+            "spya-zbq6a4",
+            "spya-nwxrm0"
+          ],
+          "title": "2 Methodology",
+          "parent": "n0001",
+          "children": [
+            "n0023",
+            "n0026",
+            "n0028"
+          ],
+          "sourceHeading": "2 Methodology"
+        },
+        {
+          "id": "n0030",
+          "gist": "Dozens of firsthand accounts from physicists, engineers, physicians, and other trained professionals across a century and a half document ball lightning's varied appearances and effects.",
+          "depth": 1,
+          "range": [
+            "spya-ut726q",
+            "spya-weej2g"
+          ],
+          "title": "3 Scientists as ball lightning observers",
+          "parent": "n0001",
+          "children": [
+            "n0031",
+            "n0033",
+            "n0039",
+            "n0043",
+            "n0047",
+            "n0051",
+            "n0056",
+            "n0062",
+            "n0066"
+          ],
+          "sourceHeading": "3 Scientists as ball lightning observers"
+        },
+        {
+          "id": "n0075",
+          "gist": "Trained non-scientist professionals—weather observers, coastguards, military, and amateur astronomers—add further credible ball lightning sightings.",
+          "depth": 1,
+          "range": [
+            "spya-qtga9m",
+            "spya-nb4g7h"
+          ],
+          "title": "4 Other trained observers",
+          "parent": "n0001",
+          "children": [
+            "n0076",
+            "n0078",
+            "n0087"
+          ],
+          "sourceHeading": "4 Other trained observers"
+        },
+        {
+          "id": "n0093",
+          "gist": "Statistical synthesis of the 41 cases reveals consistent thunderstorm timing but wide variation in size, duration, and behavior.",
+          "depth": 1,
+          "range": [
+            "spya-k02vg9",
+            "spya-p9uvh9"
+          ],
+          "title": "5 Synopsis of cases",
+          "parent": "n0001",
+          "children": [
+            "n0094",
+            "n0099",
+            "n0105"
+          ],
+          "sourceHeading": "5 Synopsis of cases"
+        },
+        {
+          "id": "n0109",
+          "gist": "Six additional landmark cases, from Richmann's death to modern spectroscopic recordings, illustrate both the myths and the emerging physical evidence around ball lightning.",
+          "depth": 1,
+          "range": [
+            "spya-c2m4vk",
+            "spya-djjxkt"
+          ],
+          "title": "6 Other influential or notable cases",
+          "parent": "n0001",
+          "children": [
+            "n0110",
+            "n0113",
+            "n0118",
+            "n0121"
+          ],
+          "sourceHeading": "6 Other influential or notable cases"
+        },
+        {
+          "id": "n0125",
+          "gist": "The conclusion calls for more coordinated, evidence-based ball lightning research to overcome decades of fragmented, individualized study.",
+          "depth": 1,
+          "range": [
+            "spya-reyd2w",
+            "spya-zz7g2q"
+          ],
+          "title": "7 Conclusions",
+          "parent": "n0001",
+          "children": [
+            "n0126",
+            "n0129"
+          ],
+          "sourceHeading": "7 Conclusions"
+        },
+        {
+          "id": "n0132",
+          "gist": "Closing statements cover data sources, disclosures, and acknowledgements for the compiled case collection.",
+          "depth": 1,
+          "range": [
+            "spya-yp8uzp",
+            "spya-rcbx2w"
+          ],
+          "title": "Data and acknowledgements",
+          "parent": "n0001",
+          "children": [
+            "n0133",
+            "n0136"
+          ]
+        }
+      ],
+      "blocks": 97,
+      "inputTokens": 26841,
+      "outputTokens": 395,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 6343
+    }
+  }
+}

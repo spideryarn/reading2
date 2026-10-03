@@ -60,8 +60,12 @@ import type { BlockId } from "./types.js";
  *
  * `sketch/4`, 2026-10-02: the model answer is constrained by the schema in
  * src/sketch.ts. The prompt and this reader's semantic checks are unchanged.
+ *
+ * `sketch/5`, 2026-10-03: the prompt gained the shared paperwork section,
+ * `paperwork("summary")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
+ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
  */
-export const SKETCH_VERSION = "sketch/4";
+export const SKETCH_VERSION = "sketch/5";
 
 /**
  * The canvas the model draws on, in its own units.

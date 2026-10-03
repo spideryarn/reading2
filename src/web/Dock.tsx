@@ -212,6 +212,7 @@ import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { BlockId, Comment } from "../types.js";
 import { type AskedQuestion, type DrawerEntry, MARK_KIND_LABEL, commentKind, orderDrawer, passageOf } from "./comment-nav.js";
+import { HighlightDot } from "./HighlightSwatches.js";
 import { armActivationForMode, armActivationForSubMode } from "./activation.js";
 import { withSubMode, type SubMode } from "./sub-modes.js";
 /* **This direction only.** `CommandBar` deliberately imports nothing from this
@@ -4145,7 +4146,11 @@ function Questions({
             <button type="button" className="dock-question" onClick={() => onOpen(c.id)}>
               {/* Which of three it is, as the question rows above say theirs —
                   SPIDERYARN-READING2-9H, plan 261002j. `commentKind`. */}
-              <span className="dock-question-kind">{MARK_KIND_LABEL[commentKind(c)]}</span>
+              <span className="dock-question-kind">
+                {/* A coloured comment's colour, beside its kind — plan 261003e. */}
+                {c.colour && <HighlightDot colour={c.colour} />}
+                {MARK_KIND_LABEL[commentKind(c)]}
+              </span>
               {passage}
               {/* **The reader's own words beat the model's**, which is the whole
                   ordering principle of this feature — and the list read as broken

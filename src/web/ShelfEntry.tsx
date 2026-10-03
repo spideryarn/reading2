@@ -43,6 +43,7 @@ import { IconButton } from "./IconButton.js";
 import { Link } from "./Link.js";
 import { exactly } from "./relative-time.js";
 import { readHref } from "./router.js";
+import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { useShelf } from "./useShelf.js";
@@ -272,6 +273,8 @@ export function ShelfCard({
             fixture
           </span>
         )}
+        {/* The reader's own tags, and the way to add one — plan 261003d. */}
+        <ShelfTags entry={entry} shelf={shelf} />
       </p>
 
       {/* The whole piece in one sentence: a model's gist, or the article's own

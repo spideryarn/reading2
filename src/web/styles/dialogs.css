@@ -171,6 +171,60 @@
 }
 .annotate-ask input { cursor: pointer; }
 
+/* ---- the highlight colour row ------------------------------------------
+   HighlightSwatches.tsx, in both comment boxes (AnnotateDialog and
+   CommentDialog). Five round swatches — none, then the four `--hl-*` washes
+   from tokens.css, which are the exact colours the prose is painted with, so
+   the swatch is a preview rather than a legend. Plan 261003e. */
+.hl-swatches {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.6rem 0 0.15rem;
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+}
+.hl-swatches-row { display: inline-flex; gap: 0.4rem; }
+.hl-swatch {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--rule-strong);
+  background: var(--hl, transparent);
+  cursor: pointer;
+}
+.hl-swatch:disabled { cursor: default; opacity: 0.5; }
+/* The chosen one carries a ring in the orange the app uses for "selected",
+   and `aria-checked` says it in words. */
+.hl-swatch.on { box-shadow: 0 0 0 2px var(--page), 0 0 0 3.5px var(--highlight); }
+.hl-swatch:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+/* "No colour": an empty circle with a slash through it. */
+.hl-swatch[data-colour="none"] {
+  background: linear-gradient(
+    135deg,
+    transparent calc(50% - 0.75px),
+    var(--ink-faint) calc(50% - 0.75px),
+    var(--ink-faint) calc(50% + 0.75px),
+    transparent calc(50% + 0.75px)
+  );
+}
+.hl-swatch[data-colour="yellow"], .hl-dot[data-colour="yellow"] { --hl: var(--hl-yellow); }
+.hl-swatch[data-colour="green"], .hl-dot[data-colour="green"] { --hl: var(--hl-green); }
+.hl-swatch[data-colour="blue"], .hl-dot[data-colour="blue"] { --hl: var(--hl-blue); }
+.hl-swatch[data-colour="pink"], .hl-dot[data-colour="pink"] { --hl: var(--hl-pink); }
+/* The drawer's swatch beside a coloured comment's kind (Dock.tsx). */
+.hl-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  vertical-align: -0.05rem;
+  background: var(--hl);
+  border: 1px solid var(--rule-strong);
+}
+
 .annotate-actions {
   display: flex;
   align-items: center;

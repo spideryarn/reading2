@@ -69,6 +69,7 @@ import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 import {
   type DifficultyCentralityDrops,
   noDifficultyCentralityDrops,
@@ -109,8 +110,12 @@ import type { ArtifactStore } from "./store/artifacts.js";
  *
  * `glossary/7`, 2026-10-02: the request gained `GLOSSARY_OUTPUT_SCHEMA`; the
  * prompt text is unchanged.
+ *
+ * `glossary/8`, 2026-10-03: the prompt gained the shared paperwork section,
+ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
+ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
  */
-export const PROMPT_VERSION = "glossary/7";
+export const PROMPT_VERSION = "glossary/8";
 
 /**
  * The most entries one call may return.
@@ -1160,6 +1165,8 @@ neither "senseHere" nor "background" says nothing and will be thrown away.
 Nothing else may be omitted.
 
 ${plainWords()}
+
+${paperwork("pick")}
 
 ${PROFILE_RULES}`;
 

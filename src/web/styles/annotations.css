@@ -35,7 +35,13 @@
    already mean, and three overlapping meanings of "orange background" is one
    too many. The words themselves must not change colour — this is the verbatim
    column, and recolouring the author's prose to advertise our annotation is the
-   small version of the thing vision.md § Principles refuses. */
+   small version of the thing vision.md § Principles refuses.
+
+   **A fill is used in one case: the reader chose a colour** (a highlight,
+   2026-10-03, `mark.cmt[data-colour]` below). Then the wash is theirs, in one
+   of four hues none of which is the orange, and it is the point — they asked
+   for these words to stand out. An uncoloured comment keeps this underline
+   exactly. docs/plans/261003e-span-highlights-with-a-colour.md. */
 mark.cmt {
   background: none;
   color: inherit;
@@ -54,8 +60,49 @@ mark.cmt[data-cmt-open] {
   border-bottom-color: var(--highlight);
 }
 
+/* **A highlight: the reader's colour, as a wash behind the words.** The words
+   keep their colour (the rule above). `data-colour` is the colour of the comment
+   a click on this run opens — annotate.ts § `commentOrder` — so the wash and the
+   dialog always agree. `background-color` and never the `background` shorthand,
+   so a search's stripes (a `background-image`) survive underneath. The
+   underline goes: the wash already says something is here. */
+mark.cmt[data-colour] {
+  border-bottom-color: transparent;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  /* Square corners: a highlight is cut into one <mark> per text node (around a
+     glossary term, an <em>), and rounded corners on each piece notch the wash
+     between them. Seen in the browser check, 2026-10-03. */
+}
+mark.cmt[data-colour="yellow"] { --hl: var(--hl-yellow); }
+mark.cmt[data-colour="green"] { --hl: var(--hl-green); }
+mark.cmt[data-colour="blue"] { --hl: var(--hl-blue); }
+mark.cmt[data-colour="pink"] { --hl: var(--hl-pink); }
+/* Written at a specificity that beats `mark.cmt:hover`, `mark.hit[data-wash]`
+   and `mark.hit[data-wash][data-hit-open]` alike: **on the exact words a
+   highlight covers, its wash wins over a search's** (plan review S6). The
+   search keeps its other cues — the hue stripes under the words and the bar
+   down the paragraph — so nothing it found is hidden. */
+mark.cmt[data-colour][data-colour],
+mark.cmt.hit[data-colour][data-wash],
+mark.cmt.hit[data-colour][data-wash][data-hit-open] {
+  background-color: var(--hl);
+}
+mark.cmt[data-colour][data-colour]:hover {
+  background-color: color-mix(in oklab, var(--hl) 80%, var(--ink));
+}
+/* The open one gets an outline rather than the orange wash, which would
+   replace the reader's chosen colour with ours at exactly the moment they are
+   looking at it. */
+mark.cmt[data-colour][data-cmt-open] {
+  outline: 1px solid var(--highlight);
+  outline-offset: 1px;
+}
+
 /* The marker proper. On the final run only (annotate.ts sets data-mark-end), so
-   a mark broken across an <em> still shows exactly one asterisk. */
+   a mark broken across an <em> still shows exactly one asterisk — and only for
+   a comment that earns one: a wordless highlight shows its wash alone
+   (`earnsMarker`, comment-nav.ts). */
 mark.cmt[data-mark-end]::after {
   content: "✳";
   font-family: var(--font-ui);
@@ -747,10 +794,13 @@ mark.hit[data-quote][data-hit-open] {
   --quote-stroke-color: var(--toward-ink);
   background-color: rgb(var(--quote-stroke-rgb) / 0.18);
 }
-/* A comment over a hit keeps its underline: it is the one you can click, and
-   losing the affordance to a wash would make it look inert. Same call
+/* An uncoloured comment over a hit keeps its underline: it is the one you can
+   click, and losing the affordance to a wash would make it look inert. A
+   coloured highlight already has its own wash and deliberately keeps no orange
+   line (the rule near the top); `[data-colour]` must therefore stay excluded
+   here despite this rule appearing later in the cascade. Same call
    `mark.cmt.term` makes, for the same reason. */
-mark.cmt.hit {
+mark.cmt.hit:not([data-colour]) {
   border-bottom-color: var(--highlight);
 }
 

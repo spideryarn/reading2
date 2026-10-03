@@ -103,10 +103,16 @@ ${PROFILE_RULES}`;
   reference list are paperwork when they only identify the piece or record how it was produced,
   published or sourced, and content when the piece uses them. `"summary"` leaves it out;
   `"structure"` keeps the node a table of contents must have and labels it, and labels a node that
-  is only the front abstract the same way.
-  Summary, Tweets and both structure-step prompts carry it; the evidence is
-  [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md) and
-  [261003c](../plans/261003c-summary-and-structure-skip-the-front-matter.md).
+  is only the front abstract the same way; `"pick"` chooses no question, quote, idea, term or date
+  from it; `"part"` keeps Arc's one sentence for a paperwork part, about the argument and never the
+  paperwork (a label broke Arc's sentence count).
+  Every prompt handed the whole article carries it, or is in `PAPERWORK_EXEMPT` in the same file
+  with its reason — Citations, the referee prompts, and the modes that answer the reader, who may
+  ask who funded it. `tests/paperwork-coverage.test.ts` holds that, the way the plain-words test
+  does. The evidence is
+  [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md),
+  [261003c](../plans/261003c-summary-and-structure-skip-the-front-matter.md) and
+  [261003d](../plans/261003d-paperwork-in-every-whole-piece-mode.md).
 - **No words for a reader, no rule.** A prompt whose output is a verdict, a URL, ids or a verbatim
   transcription is listed in `PLAIN_WORDS_EXEMPT` in the same file, with its reason. A transcriber
   told to prefer common words is a transcriber invited to tidy.

@@ -15,6 +15,8 @@
  *   DELETE /api/library/:slug    destroy it, for good → { destroyed: slug }. 409 while an
  *                                 import is running; no body, and nothing to undo
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
+ *   GET    /api/library/tags     every tag the reader uses → { tags: [{ tag, count }] }
+ *   PATCH  /api/library/:slug/tags   { add?: string[], remove?: string[] } → { tags }
  *   GET    /api/models           which model writes what
  *                                 → { tasks: [{ task, model, id, provider, source, effort? }] }
  *   GET    /api/reader           `?slug=` → { profile, purpose, hasProfile, experimentalSince }
@@ -52,15 +54,18 @@
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
  *   GET    /api/comments/:slug   selection-anchored comments for compatibility;
  *                                `?anchors=whole-block` opts the current client into every comment
- *   POST   /api/comments/:slug   { blockId, quote, start, body?, criterionId?, valence? }, or
- *                                { blockId } for a whole-block bookmark
+ *   POST   /api/comments/:slug   { blockId, quote, start, body?, criterionId?, valence?, colour? },
+ *                                or { blockId } for a whole-block bookmark
  *                                → the stored comment. `criterionId` + `valence` are the referee's
- *                                  own placement of the passage — `tidyMark`
+ *                                  own placement of the passage — `tidyMark`; `colour` is a
+ *                                  highlight's, refused on a whole-block bookmark — `tidyColour`
  *   PATCH  /api/comments/:slug/:id        { body } — the reader's words, `null` clears them.
  *                                  The key is required: a patch that never mentions the body
  *                                  is a 400, not a silent wipe
  *   PATCH  /api/comments/:slug/:id/mark   { criterionId, valence } — both keys, always, each a
  *                                  value or `null`; both `null` clears the placement
+ *   PATCH  /api/comments/:slug/:id/colour { colour } — a highlight colour, or `null` to
+ *                                  remove it; the key is required. 409 on a whole-block comment
  *   DELETE /api/comments/:slug/:id
  *   GET    /api/chat/:slug       every stored conversation for the article
  *   POST   /api/chat/:slug       → **a stream**, see `streamChat`. Three bodies:
@@ -143,6 +148,7 @@ import {
   refereeCriteriaStore,
   searchStore,
   shelfStore,
+  tagStore,
   readingTimeStore,
   glossaryHiddenStore,
   loadArticle,
@@ -471,6 +477,8 @@ import type {
   SketchResponse,
   LibraryResponse,
   LibraryTermsResponse,
+  LibraryTagsResponse,
+  ArticleTagsResponse,
   RememberStance,
   ThreadKind,
   ThreadResponse,
@@ -481,7 +489,7 @@ import type {
 /* Values, not types: the list a placement off the wire is checked against, and
    the guard that does the checking. Both live in types.ts because the browser
    needs the same union and cannot import src/live.ts. */
-import { isMicPlacement, MIC_PLACEMENTS } from "./types.js";
+import { isMicPlacement, MIC_PLACEMENTS, HIGHLIGHT_COLOURS, isHighlightColour } from "./types.js";
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
 import { isThreadKind, MAX_VISIBLE_BLOCKS, THREAD_KINDS } from "./types.js";
@@ -506,7 +514,7 @@ import {
    (`streamChat` says why one is still accepted at all).
    src/types.ts § REMEMBER_STANCES. */
 import { REMEMBER_STANCES } from "./types.js";
-import type { Article, CommentAnchor, ResetResponse } from "./types.js";
+import type { Article, CommentAnchor, HighlightColour, ResetResponse } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -1526,6 +1534,21 @@ async function tidyMark(slug: string, raw: Record<string, unknown>): Promise<Mar
 }
 
 /**
+ * **A highlight's colour off the wire**: one of `HIGHLIGHT_COLOURS`, or `null`
+ * (and, on the create path, absent) for none. Anything else is a 400 rather
+ * than "no colour" — a mistyped name silently drawing an underline is the
+ * failure a refusal makes visible. `comments_colour` refuses it again.
+ * docs/plans/261003e-span-highlights-with-a-colour.md.
+ */
+function tidyColour(colour: unknown): HighlightColour | null {
+  if (colour === undefined || colour === null) return null;
+  if (!isHighlightColour(colour)) {
+    throw httpError(400, `colour must be one of ${HIGHLIGHT_COLOURS.join(", ")}, or null [cmt-colour]`);
+  }
+  return colour;
+}
+
+/**
  * The same placement, in the shape `create` takes: absent keys, not `null`s.
  *
  * **One validator, two shapes, and the two shapes are not interchangeable.**
@@ -1601,6 +1624,13 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
     }
   }
   const tidied = tidyBody(text);
+  const colour = tidyColour(raw.colour);
+  /* A colour needs words to paint: a whole-block bookmark draws nothing in the
+     prose, so a coloured one would be a "highlight" that shows nothing (plan
+     261003e, review S4). `comments_colour_needs_quote` refuses it again. */
+  if (colour !== null && anchor.quote === undefined) {
+    throw httpError(400, "A whole-paragraph bookmark cannot have a colour [cmt-colour-block]");
+  }
 
   // Before anything is written, so a slug that is not an article is a clean 404
   // with nothing left behind.
@@ -1628,6 +1658,7 @@ async function createFree(slug: string, body: unknown): Promise<Comment> {
     ...(tidied === null ? {} : { body: tidied }),
     ...(typeof id === "string" ? { id } : {}),
     ...mark,
+    ...(colour === null ? {} : { colour }),
   });
 }
 
@@ -5171,6 +5202,29 @@ async function patchShelf(
 }
 
 /**
+ * **A tag edit's body, checked for shape** — `{ add?: string[], remove?: string[] }`.
+ *
+ * Shape only. The spelling, the per-edit limit, a tag named on both sides and
+ * an empty edit are refused by `normaliseChange` (src/store/pg-tags.ts), which
+ * the later command-bar "add a tag" reaches through the same route, so there
+ * is one rule and one place for it. Plan 261003d.
+ */
+function tagChangeOf(body: unknown): { add?: string[]; remove?: string[] } {
+  const patch = objectBody(body);
+  const side = (key: "add" | "remove"): string[] | undefined => {
+    if (!(key in patch)) return undefined;
+    const value = patch[key];
+    if (!Array.isArray(value) || !value.every((t) => typeof t === "string")) {
+      throw httpError(400, `${key} must be a list of strings`);
+    }
+    return value;
+  };
+  const add = side("add");
+  const remove = side("remove");
+  return { ...(add ? { add } : {}), ...(remove ? { remove } : {}) };
+}
+
+/**
  * Turn a POST body into a job request, or explain what was wrong with it.
  *
  * Two shapes, and they are **mutually exclusive**. `{ url }` means "add this
@@ -7541,6 +7595,8 @@ const ONE_THREAD_PATTERN = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/;
 const COMMENTS_PATTERN = /^\/api\/comments\/([\w.%-]+)$/;
 const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
 const SHELF_ENTRY_PATTERN = /^\/api\/library\/([\w.%-]+)$/;
+/* The reader's own tags on one article — plan 261003d. */
+const SHELF_TAGS_PATTERN = /^\/api\/library\/([\w.%-]+)\/tags$/;
 /* Reading time: GET reads the totals, POST adds to them — two rows, one path. */
 const READING_TIME_PATTERN = /^\/api\/reading-time\/([\w.%-]+)$/;
 /* Hiding a glossary entry: PUT hides, DELETE shows it again — two rows, one path. */
@@ -7937,6 +7993,41 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          and a Vercel function stays alive until it is done. `refresh` never
          throws. src/shelf-topics.ts. */
       if (refresh) await refresh();
+    },
+  },
+
+  /* Every tag the reader uses, with counts, for the tag editor's suggestions.
+     Exact, like /api/library/terms above, and GET where the slug pattern below
+     is PATCH and DELETE. Plan 261003d. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/library/tags",
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      const tags: LibraryTagsResponse = { tags: await tagStore.readerTags() };
+      /* The reader's own words: never a shared cache's, as the terms route. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, tags);
+    },
+  },
+
+  /* **Add and remove the reader's tags on one article**; answers the tags
+     after. Additive rather than a PUT of the whole set, so two tabs cannot
+     clobber each other and the command bar's later "add a tag of X" is
+     `{ add: [X] }`. Ownership is `ownedSlug` inside the store: a stranger's
+     slug is a 404. */
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: SHELF_TAGS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const tags: ArticleTagsResponse = {
+        tags: await tagStore.edit(slug, tagChangeOf(await readBody(req))),
+      };
+      send(res, 200, tags);
     },
   },
 
@@ -9296,6 +9387,28 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       }
       const mark = await tidyMark(slug, raw);
       send(res, 200, { comment: await commentStore.patchMark(slug, id, mark) });
+    },
+  },
+
+  /* **A highlight recoloured, or its colour removed** — its own sub-path, for
+     the reason the placement has one above: a patch carrying more than one
+     thing has to decide what an absent key means. The key is required, and
+     `{ colour: null }` is how a colour is removed, in writing. Ownership is the
+     slug's, as for every route here (`article: "first-capture"`); the store
+     refuses a whole-block comment with a 409 (plan 261003e, review S4). */
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/colour$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      const raw = fields(await readBody(req));
+      if (!("colour" in raw)) {
+        throw httpError(400, "A colour patch has to say what the colour is, or null [cmt-colour-missing]");
+      }
+      const colour = tidyColour(raw.colour);
+      send(res, 200, { comment: await commentStore.patchColour(slug, id, colour) });
     },
   },
 

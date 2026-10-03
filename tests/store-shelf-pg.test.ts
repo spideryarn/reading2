@@ -46,6 +46,7 @@ import * as schema from "../src/db/schema.js";
 import {
   aiCalls,
   articleRevisions,
+  articleTags,
   articleVisibilityChanges,
   articles,
   blockIdentities,
@@ -74,6 +75,7 @@ import { pgArticleReader } from "../src/store/pg.js";
 import { PgTable, QueryBuilder, getTableConfig } from "drizzle-orm/pg-core";
 
 import { lockedArticleForDestroyQuery, pgLibrarySearch, pgShelfStore } from "../src/store/pg-shelf.js";
+import { pgTagStore } from "../src/store/pg-tags.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -519,6 +521,20 @@ describe("the Postgres shelf and library search", () => {
   });
 
   describe("the shelf's writes", () => {
+    /* The listing is where the shelf's Tags row and the cards read them from,
+       and it is a second query beside `listArticlesQuery` — so a listing that
+       forgot to attach them would leave every other tag test green. Plan 261003d. */
+    it("lists the reader's tags on each card, sorted, and none on an untagged one", async () => {
+      await pgTagStore.edit(SLUG, { add: ["Zeta", "alpha"] });
+      try {
+        const entries = await pgArticleReader.listArticles();
+        expect(entries.find((e) => e.slug === SLUG)?.tags).toEqual(["alpha", "zeta"]);
+        expect(entries.find((e) => e.slug === OTHER_SLUG)?.tags).toEqual([]);
+      } finally {
+        await pgTagStore.edit(SLUG, { remove: ["alpha", "zeta"] });
+      }
+    });
+
     it("renames, and the reading view agrees with the card", async () => {
       const entry = await pgShelfStore.patch(SLUG, { title: "What I call it" });
       expect(entry.title).toBe("What I call it");
@@ -969,6 +985,7 @@ describe("destroying an article", () => {
         }),
       glossary_hidden_entries: () =>
         db.insert(glossaryHiddenEntries).values({ articleId: GONE_ARTICLE, entryId: mintId() }),
+      article_tags: () => db.insert(articleTags).values({ articleId: GONE_ARTICLE, tag: "gone" }),
       glossary_lookups: () =>
         db.insert(glossaryLookups).values({
           articleId: GONE_ARTICLE,

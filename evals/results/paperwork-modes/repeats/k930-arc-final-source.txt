@@ -1,0 +1,8 @@
+{"ok":true,"last":"The collected cases are offered as open and incomplete, inviting more reports rather than closing the question."}
+{"ok":true,"last":"Nothing further is claimed here; this closes the record without adding to or resolving the open question."}
+{"ok":true,"last":"The sightings stand as openly shared, undisclosed-bias testimony, leaving the underlying mystery exactly where it was."}
+{"ok":true,"last":"Nothing new is argued here; the case remains what the compiled testimonies and few material traces have already shown."}
+{"ok":true,"last":"The case compilation itself is now laid open for others to extend, with the central puzzle still unsolved."}
+{"ok":true,"last":"The case collection stands as compiled and shared, with nothing further argued beyond its assembly."}
+{"ok":true,"last":"What stands settled is the compiled record itself; what still lacks is the theory it was meant to test."}
+{"ok":true,"last":"Nothing further is argued; the sources behind the compiled cases are simply made available for others to check."}

@@ -90,6 +90,7 @@ function entry(over: Partial<LibraryEntry> & { slug: string }): LibraryEntry {
     sections: 9,
     comments: 0,
     opens: 0,
+    tags: [],
     sourceReusable: true,
     has: { arc: false, tweets: false, glossary: false },
     ...over,
@@ -620,6 +621,69 @@ describe("what a failure does to a shelf that is already painted", () => {
   });
 });
 
+describe("tag edits and shelf races", () => {
+  it("does not recreate an archived overlay when Put back wins a tag-edit race", async () => {
+    const archived = entry({
+      slug: "a-piece",
+      archivedAt: "2026-10-01T10:00:00.000Z",
+      tags: ["old"],
+    });
+    answers.set("/api/library", () => Promise.resolve(shelfOf()));
+    answers.set("/api/library?archived=1", () =>
+      Promise.resolve({ articles: [archived] } satisfies LibraryResponse),
+    );
+    paint();
+    await settle();
+    await act(async () => {
+      await shelfNow_!.loadArchived();
+    });
+
+    const tagAnswer = deferred<{ tags: string[] }>();
+    answers.set("/api/library/a-piece/tags", () => tagAnswer.promise);
+    const tagWrite = shelfNow_!.editTags("a-piece", { add: ["new"] });
+    await settle();
+
+    const restored = { ...archived, archivedAt: undefined, tags: ["old", "new"] };
+    answers.set("/api/library/a-piece", () => Promise.resolve({ entry: restored }));
+    await act(async () => {
+      await shelfNow_!.restore("a-piece");
+    });
+
+    tagAnswer.resolve({ tags: ["old", "new"] });
+    await act(async () => {
+      await tagWrite;
+    });
+
+    expect(shelfNow_!.articles).toEqual([restored]);
+    expect(shelfNow_!.archivedVisible).toEqual([]);
+  });
+
+  it("does not let a shelf read started before a tag edit paint old tags back", async () => {
+    const old = entry({ slug: "a-piece", tags: ["old"] });
+    answers.set("/api/library", () => Promise.resolve({ articles: [old] }));
+    paint();
+    await settle();
+
+    const staleRead = deferred<LibraryResponse>();
+    answers.set("/api/library", () => staleRead.promise);
+    const reload = shelfNow_!.reload();
+    await settle();
+
+    answers.set("/api/library/a-piece/tags", () =>
+      Promise.resolve({ tags: ["new", "old"] }),
+    );
+    await act(async () => {
+      await shelfNow_!.editTags("a-piece", { add: ["new"] });
+    });
+    staleRead.resolve({ articles: [old] });
+    await act(async () => {
+      await reload;
+    });
+
+    expect(shelfNow_!.articles?.[0]?.tags).toEqual(["new", "old"]);
+  });
+});
+
 describe("a body saved by an older deployment", () => {
   /**
    * The risk this stage adds. Until now the saved body was only ever drawn by a
@@ -659,6 +723,15 @@ describe("a body saved by an older deployment", () => {
     expect(shelfFromCachedBody({ articles: [after] })).toEqual([after]);
     const odd = { ...after, gistVoice: "reader" };
     expect(shelfFromCachedBody({ articles: [odd] })).toBeNull();
+  });
+
+  it("normalises a pre-tags cached entry to an empty list, and rejects a malformed list", () => {
+    const current = entry({ slug: "a-piece", tags: ["read later"] });
+    const { tags: _tags, ...beforeTags } = current;
+    expect(shelfFromCachedBody({ articles: [beforeTags] })).toEqual([
+      { ...beforeTags, tags: [] },
+    ]);
+    expect(shelfFromCachedBody({ articles: [{ ...current, tags: ["fine", 7] }] })).toBeNull();
   });
 
   /* The envelope, and the shape the offline filter spent a fortnight testing

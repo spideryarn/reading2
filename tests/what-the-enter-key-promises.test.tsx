@@ -69,6 +69,9 @@ const PROMISES: Record<string, string> = {
   "AdminVouchersPage.tsx › Private note": "done",
   "ChatPanel.tsx › chat-rename": "done",
   "TitleEditor.tsx › Title": "done",
+  /* Enter adds the tag typed or highlighted and the box stays for the next —
+     plan 261003d. */
+  "TagEditor.tsx › Add a tag": "done",
   /* Enter posts a question into chat. */
   "CommentDialog.tsx › Ask a follow-up question about this passage": "send",
   /* Enter opens the selected mode — it goes somewhere. Not `search`: the search

@@ -533,6 +533,15 @@ const SHARED_WITH_READER = [
   "src/web/ModeSurface.tsx",
   "src/web/SettingsSection.tsx",
   "src/web/ShelfEntry.tsx",
+  /* Arrived 2026-10-03 with the reader's own tags (plan 261003d), by the
+     second zero-cost route: `ShelfEntry.tsx` (already here) draws every card's
+     tags and their editor, so the editor, its API module and the spelling rules
+     are in the reader's shelf closure whatever the admin routes do. Small, and
+     importing nothing the reader lacks. */
+  "src/web/ShelfTags.tsx",
+  "src/web/TagEditor.tsx",
+  "src/web/article-tags.ts",
+  "src/tags.ts",
   "src/web/TitleEditor.tsx",
   "src/web/Tooltip.tsx",
   "src/web/build-stamp.ts",

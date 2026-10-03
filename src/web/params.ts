@@ -1665,6 +1665,18 @@ export const libraryTopicsParam = createParser<string[]>({
   .withOptions({ history: "push" });
 
 /**
+ * The reader's own tags chosen in the shelf's Tags row — `tags=ai,memory`.
+ *
+ * `libraryTopicsParam`'s shape and history, for its reasons; its own key so a
+ * tag and a topic can never be mistaken for each other. **Never rewritten by
+ * the page**: a tag that is not on any article in scope is ignored rather than
+ * dropped, so an edit in flight or a shelf still loading cannot eat a filter
+ * (plan 261003d § After GPT Sol's plan review, 4). Tags hold no comma
+ * (src/tags.ts).
+ */
+export const libraryTagsParam = libraryTopicsParam;
+
+/**
  * Whether the archived half of the shelf is in view — `archived=1`.
  *
  * It was `useState` inside the "Show archived" disclosure until 2026-09-28,

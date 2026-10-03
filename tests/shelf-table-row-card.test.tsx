@@ -348,7 +348,10 @@ describe("the row", () => {
     paint([BARE]);
     const row = host.querySelector("tbody tr");
     expect(row?.textContent).toContain("never opened");
-    expect(row?.querySelector("[aria-hidden='true']")?.textContent).toBe("—");
+    /* Any hidden element saying "—", not the first hidden one: the tag
+       control's icon (ShelfTags.tsx) is hidden too, and comes earlier. */
+    const hidden = [...(row?.querySelectorAll("[aria-hidden='true']") ?? [])];
+    expect(hidden.map((el) => el.textContent)).toContain("—");
   });
 
   it("wraps the title and byline line even when either contains an unbroken word", () => {

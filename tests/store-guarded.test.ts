@@ -150,6 +150,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-shelf.js", "pgShelfStore", "shelf"],
     ["../src/store/pg-shelf.js", "pgLibrarySearch", "library"],
     ["../src/store/pg-shelf-terms.js", "pgShelfTermsStore", "shelf-terms"],
+    ["../src/store/pg-tags.js", "pgTagStore", "tags"],
     ["../src/store/pg-reader.js", "pgReaderStore", "reader-profile"],
     ["../src/store/pg-source.js", "pgSourceStore", "source"],
     ["../src/store/pg-referee-criteria.js", "pgRefereeCriteriaStore", "referee-criteria"],
@@ -393,6 +394,9 @@ describe("no Postgres store is selected without a guard", () => {
       /* The third factory, and the one that proved a fixed-size window wrong:
          it guards on its last line, 450 below its signature. */
       "pgStoreSession",
+      /* The reader's own tags, 2026-10-03 (plan 261003d): its parameters are
+         the reader's own words. */
+      "pgTagStore",
       "pgUploadStore",
       "pgVisibilityStore",
     ]);

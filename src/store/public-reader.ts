@@ -61,7 +61,7 @@ import { headingTitleOf } from "../library-scalars.js";
 import { log } from "../log.js";
 import { STORAGE_FAILED } from "../messages.js";
 import type { PublicArticle, PublicBlock } from "../public-types.js";
-import { isSearchKind } from "../types.js";
+import { isSearchKind, type HighlightColour } from "../types.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
 import { isStale } from "../search-stale.js";
 import { citedMetaFingerprintOf, hashBlocks } from "../source-hash.js";
@@ -575,6 +575,7 @@ export function publicCommentsQuery(
       body: comments.body,
       answer: comments.answer,
       citations: comments.citations,
+      colour: comments.colour,
     })
     .from(comments)
     .innerJoin(articles, eq(articles.id, comments.articleId))
@@ -908,6 +909,8 @@ export const pgPublicReader: PublicArticleReader = {
           ...(row.body === null ? {} : { body: row.body }),
           ...(row.answer === null ? {} : { answer: row.answer }),
           ...(row.citations === null ? {} : { citations: row.citations }),
+          /* `comments_colour` keeps the column to the four names. */
+          ...(row.colour === null ? {} : { colour: row.colour as HighlightColour }),
           /* Required by `Comment` and constant by construction: the query
              refuses every other value (PUBLIC_COMMENTS_WHERE), and the public
              DTO drops the field. Written out rather than cast so that a change

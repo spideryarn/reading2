@@ -57,9 +57,10 @@
 import { useEffect, useRef, useState } from "react";
 import { ClipboardCheck, Copy, MessageSquarePlus, TriangleAlert, X } from "lucide-react";
 
-import type { ChatAnchor } from "../types.js";
+import type { ChatAnchor, HighlightColour } from "../types.js";
 import { mintId } from "../ids.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { HighlightSwatches } from "./HighlightSwatches.js";
 import { type Mark, NO_MARK, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { parseRoute } from "./router.js";
 import { keepDictation } from "./dictation-keep.js";
@@ -88,8 +89,11 @@ interface Props {
    *
    * `mark` is the referee's placement, `NO_MARK` when they made none — which is
    * the ordinary case and the one this dialog is mostly used for.
+   *
+   * `colour` is the highlight colour the reader picked, `null` for none — the
+   * default, so a comment made the old way looks as it always has.
    */
-  onSave(id: string, body: string, ask: boolean, mark: Mark): void;
+  onSave(id: string, body: string, ask: boolean, mark: Mark, colour: HighlightColour | null): void;
   /**
    * **Has the article's comment list come back — answered, failed or given up
    * on?** `useComments`'s `loaded`, and Save waits for it: that GET's answer
@@ -140,6 +144,9 @@ export function AnnotateDialog({
      failed write must not look like a successful one — this one is local:
      there is nothing on a server yet for it to disagree with. */
   const [mark, setMark] = useState<Mark>(NO_MARK);
+  /* The highlight colour, a draft like the placement: nothing is stored until
+     Save. None by default (plan 261003e). */
+  const [colour, setColour] = useState<HighlightColour | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
 
   /**
@@ -193,6 +200,7 @@ export function AnnotateDialog({
        carried from one selection to the next is a judgement about a passage the
        referee is no longer looking at. */
     setMark(NO_MARK);
+    setColour(null);
     draftId.current = mintId();
     sending.current = false;
   }, [anchor.blockId, anchor.start, anchor.quote]);
@@ -221,7 +229,7 @@ export function AnnotateDialog({
     if (!loaded) return;
     if (sending.current) return;
     sending.current = true;
-    onSave(draftId.current, body.trim(), ask, mark);
+    onSave(draftId.current, body.trim(), ask, mark, colour);
   };
 
   return (
@@ -310,6 +318,11 @@ export function AnnotateDialog({
           {placing && route.kind === "read" && (
             <PlaceOnCriterion slug={route.slug} value={mark} onChange={setMark} />
           )}
+
+          {/* A highlight is this same comment with a colour; no words and a
+              colour is a wordless highlight. Not gated on `loaded` — picking is
+              part of the draft, and only Save waits. */}
+          <HighlightSwatches value={colour} onChange={setColour} />
 
           <label className="annotate-ask">
             <input
