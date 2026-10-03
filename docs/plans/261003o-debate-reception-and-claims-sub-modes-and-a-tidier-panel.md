@@ -227,21 +227,91 @@ Verdict: build with the P1 fixes. All nine findings accepted, each checked again
 
 ## Questions for Greg (not waited on)
 
-**[Q-citation-index]** *Should Reception list the papers that cite the piece, from a citation
-index?* On this paper the open web has no discussion to find, and 39 papers cite it. A web search
-cannot list them; OpenAlex (free, CC0) can, with title, authors, year and venue, but not what each
-says. The options are the four in
-[261002i § The question for Greg](261002i-debate-leads-with-who-has-cited-this-article.md#the-question-for-greg),
-unchanged; this paper is the case for option 1 (OpenAlex now). It sends the article's DOI to
-OpenAlex from our server, which is why it is his call.
+### [Q-claims-picker] Should you be able to choose which claim Debate checks?
 
-**[Q-claims-picker]** *Should Claims let the reader choose which claim to check?* Options, with the
-eval's numbers, in the debrief and the investigation: (a) leave it as built here; (b) a box in
-Claims, "Check a claim…", that runs one more search on what the reader types or on a passage they
-pick, and adds its sources as another claim (one extra search each, about 10–20 cents); (c) list the
-piece's claims first and search nothing until the reader picks. Recommended: (b), after (a) has been
-used for a few days, because it is also the "steer the debate" box from `spya-thpsnd` and reuses
-pass B whole.
+**Background.** Debate's Claims search reads the article, picks three or four claims by itself,
+and looks for what has been written about each. As built, Claims now *shows* you those claims, each
+with its sources under it. You cannot yet say "check this one". You asked for that ("which of these
+claims do you want me to check?"), and in your fewer-modes report for a box to steer Debate.
+
+**What the eval found.** Telling the search to check one named claim (the RNA memory-transfer
+one) worked with nothing else changed. It reported about twice as many sources on that claim (6
+and 7, against 3), kept about the same number after our quote checks (4 and 3, against 3), and the
+sources were different ones: a bioRxiv preprint and a Scientific American piece disputing the
+result. Each such search costs about 20 cents and takes about a minute and a half.
+
+**The options.**
+
+- **A. Leave it as built.** The search chooses the claims; you see them listed. Costs nothing
+  more. You cannot direct it.
+
+- **B. A box in Claims: "Check a claim…" (recommended, after a few days of using A).**
+
+  ```
+  [ Reception 0 | Claims 7 ]
+  Check a claim…  [ RNA can carry a memory between animals      ] [Search]
+   ▾ "memories … across metamorphosis"            2
+   ▾ "RNA from trained animals …"                  3
+   ▾ (you asked) "RNA can carry a memory …"        4     ← added by your search
+  ```
+
+  You type a claim in your own words, or press a button on a claim already listed to dig further
+  into it. One more search runs, and its sources are added as another claim. This is also the
+  "steer the debate" box. What it costs us: the search has to accept your words (today it takes
+  none), each extra search has to be stored alongside the first, and each one spends about 20
+  cents, so it needs the same care as the first search (a press, never automatic). Roughly two to
+  three days of work.
+
+- **C. List the claims first, search nothing until you pick.**
+
+  ```
+  Which claims should I check?
+   ☐ Memories survive metamorphosis
+   ☐ RNA can carry a memory between animals
+   ☐ The self is rebuilt, not stored
+   [ Check the ticked claims ]
+  ```
+
+  A cheap first step lists the article's main claims; you tick some; only then does it search.
+  Nothing is spent on claims you do not care about, and you see claims the search would not have
+  chosen. What it costs: opening Debate no longer gives you anything until you have chosen, which
+  is a slower start; and it is the most work (a new claims-listing step, plus everything in B).
+
+**What would decide it.** If the claims the search picks by itself are usually the ones you care
+about, A or B. If you often find it has picked the wrong ones, C. B is the smaller step and does
+not rule C out later.
+
+### [Q-citation-index] Should Reception list the papers that cite the piece?
+
+**Background.** You asked whether "who has cited it" is the same thing as reception. I have treated
+it as the same: a paper that cites the piece and says something about it is reception, and Reception
+looks for those. But a web search finds only the handful of pages that discuss a paper by name. On
+the paper you were reading, there is no review, reply or blog post to find at all, and **39 papers
+cite it**. The web search found none of them. Reception therefore honestly says it found nothing,
+and offers a Google Scholar link instead.
+
+The only thing that knows who cited a paper is a citation index. This is the question already
+waiting for you from 2026-10-02
+([261002i § The question for Greg](261002i-debate-leads-with-who-has-cited-this-article.md#the-question-for-greg)),
+with the same four options. This paper is the case for its option 1: **OpenAlex** (free, open
+licence). Reception would then show "39 papers cite this", listed with title, authors, year and
+journal, most-cited first. It would not say what each one says about the piece; for that we would
+still rely on the web search, or on Semantic Scholar's citing sentences, whose licence needs
+asking for. It is your call because it sends the article's DOI (not its text, not who is reading)
+to an outside service.
+
+### [Q-identification-slider] The "identification" slider is gone. Is that all right?
+
+**Background.** On 2026-09-06 you asked for a way to threshold reception by how sure we are that a
+page is about *this* article, and Debate got a three-stop slider (names it / quotes it / links
+it), resting on "quotes it". That default was hiding the published replies and citing papers, which
+usually only name the piece. I replaced the slider with layout: pages that quote or link the piece
+come first, and pages that only name it by title follow under a heading saying so. Nothing is
+hidden and there is one control fewer.
+
+- **Keep it as built (recommended).**
+- **Bring the slider back**, resting on "names it" so nothing is hidden by default. About half a
+  day. Worth it only if you find yourself wanting to hide the title-only rows.
 
 ## What landed (2026-10-04)
 
