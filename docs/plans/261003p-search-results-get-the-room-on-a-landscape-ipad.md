@@ -168,3 +168,7 @@ not enough, this is the next thing to try, and the note will say so rather than 
   still jumps and closes it; a real mouse moved onto the score and off again after a tap closes it;
   with a mouse only, hover and click behave as before; the band's (i) and the spine's two taps are
   unchanged. Screenshot of the card held open by a tap: `261003p-shot-after-gutter-card.png`.
+- 2026-10-04: round two, narrow, on the reviewer's own CR-1 fix
+  ([answer](261003p-search-results-room-code-review-2-sol.md)): no findings, verdict land.
+  The feedback note is
+  [261003_1917](../user-feedback/261003_1917-search-results-squeezed-on-a-landscape-ipad.md).
