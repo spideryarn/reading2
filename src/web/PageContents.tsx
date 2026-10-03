@@ -223,6 +223,30 @@ function reachedPx(section: HTMLElement): number {
   return Number.isFinite(margin) && margin > 0 ? margin + REACHED_SLACK_PX : FALLBACK_REACHED_PX;
 }
 
+/**
+ * **The class a page's `<main>` wears to make room for this list.** The list is
+ * fixed in the left margin (the `<nav>` below says why), so the page has to
+ * step right where its centred margin is too narrow to hold it. A page that
+ * mounts `PageContents` without this puts the list over its own text between
+ * 1024px and 1152px wide. One copy, here beside the widths it answers to, so
+ * Metadata and `/profile` cannot drift apart.
+ *
+ * It is `mx-auto`'s own left margin for a 48rem column (`max-w-3xl`, which the
+ * page supplies), but never less than 12rem plus the left safe inset: the list
+ * ends at 12.5rem plus that inset (it is fixed chrome, so it adds it —
+ * tokens.css § safe areas), and the column's text starts 1.5rem inside it, so
+ * a 1rem gap. The `max` picks the centred margin from 1152px plus twice the
+ * left inset of containing-block width (a little more window width with a
+ * classic scrollbar, since `100%` is the width beside it). Below that the page
+ * sits right of centre — by up to 4rem when the inset is zero — so an iPad in
+ * landscape gets the list. Greg, SPIDERYARN-READING2-9M, 2026-10-01: *"not
+ * visible on my iPad, even in landscape mode, even though there's quite a lot
+ * of space on either side."*
+ * docs/plans/261002a-metadata-contents-on-an-ipad-in-landscape.md.
+ */
+export const CONTENTS_MARGIN =
+  "tw:lg:ml-[max(calc(12rem_+_var(--safe-left)),calc((100%_-_48rem)/2))]";
+
 export function PageContents({
   containerRef,
   label,
@@ -422,8 +446,8 @@ export function PageContents({
        content is `max-w-3xl` (48rem) and centred. With no left safe inset its
        margin holds the list from 1152px up; an inset raises that threshold by
        twice its width. Below it the page steps its column right just far enough
-       to clear the list (Metadata.tsx § `tw:lg:ml-…`) —
-       so this nav assumes its page does that, and a page that mounts it
+       to clear the list (`CONTENTS_MARGIN`, above) —
+       so this nav assumes its page wears that, and a page that mounts it
        without it would put the list over the prose. It was `xl` until Greg,
        SPIDERYARN-READING2-9M, 2026-10-01: *"not visible on my iPad, even in
        landscape mode"*. Plan 261002a.

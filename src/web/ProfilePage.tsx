@@ -48,7 +48,7 @@
  * docs/plans/260825e-metadata-page.md gives; and **streaks or anything that counts at you**, which
  * the original's homepage did not have either. This is a reading tool.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookOpen, Cpu, SlidersHorizontal, User, UserCheck, Wallet } from "lucide-react";
 import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -59,6 +59,7 @@ import { readHref } from "./router.js";
 import { AccountSection } from "./AccountSection.js";
 import { BillingSection } from "./BillingSection.js";
 import { ProfileBox } from "./ProfileBox.js";
+import { CONTENTS_MARGIN, PageContents } from "./PageContents.js";
 /* The Metadata page's section, shared since 2026-10-03 so the two read as one
    app and fold the same way. This page had a private copy of the heading. */
 import { Section } from "./PageSection.js";
@@ -153,6 +154,8 @@ export function ProfilePage() {
      panels do: nothing for the first 600ms, because a line that appears and
      vanishes reads as breakage. useSlow.ts. */
   const slowShelf = useSlow(shelf === null);
+  /* What the contents list reads its sections from, and resolves them inside. */
+  const body = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -202,7 +205,19 @@ export function ProfilePage() {
   const words = onShelf.reduce((n, a) => n + (a.words ?? 0), 0);
 
   return (
-    <main className="tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
+    <>
+      {/* **Metadata's contents list, in the left margin, with its search box.**
+          Greg, 2026-10-03, asked whether this page gets it as well as the
+          folding: *"Probably B"*, B being this. It reads the `[data-section]`
+          elements inside `main`, so there is no list of the six to keep in
+          step. Hidden below `lg`; `CONTENTS_MARGIN` is the room it needs from
+          there until the centred margin holds it.
+          docs/plans/261003n-profile-gets-the-contents-list-and-search-box.md. */}
+      <PageContents containerRef={body} label="Sections of this page" />
+    <main
+      ref={body}
+      className={`tw:mx-auto ${CONTENTS_MARGIN} tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans`}
+    >
       <BackLink href="/" label="Back to your library" className="tw:mb-6" />
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">Profile</h1>
@@ -235,10 +250,9 @@ export function ProfilePage() {
           this page owns, above, which run whether or not their card is drawn.
           GPT Sol, plan review of 261003k, F4.
 
-          `keywords` are for a contents list's search box (PageSection.tsx).
-          This page draws no such list yet — six headings on about one screen —
-          but the prop is required, and written now they are the words a reader
-          would type, not the ones each card prints.
+          `keywords` are for the contents list's search box (PageContents.tsx,
+          mounted above): the words a reader would type, not the ones each
+          card prints.
           docs/project/reader-profile.md § The page's six sections. */}
       {/* ---------------------------------------------------------- account -- */}
       <Section
@@ -449,5 +463,6 @@ export function ProfilePage() {
           gloss the others do not have reads as a different kind of thing. */}
       <SiteFooter />
     </main>
+    </>
   );
 }
