@@ -27,6 +27,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  SHARING_COPY_FAILED,
   SHARING_NOT_PERSONALISED,
   SHARING_ON,
   SHARING_PERSONALISED,
@@ -904,5 +905,98 @@ describe("what a shared link carries", () => {
     /* The positive control for the negative above: the column it was under is
        still on the card, so this is not passing because nothing rendered. */
     expect(host.textContent).toContain("These stay with you");
+  });
+});
+
+/**
+ * **The copy button says what happened, all three ways.** Until 2026-10-03 it
+ * had two states, and both ways a copy can fail were drawn as the one it
+ * starts in: with no `navigator.clipboard` — every insecure context, which
+ * includes this app reached over a LAN address from a phone — the handler
+ * returned without a word, and a rejected write set `copied` to false, which
+ * it already was. An owner pressed Copy, saw nothing, and pasted whatever was
+ * on the clipboard before. Found by GPT Sol reviewing the fifth sweep; plan
+ * 261003g § 5.
+ *
+ * Two failure paths, so two cases: fixing either alone leaves the other
+ * silent, and one case would not notice.
+ */
+describe("copying the link", () => {
+  const LINK = `${location.origin}/read/${SLUG}`;
+
+  function setClipboard(value: unknown): void {
+    Object.defineProperty(navigator, "clipboard", { value, configurable: true });
+  }
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, "clipboard");
+  });
+
+  /** What the live region beside the button last said. */
+  const announced = () => host.querySelector('[data-copy-status][aria-live="polite"]')?.textContent ?? "";
+  const buttonSays = (text: string) =>
+    [...host.querySelectorAll("button")].some((b) => b.textContent === text);
+
+  it("puts the exact link on the clipboard and says so", async () => {
+    const written: string[] = [];
+    setClipboard({ writeText: async (text: string) => void written.push(text) });
+    await mount(SHARED);
+    expect(announced()).toBe("");
+
+    press("Copy");
+    await settle();
+
+    expect(written).toEqual([LINK]);
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="The link to share"]')?.value).toBe(LINK);
+    expect(buttonSays("Copied")).toBe(true);
+    expect(announced()).toBe("Link copied.");
+    expect(host.textContent).not.toContain(SHARING_COPY_FAILED);
+  });
+
+  it("says so when the browser has no clipboard at all", async () => {
+    setClipboard(undefined);
+    await mount(SHARED);
+
+    press("Copy");
+    await settle();
+
+    expect(announced()).toBe(SHARING_COPY_FAILED);
+    expect(host.querySelector("[data-copy-status]")?.className).not.toContain("sr-only");
+    expect(buttonSays("Copied")).toBe(false);
+  });
+
+  it("says so when the clipboard refuses", async () => {
+    setClipboard({
+      writeText: async () => {
+        throw new DOMException("Write permission denied.", "NotAllowedError");
+      },
+    });
+    await mount(SHARED);
+
+    press("Copy");
+    await settle();
+
+    expect(announced()).toBe(SHARING_COPY_FAILED);
+    expect(host.querySelector("[data-copy-status]")?.className).not.toContain("sr-only");
+    expect(buttonSays("Copied")).toBe(false);
+  });
+
+  it("tells the reader what to do instead, and takes it back when a later copy works", async () => {
+    expect(SHARING_COPY_FAILED).toMatch(/select the link/i);
+    let refuse = true;
+    setClipboard({
+      writeText: async () => {
+        if (refuse) throw new Error("no");
+      },
+    });
+    await mount(SHARED);
+    press("Copy");
+    await settle();
+    expect(host.textContent).toContain(SHARING_COPY_FAILED);
+
+    refuse = false;
+    press("Copy");
+    await settle();
+    expect(host.textContent).not.toContain(SHARING_COPY_FAILED);
+    expect(announced()).toBe("Link copied.");
   });
 });
