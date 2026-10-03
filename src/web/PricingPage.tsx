@@ -301,8 +301,8 @@ function Faq() {
               their articles costs"*, the same day. It is one more charge row
               for the article, once, never refunded (`switchOnHighPower`,
               src/store/pg-billing.ts). docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md. */}
-          For a difficult piece, you can switch one article to a stronger AI model from its
-          Metadata page. Switching it on counts as one more article against your allowance — half
+          For a difficult piece, you can switch one article to a stronger AI model — when you add
+          it, or later from its Metadata page. Switching it on counts as one more article against your allowance — half
           of one if the article is shared publicly. Switching it off doesn&apos;t
           give it back, and switching it on again costs nothing more.
         </Answer>

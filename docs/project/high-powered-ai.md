@@ -3,9 +3,10 @@
 Parent: [reading-view-overview.md](reading-view-overview.md). The build, and every decision behind
 it, is [260930f](../plans/260930f-high-powered-ai-per-article.md) (the switch, for the administrator)
 and [260930k](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md) (readers, and what
-it costs them).
+it costs them), and [261002k](../plans/261002k-high-powered-ai-at-import.md) (choosing it while
+the article is added).
 
-**One switch per article, on `/metadata`, that moves most of that article's capable-tier calls from
+**One switch per article — on `/metadata`, or a tick box while the article is added — that moves most of that article's capable-tier calls from
 Claude Sonnet to Claude Opus.** For a difficult piece — a dense paper, an argument that takes several
 readings — the stronger model writes the structure, gists, quotes, FAQ answers and chat replies.
 Simple's plain-words summaries are the exception: they use Opus for every article. So is
@@ -43,11 +44,32 @@ The administrator is exempt, as with ingests. The mechanism is billing's:
 and `/features`
 ([cost-tracking.md § Only the administrator ever sees a figure](cost-tracking.md#only-the-administrator-ever-sees-a-figure)).
 
-**Switching on happens only on `/metadata`, after the article is on the shelf**, not at import. The
-ingest-time capable-tier work uses Sonnet, and a reader who wants Opus throughout presses *Run it
-again* (free, as every re-run is). Simple is not part of the default ingest and already uses Opus
-whenever it is requested. An import-time flag is the named next step; it needs its own plan, because
-the charge would have to ride the job.
+## Switching it on while the article is added
+
+Since 2026-10-02 the add page (`/add/…`) has a **High-powered AI** tick box beside *Generate the main
+modes*, off by default and never remembered — a remembered tick would double the price of every later
+import unseen. It sends **the same `PUT`** as the Metadata switch, so the price and every refusal
+above are unchanged; only the moment is earlier. The build is
+[261002k](../plans/261002k-high-powered-ai-at-import.md); the page's half is
+[`src/web/add-high-power.ts`](../../src/web/add-high-power.ts).
+
+- **It is sent as soon as the page knows the job's slug**, and a `404` while the job is still alive
+  is retried — a job reports `running` before its claim creates the article row.
+- **Ticked before the capable-tier work starts, the whole import runs on Opus**: before `structure`
+  for a web page, before `extract` for a PDF, whose front matter is read on the capable tier. Later
+  than that, the line under the box says some of it *may* have used Sonnet; exactly which steps
+  cannot be told from the page, because the runner reads the setting before it marks a step running.
+- **The main modes it queues at the end wait for the switch to answer**, so none of them claims
+  first and reads Sonnet. The navigation to the article does not wait.
+- **It is a page's intent**, like *Generate the main modes*: a tab closed before the job is claimed
+  sends nothing, and the article imports on Sonnet. An import that fails after the switch keeps the
+  charge on its article row, under the never-refunded rule; its *Retry* does not charge again.
+
+Deferred, and a billing change if built: the charge riding the job itself (admitted at
+`POST /api/jobs`, switched server-side at the first capable-tier step), which would survive a closed
+tab and charge only an import that got past `fetch`.
+
+Simple is not part of the default ingest and already uses Opus whenever it is requested.
 
 ## What it changes, and what it does not
 

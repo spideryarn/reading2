@@ -624,6 +624,11 @@ paper before `structure`):
 [260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md) and
 [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts).
 
+**Since 2026-10-02 it can also switch the article to High-powered AI** — a second tick box, off by
+default and never remembered, which sends the Metadata switch's own request as soon as the job's slug
+is known; the main modes above wait for it to answer.
+[high-powered-ai.md § Switching it on while the article is added](high-powered-ai.md).
+
 ### The three traps in a page whose whole job is one effect
 
 - **Queue it once.** `<StrictMode>` mounts, unmounts and mounts again in development, so a plain
