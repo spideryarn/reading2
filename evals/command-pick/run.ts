@@ -32,6 +32,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { withLedger } from "../../src/cli-ledger.js";
+import { APP, choiceAsk, describeOption, NONE_TEXT, wordsMessages, WORDS_MAX_TOKENS } from "../../src/command-pick.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { PAPER_METADATA_MODEL, QUICK_MODEL_OPENROUTER } from "../../src/models.js";
 import { type ArgumentKind, CATALOGUE, type CatalogueRow, NONE } from "./catalogue.js";
@@ -110,14 +111,11 @@ export interface Row {
   error: string | null;
 }
 
-const APP =
-  "Spideryarn is a reading app. The reader has one article open and has typed or spoken a request into the app's command bar. Each command below is something the app can do right now.";
-const NONE_TEXT =
-  "None of these commands does what the reader asked — the app cannot do it, or it is not a request to the app at all. Choose this rather than a command that only sounds related.";
-
-function describe(c: CatalogueRow): string {
-  return `${c.label} — ${c.description}${c.aliases.length ? ` (also called: ${c.aliases.join(", ")})` : ""}`;
-}
+/* `APP`, `NONE_TEXT`, the option line, the choice question and the
+   argument-only prompt are src/command-pick.ts's since Stage 2: production
+   asks with them, so there is one copy and a change to it is visibly a change
+   to what this measured. */
+const describe = (c: CatalogueRow): string => describeOption(c);
 
 export const sentenceWords = (text: string): string[] => text.trim().split(/\s+/);
 export const WORD_THRESHOLD = 0.5;
@@ -125,15 +123,9 @@ export const WORD_THRESHOLD = 0.5;
 export const bare = (word: string): string => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
 
 function jevQuestions(p: Phrase, withWords: boolean): Record<string, unknown> {
-  const criteria: Record<string, string> = Object.fromEntries(CATALOGUE.map((c) => [c.id, describe(c)]));
-  criteria[NONE] = NONE_TEXT;
-  const questions: Record<string, unknown> = {
-    command: {
-      type: "choice",
-      instructions: `Which one command should run for the reader's request: "${p.text}"?`,
-      criteria,
-    },
-  };
+  /* Every option as a row: the argument commands are in `CATALOGUE` with
+     their `arg:` ids, in the place production's `choiceAsk` puts them. */
+  const questions: Record<string, unknown> = { ...choiceAsk(p.text, CATALOGUE, []).questions };
   if (withWords) {
     sentenceWords(p.text).forEach((word, i) => {
       questions[`w${i + 1}`] = {
@@ -160,29 +152,6 @@ function pickMessages(p: Phrase): { role: string; content: string }[] {
         "The five commands whose id starts with arg: need words from the reader: the words to look for, the term to look up, or the tag. Give those words as argument. Copy them from the reader's request as the reader wrote them, and leave out the words that ask for it and any filler such as \"um\". For every other id, argument is null.",
         "confidence is how sure you are that this is the command the reader meant, from 0 to 1.",
         'Answer with JSON only: {"id": "<command id or none>", "argument": <string or null>, "confidence": <0 to 1>}',
-      ].join("\n"),
-    },
-    { role: "user", content: p.text },
-  ];
-}
-
-const KIND_ASKS: Record<ArgumentKind, { wants: string; thing: string }> = {
-  find: { wants: "find a word, a name or a phrase in the article", thing: "the words to look for" },
-  "jump-first": { wants: "go to the first place the article says a word, a name or a phrase", thing: "the words to look for" },
-  glossary: { wants: "know what one term means", thing: "the term" },
-  "tag-add": { wants: "put a tag on the article", thing: "the tag" },
-  "tag-remove": { wants: "take a tag off the article", thing: "the tag" },
-};
-
-function argumentMessages(p: Phrase, kind: ArgumentKind): { role: string; content: string }[] {
-  const ask = KIND_ASKS[kind];
-  return [
-    {
-      role: "system",
-      content: [
-        `A reader has an article open in a reading app and typed or said a request. The reader wants to ${ask.wants}.`,
-        `Copy ${ask.thing} out of the request, as the reader wrote them. Leave out the words that ask for it and any filler such as "um".`,
-        'Answer with JSON only: {"argument": "<the words>"}',
       ].join("\n"),
     },
     { role: "user", content: p.text },
@@ -250,7 +219,7 @@ async function runJev(p: Phrase, row: Row, withWords: boolean): Promise<unknown>
 
 async function runChat(p: Phrase, row: Row, arm: ChatArm, kind: ArgumentKind | null): Promise<unknown> {
   const argumentOnly = kind !== null;
-  const r = await chatAsk(arm, kind !== null ? argumentMessages(p, kind) : pickMessages(p), argumentOnly ? 100 : 200);
+  const r = await chatAsk(arm, kind !== null ? wordsMessages(p.text, kind) : pickMessages(p), argumentOnly ? WORDS_MAX_TOKENS : 200);
   row.latencyMs = r.latencyMs;
   row.costUsd = r.costUsd;
   row.tokensIn = r.inputTokens;

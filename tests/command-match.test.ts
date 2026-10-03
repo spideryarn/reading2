@@ -376,6 +376,7 @@ const AN_ACTION: Extract<Command, { kind: "action" }> = {
   label: "Feedback",
   description: "Tell us what went wrong.",
   aliases: ["bug"],
+  opensOnly: true,
   generates: false,
   run: () => ({ kind: "close" }),
 };

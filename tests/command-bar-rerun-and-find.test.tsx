@@ -380,7 +380,8 @@ describe("find <words>", () => {
     openBar();
     type("wet hardware");
     expect(rows()).toEqual([]);
-    expect(dialog().querySelector(".cmdbar-empty")?.textContent).toBe(NO_MATCH);
+    /* No row; what follows the sentence is the offer to ask (plan 261003k). */
+    expect(dialog().querySelector(".cmdbar-empty")?.textContent).toContain(NO_MATCH);
     type("find");
     expect(listed().some((n) => n.startsWith("Find “"))).toBe(false);
   });

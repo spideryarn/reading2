@@ -282,4 +282,52 @@ Every finding checked against the code and accepted.
     word.
   - Found on the way, and fixed in Stage 2: `find mentions of dopamine` looks for
     *mentions of dopamine*.
+- 2026-10-03: **Stage 2 built** (not yet reviewed). What landed:
+  - **Shared** — `src/command-pick.ts`: the shapes, the caps, the body validator, the argument
+    commands' descriptions, the two prompts, `readPick` / `readWords`, and `readPickAnswer` (the
+    browser reading the server as carefully as the server reads the model). The eval imports its
+    wording from here, so what was measured and what is sent are one copy.
+  - **Keys** — `pickKey(command, slug)` in `src/web/command-match.ts`; the generated list holds
+    them, and its test fails if two different rows share an (id, label) or any id names an article.
+  - **Gateway** — `openRouterDecisions` reads a `choice` (pick, confidence, probabilities); jobs
+    `command-pick` (Jev, `COMMAND_PICK_MODEL`) and `command-pick-words` (GPT Luna, reasoning
+    `none`, `require_parameters` — the eval's `luna` arm byte for byte, asserted in a test).
+  - **Server** — `src/command-pick-call.ts` and `POST /api/command-pick`. A key the list does not
+    hold is dropped; no known row means `none` and no call; 5 s across both calls; the reader's
+    disconnect aborts.
+  - **Client** — `src/web/CommandBar.tsx` (`ask`, `suggestedRows`, `onlyMovesTheReader`) and
+    `src/web/command-pick-client.ts`. Action rows declare a required `opensOnly`: true for
+    Comments, Feedback and the three Metadata sections; false for Archive / Put back, Export, the
+    Experimental switch, every *Run again* and every argument row.
+  - `find mentions of X`, `find all mentions of X`, `find every mention of X` and
+    `find references to X` are verbs now; the collision matrix allowed all four.
+  - **Live check**, three sentences against the 64 owner-article rows, $0.0007: Greg's changelog
+    sentence → *What’s new* at 0.62 with Timeline second (so drawn, not run), 0.59 s; *is
+    consciousness mentioned anywhere* → find + `consciousness`, 2.47 s (0.34 s of it Jev); *what's
+    the weather tomorrow* → none, 0.28 s.
+
+  How it diverged from the plan:
+  - **A key drops more than the slug.** A page row's id is its whole address, and that carries
+    `?at=…` and, for Help, `#<mode>`. `pickKey` takes the query string and the fragment out too;
+    otherwise the server would have known neither row.
+  - **One job became two** (`command-pick-words`), as Stage 1 decided. The plan called it
+    `command-pick-argument`.
+  - **A changed row list throws the answer away when it lands, not by a counter.** The revision
+    counter covers edits, opening and closing; the row list is compared as a signature of its keys
+    at the moment the answer arrives. A suggestion already drawn is not re-checked against the
+    signature: each of its rows is looked up afresh at every render, so one that has gone is not
+    drawn. (A render-time signature check was written, found to be covered by nothing, and removed.)
+  - **An edit or a close aborts the request** as well as ignoring its answer, so a new sentence can
+    be asked at once and the server stops the model call.
+  - **`none` shows the sentence only.** The picture above says *"Couldn't tell what you meant" + the
+    list*; the bullets say the bar stays open, and that is what was built — the box still holds the
+    reader's sentence, so the list under it is the empty line.
+  - **A request with no known row is `none`**, even if it offered argument commands.
+  - **The route's failures carry a sentence from src/messages.ts and the bar ignores it**: it says
+    *Couldn't tell what you meant.* for all of them, as the plan asks.
+  - **The eval's saved run keeps its slug.** `evals/command-pick/catalogue.ts` puts `a-piece` back
+    into the one id that had it, so the scored answers and `phrases.ts` still line up.
+  - **Not done here, for Stage 3**: /privacy and privacy.md do not yet say that a sentence typed
+    into the bar goes to TypeSafe and, for an argument, to OpenAI; `evals/command-pick/README.md`
+    still says the argument commands' words are written in `catalogue.ts`.
 

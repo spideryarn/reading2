@@ -17,10 +17,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const NONE = "none";
+import { ARGUMENT_OPTIONS, type ArgumentKind, NONE, PICK_SLUG } from "../../src/command-pick.js";
 
-/** `ArgumentQuery["kind"]` in src/web/command-match.ts — see `BarAnswer` below for why it is not imported. */
-export type ArgumentKind = "find" | "jump-first" | "glossary" | "tag-add" | "tag-remove";
+export { type ArgumentKind, NONE };
 
 /** `PickOption` (src/web/command-match.ts), plus what the generator adds. */
 export interface CatalogueRow {
@@ -40,54 +39,30 @@ export const EVAL_CONTEXT = "owner-article";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * **The slug the 2026-10-03 run was measured with.** The list holds a page's
+ * id without its article since Stage 2 (`page:/read/:slug/metadata`); the
+ * saved answers and `phrases.ts` say `page:/read/a-piece/metadata`, so the
+ * eval puts the slug back rather than relabelling a run that has been scored.
+ */
+const MEASURED_SLUG = "a-piece";
+
 export const BAR_ROWS: readonly CatalogueRow[] = (
   JSON.parse(
     readFileSync(path.join(HERE, "..", "..", "src", "command-pick-catalogue.generated.json"), "utf8"),
   ) as CatalogueRow[]
-).filter((row) => row.contexts.includes(EVAL_CONTEXT));
+)
+  .filter((row) => row.contexts.includes(EVAL_CONTEXT))
+  .map((row) => ({ ...row, id: row.id.replace(PICK_SLUG, MEASURED_SLUG) }));
 
-const argument = (kind: ArgumentKind, label: string, description: string, aliases: string[]): CatalogueRow => ({
+/** The five argument commands, in the words production asks with (src/command-pick.ts § `ARGUMENT_OPTIONS`). */
+export const ARGUMENT_ROWS: readonly CatalogueRow[] = (Object.keys(ARGUMENT_OPTIONS) as ArgumentKind[]).map((kind) => ({
   id: `arg:${kind}`,
-  label,
-  description,
-  aliases,
+  ...ARGUMENT_OPTIONS[kind],
   kind: "argument",
   generates: false,
   contexts: [EVAL_CONTEXT],
-});
-
-export const ARGUMENT_ROWS: readonly CatalogueRow[] = [
-  argument(
-    "find",
-    "Find words in this article",
-    "Look for a word, a name or a phrase in the article and show every place it comes up. Choose this when the reader names something to look for.",
-    ["search for", "does it mention", "is it mentioned"],
-  ),
-  argument(
-    "jump-first",
-    "Jump to the first mention",
-    "Go to the first place the article says a word, a name or a phrase. Choose this when the reader asks where something first comes up.",
-    ["first mention of", "where does it first say"],
-  ),
-  argument(
-    "glossary",
-    "Look up a term",
-    "Say what one term means in this article. Choose this when the reader names a term and asks what it is or what it means.",
-    ["define", "what does it mean", "look up"],
-  ),
-  argument(
-    "tag-add",
-    "Add a tag",
-    "Put a tag, a short label of the reader's own, on this article. Choose this when the reader names a tag to add.",
-    ["tag this as", "label", "file under"],
-  ),
-  argument(
-    "tag-remove",
-    "Remove a tag",
-    "Take a tag off this article. Choose this when the reader names a tag to take off.",
-    ["untag", "remove the tag"],
-  ),
-];
+}));
 
 export const CATALOGUE: readonly CatalogueRow[] = [...BAR_ROWS, ...ARGUMENT_ROWS];
 export const VALID_IDS: ReadonlySet<string> = new Set([...CATALOGUE.map((c) => c.id), NONE]);

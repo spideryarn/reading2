@@ -15,6 +15,11 @@
  *
  *     WRITE_COMMAND_PICK_CATALOGUE=1 npx vitest run tests/command-pick-catalogue.test.ts
  *
+ * **The server answers from this file** (src/command-pick-call.ts): the browser
+ * sends keys, and the words a model reads for each come from here (plan
+ * 261003k, F1). So every id is `pickKey`'s — no slug, no query string — and
+ * two different rows may never share an (id, label).
+ *
  * The eval (evals/command-pick/) reads the `owner-article` slice. Regenerating
  * after a row changes leaves its saved results measured against the old words;
  * evals/command-pick/README.md says what that means.
@@ -31,7 +36,16 @@ import { MODES } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { modeGenerates, subModeGenerates } from "../src/web/activation.js";
 import { besideTheModes, experimentalRows, subModeRows } from "../src/web/CommandBar.js";
-import { type Command, modeCommand, parseArgumentQuery, pickOption, rankCommands } from "../src/web/command-match.js";
+import { PICK_SLUG } from "../src/command-pick.js";
+import {
+  type Command,
+  commandId,
+  modeCommand,
+  parseArgumentQuery,
+  pickKey,
+  pickOption,
+  rankCommands,
+} from "../src/web/command-match.js";
 import { visibleModes } from "../src/web/Dock.js";
 import { PHRASES } from "../evals/command-pick/phrases.js";
 
@@ -49,9 +63,11 @@ interface Context {
 
 /**
  * **The places the bar is opened**, the eval's first so the file reads in the
- * bar's own order. The slug is `a-piece` and the address carries nothing, so
- * the Metadata row's id is `page:/read/a-piece/metadata`.
+ * bar's own order. The slug is `SLUG` and the address carries a place, as a
+ * real one does — so the file is only right if `pickKey` takes both out.
  */
+const SLUG = "a-piece";
+
 const CONTEXTS: readonly Context[] = [
   { name: "owner-article", experimentalOn: true, article: { view: "article", owner: true, archived: false }, comments: true },
   {
@@ -94,10 +110,10 @@ function rowsIn(context: Context): readonly Command[] {
     ...besideTheModes({
       article: context.article
         ? {
-            slug: "a-piece",
-            search: "",
+            slug: SLUG,
+            search: "at=spya-k3m9qt",
             view: context.article.view,
-            help: "/help",
+            help: "/help#glossary",
             shelfRow: context.article.owner ? { archive, tags: { edit: async () => [] } } : undefined,
           }
         : undefined,
@@ -132,6 +148,7 @@ describe("pickOption", () => {
       label: "Feedback",
       description: "Tell us.",
       aliases: ["bug"],
+      opensOnly: true,
       generates: false,
       run: () => ({ kind: "close" }),
     };
@@ -140,13 +157,47 @@ describe("pickOption", () => {
   });
 });
 
+describe("pickKey", () => {
+  const page = (href: string): Command => ({ kind: "page", href, label: "Metadata", description: "", aliases: [], generates: false });
+
+  it("takes the slug, the query string and the fragment out of a page's id", () => {
+    const row = page("/read/my-paper/metadata?at=spya-k3m9qt&cols=0,1");
+    expect(commandId(row)).toBe("page:/read/my-paper/metadata?at=spya-k3m9qt&cols=0,1");
+    expect(pickKey(row, "my-paper")).toEqual({ id: `page:/read/${PICK_SLUG}/metadata`, label: "Metadata" });
+    expect(pickKey(page("/help#glossary"), "my-paper").id).toBe("page:/help");
+    expect(pickKey(page("/read/my-paper"), "my-paper").id).toBe(`page:/read/${PICK_SLUG}`);
+  });
+
+  it("gives two articles the same key, and leaves a slug that only starts the same alone", () => {
+    expect(pickKey(page("/read/one/metadata"), "one")).toEqual(pickKey(page("/read/two/metadata"), "two"));
+    expect(pickKey(page("/read/one-more/metadata"), "one").id).toBe("page:/read/one-more/metadata");
+    /* The slug as the address spells it. */
+    expect(pickKey(page("/read/a%20b/metadata"), "a b").id).toBe(`page:/read/${PICK_SLUG}/metadata`);
+  });
+
+  it("is the row's own id for everything that is not a page", () => {
+    expect(pickKey(modeCommand("glossary"), "glossary")).toEqual({ id: "mode:glossary", label: MODE_LABEL.glossary });
+  });
+});
+
 describe("src/command-pick-catalogue.generated.json", () => {
-  const entries = new Map<string, Record<string, unknown> & { id: string; label: string; contexts: string[] }>();
+  const entries = new Map<
+    string,
+    Record<string, unknown> & { id: string; label: string; description: string; aliases: readonly string[]; contexts: string[] }
+  >();
+  const collisions: string[] = [];
   for (const context of CONTEXTS) {
     for (const command of rowsIn(context)) {
-      const option = pickOption(command);
+      const option = pickOption(command, context.article ? SLUG : undefined);
       const key = `${option.id}\n${option.label}`;
-      const entry = entries.get(key) ?? { ...option, kind: command.kind, generates: generates(command), contexts: [] };
+      const held = entries.get(key);
+      /* The same key in two places must be the same row: the server finds a
+         row's words by (id, label), so two rows under one key would hand a
+         model one row's words for the other's press. */
+      if (held && (held.description !== option.description || JSON.stringify(held.aliases) !== JSON.stringify(option.aliases))) {
+        collisions.push(key);
+      }
+      const entry = held ?? { ...option, kind: command.kind, generates: generates(command), contexts: [] };
       entry.contexts.push(context.name);
       entries.set(key, entry);
     }
@@ -168,6 +219,16 @@ describe("src/command-pick-catalogue.generated.json", () => {
       "Put this article back",
     ]);
     expect(built.filter((o) => o.id === "action:experimental")).toHaveLength(2);
+  });
+
+  it("never holds two different rows under one (id, label), and no id names an article", () => {
+    expect(collisions).toEqual([]);
+    for (const { id } of built) {
+      expect(id, id).not.toContain(SLUG);
+      expect(id, id).not.toMatch(/[?#]/);
+    }
+    expect(built.map((o) => o.id)).toContain(`page:/read/${PICK_SLUG}/metadata`);
+    expect(built.map((o) => o.id)).toContain("page:/help");
   });
 
   it("gives each id once inside any one context", () => {

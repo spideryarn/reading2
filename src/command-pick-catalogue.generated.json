@@ -662,7 +662,7 @@
   ]
  },
  {
-  "id": "page:/read/a-piece/metadata",
+  "id": "page:/read/:slug/metadata",
   "label": "Metadata",
   "description": "Where this came from, how long it is, and every step that built it.",
   "aliases": [
