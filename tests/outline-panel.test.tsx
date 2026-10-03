@@ -606,7 +606,7 @@ describe("follow-along in a list that scrolls", () => {
     expect(list.scrollTop).toBe(200 - 90 / 3);
   });
 
-  it("never cuts off the foot of a current row that would fit", () => {
+  it.each([false, true])("never cuts off the foot of a current row that would fit (expanded=%s)", (expanded) => {
     /* Rows are 30px in this stub; make the current one 80px, as a row with a
        summary is. In a 90px list a third down is 30px, which would leave 60px
        for an 80px row. GPT Sol's plan review, 261003k, F2. */
@@ -618,11 +618,22 @@ describe("follow-along in a list that scrolls", () => {
       if (!this.classList.contains("outln-row")) return 0;
       return this.classList.contains("now") ? 80 : 30;
     });
-    const list = draw(0, false);
-    draw(9, false);
+    const list = draw(0, expanded);
+    draw(9, expanded);
     const top = 200;
     expect(list.scrollTop).toBeLessThanOrEqual(top);
     expect(list.scrollTop + 90).toBeGreaterThanOrEqual(top + 80);
+  });
+
+  it.each([false, true])("starts a row taller than the list at its top (expanded=%s)", (expanded) => {
+    nothingFits();
+    layout(() => 90);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) { return this.classList.contains("now") ? 140 : 30; });
+    const list = draw(0, expanded);
+    draw(9, expanded);
+    expect(list.scrollTop).toBe(200);
   });
 
   it("keeps a place the reader scrolled to by hand until the section changes — fisheye too", () => {
@@ -648,6 +659,26 @@ describe("follow-along in a list that scrolls", () => {
     });
     /* The last of five rows: top 200, 30px tall, in a 90px list. */
     expect(list.scrollTop).toBe(200 + 30 - 90);
+  });
+
+  it("follows when the floor starts scrolling without changing section", () => {
+    const observers: ResizeObserverCallback[] = [];
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(cb: ResizeObserverCallback) { observers.push(cb); }
+      observe() {}
+      disconnect() {}
+    });
+    layout(() => 90);
+    let candidateHeight = 70;
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) { return this.dataset.rung ? candidateHeight : 0; });
+    const list = draw(9, false);
+    expect(list.scrollTop).toBe(0);
+    candidateHeight = 1000;
+    act(() => observers[0]!([], {} as ResizeObserver));
+    expect(host.querySelector<HTMLElement>(".outln")!.dataset.outlineScroll).toBe("1");
+    expect(list.scrollTop).toBe(170);
   });
 
   it("a fisheye list that fits is never scrolled", () => {

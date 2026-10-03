@@ -1,6 +1,6 @@
 /* outline-mode.css — Structure mode's narrow face in the mode band: the whole
-   document as one nested list, which scrolls only when the least it may draw
-   does not fit. OutlinePanel.tsx, outline.ts.
+   document as one nested list. Its fisheye scrolls when the least it may draw
+   does not fit; Expanded always scrolls. OutlinePanel.tsx, outline.ts.
    It was Outline mode until 2026-09-10, and kept its name and its classes when
    it became Structure's list (docs/plans/260910g-structure-mode-subsumes-outline.md).
 
@@ -84,7 +84,7 @@
 
 .outln-row {
   /* **A grid, so the number sits BESIDE the title instead of above it.**
-     While titles were clamped to one line (until 2026-09-10) `.outln-text`
+     While all titles were clamped to one line (until 2026-09-10) `.outln-text`
      was `display: -webkit-box`, a *block-level* box: as an inline-flow sibling
      of `.outln-num` it took a line of its own, so every numbered row was two
      lines tall. Nothing errored and nothing measured wrong — the panel just
@@ -329,8 +329,8 @@
 }
 .outln-arc { color: var(--ink-soft); font-style: italic; }
 
-/* The candidates being measured. Laid out for real — same width, same styles,
-   same wrapping — and simply not painted. `visibility: hidden` rather than
+/* The candidates being measured. Laid out for real at the non-scrolling list's
+   width, with the same styles, and simply not painted. `visibility: hidden` rather than
    `display: none`, which would give every candidate a height of zero and make
    the fit choose rung 5 every time, silently. */
 .outln-measure {

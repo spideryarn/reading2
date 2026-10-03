@@ -123,7 +123,7 @@ letting the list take the wheel.
      `currentId`. In the fisheye it prefers the whole current-part block, as above.
    - `data-outline-scroll` replaces `data-outline-clamp`.
 2. `src/web/styles/outline-mode.css`: the Expanded scroll rule also applies to
-   `.mode-band.outln[data-outline-scroll="1"] .outln-list`; `.outln-list.clamp` removed; the header
+   `.mode-band.outln[data-outline-scroll="1"] > .outln-list`; `.outln-list.clamp` removed; the header
    comments that say the list never scrolls are corrected.
 3. Tests, red first (`tests/outline-panel.test.tsx`): a band too short for rung 3 still draws the
    current part's sections and the current section's summary and reports scroll; a band that fits
@@ -136,3 +136,80 @@ letting the list take the wheel.
 5. Browser check (jsdom does no layout, so the fit is only proved in a browser): desktop with the
    list face, iPad, phone; a long article at a short height shows `data-outline-scroll="1"`, the
    current section and its summary on screen, and the list follows on crossing a section.
+
+## The browser check
+
+A Sonnet subagent, Playwright on the box, on "Why Most Published Research Findings Are False" (10
+parts, about 67 sections), 2026-10-03. At 1100×700, 1100×480, iPad portrait 820×1180 and phone
+390×844 the list face was at rung 3 with `data-outline-scroll="1"` wherever the floor did not fit,
+and rung 4 with `"0"` at the top of the article on the iPad and the phone, where it did. Measured
+in each: the current row and its summary fully inside the list, the whole current-part block
+inside it whenever the block was shorter than the list, the toggle row fixed, the last row
+scrolling clear of the dock, the list following into the next section and the next part, a
+hand-scrolled place kept within a section, ten samples over two seconds stable, and a 15px classic
+scrollbar cutting no text. iPad landscape 1180×820 draws the two columns, unchanged. Expanded
+still scrolls and follows. It ran before the code review's edits, on commit `d31a1e6a7`.
+
+**Found, and not this change's**: on the phone, a row's hover card opens off the edge of the
+screen (x 367 to 693 of 390, or off the left), the page widens to 706px, and rows move under the
+finger, so a second tap can land on another row. The same on `dev` without this change. Reported
+to the Overseer as its own bug.
+
+## GPT Sol's code review
+
+**The caller's note, written after the review.** The first fix below, the held reveal
+(`pendingReveal`), **was taken out again** with its two tests. It cost a ref, a second projection
+on every Home/End, clears in three handlers and about 145 lines of test, for one case: Home or End
+landing in a part taller than the list, where follow-along can then push the chosen part's row
+just off the top. And the review's own last finding is a hole in it (the reveal can stay pending).
+What stays from it: `revealRow`, the tests for the summary clamp in both views and for scrolling
+turning on without a section change, and the wording fixes. The paragraph below is the reviewer's
+own account of what it built.
+
+**P2, fixed: a keyboard reveal could be undone by the jump it made.** End selected and revealed
+the last collapsed part, then the article jump opened that part and passive follow placed its
+first section at the top, leaving the selected heading 50px above the list. The original
+Home/End test used a no-op jump, so it could not see this. The class is **event-time geometry
+invalidated by a later render, with competing scroll writers**. `OutlinePanel` now retains the
+explicit reveal until the destination is current, then consumes it before passive follow.
+Tests went red first and cover immediate and deferred focus updates, an intermediate section
+during a smooth Home jump, manual-position preservation after arrival, and the next passive
+boundary. The reveal waits for the destination section rather than the first frame inside its
+part. A further red-first case covers a part introduction
+before its first section: the destination must use section-granular focus, or Home leaves a
+reveal pending for an unrelated later boundary.
+
+**P2, fixed in the wording: the floor's guarantee was broader than its scope.** The Structure
+reference and help now say the sections directly under the part and the available summary, and
+point readers to Expanded for deeper subsections. The depth-4 extension remains deferred under
+F1 above; this review does not change that decision. Header comments now also distinguish
+Expanded's always-scrolling list from the fisheye's conditional scroll.
+
+The direct-child CSS selector reaches the visible list through `ModeSurface` and `TooltipGroup`
+(a context provider with no wrapper); hidden copies carry no ids and receive no scroll padding.
+No live clamp consumers remain. No measurement feedback loop was found: hidden candidates and
+the visible list's top do not depend on scrolling state. The classic scrollbar can narrow the
+overflowing floor, but switching scrolling off restores the width used to measure a fitting rung.
+
+Verification is in `tests/outline-panel.test.tsx`: additional cases pin scrolling turning on
+without a section change and the summary-height clamp in both views. Representative mutations
+were applied through an isolated Vitest transform in `/tmp`, without changing files served to the
+separate browser worker. They exercise the floor, scroll decision, part-block preference,
+third-down placement, summary clamp, follow dependencies and guard, Home/End reveal, deferred
+reveal and its consumption, manual-position preservation, hidden-to-visible recovery, and the
+removed clamp. The fit and follow arithmetic are covered; actual wrapping, flex sizing,
+scrollbar width, summary visibility and wheel/touch chaining still require the separate browser
+check. No dev server or git state was changed by this review.
+
+**Wider P2, left for the caller:** `beginJump` centres a target, while `useColumnContext` samples
+at 40% of the viewport. A long part introduction or very short sections can therefore make the
+actual sampled section differ from the projected first section. The pending keyboard reveal has
+no arrival outcome from `onJump`, so that mismatch can leave it pending. Changing the shared
+jump/focus contract is outside this review's file scope; the browser check should explicitly
+verify Home/End's actual landing before approval, including parts with introductions. The
+confirmed immediate, deferred and intermediate-section regressions above are fixed.
+
+Final checks: 136 tests passed across OutlinePanel, the projection, surface markup, Help and doc
+links; all four typecheck projects passed (2859 source files covered). `npm run typecheck` hit
+the sandbox's `tsx` IPC restriction; `node --import tsx scripts/typecheck.ts` ran the same checking
+script successfully. Scoped lint has no errors and two cognitive-complexity advisories.

@@ -1,6 +1,7 @@
 /**
  * **Structure mode's list face** — the whole document as one nested list,
- * which scrolls only when the floor of its ladder does not fit. It was Outline mode, 2026-08-28 to 2026-09-10; it is now what
+ * whose fisheye scrolls when its floor does not fit, and whose Expanded view
+ * always scrolls. It was Outline mode, 2026-08-28 to 2026-09-10; it is now what
  * `StructureBand` draws when the band is too narrow for Structure's two columns
  * (src/web/modes/structure/StructureMode.tsx § `structureFace`), and the
  * names here — this file, `outline.ts`, `.outln-*` — are the ones it had.
@@ -33,6 +34,15 @@ import { withVoice } from "./voice.js";
  * and the current section's summary (outline.ts § `Rung`). `fit` below.
  */
 const FLOOR: Rung = 3;
+
+/** Reveal a keyboard target using only the list's own scroll position. */
+function revealRow(list: HTMLOListElement, row: HTMLElement) {
+  if (list.clientHeight <= 0) return;
+  const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+  const bottom = top + row.offsetHeight;
+  if (top < list.scrollTop || row.offsetHeight > list.clientHeight) list.scrollTop = top;
+  else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+}
 
 interface Props {
   /** The tree, nested and numbered. Null if it is unusable. */
@@ -142,7 +152,6 @@ export function OutlinePanel({
   const [fit, setFit] = useState<{ rung: Rung; scroll: boolean }>({ rung: FLOOR, scroll: false });
   const rung = fit.rung;
 
-  /**
   /**
    * Whether the band is covering the article rather than sitting beside it,
    * **measured rather than derived from a width.**
@@ -271,7 +280,7 @@ export function OutlinePanel({
           list.getBoundingClientRect().top
         : panel.clientHeight - (Number.parseFloat(pad.paddingTop) || 0) - padBottom;
       /* Nothing to measure against yet — a band with no laid-out height would
-         make every candidate "not fit" and pin the rung at 1 for ever. Leave
+         make every candidate "not fit" and report scrolling while hidden. Leave
          it alone and wait for the observer. */
       if (avail <= 0) return;
 
@@ -343,8 +352,9 @@ export function OutlinePanel({
    * able to scroll independently within the column … Let's try and avoid too
    * much complexity for the v1."
    *
-   * So the panel is scrolled when the row marked `now` *changes* — the reader
-   * has moved into another section — and at no other time. A reader who
+   * Normally the list follows when the row marked `now` *changes* — the reader
+   * has moved into another section. It also aligns when scrolling starts or
+   * the hidden list returns. A reader who
    * scrolls the column by hand keeps their place until the next boundary in
    * the text. No pause timer and no "detached" state; add one only if the
    * snap-back turns out to annoy. A row already fully in view is left where it
@@ -481,16 +491,17 @@ export function OutlinePanel({
          already in the first section would mark a row that is off screen. The
          least scroll that brings it in, on the list's own `scrollTop` (never
          `scrollIntoView`, which moves the page too). GPT Sol's plan review,
-         261003k, F3. */
+         261003k, F3.
+
+         **Known and left**: when the jump lands in another part, follow-along
+         then places that part's current section, and in a part taller than
+         the list that can push the chosen part's own row just off the top.
+         Sol's code review built a held reveal for it; it was taken out as
+         more machinery than a Home/End edge earns (the plan says so). */
       const list = listRef.current;
       /* By id on the document: only the visible rows carry one. */
       const el = scrolls && target ? list?.ownerDocument.getElementById(rowId(target)) : null;
-      if (list && el && list.clientHeight > 0) {
-        const top = el.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
-        const bottom = top + el.offsetHeight;
-        if (top < list.scrollTop || el.offsetHeight > list.clientHeight) list.scrollTop = top;
-        else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
-      }
+      if (list && el) revealRow(list, el);
       jump(target);
     };
     switch (e.key) {
@@ -577,7 +588,7 @@ export function OutlinePanel({
       {/* The candidates, measured and never seen. `aria-hidden` and out of the
           tab order, so a screen reader meets the list once.
 
-          **Same element, same classes, same width as the real list** — an
+          **Same element, same classes, same width as the non-scrolling list** — an
           `<ol class="outln-list">` of `<li class="outln-row …">`, because a
           measurement of different markup is a measurement of something else.
           That is the whole point of measuring rather than estimating, and it

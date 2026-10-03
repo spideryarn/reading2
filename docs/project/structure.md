@@ -68,8 +68,10 @@ and shallow everywhere else.
 
 **The list has a floor, and scrolls rather than go below it** (since 2026-10-03,
 [261003k](../plans/261003k-structure-fisheye-list-always-shows-the-current-sections-and-summary-and-scrolls.md)).
-It always draws every part, every section of the part you are in, and the summary of the section
-you are in. With room to spare it adds the part's arc and then the section's paragraphs. Without
+It always draws every part, the sections directly under the part you are in, and the available
+summary of the current one. Deeper subsections still need Expanded; that extension is
+[deferred in the plan](../plans/261003k-structure-fisheye-list-always-shows-the-current-sections-and-summary-and-scrolls.md#not-in-this-change).
+With room to spare it adds the part's arc and then the section's paragraphs. Without
 room for the floor it draws the floor anyway and the list scrolls, following the reader as
 Expanded does and keeping the whole of the current part's block in view when that fits. Before
 that the list never scrolled and dropped the sections and the summary instead, and from 2026-09-10
