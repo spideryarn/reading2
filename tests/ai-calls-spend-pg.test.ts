@@ -101,6 +101,7 @@ function row(id: string, over: Partial<AiCallRow>): AiCallRow {
     outputTextTokens: null,
     outputAudioTokens: null,
     transcriptionSeconds: null,
+    voiceSeconds: null,
     ...over,
   };
 }
@@ -472,6 +473,9 @@ describe("the per-owner spend aggregate", () => {
           threadId: null,
           model: "gpt-realtime-2.1",
           transcriptionModel: "gpt-live-transcribe",
+          backendModel: null,
+          providerSessionId: null,
+          voiceSecondsReported: 0,
           issuedAt,
           acceptsUntil,
           connectedAt,

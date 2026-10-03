@@ -2783,6 +2783,32 @@ export const realtimeSessions = spideryarn.table(
     model: text("model").notNull(),
     /** `gpt-live-transcribe` — a second model on a second rate card. src/live.ts. */
     transcriptionModel: text("transcription_model"),
+    /**
+     * **GPT-Live only: the text model that answers behind the voice**
+     * (`GPT_LIVE_BACKEND_MODEL` in src/live.ts). Null on a Realtime session,
+     * where one model does both. It is the rate card a `backend` usage report is
+     * priced on, and it comes from this row for the reason `model` does: a
+     * report that could name its own model could name the cheap one.
+     */
+    backendModel: text("backend_model"),
+    /**
+     * **GPT-Live only: OpenAI's own id for the session** (`live_…`), written
+     * once its create call has answered. Null on a Realtime session — the
+     * browser opens that one and this server never learns its id — and null on
+     * a GPT-Live row whose create failed. It is what a later reconciliation
+     * against OpenAI's records would join on.
+     */
+    providerSessionId: text("provider_session_id"),
+    /**
+     * **GPT-Live only: the highest cumulative voice-seconds figure this server
+     * has billed for** — a high-water mark. GPT-Live reports seconds as a
+     * running total, so each report is priced as the difference from this, and
+     * a repeat or an older report adds nothing. Read, advanced and paired with
+     * its `ai_calls` row under one row lock
+     * (`advanceVoiceSeconds` in src/store/realtime-sessions-pg.ts). Zero on
+     * every Realtime session.
+     */
+    voiceSecondsReported: integer("voice_seconds_reported").notNull().default(0),
     /** When the client secret was minted. A token handed out, not a conversation. */
     issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
     /** The last instant a usage report for this session is accepted. See above. */
@@ -2817,6 +2843,8 @@ export const realtimeSessions = spideryarn.table(
       sql`${t.connectedAt} is null or ${t.connectedAt} >= ${t.issuedAt}`,
     ),
     check("realtime_sessions_close_reason_len", sql`length(${t.closeReason}) <= 64`),
+    /** A running total of seconds is never negative; the mark only moves up. */
+    check("realtime_sessions_voice_seconds_not_negative", sql`${t.voiceSecondsReported} >= 0`),
   ],
 );
 
@@ -3072,7 +3100,11 @@ export const aiCalls = spideryarn.table(
     }),
     /** OpenAI's `response.id`, or the transcribed item's id. Half the idempotency key. */
     providerEventId: text("provider_event_id"),
-    /** `response` or `transcription` — which rate card, and the rest of the key. */
+    /**
+     * Which bill this row is, and the rest of the key: `response` or
+     * `transcription` on a Realtime session, `voice` or `backend` on a
+     * GPT-Live one. `RealtimeEventKind` in src/ai-spend.ts.
+     */
     eventKind: text("event_kind"),
     /** `completed`, `cancelled`, `failed`, `incomplete` — kept verbatim. See `outcome`. */
     providerStatus: text("provider_status"),
@@ -3114,6 +3146,17 @@ export const aiCalls = spideryarn.table(
      * accumulate a real error over a twenty-minute conversation of short turns.
      */
     transcriptionSeconds: doublePrecision("transcription_seconds"),
+    /**
+     * **Seconds of a GPT-Live voice session this row bills for** — the positive
+     * difference between two cumulative reports, at a per-minute rate.
+     *
+     * Its own column, not `transcription_seconds`: that one is audio a
+     * *transcriber* wrote down, on another model's rate card, and a
+     * `SUM(transcription_seconds)` that quietly included voice minutes would be
+     * a figure about nothing. An integer because the provider reports whole
+     * seconds. Set on `voice` rows and on no others — the check below.
+     */
+    voiceSeconds: integer("voice_seconds"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -3171,7 +3214,22 @@ export const aiCalls = spideryarn.table(
       sql`(${t.realtimeSessionId} is null and ${t.providerEventId} is null and ${t.eventKind} is null)
           or (${t.realtimeSessionId} is not null and ${t.providerEventId} is not null and ${t.eventKind} is not null)`,
     ),
-    check("ai_calls_realtime_event_kind", sql`${t.eventKind} is null or ${t.eventKind} in ('response','transcription')`),
+    check(
+      "ai_calls_realtime_event_kind",
+      sql`${t.eventKind} is null or ${t.eventKind} in ('response','transcription','voice','backend')`,
+    ),
+    /**
+     * **`voice_seconds` is set on a `voice` row, positive, and on nothing
+     * else.** `is not distinct from`, because `event_kind` is null on every row
+     * that is not a live conversation and a CHECK passes on null — a plain `=`
+     * would let a chat row carry voice seconds. A `voice` row implies a
+     * realtime session (`ai_calls_realtime_identified`), so this also keeps the
+     * column off every other wire.
+     */
+    check(
+      "ai_calls_voice_seconds_on_voice_rows",
+      sql`(${t.eventKind} is not distinct from 'voice') = (${t.voiceSeconds} is not null and ${t.voiceSeconds} > 0)`,
+    ),
     /**
      * **The modality columns belong to the realtime wire and nowhere else.**
      *

@@ -63,6 +63,9 @@ function session(over: Partial<RealtimeSession> = {}): RealtimeSession {
     threadId: "spya-vaaaaa",
     model: "gpt-realtime-2.1",
     transcriptionModel: "gpt-live-transcribe",
+    backendModel: null,
+    providerSessionId: null,
+    voiceSecondsReported: 0,
     issuedAt: ISSUED,
     acceptsUntil: "2026-09-02T10:20:00.000Z",
     connectedAt: null,
@@ -163,7 +166,11 @@ function bothStores(name: string, store: () => RealtimeSessionStore, id: (n: num
 await pgReady({
   suite: "tests/store-realtime-sessions.test.ts",
   tables: ["spideryarn.realtime_sessions"],
-  columns: [{ table: "spideryarn.realtime_sessions", column: "accepts_until" }],
+  columns: [
+    { table: "spideryarn.realtime_sessions", column: "accepts_until" },
+    { table: "spideryarn.realtime_sessions", column: "voice_seconds_reported" },
+    { table: "spideryarn.ai_calls", column: "voice_seconds" },
+  ],
   max: 2,
 });
 
@@ -200,8 +207,11 @@ afterAll(async () => {
      removes — so the tidying has to go round it, exactly as
      tests/store-ai-calls.test.ts does for the ledger rows it writes. */
   const { getDb, closeDb } = await import("../src/db/client.js");
-  const { realtimeSessions } = await import("../src/db/schema.js");
+  const { aiCalls, realtimeSessions } = await import("../src/db/schema.js");
   const { eq } = await import("drizzle-orm");
+  /* The voice meter's ledger rows first: they point at the sessions, and that
+     foreign key is `on delete restrict`. */
+  await getDb().delete(aiCalls).where(eq(aiCalls.ownerId, OWNER));
   await getDb().delete(realtimeSessions).where(eq(realtimeSessions.ownerId, OWNER));
   /* The seeded accounts go too, and after the sessions that point at them —
      a left-behind `auth.users` row is not inert here, it is the 500 above
@@ -216,3 +226,222 @@ bothStores(
   () => pgRealtimeSessionStore,
   (n) => `00000000-0000-4000-8000-00000000f20${n}`,
 );
+
+/* ------------------------------------------ GPT-Live's voice meter -- */
+
+/**
+ * **The high-water mark, against real Postgres** —
+ * `advanceVoiceSeconds` and `closeUnopened`, the two methods the second engine
+ * added (docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md
+ * § The meter).
+ *
+ * GPT-Live reports voice seconds as a running total. The promise is that the
+ * rows written for one session always add up to exactly the highest total
+ * reported — whatever order the reports come in, however often one repeats,
+ * and when several arrive at once. Only a database can break the last of
+ * those, which is why this is here and not beside the arithmetic in
+ * tests/realtime-usage.test.ts.
+ *
+ * The rows are built by `acceptRealtimeUsage`, the function the route uses, so
+ * what is inserted is what production inserts and passes every CHECK it does.
+ */
+describe("the GPT-Live voice meter", () => {
+  const vid = (n: number): string => `00000000-0000-4000-8000-00000000f21${n}`;
+  const AT = new Date("2026-09-02T10:05:00.000Z");
+
+  const gptSession = (n: number): RealtimeSession =>
+    session({
+      id: vid(n),
+      model: "gpt-live-1",
+      transcriptionModel: null,
+      backendModel: "gpt-6-luna",
+    });
+
+  /** One `voice` report, through the store, priced by the real function. */
+  async function report(n: number, seconds: number, eventId = `event_${seconds}`) {
+    const { acceptRealtimeUsage } = await import("../src/live.js");
+    return pgRealtimeSessionStore.advanceVoiceSeconds(vid(n), OWNER, {
+      seconds,
+      rowFor: (locked) =>
+        acceptRealtimeUsage({
+          session: locked,
+          usage: { kind: "voice", seconds, eventId },
+          receivedAt: AT,
+        }),
+    });
+  }
+
+  /** The seconds each of this session's ledger rows bills, in the order of their ranges. */
+  async function billed(n: number): Promise<number[]> {
+    const { getDb } = await import("../src/db/client.js");
+    const { aiCalls } = await import("../src/db/schema.js");
+    const { eq } = await import("drizzle-orm");
+    const rows = await getDb()
+      .select({ seconds: aiCalls.voiceSeconds, event: aiCalls.providerEventId, kind: aiCalls.eventKind })
+      .from(aiCalls)
+      .where(eq(aiCalls.realtimeSessionId, vid(n)));
+    for (const r of rows) expect(r.kind).toBe("voice");
+    return rows
+      .sort((a, b) => Number(a.event?.split("-")[0]) - Number(b.event?.split("-")[0]))
+      .map((r) => r.seconds ?? -1);
+  }
+
+  const mark = async (n: number): Promise<number | undefined> =>
+    (await pgRealtimeSessionStore.find(vid(n), OWNER))?.voiceSecondsReported;
+
+  it("starts at zero, and stores the backend model", async () => {
+    await pgRealtimeSessionStore.issue(gptSession(1));
+    const found = await pgRealtimeSessionStore.find(vid(1), OWNER);
+    expect(found?.voiceSecondsReported).toBe(0);
+    expect(found?.backendModel).toBe("gpt-6-luna");
+    expect(found?.providerSessionId).toBeNull();
+    expect(found?.transcriptionModel).toBeNull();
+  });
+
+  it("bills the difference, and nothing for a repeat or an older report", async () => {
+    await pgRealtimeSessionStore.issue(gptSession(2));
+
+    expect((await report(2, 15))?.voiceSeconds).toBe(15);
+    expect(await mark(2)).toBe(15);
+
+    /* The same figure again — the browser's first report after the create
+       charge, or a retry. */
+    expect(await report(2, 15)).toBeNull();
+    expect(await report(2, 15, "another_event")).toBeNull();
+    expect(await billed(2)).toEqual([15]);
+
+    expect((await report(2, 28))?.voiceSeconds).toBe(13);
+    expect(await mark(2)).toBe(28);
+
+    /* An older report arriving late. */
+    expect(await report(2, 20)).toBeNull();
+    expect(await mark(2)).toBe(28);
+    expect(await billed(2)).toEqual([15, 13]);
+  });
+
+  it("comes to the same total when the reports arrive out of order", async () => {
+    await pgRealtimeSessionStore.issue(gptSession(3));
+    expect((await report(3, 45))?.voiceSeconds).toBe(45);
+    expect(await report(3, 15)).toBeNull();
+    expect(await report(3, 30)).toBeNull();
+    expect((await report(3, 60))?.voiceSeconds).toBe(15);
+    expect(await billed(3)).toEqual([45, 15]);
+    expect(await mark(3)).toBe(60);
+  });
+
+  it("bills each second once when reports arrive together", async () => {
+    /* The case only a lock gets right. Without `for update`, two of these read
+       the same mark, both take a difference from it, and both insert: seconds
+       billed twice by rows that are each individually correct. */
+    await pgRealtimeSessionStore.issue(gptSession(4));
+    const totals = [15, 30, 30, 45, 45, 45, 60, 60, 15, 60];
+    const rows = await Promise.all(totals.map((seconds, i) => report(4, seconds, `event_${i}`)));
+
+    const written = rows.filter((r) => r !== null);
+    const sum = written.reduce((n, r) => n + (r?.voiceSeconds ?? 0), 0);
+    expect(sum).toBe(60);
+    expect(await mark(4)).toBe(60);
+    /* And what the calls said they wrote is what is in the table. */
+    const inTable = await billed(4);
+    expect(inTable.reduce((n, s) => n + s, 0)).toBe(60);
+    expect(inTable).toHaveLength(written.length);
+  });
+
+  it("records OpenAI's session id in the same write", async () => {
+    await pgRealtimeSessionStore.issue(gptSession(5));
+    const { acceptRealtimeUsage } = await import("../src/live.js");
+    await pgRealtimeSessionStore.advanceVoiceSeconds(vid(5), OWNER, {
+      seconds: 15,
+      providerSessionId: "live_u1_abc",
+      rowFor: (locked) =>
+        acceptRealtimeUsage({
+          session: locked,
+          usage: { kind: "voice", seconds: 15, eventId: "create" },
+          receivedAt: AT,
+        }),
+    });
+    const found = await pgRealtimeSessionStore.find(vid(5), OWNER);
+    expect(found?.providerSessionId).toBe("live_u1_abc");
+    expect(found?.voiceSecondsReported).toBe(15);
+    /* A create charge is not a connection. */
+    expect(found?.connectedAt).toBeNull();
+    expect(await billed(5)).toEqual([15]);
+  });
+
+  it("writes nothing at all when the report is refused", async () => {
+    await pgRealtimeSessionStore.issue(gptSession(6));
+    const refusal = Object.assign(new Error("refused [live-report]"), { status: 400 });
+    await expect(
+      pgRealtimeSessionStore.advanceVoiceSeconds(vid(6), OWNER, {
+        seconds: 15,
+        providerSessionId: "live_never",
+        rowFor: () => {
+          throw refusal;
+        },
+      }),
+      /* The refusal itself, not a scrubbed database error: it carries a status,
+         so the guard lets it through and the route answers 400. */
+    ).rejects.toBe(refusal);
+    const found = await pgRealtimeSessionStore.find(vid(6), OWNER);
+    expect(found?.voiceSecondsReported).toBe(0);
+    expect(found?.providerSessionId).toBeNull();
+    expect(await billed(6)).toEqual([]);
+  });
+
+  it("moves the mark back when the row cannot be written", async () => {
+    /* The mark and the row are one fact. A row the database refuses — here,
+       one claiming zero seconds, which `ai_calls_voice_seconds_on_voice_rows`
+       forbids — must not leave seconds marked as billed with no bill. */
+    await pgRealtimeSessionStore.issue(gptSession(7));
+    const { acceptRealtimeUsage } = await import("../src/live.js");
+    await expect(
+      pgRealtimeSessionStore.advanceVoiceSeconds(vid(7), OWNER, {
+        seconds: 15,
+        rowFor: (locked) => {
+          const row = acceptRealtimeUsage({
+            session: locked,
+            usage: { kind: "voice", seconds: 15, eventId: "e" },
+            receivedAt: AT,
+          });
+          return row ? { ...row, voiceSeconds: 0 } : null;
+        },
+      }),
+    ).rejects.toThrow();
+    expect(await mark(7)).toBe(0);
+    expect(await billed(7)).toEqual([]);
+  });
+
+  it("does nothing for somebody else's session, and never builds a row", async () => {
+    await pgRealtimeSessionStore.issue(gptSession(8));
+    let asked = 0;
+    const out = await pgRealtimeSessionStore.advanceVoiceSeconds(vid(8), STRANGER, {
+      seconds: 15,
+      providerSessionId: "live_theirs",
+      rowFor: () => {
+        asked += 1;
+        return null;
+      },
+    });
+    expect(out).toBeNull();
+    expect(asked).toBe(0);
+    const found = await pgRealtimeSessionStore.find(vid(8), OWNER);
+    expect(found?.voiceSecondsReported).toBe(0);
+    expect(found?.providerSessionId).toBeNull();
+  });
+
+  it("closes a session that never opened without saying it connected", async () => {
+    /* `close` backfills `connectedAt`, on the reasoning that a session which
+       reached its end must have opened. One whose create OpenAI refused did
+       not, and must not join the conversations that happened. */
+    await pgRealtimeSessionStore.issue(gptSession(9));
+    await pgRealtimeSessionStore.closeUnopened(vid(9), STRANGER, "2026-09-02T10:00:01.000Z", "create_failed");
+    expect((await pgRealtimeSessionStore.find(vid(9), OWNER))?.closedAt).toBeNull();
+
+    await pgRealtimeSessionStore.closeUnopened(vid(9), OWNER, "2026-09-02T10:00:02.000Z", "create_failed");
+    await pgRealtimeSessionStore.closeUnopened(vid(9), OWNER, "2026-09-02T10:00:09.000Z", "later");
+    const found = await pgRealtimeSessionStore.find(vid(9), OWNER);
+    expect(found?.closedAt).toBe("2026-09-02T10:00:02.000Z");
+    expect(found?.closeReason).toBe("create_failed");
+    expect(found?.connectedAt).toBeNull();
+  });
+});

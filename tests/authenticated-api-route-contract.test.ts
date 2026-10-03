@@ -736,6 +736,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/chat/w1/w2/live"],
   },
   {
+    /* GPT-Live's create-and-connect, the second live engine (plan 261003a). */
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live-session$",
+      flags: "",
+    },
+    methods: ["POST"],
+    witnesses: ["/api/chat/w1/w2/live-session"],
+  },
+  {
     /* The second documented overlap: `/api/chat/<slug>/live-tool` is also two
        segments, so the thread matcher above takes it for `PATCH` and `DELETE`.
        Both selections are right and neither depends on the order. */
@@ -866,8 +876,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 84;
-const EXPECTED_GUARD_COUNT = 103;
+const EXPECTED_MATCHER_COUNT = 85;
+const EXPECTED_GUARD_COUNT = 104;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2081,6 +2091,7 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/cancel$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/live-tool$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live-session$/",
         "POST regex /^\\/api\\/live\\/([\\w-]+)\\/connected$/",
         "POST regex /^\\/api\\/live\\/([\\w-]+)\\/usage$/",
         "POST regex /^\\/api\\/live\\/([\\w-]+)\\/close$/",

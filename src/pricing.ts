@@ -684,6 +684,144 @@ export function priceRealtimeTranscription(
   };
 }
 
+/* ------------------------------------------------------------ GPT-Live -- */
+
+/**
+ * **USD per MINUTE of a GPT-Live voice session** — the second engine's voice
+ * bill (docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md).
+ *
+ * GPT-Live does not report audio tokens at all. It reports one cumulative
+ * number of seconds for the session and bills that by the minute, so this is
+ * the shape `TRANSCRIPTION_PRICES` has and not the one `REALTIME_PRICES` has.
+ *
+ * **Where $0.05 comes from:** the plan, which states it (§ The meter,
+ * 2026-10-03) without recording the page it was read from. It has not been
+ * checked against a bill — there is no OpenAI admin key to check with — so it
+ * is `computed` like every other figure in this section, and it wants the same
+ * source-and-date note `REALTIME_PRICE_SOURCE` has once somebody re-reads it.
+ */
+export const LIVE_VOICE_PRICES: Readonly<Record<string, readonly PerMinuteRow[]>> = {
+  "gpt-live-1": [{ from: "1970-01-01", usdPerMinute: 0.05 }],
+};
+
+/** A per-minute price and the UTC date it applies from. */
+export interface PerMinuteRow {
+  from: string;
+  usdPerMinute: number;
+}
+
+/**
+ * **What some seconds of a GPT-Live voice session cost.** `null` for a model
+ * with no row. The seconds are a *difference* between two cumulative reports,
+ * worked out by the caller under a row lock; this is only the arithmetic.
+ */
+export function priceLiveVoice(model: string, seconds: number, at: Date): PricedCall | null {
+  const rows = LIVE_VOICE_PRICES[model];
+  if (!rows) return null;
+  let found: PerMinuteRow | null = null;
+  for (const row of rows) {
+    if (Date.parse(`${row.from}T00:00:00Z`) <= at.getTime()) found = row;
+  }
+  if (!found) return null;
+  const total = toNanos((seconds / 60) * found.usdPerMinute);
+  return {
+    /* All input, as `priceRealtimeTranscription` does and for its reason:
+       `PricedCall` promises four parts that sum to the total, and the provider
+       gives one undivided figure for the session. */
+    totalNanos: total,
+    inputNanos: total,
+    outputNanos: 0,
+    cacheWriteNanos: 0,
+    cacheReadNanos: 0,
+    priceVersion: `${model}@${found.from}`,
+  };
+}
+
+/**
+ * What the text model behind a GPT-Live voice costs, per million tokens.
+ *
+ * `cachedInput` is `null` when **nobody has established the cached rate**. A
+ * cached token is then priced at the full input rate: the figure is an upper
+ * bound, and the cached count stays on the row so it can be repriced. That is
+ * the direction this ledger already takes when it has to be wrong — see
+ * `priceResponseRow` in src/live.ts: only an understatement is silent.
+ */
+export interface LiveBackendPrice {
+  input: number;
+  cachedInput: number | null;
+  output: number;
+}
+
+/** A backend price, and the UTC date it applies from. */
+export interface LiveBackendPriceRow {
+  from: string;
+  price: LiveBackendPrice;
+}
+
+/**
+ * **The GPT-Live backend's rate card.**
+ *
+ * `gpt-6-luna` at $0.10 in and $0.50 out is OpenRouter's list price for
+ * `openai/gpt-6-luna`, read on 2026-09-29
+ * (docs/plans/260929c-shelf-topics-chosen-by-a-model.md § comparison prices;
+ * docs/research/260929a-paying-for-model-calls-with-the-reader-s-own-ai-subscription.md).
+ * Two caveats, both real:
+ *
+ * - The backend runs on **OpenAI directly**, inside the Live session, not
+ *   through OpenRouter. OpenRouter passes OpenAI's list price through, so the
+ *   two should agree, but this number was not read off OpenAI's own page.
+ * - **The cached-input rate is not in this repo anywhere**, so it is `null` and
+ *   cached tokens are priced as fresh. Backend prompts are mostly cached after
+ *   the first round (the whole article is the prefix), so the figure overstates
+ *   until somebody fills this in.
+ */
+export const LIVE_BACKEND_PRICES: Readonly<Record<string, readonly LiveBackendPriceRow[]>> = {
+  "gpt-6-luna": [{ from: "1970-01-01", price: { input: 0.1, cachedInput: null, output: 0.5 } }],
+};
+
+/** One backend response's tokens. `freshInputTokens` already excludes the cached ones. */
+export interface LiveBackendTokens {
+  freshInputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * **What one GPT-Live backend response cost.** `null` for a model with no row —
+ * recorded as unpriced, never as zero.
+ *
+ * `prices` is a parameter so the arithmetic can be tested against a card that
+ * has a cached rate, which the real one does not yet.
+ */
+export function priceLiveBackend(
+  model: string,
+  tokens: LiveBackendTokens,
+  at: Date,
+  prices: Readonly<Record<string, readonly LiveBackendPriceRow[]>> = LIVE_BACKEND_PRICES,
+): PricedCall | null {
+  const rows = prices[model];
+  if (!rows) return null;
+  let found: LiveBackendPriceRow | null = null;
+  for (const row of rows) {
+    if (Date.parse(`${row.from}T00:00:00Z`) <= at.getTime()) found = row;
+  }
+  if (!found) return null;
+  const p = found.price;
+  const inputUsd = usd(tokens.freshInputTokens, p.input);
+  const cacheReadUsd = usd(tokens.cachedInputTokens, p.cachedInput ?? p.input);
+  const outputUsd = usd(tokens.outputTokens, p.output);
+  return {
+    totalNanos: toNanos(inputUsd + cacheReadUsd + outputUsd),
+    inputNanos: toNanos(inputUsd),
+    outputNanos: toNanos(outputUsd),
+    cacheWriteNanos: 0,
+    cacheReadNanos: toNanos(cacheReadUsd),
+    /* The version says when the cached rate was a stand-in, so a row priced
+       that way can be found and repriced once the real rate is known. */
+    priceVersion: `${model}@${found.from}${p.cachedInput === null ? "+cached-as-fresh" : ""}`,
+  };
+}
+
 /** A dollar figure OpenRouter reported, as nano-dollars. */
 export function providerCostToNanos(cost: number | null | undefined): Nanos | null {
   if (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return null;

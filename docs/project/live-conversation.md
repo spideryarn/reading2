@@ -87,8 +87,9 @@ The browser opens a `RTCPeerConnection` straight to OpenAI with a short-lived `e
 server minted. That is not a shortcut, it is the only shape available: relayed audio needs a
 long-lived socket and a Vercel function does not have one.
 
-Our server sees six requests and none of them carries audio: `POST /api/chat/:slug/:threadId/live`
-for a ticket, `POST /api/chat/:slug/live-tool` to run a tool the model called,
+Our server sees six requests and none of them carries audio (for GPT-Live the first is
+`POST …/live-session` instead, which also carries no audio — § GPT-Live's two bills):
+`POST /api/chat/:slug/:threadId/live` for a ticket, `POST /api/chat/:slug/live-tool` to run a tool the model called,
 `POST /api/chat/:slug/:threadId/spoken` once per finished exchange, and the three accounting
 endpoints under `/api/live/:sessionId/` below.
 
@@ -188,6 +189,34 @@ aggregate is biased low by a probably-small unknown. There is no durable outbox 
 retry, deliberately: GPT Sol cut both as what an invoice needs rather than what a pricing estimate
 does. *"Add the durable outbox before usage affects an allowance, an invoice, or a promise made to
 users."*
+
+### GPT-Live's two bills
+
+The second engine ([261003a](../plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md))
+is metered through the same three endpoints and the same session row, with two report kinds of its
+own. The server half landed on 2026-10-03; the browser half that posts them is Stage 3 of that plan.
+
+- **`voice` — seconds, as a running total.** OpenAI reports one cumulative figure for the session,
+  so two reports are not two bills. The session row holds a high-water mark
+  (`voice_seconds_reported`); a report is priced as the difference from it, and a repeat or an older
+  figure adds nothing. The mark and the `ai_calls` row are written under one row lock, in one
+  transaction — `advanceVoiceSeconds` in
+  [`src/store/realtime-sessions-pg.ts`](../../src/store/realtime-sessions-pg.ts). The seconds go in
+  their own column, `voice_seconds`, not `transcription_seconds`.
+- **`backend` — the text model's tokens**, one row per backend response id. Priced on the model the
+  session row names. **Its cached-input rate is not known**, so cached tokens are priced as fresh:
+  an upper bound, marked `+cached-as-fresh` in `price_version` so the rows can be found and
+  repriced. `LIVE_BACKEND_PRICES` in [`src/pricing.ts`](../../src/pricing.ts) says where each number
+  came from.
+
+**The create call is the server's own, and it bills fifteen seconds.** So
+`POST /api/chat/:slug/:threadId/live-session` writes the session row *before* it asks OpenAI — the
+reverse of the ticket route — and records those fifteen seconds as a priced row itself. A create
+that fails closes the row as `create_failed`, with no connected time. A report for the other
+engine's bill is refused in both directions. The cases are in
+[`tests/realtime-usage.test.ts`](../../tests/realtime-usage.test.ts),
+[`tests/store-realtime-sessions.test.ts`](../../tests/store-realtime-sessions.test.ts) and
+[`tests/live-session-routes.test.ts`](../../tests/live-session-routes.test.ts).
 
 **Verification, 2026-09-06:** the journal exists in local Postgres; the earlier migration blocker
 is no longer current. [`tests/live-session-routes.test.ts`](../../tests/live-session-routes.test.ts)

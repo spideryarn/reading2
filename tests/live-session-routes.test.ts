@@ -78,13 +78,19 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { and, count, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 
 import type { AiCallRow } from "../src/ai-spend.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { realtimeSessions } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { LIVE_MODEL, LIVE_TRANSCRIBER } from "../src/live.js";
+import {
+  GPT_LIVE_BACKEND_MODEL,
+  GPT_LIVE_CREATE_SECONDS,
+  GPT_LIVE_MODEL,
+  LIVE_MODEL,
+  LIVE_TRANSCRIBER,
+} from "../src/live.js";
 import { responseReport, transcriptionReport } from "../src/web/live/meter.js";
 import { handleApi } from "../src/routes.js";
 import { costStore } from "../src/store/ai-calls.js";
@@ -130,12 +136,55 @@ afterAll(async () => {
 /** Whether OpenAI answers at all, so a test can drive the failure path. */
 let mintFails = false;
 
+/**
+ * **OpenAI's GPT-Live create endpoint, stubbed** — and the one place the order
+ * of the route's steps can be seen. `seen` records, for each create call, the
+ * request body and **the journal row as it stood while the call was in flight**.
+ */
+const liveCreate: {
+  status: number;
+  answer: unknown;
+  throws: boolean;
+  seen: { body: unknown; rowAtCreate: Record<string, unknown> | null }[];
+} = { status: 201, answer: null, throws: false, seen: [] };
+
 beforeEach(() => {
   mintFails = false;
+  liveCreate.status = 201;
+  liveCreate.answer = { session: { id: "live_test_session" }, transport: { type: "webrtc", sdp: "v=0 the answer" } };
+  liveCreate.throws = false;
+  liveCreate.seen = [];
   process.env.OPENAI_API_KEY = "sk-test";
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => {
+    vi.fn(async (input: unknown, init?: { body?: unknown }) => {
+      if (String(input) === "https://api.openai.com/v1/live/sessions") {
+        /* The newest row for this article: the one the route has just
+           journalled, if it journalled before asking. */
+        const rows = await getDb()
+          .select()
+          .from(realtimeSessions)
+          .where(and(eq(realtimeSessions.ownerId, TEST_OWNER), eq(realtimeSessions.articleSlug, SLUG)))
+          .orderBy(desc(realtimeSessions.createdAt))
+          .limit(1);
+        const newest = rows[0];
+        liveCreate.seen.push({
+          body: JSON.parse(String(init?.body)),
+          /* Only a row not yet touched by a create counts as "this call's". */
+          rowAtCreate:
+            newest && newest.model === GPT_LIVE_MODEL && newest.providerSessionId === null && newest.closedAt === null
+              ? (newest as unknown as Record<string, unknown>)
+              : null,
+        });
+        if (liveCreate.throws) throw new TypeError("fetch failed");
+        const ok = liveCreate.status >= 200 && liveCreate.status < 300;
+        return {
+          ok,
+          status: liveCreate.status,
+          text: async () => JSON.stringify(liveCreate.answer),
+          json: async () => liveCreate.answer,
+        } as unknown as Response;
+      }
       if (mintFails) {
         return { ok: false, status: 500, text: async () => "nope" } as unknown as Response;
       }
@@ -581,5 +630,236 @@ describe("deployed on its own, before the browser posts anything", () => {
     const id = await ticket("spya-lcaaaa");
     expect(await session(id)).not.toBeNull();
     expect(await ledger(id)).toHaveLength(0);
+  });
+});
+
+/* ---------------------------------------------- GPT-Live, the second engine -- */
+
+/**
+ * **`POST /api/chat/:slug/:threadId/live-session`, and its two usage kinds
+ * through the route** — docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md.
+ *
+ * What only the route can get wrong here is **order**, and it is the reverse
+ * of the ticket's above. Creating a GPT-Live session bills fifteen seconds, so:
+ * the journal row first, then OpenAI, then the charge. Each step is checked at
+ * the moment it matters — the row is read back *from inside the stubbed create
+ * call*, which is the only place "before" can be observed.
+ *
+ * Seen red on 2026-10-03, each by its own mutation of `liveChatSession` in
+ * src/routes.ts: the create moved ahead of `issue` (the row was not there at
+ * create time); the `closeUnopened` call removed (the failed session stayed
+ * open); `advanceVoiceSeconds` after the create removed (no fifteen-second
+ * row, and the browser's first report then billed it instead); `GPT_LIVE_MODEL`
+ * on the row swapped for `LIVE_MODEL` (the voice report was refused as the
+ * wrong engine's).
+ */
+describe("a GPT-Live session", () => {
+  const OFFER = "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n";
+
+  /** The session row for a thread, read straight from the table: a failed create returns no id. */
+  async function rowForThread(threadId: string) {
+    const rows = await getDb()
+      .select()
+      .from(realtimeSessions)
+      .where(and(eq(realtimeSessions.ownerId, TEST_OWNER), eq(realtimeSessions.threadId, threadId)));
+    expect(rows).toHaveLength(1);
+    return rows[0];
+  }
+
+  async function open(threadId: string, body: Record<string, unknown> = {}) {
+    return post(`/api/chat/${SLUG}/${threadId}/live-session`, { sdp: OFFER, ...body });
+  }
+
+  it("journals first, then creates, then records the charge — and answers with the SDP", async () => {
+    const out = await open("spya-lgaaaa");
+    expect(out.status).toBe(200);
+
+    /* **The row was already there when OpenAI was asked**, with nothing billed
+       and no provider id yet. Read from inside the create call. */
+    expect(liveCreate.seen).toHaveLength(1);
+    expect(liveCreate.seen[0]?.rowAtCreate).toMatchObject({
+      model: GPT_LIVE_MODEL,
+      backendModel: GPT_LIVE_BACKEND_MODEL,
+      providerSessionId: null,
+      voiceSecondsReported: 0,
+      closedAt: null,
+    });
+
+    /* What OpenAI was sent: the session and the browser's offer, untouched. */
+    const sent = liveCreate.seen[0]?.body as {
+      session: { model: string; instructions: string; delegation: { responses: { instructions: string } } };
+      transport: { type: string; sdp: string };
+    };
+    expect(sent.transport).toEqual({ type: "webrtc", sdp: OFFER });
+    expect(sent.session.model).toBe(GPT_LIVE_MODEL);
+    expect(sent.session.instructions).toContain("# Delegation policy");
+    expect(sent.session.delegation.responses.instructions).toContain("THE ARTICLE");
+
+    /* What the browser gets: four fields, and none of what the models were told. */
+    expect(Object.keys(out.body).sort()).toEqual(["liveSessionId", "sdp", "sessionId", "tailId"]);
+    expect(out.body.sdp).toBe("v=0 the answer");
+    expect(out.body.liveSessionId).toBe("live_test_session");
+    expect(out.body.tailId).toBeNull();
+
+    const id = out.body.sessionId as string;
+    const row = await session(id);
+    expect(row?.model).toBe(GPT_LIVE_MODEL);
+    expect(row?.backendModel).toBe(GPT_LIVE_BACKEND_MODEL);
+    expect(row?.transcriptionModel).toBeNull();
+    expect(row?.providerSessionId).toBe("live_test_session");
+    expect(row?.articleSlug).toBe(SLUG);
+    /* Twenty minutes, the same server-owned window a Realtime session gets. */
+    expect(Date.parse(String(row?.acceptsUntil)) - Date.parse(String(row?.issuedAt))).toBe(20 * 60_000);
+    /* Created is not connected: the data channel has not opened. */
+    expect(row?.connectedAt).toBeNull();
+
+    /* **The fifteen seconds the create billed are already a priced row.** */
+    expect(row?.voiceSecondsReported).toBe(GPT_LIVE_CREATE_SECONDS);
+    const rows = await ledger(id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.eventKind).toBe("voice");
+    expect(rows[0]?.voiceSeconds).toBe(15);
+    expect(rows[0]?.computedCostNanos).toBe(12_500_000);
+    expect(rows[0]?.costSource).toBe("computed");
+    expect(rows[0]?.requestedModel).toBe(GPT_LIVE_MODEL);
+    expect(rows[0]?.articleSlug).toBe(SLUG);
+  });
+
+  it("adds nothing for the browser's first report of 15, and thirteen seconds for 28", async () => {
+    const id = (await open("spya-lgaaab")).body.sessionId as string;
+    const voice = (seconds: number, eventId: string) =>
+      post(`/api/live/${id}/usage`, { kind: "voice", seconds, eventId });
+
+    /* The same cumulative figure the create already billed. */
+    expect((await voice(15, "event_a")).status).toBe(200);
+    expect(await ledger(id)).toHaveLength(1);
+
+    expect((await voice(28, "event_b")).status).toBe(200);
+    /* A retry of it, and an older report arriving late. */
+    expect((await voice(28, "event_b")).status).toBe(200);
+    expect((await voice(20, "event_c")).status).toBe(200);
+
+    const seconds = (await ledger(id)).map((r) => r.voiceSeconds).sort((a, b) => (a ?? 0) - (b ?? 0));
+    expect(seconds).toEqual([13, 15]);
+    expect((await session(id))?.voiceSecondsReported).toBe(28);
+    /* A report is evidence the channel opened, as it is for Realtime. */
+    expect((await session(id))?.connectedAt).toBeTruthy();
+  });
+
+  it("prices a backend response once, however often it is reported", async () => {
+    const id = (await open("spya-lgaaac")).body.sessionId as string;
+    const report = {
+      kind: "backend",
+      responseId: "resp_backend_1",
+      inputTokens: 811,
+      cachedInputTokens: 0,
+      outputTokens: 20,
+    };
+    expect((await post(`/api/live/${id}/usage`, report)).status).toBe(200);
+    expect((await post(`/api/live/${id}/usage`, report)).status).toBe(200);
+    const backend = (await ledger(id)).filter((r) => r.eventKind === "backend");
+    expect(backend).toHaveLength(1);
+    expect(backend[0]?.requestedModel).toBe(GPT_LIVE_BACKEND_MODEL);
+    expect(backend[0]?.computedCostNanos).toBe(91_100);
+    expect(backend[0]?.reportedInputTokens).toBe(811);
+    /* It does not move the voice meter. */
+    expect((await session(id))?.voiceSecondsReported).toBe(15);
+  });
+
+  it("refuses the other engine's reports, in both directions, and writes nothing", async () => {
+    const gpt = (await open("spya-lgaaad")).body.sessionId as string;
+    expect((await post(`/api/live/${gpt}/usage`, turn())).status).toBe(400);
+    expect(await ledger(gpt)).toHaveLength(1);
+
+    const realtime = await ticket("spya-lgaaae");
+    const voice = await post(`/api/live/${realtime}/usage`, { kind: "voice", seconds: 15, eventId: "e" });
+    expect(voice.status).toBe(400);
+    const backend = await post(`/api/live/${realtime}/usage`, {
+      kind: "backend",
+      responseId: "r",
+      inputTokens: 1,
+      cachedInputTokens: 0,
+      outputTokens: 1,
+    });
+    expect(backend.status).toBe(400);
+    expect(await ledger(realtime)).toHaveLength(0);
+    expect((await session(realtime))?.voiceSecondsReported).toBe(0);
+  });
+
+  it("closes the row, bills nothing and tells the reader plainly when OpenAI refuses", async () => {
+    liveCreate.status = 400;
+    liveCreate.answer = { error: { message: "SECRET-UPSTREAM-WORDS instructions too long" } };
+    const out = await open("spya-lgaaaf");
+
+    expect(out.status).toBeGreaterThanOrEqual(500);
+    expect(out.body).not.toHaveProperty("sdp");
+    /* The mint's sentence, with the code the browser looks for — and none of
+       OpenAI's own words, which stay in the log. */
+    expect(String(out.body.error)).toContain("[live-upstream]");
+    expect(JSON.stringify(out.body)).not.toContain("SECRET-UPSTREAM-WORDS");
+
+    const row = await rowForThread("spya-lgaaaf");
+    expect(row?.closedAt).not.toBeNull();
+    expect(row?.closeReason).toBe("create_failed");
+    /* It never opened, so it must not read as a conversation that happened. */
+    expect(row?.connectedAt).toBeNull();
+    expect(row?.providerSessionId).toBeNull();
+    expect(row?.voiceSecondsReported).toBe(0);
+    expect(await ledger(String(row?.id))).toHaveLength(0);
+  });
+
+  it("closes the row when OpenAI cannot be reached at all", async () => {
+    liveCreate.throws = true;
+    const out = await open("spya-lgaaag");
+    expect(out.status).toBeGreaterThanOrEqual(500);
+    const row = await rowForThread("spya-lgaaag");
+    expect(row?.closeReason).toBe("create_failed");
+    expect(row?.connectedAt).toBeNull();
+    expect(await ledger(String(row?.id))).toHaveLength(0);
+  });
+
+  it("never asks OpenAI when the journal write fails", async () => {
+    /* The create bills. A session OpenAI made and we have no row for is spend
+       nothing could ever see — so no row, no request. */
+    const issue = vi
+      .spyOn(realtimeSessionStore, "issue")
+      .mockRejectedValue(new Error("the journal refused this row"));
+    try {
+      const out = await open("spya-lgaaah");
+      expect(out.status).toBeGreaterThanOrEqual(500);
+      expect(issue).toHaveBeenCalledTimes(1);
+      expect(liveCreate.seen).toHaveLength(0);
+    } finally {
+      issue.mockRestore();
+    }
+  });
+
+  it("checks the body before it journals or asks anything", async () => {
+    const before = await journalled();
+    for (const body of [
+      {},
+      { sdp: "" },
+      { sdp: 12 },
+      { sdp: "v=0 ".repeat(6000) },
+      { sdp: OFFER, placement: "wibble" },
+      { sdp: OFFER, useProfile: "yes" },
+    ]) {
+      const out = await post(`/api/chat/${SLUG}/spya-lgaaai/live-session`, body);
+      expect(out.status, JSON.stringify(body).slice(0, 60)).toBeGreaterThanOrEqual(400);
+      expect(out.status, JSON.stringify(body).slice(0, 60)).toBeLessThan(500);
+    }
+    expect(await journalled()).toBe(before);
+    expect(liveCreate.seen).toHaveLength(0);
+
+    /* A placement is accepted — one body shape for both engines — and unused. */
+    const ok = await open("spya-lgaaaj", { placement: "headset", useProfile: false });
+    expect(ok.status).toBe(200);
+    expect(JSON.stringify(liveCreate.seen[0]?.body)).not.toMatch(/noise_reduction|near_field|headset/);
+  });
+
+  it("is behind the gate like the rest", async () => {
+    const out = await post(`/api/chat/${SLUG}/spya-lgaaak/live-session`, { sdp: OFFER }, {});
+    expect(out.status).toBe(401);
+    expect(liveCreate.seen).toHaveLength(0);
   });
 });

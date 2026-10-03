@@ -32,8 +32,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   acceptRealtimeUsage,
+  GPT_LIVE_BACKEND_MODEL,
+  GPT_LIVE_MAX_SECONDS,
+  GPT_LIVE_MODEL,
   LIVE_MODEL,
   LIVE_TRANSCRIBER,
+  parseLiveUsage,
   parseRealtimeUsage,
   REALTIME_CONTEXT_TOKENS,
   REALTIME_OUTCOME,
@@ -42,7 +46,13 @@ import {
   REPORT_TOLERANCE_MS,
   REPORT_WINDOW_MS,
 } from "../src/live.js";
-import { priceRealtimeResponse, priceRealtimeTranscription } from "../src/pricing.js";
+import {
+  LIVE_BACKEND_PRICES,
+  priceLiveBackend,
+  priceLiveVoice,
+  priceRealtimeResponse,
+  priceRealtimeTranscription,
+} from "../src/pricing.js";
 import type { RealtimeSession } from "../src/store/contracts.js";
 
 const ISSUED = "2026-09-02T10:00:00.000Z";
@@ -63,6 +73,9 @@ function session(over: Partial<RealtimeSession> = {}): RealtimeSession {
     threadId: "spya-vaaaaa",
     model: LIVE_MODEL,
     transcriptionModel: LIVE_TRANSCRIBER,
+    backendModel: null,
+    providerSessionId: null,
+    voiceSecondsReported: 0,
     issuedAt: ISSUED,
     acceptsUntil: new Date(Date.parse(ISSUED) + REPORT_WINDOW_MS).toISOString(),
     connectedAt: null,
@@ -707,5 +720,279 @@ describe("the close reason", () => {
        that lagged it would refuse a true report about how a conversation ended. */
     expect(() => realtimeCloseReason("x".repeat(65))).toThrow(/short string/);
     expect(() => realtimeCloseReason({ why: "no" })).toThrow(/short string/);
+  });
+});
+
+/* ---------------------------------------------------------- GPT-Live -- */
+
+/**
+ * **The second engine's two bills** — voice seconds and backend tokens
+ * (docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md
+ * § The meter). Same rules as above: refuse rather than clamp, price from our
+ * own table, and take the model from the session row.
+ *
+ * The high-water mark is `session.voiceSecondsReported`. Here it is a field on
+ * a literal; that it is read under a lock, and that two reports at once bill
+ * once, is tests/store-realtime-sessions.test.ts.
+ */
+function gptSession(over: Partial<RealtimeSession> = {}): RealtimeSession {
+  return session({
+    model: GPT_LIVE_MODEL,
+    transcriptionModel: null,
+    backendModel: GPT_LIVE_BACKEND_MODEL,
+    ...over,
+  });
+}
+
+function acceptLive(body: Record<string, unknown>, over: Partial<RealtimeSession> = {}) {
+  return acceptRealtimeUsage({
+    session: gptSession(over),
+    usage: parseLiveUsage(body),
+    receivedAt: DURING,
+  });
+}
+
+describe("GPT-Live: reading a report off the wire", () => {
+  it("takes voice seconds and a backend response", () => {
+    expect(parseLiveUsage({ kind: "voice", seconds: 28, eventId: "event_1" })).toEqual({
+      kind: "voice",
+      seconds: 28,
+      eventId: "event_1",
+    });
+    expect(
+      parseLiveUsage({
+        kind: "backend",
+        responseId: "resp_1",
+        inputTokens: 811,
+        cachedInputTokens: 0,
+        outputTokens: 20,
+      }),
+    ).toEqual({
+      kind: "backend",
+      responseId: "resp_1",
+      inputTokens: 811,
+      cachedInputTokens: 0,
+      outputTokens: 20,
+    });
+  });
+
+  it("still reads Realtime's two kinds, and says all four when it is none of them", () => {
+    expect(parseLiveUsage(response()).kind).toBe("response");
+    expect(parseLiveUsage(transcription()).kind).toBe("transcription");
+    expect(() => parseLiveUsage({ kind: "guess" })).toThrow(/response, transcription, voice, backend/);
+  });
+
+  it("is not something the Realtime parser reads", () => {
+    /* `parseRealtimeUsage` is pinned to the Realtime meter's own type; a
+       `voice` report through it would be a type saying something untrue. */
+    expect(() => parseRealtimeUsage({ kind: "voice", seconds: 1, eventId: "e" })).toThrow(/kind must be/);
+  });
+
+  it("refuses seconds that are negative, fractional, not a number, or longer than a session", () => {
+    const voice = (seconds: unknown) => () => parseLiveUsage({ kind: "voice", seconds, eventId: "e" });
+    expect(voice(-1)).toThrow(/whole number of seconds/);
+    expect(voice(Number.NaN)).toThrow(/whole number of seconds/);
+    expect(voice(12.5)).toThrow(/whole number of seconds/);
+    expect(voice("28")).toThrow(/whole number of seconds/);
+    expect(voice(Number.POSITIVE_INFINITY)).toThrow(/whole number of seconds/);
+    expect(voice(GPT_LIVE_MAX_SECONDS + 1)).toThrow(/longer than a voice session can last/);
+    expect(voice(0)).not.toThrow();
+    expect(voice(GPT_LIVE_MAX_SECONDS)).not.toThrow();
+  });
+
+  it("refuses a report with no id to file it under", () => {
+    expect(() => parseLiveUsage({ kind: "voice", seconds: 1 })).toThrow(/provider event id/);
+    expect(() =>
+      parseLiveUsage({ kind: "backend", inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 }),
+    ).toThrow(/provider event id/);
+  });
+
+  it("refuses backend counts that are negative, not numbers, or more cached than input", () => {
+    const backend = (over: Record<string, unknown>) => () =>
+      parseLiveUsage({
+        kind: "backend",
+        responseId: "resp_1",
+        inputTokens: 100,
+        cachedInputTokens: 10,
+        outputTokens: 5,
+        ...over,
+      });
+    expect(backend({})).not.toThrow();
+    expect(backend({ inputTokens: -1 })).toThrow(/inputTokens/);
+    expect(backend({ outputTokens: Number.NaN })).toThrow(/outputTokens/);
+    expect(backend({ outputTokens: 1.5 })).toThrow(/outputTokens/);
+    expect(backend({ cachedInputTokens: undefined })).toThrow(/cachedInputTokens/);
+    /* A cached token is an input token. More of them than there were would
+       price a negative amount of fresh input. */
+    expect(backend({ cachedInputTokens: 101 })).toThrow(/cachedInputTokens/);
+  });
+});
+
+describe("GPT-Live: a report for the other engine's bill is refused", () => {
+  it("refuses voice and backend reports against a Realtime session", () => {
+    const realtime = session();
+    for (const body of [
+      { kind: "voice", seconds: 15, eventId: "e" },
+      { kind: "backend", responseId: "r", inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 },
+    ]) {
+      expect(() =>
+        acceptRealtimeUsage({ session: realtime, usage: parseLiveUsage(body), receivedAt: DURING }),
+      ).toThrow(/does not belong to this kind of live session/);
+    }
+  });
+
+  it("refuses response and transcription reports against a GPT-Live session", () => {
+    expect(() => acceptLive(response())).toThrow(/does not belong to this kind of live session/);
+    expect(() => acceptLive(transcription())).toThrow(/does not belong to this kind of live session/);
+  });
+
+  it("is a 400, so the browser stops retrying it", () => {
+    try {
+      acceptLive(response());
+      throw new Error("unreachable");
+    } catch (err) {
+      expect((err as { status?: number }).status).toBe(400);
+    }
+  });
+});
+
+describe("GPT-Live: voice seconds against the high-water mark", () => {
+  it("bills the first fifteen seconds at five cents a minute", () => {
+    const row = acceptLive({ kind: "voice", seconds: 15, eventId: "create" });
+    expect(row).not.toBeNull();
+    expect(row?.voiceSeconds).toBe(15);
+    /* 15 s is a quarter of a minute: $0.0125. */
+    expect(row?.computedCostNanos).toBe(12_500_000);
+    expect(row?.costSource).toBe("computed");
+    expect(row?.priceVersion).toBe("gpt-live-1@1970-01-01");
+    expect(row?.eventKind).toBe("voice");
+    expect(row?.requestedModel).toBe(GPT_LIVE_MODEL);
+    expect(row?.wire).toBe("realtime");
+    expect(row?.providerAccount).toBe("openai");
+    expect(row?.outcome).toBe("ok");
+    /* Seconds of a voice session are not seconds a transcriber wrote down. */
+    expect(row?.transcriptionSeconds).toBeNull();
+    expect(row?.reportedInputTokens).toBeNull();
+    expect(row?.durationMs).toBeNull();
+    expect(row?.finishedAt).toBe(DURING.toISOString());
+  });
+
+  it("bills only the difference from the mark", () => {
+    const row = acceptLive({ kind: "voice", seconds: 28, eventId: "event_2" }, { voiceSecondsReported: 15 });
+    expect(row?.voiceSeconds).toBe(13);
+    /* 13 s at $0.05 a minute. */
+    expect(row?.computedCostNanos).toBe(Math.round((13 / 60) * 0.05 * 1e9));
+  });
+
+  it("adds nothing for a repeat or an older figure", () => {
+    expect(acceptLive({ kind: "voice", seconds: 15, eventId: "e" }, { voiceSecondsReported: 15 })).toBeNull();
+    expect(acceptLive({ kind: "voice", seconds: 15, eventId: "e" }, { voiceSecondsReported: 28 })).toBeNull();
+    expect(acceptLive({ kind: "voice", seconds: 0, eventId: "e" })).toBeNull();
+  });
+
+  it("keys the row on the range of seconds, so one event id cannot hide a second bill", () => {
+    const first = acceptLive({ kind: "voice", seconds: 15, eventId: "same" });
+    const second = acceptLive({ kind: "voice", seconds: 28, eventId: "same" }, { voiceSecondsReported: 15 });
+    expect(first?.providerEventId).toBe("0-15:same");
+    expect(second?.providerEventId).toBe("15-28:same");
+    expect(first?.id).not.toBe(second?.id);
+    /* And the same range is the same row. */
+    expect(acceptLive({ kind: "voice", seconds: 15, eventId: "same" })?.id).toBe(first?.id);
+  });
+
+  it("refuses more voice time than the session has been open for", () => {
+    /* Issued five minutes before `DURING`, with five minutes of tolerance. */
+    expect(() => acceptLive({ kind: "voice", seconds: 601, eventId: "e" })).toThrow(
+      /more voice time than the session has been open for/,
+    );
+    expect(acceptLive({ kind: "voice", seconds: 600, eventId: "e" })?.voiceSeconds).toBe(600);
+  });
+
+  it("stops accepting when the session's own window has passed", () => {
+    const late = new Date(Date.parse(ISSUED) + REPORT_WINDOW_MS + REPORT_TOLERANCE_MS + 1);
+    expect(() =>
+      acceptRealtimeUsage({
+        session: gptSession(),
+        usage: parseLiveUsage({ kind: "voice", seconds: 20, eventId: "e" }),
+        receivedAt: late,
+      }),
+    ).toThrow(/stopped accepting/);
+  });
+
+  it("keeps the row and leaves it unpriced for a voice model with no price", () => {
+    /* Reached only by pricing directly: a session on another model is a
+       Realtime session, and the report is refused before it is priced. */
+    expect(priceLiveVoice("gpt-live-2", 15, DURING)).toBeNull();
+    expect(priceLiveVoice(GPT_LIVE_MODEL, 60, DURING)?.totalNanos).toBe(50_000_000);
+  });
+});
+
+describe("GPT-Live: one backend response", () => {
+  const body = { kind: "backend", responseId: "resp_abc", inputTokens: 811, cachedInputTokens: 0, outputTokens: 20 };
+  /** A backend report always builds a row; only a voice report can add nothing. */
+  function acceptBackend(report: Record<string, unknown>, over: Partial<RealtimeSession> = {}) {
+    const row = acceptLive(report, over);
+    if (!row) throw new Error("a backend report built no row");
+    return row;
+  }
+
+  it("prices the spike's real first round on the backend model's card", () => {
+    const row = acceptBackend(body);
+    /* 811 in at $0.10 a million, 20 out at $0.50 a million. */
+    expect(row.computedCostNanos).toBe(81_100 + 10_000);
+    expect(row.costSource).toBe("computed");
+    expect(row.eventKind).toBe("backend");
+    expect(row.requestedModel).toBe(GPT_LIVE_BACKEND_MODEL);
+    expect(row.providerEventId).toBe("resp_abc");
+    expect(row.providerStatus).toBe("completed");
+    expect(row.reportedInputTokens).toBe(811);
+    expect(row.cacheReadTokens).toBe(0);
+    expect(row.outputTokens).toBe(20);
+    expect(row.voiceSeconds).toBeNull();
+    expect(row.inputTextTokens).toBeNull();
+  });
+
+  it("is one row per response id, however often it is reported", () => {
+    expect(acceptBackend(body).id).toBe(acceptBackend(body).id);
+    expect(acceptBackend(body).id).toBe(realtimeRowId(gptSession().id, "backend", "resp_abc"));
+    expect(acceptBackend({ ...body, responseId: "resp_other" }).id).not.toBe(acceptBackend(body).id);
+  });
+
+  it("takes the model from the session row, and leaves an unknown one unpriced", () => {
+    const row = acceptBackend(body, { backendModel: "gpt-9-nova" });
+    expect(row.requestedModel).toBe("gpt-9-nova");
+    expect(row.costSource).toBe("none");
+    expect(row.computedCostNanos).toBeNull();
+    /* Kept, not refused: the tokens are still evidence the response happened. */
+    expect(row.reportedInputTokens).toBe(811);
+  });
+
+  it("prices cached input as fresh while nobody knows the cached rate — and says so on the row", () => {
+    /* The stand-in, pinned so that filling in the real rate is a deliberate
+       edit here: 1,000 in of which 900 cached costs what 1,000 fresh would. */
+    const cached = acceptBackend({ ...body, inputTokens: 1000, cachedInputTokens: 900, outputTokens: 0 });
+    const fresh = acceptBackend({ ...body, inputTokens: 1000, cachedInputTokens: 0, outputTokens: 0 });
+    expect(cached.computedCostNanos).toBe(100_000);
+    expect(cached.computedCostNanos).toBe(fresh.computedCostNanos);
+    expect(cached.priceVersion).toBe("gpt-6-luna@1970-01-01+cached-as-fresh");
+    expect(cached.cacheReadTokens).toBe(900);
+    expect(LIVE_BACKEND_PRICES["gpt-6-luna"]?.[0]?.price.cachedInput).toBeNull();
+  });
+
+  it("prices cached input separately once a card has the rate", () => {
+    const card = {
+      "gpt-6-luna": [{ from: "1970-01-01", price: { input: 0.1, cachedInput: 0.01, output: 0.5 } }],
+    };
+    const priced = priceLiveBackend(
+      "gpt-6-luna",
+      { freshInputTokens: 100, cachedInputTokens: 900, outputTokens: 20 },
+      DURING,
+      card,
+    );
+    expect(priced?.inputNanos).toBe(10_000);
+    expect(priced?.cacheReadNanos).toBe(9_000);
+    expect(priced?.outputNanos).toBe(10_000);
+    expect(priced?.totalNanos).toBe(29_000);
+    expect(priced?.priceVersion).toBe("gpt-6-luna@1970-01-01");
   });
 });
