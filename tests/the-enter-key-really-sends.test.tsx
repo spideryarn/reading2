@@ -414,6 +414,7 @@ describe("the comment follow-up box", () => {
             onEdit: () => {},
             placing: false,
             onPlace: () => {},
+            onRecolour: () => {},
             error: null,
           },
           position: 1,

@@ -37,7 +37,7 @@ import { quoteFinderWithMultiplicity } from "../quote-match.js";
 import { termPattern, termSpans } from "../term-match.js";
 import { PALETTE_SLOTS } from "./hit-colours.js";
 import type { ValenceDirection } from "./valence.js";
-import type { Block, BlockId, Crossref, QuoteStroke } from "../types.js";
+import type { Block, BlockId, Crossref, HighlightColour, QuoteStroke } from "../types.js";
 import { costOn, leafClock, noteCost } from "./annotation-cost.js";
 
 /**
@@ -274,6 +274,53 @@ interface MarkBase {
    * announced whole rather than as its first fragment. `xref` marks only.
    */
   label?: string;
+  /**
+   * A highlight's colour — `cmt` marks only, and absent on an uncoloured
+   * comment, which draws the plain underline. docs/plans/261003e-span-highlights-with-a-colour.md.
+   */
+  colour?: HighlightColour;
+  /**
+   * `false` when this comment's mark does **not** carry the ✳ — a wordless
+   * highlight (`earnsMarker` in comment-nav.ts). `cmt` marks only. Absent
+   * means it does, which is every comment before 2026-10-03.
+   */
+  marker?: boolean;
+  /**
+   * When the comment was made (ISO) — `cmt` marks only. The priority on an
+   * overlap: newer first, then the higher id, so the colour a run shows and the
+   * comment a click on it opens are the same one. See `commentOrder`.
+   */
+  createdAt?: string;
+}
+
+/**
+ * **Which of several comments over one run comes first** — in `data-comment`,
+ * so it is the one a click opens, and so it is the one whose colour the run
+ * wears. Plan 261003e, review S5: the colour shown and the comment opened must
+ * never be two different comments.
+ *
+ * The rule: **the newest coloured comment, if any covers the run; otherwise
+ * the newest comment.** Then the rest, newest first. "Newest" is `createdAt`,
+ * then `id`, both descending; a mark with no `createdAt` sorts as oldest and
+ * keeps its input order among its peers.
+ *
+ * Coloured first rather than strictly newest first because a run wears one
+ * wash: if an uncoloured note were newer than a yellow highlight beneath it,
+ * strictly-newest would show yellow and open the note. A newer uncoloured
+ * comment over a highlight still draws its underline and ✳, and is one click
+ * away in the drawer or the gutter.
+ */
+export function commentOrder(comments: readonly Mark[]): Mark[] {
+  const newestFirst = [...comments].sort((a, b) => {
+    const ac = a.createdAt ?? "";
+    const bc = b.createdAt ?? "";
+    if (ac !== bc) return ac < bc ? 1 : -1;
+    if (ac === "") return 0;
+    return a.id === b.id ? 0 : a.id < b.id ? 1 : -1;
+  });
+  const winner = newestFirst.findIndex((m) => m.colour !== undefined);
+  if (winner > 0) newestFirst.unshift(...newestFirst.splice(winner, 1));
+  return newestFirst;
 }
 
 /** A comment's stored anchor, before it has been matched against the block. */
@@ -437,7 +484,7 @@ function annotate(html: string, marks: readonly Mark[]): string {
         continue;
       }
       const el = doc.createElement("mark");
-      const comments = covering.filter((m) => (m.kind ?? "cmt") === "cmt");
+      const comments = commentOrder(covering.filter((m) => (m.kind ?? "cmt") === "cmt"));
       const chats = covering.filter((m) => m.kind === "chat");
       const terms = covering.filter((m) => m.kind === "term");
       const hits = covering.filter((m) => m.kind === "hit");
@@ -458,11 +505,19 @@ function annotate(html: string, marks: readonly Mark[]): string {
         .filter(Boolean)
         .join(" ");
       if (comments.length > 0) {
+        /* In `commentOrder`'s order, so the first id — the one a click opens —
+           is the comment whose colour this run wears. */
         el.setAttribute("data-comment", comments.map((m) => m.id).join(" "));
+        const colour = comments[0]?.colour;
+        if (colour !== undefined) el.setAttribute("data-colour", colour);
         // The asterisk goes on the final run only, so a mark broken across an
         // <em> still shows exactly one marker. Comments only: a glossary term
-        // is not an artefact the reader made and does not get a marker.
-        if (comments.some((m) => m.end === nodeStart + to)) el.setAttribute("data-mark-end", "");
+        // is not an artefact the reader made and does not get a marker. And
+        // only for a comment that earns one — a wordless highlight shows its
+        // wash and nothing else (`Mark.marker`).
+        if (comments.some((m) => m.end === nodeStart + to && m.marker !== false)) {
+          el.setAttribute("data-mark-end", "");
+        }
       }
       if (chats.length > 0) {
         el.setAttribute("data-chat", chats.map((m) => m.id).join(" "));

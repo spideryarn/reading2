@@ -876,6 +876,13 @@
       "when": 1790983475832,
       "tag": "20261002232435_jobs_illustration_note",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1791003650211,
+      "tag": "20261003050050_comments_colour",
+      "breakpoints": true
     }
   ]
 }

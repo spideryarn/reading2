@@ -216,22 +216,45 @@ export function commentsByBlock(
  * a comment points at, so the three never overlap.
  * docs/plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md.
  */
-export type CommentKind = "bookmark" | "comment" | "comment-ai";
+export type CommentKind = "bookmark" | "highlight" | "comment" | "comment-ai";
 export type MarkKind = CommentKind | "question";
 
+/**
+ * **`highlight`, since 2026-10-03**, is a wordless comment with a colour and no
+ * AI involvement (docs/plans/261003e-span-highlights-with-a-colour.md). The
+ * precedence is the order of the checks below, and it is deliberate (plan
+ * review S9): `comment-ai` > `comment` > `highlight` > `bookmark`. A coloured
+ * comment with words is a `comment`, and a coloured one that asked the AI is a
+ * `comment-ai` — the colour is how it looks, the words and the answer are what
+ * it says.
+ */
 export function commentKind(c: {
   readonly body?: string | null | undefined;
   readonly answer?: string | undefined;
   readonly threadId?: string | undefined;
   readonly status?: string | undefined;
+  readonly colour?: string | undefined;
 }): CommentKind {
   if (c.threadId || c.answer || (c.status !== undefined && c.status !== "none")) return "comment-ai";
-  return c.body ? "comment" : "bookmark";
+  if (c.body) return "comment";
+  return c.colour ? "highlight" : "bookmark";
+}
+
+/**
+ * **Does this comment's mark carry the ✳?** Every kind but a highlight. The ✳
+ * marks *words* — something to open and read — and a wordless highlight has
+ * only its wash to show; anything with a note or an answer keeps it, as does an
+ * uncoloured bookmark, whose underline would otherwise be easy to miss. One
+ * rule with `commentKind`, so the margin, the drawer and the prose agree.
+ */
+export function earnsMarker(c: Parameters<typeof commentKind>[0]): boolean {
+  return commentKind(c) !== "highlight";
 }
 
 /** One label per kind, for the drawer and the margin alike. */
 export const MARK_KIND_LABEL: Record<MarkKind, string> = {
   bookmark: "Bookmark",
+  highlight: "Highlight",
   comment: "Comment",
   "comment-ai": "Comment + AI",
   question: "Question",

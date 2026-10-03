@@ -1,0 +1,3 @@
+ALTER TABLE "spideryarn"."comments" ADD COLUMN "colour" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."comments" ADD CONSTRAINT "comments_colour" CHECK ("spideryarn"."comments"."colour" is null or "spideryarn"."comments"."colour" in ('yellow','green','blue','pink'));--> statement-breakpoint
+ALTER TABLE "spideryarn"."comments" ADD CONSTRAINT "comments_colour_needs_quote" CHECK ("spideryarn"."comments"."colour" is null or "spideryarn"."comments"."quote" is not null);

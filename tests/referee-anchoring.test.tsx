@@ -238,6 +238,7 @@ function BothHarness({ dialog }: { dialog: "annotate" | "comment" }) {
                 onDiscuss: () => {},
                 onEdit: () => {},
                 onPlace: () => {},
+                onRecolour: () => {},
                 error: comments.error,
               },
             })

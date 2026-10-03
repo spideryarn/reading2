@@ -2852,6 +2852,27 @@ export interface ToolRun {
 export type Comment = CommentFields & CommentAnchor;
 
 /**
+ * **A highlight's colour, by name.** Stored as the name, never a hex value, so
+ * the palette can be retuned for dark mode or contrast without a migration;
+ * the washes are `--hl-*` in src/web/styles/tokens.css. The database's
+ * `comments_colour` CHECK lists the same four by hand.
+ */
+export type HighlightColour = "yellow" | "green" | "blue" | "pink";
+
+/** The four, as a value, in the order the swatch rows show them. */
+export const HIGHLIGHT_COLOURS = [
+  "yellow",
+  "green",
+  "blue",
+  "pink",
+] as const satisfies readonly HighlightColour[];
+
+/** Is this value off the wire one of ours? */
+export function isHighlightColour(x: unknown): x is HighlightColour {
+  return typeof x === "string" && (HIGHLIGHT_COLOURS as readonly string[]).includes(x);
+}
+
+/**
  * Where a comment is anchored: some words in the block, or the whole block.
  *
  * **The whole-block arm is a bookmark made from the gutter** — Greg,
@@ -2964,6 +2985,18 @@ interface CommentFields {
    * the database as well.
    */
   valence?: number;
+
+  /**
+   * **The highlight's colour** — absent on every comment made without one,
+   * which draws the plain underline. A highlight is a comment with a colour
+   * (docs/plans/261003e-span-highlights-with-a-colour.md): with no `body` it is
+   * a wordless highlight, with one it is a highlighted note.
+   *
+   * **Only on a selection-anchored comment.** A whole-block row has no words to
+   * paint, so the route refuses a colour on one and
+   * `comments_colour_needs_quote` refuses it again in the database.
+   */
+  colour?: HighlightColour;
 
   /**
    * How the *model call* went, and only that.

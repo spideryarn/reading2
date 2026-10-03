@@ -57,7 +57,7 @@ import {
   type NoteStart,
 } from "./notes-view.js";
 import { BlockGutter } from "./BlockGutter.js";
-import { commentsByBlock } from "./comment-nav.js";
+import { commentsByBlock, earnsMarker } from "./comment-nav.js";
 import { costOn, NO_CLOCK, noteCost } from "./annotation-cost.js";
 import type { AnchoredThread } from "./useChatAnchors.js";
 import { Lightbox } from "./Lightbox.js";
@@ -218,10 +218,17 @@ function anchorKey(comments: readonly Comment[], chats: readonly AnchoredThread[
   for (const c of comments) {
     /* A whole-block bookmark has no words to find, and `-` cannot be a length,
        so it cannot spell a quoted record. */
+    /* **And how it is drawn**, since highlights (plan 261003e, review S2): its
+       colour, whether it earns the ✳ and its overlap priority all change the
+       markup, so a recolour, a removed colour or a body added to a wordless
+       highlight must miss this cache. None of the three changes on a streamed
+       token — `earnsMarker` is a boolean, not the body — so the reuse this key
+       exists for survives. Kept ahead of the quote so it cannot be spelt by one. */
+    const look = `${c.colour ?? "-"}\n${earnsMarker(c) ? "*" : "-"}\n${c.createdAt}`;
     parts.push(
       c.quote === undefined
         ? `c\n${c.id}\n${c.blockId}\n-`
-        : `c\n${c.id}\n${c.blockId}\n${c.start}\n${c.quote.length}\n${c.quote}`,
+        : `c\n${c.id}\n${c.blockId}\n${look}\n${c.start}\n${c.quote.length}\n${c.quote}`,
     );
   }
   for (const t of chats) {
@@ -269,7 +276,16 @@ function resolveAnchors(
       offsetTrusted: !rendersMaths(block),
     });
     if (!found) continue;
-    push(c.blockId, { id: c.id, ...found });
+    /* What `annotateHtml` needs to draw a highlight and to order an overlap —
+       the same three facts `anchorKey` keys on, so the cache cannot hold one
+       of them stale. */
+    push(c.blockId, {
+      id: c.id,
+      ...found,
+      ...(c.colour ? { colour: c.colour } : {}),
+      ...(earnsMarker(c) ? {} : { marker: false }),
+      createdAt: c.createdAt,
+    });
   }
   for (const t of chats) {
     const block = byId.get(t.anchor.blockId);

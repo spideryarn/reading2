@@ -67,6 +67,7 @@ import type {
   BlockId,
   BlockKind,
   CommentAnchor,
+  HighlightColour,
   Crossref,
   DebateBears,
   DebateLean,
@@ -829,6 +830,12 @@ interface PublicCommentFields {
   body?: string;
   /** What the model said back, when the reader ticked the box. */
   answer?: string;
+  /**
+   * A highlight's colour, by name. Presentation, not private: it is how the
+   * owner marked the words, and a shared highlight that arrived as a plain
+   * underline would have stopped being a highlight. Absent for none.
+   */
+  colour?: HighlightColour;
   /**
    * Where the answer says it came from, **rebuilt and re-judged**.
    *
