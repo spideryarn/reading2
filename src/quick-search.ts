@@ -16,15 +16,20 @@
  * text}}` and one `noul` (yes/no, answered as a probability) question per
  * block, keyed by the block id. The state is billed **once**, not per question,
  * which is what makes one request over the whole article cost about $0.0004.
- * The plain wording; a "meaning, not words" sentence was measured and bought
- * nothing for 45% more input.
+ * The question asks whether the passage *mentions or discusses* what the
+ * reader wants. Until 2026-10-03 it asked whether the passage *matches*, and a
+ * one-word topic the article only mentions in passing scored under the floor:
+ * 109 of 141 literal mentions missed on 18 one-word queries, against 17 with
+ * this wording (docs/investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md).
+ * A "meaning, not words" sentence was measured before that and bought nothing
+ * for 45% more input.
  *
  * ## What it gives back, and what it cannot
  *
  * Blocks scoring at least `QUICK_FLOOR`, best first, capped at `MAX_HITS`, each
  * as a `SearchHit` whose `quote` is the whole block — Jev scores blocks, so
  * there is no sentence inside one to point at — with `confidence` its
- * probability × 100 and no `reasoning`. That is what *flesh out* (a meaning
+ * probability × 100 and no `reasoning`. That is what *thorough* (a meaning
  * search with the same words) is for. A quick 88 and a meaning 88 are
  * different numbers; the run's `kind` says which one this is.
  *
@@ -66,6 +71,14 @@ import type { Block, Meta, SearchHit } from "./types.js";
  * hits against 73% at 0.7, and the passages between 0.7 and 0.8 were nearly
  * all genuine. docs/investigations/261002o-quick-search-spike.md § threshold,
  * and evals/results/quick-search-spike-2026-10-02/floor-summary.json.
+ *
+ * **Re-measured on 2026-10-03 with the "mention or discuss" wording, and kept.**
+ * On the same 16 queries 0.7 keeps 0.78 of the meaning search's hits (0.82 at
+ * 0.65, 0.76 at 0.75, 0.65 at 0.8). On 18 one-word topic queries a lower floor
+ * finds no more literal mentions (17 of 141 missed at 0.6 and at 0.7; 29 at
+ * 0.75) and lets in more wrong blocks. A topic the article does not have tops
+ * out at 0.04–0.14, so the floor still returns nothing for it; a floor relative
+ * to the top score would not. Investigation 261003c.
  */
 export const QUICK_FLOOR = 0.7;
 
@@ -167,11 +180,16 @@ export function chunkBlocks(blocks: Block[], budget: number = CHUNK_TOKEN_BUDGET
   return chunks;
 }
 
-/** The one question, worded as the spike measured it. */
+/**
+ * The one question. *Mention or discuss*, not *match*: "match" made Jev ask
+ * whether the passage **is** the thing, and a paragraph that only mentions a
+ * one-word topic scored 0.4–0.75 where this wording scores it 0.81–0.97
+ * (investigation 261003c, which is where to go before changing a word of it).
+ */
 function questionFor(id: string): DecisionQuestion {
   return {
     type: "noul",
-    instructions: `Does passage ${id} match what the reader is looking for (query)?`,
+    instructions: `Does passage ${id} mention or discuss what the reader is looking for (query)?`,
   };
 }
 

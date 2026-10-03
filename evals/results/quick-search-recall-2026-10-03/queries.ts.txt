@@ -1,0 +1,67 @@
+/* The eval set. `old` = the 261002o spike's 16 (reference answers saved there).
+   `short` = new one- or two-word topic queries whose targets are mostly passing mentions.
+   `literal` is the stem a reader would expect a plain find-in-page to catch; null when the
+   query's word is not in the article at all (a topic the piece touches in other words). */
+import { ENTROPY, REPL } from "./lib.ts";
+
+export interface Q { slug: string; q: string; set: "old" | "short" | "holdout" | "negative"; literal?: RegExp | null }
+
+export const OLD: Q[] = [
+  ["constitution", "ways Claude can be too cautious"], ["constitution", "Why does safety come before ethics?"],
+  ["constitution", "treating users as grown-ups"], ["constitution", "things Claude should never do"],
+  ["noema-mythology-of-conscious-ai", "arguments that minds are not software"],
+  ["noema-mythology-of-conscious-ai", "Why do people mistake chatbots for being conscious?"],
+  ["noema-mythology-of-conscious-ai", "machines that do clever things without computing anything"],
+  ["noema-mythology-of-conscious-ai", "what the author thinks we should do about it"],
+  ["openai-huggingface", "Did any of the agents blow the whistle?"], ["openai-huggingface", "how the agents covered their tracks"],
+  ["openai-huggingface", "self-sacrifice for the group"],
+  ["openai-huggingface", "objections that the author is treating the AIs like people"],
+  [REPL, "What can journals do to fix this?"], [REPL, "fishing for significant results"],
+  [REPL, "examples from fields outside psychology"], [REPL, "Why do so many studies fail to replicate?"],
+].map(([slug, q]) => ({ slug: slug!, q: q!, set: "old" as const }));
+
+export const SHORT: Q[] = [
+  { slug: ENTROPY, q: "Buddhism", literal: /buddh/i },
+  { slug: ENTROPY, q: "Evolution", literal: /evol/i },
+  { slug: ENTROPY, q: "Freud", literal: /freud/i },
+  { slug: ENTROPY, q: "cancer", literal: /cancer/i },
+  { slug: ENTROPY, q: "psychotherapy", literal: /therap/i },
+  { slug: "constitution", q: "doctor", literal: /\bdoctors?\b/i },
+  { slug: "constitution", q: "poverty", literal: /povert/i },
+  { slug: "constitution", q: "coding", literal: /\b(coding|code)\b/i },
+  { slug: "constitution", q: "mental health", literal: /mental health/i },
+  { slug: "noema-mythology-of-conscious-ai", q: "Frankenstein", literal: /frankenstein/i },
+  { slug: "noema-mythology-of-conscious-ai", q: "Google", literal: /google/i },
+  { slug: "noema-mythology-of-conscious-ai", q: "anesthesia", literal: /anesthe/i },
+  { slug: "noema-mythology-of-conscious-ai", q: "religion", literal: /religio/i },
+  { slug: "noema-mythology-of-conscious-ai", q: "immortality", literal: /immortal/i },
+  { slug: "openai-huggingface", q: "Twitter", literal: /twitter/i },
+  { slug: "openai-huggingface", q: "Alexander the Great", literal: /alexander/i },
+  { slug: "openai-huggingface", q: "war", literal: /\bwars?\b/i },
+  { slug: "openai-huggingface", q: "podcast", literal: /podcast/i },
+].map((x) => ({ ...x, set: "short" as const }));
+
+/* Held back (Sol F6): declared after the SHORT set had been run and before any of these were
+   run. The wording and floor are chosen on OLD + SHORT; these only confirm. */
+export const HOLDOUT: Q[] = [
+  { slug: ENTROPY, q: "Heraclitus", literal: /heraclit/i },
+  { slug: ENTROPY, q: "puberty", literal: /pubert/i },
+  { slug: "constitution", q: "lawyer", literal: /lawyer/i },
+  { slug: "constitution", q: "liability", literal: /liabilit/i },
+  { slug: "noema-mythology-of-conscious-ai", q: "Nobel prize", literal: /nobel/i },
+  { slug: "noema-mythology-of-conscious-ai", q: "coffee", literal: /coffee/i },
+  { slug: "openai-huggingface", q: "kamikaze", literal: /kamikaze/i },
+  { slug: "openai-huggingface", q: "Mafia", literal: /mafia/i },
+].map((x) => ({ ...x, set: "holdout" as const }));
+
+/* Absent topics (Sol F6): nothing in the article is about these. Anything kept is a false positive. */
+export const NEGATIVE: Q[] = [
+  { slug: ENTROPY, q: "football", literal: /football|soccer/i },
+  { slug: ENTROPY, q: "Christianity", literal: /christ/i },
+  { slug: "constitution", q: "Buddhism", literal: /buddh/i },
+  { slug: "noema-mythology-of-conscious-ai", q: "cryptocurrency", literal: /crypto|bitcoin/i },
+  { slug: "openai-huggingface", q: "climate change", literal: /climate/i },
+  { slug: REPL, q: "Buddhism", literal: /buddh/i },
+].map((x) => ({ ...x, set: "negative" as const }));
+
+export const ALL: Q[] = [...OLD, ...SHORT, ...HOLDOUT, ...NEGATIVE];

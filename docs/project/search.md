@@ -159,7 +159,9 @@ none in the other, rather than a disabled one that invites you to wonder what yo
 
 **Built 2026-10-02**, from feedback report `spya-c77zuq`. The plan is
 [261002e-quick-search-v1.md](../plans/261002e-quick-search-v1.md) and every number below was
-measured in [261002o-quick-search-spike.md](../investigations/261002o-quick-search-spike.md).
+measured in [261002o-quick-search-spike.md](../investigations/261002o-quick-search-spike.md), and
+again on 2026-10-03, when the question's wording changed, in
+[261003c](../investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md).
 
 > I really love the idea of our kind of search that can search by concepts or ideas or questions,
 > but it's quite slow. And so I was wondering about using TypeSafe.ai's Jev model through OpenRouter
@@ -174,8 +176,9 @@ measured in [261002o-quick-search-spike.md](../investigations/261002o-quick-sear
 
 Jev (`typesafe/jev-1.13`, `QUICK_SEARCH_MODEL` in [`src/models.ts`](../../src/models.ts)) is a
 *decision* model: it answers typed questions with probabilities rather than writing text. Quick
-search asks it one yes/no question per block — *does this passage match what the reader is looking
-for?* — all in one request, and keeps the blocks it says yes to. What follows from that shape:
+search asks it one yes/no question per block — *does this passage mention or discuss what the
+reader is looking for?* — all in one request, and keeps the blocks it says yes to. What follows
+from that shape:
 
 - **A hit is a whole paragraph.** Jev scores blocks, so there is no sentence inside one to quote;
   the row and hover show a bounded preview of it rather than all of it (the snippet caps above
@@ -192,7 +195,16 @@ for?* — all in one request, and keeps the blocks it says yes to. What follows 
   natural break in Jev's scores, so the floor is a measurement, not a gap: the plan said 0.8, and
   re-measured on the wording actually sent, 0.8 kept about half the meaning search's hits and 0.7
   about three-quarters, with what lay between nearly all genuine. The cap does real work on queries
-  about the whole piece, where 34–59 blocks clear 0.7.
+  about the whole piece, where 34–59 blocks clear 0.7. Re-measured on the wording below and kept:
+  a lower floor found no more and let in more wrong paragraphs.
+- **The question says *mention or discuss*, not *match*** — since 2026-10-03, from Greg's report
+  `spya-ats9dk`: a quick search for *Buddhism* found nothing in an article with a paragraph on
+  Buddhist no-self. That paragraph was Jev's top answer and scored 0.70–0.75, on the floor. *Match*
+  made Jev ask whether the paragraph **is** the thing, so a one-word topic mentioned in passing
+  scored low: on 18 one-word queries the old wording returned nothing at all on 56% of runs and
+  missed 109 of 141 literal mentions. The new one misses 17, found 27 of 27 on queries held back
+  until it was chosen, and does a little better on phrases and questions too (0.78 of the meaning
+  search's hits against 0.70). A topic the article does not have still returns nothing.
 - **Headings are never asked about.** Jev rates the title highly against any query about the
   article. They are dropped in `quickBlocks`, not in the shared `isSearchable`, because they are
   searchable — a meaning search may land on one. Notes and references stay in, as they do for
@@ -1451,9 +1463,9 @@ a hope.
 
 ## What is still open
 
-- **No keyboard shortcut** opens search, and nothing steps between results with the arrow keys. The
-  app still has no shortcut map at all — the gap [keyboard.md](keyboard.md) and
-  [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md#what-is-still-open) both record.
+- **Nothing steps between results with the arrow keys.** `/` opens quick search
+  ([keyboard.md § Quick search: the slash key](keyboard.md#quick-search-the-slash-key)); there is
+  no next-result or previous-result key.
 - **The rail has no scroll-to-next.** Marks in the spine now show where the results are
   ([above](#the-rail-and-the-shape-of-a-search)), and each mark is inside a band you can click — but
   clicking lands on the section, not on the match. Chrome and Firefox put *both* on the scrollbar
@@ -1483,10 +1495,14 @@ a hope.
 - **Words mode has no whole-word or case-sensitive option.** Deliberately: find-on-page has a
   meaning readers already hold, and the reader who wants cleverness has the other toggle. But it is
   the first thing somebody will ask for.
-- **Quick search does not run as you type**, though a second is fast enough to tempt: every pause
-  would be a saved row and a call. A natural v2, and the reason it has a *find* button too.
 - **A quick hit cannot point inside its paragraph.** Jev scores blocks, so it marks the whole
   paragraph, with the bar and the spine only; the quote is what *thorough* buys.
+- **A small LLM that answers with block ids was measured and not adopted** (2026-10-03,
+  [261003c](../investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md)).
+  It takes 1.2–2.2 seconds against Jev's 0.4 and costs 2 to 15 times as much; on one-word topics it
+  is level with Jev's new wording and keeps more junk, and on phrases and questions it is better
+  (0.91 of the meaning search's hits against 0.78). A middle tier is Greg's call. So is putting
+  literal matches of the typed word ahead of Jev's hits, which would take literal misses to zero.
 - **Should a meaning hit lose its wash too?** A quick hit's words are no longer washed
   (`spya-m59qg0`). A meaning hit's still are, because there the words are a real quote inside the
   paragraph. Greg has been asked; not decided.

@@ -147,4 +147,28 @@ and phone widths. The help page and `search.md` in the same stage.
 
 ## What landed
 
-(filled in at the end of each stage)
+**Stage B** (commit `bddc97fbc`, then GPT Sol's fixes). Built as planned. Two things differ from
+the plan's wording:
+
+- The new row's colour is pinned (it goes through the stored `colour` field), so it no longer follows
+  the automatic hash. The reader can set it back to Automatic.
+- `Found.bare` is the flag B4 carries; it is set where a quick run already asks for its preview
+  from the top of the paragraph.
+
+GPT Sol's code review ([261003i-quick-search-code-review-sol.md](261003i-quick-search-code-review-sol.md))
+found and fixed two P1s, each red first: **C1**, a colour chosen in this tab was written back on
+every later revision or retry, over a newer choice from another tab (now once, at the row's first
+`begin`); **C2**, a quick hit's invisible mark still blocked the tap that selects a paragraph on
+touch. Its write-ups are postmortems
+[261003b](../postmortems/261003b-a-rendering-override-becomes-an-unrequested-persistence-command.md)
+and [261003c](../postmortems/261003c-a-visual-marker-outlives-the-interaction-it-used-to-imply.md).
+C3 and C4 were stale lines in `search.md` from before this job; fixed.
+
+**Stage A.** The eval is
+[261003c](../investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md);
+spend about $1.50. The cause was the question's verb. Shipped: the question asks whether a passage
+*mentions or discusses* what the reader wants, not whether it *matches*. The floor (0.7) and the cap
+(20) stay. Checked on the real code path after the change: "Buddhism" on Greg's article returns the
+Buddhist no-self paragraph at 95–96, three runs of three, and a topic the article lacks returns
+nothing. Not shipped, and asked of Greg: an ids-only LLM as a middle tier, and literal matches
+ahead of Jev's hits.

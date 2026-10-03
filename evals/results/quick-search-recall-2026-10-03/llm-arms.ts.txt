@@ -1,0 +1,44 @@
+/* The ids-only LLM arms over the whole eval set, 3 runs each. SPENDS (about $1 in all).
+   One request per search: the whole article fits in one call for every candidate, including the
+   505-block article (40-47k tokens). Models run side by side; each model's own calls are serial,
+   so its latency is not inflated by its own queue. */
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { DIR, loadArticle, quickBlocks, spent, totalSpend } from "./lib.ts";
+import { llmSearch } from "./llm-lib.ts";
+import { ALL } from "./queries.ts";
+
+/* List prices per million tokens (OpenRouter's live model list, 2026-10-03), for the one model
+   whose responses report usage.cost as 0. */
+const LIST: Record<string, [number, number]> = { "openai/gpt-6-luna": [0.1, 0.5], "google/gemini-3.1-flash-lite": [0.25, 1.5], "deepseek/deepseek-v4.1-flash": [0.3, 1.2] };
+const MODELS: [string, Record<string, unknown>][] = [
+  ["openai/gpt-6-luna", { reasoning: { effort: "none" } }],
+  ["google/gemini-3.1-flash-lite", { reasoning: { effort: "none" } }],
+  ["deepseek/deepseek-v4.1-flash", { reasoning: { effort: "none" } }],
+];
+const P = `${DIR}/llm-raw.json`;
+const raw: Record<string, any> = existsSync(P) ? JSON.parse(readFileSync(P, "utf8")) : {};
+const REPS = 3;
+const blocks: Record<string, any[]> = {};
+for (const slug of new Set(ALL.map((q) => q.slug))) blocks[slug] = quickBlocks((await loadArticle(slug)).blocks);
+
+await Promise.all(MODELS.map(async ([model, extra]) => {
+  for (const s of ALL) {
+    const key = `${model}|${s.slug}|${s.q}`;
+    if (raw[key]?.reps?.length === REPS) continue;
+    const reps: any[] = [];
+    for (let i = 0; i < REPS; i++) {
+      let r = await llmSearch(model, s.q, blocks[s.slug]!, extra);
+      let retries = 0;
+      while (!r.ok && retries < 2 && (r.status === 0 || r.status === 429 || r.status >= 500)) { retries++; await new Promise((res) => setTimeout(res, 2000)); r = await llmSearch(model, s.q, blocks[s.slug]!, extra); }
+      const [pi, po] = LIST[model]!;
+      const est = r.usage ? (r.usage.prompt_tokens * pi + r.usage.completion_tokens * po) / 1e6 : 0;
+      if (!r.cost && est) spent(`llm-est:${model}`, est);
+      reps.push({ ...r, retries, estCost: est, usage: r.usage && { prompt: r.usage.prompt_tokens, completion: r.usage.completion_tokens, cached: r.usage.prompt_tokens_details?.cached_tokens ?? 0 } });
+    }
+    raw[key] = { model, slug: s.slug, q: s.q, set: s.set, reps };
+    writeFileSync(P, JSON.stringify(raw));
+    console.log(`${model.slice(0, 22).padEnd(22)} ${s.slug.slice(0, 8)} ${s.q.slice(0, 32).padEnd(32)} ok ${reps.map((r) => (r.ok ? 1 : 0)).join("")} first ${reps.map((r) => r.msFirstId ?? "-").join("/")} done ${reps.map((r) => r.msDone).join("/")} ids ${reps.map((r) => r.ids.length).join("/")}`);
+  }
+}));
+console.log(`total spend so far $${totalSpend().toFixed(4)}`);
+process.exit(0);

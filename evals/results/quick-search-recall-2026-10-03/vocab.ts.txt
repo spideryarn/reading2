@@ -1,0 +1,16 @@
+import { ARTICLES, loadArticle, quickBlocks } from "./lib.ts";
+const only = process.argv[2];
+const stop = new Set("the and that this with from have will would their there which about these those they them then than what when where been being were also such into more most some other only very just like over even much many each make made does doing could should because between through while after before under your you our its his her not but for are was can may might must any all one two how who why has had".split(" "));
+for (const slug of ARTICLES.filter((s) => !only || s.includes(only))) {
+  const asked = quickBlocks((await loadArticle(slug)).blocks);
+  const df = new Map<string, Set<number>>();
+  asked.forEach((b: any, i: number) => {
+    for (const w of new Set((b.text.toLowerCase().match(/[a-z][a-z-]{4,}/g) ?? []) as string[])) {
+      if (stop.has(w)) continue;
+      if (!df.has(w)) df.set(w, new Set());
+      df.get(w)!.add(i);
+    }
+  });
+  const rare = [...df.entries()].filter(([, s]) => s.size >= 1 && s.size <= 3).map(([w, s]) => `${w}:${s.size}`);
+  console.log(`\n== ${slug} (${asked.length} asked) rare words: ${rare.length}\n${rare.join(" ")}`);
+}
