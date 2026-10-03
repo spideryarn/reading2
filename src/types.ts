@@ -3749,7 +3749,7 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  * so drizzle/0050_candidates_thread_kind.sql is a drop and a re-add with no data
  * movement between them. docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
  */
-export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial";
+export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial" | "explore";
 
 /**
  * The thread kinds, as a value, and the predicate both ends validate with.
@@ -3764,20 +3764,22 @@ export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial";
  * introduced to prevent. Since both call `isThreadKind`, adding a member is one
  * edit rather than four.
  */
-export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates", "tutorial"];
+export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates", "tutorial", "explore"];
 
 /**
- * **The kinds an article has at most one of** — Remember's Recall and Tutorial,
- * each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
- * and Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md).
+ * **The kinds an article has at most one of** — Remember's Recall, Tutorial and
+ * Explore, each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
+ * Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md,
+ * and Explore since docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md).
  * A partial unique index per kind holds it in the database
- * (`chat_threads_one_remember`, `chat_threads_one_tutorial`); this is the list
- * `targetOf` in src/chat.ts and `ConversationBand` read, so the two ends agree.
+ * (`chat_threads_one_remember`, `chat_threads_one_tutorial`,
+ * `chat_threads_one_explore`); this is the list `targetOf` in src/chat.ts and
+ * `ConversationBand` read, so the two ends agree.
  *
  * Single-thread is ONE property. It does not say what a kind is called, what
  * its empty box says, or whether it offers Live — those are decided per kind.
  */
-export const SINGLE_THREAD_KINDS = ["remember", "tutorial"] as const satisfies readonly ThreadKind[];
+export const SINGLE_THREAD_KINDS = ["remember", "tutorial", "explore"] as const satisfies readonly ThreadKind[];
 export type SingleThreadKind = (typeof SINGLE_THREAD_KINDS)[number];
 
 export function isSingleThreadKind(kind: ThreadKind | undefined): kind is SingleThreadKind {

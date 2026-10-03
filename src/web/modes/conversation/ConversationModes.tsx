@@ -35,12 +35,14 @@ import { useLive } from "../../live/useLive.js";
 import { ChatPanel } from "../../ChatPanel.js";
 
 /**
- * **Remember's three sub-modes, and the one place their URL rules live.**
+ * **Remember's four sub-modes, and the one place their URL rules live.**
  *
  * Remember is `recall` — the reader says what they took from the article and the
  * model shows them where that comes apart — `tutorial`, where model and reader
- * take short teaching turns, or `quiz`, where the questions come from the article
- * instead. One mode, three views, and `?remember=` says which.
+ * take short teaching turns, `explore`, where the reader works out what they
+ * think and the model starts from what they marked, or `quiz`, where the
+ * questions come from the article instead. One mode, four views, and
+ * `?remember=` says which.
  * docs/plans/260831al-review-quiz-sub-mode.md.
  *
  * ## Why this is a component rather than two conditions up in `Reader`
@@ -168,6 +170,19 @@ export function RememberBand({
         blocks={blocks}
         onJump={onJump}
         kind="tutorial"
+        subMode={toggle}
+      />
+    );
+  if (remember === "explore")
+    return (
+      <ConversationBand
+        /* Its own key, for Tutorial's reason: three conversations, and none of
+           them shares a mounted band with another. */
+        key="remember-explore"
+        slug={slug}
+        blocks={blocks}
+        onJump={onJump}
+        kind="explore"
         subMode={toggle}
       />
     );
@@ -358,6 +373,31 @@ type ConversationVisibilityByKind = {
     kind: "tutorial";
     onScreen?: never;
   };
+  /** Remember's Explore: about the reader's thinking, not where they are on the page. */
+  explore: {
+    kind: "explore";
+    onScreen?: never;
+  };
+};
+
+/**
+ * **Which kinds of conversation offer Live**, the spoken one
+ * (docs/project/live-conversation.md). A capability per kind, written out for
+ * every kind, so a new one has to say — it was a `kind === "tutorial"` check
+ * until Explore, which would have got a Live button by default and a 400 from
+ * the server on its first spoken turn (GPT Sol's review of plan 261003l, PR-5).
+ *
+ * It has to agree with `SpokenKind` in src/chat.ts, the kinds a spoken turn
+ * may create or join: tests/remember-own-thread.test.tsx holds the two
+ * together. Tutorial has none yet because Greg said Live "doesn't work very
+ * well at the moment"; Explore has none for the same reason, and because a
+ * spoken turn carries no notes digest.
+ */
+export const OFFERS_LIVE: Readonly<Record<ConversationKind, boolean>> = {
+  chat: true,
+  remember: true,
+  tutorial: false,
+  explore: false,
 };
 
 type ConversationBandProps = {
@@ -372,7 +412,7 @@ type ConversationBandProps = {
   /** The band has taken `handoff` (or refused it); the owner should forget it. */
   onHandoffTaken?: (() => void) | undefined;
   /**
-   * **The Recall | Tutorial | Quiz control**, when this band is one of Remember's
+   * **The Recall | Tutorial | Explore | Quiz control**, when this band is one of Remember's
    * conversation views. Absent in chat mode. Built by `RememberBand` above and passed straight
    * through to `ChatPanel`, which is where it is drawn.
    */
@@ -420,8 +460,8 @@ export function ConversationBand({
    */
   const threads = useMemo(() => everyThread.filter((t) => t.kind === kind), [everyThread, kind]);
   const [thread, setThread] = useQueryState("thread", threadParam);
-  /* Recall and Tutorial: each one conversation per article, no list. Named
-     for Remember because that is where both live. */
+  /* Recall, Tutorial and Explore: each one conversation per article, no
+     list. Named for Remember because that is where all three live. */
   const single = isSingleThreadKind(kind) ? kind : null;
   const remembering = single !== null;
   /**
@@ -733,13 +773,14 @@ export function ConversationBand({
       onNew={startNew}
       /* **Owned above this panel**, which is remounted on every conversation
          switch — see the note where the hook is called. */
-      /* **No Live in Tutorial, yet.** Short alternating turns are ideal spoken,
-         and Greg said so, but also that Live "doesn't work very well at the
-         moment" — so Tutorial is typed or dictated first, and a spoken turn
-         cannot create one (`SpokenKind` in src/chat.ts stays chat | remember).
-         Omitted here rather than refused by the server, so there is no button. */
-      live={kind === "tutorial" ? undefined : live}
-      onStartLive={kind === "tutorial" ? undefined : (id) => {
+      /* **No Live in Tutorial or Explore, yet** (`OFFERS_LIVE` above). Short
+         alternating turns are ideal spoken, and Greg said so, but also that
+         Live "doesn't work very well at the moment" — so both are typed or
+         dictated first, and a spoken turn cannot create one (`SpokenKind` in
+         src/chat.ts stays chat | remember). Omitted here rather than refused
+         by the server, so there is no button. */
+      live={OFFERS_LIVE[kind] ? live : undefined}
+      onStartLive={!OFFERS_LIVE[kind] ? undefined : (id) => {
         if (resettingNow.current) return;
         if (!id && kind !== "chat") return;
         const next = id ?? begin("chat");

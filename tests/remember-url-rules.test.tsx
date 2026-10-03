@@ -60,8 +60,8 @@ describe("the mode key is `remember`, and `review` is not a mode any more", () =
 });
 
 describe("the sub-mode parameter is `?remember=`", () => {
-  it("accepts its three views and nothing else", () => {
-    expect(REMEMBER_VIEWS).toEqual(["recall", "tutorial", "quiz"]);
+  it("accepts its four views, in the order the chips are drawn, and nothing else", () => {
+    expect(REMEMBER_VIEWS).toEqual(["recall", "tutorial", "explore", "quiz"]);
     for (const view of REMEMBER_VIEWS) expect(rememberParam.parse(view)).toBe(view);
     expect(rememberParam.parse("review")).toBeNull();
     expect(rememberParam.parse("")).toBeNull();

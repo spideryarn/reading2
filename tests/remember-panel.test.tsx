@@ -48,7 +48,7 @@ let root: Root;
 
 const sent: { question: string }[] = [];
 
-function paint(thread: ChatThread, kind: "chat" | "remember" = "remember") {
+function paint(thread: ChatThread, kind: "chat" | "remember" | "tutorial" | "explore" = "remember") {
   act(() => {
     root.render(
       createElement(ChatPanel, {
@@ -280,5 +280,62 @@ describe("the Remember composer on a short viewport", () => {
     viewport(true);
     paint({ ...rememberThread(), kind: "chat" }, "chat");
     expect(host.querySelector<HTMLTextAreaElement>("textarea.chat-input")?.rows).toBe(1);
+  });
+});
+
+/* Explore, Remember's fourth sub-mode (plan 261003l): the same panel and the
+   same tall box, an empty state of its own with three ways in, and no Live. */
+describe("Explore's panel", () => {
+  const empty = (): ChatThread => ({ ...rememberThread(), kind: "explore", title: "Exploring", messages: [] });
+
+  it("says what Explore is for, in two short lines, and offers its starters as buttons", async () => {
+    const { EXPLORE_STARTERS } = await import("../src/web/ChatPanel.js");
+    paint(empty(), "explore");
+    const hints = [...host.querySelectorAll(".chat-suggest .chat-empty-hint")].map((p) => p.textContent ?? "");
+    expect(hints).toHaveLength(2);
+    expect(hints.join(" ")).toMatch(/what you've highlighted, noted and talked about/);
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>(".chat-suggest-btn")];
+    expect(buttons.map((b) => b.textContent)).toEqual([...EXPLORE_STARTERS]);
+    expect(EXPLORE_STARTERS).toHaveLength(3);
+  });
+
+  it("sends a starter as the reader's first message, word for word", () => {
+    paint(empty(), "explore");
+    const button = [...host.querySelectorAll<HTMLButtonElement>(".chat-suggest-btn")].find((b) =>
+      b.textContent?.includes("marked and discussed"),
+    );
+    act(() => button?.click());
+    expect(sent).toEqual([{ question: "Start from what I've marked and discussed" }]);
+  });
+
+  it("draws no starters once the conversation has begun", () => {
+    paint({ ...rememberThread(), kind: "explore" }, "explore");
+    expect(host.querySelector(".chat-suggest")).toBeNull();
+  });
+
+  it("has Remember's tall box, its own placeholder, and Remember in the header", () => {
+    paint(empty(), "explore");
+    const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
+    expect(box?.rows).toBe(6);
+    expect(box?.placeholder).toMatch(/What do you make of it/);
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("Remember");
+    expect(host.querySelector('[aria-label="Explore what you think about this article"]')).not.toBeNull();
+  });
+
+  it("draws no list, and no Recall or Tutorial invitation", () => {
+    paint(empty(), "explore");
+    expect(host.querySelector(".chat-threads")).toBeNull();
+    expect(host.textContent).not.toMatch(/Say what you took from this article/);
+    expect(host.textContent).not.toMatch(/What do you remember about this article/);
+  });
+
+  /* The band hands it no Live props (tests/remember-own-thread.test.tsx §
+     which conversations offer Live); with none, the panel draws no control. */
+  it("has no Live control", () => {
+    paint(empty(), "explore");
+    expect(host.querySelector(".chat-live")).toBeNull();
+    expect(host.querySelector(".chat-live-btn")).toBeNull();
+    paint({ ...rememberThread(), kind: "explore" }, "explore");
+    expect(host.querySelector(".chat-live-btn")).toBeNull();
   });
 });

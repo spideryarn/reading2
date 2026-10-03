@@ -36,7 +36,8 @@ const systemOf = (kind: "chat" | "remember" | "tutorial") =>
 describe("the kind itself", () => {
   it("is a thread kind, and a single-thread one like Remember", () => {
     expect(isThreadKind("tutorial")).toBe(true);
-    expect(SINGLE_THREAD_KINDS).toEqual(["remember", "tutorial"]);
+    /* Explore joined them on 2026-10-03: tests/explore-kind.test.ts. */
+    expect(SINGLE_THREAD_KINDS).toEqual(["remember", "tutorial", "explore"]);
     expect(isSingleThreadKind("tutorial")).toBe(true);
     expect(isSingleThreadKind("chat")).toBe(false);
     expect(isSingleThreadKind("candidates")).toBe(false);
