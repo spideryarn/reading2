@@ -94,9 +94,10 @@ export type ScreenshotResult =
  *
  * The dialog downscales to 1600 on the long edge, so this is generous. It is
  * not a product preference: it is the bound that makes the inflate below safe,
- * because `MAX_SCREENSHOT_PIXELS × 8 + height` is the most memory one request
- * can ask for — **32 MB, not 16**: `DEPTHS` allows 16-bit RGBA, which is eight
- * bytes a pixel. This said `× 4` until 2026-10-03 (GPT Sol's review of 261003k).
+ * because `MAX_SCREENSHOT_PIXELS × 8 + height` bounds the inflated raster
+ * (not the request's total memory) — **32 MB, not 16**: `DEPTHS` allows
+ * 16-bit RGBA, which is eight bytes a pixel. This said `× 4` until 2026-10-03
+ * (GPT Sol's review of 261003k).
  * A browser's canvas only ever writes 8-bit, so a real screenshot is half that.
  */
 export const MAX_SCREENSHOT_EDGE = 4096;

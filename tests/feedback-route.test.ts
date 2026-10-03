@@ -717,9 +717,10 @@ describe("POST /api/feedback", () => {
     const stored = Buffer.from(submitted[0]!.screenshot!);
     expect(stored.length).toBeGreaterThan(MAX_FEEDBACK_SCREENSHOT_BYTES * 0.98);
     expect(stored.length).toBeLessThanOrEqual(MAX_FEEDBACK_SCREENSHOT_BYTES);
-    /* Same signature, same `IHDR` — the dimensions are in it — so it is the
-       picture that was sent and not merely something of the right size. */
+    /* Same header and inflated pixels: dimensions and byte count alone would
+       let a different raster of similar compressed size pass. */
     expect(stored.subarray(0, 33).equals(png.subarray(0, 33))).toBe(true);
+    expect(pixelsOf(stored).equals(pixelsOf(png))).toBe(true);
   });
 
   it("takes a report with no kind at all", async () => {

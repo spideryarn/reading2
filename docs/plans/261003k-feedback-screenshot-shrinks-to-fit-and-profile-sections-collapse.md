@@ -202,3 +202,21 @@ prints the parenthesis only when it is there. Red first, in the same test file. 
 
 **Seen and left**: the shut headings are 14px tall, which is small under a thumb. It is the
 Metadata page's heading exactly, so changing it is a change to both pages.
+
+### GPT Sol's code review, 2026-10-03: ship with its fixes
+
+It reviewed `40f7a082b` and `0becf8dc7` and found no P0 or P1. Its three fixes are in the commit
+after them:
+
+- **C1 (P2)**: the "(undefined)" test supplied `wire` itself, so deleting the server's half left
+  every test green. It added an assertion on the real `GET /api/models` reply, seen red with the
+  assignment removed, and wrote
+  [the postmortem](../postmortems/261003d-a-consumer-fixture-asserts-a-field-its-producer-never-emits.md).
+- **C2 (P2)**: the near-ceiling route test checked header and size but not pixels. Now it compares
+  the pixels, and there is an offline test of the same in `tests/feedback-image.test.ts`.
+- **C3 (P3)**: a comment called the raster bound the request's total memory.
+- **C4 (P2), reported and left**: the synchronous deflate, already named above.
+
+It confirmed the moved `Section` behaves as the original, and that a picture the client passes and
+the server refuses still gets the server's sentence with the draft kept. I re-ran the Postgres
+suites it could not: 8 files, 565 tests, and typecheck, all passing.

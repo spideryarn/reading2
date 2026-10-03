@@ -17,7 +17,7 @@
  * `MARKER` is one string throughout, so a test that stops checking anything
  * still has to explain where it went.
  */
-import { deflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -25,6 +25,7 @@ import {
   MAX_SCREENSHOT_PIXELS,
   reencodeScreenshot,
 } from "../src/feedback-image.js";
+import { MAX_FEEDBACK_SCREENSHOT_BYTES } from "../src/types.js";
 
 const MARKER = "MY_SECRET_MANUSCRIPT";
 const SIGNATURE = Buffer.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
@@ -52,10 +53,10 @@ function chunk(type: string, payload: Buffer): Buffer {
 function png(
   width: number,
   height: number,
-  options: { extra?: Buffer[]; after?: Buffer; depth?: number; colourType?: number } = {},
+  options: { extra?: Buffer[]; after?: Buffer; depth?: number; colourType?: number; raster?: Buffer } = {},
 ): Buffer {
   const channels = options.colourType === 0 ? 1 : 4;
-  const raster = Buffer.alloc(height * (width * channels + 1));
+  const raster = options.raster ?? Buffer.alloc(height * (width * channels + 1));
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
@@ -78,6 +79,33 @@ function accepted(bytes: Buffer): Buffer {
 }
 
 describe("re-encoding a pasted screenshot", () => {
+  it("preserves every pixel of a real PNG near the two-megabyte cap", () => {
+    const width = 1000;
+    const height = 495;
+    const stride = width * 4 + 1;
+    const raster = Buffer.alloc(height * stride);
+    let seed = 0x12345678;
+    for (let y = 0; y < height; y++) {
+      for (let x = 1; x < stride; x++) {
+        seed ^= seed << 13;
+        seed ^= seed >>> 17;
+        seed ^= seed << 5;
+        raster[y * stride + x] = seed & 0xff;
+      }
+    }
+    const input = png(width, height, { raster });
+    expect(input.length).toBeGreaterThan(1_900_000);
+    expect(input.length).toBeLessThanOrEqual(MAX_FEEDBACK_SCREENSHOT_BYTES);
+    const result = reencodeScreenshot(input, MAX_FEEDBACK_SCREENSHOT_BYTES);
+    if (!result.ok) throw new Error(`refused: ${result.reason}`);
+    const output = Buffer.from(result.screenshot.bytes);
+    expect(output.length).toBeLessThanOrEqual(MAX_FEEDBACK_SCREENSHOT_BYTES);
+    expect(output.subarray(0, 33).equals(input.subarray(0, 33))).toBe(true);
+    /* The rebuilt PNG has one IDAT after IHDR: 41 bytes before its payload,
+       then its CRC and IEND. Compare the raster, not the compression stream. */
+    expect(inflateSync(output.subarray(41, output.length - 16)).equals(raster)).toBe(true);
+  });
+
   it("takes an ordinary PNG and hands back a PNG", () => {
     const out = accepted(png(4, 4));
     expect(out.subarray(0, 8).equals(SIGNATURE)).toBe(true);
