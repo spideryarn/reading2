@@ -623,6 +623,10 @@ export type Task =
      where it responds — docs/plans/260916d-faq-mode.md. Article-reading like
      `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
   | "faq"
+  /* How each paragraph bears on the one before it —
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+     Article-reading like `ideas`, answering block ids, so `articleWithIds`. */
+  | "relations"
   /* Links between the article's own blocks —
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
      Article-reading like `ideas`, naming block ids, so `articleWithIds`. */
@@ -1019,6 +1023,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   illustrated: "capable",
   quiz: "capable",
   faq: "capable",
+  relations: "capable",
   crossrefs: "capable",
   simple: "capable",
   skim: "capable",
@@ -1285,6 +1290,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   illustrated: "messages",
   quiz: "messages",
   faq: "messages",
+  relations: "messages",
   crossrefs: "messages",
   simple: "messages",
   skim: "messages",
@@ -1413,6 +1419,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   illustrated: null,
   quiz: null,
   faq: null,
+  relations: null,
   crossrefs: null,
   simple: null,
   skim: null,
@@ -1715,6 +1722,7 @@ export type ArticleStage =
   | "timeline"
   | "quiz"
   | "faq"
+  | "relations"
   | "crossrefs"
   | "simple";
 
@@ -1848,6 +1856,16 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      Untested, like every effort choice not yet through
      evals/results/effort-vs-quality.md. docs/plans/260916d-faq-mode.md. */
   faq: "high",
+  /* `low`, the lowest value in this table (`sketch`'s, which was measured; this
+     is NOT). What it is paid for is one word of ten per paragraph, each judged
+     against the paragraph before it — the lightest judgment any stage here
+     makes, lighter than the `medium` that `crossrefs` and `quotes` take for
+     reading rather than inference. Its bytes are `faq`'s and its effort is
+     `sketch`'s, but all three schemas differ, so it shares a cached article
+     with nothing. Untested, like every effort choice not yet through
+     evals/results/effort-vs-quality.md; the plan names the quick tier as the
+     next thing to measure. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  relations: "low",
   /* `medium`, the plan's call: matching a claim to the paragraph that backs it
      is reading, not the multi-step inference `ideas` and `quiz` are paid `high`
      for. **It therefore shares a cached prefix with nothing** — the same bytes
@@ -1928,6 +1946,10 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   /* Every passage names a block id, so the ids have to be on the page — and it
      sends the body only, byte-identical to `ideas`, so it joins that prefix. */
   faq: "ids",
+  /* It answers block ids, so the ids have to be on the page — and it sends the
+     body only, byte-identical to `ideas` and `faq`. `low` effort and its own
+     schema, so no share. */
+  relations: "ids",
   /* Two block ids a row, so the ids have to be on the page — and the body
      only, byte-identical to `ideas`. The effort differs, so no share. */
   crossrefs: "ids",

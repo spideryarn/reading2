@@ -71,6 +71,10 @@ export const RESET_ROLE = {
   timeline: "extra",
   quiz: "extra",
   faq: "extra",
+  /* Made on demand by the owner's press that turns Marginalia on, off
+     DEFAULT_INGEST_STEPS, a whole column: the modes' shape, though it is not a
+     mode of its own. */
+  relations: "extra",
   sketch: "extra",
   illustrated: "extra",
   debate: "extra",

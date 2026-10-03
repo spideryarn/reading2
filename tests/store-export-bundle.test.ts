@@ -56,7 +56,7 @@ import {
   overBundleCap,
 } from "../src/store/export-bundle.js";
 import { exportArticle } from "../src/store/export.js";
-import type { SimpleSummary } from "../src/types.js";
+import type { Relations, SimpleSummary } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -140,6 +140,18 @@ const SIMPLE: SimpleSummary = {
       { text: "And it says where that answer stops.", ids: [BLOCKS[2]] },
     ],
   },
+};
+
+/** A second whole artefact, to hold the new export registration on both paths. */
+const RELATIONS_FIXTURE: Relations = {
+  version: "relations/export-fixture",
+  generator: "fixture-model",
+  slug: SLUG,
+  sourceHash: "fedcba9876543210",
+  relations: { [BLOCKS[1]]: "but" },
+  dropped: { unknown: 0, repeated: 0, offList: 0, missing: 0 },
+  generatedAt: "2026-10-03T12:00:00.000Z",
+  elapsedMs: 123,
 };
 
 /* A real source document, so the rollback's `readRawDocument` actually reaches
@@ -226,6 +238,7 @@ await pgReady({
     { table: "spideryarn.chat_messages", column: "passages" },
     { table: "spideryarn.chat_messages", column: "interrupted" },
     { table: "spideryarn.article_revisions", column: "simple_summary" },
+    { table: "spideryarn.article_revisions", column: "relations" },
   ],
 });
 
@@ -300,6 +313,7 @@ describe("the bundle is the faithful projection", () => {
         },
         assets: ASSETS,
         simpleSummary: SIMPLE,
+        relations: RELATIONS_FIXTURE,
         rawSourceSha256: RAW_SHA256,
         rawSourceKind: "html",
       })
@@ -498,6 +512,14 @@ describe("the bundle is the faithful projection", () => {
       await readFile(path.join(out, SLUG, "simple-summary.json"), "utf8"),
     ) as SimpleSummary;
     expect(rollback).toEqual(SIMPLE);
+  });
+
+  it("carries Relations whole through the bundle and rollback exports", async () => {
+    expect(parsed("augmentations/relations.json")).toEqual(RELATIONS_FIXTURE);
+    const rollback = JSON.parse(
+      await readFile(path.join(out, SLUG, "relations.json"), "utf8"),
+    ) as Relations;
+    expect(rollback).toEqual(RELATIONS_FIXTURE);
   });
 
   /* Sol's plan review of 261001b, P2-7: the page counted `paragraphs`, which a

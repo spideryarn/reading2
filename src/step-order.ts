@@ -122,6 +122,12 @@ export const STEP_ORDER = [
      over the whole article that a reader asks for by opening the mode.
      docs/plans/260916d-faq-mode.md. */
   "faq",
+  /* Straight after `faq`, whose article bytes and fingerprint it shares — but
+     at `low` effort, so it is in no cache group (src/models.ts § STAGE_EFFORT).
+     Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`: one model call
+     over the whole article, started by the owner's press that turns Marginalia
+     on. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  "relations",
   /* Beside `faq`, a fifth time for the same argument: `high` effort (measured
      against `medium` in stage 1, src/models.ts § STAGE_EFFORT), the `ids`
      renderer and the body-only evidence, so it is in the `ideas` … `faq`

@@ -3605,6 +3605,15 @@ export const SHARING_COPY_TIP =
   "readable without it.";
 
 /**
+ * What the Copy button says when the copy did not happen — no clipboard in
+ * this browser, or one that refused. It names the way round, because the link
+ * is in a box beside the button and selects itself on focus.
+ * AccessSharing.tsx § `CopyLink`.
+ */
+export const SHARING_COPY_FAILED =
+  "Your browser would not allow the copy. Select the link and copy it by hand.";
+
+/**
  * **The same fact, small enough for a corner of a card on the shelf.**
  *
  * The owner's own word for it — the sharing card says *"Shared since …"* — and

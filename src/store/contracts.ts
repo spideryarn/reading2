@@ -93,6 +93,7 @@ import type {
   SketchFound,
   QuizFound,
   FaqFound,
+  RelationsResponse,
   CrossrefsFound,
   SimpleSummaryFound,
   SkimFound,
@@ -288,6 +289,15 @@ export interface ArticleReader {
    * docs/plans/260916d-faq-mode.md.
    */
   loadFaq(slug: string): Promise<FaqFound>;
+
+  /**
+   * How each paragraph bears on the one before it, plus whether it still
+   * describes the article — FAQ's two staleness facts, over FAQ's fingerprint.
+   * **Owner-only, and there is no public twin**: a visitor's payload carries no
+   * staleness verdict and a relation word has no quote to check (Sol P1-4).
+   * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+   */
+  loadRelations(slug: string): Promise<RelationsResponse>;
 
   /**
    * The cross-references, plus whether they still describe the article — the
@@ -1309,6 +1319,15 @@ export interface RefereeCriteriaStore {
  * The Postgres adapter was built, and src/store/index.ts wires it with
  * `guarded(...)` like every other seam.
  */
+/**
+ * What a claims run can end as. **Never `pending`**: `finish` releases the
+ * attempt token whatever the patch says, so a patch leaving the row `pending`
+ * would strip the fence off a row still waiting for an answer.
+ * `RefereeCriteriaStore.finish` refuses the same thing at run time; here the
+ * compiler does.
+ */
+export type ClaimsFinish = Partial<ClaimsRun> & { status: "done" | "error" };
+
 export interface RefereeClaimsStore {
   /** The stored run, or `null` when this paper has never been asked. */
   load(slug: string): Promise<ClaimsRun | null>;
@@ -1323,16 +1342,30 @@ export interface RefereeClaimsStore {
    * There is no `wantedId` and no retry rule, because there is nothing to
    * collide with: a second run is a run, and the answer it overwrites was about
    * the same paper. src/store/pg-referee-claims.ts § One run per article.
+   *
+   * `sourceHash` is `hashBlocks` of **the blocks the caller is about to send**,
+   * not something the store reads: the caller loaded them before this call, and
+   * a re-extraction in between would otherwise stamp the new revision's hash on
+   * an answer about the old blocks.
+   *
+   * `attempt` is this run's token. `finish` needs it, and a later `begin`
+   * replaces it — which is what stops a slower, older run writing over a newer
+   * one.
    */
-  begin(slug: string, now?: () => string): Promise<ClaimsRun>;
+  begin(
+    slug: string,
+    sourceHash: string,
+    now?: () => string,
+  ): Promise<{ run: ClaimsRun; attempt: string }>;
 
   /**
-   * Write the answer over the `pending` run.
+   * Write the answer over the `pending` run **this attempt began**.
    *
-   * `null` when there is no run on disk any more — the article's data went away
-   * underneath the call — rather than resurrecting a row nobody has.
+   * `null` when that run is not there to write to: the row went away, a newer
+   * `begin` took it, or the sweep already failed it. Never a resurrection, and
+   * never a write over somebody else's run.
    */
-  finish(slug: string, patch: Pick<ClaimsRun, "status"> & Partial<ClaimsRun>): Promise<ClaimsRun | null>;
+  finish(slug: string, patch: ClaimsFinish, attempt: string): Promise<ClaimsRun | null>;
 
   /**
    * Turn an abandoned `pending` run into an `error`, so it can be run again.

@@ -1,0 +1,86 @@
+{
+  "greg-like": {
+    "pair-1": {
+      "A": "induce",
+      "B": "production"
+    },
+    "pair-2": {
+      "A": "cluster",
+      "B": "production"
+    },
+    "pair-3": {
+      "A": "induce",
+      "B": "cluster"
+    }
+  },
+  "mind-and-machines": {
+    "pair-1": {
+      "A": "induce",
+      "B": "production"
+    },
+    "pair-2": {
+      "A": "cluster",
+      "B": "production"
+    },
+    "pair-3": {
+      "A": "induce",
+      "B": "cluster"
+    }
+  },
+  "contemplative-neuro": {
+    "pair-1": {
+      "A": "production",
+      "B": "induce"
+    },
+    "pair-2": {
+      "A": "production",
+      "B": "cluster"
+    },
+    "pair-3": {
+      "A": "cluster",
+      "B": "induce"
+    }
+  },
+  "kitchen-garden": {
+    "pair-1": {
+      "A": "production",
+      "B": "induce"
+    },
+    "pair-2": {
+      "A": "production",
+      "B": "cluster"
+    },
+    "pair-3": {
+      "A": "induce",
+      "B": "cluster"
+    }
+  },
+  "history": {
+    "pair-1": {
+      "A": "production",
+      "B": "induce"
+    },
+    "pair-2": {
+      "A": "production",
+      "B": "cluster"
+    },
+    "pair-3": {
+      "A": "induce",
+      "B": "cluster"
+    }
+  },
+  "greg-wide": {
+    "pair-1": {
+      "A": "induce",
+      "B": "production"
+    },
+    "pair-2": {
+      "A": "cluster",
+      "B": "production"
+    },
+    "pair-3": {
+      "A": "cluster",
+      "B": "induce"
+    }
+  }
+}
