@@ -258,6 +258,61 @@ describe("the reader's colour choice beats a frame that predates it", () => {
 });
 
 describe("two colour choices in quick succession", () => {
+  it.each([
+    ["revision", false], ["retry", false], ["revision", true], ["retry", true],
+  ] as const)("does not write an old tab choice back on a %s begin (inherited=%s)", async (action, inherited) => {
+    await mount("a-slug");
+    await flush();
+    const createdAt = "2026-10-03T00:00:00.000Z";
+    let serverColour = 1;
+    postImpl = ({ id, criterion }) => {
+      const run = { id, criterion, kind: "quick", createdAt, hits: [], colour: serverColour };
+      return Promise.resolve(new Response(oneShotStream([
+        { event: "begin", data: { ...run, status: "pending" } },
+        { event: "done", data: { ...run, status: action === "retry" ? "error" : "done" } },
+      ])));
+    };
+    let id = "";
+    act(() => { id = latest!.ask("why", "quick", inherited ? 2 : undefined); });
+    await flush();
+    if (!inherited) act(() => latest!.recolour(id, 2));
+    await flush();
+    const patches = () => (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .filter(([, init]) => init?.method === "PATCH");
+    expect(patches()).toHaveLength(1);
+
+    // Another tab has since chosen 5. This begin acknowledges that choice;
+    // this tab's local paint override is not permission to overwrite the store.
+    serverColour = 5;
+    act(() => {
+      if (action === "revision") latest!.revise(id, "why now");
+      else latest!.retry(id);
+    });
+    await flush();
+    expect(latest!.runs[0]?.colour, "local frame protection still holds").toBe(2);
+    expect(patches(), "begin silently overwrote the other tab's colour").toHaveLength(1);
+  });
+
+  it("keeps an inherited colour waiting through a failure before begin and pins it on retry", async () => {
+    await mount("a-slug");
+    await flush();
+    postImpl = () => Promise.reject(new Error("connection dropped before begin"));
+    let id = "";
+    act(() => { id = latest!.ask("why", "meaning", 3); });
+    await flush();
+    expect(latest!.runs[0]).toMatchObject({ id, status: "error", colour: 3 });
+    postImpl = ({ id, criterion }) => Promise.resolve(new Response(oneShotStream([
+      { event: "begin", data: { id, criterion, kind: "meaning", createdAt: "2026-10-03T00:00:00.000Z", status: "pending", hits: [] } },
+      { event: "done", data: { id, criterion, kind: "meaning", createdAt: "2026-10-03T00:00:00.000Z", status: "done", hits: [] } },
+    ])));
+    act(() => latest!.retry(id));
+    await flush();
+    const patches = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .filter(([, init]) => init?.method === "PATCH");
+    expect(patches).toHaveLength(1);
+    expect(JSON.parse(String(patches[0]![1].body))).toEqual({ colour: 3 });
+  });
+
   it("reaches the server in the order the reader made them", async () => {
     /* Two independent PATCHes have no ordering, and the failure is the quiet
        kind: the screen follows the reader (via `chosen`) while the store

@@ -287,6 +287,15 @@ export function useSearch(
   const chosen = useRef(new Map<string, number | null>());
 
   /**
+   * New rows whose inherited colour still needs its first `begin` to exist
+   * on the server. `chosen` is a lasting display override, not a pending
+   * write: replaying it on every revision or retry would overwrite a newer
+   * colour chosen in another tab without any colour press in this one.
+   * Kept through failures before `begin`, so an explicit retry still pins it.
+   */
+  const pendingColours = useRef(new Set<string>());
+
+  /**
    * The last PATCH in flight for each run, so a second one waits for it.
    *
    * Two presses in quick succession are two independent requests, and nothing
@@ -312,6 +321,7 @@ export function useSearch(
     currentArticle.current = articleToken;
     const gone = deleted.current;
     const picks = chosen.current;
+    const colours = pendingColours.current;
     const chains = patching.current;
     const flying = inFlight.current;
     const queues = lanes.current;
@@ -320,6 +330,7 @@ export function useSearch(
       gone.clear();
       queues.clear();
       picks.clear();
+      colours.clear();
       chains.clear();
       if (flying.size > 0) {
         flying.clear();
@@ -646,17 +657,16 @@ export function useSearch(
                  moment, which is the true thing to do rather than a side
                  effect worth avoiding. */
               if (begun.sourceHash !== undefined) setFingerprint({ hash: begun.sourceHash });
+              const pinColour = pendingColours.current.delete(liveId);
               if (begun.id !== liveId) follow(begun.id);
               else if (
                 !gone &&
+                pinColour &&
                 chosen.current.has(liveId) &&
                 (chosen.current.get(liveId) ?? null) !== (begun.colour ?? null)
               ) {
-                /* **A colour chosen before the server had the row**: one `ask`
-                   was given, or a swatch pressed in the gap. This frame is the
-                   first moment there is a row to write it to — a PATCH sent
-                   earlier names an id the server may not have yet. `follow`
-                   does the same for a renamed row, one line up. */
+                /* The inherited colour of a newly asked row, once only.
+                   `follow` handles a renamed row, one line up. */
                 recolour(liveId, chosen.current.get(liveId) ?? null);
               }
               me.begun = true;
@@ -779,7 +789,10 @@ export function useSearch(
     (criterion: string, kind: SearchKind, colour?: number) => {
       const id = mintId();
       // Before `send`, so the pending row is painted in it — `put` reads `chosen`.
-      if (colour !== undefined) chosen.current.set(id, colour);
+      if (colour !== undefined) {
+        chosen.current.set(id, colour);
+        pendingColours.current.add(id);
+      }
       send(id, criterion.trim(), kind, new Date().toISOString());
       return id;
     },
@@ -808,6 +821,7 @@ export function useSearch(
   const remove = useCallback(
     (id: string) => {
       deleted.current.add(id);
+      pendingColours.current.delete(id);
       setRuns((prev) => prev.filter((r) => r.id !== id));
       // Deleting it frees the question at once, as it always has: asking it
       // again is a new search the reader chose, not an impatient press.
