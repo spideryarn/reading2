@@ -166,7 +166,7 @@ const button = (label: string) =>
   document.querySelector<HTMLButtonElement>(`.prose-card button[aria-label="${label}"]`);
 const openInQuotes = () =>
   [...document.querySelectorAll<HTMLButtonElement>(".prose-card button")].find((b) =>
-    (b.textContent ?? "").includes("open in Quotes"),
+    (b.textContent ?? "").includes("open Quotes"),
   );
 
 describe("resting on a quote", () => {

@@ -579,7 +579,7 @@ export function markedQuotes(
  * Lower a prioritised bar just enough to reveal `id`, or leave it alone.
  *
  * The prose normally cards only threshold-visible quotes. Skim can add its
- * current quote to the prose after the bar hid it; *open in Quotes* must then
+ * current quote to the prose after the bar hid it; *open Quotes* must then
  * reveal that row before `useQuoteMarks`' `hiddenSelection` effect clears the
  * selection. This is Quotes' `gateToReveal` (GlossaryPanel.tsx): preserve the
  * chosen order, move the visible control, and floor to the URL's hundredth so

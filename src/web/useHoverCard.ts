@@ -666,7 +666,7 @@ export function useHoverCard<T>({
       if (!isTap(start, event, window.getSelection())) return;
 
       const target = event.target as Element | null;
-      /* Inside the card: the reader is reaching for "in the glossary" or "open
+      /* Inside the card: the reader is reaching for "Open glossary" or "open
          in a new tab". Leave the event entirely alone — swallowing it would
          swallow the press they came for. */
       if (target?.closest?.(`.${CARD_CLASS}`)) return;

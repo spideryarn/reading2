@@ -403,7 +403,7 @@ Greg, in two feedback reports:
 - **A card on a quote in the prose**, in `ProseHoverCard` beside the term, citation and link halves:
   both raw scores, drawn and printed (this card is where the rows' numbers live — never the `max`
   composite); the reason, in the model's face; ‹ › to the quote before or after it **down the
-  page**; and *open in Quotes*, which selects it and opens the band on its row. **Pointer only.** A
+  page**; and *open Quotes*, which selects it and opens the band on its row. **Pointer only.** A
   tap on a bare quote still selects its paragraph (TableView's `NOT_A_BLOCK_SELECTION`, the reason
   above), and a quote is not a tab stop — a quote that is also a term, a citation or inside a link
   gets the card through those, as before. **It waits 900ms rather than 320ms** before opening on a

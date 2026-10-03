@@ -217,19 +217,27 @@
   grid-template-columns: var(--blk-slot);
   grid-auto-rows: var(--blk-slot);
   align-content: start;
-  /* **A 4px gap between slots, since 2026-10-02**, and that reverses a
-     decision. The first draft of the 24px slot asked for 4px and GPT Sol took
-     it out: the slot alone already supplied the separation Greg had asked for.
-     Then the glyphs grew from 12px to 15px (2026-09-29), which left 9px of air
-     between two of them, and Greg asked for more: *"please slightly increase
-     the vertical gaps between them"* (spya-jc0vm6). 13px now.
+  /* **An 8px gap between slots, since 2026-10-03**; it was 4px for a day and
+     nothing before that. The first draft of the 24px slot asked for 4px and
+     GPT Sol took it out: the slot alone already supplied the separation Greg
+     had asked for. Then the glyphs grew from 12px to 15px (2026-09-29), which
+     left 9px of air between two of them, and Greg asked for more: *"please
+     slightly increase the vertical gaps between them"* (spya-jc0vm6). That
+     made 13px, and from an iPad it was not enough: *"It's just a little bit
+     hard to touch them with a finger on an iPad"* (spya-kwgem6). 17px of air
+     now, and 32px from the middle of one target to the middle of the next.
+
+     **For everyone, not only for a finger.** A gap under `(any-pointer:
+     coarse)` alone would need every container query in § the count written a
+     second time inside a media query, and a rule restated at a second
+     specificity is this file's recorded failure mode. Plan 261003h.
 
      **It costs no row any height** — the one-slot floor below holds one slot
      and no gap — but every container query in § the count counts it: n slots
      need n × slot + (n − 1) × gap. Written with the slot's two halves, so it
      scales and floors exactly as the slot does, and the queries' `and` form
      stays exact. Plan 261002e. */
-  row-gap: max(0.25rem, 4px);
+  row-gap: max(0.5rem, 8px);
   align-items: center;
   justify-items: center;
   line-height: 0;
@@ -490,7 +498,7 @@ td.text.kind-heading .blk-gutter {
    is what gives way. There is no `:has(.blk-cmt)` left in this section at all —
    the count says everything the mark used to be asked to stand in for. */
 
-@container (min-height: 52px) and (min-height: 3.25rem) {
+@container (min-height: 56px) and (min-height: 3.5rem) {
   /* Two slots: the first control, and either the second or the way to it. */
   .blk-gutter > :nth-child(1) { display: inline-flex; }
   .blk-gutter[data-controls="2"] > * { display: inline-flex; }
@@ -499,7 +507,7 @@ td.text.kind-heading .blk-gutter {
   .blk-gutter[data-controls="2"] > .blk-more { display: none; }
 }
 
-@container (min-height: 80px) and (min-height: 5rem) {
+@container (min-height: 88px) and (min-height: 5.5rem) {
   /* Three slots: three controls are out, four are two and a dot. */
   .blk-gutter > :nth-child(-n + 2) { display: inline-flex; }
   .blk-gutter[data-controls="3"] > * { display: inline-flex; }
@@ -507,7 +515,7 @@ td.text.kind-heading .blk-gutter {
   .blk-gutter[data-controls="3"] > .blk-more { display: none; }
 }
 
-@container (min-height: 108px) and (min-height: 6.75rem) {
+@container (min-height: 120px) and (min-height: 7.5rem) {
   /* Four slots, which is every control there can be. */
   .blk-gutter > * { display: inline-flex; }
   .blk-gutter[data-controls="4"] > .blk-more { display: none; }
@@ -539,7 +547,7 @@ td.text.kind-heading .blk-gutter {
    browser without container queries skips the block and keeps the collapsed
    default. And not while open: the unfolded column is auto-placed, and a
    control pinned to the first cell would sit on another. */
-@container not ((min-height: 52px) and (min-height: 3.25rem)) {
+@container not ((min-height: 56px) and (min-height: 3.5rem)) {
   .blk-gutter[data-marked]:not([data-open]) > .blk-cmt { display: inline-flex; }
   .blk-gutter[data-marked]:not([data-open]) > .blk-cmt,
   .blk-gutter[data-marked]:not([data-open]) > .blk-more { grid-area: 1 / 1; }
