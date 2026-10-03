@@ -1,0 +1,5 @@
+# Regenerable: the per-run lists (run.ts). The summary, the judge's pairs, the
+# key and the verdicts are committed — they are the evidence.
+results/*/
+!results/pairs/
+!results/judgements/

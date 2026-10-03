@@ -58,6 +58,9 @@ describe("the steps the Metadata page will re-run", () => {
       "timeline",
       "quiz",
       "faq",
+      /* Plan 261003f, 2026-10-03: Marginalia's relation words, made again from
+         Metadata. The three answers are in src/rerun-steps.ts. */
+      "relations",
       "sketch",
       "skim",
       "debate",

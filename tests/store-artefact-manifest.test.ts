@@ -236,6 +236,7 @@ const HOMES: Record<string, string> = {
      call every time**, so until he runs it this row says where the artefact goes
      and the database does not yet have the column. */
   "timeline.json": "article_revisions.timeline",
+  "relations.json": "article_revisions.relations",
   /* `drizzle/0046_quiz.sql`, applied locally on 2026-09-01. It also carries the
      `revision_step_runs_step` CHECK that drizzle-kit will not write — the sixth
      migration in a row to have to. */
@@ -492,6 +493,13 @@ const RETIRED_DIRECTORY_REPRESENTATIONS: Record<string, Unexampled> = {
  * `PENDING_CORPUS_EXAMPLE` and not here.
  */
 const COVERED_BY_ANOTHER_TEST: Record<string, Unexampled> = {
+  "relations.json": {
+    why: "no committed article carries relation words; the export suite plants an artefact and requires this file from both export paths",
+    evidence: {
+      file: "tests/store-export-bundle.test.ts",
+      contains: "relations.json",
+    },
+  },
   "referee-criteria.json": {
     why: "no committed article carries a criterion; the export is proved by a suite that makes the rows it needs",
     evidence: {

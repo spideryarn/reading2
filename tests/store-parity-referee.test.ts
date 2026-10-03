@@ -84,7 +84,7 @@ import { CLAIMS_SWEPT } from "../src/store/pg-referee-claims.js";
 import type { DivergingResult, SingleResult } from "../src/referee-criteria.js";
 import type { Comment } from "../src/types.js";
 import { CRITERION_SWEPT } from "../src/referee-criteria-store.js";
-import type { SavedCriterion } from "../src/saved-criteria.js";
+import { MAX_CRITERIA, type SavedCriterion } from "../src/saved-criteria.js";
 import type { CommentStore, RefereeClaimsStore, RefereeCriteriaStore } from "../src/store/contracts.js";
 import {
   CLAIMS_ORPHAN_GRACE_MS,
@@ -102,6 +102,8 @@ const REVISION_ID = "00000000-0000-4000-8000-00000000af11";
 
 /** A slug no article has, in either store — see difference 1 in the header. */
 const ABSENT = "test-referee-parity-no-such-article";
+/** A fingerprint for claims runs whose fingerprint is not what the case is about. */
+const HASH = "feedfacefeedface";
 
 await pgReady({
   suite: "tests/store-parity-referee.test.ts",
@@ -484,6 +486,42 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
     expect(at(13)).toEqual(at(12));
   });
 
+  it("never trims a criterion that is still being answered", async () => {
+    /* Sweep 5, D1 (docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md).
+       A retry keeps its original `created_at`, so the oldest criterion of a full
+       history can be the one that is `pending`. The trim did not look at status:
+       one more `begin` deleted it, its fenced `finish` updated nothing, and the
+       answer the referee was waiting on was gone. Search's twin of this test is
+       in tests/store-searches-pg.test.ts. */
+    const store = pgRefereeCriteriaStore;
+    const start = Date.parse("2026-08-01T00:00:00.000Z");
+    const at = (i: number) => () => new Date(start + i * 60_000).toISOString();
+
+    const oldest = await store.begin(SLUG, "the one that failed", { kind: "single" }, undefined, at(0));
+    await store.finish(SLUG, oldest.row.id, { status: "error", error: "the provider refused" }, oldest.attempt);
+    for (let i = 1; i < MAX_CRITERIA; i++) {
+      const { row, attempt } = await store.begin(SLUG, `criterion ${i}`, { kind: "single" }, undefined, at(i));
+      await store.finish(SLUG, row.id, { status: "done", results: [] }, attempt);
+    }
+    expect(await store.load(SLUG)).toHaveLength(MAX_CRITERIA);
+
+    // Retried: the same row, the same date, waiting again.
+    const retry = await store.begin(SLUG, "the one that failed", { kind: "single" }, oldest.row.id, at(100));
+    expect(retry.row.id).toBe(oldest.row.id);
+    expect(retry.row.createdAt).toBe(oldest.row.createdAt);
+
+    // And while it is out, one more criterion is begun.
+    await store.begin(SLUG, "one more", { kind: "single" }, undefined, at(101));
+
+    const kept = await store.load(SLUG);
+    expect(kept.find((c) => c.id === oldest.row.id)?.status).toBe("pending");
+    // The cap is twenty, plus however many older ones are still running.
+    expect(kept).toHaveLength(MAX_CRITERIA + 1);
+    // And the retry can still land its answer.
+    const landed = await store.finish(SLUG, oldest.row.id, { status: "done", results: [] }, retry.attempt);
+    expect(landed?.status).toBe("done");
+  });
+
   it("keeps a negative valence signed, byte for byte", async () => {
     /* The walk above already reaches this inside a whole-row snapshot. This test
        exists because that failure would read as "the retry's answer lost the
@@ -672,7 +710,8 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
 
     await take("nobody has asked this paper anything");
 
-    await take("begin a run", await store.begin(SLUG, now));
+    const first = await store.begin(SLUG, HASH, now);
+    await take("begin a run", first.run);
 
     /* `claimsOmitted: 0` and `start: 0` are both written as zeros on purpose:
        a `?? null` or a falsy check turns a truthful "none were cut off" into
@@ -701,7 +740,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
             discarded: 0,
           },
         ],
-      }),
+      }, first.attempt),
     );
 
     // A sweep over a finished run repairs nothing and answers what is there.
@@ -712,7 +751,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
        spinner is the one state a referee cannot interpret. So `claims`, `model`
        and `claimsOmitted` all have to go, and a store that merged instead of
        overwriting shows both. */
-    await take("begin a second run", await store.begin(SLUG, now));
+    await take("begin a second run", (await store.begin(SLUG, HASH, now)).run);
 
     // This process is running it: left alone, whatever its age.
     await take("sweep while this process is running it", await store.sweep(SLUG, true));
@@ -724,9 +763,13 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
     // A second sweep must not re-sweep what is already an error.
     await take("sweep it again", await store.sweep(SLUG, false));
 
+    /* A third run, because the second is the sweep's now: since 2026-10-03 a
+       `finish` lands only on the `pending` row its own `begin` wrote, so there
+       is no failing a run that has already been swept. */
+    const third = await store.begin(SLUG, HASH, now);
     await take(
       "fail a run outright",
-      await store.finish(SLUG, { status: "error", error: "the provider fell over" }),
+      await store.finish(SLUG, { status: "error", error: "the provider fell over" }, third.attempt),
     );
 
     return snapshots;
@@ -773,7 +816,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
        src/store/pg-referee-claims.ts on 2026-09-05 when the filesystem claims
        store that used to hold it was deleted; the import here is what says the
        sweep still writes the shared constant rather than a copy. */
-    await pgRefereeClaimsStore.begin(SLUG, clockFrom(staleStart()));
+    await pgRefereeClaimsStore.begin(SLUG, HASH, clockFrom(staleStart()));
     expect((await pgRefereeClaimsStore.sweep(SLUG, false))?.error).toBe(CLAIMS_SWEPT);
   });
 
@@ -795,7 +838,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
        filesystem one swept the moment anybody looked — and without it the past
        clock the claims script runs on is indistinguishable from an exclusion:
        the day the grace window is dropped, the walk above still passes. */
-    await pgRefereeClaimsStore.begin(SLUG);
+    await pgRefereeClaimsStore.begin(SLUG, HASH);
     const spared = await pgRefereeClaimsStore.sweep(SLUG, false);
     expect(
       spared?.status,

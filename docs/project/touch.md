@@ -753,6 +753,75 @@ device rather than for a finger, because the band's head is empty on a desktop t
 the case it exists for, and the general point is worth carrying: anything this app says only in a
 tooltip, it does not say on an iPad.**
 
+## A finger's selection gets a button
+
+> I tried highlighting a few words on my iPad and it didn't seem to work. It just flashed up the
+> usual iPad context menu.
+>
+> — Greg, 2026-10-03 (spya-ma5h9b)
+
+Selecting prose opens the comment box from `mouseup` (`TableView.tsx` § `onMouseUp`), and a
+long-press selection on iOS and iPadOS fires no `mouseup`. So on an iPad nothing of ours appeared.
+
+**Now a touch selection in the prose, once it has settled, shows one button just below it:
+"Highlight or comment".** Pressing it opens the same box on the same words, through the same
+`onSelect` a mouseup calls. The code is
+[`TouchSelectionChip.tsx`](../../src/web/TouchSelectionChip.tsx), mounted in `Reader.tsx` beside the
+boxes it opens; the tests are `tests/touch-selection-chip.test.tsx`.
+
+**Why a button, and not the box opening by itself.** A finger's selection has no "let go". The
+reader long-presses, then drags the two handles, and all iOS tells the page is that the selection
+changed. Opening the box when the selection first settles would open it on a word the reader was
+still extending. So we wait for the handles to stop, show the button, and leave the press to them.
+
+The rules it keeps:
+
+- **Touch only.** The last pointer that went down decides (`touch` or `pen`). A mouse selection
+  keeps its mouseup exactly as before and never sees the button; a hybrid machine gets whichever
+  input made the selection.
+- **Same floor, same clamp.** It reads the selection with the function mouseup uses, so a selection
+  under the floor shows nothing and one that runs into the next paragraph is clamped to the first
+  ([comments.md § Deliberate limits](comments.md#deliberate-limits)). The button sits at the end of
+  the *clamped* words, the ones that will be saved.
+- **Below the words**, because iOS puts its own callout above them. Clamped to the viewport, the
+  safe area and the bottom bar in CSS (`annotations.css` § `.touch-select-chip`). Hidden on scroll,
+  resize, a new touch, or the handles moving, and shown again when things settle. **Not shown at
+  all while the selected words are off screen**: the clamp would otherwise pin it to the screen
+  edge, beside words it has nothing to do with.
+- **The press is the finger lifting (`pointerup`), not the `click`.** The button prevents its
+  `pointerdown` so the selection survives, and Playwright's WebKit then delivers no `click` at all,
+  which made the button inert there (browser check and GPT Sol T2, 2026-10-03). `click` remains as
+  a fallback and cannot fire the action twice.
+- **It cannot open the box on stale words.** iOS may collapse the selection as the tap lands, so the
+  button outlives the selection by 300ms and remembers its words for that long. A press reads the
+  live selection first and uses the remembered words only inside that window, and only while their
+  paragraph is still in the document.
+- **Owners only**, decided where the owner is known. A visitor's selection is silent, as it is with
+  a mouse.
+- **It is not a dialog.** No focus, no Escape, no focus trap. It is not drawn while the Annotate,
+  Comment or Chat box is open.
+- **44px tall** at every pointer type, since only a finger ever draws it.
+
+**This was built against jsdom and emulation, not a physical iPad.** What that leaves unchecked:
+
+1. Whether the tap on the button really does collapse the selection first, and whether 300ms is
+   long enough when it does.
+2. Whether the button, a rem and a quarter below the last line, clears the lower selection handle
+   or sits where a thumb wants to grab it.
+3. Whether iOS ever puts its own callout *below* the selection (it does when there is no room
+   above), and what the two look like together.
+4. Whether `selectionchange` goes quiet for long enough between handle drags that the button
+   flickers in and out.
+5. An Apple Pencil, which should behave as a finger does.
+6. Android Chrome, which nobody has looked at. It has its own selection toolbar, also above.
+
+**One known limit, seen in emulation:** when the selected words are on the last visible line above
+the bottom bar, the clamp pushes the button up over those words. It hides them until the reader
+scrolls a little. Flipping it above the selection would put it under the iOS callout, so it is left.
+
+No colour dots and no copy button in it. The colours are in the box it opens; a copy button is a
+separate decision.
+
 ## What we deliberately did not build
 
 - **A setting.** Apple Books and Kindle both ship an explicit continuous-scroll / page-turn toggle,

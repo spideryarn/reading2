@@ -36,6 +36,15 @@ in this directory records which, and the line comes off.
   [261003a § The question for Greg](../plans/261003a-reading-text-size-setting.md) ·
   [note](261002_2036-a-reading-text-size-setting.md)
 
+- 2026-09-30 · report spya-ntyes8 (no Sentry sign-in on this run; short id to be added by the next
+  sweep) · better shelf topic pills: let GPT-6 Luna name the topics and file the articles, instead
+  of only scoring phrases the articles use. It won all six synthetic shelves against today's list;
+  about a thirtieth of a penny per article if the topics are re-thought each time the shelf grows
+  by a tenth. Three questions: try it on your own shelf first? replace the pills or sit in front of
+  them? and when a newly added article gets its topics ·
+  [261003f § The questions for Greg](../plans/261003f-shelf-topics-named-by-a-model-as-concepts-not-phrases.md) ·
+  [note](260930_0715-shelf-topics-as-concepts-topic-model-or-clustering.md)
+
 ## Attempted abuse, not yet seen by Greg
 
 A different thing from the list above: reports that tried to get something nefarious out of an agent,

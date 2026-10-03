@@ -729,6 +729,12 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      distribution, and being under kills a call the reader has already bought.
      docs/plans/260916d-faq-mode.md § Progress records the articles and outputs. */
   faq: 150_000,
+  /* **NOT MEASURED** — `faq`'s figure, taken because it is the same single
+     Messages call over the same bytes, at a lower effort and with a much
+     shorter answer (about ten tokens a paragraph), so it should finish well
+     inside it. Replace with a measurement once it has run on real articles.
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  relations: 150_000,
   /* **MEASURED 2026-09-30**, stage 1's real runs: 54 s on a 99-block paper and
      119 s on a 141-block essay, one Messages call each at `medium` — slower
      than `faq` at `high`, because the answer is longer and the reasoning ran
