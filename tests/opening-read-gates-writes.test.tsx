@@ -62,6 +62,7 @@ import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SavedCriterion } from "../src/saved-criteria.js";
+import type { AnnotateDraft } from "../src/web/AnnotateDialog.js";
 import type { Block, BlockId, Comment, SearchRun } from "../src/types.js";
 
 /** One reply per request, decided by the case that is running. */
@@ -110,7 +111,6 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { CriteriaBand } = await import("../src/web/CriteriaPanel.js");
 const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
 const { AnnotateDialog } = await import("../src/web/AnnotateDialog.js");
-const { NO_MARK } = await import("../src/web/PlaceOnCriterion.js");
 const { useComments } = await import("../src/web/useComments.js");
 const { OPENING_READ_DEADLINE_MS } = await import("../src/web/lib/opening-read.js");
 const { Dock } = await import("../src/web/Dock.js");
@@ -640,7 +640,7 @@ function CommentsHarness() {
         placing: false,
         loaded: comments.loaded,
         onCancel: () => setOpen(false),
-        onSave: (id: string, body: string, _ask: boolean, mark: typeof NO_MARK) => {
+        onSave: ({ id, body, mark }: AnnotateDraft) => {
           setOpen(false);
           void comments.create({
             id,
@@ -698,7 +698,7 @@ function DrawerHarness() {
         placing: false,
         loaded: comments.loaded,
         onCancel: () => setOpen(false),
-        onSave: (id: string, body: string, _ask: boolean, mark: typeof NO_MARK) => {
+        onSave: ({ id, body, mark }: AnnotateDraft) => {
           setOpen(false);
           /* Open the drawer only after the dialog closes. Keeping it open
              underneath the dialog lets jsdom click through a scrim that a

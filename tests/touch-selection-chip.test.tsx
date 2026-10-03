@@ -36,7 +36,7 @@ vi.mock("../src/web/Tooltip.js", () => ({
   ControlTip: () => null,
 }));
 
-import { AnnotateDialog } from "../src/web/AnnotateDialog.js";
+import { AnnotateDialog, annotateKey } from "../src/web/AnnotateDialog.js";
 import { TableView } from "../src/web/TableView.js";
 import { GRACE_MS, SETTLE_MS, TouchSelectionChip } from "../src/web/TouchSelectionChip.js";
 import { buildGeometry } from "../src/web/tree.js";
@@ -108,6 +108,7 @@ function Harness({ article, owner }: { article: Article; owner: boolean }) {
     owner &&
       annotating &&
       createElement(AnnotateDialog, {
+        key: annotateKey(annotating),
         anchor: annotating,
         placing: false,
         loaded: true,

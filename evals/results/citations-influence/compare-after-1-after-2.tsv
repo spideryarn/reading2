@@ -1,0 +1,214 @@
+
+== antikythera-mechanism-spya-zhxrzm ==
+a after-1: citations/6 prompt 450899eddefa claude-sonnet-5 2026-10-03T19:25:56.355Z
+b after-2: citations/6 prompt 450899eddefa claude-sonnet-5 2026-10-03T19:25:08.505Z
+set	rows	with number	without	<=0.15	0.0	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9+
+a	77	39	38	0	0	0	2	6	12	9	4	1	2	3
+b	74	28	46	0	0	0	3	6	2	8	4	1	2	2
+paired 57 (57 by title, 0 by first author and year); only in a 20; only in b 17; both numbers 24, mean |a-b| 0.063, max 0.20; number in a, unknown in b 4; unknown in a, number in b 1
+infl a	infl b	in	year	authors	title
+1.00	0.90	both	2006	Freeth, Bitsakis, Moussas, Seiradakis, et al.	Decoding the ancient Greek astronomical calculator known as the Antikythera Mechanism
+0.90	0.90	both	1974	Price	Gears from the Greeks. The Antikythera Mechanism: A Calendar Computer from ca. 80 B.C.
+0.90	-	a only	1998	Ptolemy	Ptolemy's Almagest
+0.80	0.80	both	2012	Freeth, Jones	The Cosmos in the Antikythera Mechanism
+0.80	0.80	both	2008	Freeth, Jones, Steele, Bitsakis	Calendars with Olympiad display and eclipse prediction on the Antikythera Mechanism
+-	0.70	b only	54–51 BC	Cicero	De re publica
+0.70	-	a only		Cicero	De Re Publica, Liber Primus
+0.60	0.60	both	2017	Jones	A Portable Cosmos: Revealing the Antikythera Mechanism, Scientific Wonder of the Ancient World
+0.60	0.60	both	2021	Freeth, Higgon, Dacanalis, MacDonald, Georgakopoulou, Wojcik	A Model of the Cosmos in the ancient Greek Antikythera Mechanism
+0.60	0.50	both	2000	Needham	Science and Civilisation in China
+0.60	-	a only	1959	Price	An Ancient Greek Computer
+0.50	0.60	both	2007	Wright	The Antikythera Mechanism reconsidered
+0.50	0.60	both	2010	Evans, Carman, Thorndyke	Solar anomaly and planetary displays in the Antikythera Mechanism
+0.50	0.50	both	1950	Parker	The Calendars of Ancient Egypt
+0.50	0.50	both	2005	Wright	The Antikythera Mechanism: a new gearing scheme
+-	0.50	b only		Cicero	De Natura Deorum
+0.50	0.30	both	2009	Freeth	Decoding an Ancient Computer
+0.50	0.30	both	2011	Edmunds, Freeth	Using Computation to Decode the First Known Computer
+0.50	-	a only	2016	Anastasiou, Bitsakis, Jones, Moussas, Tselikas, Zafeiropoulou	The Inscriptions of the Antikythera Mechanism
+0.50	-	a only	2007	Netz, Noel	The Archimedes Codex
+0.50	-	a only		Cicero	De Natura Deorum II.88
+0.40	0.50	both	2017	Iversen	The Calendar on the Antikythera Mechanism and the Corinthian Family of Calendars
+0.40	0.50	both	2014	Carman, Evans	On the epoch of the Antikythera mechanism and its eclipse predictor
+0.40	0.50	both	2006	Wright	The Antikythera Mechanism and the early history of the moon phase display
+0.40	0.50	both	2012	Carman, Thorndyke, Evans	On the Pin-and-Slot Device of the Antikythera Mechanism, with a New Application to the Superior Planets
+0.40	0.40	both	2020	Budiselic et al.	Antikythera mechanism: Evidence of a lunar calendar
+0.40	0.40	both	2011	Edmunds	An Initial Assessment of the Accuracy of the Gear Trains in the Antikythera Mechanism
+0.40	0.30	both	2006	Marchant	Decoding the Heavens
+0.40	0.30	both	2024	Woan, Bayley	An improved calendar ring hole-count for the Antikythera mechanism
+0.40	unknown	both	2006	Marchant	In search of lost time
+0.40	-	a only	1991	Jones	The adaptation of Babylonian methods in Greek numerical astronomy
+0.40	-	a only	2004	Russo	The Forgotten Revolution: How Science Was Born in 300 BC and Why It Had To Be Reborn
+0.40	-	a only	1965	Weinberg, Grace, Edwards, Robinson, et al.	The Antikythera Shipwreck Reconsidered
+0.30	0.30	both	1985	Maddison	Early mathematical wheelwork: Byzantine calendrical gearing
+-	0.30	b only	2013	Bitsakis, Jones	The Inscriptions of the Antikythera Mechanism 3: The Front Dial and Parapegma Inscriptions
+0.30	0.20	both	2024	Malin, Dickens	How Many Days in an Egyptian Year? Evidence from the Antikythera Mechanism
+0.30	unknown	both	2013	Freeth	Building the Cosmos in the Antikythera Mechanism
+0.30	unknown	both	1981	Sleeswyk	Vitruvius' odometer
+0.30	-	a only	2013	Efstathiou, Basiakoulis, Efstathiou, Anastasiou, Boutbaras, Seiradakis	The Reconstruction of the Antikythera Mechanism
+0.30	-	a only	2012	Efstathiou, Basiakoulis, Efstathiou, Anastasiou, Seiradakis	Determination of the gears geometrical parameters necessary for the construction of an operational model of the…
+0.20	0.20	both	2022	Voularis, Mouratidis, Vossinakis	The Initial Calibration Date of the Antikythera Mechanism after the Saros spiral mechanical Apokatastasis
+unknown	0.20	both	2011	Moussas	Antikythera Mechanism, PINAX
+0.20	unknown	both	2018	Voulgaris, Mouratidis, Vossinakis	Conclusions from the Functional Reconstruction of the Antikythera Mechanism
+unknown	unknown	both	2014	Markoff	On the Trail of an Ancient Mystery – Solving the Riddles of an Early Astronomical Calculator
+unknown	unknown	both	2022	Ouellette	Researchers home in on possible "day zero" for Antikythera mechanism
+unknown	unknown	both	2025	Wilkins	Ancient computer's gears may not have been able to turn
+unknown	unknown	both	2019	Voulgaris et al.	Simulation and Analysis of Natural Seawater Chemical Reactions on the Antikythera Mechanism
+unknown	unknown	both			Albert Rehm zum Gedächtnis
+unknown	unknown	both	2018	Jones	'Like Opening a Pyramid and Finding an Atomic Bomb': Derek de Solla Price and the Antikythera Mechanism
+unknown	unknown	both	2006	Haughton	Hidden History: Lost Civilizations, Secret Knowledge, and Ancient Mysteries
+unknown	unknown	both	2018	Bohstrom	Missing Piece of Antikythera Mechanism Found on Aegean Seabed
+unknown	unknown	both	2018	Daley	No, Archaeologists Probably Did Not Find a New Piece of the Antikythera Mechanism
+unknown	unknown	both	2005	Angelakis	Quantum Information Processing: From Theory to Experiment
+unknown	unknown	both	2007	Allen	Were there others? The Antikythera Mechanism Research Project
+unknown	unknown	both	2011		The Antikythera Mechanism
+unknown	unknown	both			Antikythera Mechanism Research Project
+unknown	unknown	both			Pergamum
+unknown	unknown	both	2019	Kampouris	Important New Discoveries from Greece's Ancient Antikythera Shipwreck
+unknown	unknown	both	2019		The new findings from the underwater archaeological research at the Antikythera Shipwreck
+unknown	unknown	both	2018	Moussas	Antikythera Mechanism the oldest computer
+unknown	unknown	both	2008	Wilford	Discovering how Greeks computed in 100 B.C.
+unknown	unknown	both	2008	Connor	Ancient Device Was Used To Predict Olympic Games
+unknown	unknown	both	2008		Olympic link to early 'computer'
+unknown	unknown	both	2007		Does it favour a Heliocentric, or Geocentric Universe?
+unknown	unknown	both	2021	Freeth	The Antikythera Cosmos (video)
+unknown	unknown	both	2025	Szigety, Arenas	The Impact of Triangular-Toothed Gears on the Functionality of the Antikythera Mechanism
+unknown	unknown	both		Rorres	Archimedes: Spheres and Planetaria (Introduction)
+unknown	unknown	both	2006	Fildes	Ancient Moon 'computer' revisited
+unknown	unknown	both	1970	Hoepfner	Ein Kombinationsschloss aus dem Kerameikos
+unknown	unknown	both	2006	Charette	Archaeology: high tech from Ancient Greece
+unknown	unknown	both			The Song Dynasty in China
+unknown	-	a only	2007	Pinotsis	The Antikythera mechanism: who was its creator and what was its use and purpose?
+unknown	-	a only	2016	Sample	Mysteries of computer from 65 BC are solved
+unknown	-	a only			Dimitrios Kontos
+unknown	-	a only			History
+unknown	-	a only			The Cosmos on the front of the Antikythera Mechanism
+unknown	-	a only			P.Wash.Univ.inv. 181+221 (Astrologer's Board papyrus)
+unknown	-	a only	2021		Antikythera Mechanism SOLVED !
+unknown	-	a only	2011	Pickover	The Physics Book
+unknown	-	a only	1997	Rice	The Antikythera Mechanism: Physical and Intellectual Salvage from the 1st Century B.C.
+-	unknown	b only			Exhibitions
+-	unknown	b only			The Antikythera Shipwreck: the Ship, the Treasures, the Mechanism
+-	unknown	b only			The Museum
+-	unknown	b only			Kotsanas Museum of Ancient Greek Technology
+-	unknown	b only	2023	Giannopoulos	Western Australian Museum exhibits full scale replica of Antikythera Mechanism by Greek Australian engineer
+-	unknown	b only	2011		Naked Science – Star Clock BC (TV Episode)
+-	unknown	b only			The World's First Computer
+-	unknown	b only			BBC Four - The Two-Thousand-Year-Old Computer
+-	unknown	b only			Ancient Computer
+-	unknown	b only	2010	Pavlus	Small Mammal, Behind the Scenes: Lego Antikythera Mechanism
+-	unknown	b only	2017	Smith	What is the Antikythera mechanism? Google Doodle marks discovery of ancient Greek computer
+-	unknown	b only			'Indiana Jones And The Dial Of Destiny': Cannes Review
+-	unknown	b only	2023	Barker	Indiana Jones & The Dial of Destiny's Time Travel Explained
+-	unknown	b only			Nightwish – The Antikythera Mechanism (Orchestral Version) Lyrics
+
+== scaling-hypothesis ==
+a after-1: citations/6 prompt 450899eddefa claude-sonnet-5 2026-10-03T19:30:14.910Z
+b after-2: citations/6 prompt 450899eddefa claude-sonnet-5 2026-10-03T19:26:10.381Z
+set	rows	with number	without	<=0.15	0.0	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9+
+a	76	35	41	0	0	0	1	4	3	13	5	1	3	5
+b	25	14	11	0	0	0	0	3	1	3	3	1	0	3
+paired 25 (4 by title, 21 by first author and year); only in a 51; only in b 0; both numbers 8, mean |a-b| 0.112, max 0.30; number in a, unknown in b 2; unknown in a, number in b 6
+infl a	infl b	in	year	authors	title
+1.00	1.00	both (author-year; b: Language Models are Few-Shot Learners (GPT-3 paper))	2020	Brown et al.	Language Models are Few-Shot Learners
+1.00	-	a only			AlphaGo Zero
+1.00	-	a only			AlphaZero
+0.90	0.90	both	2020	Kaplan et al.	Scaling Laws for Neural Language Models
+0.90	-	a only			MuZero
+0.80	0.90	both (author-year; b: Prediction and Entropy of Printed English)	1951	Shannon	Shannon 1951 (entropy of English)
+0.80	-	a only			T5
+0.80	-	a only			StyleGAN
+0.70	-	a only			EfficientNet
+0.60	-	a only			WinoGrande
+0.60	-	a only	2018	Amodei et al.	AI and Compute
+0.60	-	a only			OpenAI Five
+0.60	-	a only			BigGAN
+0.60	-	a only		Feynman	Richard Feynman's Challenger disaster appendix
+0.50	0.60	both		Wiener	The Human Use of Human Beings
+0.50	0.60	both		Chiang	Story of Your Life
+0.50	0.60	both (author-year; b: When Will Computer Hardware Match the Human Brain?)	1998	Moravec	Moravec's forecasts of AI hardware progress
+unknown	0.50	both	1963	Anscombe	An Introduction to Wittgenstein's Tractatus
+unknown	0.50	both (author-year; b: One Billion Word Benchmark for Measuring Progress in Statistical Language Modeling)	2013	Chelba et al.	Chelba et al 2013 (One Billion Word Benchmark)
+0.50	-	a only			Jukebox
+0.50	-	a only			Turing-NLG
+0.50	-	a only			MegatronLM
+0.50	-	a only			Dactyl
+0.50	-	a only			BiT (Big Transfer)
+0.50	-	a only			ResNeXt
+0.50	-	a only			Noisy Student
+0.50	-	a only			Agent57
+0.50	-	a only			SayCan
+0.50	-	a only			LaMDA
+0.40	0.70	both (author-year; b: Natural Language Processing (Almost) from Scratch)	2011	Collobert et al.	Collobert et al 2011
+unknown	0.40	both (author-year; b: Scaling Laws for Transfer (compute-efficiency halving))	2020	Hernandez, Brown	Hernandez & Brown 2020
+0.40	-	a only			Meena
+0.40	-	a only			Procgen/CoinRun
+0.30	0.50	both (author-year; b: Deep Learning Scaling is Predictable, Empirically)	2017	Hestness et al.	Hestness et al 2017
+unknown	0.30	both (author-year; b: Scaling to Very Very Large Corpora for Natural Language Disambiguation)	2001	Banko, Brill	Banko & Brill 2001
+unknown	0.30	both (author-year; b: Large Language Models in Machine Translation)	2007	Brants et al.	Brants et al 2007
+unknown	0.30	both (author-year; b: Six Challenges for Neural Machine Translation)	2017	Koehn, Knowles	Koehn & Knowles 2017
+0.30	unknown	both (author-year; b: The Entropy of English Using PPM-based Models)	1996	Teahan, Cleary	Teahan & Cleary 1996
+0.30	-	a only			CTRL
+0.30	-	a only			GPipe
+0.20	unknown	both (author-year; b: A Practical Guide to Sentiment Analysis (envisioned NLP eras figure))	2014	Cambria, White	Cambria & White 2014
+unknown	unknown	both (author-year; b: Benchmarking scaling laws from literature-reported numbers)	2020	Thompson et al.	Thompson et al 2020
+unknown	unknown	both (author-year; b: Measuring Systematic Generalization/Massive Multitask Language Understanding)	2020	Hendrycks et al.	Hendrycks et al 2020
+unknown	unknown	both (author-year; b: Linguistic bias study of language models with scale)	2020	Warstadt et al.	Warstadt et al 2020
+unknown	unknown	both (author-year; b: Very Deep VAEs (deep variational autoencoders))	2020	Child	Child 2020
+unknown	unknown	both (author-year; b: NVAE: A Deep Hierarchical Variational Autoencoder)	2020	Vahdat, Kautz	Vahdat & Kautz 2020
+unknown	unknown	both (author-year; b: On Robustness and Transferability of Convolutional Neural Networks (BiT robustness study))	2020	Dojolonga et al.	Dojolonga et al 2020
+unknown	unknown	both (author-year; b: Soft-Robust Algorithms for Handling Model Misspecification (lottery-ticket/ensemble framing))	2020	Orseau et al.	Orseau et al 2020
+unknown	unknown	both (author-year; b: The Transition Between Overparametrization and Overfitting (double descent framing))	2021	Viering, Loog	Viering & Loog 2021
+unknown	unknown	both (author-year; b: The Quiet Enemy (The Legacy of Hiroshima))	1962	Teller	The Quiet Enemy (from The Legacy of Hiroshima)
+unknown	-	a only	2016	Santoro et al.	Santoro et al 2016
+unknown	-	a only	2018	Wang et al.	Wang et al 2018
+unknown	-	a only	2019	Botvinick et al.	Botvinick et al 2019a
+unknown	-	a only	2019	Clune	Clune 2019
+unknown	-	a only		Schmidhuber	Schmidhuber 2015/2018
+unknown	-	a only		Weng	Weng 2018/Weng 2019
+unknown	-	a only		Wilde	The Picture of Dorian Gray
+unknown	-	a only	2019	LeCun	LeCun 2019
+unknown	-	a only	2020	Schrimpf et al.	Schrimpf et al 2020
+unknown	-	a only	2019	Hill et al.	Hill et al 2019
+unknown	-	a only	2017	Chaplot et al.	Chaplot et al 2017
+unknown	-	a only	2018	Yu et al.	Yu et al 2018
+unknown	-	a only	2019	Lake	Lake 2019
+unknown	-	a only	2020	Interactive Agents Group	Interactive Agents Group 2020
+unknown	-	a only			MetaMimic
+unknown	-	a only			DD-PPO
+unknown	-	a only			ViLBERT/VideoBERT
+unknown	-	a only			The Brain as a Universal Learning Machine
+unknown	-	a only		Sutskever	Ilya Sutskever's public comments on scaling
+unknown	-	a only		Zaremba	Wojciech Zaremba's comments on OpenAI Five (transcript)
+unknown	-	a only			GShard
+unknown	-	a only			DynamicEmbedding
+unknown	-	a only	1999	Gray	Jim Gray's 1999 remarks on neural network hardware
+unknown	-	a only		Norvig	Peter Norvig's account of early neural net experiments
+unknown	-	a only		Dean	Jeff Dean's remarks on the compute slowdown
+unknown	-	a only			Adept
+
+== openai-huggingface ==
+a after-1: citations/6 prompt 450899eddefa claude-sonnet-5 2026-10-03T19:30:26.598Z
+b after-2: citations/6 prompt 450899eddefa claude-sonnet-5 2026-10-03T19:26:22.750Z
+set	rows	with number	without	<=0.15	0.0	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9+
+a	6	0	6	0	0	0	0	0	0	0	0	0	0	0
+b	6	0	6	0	0	0	0	0	0	0	0	0	0	0
+paired 1 (1 by title, 0 by first author and year); only in a 5; only in b 5; both numbers 0, mean |a-b| NaN, max -; number in a, unknown in b 0; unknown in a, number in b 0
+infl a	infl b	in	year	authors	title
+unknown	unknown	both		Hugging Face	Hugging Face's technical timeline of the attack
+unknown	-	a only		OpenAI	OpenAI's report on the incident
+unknown	-	a only		METR, Redwood Research	METR/Redwood Research report on the incident
+unknown	-	a only			ExploitGym paper
+unknown	-	a only		Dwarkesh Patel, Ryan Greenblatt	Interview with Ryan Greenblatt
+unknown	-	a only		Ajeya Cotra	Blog post with takeaways on the incident
+-	unknown	b only			OpenAI incident report on the agent civilization episode
+-	unknown	b only			METR and Redwood Research investigation report on the Hugging Face hack
+-	unknown	b only			ExploitGym benchmark paper
+-	unknown	b only		Patel, Greenblatt	Dwarkesh Podcast interview with Ryan Greenblatt
+-	unknown	b only		Cotra	Blog post with takeaways on the AI civilization incident
+
+== ALL (3 articles) ==
+set	rows	with number	without	<=0.15	0.0	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9+
+a after-1	159	74	85	0	0	0	3	10	15	22	9	2	5	8
+b after-2	105	42	63	0	0	0	3	9	3	11	7	2	2	5
+paired 83 (62 by title, 21 by first author and year); only in a 76; only in b 22; both numbers 32, mean |a-b| 0.075, differ by >=0.2: 4; number in a, unknown in b 6; unknown in a, number in b 7; unknown in both 38

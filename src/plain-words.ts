@@ -108,6 +108,8 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
     "copies a paper's title, authors, abstract and DOI off its first pages exactly as printed",
   "src/citation-paper-passages.ts":
     "copies up to three passages from a paper verbatim and picks one of three words for each; the code stores the paper's characters, not the model's",
+  "src/citation-influence.ts":
+    "writes a number, the number of a page, and words copied from that page verbatim; the code stores the page's characters, not the model's",
   "src/crossrefs.ts":
     "writes two block ids and a phrase copied from the article, and the code stores the article's characters, not the model's",
   "src/relations.ts":

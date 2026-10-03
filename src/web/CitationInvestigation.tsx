@@ -63,8 +63,8 @@ export const INVESTIGATE_SEARCHING = "Searching the web…";
 /** While the press looks for the work's own page (plan 260930d). */
 export const INVESTIGATE_FINDING = "Finding the work…";
 
-/** While the press reads the paper itself and picks its passages (plan 261001a stage 3). */
-export const INVESTIGATE_READING_PAPER = "Reading the paper itself, if we can get it…";
+/** While the press reads the paper itself and picks its passages (plan 261001a stage 3) and, beside that, looks on the search's pages for the work's influence (plan 261003m stage 2). */
+export const INVESTIGATE_READING_PAPER = "Reading the paper itself, if we can get it, and looking for how well known it is…";
 
 /** Under the button until the first words land. The words are the progress after that. */
 export const INVESTIGATE_WAIT =

@@ -112,6 +112,10 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/relative-time.ts` § `timeAgo` / `relativeAgo`, with `src/web/useNow.ts` § `useNow`** —
   "3 days ago" that stays true while the page is open. `src/web/Metadata.tsx` § `ago` is an older
   private copy with neither the switch to a date nor the clock.
+- **`src/web/stale-shell.ts` § `reloadIfStale`** — code fetched on demand that did not arrive: asks
+  `/build.json` whether a newer build is live and reloads once if so, because a copy opened from a
+  home-screen icon outlives every deploy. `src/web/LazyPage.tsx` is its one caller; `src/web/maths.ts`
+  fetches on demand without it.
 - **`src/web/Tooltip.tsx` § `Tooltip`, `ControlTip`, `TipNote`** — any tip or card on a control
   ([tooltips.md](tooltips.md)); `src/web/useHoverCard.ts` for a card on the prose.
 - **`src/web/voice.ts` § `voiceClass`, `withVoice`** — text whose voice depends on the data (the
@@ -122,8 +126,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   passing confirmation.
 - **`src/web/PageSection.tsx` § `Section`, `sectionId`** — one section of a page of cards: the
   small-caps heading, `collapsible` (which starts it shut), `keepMounted`, and the `data-section`
-  and `keywords` that `src/web/PageContents.tsx` builds a contents list and its search from.
-  Metadata and `/profile` use it ([reader-profile.md § The page's six sections](reader-profile.md#the-pages-six-sections)).
+  and `keywords` that `src/web/PageContents.tsx` § `PageContents` builds a contents list and its
+  search from. A page that mounts the list puts `CONTENTS_MARGIN` (same file) on its `<main>`.
+  Metadata and `/profile` use both ([reader-profile.md § The page's six sections](reader-profile.md#the-pages-six-sections)).
 - **`src/web/OrderGroup.tsx` § `OrderGroup`** — a band's row of order buttons, as the named group;
   on a touch screen it is one line that scrolls sideways and keeps the pressed order in view
   (glossary.css § a touch screen). Quotes, Citations, Glossary, Debate and FAQ use it.

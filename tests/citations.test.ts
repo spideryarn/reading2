@@ -64,6 +64,7 @@ import {
   systemPrompt,
 } from "../src/citations.js";
 import { plainWords } from "../src/plain-words.js";
+import { validateAnthropicJsonSchema, validateOpenAiJsonSchema } from "../src/messages-structured-output.js";
 import { type NumberedReferenceList, referenceListFrom } from "../src/citation-reference-list.js";
 import type { Block, Tree } from "../src/types.js";
 import { replayGuard } from "../evals/citations-say-less.js";
@@ -649,8 +650,113 @@ describe("scores the prompt required and did not get", () => {
       [body],
     );
     expect(rows).toHaveLength(3);
-    expect(scores).toEqual({ relevanceAbsent: 1, relevanceRejected: 2, influenceAbsent: 0, influenceRejected: 1 });
+    expect(scores).toEqual({
+      relevanceAbsent: 1,
+      relevanceRejected: 2,
+      influenceAbsent: 0,
+      influenceRejected: 1,
+      influenceUnknown: 0,
+    });
     expect(rows.find((r) => r.title === "Jones")?.relevance).toBeUndefined();
+  });
+});
+
+/* Plan 261003m stage 1. Greg, 2026-10-03: "Maybe if the model is confident
+   (e.g. because it's well-known), but if in doubt default to Unknown." */
+describe("influence: a number when the model is confident, null when it is not", () => {
+  const body = block("spya-body07", "Smith (2019) and Jones (2020) and Lee (2021) and Park (2022).");
+  const at = (quote: string) => ({ mentions: [{ block: body.id, quote }] });
+
+  it("null is unknown: absent on the row, and counted apart from left-out and out-of-range", () => {
+    const { rows, scores } = build(
+      [
+        { title: "Smith", why: "a", relevance: 0.6, influence: null, ...at("Smith (2019)") },
+        { title: "Jones", why: "b", relevance: 0.6, influence: 0.9, ...at("Jones (2020)") },
+        { title: "Lee", why: "c", relevance: 0.6, influence: 1.5, ...at("Lee (2021)") },
+        { title: "Park", why: "d", relevance: 0.6, ...at("Park (2022)") },
+      ],
+      [body],
+    );
+    expect(rows).toHaveLength(4);
+    const smith = rows.find((r) => r.title === "Smith")!;
+    expect("influence" in smith, "unknown is an absent field, not a stored null or zero").toBe(false);
+    expect(smith.relevance).toBe(0.6);
+    expect(rows.find((r) => r.title === "Jones")?.influence).toBe(0.9);
+    expect("influence" in rows.find((r) => r.title === "Lee")!).toBe(false);
+    expect(scores).toEqual({
+      relevanceAbsent: 0,
+      relevanceRejected: 0,
+      influenceAbsent: 1,
+      influenceRejected: 1,
+      influenceUnknown: 1,
+    });
+  });
+
+  it("a null relevance is still a rejected score: only influence may be unknown", () => {
+    const { scores } = build(
+      [{ title: "Smith", why: "a", relevance: null, influence: null, ...at("Smith (2019)") }],
+      [body],
+    );
+    expect(scores.relevanceRejected).toBe(1);
+    expect(scores.influenceUnknown).toBe(1);
+    expect(scores.influenceRejected).toBe(0);
+  });
+
+  it("zero is a number the model gave, not unknown", () => {
+    const { rows, scores } = build(
+      [{ title: "Smith", why: "a", relevance: 0.6, influence: 0, ...at("Smith (2019)") }],
+      [body],
+    );
+    expect(rows[0]?.influence).toBe(0);
+    expect(scores.influenceUnknown).toBe(0);
+  });
+
+  it("two drafts of one work fold to the known influence, whichever comes first", () => {
+    for (const order of [
+      [null, 0.7],
+      [0.7, null],
+    ] as const) {
+      const { rows, scores } = build(
+        order.map((influence, i) => ({
+          title: "Smith on memory",
+          authors: "Smith",
+          year: "2019",
+          why: "a",
+          relevance: 0.6,
+          influence,
+          ...at(i === 0 ? "Smith (2019)" : "Smith"),
+        })),
+        [body],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.influence).toBe(0.7);
+      expect(scores.influenceUnknown).toBe(1);
+    }
+  });
+});
+
+describe("the list's answer schema", () => {
+  const work = CITATIONS_OUTPUT_SCHEMA.properties.works.items;
+
+  it("requires influence on every row, as a number or null", () => {
+    expect(work.required).toContain("influence");
+    expect(work.required).toContain("relevance");
+    expect(work.properties.influence).toEqual({ type: ["number", "null"] });
+    expect(work.properties.relevance, "relevance is never unknown").toEqual({ type: "number" });
+  });
+
+  it("passes Anthropic's validator whole, and the required-nullable field passes OpenAI's stricter one", () => {
+    expect(() => validateAnthropicJsonSchema(CITATIONS_OUTPUT_SCHEMA)).not.toThrow();
+    /* The list schema has optional fields (authors, year, …) and goes on the
+       Messages wire, so only the new field's shape is put to the chat subset. */
+    expect(() =>
+      validateOpenAiJsonSchema({
+        type: "object",
+        properties: { influence: work.properties.influence },
+        required: ["influence"],
+        additionalProperties: false,
+      }),
+    ).not.toThrow();
   });
 });
 
@@ -779,6 +885,20 @@ describe("generateCitations", () => {
 });
 
 describe("the prompt", () => {
+  it("is citations/6, and asks for influence only when the model is confident it knows the work", () => {
+    expect(PROMPT_VERSION).toBe("citations/6");
+    const said = systemPrompt().replace(/\s+/g, " ");
+    expect(said).toMatch(/"influence"[^.]*\bnull\b/);
+    expect(said).toMatch(/in doubt[^.]*null/i);
+    /* citations/5's instruction, which made "I do not know it" and "it is
+       obscure" the same number. */
+    expect(said).not.toMatch(/say so with a low number/i);
+    expect(said).not.toMatch(/or you do not know it/i);
+    expect(said).not.toMatch(/Both scores are required/i);
+    /* The example must not teach a number for it: 0.0 was the old placeholder. */
+    expect(said).toMatch(/"influence": null/);
+  });
+
   it("carries the shared plain-words rule, and forbids addresses", () => {
     expect(systemPrompt()).toContain(plainWords("explain"));
     expect(systemPrompt()).toMatch(/Never write a URL, a DOI/);

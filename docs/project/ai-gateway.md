@@ -120,7 +120,7 @@ like**. Only the first collapsed.
 | | speaks | used by | code |
 |---|---|---|---|
 | **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — every `Task` whose `TASK_WIRE` entry is `"messages"`, which `PIPELINE_TASKS` reads off ([`src/models.ts`](../../src/models.ts)) | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, Citations' *Look it up* and *Dig deeper* ([citations.md](citations.md)), *Dig deeper*'s forced search on all three (`dig-deeper-search`) and the glossary's and a comment's answer (`dig-deeper`, [glossary.md](glossary.md#digging-deeper-into-a-term)) — Citations' answer is `citation-investigate`, with `citations-find` and `citation-paper-passages` when needed — quiz marking and **the quiz's hidden verdict** ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)), the referee runs, PDF reading, and two pipeline steps (`debate`, and the PDF's front matter) — plus jobs with no reader waiting, such as **`shelf-topics`** ([shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement)) and `env-proposal` ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)). Examples, not the list: `AI_JOB_WIRE` in [`src/models.ts`](../../src/models.ts) is the list | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, Citations' *Look it up* and *Dig deeper* ([citations.md](citations.md)), *Dig deeper*'s forced search on all three (`dig-deeper-search`) and the glossary's and a comment's answer (`dig-deeper`, [glossary.md](glossary.md#digging-deeper-into-a-term)) — Citations' answer is `citation-investigate`, with `citations-find`, `citation-paper-passages` and `citation-influence` when needed — quiz marking and **the quiz's hidden verdict** ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)), the referee runs, PDF reading, and two pipeline steps (`debate`, and the PDF's front matter) — plus jobs with no reader waiting, such as **`shelf-topics`** ([shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement)) and `env-proposal` ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)). Examples, not the list: `AI_JOB_WIRE` in [`src/models.ts`](../../src/models.ts) is the list | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **images** | `/api/v1/images` — `data: [{b64_json}]`, no `choices` anywhere in it | the Illustrated diagram sub-mode | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **transcription** | `/api/v1/audio/transcriptions` — a base64 recording in, `{text}` out, and a `usage` counting **seconds rather than tokens** | dictation, since 2026-09-07 | [`src/ai-call.ts`](../../src/ai-call.ts) |
@@ -768,6 +768,32 @@ The guard those tails ask is one function now, [`isMain`](../../src/is-main.ts),
 nine spellings that were in the tree — three of which were wrong, in both directions.
 [`tests/is-main.test.ts`](../../tests/is-main.test.ts) runs the same table of inputs against the
 real one and against all three broken ones, and says which rows each broken one gets wrong.
+
+### A transport blip is retried, and every attempt is a row <a id="transport-retry"></a>
+
+Since 2026-10-03, on the Messages wire only. `streamMessage` gives a call up to three goes when an
+attempt **fails before the response has begun** (no `message_start`): the connection failed or
+timed out, a `200` opened with a transient `error` event (overloaded, timeout, API error, or no
+type at all), or the status was one of 408, 409, 500, 502, 503, 504, 529. It waits about half a
+second, then about a second and a half, and a Stop during the wait ends the call at once. Any other
+status is a verdict on the request and is not sent again. **A 429 is not retried here**: a rate
+limit is a queue, and `src/structure-deepen.ts` already answers one with `Retry-After` and a shared
+width gate. Once the response has begun nothing is retried, because listeners have heard it.
+
+`message_start` is the line because nothing has been shown before it. It is not proof nothing was
+billed: a connection can drop after the provider took the work, so the failed attempt's row is
+*unpriced*, and a retry accepts that it may pay twice for the first moment of a call.
+`MeteredCall.attempts()` is how a caller that publishes its own request count (Simple, Labels)
+stays in step with the ledger.
+
+**Each attempt is its own `SpendRecord`**, so a call that blipped once is two rows, `error` then
+`ok`, and `aiCalls` on the step's log line reads 2. The SDK's own retry stays off
+(`maxRetries: 0`), because it would put three attempts behind one row.
+
+It exists because of one import: the Arc call's connection failed 595 ms into a cold-started
+function, nothing retried, and the job failed —
+[261003m](../plans/261003m-a-transport-blip-fails-an-import-one-countable-retry-on-the-messages-wire.md).
+The other wires are not covered; `src/pdf-read.ts` has its own loop of the same shape.
 
 ### Aborted is a cause, not a coincidence
 

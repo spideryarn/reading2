@@ -54,7 +54,13 @@ export interface BuildStamp {
    * the deployment that produced it.
    */
   deploymentId: string | null;
-  /** ISO 8601. Informational only; never asserted against anything. */
+  /**
+   * ISO 8601. No deploy check asserts it, but since 2026-10-03 the running
+   * client compares it, with `commit`, against `/build.json` to tell whether a
+   * different build is live — src/web/stale-shell.ts § `buildIdentity`. So the
+   * value compiled into the bundle and the one in `build.json` must stay the
+   * same string from the same stamp.
+   */
   builtAt: string;
   /** Where `commit` came from, so a surprising value is diagnosable. */
   source: "SPIDERYARN_BUILD_COMMIT" | "VERCEL_GIT_COMMIT_SHA" | "git" | "unknown";

@@ -54,6 +54,26 @@ describe("anthropicCallFailed", () => {
     expect(out.status).toBeUndefined();
     expect(out.message).not.toContain("ENOTFOUND");
     expect(out.message).toMatch(/\[ai-upstream\]/);
+    /* Plan 261003m: the diagnostic said "status 503" here until 2026-10-03, a
+       number no server sent, and a dropped connection read as an outage. */
+    expect(out.message).not.toContain("503");
+    expect(out.message).toContain("the connection failed");
+  });
+
+  it("says which status-less failure it was, in our words and never the SDK's", () => {
+    // A `200` whose stream carried an `error` event: the SDK throws a bare
+    // `APIError` with no status and the provider's body as its message.
+    const event = new APIError(undefined, { error: { message: "ARTICLE_SENTINEL" } }, undefined, new Headers());
+    const out = anthropicCallFailed(event);
+    expect(out.message).toContain("the response stream carried an error event");
+    expect(out.message).not.toContain("ARTICLE_SENTINEL");
+    expect(out.message).toMatch(/\[ai-upstream\]/);
+  });
+
+  it("still states a status a server really sent", () => {
+    const out = anthropicCallFailed(apiError(503, "down")) as Error & { status?: number };
+    expect(out.message).toContain("status 503");
+    expect(out.status).toBe(503);
   });
 
   it("does not repeat an SDK config error either, and calls it not-set-up", () => {

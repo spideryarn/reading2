@@ -644,7 +644,8 @@ export const citeOrderParam = createParser<CiteOrder>({
 
 /**
  * How high a work has to score to stay on screen in the prioritised order —
- * `?citebar=`, `(2 × relevance + influence) / 3` on 0–1.
+ * `?citebar=`, `priorityOf` in CitationsPanel.tsx on 0–1: weighted when both
+ * scores are known, relevance alone when influence is unknown.
  *
  * **No default, deliberately**, for `gateParam`'s reason: absent means nobody
  * has touched it, which the panel resolves to `CITATION_BAR_DEFAULT`
