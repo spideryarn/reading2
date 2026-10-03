@@ -43,3 +43,22 @@ The plan's § Not built describes each one.
 **Decided 2026-09-24, on Greg's delegated judgment: wait for data.** None of the three changes is
 built, because each alters every live conversation and the first Sentry `LiveStall-*` events will say
 whether street noise is the stall that actually happens; revisit when they arrive.
+
+**The data, 2026-10-03, and the second half shipped** (queue item `qi-8k6vjbzz`). There have been
+five live sessions in production since then, all yours, and one `LiveStall` event:
+[SPIDERYARN-READING2-6Y](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-6Y), `open-turn`.
+On 2026-09-30 the first turn of a call opened two seconds in and was still open 74 seconds later,
+when you hung up. A test against OpenAI's real server reproduced it. Traffic rumble alone does
+nothing, because noise reduction removes it. **Other people's voices** are the problem: the
+companion answered a bystander, was cut off by the next one, and then held the turn open for as long
+as they kept talking.
+
+So the "noise is holding your turn open" notice now offers **Tap to talk** beside Reconnect. For the
+rest of that call you tap **Talk**, speak, and tap **Done**. Nothing is heard in between, so voices
+around you can neither hold your turn open nor cut the reply off. It is the push-to-talk option
+above, but tap rather than hold, and only for a call that has just shown the problem. Every other
+live conversation is unchanged.
+[261003d-tap-to-talk-when-noise-holds-the-live-turn-open.md](../plans/261003d-tap-to-talk-when-noise-holds-the-live-turn-open.md).
+
+What only your phone can check is the real WebRTC audio, in a street, with those headphones. The
+notice takes 30 seconds of held-open turn to appear.

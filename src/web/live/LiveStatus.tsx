@@ -33,7 +33,7 @@ const STALL_NOTICE: Record<LiveStall, string> = {
     "Your device has paused the microphone, so nothing you say is reaching the conversation. It may come back by itself — if not, reconnect.",
   connection: "The connection is unstable. It may recover by itself — if not, reconnect.",
   "open-turn":
-    "Still hearing sound after half a minute. Background noise can keep your turn open — if you’ve finished speaking, reconnect.",
+    "Still hearing sound after half a minute. Background noise can keep your turn open — tap to talk keeps your microphone off until you speak.",
   "no-reply": "No reply yet. The connection or the voice service may have stalled — reconnect to carry on.",
 };
 
@@ -50,10 +50,11 @@ const STEP: Record<LiveStep, string> = {
 const STEPS: LiveStep[] = ["ticket", "microphone", "transport", "seeding"];
 
 /** The one state word, which the colour says too. */
-type LiveState = "connecting" | "listening" | "thinking" | "speaking" | "saving" | "stopped" | "error";
+type LiveState = "connecting" | "listening" | "ready" | "thinking" | "speaking" | "saving" | "stopped" | "error";
 const STATE_WORD: Record<LiveState, string> = {
   connecting: "Connecting",
   listening: "Listening",
+  ready: "Ready",
   thinking: "Thinking",
   speaking: "Speaking",
   saving: "Saving",
@@ -72,6 +73,11 @@ function describe(live: LiveApi): { state: LiveState; sentence: string } {
   if (live.pendingTools.length > 0) return { state: "thinking", sentence: "Using tools…" };
   if (live.speaking) return { state: "speaking", sentence: "Speaking…" };
   if (live.thinking) return { state: "thinking", sentence: "Thinking…" };
+  if (live.talkMode === "tap-idle") {
+    return { state: "ready", sentence: "The conversation isn’t listening. Tap Talk, speak, then tap Done." };
+  }
+  if (live.talkMode === "tap-sending") return { state: "thinking", sentence: "Sending…" };
+  if (live.talkMode === "tap-talking") return { state: "listening", sentence: "Listening — tap Done when you’ve finished." };
   return { state: "listening", sentence: "Listening — go ahead" };
 }
 
@@ -114,6 +120,10 @@ export function LiveStatus({ live, onRestart, blocks, onJump }: {
 
   if (!visible) return null;
   const { state, sentence } = describe(live);
+  /* The meter reads an always-enabled clone. Show it only while the
+     conversation can hear the original track, or it depicts room noise that
+     tap mode is deliberately keeping out. */
+  const hearingInput = live.talkMode === "hands-free" || live.talkMode === "tap-talking";
   /** Use the hook's reconnect intent, so cancellation and failed saves still win. */
   const reconnectIfLive = () => {
     if (live.phase === "live") live.reconnect();
@@ -128,7 +138,10 @@ export function LiveStatus({ live, onRestart, blocks, onJump }: {
     <section className={`chat-live-status is-${state}`} aria-label="Live conversation" onKeyDown={(e) => e.stopPropagation()}>
       <div className="chat-live-status-head">
         <span className="chat-live-state">{STATE_WORD[state]}</span>
-        {active && live.measuringInput && <MicLevel level={live.inputLevel} detected={false} />}
+        {/* Hidden, with the quiet-input notice, whenever tap mode is not
+            actively talking: the meter reads the capture, not what is sent,
+            so it would show a street the conversation cannot hear. */}
+        {active && live.measuringInput && hearingInput && <MicLevel level={live.inputLevel} detected={false} />}
         <span className="chat-live-sentence" role="status">{sentence}</span>
       </div>
       {live.phase === "connecting" && <ol className="chat-live-steps" aria-label="Connecting">
@@ -139,13 +152,29 @@ export function LiveStatus({ live, onRestart, blocks, onJump }: {
             aria-current={here === at ? "step" : undefined}>{STEP[step].replace("…", "")}</li>;
         })}
       </ol>}
-      {live.phase === "connecting" && live.measuringInput && <p className="chat-live-notice">
+      {live.phase === "connecting" && live.measuringInput && live.talkMode === "hands-free" && <p className="chat-live-notice">
         Your microphone is on. The conversation will hear you once it has loaded.
       </p>}
-      {live.quietInput && active && <p className="chat-live-notice">No sound detected yet. Check your microphone under Advanced.</p>}
+      {live.quietInput && active && hearingInput && <p className="chat-live-notice">No sound detected yet. Check your microphone under Advanced.</p>}
       {live.notice && <p className="chat-live-notice">{live.notice}</p>}
       {stalled && <div className="chat-live-notice chat-live-stall" role="status">
-        <span>{STALL_NOTICE[live.stall!]}</span> {reconnect}
+        <span>{STALL_NOTICE[live.stall!]}</span>{" "}
+        {/* Reconnect alone sends a reader in a street back into the same
+            street. Offered here, by the notice that names the problem, and
+            nowhere before it: plan 261003d. */}
+        {live.stall === "open-turn" && live.talkMode === "hands-free" &&
+          <button type="button" onClick={live.enterTapToTalk}
+            title="For the rest of this call: tap Talk, speak, then tap Done. Nothing is heard in between.">Tap to talk</button>}{" "}
+        {reconnect}
+      </div>}
+      {/* Plain action buttons whose label changes, not an `aria-pressed`
+          toggle: the state is in the sentence above. Talk waits while the
+          companion answers — tap to talk is a walkie-talkie. */}
+      {live.phase === "live" && live.talkMode !== "hands-free" && <div className="chat-live-actions">
+        {live.talkMode === "tap-talking"
+          ? <button type="button" onClick={live.doneTalking}>Done</button>
+          : <button type="button" onClick={live.talk}
+              disabled={live.talkMode === "tap-sending" || live.thinking || live.speaking || live.pendingTools.length > 0}>Talk</button>}
       </div>}
       {live.playbackBlocked && <div className="chat-live-notice">
         <span>Your browser paused the voice output.</span>{" "}
