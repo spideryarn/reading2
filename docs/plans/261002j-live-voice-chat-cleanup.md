@@ -216,3 +216,13 @@ not, a queue item recording why, so the question is not re-asked blind.
   to speak first changed nothing — B′), and `semantic_vad` waits up to 4.6 s after a hesitant
   question. Making the detector more eager reverses a deliberate choice not to cut a thinking reader
   off — Greg's call, and it belongs with `qi-8k6vjbzz`.
+- 2026-10-03: **Stage 1 (1b, 1c, 1d) built** — words in the thread (`LiveTail`, grouped by
+  exchange, handed off in one `flushSync` commit after `speak`), state pill and named connecting
+  steps, meter on an enabled clone from the first moment, Error with Try again, Advanced (device,
+  noise reduction, Reconnect), Cancel reconnect; no dictation or typing buttons. Browser-checked on
+  the box against a real realtime session (Playwright, fake mic): steps, moving meter, Advanced,
+  error and Try again all seen; words-in-thread not seen live (a beep produces no transcript) —
+  covered by the DOM tests. **Noise reduction is now chosen during a call, not before one** (Advanced
+  exists only while a session is on screen). GPT Sol code review: no P0; it fixed two P1s (device and
+  noise-reduction changes bypassed reconnect cancellation; an unacknowledged typed line was lost on
+  retry) and two P2s, with tests.
