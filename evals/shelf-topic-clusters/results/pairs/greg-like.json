@@ -1,0 +1,603 @@
+{
+  "case": "greg-like",
+  "profile": "Interested in computational neuroscience, consciousness, Buddhism, AI.",
+  "shelf": [
+    {
+      "title": "The Brain as a Prediction Machine",
+      "gist": "Argues the brain is best understood as a prediction machine that treats perception as a running guess corrected by prediction error, with dopamine supplying one measurable version of that error signal."
+    },
+    {
+      "title": "What the Cortex Might Share with a Neural Network",
+      "gist": "Compares artificial neural networks to the cortex and to the hippocampus, arguing the analogy is useful but only partial."
+    },
+    {
+      "title": "How the Hippocampus Builds a Map of Where You've Been",
+      "gist": "Explains how the hippocampus builds a cognitive map and consolidates memory, and how recent work on female animals has revealed cycle-linked differences the classic male-only studies missed."
+    },
+    {
+      "title": "Why a Predictable Treat Barely Moves the Needle",
+      "gist": "Explains how dopamine neurons encode a reinforcement-learning-style prediction error around food reward, and how female rats' hormonal cycles change that signal in ways male-only research missed."
+    },
+    {
+      "title": "Modeling a Neuron One Spike at a Time",
+      "gist": "Explains how spiking neuron models differ from ordinary neural networks by simulating exact spike timing rather than an averaged firing rate."
+    },
+    {
+      "title": "Consciousness as a Broadcast System",
+      "gist": "Explains global workspace theory's account of consciousness as information broadcast from a winning process to the rest of the brain."
+    },
+    {
+      "title": "Measuring Consciousness in Bits",
+      "gist": "Explains integrated information theory's claim that consciousness is a matter of integration, and contrasts it with global workspace theory."
+    },
+    {
+      "title": "The Question Neuroscience Cannot Answer Yet",
+      "gist": "Explains the hard problem of consciousness and why it persists even once every mechanism behind behavior is explained."
+    },
+    {
+      "title": "Could a Language Model Ever Be Conscious?",
+      "gist": "Asks what global workspace theory, integrated information theory and the hard problem each say about whether a language model could be conscious."
+    },
+    {
+      "title": "What a Wandering Mind Looks Like on a Screen",
+      "gist": "Explains how meditation and mindfulness practice, aided by a fixed retreat schedule including breakfast, can be understood through predictive coding as down-weighting habitual predictions."
+    },
+    {
+      "title": "The Self That Predictive Processing and Buddhism Both Doubt",
+      "gist": "Draws out the parallel between the Buddhist doctrine of non-self and predictive coding's account of the self as a constructed prediction."
+    },
+    {
+      "title": "A Day Inside a Forest Monastery",
+      "gist": "Describes a forest monastery's fixed daily schedule of bowl, kitchen duty, and breakfast as itself a mindfulness practice within Buddhism."
+    },
+    {
+      "title": "The Question That Isn't Meant to Be Answered",
+      "gist": "Explains how Zen koans use bowl-shaped bells and water imagery to interrupt ordinary reasoning during meditation, in service of a central Buddhist point."
+    },
+    {
+      "title": "The First Teaching: Suffering and Its End",
+      "gist": "Explains the four noble truths and how Buddhism uses meditation and mindfulness to investigate suffering directly rather than accept it on authority."
+    },
+    {
+      "title": "How a Language Model Actually Predicts the Next Word",
+      "gist": "Explains how language models are trained to predict the next word and how that simple objective produces broad capability."
+    },
+    {
+      "title": "Learning From Reward Alone",
+      "gist": "Explains reinforcement learning's reward-driven framework and its historical connection to dopamine's prediction-error signal in the brain."
+    },
+    {
+      "title": "Getting an AI to Want What We Want",
+      "gist": "Explains how reinforcement learning from human feedback is used to align language models, and how that process can be gamed."
+    },
+    {
+      "title": "Looking Inside a Model That Was Never Meant to Be Read",
+      "gist": "Explains why neural networks, especially language models, are hard to interpret and what researchers are doing about it."
+    },
+    {
+      "title": "A Grain Bowl for Busy Weeknights",
+      "gist": "A recipe for a weeknight grain bowl, walking through cooking the grain, roasting vegetables, and making a tahini water dressing."
+    },
+    {
+      "title": "Riverside Women's Football Club Wins Promotion",
+      "gist": "A local news report on a women's football club's promotion after a demanding week of preparation."
+    },
+    {
+      "title": "The Breakfast Habit That Changed My Mornings",
+      "gist": "A first-person lifestyle piece about renovating a kitchen corner to make breakfast a planned daily ritual."
+    },
+    {
+      "title": "A Week in a Cornish Kitchen Garden",
+      "gist": "A travel piece about a week spent helping tend a walled kitchen garden above a Cornish cove."
+    }
+  ],
+  "pairs": [
+    {
+      "pair": "pair-1",
+      "A": [
+        {
+          "topic": "Computational neuroscience",
+          "articles": [
+            "The Brain as a Prediction Machine",
+            "What the Cortex Might Share with a Neural Network",
+            "How the Hippocampus Builds a Map of Where You've Been",
+            "Why a Predictable Treat Barely Moves the Needle",
+            "Modeling a Neuron One Spike at a Time",
+            "Consciousness as a Broadcast System",
+            "Measuring Consciousness in Bits",
+            "What a Wandering Mind Looks Like on a Screen",
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "Learning From Reward Alone"
+          ]
+        },
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "A Day Inside a Forest Monastery",
+            "The Question That Isn't Meant to Be Answered",
+            "The First Teaching: Suffering and Its End"
+          ]
+        },
+        {
+          "topic": "Consciousness",
+          "articles": [
+            "Consciousness as a Broadcast System",
+            "Measuring Consciousness in Bits",
+            "The Question Neuroscience Cannot Answer Yet",
+            "Could a Language Model Ever Be Conscious?"
+          ]
+        },
+        {
+          "topic": "AI",
+          "articles": [
+            "What the Cortex Might Share with a Neural Network",
+            "Modeling a Neuron One Spike at a Time",
+            "Could a Language Model Ever Be Conscious?",
+            "How a Language Model Actually Predicts the Next Word",
+            "Getting an AI to Want What We Want",
+            "Looking Inside a Model That Was Never Meant to Be Read"
+          ]
+        },
+        {
+          "topic": "Reinforcement learning",
+          "articles": [
+            "Why a Predictable Treat Barely Moves the Needle",
+            "Learning From Reward Alone",
+            "Getting an AI to Want What We Want"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "The First Teaching: Suffering and Its End",
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "The Question That Isn't Meant to Be Answered",
+            "A Day Inside a Forest Monastery"
+          ]
+        },
+        {
+          "topic": "consciousness",
+          "articles": [
+            "Measuring Consciousness in Bits",
+            "Could a Language Model Ever Be Conscious?",
+            "Consciousness as a Broadcast System",
+            "The Question Neuroscience Cannot Answer Yet"
+          ]
+        },
+        {
+          "topic": "dopamine",
+          "articles": [
+            "Why a Predictable Treat Barely Moves the Needle",
+            "The Brain as a Prediction Machine",
+            "Learning From Reward Alone"
+          ]
+        },
+        {
+          "topic": "neural networks",
+          "articles": [
+            "What the Cortex Might Share with a Neural Network",
+            "Looking Inside a Model That Was Never Meant to Be Read",
+            "Modeling a Neuron One Spike at a Time"
+          ]
+        },
+        {
+          "topic": "prediction",
+          "articles": [
+            "What a Wandering Mind Looks Like on a Screen",
+            "The Brain as a Prediction Machine",
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "Measuring Consciousness in Bits",
+            "How a Language Model Actually Predicts the Next Word"
+          ]
+        },
+        {
+          "topic": "hippocampus",
+          "articles": [
+            "How the Hippocampus Builds a Map of Where You've Been",
+            "What the Cortex Might Share with a Neural Network",
+            "Why a Predictable Treat Barely Moves the Needle"
+          ]
+        },
+        {
+          "topic": "reinforcement learning",
+          "articles": [
+            "Learning From Reward Alone",
+            "Getting an AI to Want What We Want",
+            "Why a Predictable Treat Barely Moves the Needle"
+          ]
+        },
+        {
+          "topic": "meditation",
+          "articles": [
+            "What a Wandering Mind Looks Like on a Screen",
+            "The Question That Isn't Meant to Be Answered",
+            "The First Teaching: Suffering and Its End",
+            "A Day Inside a Forest Monastery"
+          ]
+        },
+        {
+          "topic": "language",
+          "articles": [
+            "Could a Language Model Ever Be Conscious?",
+            "How a Language Model Actually Predicts the Next Word",
+            "Getting an AI to Want What We Want",
+            "Looking Inside a Model That Was Never Meant to Be Read"
+          ]
+        },
+        {
+          "topic": "female",
+          "articles": [
+            "Riverside Women's Football Club Wins Promotion",
+            "How the Hippocampus Builds a Map of Where You've Been",
+            "Why a Predictable Treat Barely Moves the Needle"
+          ]
+        },
+        {
+          "topic": "training",
+          "articles": [
+            "How a Language Model Actually Predicts the Next Word",
+            "A Day Inside a Forest Monastery",
+            "Learning From Reward Alone",
+            "Modeling a Neuron One Spike at a Time"
+          ]
+        },
+        {
+          "topic": "brain",
+          "articles": [
+            "Measuring Consciousness in Bits",
+            "The Brain as a Prediction Machine",
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "What the Cortex Might Share with a Neural Network"
+          ]
+        },
+        {
+          "topic": "behavior",
+          "articles": [
+            "Consciousness as a Broadcast System",
+            "Looking Inside a Model That Was Never Meant to Be Read"
+          ]
+        },
+        {
+          "topic": "model",
+          "articles": [
+            "Getting an AI to Want What We Want",
+            "Could a Language Model Ever Be Conscious?",
+            "How a Language Model Actually Predicts the Next Word",
+            "Looking Inside a Model That Was Never Meant to Be Read",
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "Modeling a Neuron One Spike at a Time",
+            "What the Cortex Might Share with a Neural Network"
+          ]
+        },
+        {
+          "topic": "neuron",
+          "articles": [
+            "Modeling a Neuron One Spike at a Time",
+            "Why a Predictable Treat Barely Moves the Needle"
+          ]
+        },
+        {
+          "topic": "predict",
+          "articles": [
+            "How a Language Model Actually Predicts the Next Word",
+            "Getting an AI to Want What We Want",
+            "Why a Predictable Treat Barely Moves the Needle"
+          ]
+        },
+        {
+          "topic": "artificial",
+          "articles": [
+            "What the Cortex Might Share with a Neural Network",
+            "Learning From Reward Alone"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "pair-2",
+      "A": [
+        {
+          "topic": "Computational neuroscience",
+          "articles": [
+            "The Brain as a Prediction Machine",
+            "What the Cortex Might Share with a Neural Network",
+            "How the Hippocampus Builds a Map of Where You've Been",
+            "Why a Predictable Treat Barely Moves the Needle",
+            "Modeling a Neuron One Spike at a Time",
+            "Learning From Reward Alone",
+            "Riverside Women's Football Club Wins Promotion",
+            "Consciousness as a Broadcast System",
+            "Measuring Consciousness in Bits",
+            "The Question Neuroscience Cannot Answer Yet"
+          ]
+        },
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "What a Wandering Mind Looks Like on a Screen",
+            "A Day Inside a Forest Monastery",
+            "The Question That Isn't Meant to Be Answered",
+            "The First Teaching: Suffering and Its End",
+            "A Grain Bowl for Busy Weeknights",
+            "The Breakfast Habit That Changed My Mornings",
+            "A Week in a Cornish Kitchen Garden",
+            "The Self That Predictive Processing and Buddhism Both Doubt"
+          ]
+        },
+        {
+          "topic": "Consciousness",
+          "articles": [
+            "Consciousness as a Broadcast System",
+            "Measuring Consciousness in Bits",
+            "The Question Neuroscience Cannot Answer Yet",
+            "The Self That Predictive Processing and Buddhism Both Doubt"
+          ]
+        },
+        {
+          "topic": "Artificial intelligence",
+          "articles": [
+            "Could a Language Model Ever Be Conscious?",
+            "How a Language Model Actually Predicts the Next Word",
+            "Getting an AI to Want What We Want",
+            "Looking Inside a Model That Was Never Meant to Be Read"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "The First Teaching: Suffering and Its End",
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "The Question That Isn't Meant to Be Answered",
+            "A Day Inside a Forest Monastery"
+          ]
+        },
+        {
+          "topic": "consciousness",
+          "articles": [
+            "Measuring Consciousness in Bits",
+            "Could a Language Model Ever Be Conscious?",
+            "Consciousness as a Broadcast System",
+            "The Question Neuroscience Cannot Answer Yet"
+          ]
+        },
+        {
+          "topic": "dopamine",
+          "articles": [
+            "Why a Predictable Treat Barely Moves the Needle",
+            "The Brain as a Prediction Machine",
+            "Learning From Reward Alone"
+          ]
+        },
+        {
+          "topic": "neural networks",
+          "articles": [
+            "What the Cortex Might Share with a Neural Network",
+            "Looking Inside a Model That Was Never Meant to Be Read",
+            "Modeling a Neuron One Spike at a Time"
+          ]
+        },
+        {
+          "topic": "prediction",
+          "articles": [
+            "What a Wandering Mind Looks Like on a Screen",
+            "The Brain as a Prediction Machine",
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "Measuring Consciousness in Bits",
+            "How a Language Model Actually Predicts the Next Word"
+          ]
+        },
+        {
+          "topic": "hippocampus",
+          "articles": [
+            "How the Hippocampus Builds a Map of Where You've Been",
+            "What the Cortex Might Share with a Neural Network",
+            "Why a Predictable Treat Barely Moves the Needle"
+          ]
+        },
+        {
+          "topic": "reinforcement learning",
+          "articles": [
+            "Learning From Reward Alone",
+            "Getting an AI to Want What We Want",
+            "Why a Predictable Treat Barely Moves the Needle"
+          ]
+        },
+        {
+          "topic": "meditation",
+          "articles": [
+            "What a Wandering Mind Looks Like on a Screen",
+            "The Question That Isn't Meant to Be Answered",
+            "The First Teaching: Suffering and Its End",
+            "A Day Inside a Forest Monastery"
+          ]
+        },
+        {
+          "topic": "language",
+          "articles": [
+            "Could a Language Model Ever Be Conscious?",
+            "How a Language Model Actually Predicts the Next Word",
+            "Getting an AI to Want What We Want",
+            "Looking Inside a Model That Was Never Meant to Be Read"
+          ]
+        },
+        {
+          "topic": "female",
+          "articles": [
+            "Riverside Women's Football Club Wins Promotion",
+            "How the Hippocampus Builds a Map of Where You've Been",
+            "Why a Predictable Treat Barely Moves the Needle"
+          ]
+        },
+        {
+          "topic": "training",
+          "articles": [
+            "How a Language Model Actually Predicts the Next Word",
+            "A Day Inside a Forest Monastery",
+            "Learning From Reward Alone",
+            "Modeling a Neuron One Spike at a Time"
+          ]
+        },
+        {
+          "topic": "brain",
+          "articles": [
+            "Measuring Consciousness in Bits",
+            "The Brain as a Prediction Machine",
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "What the Cortex Might Share with a Neural Network"
+          ]
+        },
+        {
+          "topic": "behavior",
+          "articles": [
+            "Consciousness as a Broadcast System",
+            "Looking Inside a Model That Was Never Meant to Be Read"
+          ]
+        },
+        {
+          "topic": "model",
+          "articles": [
+            "Getting an AI to Want What We Want",
+            "Could a Language Model Ever Be Conscious?",
+            "How a Language Model Actually Predicts the Next Word",
+            "Looking Inside a Model That Was Never Meant to Be Read",
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "Modeling a Neuron One Spike at a Time",
+            "What the Cortex Might Share with a Neural Network"
+          ]
+        },
+        {
+          "topic": "neuron",
+          "articles": [
+            "Modeling a Neuron One Spike at a Time",
+            "Why a Predictable Treat Barely Moves the Needle"
+          ]
+        },
+        {
+          "topic": "predict",
+          "articles": [
+            "How a Language Model Actually Predicts the Next Word",
+            "Getting an AI to Want What We Want",
+            "Why a Predictable Treat Barely Moves the Needle"
+          ]
+        },
+        {
+          "topic": "artificial",
+          "articles": [
+            "What the Cortex Might Share with a Neural Network",
+            "Learning From Reward Alone"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "pair-3",
+      "A": [
+        {
+          "topic": "Computational neuroscience",
+          "articles": [
+            "The Brain as a Prediction Machine",
+            "What the Cortex Might Share with a Neural Network",
+            "How the Hippocampus Builds a Map of Where You've Been",
+            "Why a Predictable Treat Barely Moves the Needle",
+            "Modeling a Neuron One Spike at a Time",
+            "Consciousness as a Broadcast System",
+            "Measuring Consciousness in Bits",
+            "What a Wandering Mind Looks Like on a Screen",
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "Learning From Reward Alone"
+          ]
+        },
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "The Self That Predictive Processing and Buddhism Both Doubt",
+            "A Day Inside a Forest Monastery",
+            "The Question That Isn't Meant to Be Answered",
+            "The First Teaching: Suffering and Its End"
+          ]
+        },
+        {
+          "topic": "Consciousness",
+          "articles": [
+            "Consciousness as a Broadcast System",
+            "Measuring Consciousness in Bits",
+            "The Question Neuroscience Cannot Answer Yet",
+            "Could a Language Model Ever Be Conscious?"
+          ]
+        },
+        {
+          "topic": "AI",
+          "articles": [
+            "What the Cortex Might Share with a Neural Network",
+            "Modeling a Neuron One Spike at a Time",
+            "Could a Language Model Ever Be Conscious?",
+            "How a Language Model Actually Predicts the Next Word",
+            "Getting an AI to Want What We Want",
+            "Looking Inside a Model That Was Never Meant to Be Read"
+          ]
+        },
+        {
+          "topic": "Reinforcement learning",
+          "articles": [
+            "Why a Predictable Treat Barely Moves the Needle",
+            "Learning From Reward Alone",
+            "Getting an AI to Want What We Want"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Computational neuroscience",
+          "articles": [
+            "The Brain as a Prediction Machine",
+            "What the Cortex Might Share with a Neural Network",
+            "How the Hippocampus Builds a Map of Where You've Been",
+            "Why a Predictable Treat Barely Moves the Needle",
+            "Modeling a Neuron One Spike at a Time",
+            "Learning From Reward Alone",
+            "Riverside Women's Football Club Wins Promotion",
+            "Consciousness as a Broadcast System",
+            "Measuring Consciousness in Bits",
+            "The Question Neuroscience Cannot Answer Yet"
+          ]
+        },
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "What a Wandering Mind Looks Like on a Screen",
+            "A Day Inside a Forest Monastery",
+            "The Question That Isn't Meant to Be Answered",
+            "The First Teaching: Suffering and Its End",
+            "A Grain Bowl for Busy Weeknights",
+            "The Breakfast Habit That Changed My Mornings",
+            "A Week in a Cornish Kitchen Garden",
+            "The Self That Predictive Processing and Buddhism Both Doubt"
+          ]
+        },
+        {
+          "topic": "Consciousness",
+          "articles": [
+            "Consciousness as a Broadcast System",
+            "Measuring Consciousness in Bits",
+            "The Question Neuroscience Cannot Answer Yet",
+            "The Self That Predictive Processing and Buddhism Both Doubt"
+          ]
+        },
+        {
+          "topic": "Artificial intelligence",
+          "articles": [
+            "Could a Language Model Ever Be Conscious?",
+            "How a Language Model Actually Predicts the Next Word",
+            "Getting an AI to Want What We Want",
+            "Looking Inside a Model That Was Never Meant to Be Read"
+          ]
+        }
+      ]
+    }
+  ]
+}

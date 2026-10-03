@@ -1,0 +1,387 @@
+{
+  "case": "kitchen-garden",
+  "profile": "A home cook and allotment gardener who reads about fermentation, growing vegetables and seasonal cooking.",
+  "shelf": [
+    {
+      "title": "Keeping a Sourdough Starter Alive",
+      "gist": "A diary-style piece on the daily ritual of feeding a sourdough starter and why slow fermentation makes better bread."
+    },
+    {
+      "title": "Why Your Sourdough Starter Has Stalled",
+      "gist": "An explainer diagnosing the common causes of a sluggish sourdough starter and how to restart fermentation."
+    },
+    {
+      "title": "A Baker's Diary: Rye Sourdough in Autumn",
+      "gist": "A personal essay on baking rye sourdough through autumn and treating fermentation as part of seasonal cooking."
+    },
+    {
+      "title": "Two Kimchi Recipes for a Small Kitchen",
+      "gist": "A practical how-to comparing a quick and a slow method for making kimchi at home."
+    },
+    {
+      "title": "The Many Regional Faces of Kimchi",
+      "gist": "An essay surveying how kimchi varies by region and season across Korea, and why it belongs to seasonal cooking."
+    },
+    {
+      "title": "A Fermenting Weekend: Kimchi and Kombucha Together",
+      "gist": "A light blog post about spending a weekend making kimchi alongside a batch of kombucha."
+    },
+    {
+      "title": "From Seed to Sauce: A Year of Growing Tomatoes",
+      "gist": "A personal essay following a year of growing tomatoes, saving seeds, feeding the compost heap, and keeping bees on the side."
+    },
+    {
+      "title": "Pruning and Training Tomatoes in Raised Beds",
+      "gist": "A how-to guide on pruning tomato vines grown in raised beds and why soil health underpins the whole method."
+    },
+    {
+      "title": "Community Garden Reports Bumper Tomato Harvest",
+      "gist": "A news-style report on a community garden's tomato harvest, its compost programme and a seed saving swap."
+    },
+    {
+      "title": "Building Raised Beds Before the Spring Rush",
+      "gist": "A how-to guide on building raised beds in late winter, with an aside on the beekeeping that will follow once beds are settled."
+    },
+    {
+      "title": "Keeping the Compost Heap Working Through Winter",
+      "gist": "An essay on maintaining an active compost heap and healthy soil through the cold months, feeding next year's raised beds."
+    },
+    {
+      "title": "A Practical Guide to Saving Seeds",
+      "gist": "A how-to guide on saving seeds from this year's tomatoes and other vegetables to protect soil health and reduce yearly costs."
+    },
+    {
+      "title": "Keeping Bees Alongside the Vegetable Beds",
+      "gist": "An essay on taking up beekeeping at an allotment and folding the honey harvest into seasonal cooking, with soil health as an unexpected benefit."
+    }
+  ],
+  "pairs": [
+    {
+      "pair": "pair-1",
+      "A": [
+        {
+          "topic": "soil health",
+          "articles": [
+            "Building Raised Beds Before the Spring Rush",
+            "Keeping the Compost Heap Working Through Winter",
+            "Pruning and Training Tomatoes in Raised Beds",
+            "Keeping Bees Alongside the Vegetable Beds",
+            "A Practical Guide to Saving Seeds"
+          ]
+        },
+        {
+          "topic": "kimchi",
+          "articles": [
+            "Two Kimchi Recipes for a Small Kitchen",
+            "The Many Regional Faces of Kimchi",
+            "A Fermenting Weekend: Kimchi and Kombucha Together"
+          ]
+        },
+        {
+          "topic": "sourdough",
+          "articles": [
+            "Why Your Sourdough Starter Has Stalled",
+            "Keeping a Sourdough Starter Alive",
+            "A Baker's Diary: Rye Sourdough in Autumn"
+          ]
+        },
+        {
+          "topic": "seed saving",
+          "articles": [
+            "A Practical Guide to Saving Seeds",
+            "Community Garden Reports Bumper Tomato Harvest",
+            "From Seed to Sauce: A Year of Growing Tomatoes"
+          ]
+        },
+        {
+          "topic": "seasonal cooking",
+          "articles": [
+            "The Many Regional Faces of Kimchi",
+            "A Baker's Diary: Rye Sourdough in Autumn",
+            "Keeping Bees Alongside the Vegetable Beds"
+          ]
+        },
+        {
+          "topic": "compost",
+          "articles": [
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Keeping the Compost Heap Working Through Winter",
+            "From Seed to Sauce: A Year of Growing Tomatoes"
+          ]
+        },
+        {
+          "topic": "season",
+          "articles": [
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Keeping the Compost Heap Working Through Winter",
+            "A Baker's Diary: Rye Sourdough in Autumn",
+            "A Practical Guide to Saving Seeds"
+          ]
+        },
+        {
+          "topic": "beekeeping",
+          "articles": [
+            "Keeping Bees Alongside the Vegetable Beds",
+            "Building Raised Beds Before the Spring Rush",
+            "From Seed to Sauce: A Year of Growing Tomatoes"
+          ]
+        },
+        {
+          "topic": "kitchen",
+          "articles": [
+            "A Fermenting Weekend: Kimchi and Kombucha Together",
+            "The Many Regional Faces of Kimchi",
+            "A Baker's Diary: Rye Sourdough in Autumn"
+          ]
+        },
+        {
+          "topic": "tomatoes grown",
+          "articles": [
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Pruning and Training Tomatoes in Raised Beds"
+          ]
+        },
+        {
+          "topic": "harvest",
+          "articles": [
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Keeping Bees Alongside the Vegetable Beds",
+            "The Many Regional Faces of Kimchi"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Vegetable gardening",
+          "articles": [
+            "From Seed to Sauce: A Year of Growing Tomatoes",
+            "Pruning and Training Tomatoes in Raised Beds",
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Building Raised Beds Before the Spring Rush",
+            "Keeping the Compost Heap Working Through Winter",
+            "A Practical Guide to Saving Seeds",
+            "Keeping Bees Alongside the Vegetable Beds"
+          ]
+        },
+        {
+          "topic": "Fermentation",
+          "articles": [
+            "Keeping a Sourdough Starter Alive",
+            "Why Your Sourdough Starter Has Stalled",
+            "A Baker's Diary: Rye Sourdough in Autumn",
+            "Two Kimchi Recipes for a Small Kitchen",
+            "The Many Regional Faces of Kimchi",
+            "A Fermenting Weekend: Kimchi and Kombucha Together"
+          ]
+        },
+        {
+          "topic": "Soil health",
+          "articles": [
+            "Pruning and Training Tomatoes in Raised Beds",
+            "Keeping the Compost Heap Working Through Winter",
+            "A Practical Guide to Saving Seeds",
+            "Keeping Bees Alongside the Vegetable Beds"
+          ]
+        },
+        {
+          "topic": "Seasonal cooking",
+          "articles": [
+            "A Baker's Diary: Rye Sourdough in Autumn",
+            "The Many Regional Faces of Kimchi",
+            "Keeping Bees Alongside the Vegetable Beds"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "pair-2",
+      "A": [
+        {
+          "topic": "soil health",
+          "articles": [
+            "Building Raised Beds Before the Spring Rush",
+            "Keeping the Compost Heap Working Through Winter",
+            "Pruning and Training Tomatoes in Raised Beds",
+            "Keeping Bees Alongside the Vegetable Beds",
+            "A Practical Guide to Saving Seeds"
+          ]
+        },
+        {
+          "topic": "kimchi",
+          "articles": [
+            "Two Kimchi Recipes for a Small Kitchen",
+            "The Many Regional Faces of Kimchi",
+            "A Fermenting Weekend: Kimchi and Kombucha Together"
+          ]
+        },
+        {
+          "topic": "sourdough",
+          "articles": [
+            "Why Your Sourdough Starter Has Stalled",
+            "Keeping a Sourdough Starter Alive",
+            "A Baker's Diary: Rye Sourdough in Autumn"
+          ]
+        },
+        {
+          "topic": "seed saving",
+          "articles": [
+            "A Practical Guide to Saving Seeds",
+            "Community Garden Reports Bumper Tomato Harvest",
+            "From Seed to Sauce: A Year of Growing Tomatoes"
+          ]
+        },
+        {
+          "topic": "seasonal cooking",
+          "articles": [
+            "The Many Regional Faces of Kimchi",
+            "A Baker's Diary: Rye Sourdough in Autumn",
+            "Keeping Bees Alongside the Vegetable Beds"
+          ]
+        },
+        {
+          "topic": "compost",
+          "articles": [
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Keeping the Compost Heap Working Through Winter",
+            "From Seed to Sauce: A Year of Growing Tomatoes"
+          ]
+        },
+        {
+          "topic": "season",
+          "articles": [
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Keeping the Compost Heap Working Through Winter",
+            "A Baker's Diary: Rye Sourdough in Autumn",
+            "A Practical Guide to Saving Seeds"
+          ]
+        },
+        {
+          "topic": "beekeeping",
+          "articles": [
+            "Keeping Bees Alongside the Vegetable Beds",
+            "Building Raised Beds Before the Spring Rush",
+            "From Seed to Sauce: A Year of Growing Tomatoes"
+          ]
+        },
+        {
+          "topic": "kitchen",
+          "articles": [
+            "A Fermenting Weekend: Kimchi and Kombucha Together",
+            "The Many Regional Faces of Kimchi",
+            "A Baker's Diary: Rye Sourdough in Autumn"
+          ]
+        },
+        {
+          "topic": "tomatoes grown",
+          "articles": [
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Pruning and Training Tomatoes in Raised Beds"
+          ]
+        },
+        {
+          "topic": "harvest",
+          "articles": [
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Keeping Bees Alongside the Vegetable Beds",
+            "The Many Regional Faces of Kimchi"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Vegetable gardening",
+          "articles": [
+            "From Seed to Sauce: A Year of Growing Tomatoes",
+            "Pruning and Training Tomatoes in Raised Beds",
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Building Raised Beds Before the Spring Rush",
+            "Keeping the Compost Heap Working Through Winter",
+            "A Practical Guide to Saving Seeds",
+            "Keeping Bees Alongside the Vegetable Beds"
+          ]
+        },
+        {
+          "topic": "Fermentation",
+          "articles": [
+            "Keeping a Sourdough Starter Alive",
+            "Why Your Sourdough Starter Has Stalled",
+            "A Baker's Diary: Rye Sourdough in Autumn",
+            "Two Kimchi Recipes for a Small Kitchen",
+            "The Many Regional Faces of Kimchi",
+            "A Fermenting Weekend: Kimchi and Kombucha Together"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "pair-3",
+      "A": [
+        {
+          "topic": "Vegetable gardening",
+          "articles": [
+            "From Seed to Sauce: A Year of Growing Tomatoes",
+            "Pruning and Training Tomatoes in Raised Beds",
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Building Raised Beds Before the Spring Rush",
+            "Keeping the Compost Heap Working Through Winter",
+            "A Practical Guide to Saving Seeds",
+            "Keeping Bees Alongside the Vegetable Beds"
+          ]
+        },
+        {
+          "topic": "Fermentation",
+          "articles": [
+            "Keeping a Sourdough Starter Alive",
+            "Why Your Sourdough Starter Has Stalled",
+            "A Baker's Diary: Rye Sourdough in Autumn",
+            "Two Kimchi Recipes for a Small Kitchen",
+            "The Many Regional Faces of Kimchi",
+            "A Fermenting Weekend: Kimchi and Kombucha Together"
+          ]
+        },
+        {
+          "topic": "Soil health",
+          "articles": [
+            "Pruning and Training Tomatoes in Raised Beds",
+            "Keeping the Compost Heap Working Through Winter",
+            "A Practical Guide to Saving Seeds",
+            "Keeping Bees Alongside the Vegetable Beds"
+          ]
+        },
+        {
+          "topic": "Seasonal cooking",
+          "articles": [
+            "A Baker's Diary: Rye Sourdough in Autumn",
+            "The Many Regional Faces of Kimchi",
+            "Keeping Bees Alongside the Vegetable Beds"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Vegetable gardening",
+          "articles": [
+            "From Seed to Sauce: A Year of Growing Tomatoes",
+            "Pruning and Training Tomatoes in Raised Beds",
+            "Community Garden Reports Bumper Tomato Harvest",
+            "Building Raised Beds Before the Spring Rush",
+            "Keeping the Compost Heap Working Through Winter",
+            "A Practical Guide to Saving Seeds",
+            "Keeping Bees Alongside the Vegetable Beds"
+          ]
+        },
+        {
+          "topic": "Fermentation",
+          "articles": [
+            "Keeping a Sourdough Starter Alive",
+            "Why Your Sourdough Starter Has Stalled",
+            "A Baker's Diary: Rye Sourdough in Autumn",
+            "Two Kimchi Recipes for a Small Kitchen",
+            "The Many Regional Faces of Kimchi",
+            "A Fermenting Weekend: Kimchi and Kombucha Together"
+          ]
+        }
+      ]
+    }
+  ]
+}
