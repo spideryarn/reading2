@@ -745,6 +745,14 @@ function saving(
          and it has to be named. GPT Sol's review of the built code,
          2026-08-30; docs/plans/260830c-profile-panel.md. */
       if (owner && prefix.startsWith("/api/library/")) void invalidate("/api/reader", owner);
+      /* **A tag edit is the same shape, twice over** (plan 261003d, GPT Sol's
+         plan review 7): its URL names neither the shelf listing that carries
+         every card's tags nor the Metadata page that shows this article's. */
+      const tagged = /^\/api\/library\/([^/?]+)\/tags$/.exec(input.split("?")[0] ?? input);
+      if (owner && tagged) {
+        void invalidate("/api/library", owner);
+        void invalidate(`/api/metadata/${tagged[1]}`, owner);
+      }
     }
     return res;
   }

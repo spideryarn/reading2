@@ -49,6 +49,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryEntry, LibraryResponse } from "../types.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
+import { editArticleTags, type TagChange } from "./article-tags.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { readCachedShelf } from "./lib/cached-shelf.js";
 
@@ -81,6 +82,13 @@ export interface Shelf {
   archive: (slug: string) => Promise<void>;
   undo: () => Promise<void>;
   rename: (slug: string, title: string | null) => Promise<void>;
+  /**
+   * Add and remove the reader's own tags on one article, and put the server's
+   * answer on its card in whichever list holds it (plan 261003d). Resolves to
+   * the tags after; **rejects** on failure, so the editor can say so where the
+   * reader is looking rather than in the shelf's strip.
+   */
+  editTags: (slug: string, change: TagChange) => Promise<string[]>;
   /** Whatever last went wrong with a button, for the strip to say. Cleared on the next try. */
   actionError: string | null;
   /** The archived articles, once somebody has asked to see them. */
@@ -496,6 +504,26 @@ export function useShelf(readerId: string): Shelf {
     [patch, recordArchivedEdit, stillOurs, supersedeEarlierReads],
   );
 
+  const editTags = useCallback(
+    async (slug: string, change: TagChange): Promise<string[]> => {
+      const asked = reader.current;
+      const tags = await editArticleTags(slug, change);
+      if (!stillOurs(asked)) return tags;
+      /* `rename`'s bookkeeping, for `rename`'s reasons: a read that started
+         before this write must not paint the old tags back, and an archived
+         card edited while the archived list is still loading keeps its edit. */
+      supersedeEarlierReads();
+      const swap = (list: LibraryEntry[] | null) =>
+        list?.map((a) => (a.slug === slug ? { ...a, tags } : a)) ?? null;
+      const edited = archivedEditsRef.current.get(slug) ?? archived?.find((a) => a.slug === slug);
+      if (edited) recordArchivedEdit(slug, { ...edited, tags });
+      setArticles(swap);
+      setArchived(swap);
+      return tags;
+    },
+    [archived, recordArchivedEdit, stillOurs, supersedeEarlierReads],
+  );
+
   const beginRename = useCallback((slug: string) => setRenaming(slug), []);
   const cancelRename = useCallback(() => setRenaming(null), []);
 
@@ -583,6 +611,7 @@ export function useShelf(readerId: string): Shelf {
       archive,
       undo,
       rename,
+      editTags,
       actionError,
       report,
       archived,
@@ -603,6 +632,7 @@ export function useShelf(readerId: string): Shelf {
       archive,
       undo,
       rename,
+      editTags,
       actionError,
       report,
       archived,

@@ -272,6 +272,8 @@ import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from ".
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
+import { TagEditor } from "./TagEditor.js";
+import { editArticleTags } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { AuthorNames } from "./AuthorNames.js";
 import { howLong, timeAgo } from "./relative-time.js";
@@ -897,6 +899,29 @@ export function Metadata({
               fixture
             </span>
           </p>
+        )}
+
+        {/* **The reader's own tags**, near the top as asked (Greg, 2026-10-01:
+            *"Also add this near the top of the article's Metadata page, reusing
+            machinery"*) — the shelf's editor, TagEditor.tsx. Only on the
+            reader's own article, which is what `hasShelfRow` already says.
+            `?? []`: a Metadata answer cached before tags existed has none.
+            Plan 261003d. */}
+        {hasShelfRow && provenance && (
+          <div className="tw:mt-3 tw:max-w-xl">
+            <p className="tw:mt-0 tw:mb-1 tw:text-xs tw:font-medium tw:text-muted-foreground">
+              Your tags <span className="tw:font-normal">— only you see them</span>
+            </p>
+            <TagEditor
+              tags={provenance.tags ?? []}
+              label="Your tags on this article"
+              save={async (change) => {
+                const tags = await editArticleTags(slug, change);
+                setProvenance((p) => (p && p.slug === slug ? { ...p, tags } : p));
+                return tags;
+              }}
+            />
+          </div>
         )}
 
         {/* The two acts people come here for most often, under the title —

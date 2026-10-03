@@ -210,6 +210,8 @@ function isDrawableEntry(value: unknown): boolean {
     typeof has.glossary === "boolean" &&
     typeof e.sourceReusable === "boolean" &&
     maybe(e.byline, str) &&
+    /* Plan 261003d: absent on a body saved before tags existed, read as none. */
+    maybe(e.tags, (v) => Array.isArray(v) && v.every(str)) &&
     maybe(e.siteName, str) &&
     maybe(e.url, str) &&
     maybe(e.gist, str) &&

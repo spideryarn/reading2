@@ -180,3 +180,16 @@ both routes, `LibraryEntry.tags`, `ArticleMetadata.tags`, both exports. What was
   export coverage test's types refused to compile until `article_tags` had a fixture. Both are guards
   that did their job.
 - JS `\s` does not include U+0085 (NEL); it is refused as a C1 control rather than collapsed.
+
+**Stage 2 (editor) — done.** `TagEditor.tsx` (one combobox for both places), `ShelfTags.tsx` (chips +
+a popover on the card and at the end of the table row's sub-line), `useShelf.editTags`, Metadata's
+inline editor, `article-tags.ts` as the one client write. Changed from the plan:
+
+- **The Tags control sits beside the chips, not in the action row.** The action row has
+  reveal-then-commit tips and a narrow-screen menu; a sixth button there costs all of that. With no
+  tags it shows on hover/focus (always on touch), as the action row does.
+- **In the table, tags go at the end of the always-present sub-line**, not a new line, so untagged
+  rows keep their height.
+- **No highlight until the reader types or uses the arrows**, so Enter in a freshly focused empty
+  box does not add the first suggestion — found writing the "empty Enter" test.
+
