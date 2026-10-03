@@ -269,7 +269,7 @@ describe("no migration invents a time for rows that already exist", () => {
 
   it("reads the migrations at all", () => {
     expect(files.length).toBeGreaterThan(100);
-    expect(files).toContain("20261003143158_created_at_on_action_tables.sql");
+    expect(files).toContain("20261003170347_store_when_it_happened.sql");
   });
 
   it("finds no `ADD COLUMN … timestamp … DEFAULT now()` in any of them", () => {

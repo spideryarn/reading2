@@ -90,10 +90,11 @@ the offline cache. Each of those is a state where a press would write a value no
 [`useExperimental`](../../src/web/useExperimental.ts) has the reasoning, and GPT Sol's review
 (2026-08-31, in `docs/plans/`) is where two of the three came from.
 
-## The two controls
+## The three controls
 
-Since 2026-09-03 the setting can be moved from either end of the app. They read one store, so they
-cannot disagree; they say the same two sentences, from
+Since 2026-09-03 the setting can be moved from either end of the app, and since 2026-10-03 from the
+command bar as well (the paragraph under the table). They read one store, so they cannot disagree;
+the first two say the same two sentences, from
 [`experimental-copy.ts`](../../src/web/experimental-copy.ts), so they cannot tell a reader two
 stories about what they turned on. Greg asked for the second one mid-run:
 
@@ -106,6 +107,18 @@ stories about what they turned on. Greg asked for the second one mid-run:
 | Who sees it | anybody on their own profile | **signed-in readers only** — there is no account to save it to otherwise, and a control a stranger cannot use is an advertisement for an account |
 | Also says | *when* it was turned on | nothing else; the bar is eighteen icons |
 | Inert by | `disabled` | `aria-disabled`, so the tooltip explaining *why* is still reachable — a `disabled` button fires no hover and takes no focus, which fails in exactly the states that need explaining |
+
+**The third is a row in the command bar** — *Turn experimental features on*, or *off*: one row whose
+label follows the state, typed-only, found by `experimental` and `labs`
+([`CommandBar.tsx`](../../src/web/CommandBar.tsx) § `experimentalRows`). Greg, 2026-09-29
+(`spya-wh2xys`): *"a command to turn on the experimental features or off … turning on the
+experimental features might be disabled if it's already on."* One row rather than a greyed twin,
+so there is nothing to press that does nothing — and for the same reason **no row at all** before
+the store has loaded, for nobody signed in, and while a save is out, when the store would drop the
+press. To make a refusal sayable, **`set` is awaitable**: it resolves to an
+`ExperimentalSaveOutcome` ([`experimental-store.ts`](../../src/web/experimental-store.ts)) — saved,
+failed, not sent, abandoned — and the bar stays open with the reason on anything but the first. The
+two switches ignore the answer; the store's state already draws everything they show.
 
 **A toggle, not a link to `/profile`**: one press, where the effect is — the modes it reveals are
 three inches to the left of it, and so are the four Diagram pictures.
@@ -204,7 +217,7 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
 **One thing that is not a mode is behind it too: [reading time](reading-time.md)**, since
-2026-09-16 — the spine thicker where the reader has spent longer. Both the recording and the drawing,
+2026-09-16 — an area chart down the spine of where the reader has spent longer. Both the recording and the drawing,
 because it is new code running every second on an owner's article and a new kind of data about a
 person, so it starts with the readers who asked for the unfinished things. The switch is availability
 here, not consent; `/privacy` says we keep it. Fable argued for recording for every owner, since reading
@@ -227,6 +240,17 @@ while it holds the breadcrumb. It is not drawn where an open mode covers the pro
 window, including after a band link steps that mode aside. The reasoning, the patterns looked at and
 what was deferred (one line per heading level, a thinner bar) are
 [261002h](../plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md).
+
+**And the choice of voice engine for a Live conversation, since 2026-10-03** — a select beside the
+Live button, *Realtime* or *GPT-Live (new)*. Switched off, there is no choice and a call is on
+Realtime, as it always was. It is behind the switch because GPT-Live is a second implementation
+built to be compared with the first and then for one of them to be deleted, on a provider API three
+weeks old: its answers about the article come from a second model the voice has to remember to ask,
+and none of that has been tried with a real microphone. Readers who have not asked for unfinished
+things keep the engine that works. **Here the switch is stricter than "hidden, not unreachable"**:
+off, the client starts no GPT-Live call whatever choice was remembered, and turning it off mid-call
+ends one by the ordinary hang-up. That is the client's rule; the `live-session` route is not gated.
+[live-conversation.md § The second engine](live-conversation.md#the-second-engine-gpt-live-behind-experimental).
 
 **And one control on the Metadata page: *Start this article again*** — a block inside *AI
 processing* rather than a section of its own: a reset, and optionally the modes made again. The

@@ -54,6 +54,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { ID_PREFIX } from "../ids.js";
 import type { BlockId } from "../types.js";
 import { MISSING_BLOCK, useBlockLinks } from "./BlockLinkCard.js";
+import type { JumpAim } from "./flash.js";
 import { addressAt, addressWithout, navigate } from "./router.js";
 
 /** `spya-k3m9qt` → `k3m9qt`. Anything not ours is shown untouched. */
@@ -134,7 +135,16 @@ export function blockPermalink(id: BlockId): string {
 interface RefProps {
   id: BlockId;
   /** Jump without a page load. Falls back to a real navigation if absent. */
-  onJump?(id: BlockId): void;
+  onJump?(id: BlockId, aim?: JumpAim): void;
+  /**
+   * **The words this link is vouching for**, when its sentence in a model's
+   * answer quotes the article (Cited.tsx § `cited`). Handed to `onJump` beside
+   * the id, so the landing paints those words rather than the paragraph around
+   * them — flash.ts § `FlashTarget.quotes`; a reader's report, spya-hzpf9b.
+   * Omitted, `onJump` is called with the id alone, as it always was. It changes
+   * the paint and nothing else: not the `href`, not where the page scrolls to.
+   */
+  quotes?: readonly string[];
   className?: string;
   /**
    * This page's address with `at` dropped — `"/read/x?cols=0,2"`.
@@ -153,7 +163,7 @@ interface RefProps {
   preview?: boolean;
 }
 
-export function BlockRef({ id, onJump, className, linkBase, children, preview = true }: RefProps) {
+export function BlockRef({ id, onJump, quotes, className, linkBase, children, preview = true }: RefProps) {
   const known = useBlockLinks();
   const classes = ["block-ref", className].filter(Boolean).join(" ");
   /* A block this article does not have, and a provider that can say so. Not a
@@ -177,7 +187,10 @@ export function BlockRef({ id, onJump, className, linkBase, children, preview = 
     if (event.button !== 0) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    if (onJump) onJump(id);
+    if (onJump) {
+      if (quotes === undefined) onJump(id);
+      else onJump(id, { quotes });
+    }
     /* The same `href` the anchor is showing, rather than a second call. A link
        whose status bar and whose click disagree is a link, and a bug. */
     else navigate(href);

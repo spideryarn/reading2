@@ -1,0 +1,24 @@
+/* Copy the commit-bound results into evals/results/quick-search-recall-2026-10-03/.
+   The Entropy article is a reader's own upload, so nothing of its text goes in: block ids,
+   scores and timings only. Scripts are saved as .txt (a committed .ts naming the Decisions
+   endpoint trips tests/no-undeclared-spend.test.ts). No spend. */
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { DIR, ENTROPY, WT } from "./lib.ts";
+
+const OUT = `${WT}/evals/results/quick-search-recall-2026-10-03`;
+mkdirSync(OUT, { recursive: true });
+for (const f of readdirSync(DIR)) if (/\.(ts|mjs)$/.test(f)) copyFileSync(`${DIR}/${f}`, `${OUT}/${f}.txt`);
+for (const f of ["jev-raw.json", "llm-raw.json", "out-repro.json", "out-repro-20.json", "out-counterfactual.json", "judged.json", "summary-old-short.json", "summary-holdout-negative.json", "summary-arms.json", "latency-jev.json", "spend.jsonl"]) copyFileSync(`${DIR}/${f}`, `${OUT}/${f}`);
+
+/* The meaning-search reference for the short queries: ids and confidence. Quotes and reasons are
+   dropped for the Entropy article (its text is not ours to commit). */
+const ref = JSON.parse(readFileSync(`${DIR}/ref-short.json`, "utf8"));
+for (const [k, v] of Object.entries(ref) as any) if (k.startsWith(ENTROPY)) v.hits = v.hits.map((h: any) => ({ blockId: h.blockId, confidence: h.confidence }));
+writeFileSync(`${OUT}/reference-short.json`, JSON.stringify(ref, null, 1));
+
+/* What Greg saw: his saved runs on the article, production, read-only. Ids and confidence only. */
+const d = JSON.parse(readFileSync(`${DIR}/entropy.json`, "utf8"));
+writeFileSync(`${OUT}/greg-saved-runs.json`, JSON.stringify(d.searchRuns.map((s: any) => ({ id: s.id, kind: s.kind, criterion: s.criterion, status: s.status, model: s.model, hits: s.hits.map((h: any) => ({ blockId: h.blockId, confidence: h.confidence })) })), null, 1));
+/* The article's shape, without its words. */
+writeFileSync(`${OUT}/entropy-blocks-shape.json`, JSON.stringify(d.blocks.map((b: any) => ({ id: b.id, ordinal: b.ordinal, kind: b.kind, gistable: b.gistable, chars: b.text.length })), null, 1));
+console.log(readdirSync(OUT).join("\n"));

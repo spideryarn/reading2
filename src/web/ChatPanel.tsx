@@ -75,6 +75,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { withoutCommandLines } from "../citable.js";
 import { worthRetrying } from "../messages.js";
 import type {
   BlockId,
@@ -86,6 +87,8 @@ import type {
 } from "../types.js";
 import { isSingleThreadKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
+import { useChatCommands } from "./CommandChip.js";
+import { chipFor } from "./chat-commands.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -1330,13 +1333,19 @@ function RememberInvitation() {
  * *"I think it might start with the sort of basic recall question. You know,
  * what do you remember about the article? But it may be that the user says
  * nothing. I haven't read it yet."*
+ *
+ * **It offers, and does not ask them to say so.** Greg, `spya-hw8mhz`,
+ * 2026-10-03: *"I don't think the user should have to say that they haven't
+ * read it … you're letting them know it's okay if they haven't read/finished
+ * it."* The composer's placeholder and `readItFor` in src/converse.ts say the
+ * same thing in the same way.
  */
 function TutorialInvitation() {
   return (
     <div className="chat-suggest">
       <p className="chat-empty-hint">
-        What do you remember about this article? Or say you haven't read it yet — either is a fine
-        place to start.
+        What do you remember about this article? It's fine if you haven't read it yet, or haven't
+        finished — we can start from wherever you are.
       </p>
       <p className="chat-empty-hint">
         We'll take short turns: a little of the piece at a time, with a link to the passage, and then
@@ -1420,6 +1429,7 @@ function Turn({
    */
   const pencil = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(editing);
+  const commands = useChatCommands() ?? undefined;
   useEffect(() => {
     if (wasEditing.current && !editing) pencil.current?.focus();
     wasEditing.current = editing;
@@ -1555,7 +1565,14 @@ function Turn({
       <WebSources citations={message.citations} />
       {message.status !== "pending" && (
         <div className="chat-actions">
-          {message.text !== "" && <CopyAnswer text={message.text} />}
+          {message.text !== "" && (
+            <CopyAnswer
+              text={withoutCommandLines(
+                message.text,
+                (raw) => commands !== undefined && chipFor(raw, commands, blocks) !== null,
+              )}
+            />
+          )}
           {/* "Answer again" is a regenerate, not only a retry — it is offered on
               a perfectly good answer too. So the extra condition is narrow: it
               disappears only when this turn *failed*, and failed in a way that
@@ -1942,6 +1959,10 @@ function Answer({
      is the one every block link shares (BlockLinkCard.tsx), which also moves
      from chip to chip without a second wait — what a `TooltipGroup` here used
      to do. */
+  /* The executor a command chip presses through, where the reading view put
+     one round this panel — chat and the chat dialog, never Remember. `null`
+     everywhere else, and a `[cmd:…]` is then plain text. CommandChip.tsx. */
+  const commands = useChatCommands() ?? undefined;
   return (
     <CitedMarkdown
       text={text}
@@ -1958,6 +1979,7 @@ function Answer({
          for plain sentences and has neither. Cited.tsx § links,
          Cited.tsx § CitedMarkdown. */
       links
+      commands={commands}
     />
   );
 }
@@ -2193,7 +2215,7 @@ export function Composer({
           busy
             ? "Waiting for the answer…"
             : kind === "tutorial"
-              ? "What do you remember about it? Or say you haven't read it yet."
+              ? "What do you remember about it? It's fine if you haven't read it yet."
               : remember
                 ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
                 : (placeholder ?? "Ask about this article…")

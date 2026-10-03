@@ -1,6 +1,6 @@
 {
-  "id": "a734cd50-fde7-457e-bec3-a12f80cad015",
-  "prevId": "d24ceacd-14f3-4293-85bf-e693de9b4d86",
+  "id": "7c5ff376-d105-413d-9c1a-590d44ed0eaf",
+  "prevId": "b8ee1b18-1434-4ac5-b4cc-f070c06127ca",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -296,6 +296,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "voice_seconds": {
+          "name": "voice_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -446,7 +452,11 @@
         },
         "ai_calls_realtime_event_kind": {
           "name": "ai_calls_realtime_event_kind",
-          "value": "\"spideryarn\".\"ai_calls\".\"event_kind\" is null or \"spideryarn\".\"ai_calls\".\"event_kind\" in ('response','transcription')"
+          "value": "\"spideryarn\".\"ai_calls\".\"event_kind\" is null or \"spideryarn\".\"ai_calls\".\"event_kind\" in ('response','transcription','voice','backend')"
+        },
+        "ai_calls_voice_seconds_on_voice_rows": {
+          "name": "ai_calls_voice_seconds_on_voice_rows",
+          "value": "((\"spideryarn\".\"ai_calls\".\"event_kind\" is not distinct from 'voice') and \"spideryarn\".\"ai_calls\".\"voice_seconds\" is not null and \"spideryarn\".\"ai_calls\".\"voice_seconds\" > 0) or ((\"spideryarn\".\"ai_calls\".\"event_kind\" is distinct from 'voice') and \"spideryarn\".\"ai_calls\".\"voice_seconds\" is null)"
         },
         "ai_calls_realtime_columns_need_realtime_wire": {
           "name": "ai_calls_realtime_columns_need_realtime_wire",
@@ -3436,6 +3446,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "ignored_at": {
+          "name": "ignored_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -3514,7 +3530,7 @@
         },
         "feedback_screenshot_size": {
           "name": "feedback_screenshot_size",
-          "value": "\"spideryarn\".\"feedback\".\"screenshot\" is null or octet_length(\"spideryarn\".\"feedback\".\"screenshot\") <= 400000"
+          "value": "\"spideryarn\".\"feedback\".\"screenshot\" is null or octet_length(\"spideryarn\".\"feedback\".\"screenshot\") <= 2000000"
         },
         "feedback_mirrored_pair": {
           "name": "feedback_mirrored_pair",
@@ -5045,6 +5061,25 @@
           "primaryKey": false,
           "notNull": false
         },
+        "backend_model": {
+          "name": "backend_model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_session_id": {
+          "name": "provider_session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "voice_seconds_reported": {
+          "name": "voice_seconds_reported",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "issued_at": {
           "name": "issued_at",
           "type": "timestamp with time zone",
@@ -5137,6 +5172,10 @@
         "realtime_sessions_close_reason_len": {
           "name": "realtime_sessions_close_reason_len",
           "value": "length(\"spideryarn\".\"realtime_sessions\".\"close_reason\") <= 64"
+        },
+        "realtime_sessions_voice_seconds_not_negative": {
+          "name": "realtime_sessions_voice_seconds_not_negative",
+          "value": "\"spideryarn\".\"realtime_sessions\".\"voice_seconds_reported\" >= 0"
         }
       },
       "isRLSEnabled": false
@@ -6131,6 +6170,144 @@
         "shelf_topic_scores_claim": {
           "name": "shelf_topic_scores_claim",
           "value": "num_nonnulls(\"spideryarn\".\"shelf_topic_scores\".\"claim_id\", \"spideryarn\".\"shelf_topic_scores\".\"claim_hash\", \"spideryarn\".\"shelf_topic_scores\".\"claimed_until\") in (0, 3)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.shelf_topic_sets": {
+      "name": "shelf_topic_sets",
+      "schema": "spideryarn",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "profile_hash": {
+          "name": "profile_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "topics": {
+          "name": "topics",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "members": {
+          "name": "members",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "works": {
+          "name": "works",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unplaced": {
+          "name": "unplaced",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rethought_at": {
+          "name": "rethought_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "filed_at": {
+          "name": "filed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_until": {
+          "name": "claimed_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failures": {
+          "name": "failures",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "retry_after": {
+          "name": "retry_after",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "shelf_topic_sets_failures": {
+          "name": "shelf_topic_sets_failures",
+          "value": "\"spideryarn\".\"shelf_topic_sets\".\"failures\" >= 0"
+        },
+        "shelf_topic_sets_result": {
+          "name": "shelf_topic_sets_result",
+          "value": "num_nonnulls(\"spideryarn\".\"shelf_topic_sets\".\"model\", \"spideryarn\".\"shelf_topic_sets\".\"prompt_version\", \"spideryarn\".\"shelf_topic_sets\".\"profile_hash\", \"spideryarn\".\"shelf_topic_sets\".\"topics\", \"spideryarn\".\"shelf_topic_sets\".\"members\", \"spideryarn\".\"shelf_topic_sets\".\"works\", \"spideryarn\".\"shelf_topic_sets\".\"unplaced\", \"spideryarn\".\"shelf_topic_sets\".\"rethought_at\") in (0, 8)"
+        },
+        "shelf_topic_sets_filed": {
+          "name": "shelf_topic_sets_filed",
+          "value": "\"spideryarn\".\"shelf_topic_sets\".\"filed_at\" is null or \"spideryarn\".\"shelf_topic_sets\".\"rethought_at\" is not null"
+        },
+        "shelf_topic_sets_topics_array": {
+          "name": "shelf_topic_sets_topics_array",
+          "value": "\"spideryarn\".\"shelf_topic_sets\".\"topics\" is null or jsonb_typeof(\"spideryarn\".\"shelf_topic_sets\".\"topics\") = 'array'"
+        },
+        "shelf_topic_sets_topics_nonempty": {
+          "name": "shelf_topic_sets_topics_nonempty",
+          "value": "case when \"spideryarn\".\"shelf_topic_sets\".\"topics\" is null then true when jsonb_typeof(\"spideryarn\".\"shelf_topic_sets\".\"topics\") = 'array' then jsonb_array_length(\"spideryarn\".\"shelf_topic_sets\".\"topics\") > 0 else false end"
+        },
+        "shelf_topic_sets_members_object": {
+          "name": "shelf_topic_sets_members_object",
+          "value": "\"spideryarn\".\"shelf_topic_sets\".\"members\" is null or jsonb_typeof(\"spideryarn\".\"shelf_topic_sets\".\"members\") = 'object'"
+        },
+        "shelf_topic_sets_counts": {
+          "name": "shelf_topic_sets_counts",
+          "value": "(\"spideryarn\".\"shelf_topic_sets\".\"works\" is null or \"spideryarn\".\"shelf_topic_sets\".\"works\" >= 0) and (\"spideryarn\".\"shelf_topic_sets\".\"unplaced\" is null or \"spideryarn\".\"shelf_topic_sets\".\"unplaced\" >= 0)"
+        },
+        "shelf_topic_sets_claim": {
+          "name": "shelf_topic_sets_claim",
+          "value": "num_nonnulls(\"spideryarn\".\"shelf_topic_sets\".\"claim_id\", \"spideryarn\".\"shelf_topic_sets\".\"claimed_until\") in (0, 2)"
         }
       },
       "isRLSEnabled": false

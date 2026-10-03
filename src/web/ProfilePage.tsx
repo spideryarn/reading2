@@ -59,6 +59,9 @@ import { readHref } from "./router.js";
 import { AccountSection } from "./AccountSection.js";
 import { BillingSection } from "./BillingSection.js";
 import { ProfileBox } from "./ProfileBox.js";
+/* The Metadata page's section, shared since 2026-10-03 so the two read as one
+   app and fold the same way. This page had a private copy of the heading. */
+import { Section } from "./PageSection.js";
 import { SettingsSection } from "./SettingsSection.js";
 import { AppearanceSetting } from "./AppearanceSetting.js";
 import { SiteFooter } from "./SiteFooter.js";
@@ -96,7 +99,8 @@ type ModelRow = {
   model: string;
   id: string;
   provider: string;
-  wire: string;
+  /** Absent on the rows that are not tasks (the PDF reader, the embedding model). */
+  wire?: string;
   /** `"override"` when an environment variable, not the code, chose this model. */
   source: "default" | "override";
   effort?: string;
@@ -213,8 +217,35 @@ export function ProfilePage() {
         have switched on.
       </p>
 
+      {/* **Which sections fold, and which do not.** Greg, 2026-10-03, feedback
+          report `spya-ka3cau`:
+
+          > So the important ones that we should keep open are probably account,
+          > plan, and about you. And then I think the others could perhaps be
+          > default collapsed.
+
+          So the first three are **not collapsible at all** rather than merely
+          open: a heading that can be shut is a card that can be hidden, and
+          *Plan* is where the quota's refusal sends a reader for a button. The
+          other three are `collapsible`, which starts them shut.
+
+          None is `keepMounted`. Settings' saves live outside the component
+          (experimental-store.ts) or on the device (AppearanceSetting), so
+          unmounting it cancels nothing; the two read-outs are fed by fetches
+          this page owns, above, which run whether or not their card is drawn.
+          GPT Sol, plan review of 261003k, F4.
+
+          `keywords` are for a contents list's search box (PageSection.tsx).
+          This page draws no such list yet — six headings on about one screen —
+          but the prop is required, and written now they are the words a reader
+          would type, not the ones each card prints.
+          docs/project/reader-profile.md § The page's six sections. */}
       {/* ---------------------------------------------------------- account -- */}
-      <Section icon={UserCheck} label="Account">
+      <Section
+        icon={UserCheck}
+        label="Account"
+        keywords="email address signed in as sign out log out logout login who am I"
+      >
         <div className={`${CARD} tw:p-4`}>
           <AccountSection />
         </div>
@@ -226,14 +257,22 @@ export function ProfilePage() {
           account may do — and it is the page the refusal copy sends people to
           when the wall stops them (`ingestQuotaReached`, src/messages.ts), so it
           must not be below three cards they have to scroll past. */}
-      <Section icon={Wallet} label="Plan">
+      <Section
+        icon={Wallet}
+        label="Plan"
+        keywords="upgrade billing subscription pay payment price cost tier free limit quota allowance articles a month stripe cancel switch"
+      >
         <div className={`${CARD} tw:p-4`}>
           <BillingSection />
         </div>
       </Section>
 
       {/* ------------------------------------------------------- about you -- */}
-      <Section icon={User} label="About you">
+      <Section
+        icon={User}
+        label="About you"
+        keywords="background expertise interests bio who I am what the model knows personalise tailor reader profile"
+      >
         <div className={`${CARD} tw:p-4`}>
           <ProfileBox
             id="reader-profile"
@@ -266,7 +305,12 @@ export function ProfilePage() {
           Both are things the reader sets, so they belong together and ahead of
           "recently read" and "what's running", neither of which is a control.
           docs/project/experimental-features.md. */}
-      <Section icon={SlidersHorizontal} label="Settings">
+      <Section
+        icon={SlidersHorizontal}
+        label="Settings"
+        keywords="theme dark mode light mode system appearance colour color night experimental features beta preferences options switch toggle"
+        collapsible
+      >
         <div className={`${CARD} tw:flex tw:flex-col tw:gap-4 tw:p-4`}>
           <AppearanceSetting />
           <SettingsSection />
@@ -274,7 +318,12 @@ export function ProfilePage() {
       </Section>
 
       {/* ---------------------------------------------------- recently read -- */}
-      <Section icon={BookOpen} label="Recently read">
+      <Section
+        icon={BookOpen}
+        label="Recently read"
+        keywords="history recent articles last opened shelf library how many words count"
+        collapsible
+      >
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
           {shelf === null ? (
             /* `role="status"` because the sentence arrives 600ms after the
@@ -331,7 +380,12 @@ export function ProfilePage() {
       </Section>
 
       {/* -------------------------------------------------- what is running -- */}
-      <Section icon={Cpu} label="What's running">
+      <Section
+        icon={Cpu}
+        label="What's running"
+        keywords="models AI which model LLM provider claude sonnet opus openrouter effort why is it slow"
+        collapsible
+      >
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
           {models === null ? (
             <p className="tw:m-0 tw:px-4 tw:py-3 tw:text-sm tw:text-muted-foreground">Loading…</p>
@@ -352,14 +406,17 @@ export function ProfilePage() {
                     third spelling. */}
                 <span
                   className="tw:font-mono tw:text-xs tw:text-foreground"
-                  title={`${m.id} · via ${PROVIDER_LABEL[m.provider] ?? m.provider} · ${WIRE_LABEL[m.wire] ?? m.wire} API`}
+                  title={`${m.id} · via ${PROVIDER_LABEL[m.provider] ?? m.provider}${m.wire ? ` · ${WIRE_LABEL[m.wire] ?? m.wire} API` : ""}`}
                 >
                   {m.model}
                   {m.effort && <span className="tw:text-ink-faint"> · {m.effort}</span>}
                   <span className="tw:text-ink-faint">
                     {" · "}
                     {PROVIDER_LABEL[m.provider] ?? m.provider}
-                    {` (${WIRE_LABEL[m.wire] ?? m.wire})`}
+                    {/* Only when the server names one. This printed
+                        "(undefined)" on every row until 2026-10-03: the
+                        route had never sent the field. */}
+                    {m.wire && ` (${WIRE_LABEL[m.wire] ?? m.wire})`}
                     {/* An override is a one-off comparison somebody is running,
                         not this app's configuration, and the difference matters
                         to anyone reading the table to find out what the app
@@ -392,26 +449,5 @@ export function ProfilePage() {
           gloss the others do not have reads as a different kind of thing. */}
       <SiteFooter />
     </main>
-  );
-}
-
-/** Same heading treatment as the metadata page, so the two read as one app. */
-function Section({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: typeof User;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="tw:mt-8">
-      <h2 className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
-        <Icon size={12} />
-        {label}
-      </h2>
-      {children}
-    </section>
   );
 }

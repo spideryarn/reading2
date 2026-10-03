@@ -109,7 +109,7 @@
   line-height: 1.5;
 }
 /* **The fact, as the control.** The whole line is the target rather than a 12px
-   chevron — Metadata.tsx's `Section` makes the same call — and it is `--ink`
+   chevron — PageSection.tsx's `Section` makes the same call — and it is `--ink`
    rather than `--ink-soft`, because shut is this notice's ordinary state and
    this sentence is then the only one on screen. Left-aligned text with the
    chevron pushed to the end, so a two-line wrap still reads as a paragraph and

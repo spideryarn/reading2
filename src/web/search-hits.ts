@@ -164,6 +164,16 @@ export interface Found {
    */
   readonly whole: boolean;
   /**
+   * **The passage is its whole paragraph by design, so its words wear
+   * nothing**: a quick search's hit, and only that. The paragraph bar and the
+   * spine mark carry it; `baseMarks` hands the flag to the mark (`Mark.bare`).
+   * Absent everywhere else.
+   *
+   * Not `whole`, which means quote placement *failed* on a hit that did name
+   * words — that one keeps its wash. Plan 261003i B4.
+   */
+  readonly bare?: true;
+  /**
    * **`null` at every source but Quotes**, and that is the whole meaning of it:
    * a passage carrying a stroke is drawn as an outline, and one carrying `null`
    * is drawn as a search hit's wash.
@@ -380,10 +390,11 @@ export interface ActiveRun {
    * because most of the tests that draw a run predate the field; the one
    * production caller, `useSearchMode`, always says.
    *
-   * It matters for one thing: a **quick** hit's quote is its whole paragraph,
+   * It matters for one fact with two consequences: a **quick** hit's quote is its whole paragraph,
    * so its previews are cut from the top of the block rather than grown
    * around a span that is already longer than either budget — see
-   * `resolveOne`'s `preview`. Plan 261002e, review F2.
+   * `resolveOne`'s `preview`. Plan 261002e, review F2. And, since 2026-10-03,
+   * its words are not washed — `Found.bare`.
    */
   kind?: SearchKind;
 }
@@ -541,7 +552,8 @@ function resolveOne(
      * given, so a 6,000-character paragraph came back whole for both the list
      * and the hover card. The highlight keeps the full span; only the two
      * previews are bounded. Not `whole`: that flag means placement *failed*,
-     * and the panel says so.
+     * and the panel says so. It is also what makes the result `bare`: one
+     * fact, "the quote is the paragraph on purpose", read twice.
      */
     preview?: "from-start";
   },
@@ -590,6 +602,7 @@ function resolveOne(
        source meant is exactly what we do not know. */
     at: placeOf(at.scale, i, span.start),
     whole,
+    ...(spec.preview === "from-start" && { bare: true as const }),
     quoteStroke: spec.quoteStroke,
   };
 }
@@ -1337,7 +1350,10 @@ function baseMarks(
       end: f.end,
       kind: "hit",
       ...painted,
-      ...(quoted
+      /* A quick hit: no stroke and no strength, so nothing on the words. */
+      ...(f.bare
+        ? { bare: true }
+        : quoted
         ? { quoteStroke: f.quoteStroke }
         : {
             strength:

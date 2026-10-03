@@ -150,6 +150,30 @@ The whole eval cost about three and a half cents by the ledger lines the runs pr
   verdict per contrast, on run 1 only; no swapped duplicates and no identical-list control this time.
 - Luna's cost includes its reasoning tokens, which vary run to run.
 
+## Later the same day: a tree, and filing
+
+Greg answered, asked for broad-to-fine topics and for new articles to be sorted in by themselves,
+and said to build ([plan 261003f § Greg's answer, and v1](../plans/261003f-shelf-topics-named-by-a-model-as-concepts-not-phrases.md)).
+The shipped code was then measured by [`hier.ts`](../../evals/shelf-topic-clusters/hier.ts), which
+calls `rethink` and `fileWorks` from `src/shelf-terms/model-topics.ts` on two shelves that record
+what each article was written to be about: greg-wide, and **expert**, Greg's own example (160
+neuroscience articles over ten sub-areas, 7 Buddhism, 5 carpentry), also cut to its first 150
+because that is the largest shelf v1 re-thinks.
+
+The numbers, what was changed after seeing a result (the top-level prompt, which at first split
+neuroscience into fifteen top-level topics and offered no *Neuroscience* at all), and what they do
+not show are in the plan's § What was measured; the full trees are in
+[hier-expert-150.md](../../evals/shelf-topic-clusters/results/hier-expert-150.md),
+[hier-greg-wide.md](../../evals/shelf-topic-clusters/results/hier-greg-wide.md) and
+[hier-expert.md](../../evals/shelf-topic-clusters/results/hier-expert.md). In one line: the top level
+came back as *Neuroscience · Buddhism · Woodworking* with 13 topics inside *Neuroscience* and 44
+finer ones, for a cent and a half; and articles filed afterwards landed in 84 to 95% of the topics
+they were written for, as often as articles the re-think placed itself, with 2 to 10% of their
+placements wrong.
+
+The flat `induce` arm above is what proved the idea; the tree is what was built. The
+`shelf-topics:preview` script still shows the flat version.
+
 ## Re-run
 
 ```
@@ -161,6 +185,7 @@ npx tsx evals/shelf-topic-clusters/summarise.ts                          # resul
 npx tsx evals/shelf-topic-clusters/make-pairs.ts                         # what the judge reads
 npx tsx evals/shelf-topic-clusters/tally.ts                              # verdicts joined to the key
 npx tsx evals/shelf-topic-clusters/file-one.ts                           # PAID: filing one article
+npx tsx evals/shelf-topic-clusters/hier.ts                               # PAID, ~8 cents: the shipped tree and filing
 ```
 
 Up: [investigations.md](../project/investigations.md)

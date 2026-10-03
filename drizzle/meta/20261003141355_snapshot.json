@@ -1,5 +1,5 @@
 {
-  "id": "d24ceacd-14f3-4293-85bf-e693de9b4d86",
+  "id": "88594745-43a8-4b42-a9df-b343f386c016",
   "prevId": "2195faba-c7ce-441b-ac73-14571ab36af7",
   "version": "7",
   "dialect": "postgresql",
@@ -2736,13 +2736,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
         }
       },
       "indexes": {},
@@ -2983,13 +2976,6 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
         }
       },
       "indexes": {},
@@ -3406,6 +3392,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "ignored_at": {
+          "name": "ignored_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -3608,13 +3600,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
         }
       },
       "indexes": {},
@@ -3711,13 +3696,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
         }
       },
       "indexes": {},
@@ -4874,13 +4852,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false,
           "default": "now()"
         }
       },

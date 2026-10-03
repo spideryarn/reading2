@@ -306,7 +306,7 @@ import type { Verifier, VerifyResult } from "../src/auth.js";
 import { WEBHOOK_PATH } from "../src/billing/webhook.js";
 import { loadEnvLocal } from "../src/env.js";
 import { UNEXPECTED_FAILURE } from "../src/messages.js";
-import { modelFor, powerFor } from "../src/models.js";
+import { modelFor, powerFor, TASK_TIER, wireFor, type Task } from "../src/models.js";
 import { isPublicNamespace } from "../src/public/routes.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
@@ -379,7 +379,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
   },
   {
     match: { kind: "regex", source: "^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$", flags: "" },
-    methods: ["GET"],
+    /* PATCH since 261003j: mark one report ignored, or take the mark back. */
+    methods: ["GET", "PATCH"],
     witnesses: ["/api/admin/feedback/w1/w2"],
   },
   {
@@ -763,6 +764,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/chat/w1/w2/live"],
   },
   {
+    /* GPT-Live's create-and-connect, the second live engine (plan 261003a). */
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live-session$",
+      flags: "",
+    },
+    methods: ["POST"],
+    witnesses: ["/api/chat/w1/w2/live-session"],
+  },
+  {
     /* The second documented overlap: `/api/chat/<slug>/live-tool` is also two
        segments, so the thread matcher above takes it for `PATCH` and `DELETE`.
        Both selections are right and neither depends on the order. */
@@ -893,8 +904,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 88;
-const EXPECTED_GUARD_COUNT = 107;
+const EXPECTED_MATCHER_COUNT = 89;
+const EXPECTED_GUARD_COUNT = 109;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2033,6 +2044,8 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/admin\\/voucher-emails\\/([\\w-]+)\\/retry$/",
         "GET literal /api/admin/feedback",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
+        // mark one report ignored, 261003j — beside the read of it
+        "PATCH regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
         // one article's cost, for the metadata page, 260930f
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$/",
@@ -2115,6 +2128,7 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/cancel$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/live-tool$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/live-session$/",
         "POST regex /^\\/api\\/live\\/([\\w-]+)\\/connected$/",
         "POST regex /^\\/api\\/live\\/([\\w-]+)\\/usage$/",
         "POST regex /^\\/api\\/live\\/([\\w-]+)\\/close$/",
@@ -2614,6 +2628,23 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
       const simple = (reply.body.tasks as { task: string; id: string }[]).find((t) => t.task === "simple");
       expect(simple?.id).toBe(modelFor("simple", powerFor("simple", "standard")));
       expect(simple?.id).toBe(modelFor("simple", "high"));
+    });
+
+    it("sends each task's wire in the real model response", async () => {
+      const reply = await call("GET", "/api/models");
+      expect(reply.status).toBe(200);
+      const rows = reply.body.tasks as { task: string; wire?: string }[];
+      /* The Profile fixture supplies this field itself. Only the HTTP reply
+         catches a resolver value that modelsInUse forgot to put on the wire. */
+      for (const task of Object.keys(TASK_TIER) as Task[]) {
+        expect(rows.find((row) => row.task === task)?.wire, task).toBe(wireFor(task));
+      }
+      /* Independent witnesses for both API shapes, and a row with no task. */
+      expect(rows.find((row) => row.task === "glossary")?.wire).toBe("messages");
+      expect(rows.find((row) => row.task === "chat")?.wire).toBe("chat");
+      const pdf = rows.find((row) => row.task === "pdf");
+      expect(pdf).toBeDefined();
+      expect(pdf).not.toHaveProperty("wire");
     });
 
     it("still refuses a method that is not, and quotes the raw URL back", async () => {

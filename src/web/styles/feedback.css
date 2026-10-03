@@ -623,7 +623,7 @@
    `tw:text-sm` sets a size while leaving the family alone.
 
    The visible result was the collapsible section headings. A shut section's
-   heading is a button (Metadata.tsx § Section) carrying the h2's 0.68rem
+   heading is a button (PageSection.tsx § Section) carrying the h2's 0.68rem
    uppercase classes on its parent and nothing of its own, so it drew half again
    the size of every heading beside it, in a different typeface. Everything else
    on the page was subtler: the right size in the wrong face.

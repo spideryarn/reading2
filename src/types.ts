@@ -2186,8 +2186,20 @@ export interface LibraryTermsResponse {
     /** Lowercased, plural-folded — what `?topics=` names. */
     key: string;
     label: string;
-    /** Every member article, by how often it uses the phrase, then slug. */
-    articles: { slug: string; count: number }[];
+    /**
+     * Every member article. A phrase topic's are ordered by how often each uses
+     * the phrase, then slug, and carry that `count`. **A model-named topic's
+     * are newest first and carry no `count`**: there is no phrase to count
+     * (plan 261003f), and a made-up 1 would print "used 1 time".
+     */
+    articles: { slug: string; count?: number }[];
+    /**
+     * How coarse or fine the topic is, 0 (a broad subject) towards 1. Only on
+     * a model-named topic; the list arrives broad first. Greg, 2026-10-03.
+     */
+    granularity?: number;
+    /** The `key` of the broader topic this one is inside, when it has one. */
+    within?: string;
   }[];
   scope: {
     /** The whole visible shelf, including skipped and pending articles. */
@@ -2197,7 +2209,11 @@ export interface LibraryTermsResponse {
     /** Read articles the extractor skipped — not English, or no prose. */
     skipped: number;
   };
-  /** In-scope articles not yet read; ask again until this is 0. */
+  /**
+   * Articles not yet read; ask again until this is 0. Normally the visible
+   * scope. While preparing one model tree over active + archived together it
+   * can temporarily include archived articles outside the current view.
+   */
   pending: number;
   /**
    * Whose ranking `terms` is: `"model"` when a stored model score for this
@@ -2211,6 +2227,13 @@ export interface LibraryTermsResponse {
    * bounded number of times — and the model's pick will be in the answer.
    */
   refreshing: boolean;
+  /**
+   * How many articles in this view are not in the model's topics yet because
+   * they arrived after it was last worked out. They are sorted in by
+   * themselves; until then they are missing under a chosen topic, so the row
+   * says so. Absent when there are none, and on the phrase row.
+   */
+  sorting?: number;
 }
 
 /**
@@ -2866,6 +2889,51 @@ export const MIC_PLACEMENTS = ["headset", "laptop"] as const satisfies readonly 
 /** Is this string one of ours? The gate every wire-read placement goes through. */
 export function isMicPlacement(x: unknown): x is MicPlacement {
   return typeof x === "string" && (MIC_PLACEMENTS as readonly string[]).includes(x);
+}
+
+/**
+ * **Which of the two live-conversation engines a call is on.** `realtime` is
+ * OpenAI Realtime, one model that listens, thinks and speaks; `gpt-live` is
+ * GPT-Live, a voice model with a text model behind it. Built side by side to be
+ * compared, and one of them will be deleted —
+ * docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md.
+ *
+ * Here for the reason `MicPlacement` is: the browser names the engine when it
+ * saves a spoken exchange and the server checks the string, so both ends need
+ * the one union.
+ */
+export type LiveEngine = "realtime" | "gpt-live";
+
+/** The same two as a value, tied to the union by `satisfies`. */
+export const LIVE_ENGINES = ["realtime", "gpt-live"] as const satisfies readonly LiveEngine[];
+
+/** Is this string one of ours? The gate a wire-read engine goes through. */
+export function isLiveEngine(x: unknown): x is LiveEngine {
+  return typeof x === "string" && (LIVE_ENGINES as readonly string[]).includes(x);
+}
+
+/**
+ * **What `POST /api/chat/:slug/:threadId/live-session` answers** — everything
+ * the browser needs to open one GPT-Live call, and nothing it could use to
+ * change what the models were told.
+ *
+ * No seed and no expiry. The history went to OpenAI inside the create request
+ * (`session.input`), so there is nothing for the browser to replay; and the
+ * create response carries no expiry — `session.started` on the data channel
+ * does (`session.expires_at`).
+ */
+export interface GptLiveTicket {
+  /** The SDP answer, to set as the peer connection's remote description. */
+  sdp: string;
+  /**
+   * **Our** journal row's id — what `/api/live/:sessionId/connected`, `/usage`
+   * and `/close` are addressed to. Not OpenAI's.
+   */
+  sessionId: string;
+  /** OpenAI's id for the session (`live_…`). The same one `session.started` carries. */
+  liveSessionId: string;
+  /** The row the first spoken append must claim, or `null` for an empty thread. */
+  tailId: string | null;
 }
 
 export interface ToolRun {
@@ -4560,9 +4628,12 @@ export interface CitationDrops {
   entryMismatch: number;
   /** An entry whose text does not contain the model's title — the entry is dropped (plan 260930i, Sol F3). */
   entryDisagrees: number;
-  /** Authors not all found as words of the work's entry — dropped, the entry kept. */
+  /**
+   * Authors not all found as words of the work's entry — dropped, the entry
+   * kept. With no entry, authors the article names nowhere (plan 261003j).
+   */
   authorsUnfound: number;
-  /** A year the work's entry does not carry — dropped, the entry kept. */
+  /** A year the work's entry does not carry, or with no entry, the article — dropped. */
   yearUnfound: number;
 }
 
@@ -6473,12 +6544,24 @@ export const MAX_FEEDBACK_BODY_CHARS = 12_072;
 /**
  * The largest screenshot the database will take, in **decoded** bytes.
  *
- * The dialog downscales to around 300 KB; this is the ceiling that holds
- * whatever the dialog does, because client-side downscaling is not validation.
- * A CHECK on `octet_length` rather than a rule in TypeScript, so it holds for
- * every writer including a script — docs/project/sql.md.
+ * The dialog shrinks a picture until it is under 90% of this
+ * (src/web/feedback-screenshot.ts); this is the ceiling that holds whatever the
+ * dialog does, because client-side downscaling is not validation. A CHECK on
+ * `octet_length` rather than a rule in TypeScript, so it holds for every writer
+ * including a script — docs/project/sql.md.
+ *
+ * **Two megabytes since 2026-10-03; it was 400,000.** At the old number a
+ * screenshot with a photograph in it had to go at about 640 pixels to fit, which
+ * cannot be read. It is not higher because the picture travels as base64 inside
+ * a JSON body and Vercel refuses a request over 4.5 MB before our code runs:
+ * two megabytes is 2.67 MB on the wire, and five would be 6.7 MB.
+ *
+ * **Three places hold this number and must move together**: this constant, the
+ * `feedback_screenshot_size` CHECK in src/db/schema.ts, and a migration that
+ * drops and re-adds that CHECK. tests/feedback-store.test.ts files one at
+ * exactly this size and one a byte over, against the real table.
  */
-export const MAX_FEEDBACK_SCREENSHOT_BYTES = 400_000;
+export const MAX_FEEDBACK_SCREENSHOT_BYTES = 2_000_000;
 
 /**
  * The opt-in diagnostics blob — **opaque to everything that stores it**.
@@ -6625,8 +6708,29 @@ export interface AdminFeedbackReport {
   /** ISO. Sentry acknowledged it. Attempted-but-not-acknowledged is the interesting state. */
   mirroredAt: string | null;
   sentryEventId: string | null;
+  /**
+   * ISO, or `null`. **When an administrator marked this report as one to leave
+   * alone** — a test, a duplicate, nonsense. Not something the reader sent and
+   * not shown to them; the agents' sweep skips a marked report
+   * (scripts/feedback-unswept.ts). src/db/schema.ts § `ignoredAt`.
+   */
+  ignoredAt: string | null;
   /** ISO. */
   createdAt: string;
+}
+
+/**
+ * **The body of `PATCH /api/admin/feedback/:ownerId/:id`**: exactly
+ * `{ ignored: boolean }`. Anything else is refused rather than read
+ * generously, so a field added to this route later cannot be sent by a client
+ * that predates it and quietly dropped.
+ */
+export function parseFeedbackIgnorePatch(raw: unknown): { ignored: boolean } | "malformed" {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return "malformed";
+  const keys = Object.keys(raw);
+  const ignored = (raw as { ignored?: unknown }).ignored;
+  if (keys.length !== 1 || typeof ignored !== "boolean") return "malformed";
+  return { ignored };
 }
 
 /**

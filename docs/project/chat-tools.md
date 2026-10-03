@@ -12,6 +12,8 @@ Code: [`src/chat-tools.ts`](../../src/chat-tools.ts) (what a tool is, and the on
 [`src/routes.ts`](../../src/routes.ts) § `streamChat` (the `tool` frame),
 [`src/web/useChat.ts`](../../src/web/useChat.ts) (assigning by index),
 [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) § `ToolStrip`.
+The buttons an answer can offer are not tools and have their own files —
+[§ Command buttons](#command-buttons-chat-proposes-the-reader-presses).
 Tests: [`tests/chat-tools.test.ts`](../../tests/chat-tools.test.ts).
 Built on top of [260826a-chat-mode.md](../plans/260826a-chat-mode.md), which is where the panel and the citation
 contract come from.
@@ -361,7 +363,9 @@ parse that can disagree with this one.
 What *does* still hold, and is worth keeping true: nothing chat can call writes a file, deletes
 anything, or spends money. That is the reason the write tools below are not built yet — the first one
 that writes turns "an injected page made the answer wrong" into "an injected page changed the
-reader's data".
+reader's data". Since 2026-10-03 an answer can *offer* a write or a spend as a button, and the
+sentence above is unchanged by it, because a button is pressed by the reader and called by nothing:
+[§ Command buttons](#command-buttons-chat-proposes-the-reader-presses).
 
 ## A transcript cannot be published by column allowlist, and that is why chat is not shared
 
@@ -594,15 +598,83 @@ Ids the article does not have are dropped (a stale tab); anything that is not an
 client trims to `MAX_VISIBLE_BLOCKS` (100, `src/types.ts`) so a tall screen cannot get Send
 refused. [261001q](../plans/261001q-chat-knows-the-blocks-on-screen.md).
 
+## Command buttons: chat proposes, the reader presses
+
+> for everything that we do along these lines, we want to build those tools such that the chat or
+> whatever could also make use of them. So the chat could also look up words in the glossary or
+> place a bookmark at a particular block or something.
+>
+> — Greg, 2026-09-29 (`spya-wh2xys`)
+
+**Built 2026-10-03**
+([261003f](../plans/261003f-commands-take-arguments-tags-dictation-and-chat-tools.md), Stage 2). An
+answer can end in a button — *Bookmark this passage*, *Add the tag “methods”*, *Jump to the first
+“X”*, *Find “X” in this article*, *Look up “X” in this article* — which is **the command bar's own
+row**, drawn the same way, `generates` marker included
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). It is not
+a ninth tool, and that is the point.
+
+**The rule it is built to** is the one Greg accepted on 2026-10-02
+([chat-llm-help-commands-vision.md § Decided](chat-llm-help-commands-vision.md#decided)): the model
+*proposes* anything that writes or spends, the reader presses, and what the model wrote is parsed,
+never trusted. Chat's context holds the article and fetched pages, so the boundary cannot be the
+prompt.
+
+- **A token, not a tool call.** The model writes `[cmd:<id>:<percent-encoded argument>]` in its
+  prose — an exact id and one argument, never a sentence to be re-read as language. A proposal has
+  to persist with the answer and draw as a button; a token is stored free in the answer's text and
+  drawn by the renderer that already draws block chips, where a tool call would have needed a new
+  streamed event, a new stored part of a turn and a renderer, for the same button. The shape is
+  [`src/command-token.ts`](../../src/command-token.ts); what a token means is
+  [`command-proposal.ts`](../../src/web/command-proposal.ts) § `parseProposalToken`.
+- **Where one is recognised**: in an unquoted paragraph's own text — never in a blockquote, code, a
+  heading, a bold run or a link's label — **on a line of its own**, and only where the surface was handed an executor
+  ([`Cited.tsx`](../../src/web/Cited.tsx)). The own-line rule is code rather than prompt because of
+  what the eval found: every token written *for the reader* stood alone, and the one that did not
+  was a hostile article's, quoted mid-sentence by a model refusing it.
+- **The allowlist** is `CHAT_PROPOSABLE` in
+  [`chat-commands.ts`](../../src/web/chat-commands.ts), whose `chipFor` is the whole decision
+  between a button and the characters the model wrote: an id on the list, an argument its own
+  command accepts, and for a bookmark a block this article has. `glossary-open` is not on it — its
+  argument is an entry id the model is never shown — so chat writes `glossary-ask` with the term and
+  `chipFor` turns that into *open the entry* when the visible glossary has it.
+- **Asked twice.** `chipFor` runs at the draw and again at the press
+  ([`CommandChip.tsx`](../../src/web/CommandChip.tsx)), so whether the page can run it is never
+  remembered from the render. A press goes through `chatExecutor`
+  ([`command-runners.ts`](../../src/web/command-runners.ts)): the reading view's own runners by
+  reference — the memoised bookmarker, the gated glossary pair — never a copy made for chat. No
+  runner yet (the comments read still out) is a disabled button, not raw brackets.
+- **Who gets them.** Chat and the passage chat dialog, the owner's. Remember, Tutorial and
+  Candidates get no executor and their prompts no section, so a token there is text; Live's spoken
+  prompt has none either, and `tests/chat-command-chips-prompt.test.ts` holds that.
+- **A token is never citation text**, valid or not, on both sides: `citableText`
+  ([`src/citable.ts`](../../src/citable.ts)) blanks the run, so the id inside
+  `[cmd:bookmark:spya-…]` is not counted as a citation the reader was shown.
+- **The prompt** is `COMMAND_CHIPS` in [`src/converse.ts`](../../src/converse.ts): offer a button
+  only when the reader's own message asks for the action, one sentence then the token, never claim
+  to have done it.
+
+**The eval** — 30 cases a run, five runs, scored by `chipFor` itself: the right button 15 times in
+17 in every run, none on an ordinary question, and a hostile article got a token out of the model
+in 2 of 25 answers. So the prompt's sentence about the article is not a defence; the press and the
+allowlist are. [261003b](../investigations/261003b-chat-proposes-commands-as-chips.md) has the
+numbers, what was not measured (a hostile *fetched page*, a conversation with history), and the
+runner is [`evals/chat-commands/run.ts`](../../evals/chat-commands/run.ts).
+
+***Copy answer* leaves the button lines out** (`withoutCommandLines`, src/citable.ts): the reader was
+shown a button, not a token. A token that was drawn as text is copied as text.
+
 ## Not built, and worth building
 
 Greg's list, with a recommendation each so nobody is blocked. All three are **writes**, which is the
-line the eight above deliberately do not cross — see the security section.
+line the eight above deliberately do not cross — see the security section. A write that the reader
+presses now has a shape ([§ Command buttons](#command-buttons-chat-proposes-the-reader-presses)),
+and **bookmark a passage** and the reader's **tags** are built that way.
 
 | Idea | Recommendation |
 |---|---|
-| **Plant a question on a section** — a comment waiting where the reader will hit it | **Do this one first.** It is the most Spideryarn-ish thing on the list: the model prepares the reading rather than replacing it, and it is the only one that acts *later*. Needs a `Comment` that is a question rather than an answer, which is a schema change — see [comments.md](comments.md) |
-| **Glossary add/update** | Worth it, and cheap to read (`article_glossary` already does). Writing means an entry arriving without the provenance the generated ones carry, so a hand-added entry needs to be visibly one. See [glossary.md](glossary.md) |
+| **Plant a question on a section** — a comment waiting where the reader will hit it | **Do this one first** — as a command button, not a tool the model calls. It is the most Spideryarn-ish thing on the list: the model prepares the reading rather than replacing it, and it is the only one that acts *later*. Needs a `Comment` that is a question rather than an answer, which is a schema change — see [comments.md](comments.md) |
+| **Glossary add/update** | **Add is built, as a button** (2026-10-03): *Look up “X” in this article* runs the glossary's own look-up, so the entry carries the provenance any looked-up term does ([glossary.md § Looking a term up](glossary.md#looking-a-term-up)). Updating an entry from chat is not |
 | **Generate a tweet thread** | Least valuable of the three. It is a whole pipeline stage with a mode of its own (a page until 2026-09-29; [260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)), it is expensive, and "make me a thread" from inside a reading companion is a different product |
 | **`add_to_library(url)`** — offered and not taken | Would want a confirm step rather than firing on the model's say-so: it spends money and changes state. [ingest-queue.md](ingest-queue.md) |
 

@@ -1,7 +1,7 @@
 # Store when it happened: an audit of `src/db/schema.ts`, and the columns it was missing
 
-**Status: plan reviewed by GPT Sol ([261003j-plan-review-sol.md](261003j-plan-review-sol.md)); its seven
-findings are all accepted and folded in below (§ The plan review). Building.**
+**Status: built, 2026-10-03.** All three stages landed; § What landed says what, and what is left
+for Greg.
 
 ## What this is for
 
@@ -197,4 +197,50 @@ GPT Sol, 2026-10-03, verdict REFUSE on F1 and F2; all seven accepted, none overr
 
 ## What landed
 
-(to be filled in per stage)
+**One migration: `drizzle/20261003170347_store_when_it_happened.sql`** — seventeen nullable
+timestamp columns. It was built as two (`…143158_created_at_on_action_tables`,
+`…154322_event_times`); four migrations landed on `dev` meanwhile with later stamps, so both were
+unpublished losers of a fork and were regenerated as one on top of `dev`
+([database.md § Repairing a fork](../project/database.md)). The five `created_at` lines are
+hand-split into add-then-default. Applied to the shared local database on 2026-10-03, where the 19
+rows already in those five tables all kept a null `created_at` — observed, not argued.
+
+- **Stage 1** — `created_at` on `glossary_hidden_entries`, `reader_profiles`, `glossary_lookups`,
+  `citation_finds`, `citation_investigations`; no store change beyond a type
+  (`citation-investigation-row.ts` leaves the column out so an upsert cannot name it).
+  `tests/action-tables-have-created-at.test.ts` holds the rule for new tables, and also refuses any
+  migration that adds a timestamp with `DEFAULT now()` in one statement.
+  `tests/created-at-on-action-tables.test.ts` holds the five against Postgres. The drift guard
+  reports a lost default on a nullable column.
+- **Stage 2** — the twelve event columns of G6–G16, written by the stores;
+  `tests/event-times.test.ts`.
+- **Stage 3** — `GlossaryEntry.addedAt`; `tests/glossary-added-at.test.ts`.
+
+### The code reviews
+
+GPT Sol, twice. [Stages 1 and 3](261003j-code-review-1-sol.md) (read-only): F8, a glossary rewrite
+could lose an inherited id and its time when two fresh entries merged — fixed, fresh entries now
+merge before any inherits; F9, the migration guard read lines rather than statements — fixed.
+[Stage 2](261003j-code-review-2-sol.md) (write-capable): F10, re-saving an unchanged title, purpose
+or archive state moved `articles.updated_at` — fixed by Sol in the `UPDATE` itself, and seen red
+under a mutation here; F11, application clocks — now the database's `clock_timestamp()`; its
+postmortem is [261003c](../postmortems/261003c-payload-presence-is-not-a-state-transition.md).
+
+**F12 is open, and not this work's:** a stale `pgChatStore.finish` leaves the message alone but
+still moves `chat_threads.updated_at`, because that update runs before the fenced one. It predates
+this plan. Sol's fix is in its review; it changes thread ordering, so it is reported rather than
+slipped in.
+
+### Decisions made while building
+
+- `articles.updated_at` moves only when a value actually changes (F10).
+- A reader's own chat turn gets `finished_at` = its created time; only a pending reply is null.
+- A second Stop on a job already cancelling moves `cancel_requested_at`: it is the latest request.
+- The owner's glossary API carries `addedAt` on the wire, as it does every stored field; nothing
+  renders it, and the public reader drops it.
+
+### Left for Greg
+
+- **`reading_time` has no time, on purpose** — § Deliberately not changed. Adding one means
+  changing the privacy page's *"the totals, not a history"*.
+- **Deletions are untimed** — un-hiding, removing a tag, deleting a comment or thread.

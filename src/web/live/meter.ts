@@ -270,15 +270,22 @@ export function transcriptionReport(
 export type PostOutcome = "accepted" | "retry" | "refused";
 
 /** One thing waiting to be told to the server. */
-type Pending =
+type Pending<R> =
   | { kind: "connected"; tries: number }
-  | { kind: "usage"; report: LiveUsageReport; tries: number }
+  | { kind: "usage"; report: R; tries: number }
   | { kind: "close"; reason: string | null; tries: number };
 
-/** The three accounting calls, as the meter needs them. `apiWiring` in wiring.ts is the real one. */
-export interface MeterTransport {
+/**
+ * The three accounting calls, as the meter needs them. `apiWiring` in wiring.ts is the real one.
+ *
+ * **`R` is what one usage report is**, and it defaults to Realtime's. The queue
+ * below never looks inside a report, so the second engine (GPT-Live, whose two
+ * bills are `GptLiveUsageReport` in ./gpt-live/meter.ts) uses this same queue
+ * with its own report type rather than a copy of it.
+ */
+export interface MeterTransport<R = LiveUsageReport> {
   liveConnected(sessionId: string, keepalive: boolean): Promise<PostOutcome>;
-  liveUsage(sessionId: string, report: LiveUsageReport, keepalive: boolean): Promise<PostOutcome>;
+  liveUsage(sessionId: string, report: R, keepalive: boolean): Promise<PostOutcome>;
   liveClose(sessionId: string, reason: string | null, keepalive: boolean): Promise<PostOutcome>;
 }
 
@@ -334,19 +341,20 @@ export interface MeterStatus {
  * cannot set an `Authorization` header, and every route under `/api/` takes a
  * bearer token and no cookie, so a beacon would be a 401 that looks like a send.
  */
-export class LiveMeter {
+export class LiveMeter<R = LiveUsageReport> {
   readonly #sessionId: string;
-  readonly #transport: MeterTransport;
+  readonly #transport: MeterTransport<R>;
   readonly #delays: readonly number[];
-  #queue: Pending[] = [];
+  #queue: Pending<R>[] = [];
   #draining: Promise<void> | null = null;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #finished = false;
+  #keepalive = false;
   #counts = { accepted: 0, refused: 0, dropped: 0, unreportable: 0 };
 
   constructor(opts: {
     sessionId: string;
-    transport: MeterTransport;
+    transport: MeterTransport<R>;
     /** Overridden in tests, so a retry does not cost the suite thirty seconds. */
     delays?: readonly number[];
   }) {
@@ -365,7 +373,7 @@ export class LiveMeter {
   }
 
   /** One paid event. */
-  report(report: LiveUsageReport): void {
+  report(report: R): void {
     this.#push({ kind: "usage", report, tries: 0 });
   }
 
@@ -385,6 +393,25 @@ export class LiveMeter {
    */
   end(reason: string | null): void {
     this.#push({ kind: "close", reason, tries: 0 });
+  }
+
+  /**
+   * An unload hint while the producer is still draining (GPT-Live's close
+   * grace). Retry queued reports now with keepalive, and keep accepting late
+   * usage. `flush()` remains the terminal operation after the producer stops.
+   */
+  async checkpoint(): Promise<void> {
+    if (this.#finished) return;
+    this.#keepalive = true;
+    const cancelBackoff = () => {
+      if (this.#timer !== null) clearTimeout(this.#timer);
+      this.#timer = null;
+    };
+    cancelBackoff();
+    await this.#draining;
+    /* The in-flight request may have installed a new backoff meanwhile. */
+    cancelBackoff();
+    if (!this.#finished) await this.#drain();
   }
 
   /**
@@ -410,7 +437,7 @@ export class LiveMeter {
     }
   }
 
-  #push(item: Pending): void {
+  #push(item: Pending<R>): void {
     if (this.#finished) return;
     if (this.#queue.length >= MAX_QUEUE) {
       this.#queue.shift();
@@ -452,7 +479,7 @@ export class LiveMeter {
     while (!this.#finished && this.#queue.length > 0) {
       const item = this.#queue[0];
       if (!item) break;
-      const outcome = await this.#post(item, false);
+      const outcome = await this.#post(item, this.#keepalive);
       if (outcome === "retry") {
         const delay = this.#delays[item.tries];
         item.tries += 1;
@@ -490,7 +517,7 @@ export class LiveMeter {
    * conversation, which is a page error the reader can see and a session the
    * accounting took down. The ledger is never allowed to cost anybody a turn.
    */
-  async #post(item: Pending, keepalive: boolean): Promise<PostOutcome> {
+  async #post(item: Pending<R>, keepalive: boolean): Promise<PostOutcome> {
     try {
       if (item.kind === "connected") {
         return await this.#transport.liveConnected(this.#sessionId, keepalive);

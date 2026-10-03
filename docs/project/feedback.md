@@ -583,6 +583,32 @@ nearly invisible, because the client's own canvas round-trip turns whatever was 
 before it is sent. The reasoning, and the 34 MB of Vercel bundle that the obvious alternative would
 have cost, are in [`src/feedback-image.ts`](../../src/feedback-image.ts).
 
+### Shrunk until it fits, since 2026-10-03
+
+> I tried to upload a screenshot to a Feedback report. It wasn't actually very big. I think it was
+> like 400KB, but I got an error saying something like the screenshot's too big. This feels like
+> something we should be able to address, and I think we should really find a way to allow (if
+> necessary auto-resizing) screenshots of at least 5MB?
+>
+> — Greg, 2026-10-03 (`spya-wa7wms`)
+
+**The file the reader picks has no size limit.** Any image the browser can decode is drawn onto a
+canvas and written out as a PNG, so what matters is how big a PNG of those pixels is, and PNG is
+poor at photographs: a page with a cover image on it is one to three megabytes at 1600 pixels. So
+[`src/web/feedback-screenshot.ts`](../../src/web/feedback-screenshot.ts) tries long edges of 1600,
+1280, 1024, 800 and 640 in turn, never larger than the picture arrived, and sends the first whose
+PNG is under 90% of the stored limit. Only if 640 does not fit is the reader told it is too big,
+and with these numbers no real picture gets there: 640 × 640 of uncompressed noise is 1.64 MB.
+The 10% is headroom, because the server writes the file again and its copy can be a little bigger.
+
+**What we store is at most 2,000,000 bytes** — `MAX_FEEDBACK_SCREENSHOT_BYTES` in
+[`src/types.ts`](../../src/types.ts), and the `feedback_screenshot_size` CHECK on the table, which
+have to move together. It was 400,000, which sent a photographic page at about 640 pixels or not at
+all. **It is not Greg's 5 MB because of how the picture travels**: as base64 inside a JSON request,
+and Vercel refuses a request over 4.5 MB before our code runs. Two megabytes is 2.67 MB on the wire;
+five would be 6.7 MB. The plan is
+[261003k](../plans/261003k-feedback-screenshot-shrinks-to-fit-and-profile-sections-collapse.md).
+
 ## Trying it locally
 
 **`npm run dev`, and a database.** There is one store, so nothing has to be selected —
@@ -610,6 +636,32 @@ return in time. That works only for reports Sentry received. An unconfirmed row 
 among them: `mirror_attempted_at is not null and mirrored_at is null` cannot tell which. A mirror
 being the only way to read the original is backwards.
 [260902l-admin-feedback-page.md](../plans/260902l-admin-feedback-page.md).
+
+### Ignoring a report, since 2026-10-03
+
+> I just saw feedback that I wished I could delete, and there wasn't a way to do it, or at least
+> mark it as to be ignored.
+>
+> — Greg, 2026-10-03 (`spya-g95x4j`)
+
+Each card on `/admin/feedback` has an **Ignore** button. It is a mark, not a delete: it stamps
+`feedback.ignored_at`, the card stays in the list, dimmed, with its words, and **Undo** clears the
+stamp. The report itself is never edited. It is the only write on the page
+(`PATCH /api/admin/feedback/:ownerId/:id`, body `{ ignored: true | false }`, behind the same admin
+gate as the reads).
+
+**What it does is take the report out of the agents' queue**: `scripts/feedback-unswept.ts` drops a
+marked row and says how many it dropped ([feedback-reports.md § Where the queue lives](feedback-reports.md#where-the-queue-lives)).
+Nothing a reader sees changes. The Earlier tab's shipped status comes from the notes, as before,
+and Sentry's copy is untouched.
+
+The list and the write take turns in the browser. A Refresh that read the old row and landed after
+the write would draw *Ignore* again on a report already ignored, so neither starts while the other
+is in flight (`setIgnored` in [`useAdminFeedback.ts`](../../src/web/useAdminFeedback.ts)).
+
+Not built: a way to add a note to a report (Greg called it lower priority; it is in the Overseer's
+queue), a delete, and a separate "invalid" state.
+[261003j](../plans/261003j-mark-a-feedback-report-as-ignored-from-the-admin-page.md).
 
 Two columns worth knowing when you do:
 

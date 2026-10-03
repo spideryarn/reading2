@@ -1433,7 +1433,11 @@ describe("a signed-out browser on a shared document", () => {
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_WORK);
-    expect(text).toContain("The theory the piece argues against.");
+    /* A visitor has no verdict and no Dig deeper answer, so never the model's
+       sentence about the work (plan 261003j) — only that we have not read it. */
+    expect(text).not.toContain("The theory the piece argues against.");
+    expect(text).toContain("Tononi");
+    expect(text).toContain("We have not read this work");
     expect(text).toContain("A work whose link did not cross");
     expect(band?.querySelector('a[href="https://doi.org/10.1186/1471-2202-5-42"]')).not.toBeNull();
     expect(host.textContent).not.toContain("Citations is for whoever added this article");

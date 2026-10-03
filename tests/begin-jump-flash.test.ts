@@ -52,7 +52,7 @@ vi.mock("../src/web/scroll.js", async (importOriginal) => {
 });
 
 const { beginJump, useArrowNav } = await import("../src/web/keynav.js");
-const { dropPendingFlash, flashBlock, flushPendingFlash } = await import("../src/web/flash.js");
+const { dropPendingFlash, flashBlock, flushPendingFlash, QUOTE_HIGHLIGHT, resetFlash } = await import("../src/web/flash.js");
 
 const block = (i: number) => `spya-b${String(i).padStart(5, "0")}` as BlockId;
 const BLOCKS: Block[] = Array.from({ length: 30 }, (_, i) => ({
@@ -106,9 +106,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetFlash();
   vi.runOnlyPendingTimers();
   vi.useRealTimers();
   dropPendingFlash();
+  vi.unstubAllGlobals();
 });
 
 describe("beginJump and the flash", () => {
@@ -197,6 +199,43 @@ describe("beginJump and the flash", () => {
     expect(jump(block(20), key)).toBe(true);
     expect(cell?.classList.contains("block-flash")).toBe(false);
     expect(cell?.querySelector("mark")?.classList.contains("passage-flash")).toBe(true);
+  });
+
+  it("falls back to a cell flash without the highlight API, and sends the scroll no passage key", () => {
+    /* A chip whose sentence quotes the article (Cited.tsx). The quote narrows the paint
+       and nothing else: `scrollToBlock` treats an unresolved passage key as
+       provisional and re-measures, so the quote must not travel as one. This
+       tests only the fallback; the range assertions below prove forwarding. */
+    expect(beginJump(BLOCKS, block(20), (id) => void pushed.push(id), { quotes: ["some quoted words"] })).toBe(true);
+    expect(calls.hows.at(-1)).toEqual({ align: "centre", passage: undefined });
+    expect(flashed()).toEqual([block(20)]);
+  });
+
+  it.each([20, 15])("carries the quoted words to the range flash on block %i", (index) => {
+    class FakeHighlight {
+      constructor(readonly range: Range) {}
+    }
+    const registry = new Map<string, FakeHighlight>();
+    vi.stubGlobal("CSS", { escape: (s: string) => s, highlights: registry });
+    vi.stubGlobal("Highlight", FakeHighlight);
+    const prose = document.querySelector(`tr[data-block="${block(index)}"] td.text`);
+    if (!prose) throw new Error("missing prose cell");
+    prose.textContent = "Before the actual quoted words and after.";
+
+    expect(beginJump(BLOCKS, block(index), (id) => void pushed.push(id), {
+      quotes: ["the actual quoted words"],
+    })).toBe(index === 20);
+    expect(registry.get(QUOTE_HIGHLIGHT)?.range.toString()).toBe("the actual quoted words");
+    expect(flashed()).toEqual([]);
+    expect(pushed).toEqual(index === 20 ? [block(20)] : []);
+    expect(calls.scrolled).toEqual(index === 20 ? [block(20)] : []);
+    if (index === 20) expect(calls.hows.at(-1)).toEqual({ align: "centre", passage: undefined });
+  });
+
+  it("is already there for a quote in the block under the reading line: it flashes and moves nothing", () => {
+    expect(beginJump(BLOCKS, block(15), (id) => void pushed.push(id), { quotes: ["some quoted words"] })).toBe(false);
+    expect(pushed).toEqual([]);
+    expect(flashed()).toEqual([block(15)]);
   });
 
   it("narrows the no-movement branch to the passage too", () => {

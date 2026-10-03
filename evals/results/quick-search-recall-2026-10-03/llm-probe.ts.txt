@@ -1,0 +1,23 @@
+/* Probe candidate small LLMs on one query each (ordinary article, long article) to pick two. SPENDS (cents). */
+import { ENTROPY, REPL, loadArticle, quickBlocks, totalSpend } from "./lib.ts";
+import { llmSearch } from "./llm-lib.ts";
+
+const CANDS: [string, Record<string, unknown>][] = [
+  ["openai/gpt-6-luna", { reasoning: { effort: "minimal" } }],
+  ["openai/gpt-6-luna", { reasoning: { effort: "none" } }],
+  ["inception/mercury-2.5", {}],
+  ["google/gemini-3.1-flash-lite", { reasoning: { effort: "none" } }],
+  ["google/gemini-3.5-flash-lite", { reasoning: { effort: "none" } }],
+  ["deepseek/deepseek-v4.1-flash", { reasoning: { effort: "none" } }],
+  ["qwen/qwen3.7-flash", { reasoning: { effort: "none" } }],
+];
+const only = process.argv[2];
+for (const [slug, q] of [[ENTROPY, "Buddhism"], [REPL, "fishing for significant results"]] as const) {
+  const bs = quickBlocks((await loadArticle(slug)).blocks);
+  for (const [m, extra] of CANDS.filter(([m]) => !only || m.includes(only))) {
+    const r = await llmSearch(m, q, bs, extra);
+    console.log(`${slug.slice(0, 8)} ${m.padEnd(30)} ${JSON.stringify(extra).padEnd(34)} status ${r.status} ok ${r.ok} first-id ${r.msFirstId} done ${r.msDone} ids ${r.ids.length} invalid ${r.invalid} in ${r.usage?.prompt_tokens} out ${r.usage?.completion_tokens} reasoningTok ${r.usage?.completion_tokens_details?.reasoning_tokens} $${r.cost?.toFixed(5)} ${r.provider ?? ""} ${r.error ?? ""} ${r.ids.slice(0, 3).join(",")}`);
+  }
+}
+console.log(`spend so far $${totalSpend().toFixed(4)}`);
+process.exit(0);
