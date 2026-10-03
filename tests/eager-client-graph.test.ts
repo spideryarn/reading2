@@ -472,6 +472,12 @@ const SHARED_WITH_READER = [
      it in. */
   "src/billing-plan.ts",
   "src/block-policy.ts",
+  /* Arrived 2026-10-03 with the Light / Dark / System choice (plan 261003e).
+     It is eager on purpose: main.tsx starts it before the first render, so the
+     page follows the OS and other tabs from the start. /design reaches it for
+     `useTheme`, to remeasure its swatches when the theme changes. It imports
+     only React, which the reader already has, so the shared edge costs nothing. */
+  "src/web/appearance.ts",
   "src/feedback-payload.ts",
   "src/html.ts",
   "src/ids.ts",

@@ -299,6 +299,7 @@ describe("the fill orange is not used as text", () => {
         .forEach((line, i) => {
           if (
             /(?:^|:)(?:text|outline|ring)-highlight(?![-\w])/.test(line) ||
+            /(?:focus|focus-visible|focus-within):border-highlight(?![-\w])/.test(line) ||
             /accent-color:var\(--highlight\)/.test(line)
           ) {
             hits.push(`${relative(ROOT, file)}:${i + 1}`);
