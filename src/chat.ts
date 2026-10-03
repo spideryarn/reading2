@@ -473,6 +473,15 @@ export function withSpokenTurn(
     throw new ChatConflict("That conversation is already a different kind.");
   }
 
+  /* Only a chat or a Recall conversation is spoken into (`SpokenKind`). The
+     request may omit its kind, so the **stored** thread is asked too, inside
+     the transaction and before any row is minted or appended: without this a
+     kind-less spoken turn landed in an Explore thread (GPT Sol's review of
+     261003l, CR-11), and the same door stood open to Tutorial and Candidates. */
+  if (existing && !isSpokenKind(existing.kind)) {
+    throw new ChatConflict("That conversation does not take a live conversation.");
+  }
+
   /* **The guard, and it runs before anything is minted.** `null` means the
      caller believes there is nothing here yet — which is true both for a thread
      that does not exist and for one created but never spoken into. */

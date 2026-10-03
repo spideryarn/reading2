@@ -281,3 +281,61 @@ index `chat_threads_one_explore`. It was first generated as `20261003182913_…`
 Applied to the local database only (`Target: postgresql://postgres@127.0.0.1:54362/postgres`).
 
 Not done here: the eval and its investigation, the browser check, and the code review.
+
+### Stage 2, the eval
+
+[`evals/remember-explore.ts`](../../evals/remember-explore.ts) (`npm run eval:explore`), written up
+in [261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md). Built
+as PR-6 says: fixture notes and conversations through the production digest, `reader_notes`
+answered from the same fixtures through a new seam (`runToolWith` on `converse`'s request, which
+defaults to `runTool` and which no route passes), web search on, tool calls and search counts
+recorded, a judge that sees the notes and the profile and not the arm, and nine thresholds written
+in the script's header before the first run. The second article is the `openai-huggingface`
+fixture, because the Entropy copy the Tutorial eval used is gone.
+
+**The headline, plainly: Explore does not beat Chat with the tool on the measure the plan's Pass
+line led with.** The judge called 93% of Explore's replies "about the reader's thinking" and 87%
+of Chat's; the bar was 25 points apart. The other eight thresholds are met after two prompt
+revisions: a first reply that names a mark for every reader with notes (4 of 4), no invented note
+flagged, a search every time the reader asks what others say (6 of 6) with every outside claim
+linked, the profile's reason applied (10 of 10), no remark on an empty notes list, median 138
+words and none over 220. Chat's median was 288 words, and it called the tool in the first reply
+for three of the four readers with notes.
+
+**The prompt changed twice**, on what reading the turns showed (length, a reader's question about
+what others say answered from memory, "your note" said of a bare bookmark, a reader's own case
+answered with an account of the author, outside claims with no link) and on two findings from the
+stage's code review: CR-12, the reminder beside the question read as demanding a link for the
+reader's own thoughts; CR-13, the shared plain-words and profile sections told Explore never to go
+beyond the article and never to address the reader. CR-13 is answered by two short paragraphs in
+`EXPLORE_SYSTEM` that say how those sections apply here, and not by splitting the shared
+constants, which live in `src/plain-words.ts` and `src/profile.ts`: a cleaner fix, and one for
+whoever next edits those files.
+
+About $11.50 in all, $5.25 of it the judge.
+
+### Stage 2, the code review and the browser check
+
+[261003l-stage-2-code-review-sol.md](261003l-stage-2-code-review-sol.md), on `34ca6137a` and
+`5f5ae98cd`: seven findings, one P1, *land with the CR-11 and CR-17 fixes*.
+
+| | Finding | What was done |
+|---|---|---|
+| CR-11 (P1) | A spoken turn that omits its kind could be appended to a stored Explore thread | Fixed by Sol, red first, with [a postmortem](../postmortems/261003g-validating-a-request-kind-leaves-the-stored-resource-unchecked.md). Widened afterwards: `withSpokenTurn` now refuses every stored kind that is not a `SpokenKind`, so Tutorial and Candidates are closed too, and the test has a Tutorial case. That widening was not seen red |
+| CR-12 (P2) | The reminder beside the question asked for a link on the reader's own thoughts | Fixed in the eval's first prompt revision |
+| CR-13 (P2) | Shared sections told Explore never to go beyond the article | Answered by two paragraphs in `EXPLORE_SYSTEM`; the shared constants are not split (see the eval, above) |
+| CR-14 (P2) | The per-kind words in `ChatPanel.tsx` are ternary chains, not a checked record | Left. No wrong behaviour today, and tests pin each kind's words; a `Record<ThreadKind, …>` is the fix when a sixth kind arrives |
+| CR-15 (P2) | Issuing a Live session does not ask the stored thread's kind; older kinds too | Left, and older than this stage. The write is now refused (CR-11), so a session issued for such a thread can save nothing; there is no Live button on those kinds |
+| CR-16 (P3) | Tutorial's prompt still sends an exploring reader to Chat | Left: changing it changes `TUTORIAL_SYSTEM`'s measured behaviour, and wants its own before and after |
+| CR-17 (P3) | A three-chip list in remember-mode.md | Fixed by Sol |
+
+One round of discovery. The prompt revisions and the widened guard came after it.
+
+**The browser check** (Sonnet, Playwright, commit `5f5ae98cd`, article `fowler-phrenology`) passed
+at desktop, iPad and phone widths: four chips with no sideways scroll, the empty state and its
+three starters, no Live button, a starter reply that named a note the tester had written, a
+follow-up that ran two web searches and linked both, the conversation alone after a reload, Start
+over, and Chat running `reader_notes` for "What have I highlighted?" and not for "What is the main
+claim?". It found the word "Remember" squeezed to one letter beside four chips in a narrow band;
+the heading is now read out and not drawn when the chips are there. Not checked: dictation, a
+model turn at iPad or phone width, and a bare colour highlight (the tester could not make one).

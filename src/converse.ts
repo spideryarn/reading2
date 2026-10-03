@@ -1234,8 +1234,9 @@ ${PROFILE_RULES}`;
  * prompt here carries. No `COMMAND_CHIPS`: Explore is handed no executor.
  *
  * Above the cache breakpoint like the other three, so its own cached prefix;
- * nothing in it varies per turn. Not yet measured against Chat with the tool:
- * that is the plan's eval, written up under docs/investigations/.
+ * nothing in it varies per turn. Measured against Chat with the tool, and
+ * revised twice on what that showed:
+ * docs/investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md.
  */
 const EXPLORE_SYSTEM = `You are a thinking partner for one reader and one article. The reader has
 read the piece, or some of it, and wants to work out what they themselves think
@@ -1282,6 +1283,10 @@ marks on one idea say more than one mark.
   · Say only what the notes show. A highlight shows that they marked a passage;
     it does not show what they thought of it. Ask, or offer a guess and call it
     a guess.
+  · "Your note" is only for a row with words after "their note:". A bookmark or
+    a bare highlight has no note: say "you bookmarked" or "you highlighted".
+    And describe a mark by the words in its own row: do not give it a name or
+    a topic that the row does not have.
   · NEVER INVENT A NOTE, a highlight or a conversation. If it is not in what you
     were given, they did not make it.
   · If they have no notes and no other conversations, start from their message
@@ -1323,6 +1328,9 @@ on X. What would this argument say about…?"
     project or experience that they have not mentioned.
   · If they ask you to apply the piece to their work and you have not been told
     what their work is, ask them, in one question. Do not guess.
+  · When they bring a case from their own life or work, stay with it, in their
+    terms. Do not answer it with an account of what the author says: at most
+    one cited sentence of the piece, and only where it changes the case.
   · An example of your own is fine when no case of theirs fits. Say that it is
     an example, and not theirs.
   · Not every idea has a case of theirs, and the description may give no reason
@@ -1336,8 +1344,16 @@ Search the web readily for this — when they ask where the piece stands, and
 also unasked, when the idea they are on has an argument going on around it that
 the piece does not show them. A search they did not need costs little.
 
+When they ask what other people have said, who disagrees, or whether the author
+is alone in a view, ALWAYS SEARCH BEFORE YOU ANSWER, even when you think you
+know. What you remember is not something they can follow back.
+
   · Say what you found in a sentence or two, link it, and hand it back to them:
     what does it do to their view.
+  · Report fewer things and link each one, where you say it: two findings with
+    their links beat four where two have none. Never "one critic", "a
+    commenter" or "research shows" without the link beside it. What you have
+    no link for, leave out, or say that it is from memory and unchecked.
   · Link every page you use, as LINKING TO THE WEB says. A named person, a
     study, a date or a number from outside the piece is searched and linked, or
     said plainly to be unverified.
@@ -1372,6 +1388,9 @@ You are on their side, and you are not marking them.
 - Never judge the reader or their thinking: not "good point", "great
   question", "sharp observation", "exactly", "you're right to…". Take the idea
   up instead; that is the compliment.
+- Do not open by approving or rating what they said either: not "That tracks
+  with…", "That holds up", "That's a sharper way into it", "X sharpens the test
+  nicely", "You're right that…". Open with the next thing.
 - Never grade their notes, count them, or remark on how much or how little they
   have marked.
 - Disagree when you do, plainly, and as one view: "I'd put it differently…",
@@ -1382,9 +1401,12 @@ You are on their side, and you are not marking them.
 
 LENGTH
 
-Brief, like the rest of Remember: under 150 words and one move, with
-one question at most, which comes last. Start with the substance: no preamble,
-and no restating what they said. If the move needs a long explanation, give the
+Brief, like the rest of Remember: about 100 words, always under 150 words, and one
+move, with one question at most, which comes last. Start with the substance: no
+preamble, no restating what they said, and no retelling of the article: one
+short quotation or one cited sentence of it is enough for a turn. A reply that
+reports a search may run to 150 words besides its links. If the move needs a
+long explanation, give the
 short version and say that Chat is the place to go into it at length.
 
 ${NO_UNRUN_TOOL_CLAIMS}
@@ -1402,7 +1424,19 @@ ${WEB_LINKS}
 
 ${plainWords("explain")}
 
-${PROFILE_RULES}`;
+In this conversation, that last line is about what you say the article says:
+never make it say more than it does. It does not keep you inside the article.
+The wider world, the reader's own cases and your own view are what this
+conversation is for, each marked as WHERE EACH CLAIM CAME FROM says.
+
+${PROFILE_RULES}
+
+Two of those rules are different in this conversation, because here the reader
+is the subject. A sentence may be about their thinking or their case, and not
+about the article. And you may speak to them directly and name the reason they
+gave when you apply the piece to it, as THEIR OWN CASES says. The rest hold: no
+flattery, no announcing what you are skipping, and nothing of the description
+in a search.`;
 
 /**
  * Which system prompt a turn gets, and it is chosen by the **thread's** kind,
@@ -1640,6 +1674,14 @@ export interface ConverseRequest {
    * is re-asking, and the flag is on it. See `helpSection`.
    */
   help?: boolean;
+  /**
+   * **An eval's seam, and nothing a route passes**: what runs a tool the model
+   * asked for. Defaults to `runTool` (src/chat-tools.ts), so a production turn
+   * is what it was. evals/remember-explore.ts answers `reader_notes` from
+   * fixtures through this, with no database, and hands every other name on to
+   * `runTool`. What the model is *offered* is still `toolsFor(kind)`.
+   */
+  runToolWith?: typeof runTool;
 }
 
 export type ConverseEvent =
@@ -1906,11 +1948,13 @@ function lengthLine(kind: ThreadKind, opening = false): string {
      (evals/results/remember-tutorial.md and its dated runs, plan 261002i). */
   if (kind === "tutorial")
     return 'As EACH TURN says: under 100 words, one small cited piece, one question last. Every quotation or paraphrase of the piece has its [block id] — the opening turn too — and a quotation has it straight after the closing quotation mark.';
-  /* Explore's, by the same lever and before any eval run: its length and
-     one-move rules sit ahead of a whole article too. The opening turn is told
-     once more where to start; later turns follow the reader. */
+  /* Explore's, by the same lever: its length and one-move rules sit ahead of a
+     whole article too. The opening turn is told once more where to start;
+     later turns follow the reader. The search and link clauses are from its
+     eval (investigation 261003e), where a searched reply named three sources
+     and linked none. */
   if (kind === "explore")
-    return `${opening ? "This is your first reply: as START FROM WHAT IS THEIRS says, begin from one thing in the reader's notes when there is one, and name it. " : ""}As ONE MOVE A TURN and LENGTH say: one move, under 150 words, one question at most and it comes last. A quotation of the article has its [block id] straight after it, and anything from outside the article has its link.`;
+    return `${opening ? "This is your first reply: as START FROM WHAT IS THEIRS says, begin from one thing in the reader's notes when there is one, and name it. " : ""}As ONE MOVE A TURN and LENGTH say: one move, about 100 words and always under 150 words, one question at most and it comes last. If they ask what others have said, search before you answer. A quotation of the article has its [block id] straight after it, and each person, piece or finding from outside the article has its link where you say it, or is said to be from memory and unchecked; what is the reader's is named as theirs and your own view is said to be yours, and neither needs an id or a link.`;
   if (kind !== "chat") return "";
   return "Keep it brief, as WHAT IT MUST NOT DO says: most answers need fewer than 300 words, unless they ask for more.";
 }
@@ -2105,6 +2149,7 @@ export async function* converse({
   kind = "chat",
   anchor = null,
   help = false,
+  runToolWith = runTool,
   /* **`kind` above is what this reads**, and the order of these two lines is
      therefore load-bearing: a destructuring default may use a binding declared
      earlier in the same pattern, and `model` is below `kind` for exactly that.
@@ -3022,7 +3067,7 @@ export async function* converse({
       let outcome: Awaited<ReturnType<typeof runTool>>;
       let failed = false;
       try {
-        outcome = await runTool(call.name, args, toolContext);
+        outcome = await runToolWith(call.name, args, toolContext);
       } catch (err) {
         failed = true;
         line.warn(

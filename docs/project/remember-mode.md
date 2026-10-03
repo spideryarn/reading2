@@ -208,7 +208,7 @@ full and the pass condition is a person reading them.
 > account anything from the user profile or the why are you reading this information. … lots of
 > small increments is probably better than big, slow increments.
 
-The chips read **Recall · Tutorial · Quiz** (`?remember=tutorial`). Where Recall is closest to
+The chips read **Recall · Tutorial · Explore · Quiz** (`?remember=tutorial`). Where Recall is closest to
 testing — the reader brings what they have — Tutorial is closest to teaching: each turn is a brief
 reaction, **one** small cited piece of the article, and **one** task (say it back, explain why, give
 an example, apply it, push back), climbing as the reader succeeds and stepping down when they do
@@ -387,10 +387,22 @@ cap, chat's job and model. **No Live**, as Tutorial: which kinds offer it is `OF
 kind, where it was a `kind === "tutorial"` check that would have given Explore a button and a 400.
 A spoken turn would also carry no digest. **No command buttons**, as Recall and Tutorial.
 
-**Not measured yet.** Whether Explore's turns are about the reader's thinking more often than
-Chat's with the tool, whether a first turn names something marked, and whether it invents notes for
-a reader with none, are the plan's eval; its write-up will be under
-[`docs/investigations/`](investigations.md).
+**The eval** (2026-10-03):
+[`evals/remember-explore.ts`](../../evals/remember-explore.ts), written up in
+[261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md). Two
+articles, three scripted readers each with fixture notes put through the production digest, five
+turns, Explore against Chat with the tool (a comparison of two products, not of two prompts), a
+blind judge, and nine numbers set before the run. After two prompt revisions Explore meets eight:
+the first reply names something the reader marked for every reader with notes (4 of 4), it
+searches when asked what others say (6 of 6) and links what it reports, the profile's reason is
+applied (10 of 10 replies), a reader with nothing marked is never told so, and the median reply is
+138 words. **It does not meet the ninth.** The judge called 93% of Explore's replies "about the
+reader's thinking" and 87% of Chat's, 7 points apart where the bar was 25: asked to be a thinking
+partner, Chat is one. The difference a reader would see is the shape of a turn: half the length
+(138 words against 288), one question handed back, one note named and not a tour of all five.
+Still wrong, found by reading: the article's words sometimes run into a sentence unmarked and
+uncited, and "actually", which the prompt bans, is in a third of replies. One sample of each
+arm's final state, one judge of the same family, and fixture notes that are not a real reader's.
 
 ## A link after a quotation shows the quoted words
 

@@ -497,7 +497,11 @@ export function ChatPanel({
               is one Remember conversation per article, so the title names
               nothing the reader could mistake it for — and it is their first
               sixty characters, often "Um, so…". Plan 261001m § 4. */}
-          <h2>
+          {/* **Read out, not drawn, beside the sub-mode chips.** Four chips left
+              the word one letter wide in a narrow band (the browser pass on
+              261003l), and the Dock already says which mode this is — the
+              reason Quiz's own row dropped its name on 2026-09-05. */}
+          <h2 className={remember && subMode ? "sr-only" : undefined}>
             {remember ? (
               "Remember"
             ) : open ? (

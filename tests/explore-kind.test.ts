@@ -16,7 +16,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { withTurn } from "../src/chat.js";
+import { ChatConflict, withSpokenTurn, withTurn } from "../src/chat.js";
 import { CHAT_TOOLS, toolsFor } from "../src/chat-tools.js";
 import { buildConverseMessages, defaultModel, jobFor, webSearchTool } from "../src/converse.js";
 import { readerNotesDigest } from "../src/reader-notes.js";
@@ -251,6 +251,30 @@ describe("the reader's notes in an Explore turn (PR-1)", () => {
 });
 
 describe("one Explore thread per article", () => {
+  it.each(["chat", "remember"] as const)("still allows an omitted-kind spoken append to %s", (kind) => {
+    const begun = withTurn([], { threadId: "spya-expar4", question: "a typed thought", kind }, AT);
+    const appended = withSpokenTurn(begun.threads, {
+      threadId: begun.thread.id,
+      expectedTailId: begun.reply.id,
+      question: "a spoken thought",
+      answer: "a spoken reply",
+    }, AT);
+    expect(appended.thread.kind).toBe(kind);
+    expect(appended.thread.messages).toHaveLength(4);
+  });
+
+  it("refuses a spoken append to the stored Explore thread even when no kind is supplied", () => {
+    const explore = withTurn([], { threadId: "spya-expar4", question: "what do I think", kind: "explore" }, AT);
+    const before = JSON.stringify(explore.threads);
+    expect(() => withSpokenTurn(explore.threads, {
+      threadId: explore.thread.id,
+      expectedTailId: explore.reply.id,
+      question: "a spoken thought",
+      answer: "a spoken reply",
+    }, AT)).toThrow(ChatConflict);
+    expect(JSON.stringify(explore.threads)).toBe(before);
+  });
+
   it("appends a second Explore turn to the existing one, never to Recall's or Tutorial's", () => {
     const recall = withTurn([], { threadId: "spya-recab4", question: "what I took", kind: "remember" }, AT);
     const tutorial = withTurn(recall.threads, { threadId: "spya-tutar4", question: "not read it", kind: "tutorial" }, AT);
