@@ -32,7 +32,7 @@ the newest and so were the least likely to be shipped. The 115 is close, and abo
 1. **A count on each pill.** `All 345 · Shipped 305 · Not shipped 40`, the number in a quieter
    `.fb-show-count` span inside the button. All gets one too: three pills with two numbers would
    read as though All had no number to give, and its number is what the other two add up to.
-2. **The cap line names the total.** `Showing the 50 most recent of your 45 not-shipped reports.`
+2. **The cap line names the total.** `Showing the 50 most recent of your 115 not-shipped reports.`
    (`reports` / `shipped reports` / `not-shipped reports` by filter.) That answers "is that true?"
    on the screen itself, without anyone having to take it on trust.
 
@@ -51,14 +51,15 @@ The client labels the pills from **the showing filter's own answer** once it has
 other answer in the opening until then. The counts are forgotten when the dialog shuts, like the
 lists. An older answer never outvotes the one on screen, even if a deploy between two reads
 changed the shipped map. The client's shape check refuses counts that do not add up
-(`all ≠ shipped + unshipped`), or that disagree with the list they came with (`more` must mean
-the count is larger than the list; no `more` means they are equal).
+(`all ≠ shipped + unshipped`), or that disagree with the list they came with: `more` requires a
+full 50 rows and a larger count; no `more` requires equality. Rows must also have distinct ids,
+match the selected shipped filter, and not exceed either status count.
 
 `unshipped` is `all - in`, not a third count. That is the same set the `out` filter returns,
 because the filter is `not (id = any(ids))` over the same owner's rows and an id is never null.
 
-Before any answer arrives, or after a failed one, the pills carry no number. A pill never shows
-a guess.
+Before any answer arrives, or when no attempted answer succeeded, the pills carry no number. A
+pill never shows a guess.
 
 ### The simpler option passed over
 
@@ -88,7 +89,7 @@ has `/admin/feedback`.
   shipped ids, owner-scoped. A mutation (`unshipped: all`) turned both new tests red.
 - `tests/feedback-dialog.test.tsx`: the pills show their numbers once an answer lands and none
   before; the showing filter's answer labels them when answers differ; the cap line reads
-  `of your N …` for the filter showing; five malformed counts are refused.
+  `of your N …` for the filter showing; malformed counts, rows and `more` combinations are refused.
 - Browser (Sonnet, Playwright, local, dark theme, 1100px and 375px): `All 20 · Shipped 0 ·
   Not shipped 20`, rows matching, no wrap or overflow, no console errors. That ran on the
   pre-review build; the review changed the store's internals and the copy, not the pills.

@@ -106,17 +106,20 @@ const DEFAULT_LEVEL: Options = { isolationLevel: "read committed" };
 /**
  * **The deliberate exceptions, one line each, with the reason attached.**
  *
- * Keyed by file, because an exception is a property of what that file's
- * transactions are *for* rather than of one line number that moves. Adding a
- * file here is a decision somebody has to write down; forgetting to add one is
- * a red test rather than a silent inheritance, which is the whole point.
+ * Keyed by file and the named options constant, because one store file can
+ * contain reads and writes with different requirements. The key stays stable
+ * when lines move without allowing every transaction in the file to inherit
+ * the exception.
  */
 const EXCEPTIONS: Record<string, Options> = {
   /* One consistent picture of a whole article for an export, which is what
      `repeatable read` is actually for — and read-only, because a walk that
      could write is a walk that could deadlock with the pipeline. See
      src/store/article-rows.ts § SNAPSHOT. */
-  "src/store/article-rows.ts": { isolationLevel: "repeatable read", accessMode: "read only" },
+  "src/store/article-rows.ts#SNAPSHOT": { isolationLevel: "repeatable read", accessMode: "read only" },
+  /* The Earlier feedback list and its three counts must describe one moment.
+     The submit transaction beside it remains read committed. */
+  "src/store/pg-feedback.ts#SNAPSHOT": { isolationLevel: "repeatable read", accessMode: "read only" },
 };
 
 /** Where transactions are opened. Both directories, not just the store. */
@@ -191,7 +194,7 @@ function astOf(file: string): ReturnType<typeof parseSource> {
 
 /** What one call site's second argument actually says, or why it cannot be read. */
 type Resolved =
-  | { options: Options; spelling: "identifier" | "literal" }
+  | { options: Options; spelling: "identifier" | "literal"; name?: string }
   | { problem: string };
 
 function resolveOptions(arg: AstNode | undefined, file: string): Resolved {
@@ -205,14 +208,14 @@ function resolveOptions(arg: AstNode | undefined, file: string): Resolved {
   if (arg.type === "Identifier") {
     const name = arg.name as string;
     const here = constantsOf(astOf(file)).get(name);
-    if (here) return { options: here, spelling: "identifier" };
+    if (here) return { options: here, spelling: "identifier", name };
     const from = importedFrom(astOf(file), name, file);
     /* Fail closed. An option object this cannot follow is not evidence that the
        transaction is pinned correctly, so it is a red test and not a pass. */
     if (!from) return { problem: `passes \`${name}\`, which this test cannot follow to its value` };
     const there = constantsOf(astOf(from)).get(name);
     if (!there) return { problem: `passes \`${name}\`, not found in ${from}` };
-    return { options: there, spelling: "identifier" };
+    return { options: there, spelling: "identifier", name };
   }
   return { problem: `passes a ${arg.type} this test cannot read` };
 }
@@ -253,24 +256,37 @@ describe("the isolation level every store transaction runs at", () => {
   it("is named by every one of them", () => {
     const wrong: string[] = [];
     for (const site of transactionSites()) {
-      const expected = EXCEPTIONS[site.file] ?? DEFAULT_LEVEL;
       if ("problem" in site.resolved) {
         wrong.push(`${site.file}:${site.line} — .transaction(...) ${site.resolved.problem}`);
         continue;
       }
+      const exception = site.resolved.name ? EXCEPTIONS[`${site.file}#${site.resolved.name}`] : undefined;
+      const expected = exception ?? DEFAULT_LEVEL;
       const got = site.resolved.options;
       if (got.isolationLevel !== expected.isolationLevel || got.accessMode !== expected.accessMode) {
         wrong.push(
           `${site.file}:${site.line} — runs at ${JSON.stringify(got)}, expected ` +
             `${JSON.stringify(expected)}. Pass READ_COMMITTED from src/store/isolation.ts, ` +
-            `or add this file to EXCEPTIONS here with the reason.`,
+            `or add its named options constant to EXCEPTIONS here with the reason.`,
         );
       }
     }
     expect(wrong).toEqual([]);
   });
 
-  it("comes from the shared constant everywhere but four known files", () => {
+  it("uses every deliberate exception", () => {
+    /* Without this half, changing a logical snapshot read back to
+       READ_COMMITTED would leave an unused EXCEPTIONS entry behind and the
+       policy test would pass. */
+    const used = transactionSites().flatMap((site) => {
+      if ("problem" in site.resolved || !site.resolved.name) return [];
+      const key = `${site.file}#${site.resolved.name}`;
+      return Object.hasOwn(EXCEPTIONS, key) ? [key] : [];
+    });
+    expect([...new Set(used)].sort()).toEqual(Object.keys(EXCEPTIONS).sort());
+  });
+
+  it("comes from the shared constant everywhere but three known files", () => {
     /* Not a style rule. Call sites spelling out the same object are places the
        next change has to reach all of, which is how `articleIdFor` lost its slug
        check in five files out of six — T1.2 in the same sweep.

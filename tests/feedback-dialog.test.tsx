@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ADMIN_EMAIL } from "../src/admin.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
-import { MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
+import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 import { exactly } from "../src/web/relative-time.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
@@ -126,7 +126,7 @@ const COUNTS = { all: 2, shipped: 1, unshipped: 1 };
 /** Counts for an empty answer. */
 const NONE = { all: 0, shipped: 0, unshipped: 0 };
 /** Counts past the cap, for an answer with `more`. */
-const MANY = { all: 115, shipped: 70, unshipped: 45 };
+const MANY = { all: 345, shipped: 230, unshipped: 115 };
 
 /** An answer to `GET /api/feedback`. */
 function page(body: unknown, status = 200): () => Promise<Response> {
@@ -1531,17 +1531,25 @@ describe("the Earlier tab", () => {
   /* SPIDERYARN-READING2-95: "Is that true? Are there >50 not shipped?" The
      line names the total for the filter showing. */
   it("says the list is cut short when there were more, and of how many", async () => {
-    listAnswer = page({ ...REPORTS, more: true, counts: MANY });
+    const fullPage = Array.from({ length: EARLIER_FEEDBACK_LIMIT }, (_, i) => ({
+      ...(REPORTS.reports[i % REPORTS.reports.length] ?? REPORTS.reports[0]),
+      id: `spya-page-${i}`,
+    }));
+    listAnswer = page({ reports: fullPage, more: true, counts: MANY });
     mount();
     click(tab("Earlier"));
     await act(async () => {});
-    expect(panelOf("Earlier").textContent).toContain("Showing the 50 most recent of your 115 reports.");
+    expect(panelOf("Earlier").textContent).toContain("Showing the 50 most recent of your 345 reports.");
 
-    listAnswer = page({ ...REPORTS, more: true, counts: MANY });
+    const fullUnshippedPage = Array.from({ length: EARLIER_FEEDBACK_LIMIT }, (_, i) => ({
+      ...REPORTS.reports[1],
+      id: `spya-unshipped-page-${i}`,
+    }));
+    listAnswer = page({ reports: fullUnshippedPage, more: true, counts: MANY });
     click(showButton("Not shipped"));
     await act(async () => {});
     expect(panelOf("Earlier").textContent).toContain(
-      "Showing the 50 most recent of your 45 not-shipped reports.",
+      "Showing the 50 most recent of your 115 not-shipped reports.",
     );
   });
 
@@ -1561,7 +1569,7 @@ describe("the Earlier tab", () => {
     expect(showButton("All").querySelector(".fb-show-count")?.textContent).toBe("2");
     expect(showButton("Shipped").querySelector(".fb-show-count")?.textContent).toBe("1");
     expect(showButton("Not shipped").querySelector(".fb-show-count")?.textContent).toBe("1");
-    expect(showButton("Not shipped").textContent).toBe("Not shipped1");
+    expect(showButton("Not shipped").textContent).toBe("Not shipped 1");
   });
 
   /* GPT Sol's plan review: the showing filter's own answer labels the pills,
@@ -1588,13 +1596,41 @@ describe("the Earlier tab", () => {
   it.each([
     ["no counts", { reports: REPORTS.reports, more: false }],
     ["counts that do not add up", { ...REPORTS, counts: { all: 3, shipped: 1, unshipped: 1 } }],
-    ["more with a count the list already holds", { ...REPORTS, more: true }],
+    [
+      "more with a count the list already holds",
+      {
+        reports: Array.from({ length: EARLIER_FEEDBACK_LIMIT }, (_, i) => ({
+          ...REPORTS.reports[0],
+          id: `spya-full-but-not-more-${i}`,
+        })),
+        more: true,
+        counts: { all: EARLIER_FEEDBACK_LIMIT, shipped: EARLIER_FEEDBACK_LIMIT, unshipped: 0 },
+      },
+    ],
+    ["more with fewer reports than the cap", { ...REPORTS, more: true, counts: MANY }],
     ["no more but a count past the list", { ...REPORTS, counts: { all: 3, shipped: 1, unshipped: 2 } }],
     ["a negative count", { ...REPORTS, counts: { all: 2, shipped: 3, unshipped: -1 } }],
+    ["a shipped row above a zero shipped count", { ...REPORTS, counts: { all: 2, shipped: 0, unshipped: 2 } }],
+    [
+      "duplicate report ids",
+      { reports: [REPORTS.reports[0], REPORTS.reports[0]], more: false, counts: { all: 2, shipped: 2, unshipped: 0 } },
+    ],
   ])("refuses an answer with %s as the wrong shape", async (_case, body) => {
     listAnswer = page(body);
     mount();
     click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+  });
+
+  it("refuses a shipped row in the Not shipped answer", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    listAnswer = page({ reports: [REPORTS.reports[0]], more: false, counts: COUNTS });
+    click(showButton("Not shipped"));
     await act(async () => {});
     expect(panelOf("Earlier").textContent).toContain("[fb-list]");
   });

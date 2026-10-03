@@ -83,8 +83,9 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
   if (![all, shipped, unshipped].every((n) => Number.isSafeInteger(n) && (n as number) >= 0)) return false;
   if ((all as number) !== (shipped as number) + (unshipped as number)) return false;
   const here = counts[which] as number;
-  if (page.reports.length > here || page.more !== here > page.reports.length) return false;
-  return page.reports.every((value: unknown) => {
+  if (page.more && page.reports.length !== EARLIER_FEEDBACK_LIMIT) return false;
+  if (page.reports.length > here || page.more !== (here > page.reports.length)) return false;
+  if (!page.reports.every((value: unknown) => {
     if (typeof value !== "object" || value === null) return false;
     const report = value as Record<string, unknown>;
     return (
@@ -95,7 +96,19 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
       typeof report.body === "string" &&
       typeof report.shipped === "boolean"
     );
-  });
+  })) return false;
+  const reports = page.reports as EarlierFeedbackPage["reports"];
+  /* A store row is unique by (owner, id), and each row's shipped flag comes
+     from the same map as the counts. Reject a response that could make a
+     filtered page show the wrong kind of row, or make React reconcile two
+     rows through the same key. */
+  if (new Set(reports.map((report) => report.id)).size !== reports.length) return false;
+  const listedShipped = reports.filter((report) => report.shipped).length;
+  if (listedShipped > (shipped as number) || reports.length - listedShipped > (unshipped as number)) {
+    return false;
+  }
+  if (which !== "all" && reports.some((report) => report.shipped !== (which === "shipped"))) return false;
+  return true;
 }
 
 export interface EarlierFeedback {
@@ -258,7 +271,12 @@ export function EarlierFilter({
           onClick={() => onShow(which)}
         >
           {SHOW_WORD[which]}
-          {counts === null ? null : <span className="fb-show-count">{counts[which]}</span>}
+          {counts === null ? null : (
+            <>
+              {" "}
+              <span className="fb-show-count">{counts[which]}</span>
+            </>
+          )}
         </button>
       ))}
     </fieldset>
