@@ -59,6 +59,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
+import { hashBlocks } from "../src/source-hash.js";
 import { CLAIMS_ORPHAN_GRACE_MS } from "../src/store/pg-referee-claims.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -80,6 +81,8 @@ const SLUG = "test-referee-claims-routes";
 const FRESH = "test-referee-claims-routes-fresh";
 /** A slug that is not an article at all. */
 const ABSENT = "test-referee-claims-routes-no-such-article";
+/** A fingerprint for runs whose fingerprint is not what the case is about. */
+const HASH = "feedfacefeedface";
 
 await pgReady({
   suite: "tests/referee-claims-routes.test.ts",
@@ -88,7 +91,7 @@ await pgReady({
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { refereeClaimsStore } = await import("../src/store/index.js");
+const { loadArticle, refereeClaimsStore } = await import("../src/store/index.js");
 
 
 interface Reply {
@@ -192,7 +195,7 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
          The fingerprint is a **string** here, where the criteria suite's GET
          gets nothing at all: `sourceHashFor` answers `undefined` only for a
          revision with no blocks, and this article has nineteen. */
-      await asTestOwner(() => refereeClaimsStore.begin(SLUG));
+      await asTestOwner(() => refereeClaimsStore.begin(SLUG, HASH));
       const reply = await call("GET", URL);
       expect(reply.status).toBe(200);
       expect(typeof reply.body.sourceHash).toBe("string");
@@ -218,6 +221,20 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
       expect((reply.body.run as { status: string }).status).toBe("pending");
     });
 
+    it("fingerprints the blocks a run is sent exactly as the GET fingerprints the paper", async () => {
+      /* The positive control for sweep 5's fingerprint fix
+         (docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md).
+         `runRefereeClaims` stamps a run with `hashBlocks` of the blocks
+         `loadArticle` gave it, and the panel compares that against the store's
+         `sourceHash`. If the two ever disagreed for one revision, every fresh
+         run would wear *older version* — which reads as a fact about the paper
+         rather than as a bug. */
+      const loaded = await asTestOwner(() => loadArticle(SLUG));
+      const current = await asTestOwner(() => refereeClaimsStore.sourceHash(SLUG));
+      expect(current).toMatch(/^[0-9a-f]{16}$/);
+      expect(hashBlocks(loaded.blocks)).toBe(current);
+    });
+
     it("sweeps an abandoned pending run into an error a referee can retry", async () => {
       /* Written before the model is called, precisely so a crash leaves
          evidence — and evidence nothing ever clears is a spinner for ever. This
@@ -236,7 +253,7 @@ describe("Referee's claims routes", { timeout: 60_000 }, () => {
          the sentence, or with the wrong one, passes both assertions. `begin`
          and `finish`, which is where a real run's status comes from, are not
          reached by it either. */
-      await asTestOwner(() => refereeClaimsStore.begin(SLUG, abandoned()));
+      await asTestOwner(() => refereeClaimsStore.begin(SLUG, HASH, abandoned()));
       const reply = await call("GET", URL);
       expect((reply.body.run as { status: string }).status).toBe("error");
       expect((await asTestOwner(() => refereeClaimsStore.load(SLUG)))?.status).toBe("error");

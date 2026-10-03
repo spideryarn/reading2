@@ -242,7 +242,7 @@ function placeOf(scale: Ruler, index: number, start: number): number {
  * every later offset out by one — the wash starts a letter late, the snippet
  * starts a letter late, and the "42% in" is shifted. Nothing throws.
  *
- * The same trap is written down in src/library-search.ts § `foldWithMap`, which
+ * The same trap is written down in src/web/library-hits.ts § `foldWithMap`, which
  * is what makes this one worth being annoyed about: it was a known hazard in
  * this repo, in a function doing the same job, and this one did not check.
  * Raised by a GPT Sol review, 2026-08-26.

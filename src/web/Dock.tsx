@@ -1563,6 +1563,7 @@ function useActivateMode(
   arms: boolean,
   current: BandMode | undefined,
   toggles: boolean,
+  margin: boolean,
 ): (next: Mode) => void {
   return useCallback(
     (next: Mode) => {
@@ -1584,10 +1585,16 @@ function useActivateMode(
          reopen: the reopen is a fresh press on a fresh mount.
          docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
       const again = toggles && next === current;
-      if (arms && !again) armActivationForMode(slug, next, { diagram });
+      /* **Nor does a Marginalia press while the column is on**, from either
+         door: the bar's press turns it off, with its feed still mounted for
+         that instant, and naming it in the command bar leaves it where it is.
+         Only the press that turns the column on asks for its relation words
+         (plan 261003f). */
+      const marginOn = next === "marginalia" && margin;
+      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram });
       onMode(next, undefined, toggles);
     },
-    [slug, search, diagram, onMode, arms, current, toggles],
+    [slug, search, diagram, onMode, arms, current, toggles, margin],
   );
 }
 
@@ -1768,9 +1775,9 @@ export function Dock({
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const activateMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, false);
+  const activateMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, false, margin);
   /* The bar's own buttons: the same door, but a second press closes. */
-  const pressMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, true);
+  const pressMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, true, margin);
   const activateSubMode = useActivateSubMode(slug, search, onMode, !isVisitor);
 
   /* **How much of itself the bar spells out is measured, not guessed** — the

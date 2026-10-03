@@ -465,6 +465,10 @@ describe("the Postgres store, over the whole corpus", () => {
          exercises the **404**, which is the half that is easiest to get wrong
          and cheapest to check. */
       ["quiz", (r: typeof pgArticleReader) => r.loadQuiz(slug)],
+      /* No article in the corpus has relations, so this row is the **404** too
+         — and, because the read runs its projection first, that the
+         `relations` column is really there to select. */
+      ["relations", (r: typeof pgArticleReader) => r.loadRelations(slug)],
     ] as const) {
       it(`answers about ${name}, present or absent`, async () => {
         const fromPg = await read(pgArticleReader).catch((err: unknown) => err);

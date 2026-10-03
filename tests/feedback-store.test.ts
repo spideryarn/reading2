@@ -730,7 +730,7 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
     expect(bobs.reports.map((r) => r.body)).toEqual(["Bob's"]);
   });
 
-  it("hands back exactly four fields per report, and never the email, address or picture", async () => {
+  it("hands back exactly five fields per report, and never the email, address or picture", async () => {
     const id = mintId();
     await runAsOwner(ALICE, () =>
       pgFeedbackStore.submit(
@@ -745,9 +745,34 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
     const { reports } = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, []));
     expect(reports).toHaveLength(1);
     const [only] = reports;
-    expect(Object.keys(only ?? {}).sort()).toEqual(["body", "createdAt", "id", "kind"]);
+    expect(Object.keys(only ?? {}).sort()).toEqual(["body", "createdAt", "id", "kind", "page"]);
     expect(only?.id).toBe(id);
     expect(Number.isNaN(Date.parse(only?.createdAt ?? ""))).toBe(false);
+    /* The fixture's address is `…/read/a-piece?q=footnotes`: the page, and not
+       what was searched for. src/feedback-page.ts. */
+    expect(only?.page).toBe("/read/a-piece");
+    expect(JSON.stringify(only)).not.toContain("footnotes");
+  });
+
+  /* docs/plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md. */
+  it("labels an import as /add, and a report with no address as null", async () => {
+    const imported = mintId();
+    const old = mintId();
+    await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(
+        report({
+          id: imported,
+          body: "an import",
+          url: "https://www.spideryarn.com/add/https://user:secret@example.com/paper?token=abc",
+        }),
+      ),
+    );
+    await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: old, body: "an old one", url: null })));
+    const { reports } = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, []));
+    const pageOf = (id: string) => reports.find((r) => r.id === id)?.page;
+    expect(pageOf(imported)).toBe("/add");
+    expect(pageOf(old)).toBeNull();
+    expect(JSON.stringify(reports)).not.toContain("secret");
   });
 
   it("says there are more when the reader has filed past the limit, and not at it", async () => {

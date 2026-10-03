@@ -164,6 +164,7 @@ const OWNED: Article = {
 
 /** The experimental switch, off unless a case turns it on. */
 let experimentalSince: string | null = null;
+let relationsState: "current" | "missing" | "outdated" = "current";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -176,6 +177,14 @@ function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
   if (url === "/api/reader") return json({ experimentalSince });
+  if (url === `/api/relations/${SLUG}`) {
+    if (relationsState === "missing") return new Response(null, { status: 404 });
+    return json({
+      relations: { relations: {} },
+      stale: false,
+      outdated: relationsState === "outdated",
+    });
+  }
   if (method === "POST") {
     posts.push(url);
     return new Response(null, { status: 204 });
@@ -209,6 +218,7 @@ beforeEach(() => {
   }
   who.set({ id: "second-press-owner", email: "owner@example.com" });
   experimentalSince = null;
+  relationsState = "current";
   resetExperimental();
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
     Promise.resolve(reply(String(input), init?.method ?? "GET")),
@@ -345,6 +355,8 @@ describe("a second press on the band you are in closes it", () => {
 
   it("the command bar names a destination instead of toggling it", async () => {
     await open("?mode=summary&margin=1");
+    armed.length = 0;
+    posts.length = 0;
     const pushed = vi.spyOn(history, "pushState");
     await command(MODE_LABEL.summary);
     expect(modeInUrl()).toBe("summary");
@@ -354,12 +366,16 @@ describe("a second press on the band you are in closes it", () => {
       "choosing the current band added an empty history step",
     ).not.toHaveBeenCalled();
 
+    armed.length = 0;
+    posts.length = 0;
     await command(MODE_LABEL.marginalia);
     expect(marginInUrl(), "choosing the open Marginalia column must leave it open").toBe(true);
     expect(
       pushed,
       "choosing the open Marginalia column added an empty history step",
     ).not.toHaveBeenCalled();
+    expect(armed, "choosing an already-open destination armed paid work").toEqual([]);
+    expect(posts, "choosing an already-open destination started paid work").toEqual([]);
   });
 
   it("closing the band leaves the notes on", async () => {
@@ -423,6 +439,38 @@ describe("Plain closes both columns", () => {
     await until(() => !marginInUrl());
     expect(modeInUrl()).toBe("summary");
   });
+
+  /* The column's relation words are asked for by the press that turns it on
+     (plan 261003f). The press that turns it off arms nothing: its feed is still
+     mounted for that instant and would claim the token. */
+  it("the press that turns the notes off arms nothing", async () => {
+    await open("?mode=summary&margin=1");
+    armed.length = 0;
+    posts.length = 0;
+    await pressMarginalia();
+    await until(() => !marginInUrl());
+    expect(armed).toEqual([]);
+    expect(posts).toEqual([]);
+    /* That the on-press does arm, and starts the one job, is
+       every-mode-draws-its-surface.test.tsx § marginalia. */
+  });
+
+  it.each(["missing", "outdated"] as const)(
+    "the press that turns the notes on starts one job for %s relations under StrictMode",
+    async (state) => {
+      relationsState = state;
+      experimentalSince = "2026-10-03T00:00:00.000Z";
+      await open("?mode=summary");
+      armed.length = 0;
+      posts.length = 0;
+
+      await pressMarginalia();
+      await until(() => marginInUrl());
+
+      expect(armed).toEqual(["marginalia"]);
+      expect(posts).toEqual(["/api/jobs"]);
+    },
+  );
 });
 
 describe("the bar is three frames: Plain, the bands, Marginalia", () => {

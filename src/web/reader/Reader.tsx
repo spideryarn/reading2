@@ -89,6 +89,7 @@ import { horizontalInset, safeAreaInsets } from "../safe-area.js";
 import type { ArchiveControl } from "../useArchive.js";
 import { Spine } from "../Spine.js";
 import { AnnotateDialog } from "../AnnotateDialog.js";
+import { TouchSelectionChip } from "../TouchSelectionChip.js";
 import { CommentDialog } from "../CommentDialog.js";
 import { Masthead } from "../Masthead.js";
 import { Dock } from "../Dock.js";
@@ -1528,6 +1529,7 @@ export function Reader({
      owner-only (citations.md § Who sees it) and the margin is not the place to
      reverse that quietly. Comments are the one list both arms already share. */
   const marginaliaFaq = owner ? ownerFeed.faq : (artefacts?.faq?.questions ?? null);
+  const marginaliaTimeline = owner ? ownerFeed.timeline : (artefacts?.timeline?.events ?? null);
   const marginaliaClaims = owner ? ownerFeed.claims : (artefacts?.debate?.claims.rows ?? null);
   const marginaliaCitations =
     owner && owner.citations.status === "ready" && !owner.citations.stale
@@ -1834,6 +1836,9 @@ export function Reader({
     if (!marginRoom) return null;
     const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
       faq: marginaliaFaq,
+      timeline: marginaliaTimeline,
+      /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
+      relations: owner ? ownerFeed.relations : null,
       claims: marginaliaClaims,
       citations: marginaliaCitations,
       comments,
@@ -1852,6 +1857,9 @@ export function Reader({
     article.blocks,
     marginaliaIdeas,
     marginaliaFaq,
+    marginaliaTimeline,
+    owner,
+    ownerFeed.relations,
     marginaliaClaims,
     marginaliaCitations,
     comments,
@@ -3026,6 +3034,26 @@ export function Reader({
         onSelect={selectProse}
         onOpenComment={openCommentDialog}
       />
+      {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
+          never hears of it on an iPad; this is the button it gets instead, and
+          it calls the same `selectProse`. Two gates, both decided here because
+          here is where they are known. `owner &&`: a visitor's selection is
+          silent (`selectProse`'s early return), and a chip that appears and
+          then does nothing is not silent. `suppressed`: the three conditions
+          are the render conditions of the three boxes below, so it is never
+          over an open one. It is not in `surface.current` and owns no Escape —
+          it is a button, not a surface. The key drops every held anchor and
+          document listener on an article or mode change, even if WebKit sends
+          no selectionchange for the old DOM. docs/project/touch.md § A
+          finger's selection gets a button; the wiring is read by
+          tests/touch-selection-chip.test.tsx. */}
+      {owner && (
+        <TouchSelectionChip
+          key={`${slug}:${mode}`}
+          suppressed={Boolean(annotating || overlay || openComment)}
+          onSelect={selectProse}
+        />
+      )}
       {owner && annotating && (
         <AnnotateDialog
           anchor={annotating}

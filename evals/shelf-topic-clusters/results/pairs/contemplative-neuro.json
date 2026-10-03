@@ -1,0 +1,401 @@
+{
+  "case": "contemplative-neuro",
+  "profile": "A meditator and neuroscience student interested in Buddhism, meditation research and the brain.",
+  "shelf": [
+    {
+      "title": "The Self That Isn't There",
+      "gist": "An essay arguing that close inspection of experience does not turn up a fixed self, and that this no-self teaching works alongside the four noble truths to loosen clinging."
+    },
+    {
+      "title": "The Four Noble Truths, Plainly",
+      "gist": "A plain-language explainer walking through each of the four noble truths and why the diagnosis-and-cure structure still resonates."
+    },
+    {
+      "title": "Zen Mind, Ordinary Mind",
+      "gist": "A blog essay on Zen practice arguing that its austere forms are meant to strip away commentary rather than add mystique."
+    },
+    {
+      "title": "Ten Days of Silence: A Retreat Diary",
+      "gist": "A personal diary from a ten-day Theravada retreat, tracking the daily rhythm of practice, boredom, and small breakthroughs."
+    },
+    {
+      "title": "Metta: The Practice of Loving-Kindness",
+      "gist": "An explainer on the loving-kindness practice of metta, its traditional phrases, and what research on it has found so far."
+    },
+    {
+      "title": "What Happens to the Default Mode Network During Meditation",
+      "gist": "A science explainer on how brain-imaging studies link meditation to reduced activity in the default mode network, the brain's mind-wandering circuit."
+    },
+    {
+      "title": "Training the Mind: Attention and Meditation Research",
+      "gist": "A research explainer on how meditation training affects sustained attention and related cognitive tasks, and the mixed evidence behind the claims."
+    },
+    {
+      "title": "Neuroplasticity and the Meditating Brain",
+      "gist": "An essay on what long-term meditation studies suggest about neuroplasticity, structural brain change, and the limits of the current evidence."
+    },
+    {
+      "title": "Inside the Lab: EEG Studies of Monks",
+      "gist": "A news report on laboratory EEG studies of experienced monks, the unusual brainwave patterns recorded, and the practical difficulties of studying elite practitioners."
+    },
+    {
+      "title": "Mindfulness on the Morning Commute",
+      "gist": "A blog post about weaving mindfulness into an ordinary commute, and what changed after a month of treating the bus ride as practice rather than dead time."
+    },
+    {
+      "title": "A Week at Wat Suan Mokkh: Retreat Diary Two",
+      "gist": "A second retreat diary, this one from a forest monastery, tracking heat, insects, loving-kindness practice, and the strange comfort of a fixed daily bell schedule."
+    },
+    {
+      "title": "Sitting With Science: A Tour of Meditation Research",
+      "gist": "An overview piece touring the current state of meditation research across brain imaging, attention testing, and clinical trials, and what remains unsettled."
+    }
+  ],
+  "pairs": [
+    {
+      "pair": "pair-1",
+      "A": [
+        {
+          "topic": "meditation",
+          "articles": [
+            "Sitting With Science: A Tour of Meditation Research",
+            "Training the Mind: Attention and Meditation Research",
+            "What Happens to the Default Mode Network During Meditation",
+            "Neuroplasticity and the Meditating Brain"
+          ]
+        },
+        {
+          "topic": "loving-kindness",
+          "articles": [
+            "Metta: The Practice of Loving-Kindness",
+            "A Week at Wat Suan Mokkh: Retreat Diary Two",
+            "Ten Days of Silence: A Retreat Diary"
+          ]
+        },
+        {
+          "topic": "no-self",
+          "articles": [
+            "The Self That Isn't There",
+            "The Four Noble Truths, Plainly",
+            "Zen Mind, Ordinary Mind"
+          ]
+        },
+        {
+          "topic": "neuroplasticity",
+          "articles": [
+            "Neuroplasticity and the Meditating Brain",
+            "Sitting With Science: A Tour of Meditation Research",
+            "Inside the Lab: EEG Studies of Monks"
+          ]
+        },
+        {
+          "topic": "mindfulness",
+          "articles": [
+            "Mindfulness on the Morning Commute",
+            "Ten Days of Silence: A Retreat Diary",
+            "Zen Mind, Ordinary Mind"
+          ]
+        },
+        {
+          "topic": "default mode network",
+          "articles": [
+            "What Happens to the Default Mode Network During Meditation",
+            "Sitting With Science: A Tour of Meditation Research",
+            "Inside the Lab: EEG Studies of Monks"
+          ]
+        },
+        {
+          "topic": "noble truths",
+          "articles": [
+            "The Four Noble Truths, Plainly",
+            "The Self That Isn't There",
+            "Ten Days of Silence: A Retreat Diary"
+          ]
+        },
+        {
+          "topic": "retreat",
+          "articles": [
+            "A Week at Wat Suan Mokkh: Retreat Diary Two",
+            "Ten Days of Silence: A Retreat Diary",
+            "Mindfulness on the Morning Commute"
+          ]
+        },
+        {
+          "topic": "researchers",
+          "articles": [
+            "What Happens to the Default Mode Network During Meditation",
+            "Inside the Lab: EEG Studies of Monks",
+            "Training the Mind: Attention and Meditation Research"
+          ]
+        },
+        {
+          "topic": "practitioners",
+          "articles": [
+            "Inside the Lab: EEG Studies of Monks",
+            "Metta: The Practice of Loving-Kindness"
+          ]
+        },
+        {
+          "topic": "Zen",
+          "articles": [
+            "Zen Mind, Ordinary Mind",
+            "Mindfulness on the Morning Commute",
+            "Inside the Lab: EEG Studies of Monks"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Meditation",
+          "articles": [
+            "Zen Mind, Ordinary Mind",
+            "Ten Days of Silence: A Retreat Diary",
+            "Metta: The Practice of Loving-Kindness",
+            "What Happens to the Default Mode Network During Meditation",
+            "Training the Mind: Attention and Meditation Research",
+            "Neuroplasticity and the Meditating Brain",
+            "Inside the Lab: EEG Studies of Monks",
+            "Mindfulness on the Morning Commute",
+            "A Week at Wat Suan Mokkh: Retreat Diary Two",
+            "Sitting With Science: A Tour of Meditation Research"
+          ]
+        },
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "The Self That Isn't There",
+            "The Four Noble Truths, Plainly",
+            "Zen Mind, Ordinary Mind",
+            "Ten Days of Silence: A Retreat Diary",
+            "Metta: The Practice of Loving-Kindness",
+            "A Week at Wat Suan Mokkh: Retreat Diary Two"
+          ]
+        },
+        {
+          "topic": "Neuroscience",
+          "articles": [
+            "What Happens to the Default Mode Network During Meditation",
+            "Training the Mind: Attention and Meditation Research",
+            "Neuroplasticity and the Meditating Brain",
+            "Inside the Lab: EEG Studies of Monks",
+            "Sitting With Science: A Tour of Meditation Research"
+          ]
+        },
+        {
+          "topic": "Retreats",
+          "articles": [
+            "Ten Days of Silence: A Retreat Diary",
+            "A Week at Wat Suan Mokkh: Retreat Diary Two"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "pair-2",
+      "A": [
+        {
+          "topic": "meditation",
+          "articles": [
+            "Sitting With Science: A Tour of Meditation Research",
+            "Training the Mind: Attention and Meditation Research",
+            "What Happens to the Default Mode Network During Meditation",
+            "Neuroplasticity and the Meditating Brain"
+          ]
+        },
+        {
+          "topic": "loving-kindness",
+          "articles": [
+            "Metta: The Practice of Loving-Kindness",
+            "A Week at Wat Suan Mokkh: Retreat Diary Two",
+            "Ten Days of Silence: A Retreat Diary"
+          ]
+        },
+        {
+          "topic": "no-self",
+          "articles": [
+            "The Self That Isn't There",
+            "The Four Noble Truths, Plainly",
+            "Zen Mind, Ordinary Mind"
+          ]
+        },
+        {
+          "topic": "neuroplasticity",
+          "articles": [
+            "Neuroplasticity and the Meditating Brain",
+            "Sitting With Science: A Tour of Meditation Research",
+            "Inside the Lab: EEG Studies of Monks"
+          ]
+        },
+        {
+          "topic": "mindfulness",
+          "articles": [
+            "Mindfulness on the Morning Commute",
+            "Ten Days of Silence: A Retreat Diary",
+            "Zen Mind, Ordinary Mind"
+          ]
+        },
+        {
+          "topic": "default mode network",
+          "articles": [
+            "What Happens to the Default Mode Network During Meditation",
+            "Sitting With Science: A Tour of Meditation Research",
+            "Inside the Lab: EEG Studies of Monks"
+          ]
+        },
+        {
+          "topic": "noble truths",
+          "articles": [
+            "The Four Noble Truths, Plainly",
+            "The Self That Isn't There",
+            "Ten Days of Silence: A Retreat Diary"
+          ]
+        },
+        {
+          "topic": "retreat",
+          "articles": [
+            "A Week at Wat Suan Mokkh: Retreat Diary Two",
+            "Ten Days of Silence: A Retreat Diary",
+            "Mindfulness on the Morning Commute"
+          ]
+        },
+        {
+          "topic": "researchers",
+          "articles": [
+            "What Happens to the Default Mode Network During Meditation",
+            "Inside the Lab: EEG Studies of Monks",
+            "Training the Mind: Attention and Meditation Research"
+          ]
+        },
+        {
+          "topic": "practitioners",
+          "articles": [
+            "Inside the Lab: EEG Studies of Monks",
+            "Metta: The Practice of Loving-Kindness"
+          ]
+        },
+        {
+          "topic": "Zen",
+          "articles": [
+            "Zen Mind, Ordinary Mind",
+            "Mindfulness on the Morning Commute",
+            "Inside the Lab: EEG Studies of Monks"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Meditation neuroscience",
+          "articles": [
+            "What Happens to the Default Mode Network During Meditation",
+            "Training the Mind: Attention and Meditation Research",
+            "Neuroplasticity and the Meditating Brain",
+            "Inside the Lab: EEG Studies of Monks",
+            "Sitting With Science: A Tour of Meditation Research"
+          ]
+        },
+        {
+          "topic": "Meditation practice",
+          "articles": [
+            "Zen Mind, Ordinary Mind",
+            "Ten Days of Silence: A Retreat Diary",
+            "Mindfulness on the Morning Commute",
+            "A Week at Wat Suan Mokkh: Retreat Diary Two",
+            "Metta: The Practice of Loving-Kindness",
+            "What Happens to the Default Mode Network During Meditation",
+            "Training the Mind: Attention and Meditation Research",
+            "Sitting With Science: A Tour of Meditation Research"
+          ]
+        },
+        {
+          "topic": "Buddhist philosophy",
+          "articles": [
+            "The Self That Isn't There",
+            "The Four Noble Truths, Plainly",
+            "Metta: The Practice of Loving-Kindness"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "pair-3",
+      "A": [
+        {
+          "topic": "Meditation neuroscience",
+          "articles": [
+            "What Happens to the Default Mode Network During Meditation",
+            "Training the Mind: Attention and Meditation Research",
+            "Neuroplasticity and the Meditating Brain",
+            "Inside the Lab: EEG Studies of Monks",
+            "Sitting With Science: A Tour of Meditation Research"
+          ]
+        },
+        {
+          "topic": "Meditation practice",
+          "articles": [
+            "Zen Mind, Ordinary Mind",
+            "Ten Days of Silence: A Retreat Diary",
+            "Mindfulness on the Morning Commute",
+            "A Week at Wat Suan Mokkh: Retreat Diary Two",
+            "Metta: The Practice of Loving-Kindness",
+            "What Happens to the Default Mode Network During Meditation",
+            "Training the Mind: Attention and Meditation Research",
+            "Sitting With Science: A Tour of Meditation Research"
+          ]
+        },
+        {
+          "topic": "Buddhist philosophy",
+          "articles": [
+            "The Self That Isn't There",
+            "The Four Noble Truths, Plainly",
+            "Metta: The Practice of Loving-Kindness"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Meditation",
+          "articles": [
+            "Zen Mind, Ordinary Mind",
+            "Ten Days of Silence: A Retreat Diary",
+            "Metta: The Practice of Loving-Kindness",
+            "What Happens to the Default Mode Network During Meditation",
+            "Training the Mind: Attention and Meditation Research",
+            "Neuroplasticity and the Meditating Brain",
+            "Inside the Lab: EEG Studies of Monks",
+            "Mindfulness on the Morning Commute",
+            "A Week at Wat Suan Mokkh: Retreat Diary Two",
+            "Sitting With Science: A Tour of Meditation Research"
+          ]
+        },
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "The Self That Isn't There",
+            "The Four Noble Truths, Plainly",
+            "Zen Mind, Ordinary Mind",
+            "Ten Days of Silence: A Retreat Diary",
+            "Metta: The Practice of Loving-Kindness",
+            "A Week at Wat Suan Mokkh: Retreat Diary Two"
+          ]
+        },
+        {
+          "topic": "Neuroscience",
+          "articles": [
+            "What Happens to the Default Mode Network During Meditation",
+            "Training the Mind: Attention and Meditation Research",
+            "Neuroplasticity and the Meditating Brain",
+            "Inside the Lab: EEG Studies of Monks",
+            "Sitting With Science: A Tour of Meditation Research"
+          ]
+        },
+        {
+          "topic": "Retreats",
+          "articles": [
+            "Ten Days of Silence: A Retreat Diary",
+            "A Week at Wat Suan Mokkh: Retreat Diary Two"
+          ]
+        }
+      ]
+    }
+  ]
+}

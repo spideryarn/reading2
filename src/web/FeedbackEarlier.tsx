@@ -94,6 +94,7 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
       !Number.isNaN(Date.parse(report.createdAt)) &&
       (report.kind === null || FEEDBACK_KINDS.some((kind) => kind === report.kind)) &&
       typeof report.body === "string" &&
+      (report.page === null || typeof report.page === "string") &&
       typeof report.shipped === "boolean"
     );
   })) return false;
@@ -109,6 +110,26 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
   }
   if (which !== "all" && reports.some((report) => report.shipped !== (which === "shipped"))) return false;
   return true;
+}
+
+/**
+ * A tab can outlive a deployment rollback: the new client then reads the old
+ * server, whose otherwise-valid rows predate `page`. Treat that one absent
+ * field as the same answer as `null`; a present malformed value still reaches
+ * the validator above and fails closed. There is no service-worker copy of
+ * this route — this is only wire compatibility across two live builds.
+ */
+function withLegacyPage(value: unknown): unknown {
+  if (typeof value !== "object" || value === null) return value;
+  const answer = value as Record<string, unknown>;
+  if (!Array.isArray(answer.reports)) return value;
+  return {
+    ...answer,
+    reports: answer.reports.map((report: unknown) => {
+      if (typeof report !== "object" || report === null || Object.hasOwn(report, "page")) return report;
+      return { ...report, page: null };
+    }),
+  };
 }
 
 export interface EarlierFeedback {
@@ -150,7 +171,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean): EarlierFeedb
         settle({ kind: "failed", message: FEEDBACK_EARLIER_FAILED.message });
         return;
       }
-      const page: unknown = await res.json();
+      const page = withLegacyPage(await res.json());
       settle(
         isEarlierFeedbackPage(page, which)
           ? { kind: "loaded", page }
@@ -329,6 +350,16 @@ export function EarlierList({
                 <p className="fb-earlier-meta">
                   <time dateTime={report.createdAt}>{when(report.createdAt, now)}</time>
                   {report.kind === null ? null : ` · ${KIND_WORD[report.kind]}`}
+                  {/* Where it was filed (spya-y4upzw): the address has always
+                      gone with a report, and this is the one place the reader
+                      sees that it did. The server's label, not the address
+                      (src/feedback-page.ts), so text and not a link. */}
+                  {report.page === null ? null : (
+                    <>
+                      {" · on "}
+                      <span className="fb-earlier-page">{report.page}</span>
+                    </>
+                  )}
                   {report.shipped ? (
                     <>
                       {" · "}

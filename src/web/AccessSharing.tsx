@@ -62,6 +62,7 @@ import {
   SHARED_IF_BUILT_NOTE,
   NOT_SHARED_HEADING,
   SHARING_WRITE_UNCERTAIN,
+  SHARING_COPY_FAILED,
   SHARING_COPY_TIP,
   SHARING_OPEN_TIP,
   SHARING_STOP_TIP,
@@ -846,43 +847,70 @@ function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
 /**
  * The link, and a button that puts it on the clipboard.
  *
- * The tick is not decoration: `navigator.clipboard` is a promise and a copy
- * that failed looks exactly like one that worked. And the guard is a statement
- * rather than `navigator.clipboard?.writeText(…)` — where there is no clipboard
- * object at all the optional chain evaluates to `undefined` and the `.catch`
- * throws. `ChatPanel.tsx` has the long version of both.
+ * **Three states, not two, and a failure is one of them.** The clipboard's
+ * `writeText` returns a promise. Until 2026-10-03 a failed copy looked exactly
+ * like one that was never tried: with no clipboard object the handler
+ * returned, a refusal set `copied` to the `false`
+ * it already was, and an owner pasted whatever they had copied before. A
+ * failure now says so beside the button, in words, and names the way round —
+ * the link is in the box and selects itself on focus. It stays until the next
+ * press rather than timing out: it is an instruction, and a reader is part-way
+ * through following it. GPT Sol, fifth sweep; plan 261003g § 5.
+ *
+ * The status line is the live region too, and is always mounted, so assistive
+ * technology can observe its text changing. The success glyph alone does not
+ * communicate a failure.
+ *
+ * The guard is a statement rather than `navigator.clipboard?.writeText(…)` —
+ * where there is no clipboard object at all the optional chain evaluates to
+ * `undefined` and the `.catch` never runs. `ChatPanel.tsx` § `CopyAnswer` has
+ * the long version, and is the control this one now matches.
  */
 function CopyLink({ link }: { link: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  useEffect(() => {
+    if (state !== "copied") return;
+    const timer = setTimeout(() => setState("idle"), 1500);
+    return () => clearTimeout(timer);
+  }, [state]);
   return (
-    <div className="tw:mb-3 tw:flex tw:items-center tw:gap-2">
-      <input
-        readOnly
-        value={link}
-        onFocus={(e) => e.currentTarget.select()}
-        className="tw:min-w-0 tw:flex-1 tw:rounded tw:border tw:border-rule tw:bg-background tw:px-2 tw:py-1 tw:font-mono tw:text-xs tw:text-ink"
-        aria-label="The link to share"
-      />
-      <Tooltip placement="bottom" content={<TipNote>{SHARING_COPY_TIP}</TipNote>}>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            if (!navigator.clipboard) return;
-            navigator.clipboard
-              .writeText(link)
-              .then(() => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              })
-              .catch(() => setCopied(false));
-          }}
-        >
-          {copied ? <Check size={13} /> : <Copy size={13} />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </Tooltip>
+    <div className="tw:mb-3">
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <input
+          readOnly
+          value={link}
+          onFocus={(e) => e.currentTarget.select()}
+          className="tw:min-w-0 tw:flex-1 tw:rounded tw:border tw:border-rule tw:bg-background tw:px-2 tw:py-1 tw:font-mono tw:text-xs tw:text-ink"
+          aria-label="The link to share"
+        />
+        <Tooltip placement="bottom" content={<TipNote>{SHARING_COPY_TIP}</TipNote>}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (!navigator.clipboard) {
+                setState("failed");
+                return;
+              }
+              navigator.clipboard
+                .writeText(link)
+                .then(() => setState("copied"))
+                .catch(() => setState("failed"));
+            }}
+          >
+            {state === "copied" ? <Check size={13} /> : <Copy size={13} />}
+            {state === "copied" ? "Copied" : "Copy"}
+          </Button>
+        </Tooltip>
+      </div>
+      <p
+        data-copy-status=""
+        aria-live="polite"
+        className={state === "failed" ? "tw:m-0 tw:mt-1 tw:text-destructive" : "tw:sr-only"}
+      >
+        {state === "failed" ? SHARING_COPY_FAILED : state === "copied" ? "Link copied." : ""}
+      </p>
     </div>
   );
 }

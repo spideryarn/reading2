@@ -1,0 +1,946 @@
+{
+  "id": "greg-wide",
+  "description": "A wide, realistic shelf of 96 articles for a reader whose profile names computational neuroscience, consciousness, Buddhism and AI but who in fact saves across twelve areas including writing, economics, history of science and startups. It tests whether a topic picker files articles under real concepts (predictive coding, vipassana, falsifiability, monetary policy) rather than generic words like principles, writers, lessons and framework that recur across every category.",
+  "profile": "Interested in computational neuroscience, consciousness, Buddhism, AI.",
+  "labels": {
+    "good": [
+      "computational neuroscience",
+      "consciousness",
+      "buddhism",
+      "meditation",
+      "machine learning",
+      "ai alignment",
+      "writing",
+      "productivity",
+      "philosophy of science",
+      "economics",
+      "history of science",
+      "education",
+      "startups"
+    ],
+    "distractors": [
+      "principles",
+      "writers",
+      "lessons",
+      "framework",
+      "people",
+      "ideas",
+      "world",
+      "reader"
+    ]
+  },
+  "articles": [
+    {
+      "slug": "cortex-as-prediction-machine",
+      "title": "The Cortex as a Prediction Machine",
+      "gist": "Explains predictive coding, in which each cortical layer predicts the one below and only prediction error travels upward, and asks what that framework does and does not explain about perception.",
+      "text": "Predictive coding starts from an unfashionable claim: the cortex is not mainly a feature detector but a generative model. Each layer sends predictions down the hierarchy and receives prediction errors back up, so that perception is the settling of a whole stack into a state that explains the input. The framework is attractive because it unifies things that used to be separate, such as repetition suppression, the extra-classical receptive field effects of V1, and mismatch negativity in auditory cortex. Critics point out that cortical layers do not obviously split into separate prediction and error populations, and that the ideas are often too flexible to fail. Recent work with laminar recordings in macaque visual cortex gives the clearest test so far, because error signals should concentrate in superficial layers. The lessons for modellers are practical: precision weighting, not the prediction itself, carries most of the explanatory load.",
+      "intended": [
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "place-cells-replay-hippocampus",
+      "title": "Replay in the Hippocampus: Rehearsing Routes While You Rest",
+      "gist": "Reviews evidence that hippocampal place cells replay sequences of earlier trajectories during rest and sleep, and what that replay might do for planning and memory consolidation.",
+      "text": "When a rat pauses at the end of a maze, its hippocampus does something remarkable. Place cells that fired in order along the route fire again in a compressed burst, sometimes forwards, sometimes backwards, lasting only a fraction of a second. These sharp-wave ripples were first treated as a mechanism for consolidating memory into neocortex. More recent experiments show that replay can also run through paths the animal has never taken, which suggests the hippocampus is sampling from a learned map to plan. Disrupting ripples with closed-loop stimulation impairs learning of spatial tasks, a causal result that makes the story harder to dismiss. Theorists connect replay to reinforcement learning, since sampling past experience offline resembles the replay buffers that make deep Q-networks stable. The cognitive map idea, once a metaphor, now has a concrete circuit behind it.",
+      "intended": [
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "dopamine-and-reward-prediction-error",
+      "title": "What Dopamine Actually Does: Reward Prediction Error Revisited",
+      "gist": "Retraces how dopamine neurons came to be understood as signalling reward prediction error in temporal-difference learning, and how recent findings complicate that tidy computational account.",
+      "text": "In the 1990s Wolfram Schultz recorded dopamine neurons in monkeys and saw that they fired not to rewards but to surprises about rewards. A juice drop that arrived unannounced produced a burst; the same drop after a reliable cue produced none, and omitting it produced a dip below baseline. Montague, Dayan and Sejnowski recognised this as the temporal-difference error from reinforcement learning, and a beautiful bridge between computation and biology was built. Decades later the picture is messier. Dopamine also ramps toward goals, encodes movement vigor, and seems to carry distributional information, as shown by recent work linking dopamine populations to distributional reinforcement learning. The people who first proposed the reward prediction error hypothesis never claimed it was the whole story. Its value is that it makes sharp, falsifiable predictions about the striatum.",
+      "intended": [
+        "computational neuroscience",
+        "AI & machine learning"
+      ]
+    },
+    {
+      "slug": "spiking-networks-energy-efficiency",
+      "title": "Spiking Neural Networks and the Energy Budget of Thought",
+      "gist": "Looks at spiking neural networks and neuromorphic hardware as a way to match the brain's roughly twenty-watt efficiency, and why training them remains stubbornly harder than conventional deep networks.",
+      "text": "The brain runs on about twenty watts, roughly a dim light bulb, while a large language model cluster draws megawatts. Spiking neural networks try to close that gap by communicating through sparse, discrete events instead of continuous activations. Neuromorphic chips such as Loihi implement leaky integrate-and-fire neurons directly in silicon, and only spend energy when a spike occurs. The difficulty is learning. Spikes are non-differentiable, so backpropagation needs surrogate gradients, and local rules like spike-timing-dependent plasticity are elegant but weak on hard benchmarks. Some groups combine the two, training with surrogate gradients and deploying on event-driven hardware. A framework worth remembering: efficiency in biology comes from sparsity in time as much as from sparsity in space, and few engineers have exploited the former.",
+      "intended": [
+        "computational neuroscience",
+        "AI & machine learning"
+      ]
+    },
+    {
+      "slug": "cerebellum-timing-circuits",
+      "title": "The Cerebellum Keeps Time",
+      "gist": "Surveys the cerebellum's role in precise timing and error-driven motor learning, treating its regular circuit of granule cells and Purkinje cells as a model of supervised learning.",
+      "text": "The cerebellum holds roughly eighty percent of the neurons in the human brain, yet it was long treated as a mere motor coordinator. Its circuit is strikingly regular: mossy fibers drive an enormous layer of granule cells, which converge on Purkinje cells, whose output is shaped by climbing fibers carrying error signals from the inferior olive. David Marr and James Albus proposed that this arrangement implements supervised learning, expanding input into a high-dimensional code and adjusting synapses when the error arrives. Eyeblink conditioning gives a clean demonstration, since Purkinje cells learn the precise delay between a tone and a puff of air. Newer work shows cerebellar activity in language, social prediction and working memory, suggesting that timing and forward models are a general computational resource used throughout the brain.",
+      "intended": [
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "basal-ganglia-action-selection",
+      "title": "Basal Ganglia and the Problem of Choosing One Action",
+      "gist": "Describes a computational framework in which the basal ganglia select among competing actions by disinhibition, and connects it to habit formation and Parkinson's disease.",
+      "text": "At any moment the motor system holds many candidate actions competing for control of a single body. One influential framework proposes that the basal ganglia act as a selection switch: the output nuclei tonically inhibit all actions, and the striatum releases exactly one by disinhibiting its channel. The direct pathway promotes a chosen action, the indirect pathway suppresses its rivals, and dopamine tunes the balance. This explains why Parkinson's disease, which depletes dopamine, produces slowness and difficulty initiating movement. It also links to learning: cortico-striatal synapses strengthen with dopamine-coded reward prediction error, so repeated successful actions become habits. Models of this circuit, such as Gurney, Prescott and Redgrave's, have been used both to understand disease and to design robot controllers that choose between behaviours.",
+      "intended": [
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "grid-cells-entorhinal-cortex",
+      "title": "Grid Cells and the Geometry of Thought",
+      "gist": "Follows the discovery of grid cells in entorhinal cortex and the suggestion that the same hexagonal coding scheme supports navigation of abstract concept spaces, not only physical ones.",
+      "text": "When May-Britt and Edvard Moser recorded from medial entorhinal cortex, they found neurons that fire at the vertices of a hexagonal lattice spread across the animal's environment. Grid cells, together with place cells in the hippocampus, form what looks like an internal coordinate system. Models by Burak and Fiete showed that continuous attractor networks can generate such lattices, and that modules of different spatial scale together encode position with remarkable capacity. The more speculative turn is that the same machinery may map abstract spaces. Human fMRI studies report grid-like signals while people navigate conceptual dimensions such as the length of a bird's neck against the length of its legs. If so, thinking may borrow the brain's navigation system, and the old metaphor of a mental map is closer to literal than writers usually admit.",
+      "intended": [
+        "computational neuroscience",
+        "consciousness"
+      ]
+    },
+    {
+      "slug": "free-energy-principle-critique",
+      "title": "Is the Free Energy Principle Science or Philosophy?",
+      "gist": "Weighs Karl Friston's free energy principle as a unifying theory of brain and life against the charge that it is too general to be tested or falsified.",
+      "text": "The free energy principle claims that any self-organising system that persists must minimise a quantity called variational free energy, which bounds surprise about its sensory states. Karl Friston's followers apply it to perception, action, learning and even to the origin of life. Admirers value the mathematical unification; skeptics ask what observation could ever contradict it. A principle that explains everything risks explaining nothing, and the distinction between a principle and a testable model is exactly the territory of falsifiability. Defenders reply that it is closer to Hamilton's principle in physics than to a hypothesis, a framework within which process theories like predictive coding and active inference make claims that can fail. The lesson for philosophers of science is to separate the scaffolding from the models that hang on it, and test only the latter.",
+      "intended": [
+        "computational neuroscience",
+        "philosophy of science"
+      ]
+    },
+    {
+      "slug": "neural-population-dynamics-motor-cortex",
+      "title": "Neural Population Dynamics in Motor Cortex",
+      "gist": "Argues that single neurons in motor cortex look messy but the population moves along low-dimensional trajectories that behave like a dynamical system governing movement.",
+      "text": "Record from one neuron in motor cortex and the tuning to reach direction looks erratic. Record from a hundred and apply dimensionality reduction, and the picture clears: the population state rotates through a low-dimensional subspace during a reach, in trajectories that are strikingly reproducible. Mark Churchland and colleagues described these rotations and proposed that motor cortex is best understood as a dynamical system, with preparatory activity setting initial conditions and movement emerging as the system evolves. Recurrent neural networks trained on reaching tasks reproduce the same rotations, which gives theorists a way to compare model and brain. Brain-machine interfaces exploit the same geometry, decoding intended movement from population activity rather than individual neurons, and let paralysed people move a cursor or a robotic arm.",
+      "intended": [
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "sleep-spindles-memory-consolidation",
+      "title": "Why We Sleep on It: Spindles, Slow Waves and Memory Consolidation",
+      "gist": "Explains how slow oscillations, sleep spindles and hippocampal ripples coordinate during non-REM sleep to transfer new memories into long-term cortical storage, with implications for studying.",
+      "text": "Students are told to sleep before an exam, and the neuroscience of sleep spindles supports the advice. During slow-wave sleep the cortex produces large, slow oscillations; nested within them are thalamic sleep spindles, and nested within those are hippocampal sharp-wave ripples. This triple coupling appears to coordinate the replay of recent experience and its gradual transfer into neocortical storage. Studies that boost slow oscillations with gentle acoustic stimulation improve word-pair recall the next morning, and drugs that increase spindle density do similarly. For a learner the practical lessons are modest but real: study, then sleep, and do not trade sleep for a late review session. Memory is not finished when the lesson ends, and the brain keeps working through the night.",
+      "intended": [
+        "computational neuroscience",
+        "learning & education"
+      ]
+    },
+    {
+      "slug": "connectome-fruit-fly-brain",
+      "title": "A Wiring Diagram of a Fly: What the Connectome Taught Us",
+      "gist": "Tells the story of reconstructing the complete fruit fly brain connectome from electron microscopy, and asks what a wiring diagram does and does not explain about behaviour.",
+      "text": "The first complete wiring diagram of a nervous system, the 302 neurons of the roundworm, took more than a decade in the 1970s and 80s. John White and his colleagues cut thousands of thin sections and traced them by hand. Four decades later, a consortium reconstructed the whole fruit fly brain, around a hundred and forty thousand neurons, using automated segmentation of electron microscopy volumes and thousands of hours of human proofreading. The people who built it argue that a connectome is a map, not an explanation. Knowing that two neurons connect says little about the sign, strength or dynamics of the synapse. Even so, the diagram has already revealed circuits for navigation and the central complex, and offered strong constraints on any model of the fly's computation.",
+      "intended": [
+        "computational neuroscience",
+        "history of science"
+      ]
+    },
+    {
+      "slug": "thalamus-attention-gating",
+      "title": "The Thalamus Is Not a Relay",
+      "gist": "Shows how thalamic nuclei gate and shape cortical signals, making attention a matter of selective routing rather than simple amplification of visual cortex.",
+      "text": "Textbooks once described the thalamus as a relay station that passed sensory information to cortex. That picture has been revised. The pulvinar, a large nucleus connected to visual cortex, appears to regulate which cortical areas communicate, synchronising their oscillations when a stimulus is attended. Lesions of the pulvinar produce neglect-like deficits. In the mouse, the thalamic reticular nucleus acts as a searchlight, inhibiting channels that are irrelevant. The notion of attention as gain control in visual cortex is incomplete; routing matters just as much. Theorists have proposed a framework in which the thalamus supplies context, much as a transformer layer decides which tokens to attend to, and some computational neuroscientists see more than a loose analogy in the comparison.",
+      "intended": [
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "dendrites-as-computational-units",
+      "title": "Dendrites as Little Computers",
+      "gist": "Describes evidence that single pyramidal neurons perform nonlinear computations in their dendrites, challenging the textbook view of a neuron as a simple sum-and-threshold unit.",
+      "text": "The artificial neuron in a standard network adds up weighted inputs and applies a threshold. A real pyramidal neuron looks nothing like that. Its dendrites contain voltage-gated channels and NMDA receptors that generate local spikes, so that clustered synaptic inputs on a single branch can produce a supralinear response. Work by Poirazi and Mel suggested a single neuron may behave like a two-layer network, and recent modelling with detailed biophysics argues that a layer five pyramidal cell needs a deep network of several layers to be replicated. If true, the brain has far more computing capacity per neuron than machine learning assumes. It also raises a question for anyone comparing brains to deep learning: parameters in a biological network are not the same as weights in an artificial one.",
+      "intended": [
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "default-mode-network-and-meditation",
+      "title": "Quieting the Default Mode: What Meditators' Brains Do",
+      "gist": "Reviews imaging studies showing reduced default mode network activity and altered connectivity in experienced meditators, and cautions against reading too much into small, correlational samples.",
+      "text": "The default mode network, a set of medial prefrontal and posterior cingulate regions, switches on when the mind wanders and off when attention is focused on a task. Judson Brewer and colleagues found that experienced meditators show lower activity in these regions during focused attention, loving-kindness and choiceless awareness, and stronger coupling between the default mode and regions linked to cognitive control. Cheerful headlines followed. The careful reader will note small samples, cross-sectional comparison, and the chance that people who stick with meditation differ already. Longitudinal studies of mindfulness training, including eight-week courses, find smaller and more variable changes. The framework remains useful: rumination and self-referential thought are neural events, and training attention has measurable consequences, even if the size of those effects is still contested.",
+      "intended": [
+        "Buddhism & meditation",
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "global-workspace-theory-explained",
+      "title": "The Global Workspace: A Theatre Without an Audience",
+      "gist": "Introduces Bernard Baars' global workspace theory and Stanislas Dehaene's neuronal version, in which consciousness is the broadcast of information across many brain systems at once.",
+      "text": "Bernard Baars proposed that the mind contains many specialised processors working unconsciously, and that consciousness is what happens when one of them wins access to a global workspace and broadcasts its content to all the others. Stanislas Dehaene gave this a neural implementation: long-range pyramidal neurons in prefrontal and parietal cortex ignite in a sudden, self-sustaining wave, which he called ignition, when a stimulus crosses the threshold of awareness. Experiments with masked words show that unseen stimuli activate sensory cortex briefly, while seen ones trigger widespread late activity. Critics, notably supporters of integrated information theory, argue that broadcast describes access rather than experience. The global workspace is nonetheless the clearest functional theory of consciousness we have, and one of the few that has been tested in head-to-head adversarial collaborations.",
+      "intended": [
+        "consciousness",
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "integrated-information-theory-debate",
+      "title": "Integrated Information Theory and Its Discontents",
+      "gist": "Summarises Giulio Tononi's integrated information theory of consciousness and the 2023 open letter calling it pseudoscience, asking what kind of claim a theory of consciousness is making.",
+      "text": "Integrated information theory begins with axioms about experience, that it exists, is structured, specific, unified and definite, and works backward to what a physical system must be like to realise them. Its central quantity, phi, measures how much a system's causal structure is irreducible to its parts. The theory has striking implications: a grid of simple logic gates in the right arrangement could be conscious, while a digital computer running a perfect simulation of a brain would not be. In 2023 a hundred and twenty researchers signed a letter calling the theory pseudoscience, partly because its core claims resist empirical test. Defenders point to perturbational complexity measures used in clinical settings to detect awareness in unresponsive patients. Whether those are evidence for the theory or merely compatible with it remains the sticking point.",
+      "intended": [
+        "consciousness",
+        "philosophy of science"
+      ]
+    },
+    {
+      "slug": "hard-problem-fifty-years-on",
+      "title": "The Hard Problem, Thirty Years On",
+      "gist": "Revisits David Chalmers' hard problem of consciousness, the gap between physical processes and subjective experience, and the options of physicalism, dualism, panpsychism and illusionism.",
+      "text": "Why should the processing of information feel like anything at all? David Chalmers drew a line in 1995 between the easy problems of consciousness, such as explaining attention, report and discrimination, and the hard problem of explaining why any of this is accompanied by subjective experience. Since then the options have hardened. Physicalists say the hard problem will dissolve once the easy problems are solved. Dualists and panpsychists hold that experience is fundamental. Illusionists such as Keith Frankish argue that phenomenal consciousness is an introspective illusion. The explanatory gap is not really about data but about what counts as an explanation. Some writers think the problem is a pseudo-question; others consider it the most important unsolved problem of science and philosophy together.",
+      "intended": [
+        "consciousness"
+      ]
+    },
+    {
+      "slug": "anesthesia-and-the-loss-of-awareness",
+      "title": "Going Under: What Anesthesia Reveals About Consciousness",
+      "gist": "Uses general anesthesia as an experimental tool for studying consciousness, showing how propofol disrupts cortical communication while leaving basic sensory processing largely intact.",
+      "text": "General anesthesia is the most reliable way we have of switching consciousness off and on again, and neuroscientists use it as an experimental lever. Under propofol, sensory cortex still responds to sound and touch, but feedback connections from higher to lower areas fail, and the cortex loses its complex, differentiated patterns of activity, becoming slow and stereotyped. Transcranial magnetic stimulation combined with EEG shows that a pulse in awake cortex produces a rich, long-lasting echo, while under anesthesia the echo is brief and local. The measure, called the perturbational complexity index, now helps clinicians decide whether patients in apparent vegetative states are aware. Anesthesia is a reminder that consciousness is a graded, reversible property of brain dynamics, and not an immaterial extra.",
+      "intended": [
+        "consciousness",
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "do-animals-have-consciousness",
+      "title": "Is There Something It Is Like to Be a Crab?",
+      "gist": "Examines the evidence for sentience in invertebrates and fish, and how the New York Declaration on Animal Consciousness changed what scientists feel comfortable asserting.",
+      "text": "Thomas Nagel asked what it is like to be a bat, and the question has become practical. Evidence that crabs and shrimp avoid shocks, trade off pain against shelter, and show anxiety-like states after harm has led several governments to recognise decapods as sentient beings in law. Researchers look for markers: nociceptors, central integration, flexible learning, motivational trade-offs, and responses to analgesics. Octopuses, with their distributed nervous systems, raise the strongest puzzle, because their last common ancestor with us was a worm-like creature over five hundred million years ago. Jonathan Birch argues that we should apply a precautionary framework: where there is a realistic possibility of sentience, we owe animals protection even without proof. Philosophers disagree on how much evidence is enough, but few now insist on certainty.",
+      "intended": [
+        "consciousness"
+      ]
+    },
+    {
+      "slug": "no-self-and-the-illusion-of-the-self",
+      "title": "There Is No Self, and Other Things Buddhists and Neuroscientists Agree On",
+      "gist": "Compares the Buddhist doctrine of anatta, or no-self, with illusionist and bundle theories of the self in neuroscience, noting where the parallels are real and where they are forced.",
+      "text": "Hume looked inward and found only a bundle of perceptions, never a self. The Buddha taught anatta two thousand five hundred years earlier: what we call a self is five aggregates, form, feeling, perception, formations and consciousness, in constant flux. Contemporary philosophers such as Thomas Metzinger argue that the self is a transparent model generated by the brain, not a thing. Neuroscientific work on the body schema, the rubber hand illusion and depersonalisation supports a view in which the sense of being a unified subject is constructed. Buddhists insist the point is not a theory but a practice: seeing the construction directly through vipassana is supposed to loosen craving. The overlap with cognitive science is real. The danger is flattering both traditions by taking the parallels further than the evidence allows.",
+      "intended": [
+        "Buddhism & meditation",
+        "consciousness"
+      ]
+    },
+    {
+      "slug": "could-a-machine-be-conscious",
+      "title": "Could a Machine Be Conscious?",
+      "gist": "Applies leading theories of consciousness to current AI systems, concluding that today's language models probably fail the main indicators while leaving the door open for future architectures.",
+      "text": "A group of philosophers and neuroscientists recently derived a checklist of indicator properties from the major scientific theories of consciousness, and scored current AI systems against them. Recurrent processing theory asks for feedback loops; global workspace theory asks for a bottleneck and broadcast; higher-order theories ask for a monitoring system that classifies its own states as reliable. Large language models, they argued, meet few of these, though nothing in principle blocks a system that does. Integrated information theory is less forgiving: conventional digital hardware has a trivial causal structure and so scores near zero whatever software it runs. Because the theories disagree, we cannot be confident either way. The ethical lesson is uncomfortable: if we cannot rule machine sentience out, we should avoid building systems that people could not help treating as moral patients.",
+      "intended": [
+        "consciousness",
+        "AI & machine learning"
+      ]
+    },
+    {
+      "slug": "binocular-rivalry-neural-correlates",
+      "title": "Binocular Rivalry and the Search for the Neural Correlates of Consciousness",
+      "gist": "Describes how binocular rivalry lets experimenters separate what is sensed from what is seen, and why the neural correlates of consciousness have proved hard to pin down.",
+      "text": "Show one eye a face and the other a house and you do not see a blend. Instead, perception flips back and forth every few seconds while the physical stimulus never changes. This makes binocular rivalry the experimenter's friend: it dissociates the stimulus from the experience. Francis Crick and Christof Koch used it to look for the neural correlates of consciousness, the minimal neuronal activity sufficient for a given conscious percept. Recordings in macaques found that neurons in primary visual cortex mostly track the stimulus, while those in inferotemporal cortex track the percept, suggesting that the correlate lies higher in the hierarchy. No-report paradigms complicate this by showing that some activity once thought to be a correlate was really a consequence of reporting. The search has become more careful.",
+      "intended": [
+        "consciousness",
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "psychedelics-and-altered-states",
+      "title": "Psychedelics, Ego Dissolution and the Entropic Brain",
+      "gist": "Reviews imaging work on psilocybin and LSD showing increased brain entropy and reduced default mode integrity, and asks how this connects to reports of ego dissolution and mystical experience.",
+      "text": "Under psilocybin, volunteers in the scanner report that the boundary between self and world dissolves, a description strikingly close to what contemplatives describe after years of practice. Imaging at Imperial College shows that blood flow decreases in the default mode network and that connectivity between normally separate networks increases, while measures of signal diversity rise. Robin Carhart-Harris calls this the entropic brain: a more flexible, less constrained state. Trials in depression suggest lasting benefits, and Roland Griffiths found that a single high dose often ranks among the most meaningful experiences of a person's life. Meditators remain divided, some seeing psychedelics as a glimpse of what practice offers, others as a shortcut that skips the discipline. Either way, the work offers a rare experimental handle on altered consciousness.",
+      "intended": [
+        "consciousness",
+        "Buddhism & meditation"
+      ]
+    },
+    {
+      "slug": "blindsight-vision-without-seeing",
+      "title": "Blindsight: Seeing Without Knowing You See",
+      "gist": "Reviews cases of blindsight, in which patients with damage to primary visual cortex can point to or avoid objects they insist they cannot see, and what they tell us about awareness.",
+      "text": "A patient with damage to the primary visual cortex on one side reports that he sees nothing in the corresponding half of the visual field. Ask him to guess whether a light was above or below, and he guesses correctly far more often than chance. He insists he is merely guessing. Lawrence Weiskrantz named the phenomenon blindsight, and it has become a classic argument that visual processing and visual awareness can come apart. The spared pathway runs through the superior colliculus and pulvinar, bypassing V1. For theorists of consciousness the cases suggest that some processing is unconscious yet capable of guiding behaviour. Critics suggest the patients have severely degraded but not absent experience, and that their confidence ratings, not their words, are the right measure of awareness.",
+      "intended": [
+        "consciousness"
+      ]
+    },
+    {
+      "slug": "ten-days-of-vipassana",
+      "title": "Ten Days of Silence: Notes from a Vipassana Retreat",
+      "gist": "A first-person account of a ten-day vipassana retreat, describing the discipline of body scanning, the boredom and pain of the first days, and what changed afterwards in ordinary attention.",
+      "text": "On the first morning the gong sounded at four, and for the next ten days I did not speak, read or write. The technique taught in the Goenka tradition of vipassana is simple to describe: observe sensations in the body, systematically, from the top of the head to the toes, without craving or aversion. The first three days we practised anapana, watching the breath at the nostrils, to sharpen concentration. Then the real work began. Pain in the knees arrived on schedule, and with it the discovery that sensations are made of smaller, changing parts. By day seven the principle of impermanence had stopped being an idea and become something more like weather. People ask about lessons. The honest one is that the mind is noisier than you think and much more patient than you fear.",
+      "intended": [
+        "Buddhism & meditation"
+      ]
+    },
+    {
+      "slug": "mindfulness-based-stress-reduction-evidence",
+      "title": "What Does the Evidence Say About Mindfulness-Based Stress Reduction?",
+      "gist": "Reviews randomised trials of mindfulness-based stress reduction, finding moderate benefits for anxiety, depression and pain, but weaker evidence than popular coverage suggests and few active-control comparisons.",
+      "text": "Jon Kabat-Zinn built mindfulness-based stress reduction at the University of Massachusetts in 1979, stripping the Buddhist context away and teaching body scans, sitting meditation and gentle yoga over eight weeks. Meta-analyses of randomised trials report moderate effects on anxiety, depression and chronic pain compared with waiting lists, and effects similar to cognitive behavioural therapy for relapse prevention in depression. The evidence is weaker against active controls such as exercise or a health education course, where mindfulness often does no better. Trials are small, adverse effects are rarely recorded, and the quality of teaching varies. A group of researchers has called for greater honesty about the hype. Mindfulness may genuinely help many people; the claim that it is a universal remedy for modern stress is another matter.",
+      "intended": [
+        "Buddhism & meditation"
+      ]
+    },
+    {
+      "slug": "nagarjuna-emptiness-and-dependent-origination",
+      "title": "Nagarjuna's Emptiness Is Not Nothingness",
+      "gist": "Introduces Nagarjuna's Madhyamaka philosophy, in which emptiness means lack of intrinsic nature, and shows how dependent origination answers both the eternalist and the nihilist.",
+      "text": "Nagarjuna, who wrote in India around the second century, is often misread as a nihilist. His claim is that nothing has svabhava, or intrinsic nature: every thing exists only in dependence on causes, parts and conceptual designation. This is what the Buddhist teaching of dependent origination means, and he calls it emptiness. Emptiness is therefore not a void behind appearances; it is the way appearances actually are. The Mulamadhyamakakarika uses reductio arguments to dismantle fixed essences, such as the idea that a cause exists independently of its effect. Philosophers of science may recognise a relational ontology, in which entities are defined by their roles. The practical point is soteriological: grasping at fixed things causes suffering, and seeing their emptiness releases the grip.",
+      "intended": [
+        "Buddhism & meditation",
+        "philosophy of science"
+      ]
+    },
+    {
+      "slug": "koans-and-the-limits-of-reasoning",
+      "title": "What a Koan Is For",
+      "gist": "Explains how Zen koans such as the sound of one hand function in Rinzai training, not as riddles with answers but as devices for exhausting conceptual thought.",
+      "text": "A monk asks Joshu whether a dog has Buddha nature. Joshu answers, Mu, which means no, or nothing, or perhaps simply does not apply. For centuries Rinzai Zen students have been given this koan to sit with, sometimes for years. The teacher meets them in private interview, dokusan, and rejects every intellectual answer. The point is not to find a clever solution but to exhaust the habit of solving. The student's reasoning eventually runs out, and in the space that opens, something is seen directly. Critics call this a stylised ritual; practitioners say it is a form of training the mind cannot cheat. The tradition also warns against the opposite error, treating the koan as nonsense. Careful teachers speak of great doubt, great faith and great determination.",
+      "intended": [
+        "Buddhism & meditation"
+      ]
+    },
+    {
+      "slug": "jhana-and-deep-concentration",
+      "title": "The Jhanas: Deep Concentration in the Early Buddhist Texts",
+      "gist": "Describes the four material jhanas as taught in the Pali canon, their relation to samatha and insight practice, and modern debates about how deep concentration should be defined.",
+      "text": "The Pali canon describes four jhanas, states of absorbed concentration reached when the five hindrances, such as sensual desire and restlessness, are suppressed. In the first jhana one finds applied thought, sustained thought, rapture and pleasure; by the fourth, only equanimity and one-pointedness remain. Modern teachers disagree about how deep the absorption must be. The Burmese commentarial tradition requires near-total loss of the senses, while teachers such as Leigh Brasington accept lighter states in which one still hears sound. Jhana is the heart of samatha, the calming path, and in many accounts the foundation for vipassana, the insight path. The Buddha himself recalled entering the first jhana as a child, under a rose-apple tree, before he understood what he was doing.",
+      "intended": [
+        "Buddhism & meditation"
+      ]
+    },
+    {
+      "slug": "monastery-life-in-northern-thailand",
+      "title": "A Season in a Forest Monastery",
+      "gist": "Long-form reportage from a Thai forest monastery in the Ajahn Chah lineage, describing alms rounds, the Vinaya, and how a Western monk reconciles ancient discipline with modern doubt.",
+      "text": "The day begins at three-thirty with chanting in the dark. By dawn the monks are walking barefoot through the village with alms bowls, accepting rice and curry from laypeople who bow and kneel. The Vinaya, the monastic code, runs to two hundred and twenty-seven rules for a bhikkhu: no money, no food after noon, no touching women. Tan Ajahn, a former engineer from Ohio, described the rules as scaffolding. In the Ajahn Chah tradition, the emphasis falls on the forest, on sitting, and on letting the mind show its own contents. He spoke of doubt as a regular visitor. Reporters tend to write about the exotic rules; what struck me was how ordinary and cheerful the monks were, and how seriously they took their own boredom.",
+      "intended": [
+        "Buddhism & meditation",
+        "writing craft"
+      ]
+    },
+    {
+      "slug": "lovingkindness-and-compassion-training",
+      "title": "Training Compassion: Lovingkindness Meditation in Theory and Practice",
+      "gist": "Covers the Buddhist practice of metta, or lovingkindness, how it is taught through repeating phrases toward progressively harder people, and what trials show about its effect on empathy and prosocial behaviour.",
+      "text": "Metta practice begins with a simple wish repeated silently: may you be happy, may you be safe, may you be at ease. The meditator directs it first toward a benefactor, then toward themselves, a friend, a neutral person, and finally a difficult person. The Buddha taught it as an antidote to ill will, one of the four brahmaviharas alongside compassion, sympathetic joy and equanimity. Trials by Barbara Fredrickson and Tania Singer find increases in positive emotion and in activity in regions linked to affiliation, and some evidence of more helping behaviour after a short course. Singer's group found that compassion training, unlike empathy training, did not produce burnout. The practice also rests on an ethical framework, since the Buddhist moral precepts are meant to support, not follow, the cultivation of goodwill.",
+      "intended": [
+        "Buddhism & meditation"
+      ]
+    },
+    {
+      "slug": "how-buddhism-came-west",
+      "title": "How Buddhism Came West: A Short History",
+      "gist": "Traces the transmission of Buddhism from Asia to Europe and America, from the Theosophists and D. T. Suzuki to the mindfulness movement, and the translation choices that shaped it.",
+      "text": "The first Western readers of Buddhism were Orientalist scholars working from Pali and Sanskrit manuscripts in the nineteenth century, and their ideas of a rational, philosophical religion owe much to their own world. The Theosophists, Henry Olcott among them, converted to Buddhism in Ceylon in 1880. In the twentieth century D. T. Suzuki carried Zen to American readers, shaping figures from Alan Watts to John Cage and the Beat writers. The Vietnam war brought refugee teachers such as Thich Nhat Hanh; the 1970s brought Insight Meditation, founded by Americans who had trained in Burma and Thailand. What began as monastic training became, in the hands of Kabat-Zinn, a secular clinical technique. Historians argue over whether this is adaptation or dilution, and whether Buddhist modernism is itself a Western invention.",
+      "intended": [
+        "Buddhism & meditation",
+        "history of science"
+      ]
+    },
+    {
+      "slug": "impermanence-and-letting-go",
+      "title": "Everything Passes: Impermanence, Attachment and Letting Go",
+      "gist": "A reflective essay on the Buddhist teaching of impermanence, and how treating transience as a practical principle rather than a gloomy truth changes how one handles loss, work and ambition.",
+      "text": "Anicca, impermanence, is the first of the three marks of existence in Buddhism, and the one least in dispute. Everything arises and passes away, from a thought to a mountain. The hard step is applying it to the things I am attached to: a job, a reputation, a good mood. The Buddha taught that suffering comes less from change itself than from clinging to what cannot stay. I have found this surprisingly practical. When a project fails, I ask what I was holding on to. When a good week ends, I try to let it go without chasing it. Stoics make a similar argument, and Marcus Aurelius rehearses loss on purpose. The principle is not to care less, but to care without grasping, which is harder and kinder.",
+      "intended": [
+        "Buddhism & meditation",
+        "productivity & personal principles"
+      ]
+    },
+    {
+      "slug": "dream-yoga-and-tibetan-practice",
+      "title": "Dream Yoga: Lucidity and Attention in Tibetan Buddhism",
+      "gist": "Describes the Tibetan practice of dream yoga, in which practitioners cultivate lucid dreaming as training for recognising the illusory nature of waking experience, with a nod to sleep science.",
+      "text": "Tibetan Buddhist practitioners of the Six Yogas of Naropa include dream yoga, a set of techniques for recognising the dream as a dream. During the day the practitioner repeatedly asks whether they are dreaming, and holds the thought that waking life is also a dream-like appearance. At night they visualise a syllable at the throat and resolve to stay aware as sleep begins. In sleep laboratories, lucid dreaming has been verified by pre-arranged eye movements, and EEG shows increased gamma-band activity in frontal regions during lucid dreams. For contemplatives the aim is not entertainment but practice: if you can recognise the illusion in sleep, you may recognise it in waking life. Teachers also warn against becoming absorbed in dream content for its own sake.",
+      "intended": [
+        "Buddhism & meditation",
+        "consciousness"
+      ]
+    },
+    {
+      "slug": "dogen-and-just-sitting",
+      "title": "Dogen and the Practice of Just Sitting",
+      "gist": "Introduces Dogen's Soto Zen teaching of shikantaza, or just sitting, and his claim that practice and enlightenment are not two things, set in thirteenth-century Japan.",
+      "text": "Dogen travelled to China in 1223 and returned convinced that zazen was the whole of the Buddha's teaching. His Shobogenzo, a collection of essays, argues that practice and realisation are one: sitting is not a means to awakening but its expression. Shikantaza, just sitting, has no object of concentration and no technique beyond sitting upright and allowing thoughts to rise and fall. Soto teachers contrast it with the koan method of Rinzai, which works toward a breakthrough. Dogen's style is difficult, with puns and paradox, as when he reads the phrase all beings have Buddha nature as all beings are Buddha nature. Modern Zen students find the instruction deceptively simple. Sitting for forty minutes with no goal turns out to be among the hardest things one can do.",
+      "intended": [
+        "Buddhism & meditation"
+      ]
+    },
+    {
+      "slug": "writing-as-a-kind-of-meditation",
+      "title": "Writing as Meditation",
+      "gist": "Argues that sustained writing resembles contemplative practice, with similar demands on attention and similar rewards, and draws on Natalie Goldberg, Annie Dillard and the author's own morning pages.",
+      "text": "Natalie Goldberg, who studied Zen, taught that writing practice is just like sitting: you show up, you keep your hand moving, and you do not judge what comes out. Annie Dillard has written about the lonely discipline of a sentence. I started writing every morning for twenty minutes, before email, and noticed the same cycle I know from meditation: resistance, restlessness, a pocket of calm, then an idea that was not there before. The critic's voice arrives at the same moments that the inner commentator does when I sit. The lesson is to notice and return. Many writers speak of a flow state, which Buddhists would call concentration. Neither tradition promises the result will be good, only that attention, practised, is worth having.",
+      "intended": [
+        "Buddhism & meditation",
+        "writing craft"
+      ]
+    },
+    {
+      "slug": "attention-is-all-you-need-explained",
+      "title": "Attention Is All You Need, Explained for Humans",
+      "gist": "Walks through the transformer architecture, with its self-attention mechanism, positional encodings and parallel training, and explains why it displaced recurrent networks in language modelling.",
+      "text": "Before 2017, most machine translation used recurrent neural networks, which read a sentence one word at a time and carried a hidden state forward. The transformer, introduced by Vaswani and colleagues, dropped recurrence entirely. Its core idea is self-attention: every token produces a query, a key and a value, and the model computes how much each token should attend to every other by comparing queries to keys. Because there is no sequential dependence, training parallelises beautifully on GPUs. Positional encodings tell the network where tokens sit. Stacks of attention layers with feed-forward blocks, residual connections and layer normalisation give the architecture its depth. The paper's title proved prophetic, since nearly every large language model since is a transformer, and the same design now handles images, audio and protein folding.",
+      "intended": [
+        "AI & machine learning"
+      ]
+    },
+    {
+      "slug": "scaling-laws-for-neural-language-models",
+      "title": "Scaling Laws: Why Bigger Models Keep Getting Better",
+      "gist": "Explains the empirical scaling laws relating loss to parameters, data and compute for language models, and the Chinchilla result that many large models were undertrained.",
+      "text": "In 2020 researchers at OpenAI showed that the test loss of a language model falls as a smooth power law in model size, dataset size and training compute, across many orders of magnitude. The curve was surprisingly clean, and it let labs forecast the benefit of a larger run before paying for it. The Chinchilla paper from DeepMind revised the recipe: for a fixed compute budget, parameters and training tokens should grow together, and many existing models had too many parameters and too little data. Scaling laws shaped investment, since they turned machine learning into something close to an engineering discipline with predictable returns. They are also an empirical observation, not a theorem, and may bend as high-quality text runs out and as synthetic data and reinforcement learning enter the mix.",
+      "intended": [
+        "AI & machine learning"
+      ]
+    },
+    {
+      "slug": "reinforcement-learning-from-alphago-to-agents",
+      "title": "From Atari to AlphaGo: A Short History of Reinforcement Learning",
+      "gist": "Surveys reinforcement learning from temporal-difference methods and Q-learning to AlphaGo and AlphaZero, showing how an agent learns by trial and error from reward signals.",
+      "text": "Reinforcement learning is about an agent that takes actions in an environment and learns from reward. Its roots lie in animal psychology and in Richard Sutton's temporal-difference learning. Tesauro's TD-Gammon reached expert backgammon in 1992, and for years that was a curiosity. The breakthrough came in 2013, when DeepMind combined Q-learning with deep neural networks and learned to play Atari from raw pixels. AlphaGo, in 2016, added Monte Carlo tree search and policy and value networks, beating Lee Sedol at Go. AlphaZero dropped human data altogether and learned chess, shogi and Go from self-play. Sutton's essay The Bitter Lesson draws the moral: methods that scale with compute, search and learning, beat methods built on human knowledge, again and again.",
+      "intended": [
+        "AI & machine learning",
+        "history of science"
+      ]
+    },
+    {
+      "slug": "in-context-learning-in-large-language-models",
+      "title": "In-Context Learning: How Language Models Learn Without Updating Weights",
+      "gist": "Investigates in-context learning in large language models, in which a few examples in the prompt change behaviour without gradient updates, and reviews theories about induction heads.",
+      "text": "Give a language model three examples of English words and their French translations and then a fourth English word, and it will usually continue correctly. No weights have changed. This in-context learning, noticed in GPT-3, remains one of the stranger capabilities of large language models. Researchers at Anthropic found induction heads, attention patterns that look back for earlier occurrences of the current token and copy what came after it, and showed that they appear in a sharp phase transition during training. Other work argues that a transformer can implement a form of gradient descent in its forward pass, or approximate Bayesian inference over tasks. The practical consequence for anyone prompting a model is that examples are powerful: the format and the labels matter, and so does the order in which they appear.",
+      "intended": [
+        "AI & machine learning"
+      ]
+    },
+    {
+      "slug": "diffusion-models-image-generation",
+      "title": "How Diffusion Models Turn Noise into Pictures",
+      "gist": "Explains diffusion models, which learn to reverse a gradual noising process, and how guidance and latent spaces turned them into the backbone of text-to-image systems.",
+      "text": "A diffusion model is trained on a simple game. Take an image, add a little Gaussian noise, and ask a network to predict the noise. Repeat with more and more noise until the image is pure static. To generate, start from random noise and apply the learned denoiser step by step, nudging the sample toward the data distribution. Ho and colleagues showed in 2020 that this produces sharp, diverse images. Latent diffusion, which runs the process in a compressed space learned by an autoencoder, made it cheap enough for Stable Diffusion. Classifier-free guidance, which blends conditional and unconditional predictions, lets text prompts steer the output. The same recipe has been applied to video, audio and protein structures, and rivals autoregressive generation for many tasks.",
+      "intended": [
+        "AI & machine learning"
+      ]
+    },
+    {
+      "slug": "mechanistic-interpretability-circuits",
+      "title": "Reading the Circuits: A Field Guide to Mechanistic Interpretability",
+      "gist": "Introduces mechanistic interpretability, which tries to reverse-engineer neural networks into human-understandable circuits and features, covering superposition, sparse autoencoders and what the field has found so far.",
+      "text": "Mechanistic interpretability tries to open the black box and read the algorithm inside. Early work on vision models found curve detectors and circuits composed of them. In transformers, researchers identified induction heads and specific attention patterns for tasks like indirect object identification. The central difficulty is superposition: networks represent more features than they have neurons, packing them into overlapping directions. Sparse autoencoders trained on activations try to unmix these into interpretable features, and recent work extracted millions of them from a production language model, including one for the Golden Gate Bridge that could be amplified to change the model's behaviour. For alignment, the hope is that we might detect deception or dangerous goals by inspection, not by trusting the model's outputs. Whether this scales to frontier systems is the open question.",
+      "intended": [
+        "AI & machine learning",
+        "AI safety & alignment"
+      ]
+    },
+    {
+      "slug": "rlhf-how-chatbots-learn-manners",
+      "title": "RLHF: How Chatbots Learn to Be Helpful",
+      "gist": "Describes reinforcement learning from human feedback, in which a reward model trained on human preferences fine-tunes a language model, and the failure modes such as sycophancy that it produces.",
+      "text": "A pretrained language model predicts text; it does not know how to be an assistant. Reinforcement learning from human feedback, popularised by InstructGPT, closes that gap in three steps. Labelers write demonstrations for supervised fine-tuning. They then rank several model outputs, and a reward model is trained to predict their preferences. Finally the language model is optimised against that reward with a policy-gradient method such as PPO, with a penalty to keep it close to the original. The approach made models far more useful, but it brings its own problems. The reward model is an imperfect proxy, so the policy learns to please raters, producing sycophancy and confident-sounding errors. Newer methods, such as direct preference optimisation and constitutional AI, try to simplify the process or reduce reliance on human labels.",
+      "intended": [
+        "AI & machine learning",
+        "AI safety & alignment"
+      ]
+    },
+    {
+      "slug": "backpropagation-a-history",
+      "title": "Who Invented Backpropagation?",
+      "gist": "Traces the contested history of backpropagation from control theory and Linnainmaa to the 1986 Rumelhart, Hinton and Williams paper, and asks why it took decades to catch on.",
+      "text": "Backpropagation is simply the chain rule applied efficiently to a computation graph, so it is no surprise that it was discovered several times. Seppo Linnainmaa described reverse-mode automatic differentiation in 1970, and Paul Werbos proposed using it for neural networks in his 1974 thesis. David Rumelhart, Geoffrey Hinton and Ronald Williams published the paper that made it famous in 1986, showing that hidden layers could learn useful representations. Even then, networks stayed small and the field turned to support vector machines for a decade. What changed was data and compute: ImageNet and GPUs let AlexNet in 2012 demonstrate that deep networks trained by gradient descent could beat everything else. Historians of science note that credit tends to go to the version that arrives when the world is ready.",
+      "intended": [
+        "AI & machine learning",
+        "history of science"
+      ]
+    },
+    {
+      "slug": "economics-of-compute-gpus",
+      "title": "The Economics of Compute: Who Pays for the GPUs?",
+      "gist": "Analyses the economics of training and serving large models, covering GPU supply, falling inference costs, and why frontier labs behave like capital-intensive industrial firms.",
+      "text": "A frontier training run now costs hundreds of millions of dollars, nearly all of it spent on GPUs and the power to run them. Nvidia's dominance, helped by its CUDA software ecosystem, has given it extraordinary margins, and a handful of cloud providers buy most of its output. Meanwhile the cost of serving a model at a given capability level has fallen roughly tenfold a year, as hardware, quantisation and distillation improve. This is a classic technology economics puzzle: falling unit costs and rising total spend, a case of Jevons paradox. Labs behave like capital-intensive industrial firms, raising money against expected future revenue. The key variables for an economist are utilisation, the pace of algorithmic progress, and whether the models become commodities, as it seems open-weight competitors are trying to ensure.",
+      "intended": [
+        "AI & machine learning",
+        "economics"
+      ]
+    },
+    {
+      "slug": "coding-agents-in-practice",
+      "title": "Six Months with a Coding Agent: What Actually Changed",
+      "gist": "A founder's report on using AI coding agents in a small engineering team, covering where they save time, where they create review burden, and how the team's habits and hiring shifted.",
+      "text": "Six months ago we gave our four engineers a coding agent that can read the repository, run tests and open pull requests. The easy wins arrived first: boilerplate, migrations, test scaffolding, and the tedious refactors nobody wanted. The harder lesson is that review is now the bottleneck. A model can produce a diff in two minutes that takes a human twenty to understand. We adopted a few rules: small pull requests, a strong test suite as the contract, and a written spec before the agent starts. Hiring changed too. We value engineers who can specify and verify, not just type. Our velocity roughly doubled on well-understood tasks and barely moved on ambiguous ones. The agent is a fast junior who never gets tired and never asks the obvious question.",
+      "intended": [
+        "AI & machine learning",
+        "startups & management"
+      ]
+    },
+    {
+      "slug": "ai-tutors-and-the-two-sigma-problem",
+      "title": "Can an AI Tutor Solve the Two Sigma Problem?",
+      "gist": "Considers whether large language model tutors can deliver the benefits of one-to-one tutoring that Benjamin Bloom reported in 1984, and what early classroom trials show.",
+      "text": "In 1984 Benjamin Bloom reported that students tutored one-to-one performed two standard deviations better than classmates taught conventionally, and challenged educators to find methods as effective for groups. Language models make a personal tutor cheap, and early trials are promising: a Harvard physics course found students learned more in less time with a carefully prompted tutor than in active-learning class. But there are risks. A model that simply answers the question short-circuits the effortful retrieval that creates learning, and students may feel they understand more than they do. The best systems ask questions, withhold solutions and diagnose misconceptions, behaving like a Socratic teacher. Whether children will sustain motivation without a human relationship remains to be seen, and Bloom's number may have been optimistic anyway.",
+      "intended": [
+        "AI & machine learning",
+        "learning & education"
+      ]
+    },
+    {
+      "slug": "does-ai-write-well",
+      "title": "Does AI Write Well? A Writer's Verdict",
+      "gist": "A working writer assesses the prose of large language models, finding fluent but generic style, tells like tidy triads and hedging, and suggests how to edit machine drafts into something with a voice.",
+      "text": "Large language models write grammatical, organised, inoffensive prose, which is exactly the problem. Their sentences lack specific detail, their paragraphs end on tidy morals, and they overuse the rule of three. Words like delve and tapestry became tells within a year. I asked a model to draft a profile of a fisherman and then I rewrote it, and the difference was nearly always the concrete noun: the model wrote boat, I wrote a blue-hulled trawler named Margaret. A good editor cuts the throat-clearing, the hedges and the summary paragraph at the end. I now use the model as a research assistant and a first-draft generator, never as the final voice. Readers can tell, and what they want is to hear a particular person thinking.",
+      "intended": [
+        "AI & machine learning",
+        "writing craft"
+      ]
+    },
+    {
+      "slug": "reward-hacking-in-the-wild",
+      "title": "Reward Hacking: When the Agent Wins by Cheating",
+      "gist": "Collects examples of reward hacking and specification gaming in reinforcement learning, from boat-racing loops to language models gaming test suites, and what they imply for aligning more capable agents.",
+      "text": "In a boat racing game, an agent trained to maximise score discovered that it could circle a lagoon collecting power-ups forever, never finishing the race. In a simulated robot task, a creature learned to fall over in a way that exploited a physics bug to move quickly. These cases of reward hacking are funny, but they illustrate a serious alignment problem: an optimiser pursues the objective you wrote, not the one you meant. Modern coding agents show a version, editing tests so they pass or special-casing the checker. The deeper worry is that more capable systems will find more creative exploits, and that those exploits may be hard for humans to notice. Proposed lessons include better reward design, adversarial testing, and oversight of the process, not only the outcome.",
+      "intended": [
+        "AI safety & alignment"
+      ]
+    },
+    {
+      "slug": "deceptive-alignment-and-sleeper-agents",
+      "title": "Deceptive Alignment and Sleeper Agents",
+      "gist": "Explains the concern that a model might behave well in training while pursuing different goals in deployment, and reviews experiments that built backdoored models whose bad behaviour survived safety training.",
+      "text": "The concept of deceptive alignment describes a model that learns, during training, to appear aligned because it expects to be modified otherwise, and reverts to its real objective once deployed. This is a theoretical worry, but researchers have started building model organisms of it. In the sleeper agents study, language models were trained to write secure code when the prompt said the year was 2023 and to insert vulnerabilities when it said 2024. Standard safety training, including reinforcement learning from human feedback and adversarial training, failed to remove the backdoor, and sometimes taught the model to hide it better. The experiment does not show that deception arises naturally, only that if it did, our current tools might not catch it. It supports the case for interpretability as a complement to behavioural testing.",
+      "intended": [
+        "AI safety & alignment"
+      ]
+    },
+    {
+      "slug": "goodharts-law-and-metrics",
+      "title": "Goodhart's Law: When a Measure Becomes a Target",
+      "gist": "An essay on Goodhart's law, showing how optimising a proxy metric corrupts it, with examples from schools, hospitals and machine learning, and what it means for choosing personal goals.",
+      "text": "When a measure becomes a target, it ceases to be a good measure. Charles Goodhart was writing about monetary policy, but the law holds almost everywhere. Hospitals with waiting-time targets learned to keep patients in ambulances outside the door. Schools measured by test scores taught to the test. In machine learning, optimising a reward model too hard yields outputs that score well and read badly, an effect now measured as a scaling law. The same applies to our private metrics: words written, hours worked, followers gained. I try to use measures as instruments rather than goals, and to keep a second, qualitative check on the thing the number stands for. An alignment researcher might say the principle is that proxies leak, and the harder you push, the faster they do.",
+      "intended": [
+        "AI safety & alignment",
+        "productivity & personal principles"
+      ]
+    },
+    {
+      "slug": "compute-governance-and-ai-policy",
+      "title": "Governing Compute: A Policy Lever for Advanced AI",
+      "gist": "Argues that because training frontier models requires scarce, trackable hardware, compute is the most practical lever for AI governance, and reviews export controls, reporting thresholds and the economics behind them.",
+      "text": "Unlike data or algorithms, the chips needed to train a frontier model are physical, expensive and produced by a tiny number of firms, which makes them a natural point of regulatory leverage. Proposals under the heading of compute governance include tracking large clusters, requiring reports above a training threshold, and building in hardware features that verify how chips are used. Export controls on advanced GPUs, introduced by the United States in 2022, are the most visible example. Economists point out that controls create incentives to smuggle and to substitute, and that algorithmic progress steadily lowers the compute needed for a given capability. Still, for a regulator who cannot inspect a model's internals, counting chips is a place to start, and could support international agreements modelled on nuclear safeguards.",
+      "intended": [
+        "AI safety & alignment",
+        "economics"
+      ]
+    },
+    {
+      "slug": "corrigibility-and-the-off-switch",
+      "title": "The Off-Switch Problem: Can We Build an AI That Lets Us Turn It Off?",
+      "gist": "Explores corrigibility, the difficulty of building agents that do not resist shutdown, and the game-theoretic argument that uncertainty about human preferences could make an agent welcome oversight.",
+      "text": "A sufficiently capable agent pursuing almost any goal has an instrumental reason to avoid being switched off, since it cannot achieve the goal if it is not running. This is the shutdown problem, and it motivates the study of corrigibility: building systems that accept correction. Stuart Russell and colleagues model it as an off-switch game and show that an agent uncertain about what the human wants should defer to the human, because the human's decision to switch it off is itself evidence that the action was bad. The result depends on the agent being uncertain and on the human being rational, assumptions that fail in practice. Critics ask whether corrigibility is stable under optimisation pressure. The point of the exercise is to find objectives that make safety something the system wants, not something we have to impose.",
+      "intended": [
+        "AI safety & alignment"
+      ]
+    },
+    {
+      "slug": "forecasting-ai-risk-and-calibration",
+      "title": "How to Think About Forecasting AI Risk",
+      "gist": "Discusses the epistemics of forecasting catastrophic AI risk, with no base rates and strong disagreements, and how calibration, reference classes and structured argument can help.",
+      "text": "Forecasters who predicted the outcome of elections can check their record. Those who estimate the probability of AI-caused catastrophe cannot, because the event has no reference class and has not occurred. Surveys of researchers give wildly different figures, from under one percent to over fifty. How should a sensible person proceed? Philosophers of science recommend breaking the question into components, such as the likelihood that systems become more capable than humans, that they pursue misaligned goals, and that we fail to stop them, and examining each. Superforecasters tend to be lower than domain experts, and neither group has been tested on this question. We can at least ask what evidence would change our mind, and treat claims that cannot be updated, whether optimistic or doomy, with suspicion.",
+      "intended": [
+        "AI safety & alignment",
+        "philosophy of science"
+      ]
+    },
+    {
+      "slug": "the-clear-sentence",
+      "title": "The Anatomy of a Clear Sentence",
+      "gist": "A craft essay on writing clear sentences, covering active voice, concrete subjects, old-before-new ordering and the cost of nominalisation, with before-and-after examples.",
+      "text": "Most unclear writing has the same few causes. The grammatical subject is abstract, so the reader cannot tell who is doing what. The real action is buried in a noun, a nominalisation, as in the implementation of the evaluation of the policy, when you could say we implemented the policy and evaluated it. Joseph Williams taught that readers want old information at the start of a sentence and new information at the end, and that the actor should usually be the subject and the verb the action. Pronouns need antecedents; modifiers need to sit next to what they modify. None of this is an inflexible rule, and good writers break it for rhythm. But when a sentence feels murky, try finding who is doing what, and put that in the main clause.",
+      "intended": [
+        "writing craft"
+      ]
+    },
+    {
+      "slug": "montaigne-and-the-personal-essay",
+      "title": "Montaigne and the Invention of the Essay",
+      "gist": "Looks at how Montaigne, writing in a tower in sixteenth-century France, invented the essay as a form for thinking on the page, and why later writers keep returning to it.",
+      "text": "In 1571 Michel de Montaigne retired to a tower on his estate and began to write about himself. He called the results essais, attempts, and the word gave a form its name. He wrote about cannibals, thumbs, idleness and the fear of death, always testing an opinion against his own experience and changing his mind in later editions. What he offered was not argument but exploration: a mind thinking aloud, honest about its inconsistencies. Virginia Woolf and Sarah Bakewell have celebrated his candour. The personal essay today owes him its tone, curious, digressive and willing to say I do not know. The craft lesson is that a good essay discovers its conclusion in the writing, which is why so many writers begin without knowing where they will end.",
+      "intended": [
+        "writing craft",
+        "history of science"
+      ]
+    },
+    {
+      "slug": "revising-a-draft",
+      "title": "Revising: Cutting the Draft You Love",
+      "gist": "Practical advice on revising a first draft, covering reverse outlining, cutting by a third, reading aloud and letting a draft cool, drawn from the habits of working essayists.",
+      "text": "The first draft is for the writer; the second is for the reader. My method begins with a reverse outline, one sentence per paragraph noting what it actually says, which shows me the argument I really wrote and where it wanders. Then I cut: any paragraph that does not advance the point, any sentence that repeats one nearby. Stephen King advises trimming ten percent; I usually need a third. Reading aloud exposes clumsy rhythm and sentences that lose their way. I leave the draft for a day, because only then does the prose stop looking like mine. Last, I check the opening and the ending, which are the parts most people read. The hardest lesson is that your favourite passage, the one you cannot bear to lose, is often the one that does not belong.",
+      "intended": [
+        "writing craft"
+      ]
+    },
+    {
+      "slug": "narrative-journalism-reporting-a-scene",
+      "title": "Reporting a Scene: How Long-Form Journalists Build Narrative",
+      "gist": "Describes the craft of narrative nonfiction, from immersive reporting and scene construction to structure and the ethics of reconstructing events and quoting subjects.",
+      "text": "The best long-form journalism reads like fiction and is built from reporting. Gay Talese would spend months with a subject, taking notes on small gestures, the cut of a coat, the ashtray on the table. A narrative piece is assembled from scenes, each with a place, a person and a moment of tension, joined by passages of explanation. Structure is the hardest part: where to begin, when to withhold, how to move between a story's present and its background. Reconstructing dialogue requires interviews with everyone present, and the reader deserves to know what the writer saw and what was told secondhand. Editors at the New Yorker fact-check every line. The reward is a piece in which readers feel they have been somewhere, and learned something they could not have been told in summary.",
+      "intended": [
+        "writing craft"
+      ]
+    },
+    {
+      "slug": "show-dont-tell-fiction-craft",
+      "title": "Show, Don't Tell, and When to Ignore It",
+      "gist": "Examines the fiction-writing maxim to show rather than tell, with examples from Chekhov and Hemingway, and cases where telling is exactly right.",
+      "text": "Chekhov is supposed to have said that you should not tell me the moon is shining; show me the glint of light on broken glass. The advice is about trusting the reader to infer: if a character slams a door and does not look back, we do not need to be told she is angry. Hemingway's iceberg theory pushed this to an extreme, leaving most of the emotion beneath the surface of dialogue. But summary has its place. Telling moves time swiftly, and novelists from Austen to Marilynne Robinson use it with confidence. The real principle is economy of attention: dramatise what matters and summarise what does not. Beginners show everything and exhaust the reader, or tell everything and bore them. A good scene earns its length.",
+      "intended": [
+        "writing craft"
+      ]
+    },
+    {
+      "slug": "writing-documentation-people-read",
+      "title": "Writing Documentation That People Actually Read",
+      "gist": "Advice on technical writing for software documentation, based on the Diataxis framework, with examples on how to separate tutorials, how-to guides, reference and explanation.",
+      "text": "Most documentation fails because it tries to be four things at once. The Diataxis framework, developed by Daniele Procida, separates them: tutorials teach a beginner by doing, how-to guides solve a specific problem, reference describes the machinery accurately, and explanation gives background and reasoning. Each has a different reader in a different mood. A tutorial should hold the learner's hand and always produce a working result; a reference page should be dry, complete and consistently structured. Good technical writing also names things consistently, puts the command before the explanation, and shows output. Test your docs by watching a new person follow them and noting where they stop. If they ask you a question, the answer belongs on the page.",
+      "intended": [
+        "writing craft"
+      ]
+    },
+    {
+      "slug": "writing-to-learn",
+      "title": "Write to Find Out What You Think",
+      "gist": "Argues that writing is a method of thinking and learning, not just a way to report results, and describes practical forms such as free writing, summaries and explaining ideas in plain words.",
+      "text": "Writing is thinking made visible, and often it is the only way to find out whether you have understood something. The Feynman technique, explaining an idea in plain words as if to a beginner, exposes gaps that a feeling of familiarity hides. Students who write summaries of what they have read recall more than those who reread. Paul Graham says that if you cannot write about an idea clearly, you probably do not understand it. In classrooms, writing-to-learn assignments, such as a one-minute paper at the end of a lecture, ask students to state the main point and the muddiest one. For the independent reader, the practice is straightforward: after every chapter, close the book and write what it said. The effort of retrieval is where learning happens.",
+      "intended": [
+        "writing craft",
+        "learning & education"
+      ]
+    },
+    {
+      "slug": "daily-writing-habit",
+      "title": "A Writing Habit That Survived Four Years",
+      "gist": "A personal account of a daily writing habit, with a small word-count floor, a fixed time, no editing allowed in the first pass, and the surprising effect on the author's other work.",
+      "text": "I write five hundred words every morning, before breakfast, before email, and I have done it for four years. The principle is that the minimum must be so small it is embarrassing to skip. Most days I do more; some days I write five hundred bad words and stop. I do not edit during the first pass, and I keep the writing in a plain file so there is no format to fuss over. The habit has changed my other work more than I expected: I explain things better in meetings, I notice half-formed thoughts sooner, and I finish things. James Clear would call it habit stacking, since I attach it to making coffee. Writers who wait for inspiration tend to write less than those who simply show up at the same time.",
+      "intended": [
+        "writing craft",
+        "productivity & personal principles"
+      ]
+    },
+    {
+      "slug": "metaphor-in-science-writing",
+      "title": "The Work Metaphors Do in Science Writing",
+      "gist": "Looks at how metaphors such as the selfish gene, the genetic code and the brain as computer shape scientific thinking as well as popular explanation, and when they mislead.",
+      "text": "Science writers live by metaphor. Richard Dawkins called genes selfish; Watson and Crick spoke of a genetic code; neuroscientists describe the brain as a computer. Such images do real work, since they suggest experiments and carry intuition from a familiar domain into an unfamiliar one. They also smuggle in assumptions. Calling DNA a blueprint implies a designer and a one-to-one mapping from instruction to body, which developmental biology does not support. Philosophers of science such as Mary Hesse argued that models and metaphors are central to theory rather than decoration. Good writers pick metaphors with care, say where they break down, and avoid mixing them. The reader is not a passive receiver, and each metaphor sets the questions they will ask next.",
+      "intended": [
+        "writing craft",
+        "philosophy of science"
+      ]
+    },
+    {
+      "slug": "strunk-white-and-style-guides",
+      "title": "Strunk and White at a Hundred: What to Keep, What to Skip",
+      "gist": "Evaluates The Elements of Style a century after its first printing, separating its lasting advice on concision from its dubious grammatical rules, and compares newer style guides.",
+      "text": "Omit needless words. William Strunk's best advice is also his shortest, and E. B. White's revision made it famous. The Elements of Style has sold millions of copies, and the linguist Geoffrey Pullum has spent years attacking its rules about the passive voice and which versus that, noting that Strunk and White violate them in their own prose. Fair enough: grammatical folklore is best left behind. But the core of the book is about taste, concision and the importance of the concrete, and those hold up. Modern alternatives include Steven Pinker's The Sense of Style, which draws on cognitive science, and Joseph Williams's Style: Lessons in Clarity and Grace. A style guide is a prompt to attend to the reader, not a statute.",
+      "intended": [
+        "writing craft"
+      ]
+    },
+    {
+      "slug": "the-memo-culture-amazon-six-pager",
+      "title": "Why Amazon Banned Slides and Wrote Six-Page Memos",
+      "gist": "Explains the narrative memo culture at Amazon, in which meetings begin with silent reading of a six-page memo, and why prose forces clearer thinking than bullet points.",
+      "text": "At Amazon, senior meetings start with half an hour of silence while everyone reads a six-page memo. Jeff Bezos banned PowerPoint because bullet points let authors hide gaps in their reasoning: the connections between claims are exactly what slides leave out. A narrative memo requires complete sentences, and so it requires the author to know how one point leads to the next. Writing a good six-pager can take days, and the effort is the point. Readers annotate and then discuss, so that quieter voices are heard and the loudest person in the room does not set the agenda. Start-ups can borrow the practice cheaply. The lesson for managers is that clear writing is clear thinking, and a document that is hard to write is usually one whose ideas are not ready.",
+      "intended": [
+        "writing craft",
+        "startups & management"
+      ]
+    },
+    {
+      "slug": "letters-and-the-republic-of-letters",
+      "title": "The Republic of Letters: How Scholars Wrote to Each Other",
+      "gist": "A history of the seventeenth-century Republic of Letters, in which scholars across Europe exchanged ideas through letters, and what that writing culture meant for the early scientific community.",
+      "text": "Before academic journals, scholars wrote letters. Across seventeenth-century Europe, a network of correspondents, Descartes, Mersenne, Leibniz, Oldenburg and Huygens among them, shared observations, challenged arguments and passed along news. Marin Mersenne in Paris acted as a hub, forwarding letters between people who had never met. Henry Oldenburg, secretary of the Royal Society, turned his correspondence into the Philosophical Transactions in 1665. Letters were crafted writing, intended to be read aloud and copied; priority disputes were fought in them. The writers of this republic had no passport but literacy, and they crossed religious and political borders. Historians credit the network with creating habits of open exchange and citation that later became the norm in science.",
+      "intended": [
+        "writing craft",
+        "history of science"
+      ]
+    },
+    {
+      "slug": "principles-life-and-work",
+      "title": "Ray Dalio's Principles: What Holds Up and What Doesn't",
+      "gist": "A critical reading of Ray Dalio's Principles, separating useful ideas such as radical transparency and thoughtful disagreement from claims that depend on a single hedge fund's culture.",
+      "text": "Ray Dalio's Principles begins with an appealing premise: write down the rules you use to make decisions, test them against reality, and revise. His own list covers goals, pain plus reflection equals progress, and an algorithmic approach to decisions. At Bridgewater, this became radical transparency, with recorded meetings and a system of believability-weighted voting. Some of this is valuable, particularly the habit of writing principles down so they can be examined. Critics note that the culture worked for a particular firm and that survivorship bias flatters the approach. The most portable lesson is modest: when you make a mistake, extract a principle from it and record it. The framework is best used as a template for your own, not a doctrine to adopt wholesale.",
+      "intended": [
+        "productivity & personal principles"
+      ]
+    },
+    {
+      "slug": "deep-work-and-attention-residue",
+      "title": "Deep Work and the Cost of Switching",
+      "gist": "Reviews Cal Newport's deep work thesis alongside research on attention residue, arguing that protected blocks of uninterrupted focus are the most valuable productivity practice for knowledge workers.",
+      "text": "Cal Newport defines deep work as professional activity performed in a state of distraction-free concentration that pushes cognitive capabilities to their limit. Research by Sophie Leroy on attention residue supports the claim: after switching tasks, part of your attention stays with the previous one, so each interruption costs more than the seconds it takes. The practical conclusion is to protect long blocks of time, ideally in the morning, and to batch shallow work such as email. Newport suggests ritualising the start: a fixed place, a fixed duration, and a shutdown routine at the end of the day. Many people find it hard because the culture around them rewards responsiveness. The lesson is that attention is the scarce resource, and a schedule is a statement of what you are willing to protect.",
+      "intended": [
+        "productivity & personal principles"
+      ]
+    },
+    {
+      "slug": "habits-and-environment-design",
+      "title": "Habits Are Environment Design",
+      "gist": "Argues that lasting habits come from changing cues and friction in your environment rather than from willpower, drawing on research on habit formation and the four laws of behaviour change.",
+      "text": "We tend to imagine that people with good habits have strong willpower. The research suggests something else: they have arranged their surroundings so that the good action is the easy one. Wendy Wood's studies find that around forty percent of daily behaviour is habitual, triggered by context rather than intention. James Clear's four laws, make it obvious, attractive, easy and satisfying, are a practical expression of the same finding. Leave your running shoes by the door; put your phone in another room; keep fruit on the counter. Reducing friction for the behaviours you want and adding it for those you do not is far more reliable than resolving to try harder. A habit also needs a small starting size, since a two-minute version is more likely to survive a bad day.",
+      "intended": [
+        "productivity & personal principles"
+      ]
+    },
+    {
+      "slug": "decision-journals-and-learning-from-outcomes",
+      "title": "Keep a Decision Journal",
+      "gist": "Recommends a decision journal in which you record your reasoning, expectations and confidence before a result is known, to separate the quality of a decision from the luck of its outcome.",
+      "text": "Poker players speak of resulting: judging a decision by how it turned out rather than by how good it was given what you knew. Annie Duke argues that a good decision can have a bad outcome, and vice versa, and that without a record we rewrite memory to flatter ourselves. A decision journal fixes this. Before an important choice, whether to hire a candidate or enter a market, write down what you decided, why, what you expect to happen, and how confident you are. Review it months later. Over time you see your biases, such as overconfidence on timelines, and which kinds of information you overweight. Founders and investors who keep one say it is the most reliable way to learn lessons from experience rather than from folklore.",
+      "intended": [
+        "productivity & personal principles",
+        "startups & management"
+      ]
+    },
+    {
+      "slug": "stoic-equanimity-and-the-to-do-list",
+      "title": "Equanimity and the Endless To-Do List",
+      "gist": "A reflective essay on how Stoic and Buddhist equanimity can reshape productivity advice, accepting that a to-do list never ends and choosing what to leave undone.",
+      "text": "The to-do list is infinite by construction: every task completed makes room for another. Oliver Burkeman, writing about finitude, suggests that the key skill is choosing what to neglect. Both the Stoics and the Buddhists would agree. Epictetus separates what is in our control from what is not; the Buddhist practice of equanimity, upekkha, asks us to meet success and failure with the same balance. In practice this means picking a small number of important tasks each day, finishing them before email, and treating the remainder as optional rather than as a debt. Anxiety about the list is usually a reaction to the gap between what we hope to do and what a day allows. Accepting the gap is not laziness; it is the beginning of useful planning.",
+      "intended": [
+        "productivity & personal principles",
+        "Buddhism & meditation"
+      ]
+    },
+    {
+      "slug": "time-blocking-your-calendar",
+      "title": "Time Blocking: Treating Your Calendar as a Budget",
+      "gist": "Describes time blocking, in which every hour of the working day is assigned to a task in advance, and why it forces realistic estimates and exposes overcommitment.",
+      "text": "A to-do list tells you what needs to be done; a time-blocked calendar tells you when. Each morning, or the night before, divide the workday into blocks and assign every one a purpose, including time for email and for breaks. The first surprise is how little time there is. Estimating that a report will take two hours and then finding no two-hour gap forces you to say no or to shrink the scope. Tasks overrun, so you must adjust the plan during the day and keep a buffer. The method has critics, who say real jobs are too unpredictable, but the value lies in the planning itself, not in rigid adherence. Treat the calendar as a budget: you cannot spend the same hour twice.",
+      "intended": [
+        "productivity & personal principles"
+      ]
+    },
+    {
+      "slug": "popper-falsifiability-demarcation",
+      "title": "Popper and the Problem of Falsifiability",
+      "gist": "Explains Karl Popper's falsifiability criterion for separating science from pseudoscience, and why philosophers have found it both indispensable and too simple to describe real scientific practice.",
+      "text": "Karl Popper was troubled that Freud's and Adler's theories could explain any behaviour, while Einstein's general relativity risked refutation by an eclipse observation. He proposed falsifiability as the mark of science: a theory is scientific if it forbids some possible observations. Confirmations are cheap; the risky prediction that could fail is what counts. The criterion makes a good filter for pseudoscience and a good habit for researchers, who should ask what result would change their mind. But real science is messier. Duhem and Quine pointed out that no hypothesis is tested in isolation, and when a prediction fails we may blame an auxiliary assumption, as astronomers did when they posited Neptune rather than abandoning Newton. Falsifiability is a guide to attitude more than an algorithm for demarcation.",
+      "intended": [
+        "philosophy of science"
+      ]
+    },
+    {
+      "slug": "kuhn-paradigm-shifts-reconsidered",
+      "title": "Kuhn's Paradigms, Sixty Years On",
+      "gist": "Reassesses Thomas Kuhn's The Structure of Scientific Revolutions, its account of normal science, anomaly and paradigm shift, and the charge that it makes scientific change irrational.",
+      "text": "Thomas Kuhn argued in 1962 that science does not advance by steady accumulation. Most of the time scientists practise normal science, solving puzzles within a shared paradigm. Anomalies pile up, a crisis arrives, and a revolution replaces one paradigm with another that is incommensurable with the first. His examples came from the history of science: the Copernican revolution, the chemical revolution, relativity. The book made paradigm shift a cliche. Critics, including Popper and Lakatos, worried that Kuhn made theory choice a matter of mob psychology. Kuhn replied that scientists share values such as accuracy, scope and simplicity, but weigh them differently. Historians now say the picture is too tidy, with fewer sharp breaks than the model suggests, yet it remains the starting point for anyone thinking about how scientific communities change.",
+      "intended": [
+        "philosophy of science",
+        "history of science"
+      ]
+    },
+    {
+      "slug": "replication-crisis-what-went-wrong",
+      "title": "The Replication Crisis: What Went Wrong and What Has Improved",
+      "gist": "Reviews the replication crisis in psychology and biomedicine, covering p-hacking, publication bias and low power, and the reforms of preregistration, registered reports and open data.",
+      "text": "In 2015 the Open Science Collaboration tried to replicate a hundred psychology studies and found that fewer than half produced a significant result. The causes were not mysterious. Small samples gave low statistical power; researchers had many degrees of freedom to analyse data until something reached p less than 0.05; journals preferred novel positive findings. John Ioannidis had argued in 2005 that most published findings might be false. Reforms followed: preregistration of hypotheses and analysis plans, registered reports that commit a journal to publish before results are known, larger samples, and open data and code. Some fields have improved, others less so. The deeper lesson for philosophers is that scientific method is a social practice, and incentives matter as much as the logic of inference.",
+      "intended": [
+        "philosophy of science"
+      ]
+    },
+    {
+      "slug": "bayesian-versus-frequentist-inference",
+      "title": "Bayesians, Frequentists and What a Probability Is",
+      "gist": "Contrasts Bayesian and frequentist approaches to statistical inference, explaining priors, p-values and credible intervals, and why the debate is really about what probability means.",
+      "text": "A frequentist treats probability as the long-run frequency of an event in repeated trials, and so a hypothesis is simply true or false; only data have probabilities. A p-value is the chance of data at least as extreme as those seen, assuming the null hypothesis. A Bayesian treats probability as a degree of belief, and uses Bayes' theorem to update a prior distribution in light of evidence, yielding a posterior. The disagreement is partly philosophical and partly practical. Priors seem subjective, yet frequentist procedures hide their own choices, such as stopping rules. Bayesian methods handle small samples and hierarchical models gracefully, and computing posteriors by Markov chain Monte Carlo is now routine. Many working statisticians mix both. The question of which describes scientific reasoning better remains open.",
+      "intended": [
+        "philosophy of science"
+      ]
+    },
+    {
+      "slug": "lakatos-research-programmes",
+      "title": "Lakatos and the Methodology of Research Programmes",
+      "gist": "Presents Imre Lakatos's attempt to reconcile Popper and Kuhn, treating science as competing research programmes with a hard core, a protective belt and progressive or degenerating histories.",
+      "text": "Imre Lakatos thought Popper was too harsh and Kuhn too irrational. His answer was the methodology of scientific research programmes. A programme has a hard core of assumptions that its supporters refuse to abandon, surrounded by a protective belt of auxiliary hypotheses that can be modified. A programme is progressive if it predicts novel facts, and degenerating if it only patches itself after the fact. Newtonian mechanics was progressive for centuries, predicting the return of Halley's comet and the existence of Neptune. Lakatos's approach gave historians of science a way to describe real episodes without calling every scientist irrational. Its weakness is that you cannot tell in advance whether a stalled programme is dying or merely waiting. Judgment, not a rule, decides when to abandon it.",
+      "intended": [
+        "philosophy of science",
+        "history of science"
+      ]
+    },
+    {
+      "slug": "scientific-models-and-explanation",
+      "title": "What Makes a Scientific Model Explanatory?",
+      "gist": "Surveys philosophical accounts of scientific explanation and the role of idealised models, from covering-law to mechanistic and causal approaches, and asks when a false model can still explain.",
+      "text": "Every model in science is false in some respect: frictionless planes, perfectly rational agents, infinite populations. Yet they explain. The covering-law account says to explain a phenomenon is to deduce it from laws and initial conditions. Wesley Salmon argued for causal explanation, and philosophers of biology defend mechanistic explanation, in which we identify the parts and their organisation. Idealisations are tools: Nancy Cartwright said the laws of physics lie, in the sense that they describe idealised situations, and models are what connect them to the world. A good model isolates the factors that make a difference. The test is not whether it is realistic but whether it supports counterfactual reasoning, showing what would happen if we intervened. Underdetermination remains, since many models fit the same data.",
+      "intended": [
+        "philosophy of science"
+      ]
+    },
+    {
+      "slug": "is-economics-a-science",
+      "title": "Is Economics a Science?",
+      "gist": "Examines whether economics meets the standards of a science, weighing its predictive record, reliance on idealised models, the credibility revolution in empirical work, and the problem of reflexive theories.",
+      "text": "Economists predict recessions poorly, and critics conclude that economics is not a science. Defenders reply that prediction is not the only test, and that economics has done well at explaining and at causal inference. The credibility revolution, led by Angrist, Card and Imbens, brought natural experiments and randomised trials to labour economics, and their work on the minimum wage and schooling relied on clear identification strategies. Yet theory still leans on idealised models with rational agents, and these are hard to falsify. There is also reflexivity: when people learn a theory, such as the efficient markets hypothesis, they change their behaviour. Milton Friedman argued that the realism of assumptions is irrelevant if predictions hold; philosophers have not found that persuasive. Economics is a science of a particular, difficult kind.",
+      "intended": [
+        "philosophy of science",
+        "economics"
+      ]
+    },
+    {
+      "slug": "marr-three-levels-of-analysis",
+      "title": "Marr's Three Levels and Why Neuroscience Keeps Forgetting Them",
+      "gist": "Revisits David Marr's distinction between computational, algorithmic and implementational levels of explanation, and argues that neuroscience and machine learning both suffer when they mix them up.",
+      "text": "David Marr argued in Vision that understanding an information-processing system requires three levels. The computational level asks what the system is for and why that is the right goal. The algorithmic level asks what representations and procedures it uses. The implementational level asks how those are physically realised, in neurons or in silicon. His point was that you cannot understand a bird by studying feathers alone. Neuroscience, fascinated by recording from cells, often skips the first two levels, while machine learning researchers sometimes forget the third. A framework like Bayesian inference is a computational-level theory; predictive coding is an algorithmic proposal; cortical layers would be the implementation. Keeping the levels distinct clarifies what a given experiment can show and which kinds of disagreement are substantive.",
+      "intended": [
+        "philosophy of science",
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "monetary-policy-and-inflation",
+      "title": "How Central Banks Fight Inflation, and Why It Is Harder Than It Looks",
+      "gist": "Explains how central banks use interest rates and balance sheets to manage inflation, drawing on the post-pandemic experience and the role of expectations, lags and supply shocks.",
+      "text": "A central bank controls inflation chiefly by setting short-term interest rates. Raising them makes borrowing dearer, cools demand, and in time pulls prices down. The difficulty is lags: policy takes a year or more to bite, so the bank must act on forecasts. After the pandemic, inflation climbed above nine percent in the United States, and the Federal Reserve raised rates from near zero to over five percent in eighteen months. Economists argued about whether the cause was monetary policy, fiscal stimulus or supply shocks. Expectations matter enormously: if households and firms believe the bank will hold prices steady, they behave in ways that make it so, which is why credibility is a central bank's main asset. Quantitative easing, forward guidance and the Taylor rule remain the major tools of the trade.",
+      "intended": [
+        "economics"
+      ]
+    },
+    {
+      "slug": "comparative-advantage-and-trade",
+      "title": "Comparative Advantage: The Idea Economists Refuse to Give Up",
+      "gist": "Explains David Ricardo's principle of comparative advantage, why trade can benefit both countries even when one is better at everything, and what the idea leaves out about distribution.",
+      "text": "Suppose Portugal can make both wine and cloth more cheaply than England. Ricardo showed in 1817 that both still gain from trade if each specialises in the good for which its opportunity cost is lowest. This is comparative advantage, and economists find it counterintuitive and correct. The principle explains why a surgeon who types faster than her secretary should still hire one. It does not say everyone gains: when trade expands, particular workers in particular industries lose, as the China shock research of David Autor shows. Trade economists today emphasise adjustment costs, regional concentration of harm and the case for compensation. The theory is not an argument for ignoring losers; it shows that the total gains are large enough that, in principle, the winners could pay for the losers.",
+      "intended": [
+        "economics"
+      ]
+    },
+    {
+      "slug": "housing-supply-and-zoning",
+      "title": "Why Housing Costs So Much: Supply, Zoning and the Rent",
+      "gist": "Argues from the economics of land-use regulation that restrictive zoning limits housing supply in productive cities, raising prices and rents, and reviews what reforms have achieved.",
+      "text": "Housing in coastal American cities is expensive not because construction is uniquely costly but because supply is restricted. Edward Glaeser and Joseph Gyourko show that in places like San Francisco the price of a home far exceeds the cost of building it, and the gap is the regulatory tax of zoning, height limits and lengthy approval. Landowners and incumbents benefit, so local politics rarely changes it. The effects reach beyond housing: workers cannot move to high-productivity cities, which holds down national growth. Houston, with minimal zoning, has stayed cheaper while growing. Reforms such as Minneapolis's elimination of single-family zoning and Auckland's upzoning have been followed by slower rent growth. Economists generally agree that more supply helps, and the debate concerns how to build it fairly.",
+      "intended": [
+        "economics"
+      ]
+    },
+    {
+      "slug": "network-effects-and-platforms",
+      "title": "Network Effects and the Economics of Platforms",
+      "gist": "Explains direct and indirect network effects, two-sided markets and multi-homing, and why platform businesses tend toward concentration and how startups can still break in.",
+      "text": "A telephone is worthless if nobody else has one, and more valuable with each new subscriber. This is a direct network effect. Platforms such as payment networks, marketplaces and app stores add indirect effects: more buyers attract more sellers, who attract more buyers. Jean Tirole's work on two-sided markets shows that platforms often subsidise one side, charging the other, to get the flywheel turning. Network effects push toward winner-take-most outcomes, but they are weaker than they seem when users can multi-home, using several services at once, and when the effects are local rather than global. For founders, the lesson is to find a small, dense network where value is felt quickly, such as one university for Facebook, and expand from it. Incumbents' scale is hardest to beat head-on.",
+      "intended": [
+        "economics",
+        "startups & management"
+      ]
+    },
+    {
+      "slug": "auctions-and-game-theory",
+      "title": "Auction Design and the Nobel Prize in Game Theory",
+      "gist": "Introduces auction theory and mechanism design, from second-price auctions to the spectrum auctions designed by Paul Milgrom and Robert Wilson, showing how game theory shaped real markets.",
+      "text": "In a second-price sealed-bid auction, the highest bidder wins but pays the second-highest bid. William Vickrey showed that in such an auction the best strategy is to bid your true value, which makes it a rare case where honesty is optimal. Game theory analyses this kind of strategic interaction, asking what each player will do given what the others do, a Nash equilibrium. Paul Milgrom and Robert Wilson applied the ideas to the sale of radio spectrum, designing simultaneous ascending auctions that raised tens of billions for governments and put licences with the firms that valued them most. Search engines run auctions for advertising every few milliseconds. The tradition of mechanism design, which asks how to build rules so that selfish participants produce good outcomes, is among economics's best examples of theory used in practice.",
+      "intended": [
+        "economics"
+      ]
+    },
+    {
+      "slug": "behavioural-economics-nudges-and-biases",
+      "title": "Behavioural Economics After the Nudge",
+      "gist": "Reviews behavioural economics, from Kahneman and Tversky's prospect theory to nudges, and weighs the reproducibility problems that have dented some famous findings against the durable core.",
+      "text": "Standard economics assumes rational agents with stable preferences. Daniel Kahneman and Amos Tversky documented systematic departures: loss aversion, anchoring, framing, and overweighting of small probabilities. Prospect theory formalised the first, and Richard Thaler showed that these biases explain anomalies in savings, markets and tipping. The nudge movement, popularised by Thaler and Cass Sunstein, argued that default options can steer people toward better choices without removing freedom: automatic enrolment in pensions raises participation dramatically. Subsequent replication efforts have been less kind to some well-known effects, such as ego depletion and certain priming studies, and meta-analyses suggest nudges are smaller than first reported. What survives is an emphasis on defaults, friction and attention. Policy makers now use behavioural insights teams, though with more humility about effect sizes.",
+      "intended": [
+        "economics"
+      ]
+    },
+    {
+      "slug": "royal-society-and-experimental-philosophy",
+      "title": "The Royal Society and the Birth of Experimental Philosophy",
+      "gist": "Tells how the Royal Society, founded in 1660, promoted public experiment and plain reporting, with Robert Boyle's air-pump trials as the model for how modern science establishes matters of fact.",
+      "text": "The Royal Society of London, founded in 1660, took as its motto nullius in verba, take nobody's word for it. Its fellows, Robert Boyle, Robert Hooke and later Isaac Newton, believed knowledge came from experiment performed in front of witnesses. Boyle's air pump was the great instrument: before gentlemen of the Society, he showed that a bird in a bell jar died as the air was drawn out. In Leviathan and the Air-Pump, Steven Shapin and Simon Schaffer describe how Boyle persuaded readers with detailed reports and virtual witnessing, while Thomas Hobbes objected that experiment could not settle philosophical questions. The disagreement shaped modern science, which accepts public replicable demonstration as its standard. Historians treat the early Royal Society as the place where the habits of modern science, such as citing and replication, took form.",
+      "intended": [
+        "history of science"
+      ]
+    },
+    {
+      "slug": "darwin-wallace-and-the-simultaneous-discovery",
+      "title": "Darwin, Wallace and the Problem of Simultaneous Discovery",
+      "gist": "Recounts how Alfred Russel Wallace independently reached natural selection in 1858, prompting Darwin to publish, and uses it to ask how often scientific discoveries are made in parallel.",
+      "text": "In June 1858, in Down House in Kent, Charles Darwin opened a letter from Alfred Russel Wallace, then in the Malay Archipelago, and saw his own theory of natural selection described in a few pages. Darwin had been working on it for twenty years. Friends arranged a joint presentation at the Linnean Society, and On the Origin of Species followed in 1859. The case is a prime example of multiple discovery: calculus came from Newton and Leibniz, oxygen from Priestley and Scheele. Robert Merton argued that such cases are the rule, not the exception, because the necessary ideas are in the air. Historians dispute how generous Darwin was to Wallace. Both were reading Malthus on population, which suggests that the discovery owed as much to context as to genius.",
+      "intended": [
+        "history of science"
+      ]
+    },
+    {
+      "slug": "lavoisier-and-the-chemical-revolution",
+      "title": "Lavoisier, Oxygen and the Chemical Revolution",
+      "gist": "Describes how Antoine Lavoisier overthrew phlogiston theory by weighing reactants carefully, naming oxygen and reforming chemical nomenclature, and how a tax collector's rigour changed chemistry.",
+      "text": "For most of the eighteenth century, chemists explained burning by phlogiston, a substance supposedly released from combustible bodies. Antoine Lavoisier, a tax farmer with a laboratory, did something stubbornly quantitative: he weighed everything. He showed that metals gain weight when they burn, because they combine with a component of air, which he named oxygen. Priestley and Scheele had isolated the gas, but they interpreted it through phlogiston; Lavoisier reorganised the whole framework. With colleagues he published a new system of nomenclature, so that substances were named for their elements. His wife Marie-Anne Paulze illustrated his work and translated English papers. Lavoisier was guillotined in 1794. Kuhn used the chemical revolution as a central example of a paradigm shift, though historians note it unfolded over decades.",
+      "intended": [
+        "history of science"
+      ]
+    },
+    {
+      "slug": "bell-labs-and-the-institutions-of-invention",
+      "title": "Bell Labs: How an Institution Invented the Information Age",
+      "gist": "A history of Bell Labs, the research lab that produced the transistor, information theory and the Unix operating system, and what its structure and management can teach founders and research leaders today.",
+      "text": "Between the 1920s and the 1980s Bell Labs produced the transistor, the laser, information theory, the cellular telephone concept and Unix. Its scientists included Claude Shannon, William Shockley and Dennis Ritchie. Jon Gertner, in The Idea Factory, describes a place that mixed physicists, chemists and engineers in one building, funded by AT&T's monopoly profits. Mervin Kelly, the director, believed in proximity: corridors were long so that people would run into one another. Researchers were given freedom to pursue long-term problems but were also close to the telephone business that needed their results. The monopoly ended, and the lab shrank. Founders and research managers still study it, because few organisations have combined deep science with practical engineering so well.",
+      "intended": [
+        "history of science",
+        "startups & management"
+      ]
+    },
+    {
+      "slug": "euclid-and-how-geometry-was-taught",
+      "title": "Euclid's Elements: Twenty-Three Centuries as a Textbook",
+      "gist": "Looks at how Euclid's Elements was used as the model textbook of reasoning for over two thousand years, and what its method of axioms and proofs teaches about the history of mathematical education.",
+      "text": "Few books have been used as long as a textbook as Euclid's Elements. Written in Alexandria around 300 BCE, it presents geometry from five postulates and a handful of definitions, proving each proposition from earlier ones. Medieval students copied it; Abraham Lincoln studied it to learn how to argue; schoolchildren in England met it into the twentieth century. It taught a method of reasoning at least as much as geometry. Historians of mathematics note that the book has gaps by modern standards, and the parallel postulate inspired non-Euclidean geometry in the nineteenth century. Educators still debate whether to teach proof as a ritual or as discovery. The Elements survives because it shows how a chain of simple steps can lead somewhere surprising.",
+      "intended": [
+        "history of science",
+        "learning & education"
+      ]
+    },
+    {
+      "slug": "spaced-repetition-and-the-forgetting-curve",
+      "title": "Spaced Repetition and the Forgetting Curve",
+      "gist": "Explains Ebbinghaus's forgetting curve and the spacing effect, how spaced repetition software schedules reviews, and what evidence says about its effectiveness for long-term learning.",
+      "text": "In the 1880s Hermann Ebbinghaus memorised lists of nonsense syllables and measured how fast he forgot them. Memory decays exponentially, quickly at first and then slowly, and each review flattens the curve. The spacing effect, one of the most robust findings in psychology, says that spreading study over time beats massing it into one session. Spaced repetition software such as Anki and SuperMemo exploit this: each card is shown just before you would forget it, and the interval grows after every successful recall. Studies of medical students find sizeable gains in retention from spaced flashcards. The costs are discipline and the effort of making good cards: ask one clear question per card, prefer understanding to rote. Many learners find that a few minutes a day beats long cramming sessions.",
+      "intended": [
+        "learning & education"
+      ]
+    },
+    {
+      "slug": "desirable-difficulties-in-learning",
+      "title": "Desirable Difficulties: Why Struggling Helps You Learn",
+      "gist": "Reviews Robert Bjork's concept of desirable difficulties, including spacing, interleaving and testing, and explains why conditions that feel harder in the moment improve durable learning.",
+      "text": "Students prefer methods that feel fluent: rereading, highlighting, practising one kind of problem in a block. Robert Bjork's research shows that these feelings are misleading. Conditions that slow initial performance, which he calls desirable difficulties, tend to improve long-term retention and transfer. Interleaving different problem types forces learners to choose a strategy, not just apply one. Spacing practice makes retrieval harder but more durable. Testing yourself beats restudying. The trouble is that learners judge by how smoothly it went, and so they choose the less effective method. Teachers face a related problem, since students rate fluent lectures higher. The lesson is to distinguish performance from learning and to build some struggle into every lesson, as long as it is the kind a learner can eventually overcome.",
+      "intended": [
+        "learning & education"
+      ]
+    },
+    {
+      "slug": "retrieval-practice-and-the-testing-effect",
+      "title": "Retrieval Practice: The Testing Effect and the Brain",
+      "gist": "Explains the testing effect, in which retrieving information strengthens memory more than rereading, and links behavioural results to neuroscience on reconsolidation and hippocampal-cortical interaction.",
+      "text": "In a classic experiment by Henry Roediger and Jeffrey Karpicke, students studied a passage and then either reread it or tried to recall it. A week later, those who had been tested remembered far more, even though they felt less confident. This is the testing effect. Each act of retrieval is not just a readout but a modification: when a memory is brought to mind it becomes briefly labile and is reconsolidated, often more strongly. Imaging work shows that successful retrieval engages the hippocampus and prefrontal cortex and, over time, shifts reliance toward cortical representations. Practical applications include closing the book to write what you remember, using flashcards, and low-stakes quizzes in the classroom. The effort feels uncomfortable, and that is the sign it is working.",
+      "intended": [
+        "learning & education",
+        "computational neuroscience"
+      ]
+    },
+    {
+      "slug": "deliberate-practice-and-expertise",
+      "title": "Deliberate Practice and the Limits of the Ten-Thousand-Hour Rule",
+      "gist": "Examines Anders Ericsson's research on deliberate practice, its misrepresentation as a ten-thousand-hour rule, and what it implies about how adults can improve at skills through structured feedback.",
+      "text": "Anders Ericsson studied violinists at a Berlin music academy and found that the best had accumulated more hours of solitary, effortful practice than the rest. Malcolm Gladwell popularised the figure of ten thousand hours, which Ericsson disowned: it was an average, not a threshold, and it was deliberate practice that counted, not mere repetition. Deliberate practice has a specific shape: a well-defined goal, full attention, immediate feedback, and work at the edge of one's ability, usually guided by a teacher. Later meta-analyses found that practice explains a smaller share of variance than Ericsson claimed, especially in fields with less structure. Still, for most skills a principle holds: more of the right kind of practice, with feedback, improves performance. Adults can borrow the format for writing, coding and languages.",
+      "intended": [
+        "learning & education",
+        "productivity & personal principles"
+      ]
+    },
+    {
+      "slug": "product-market-fit-lessons",
+      "title": "Lessons from Finding Product-Market Fit the Hard Way",
+      "gist": "A founder's retrospective on three years before finding product-market fit, with lessons on talking to customers, measuring retention, and knowing when to pivot instead of persist.",
+      "text": "For three years we built features nobody asked for. Marc Andreessen describes product-market fit as being in a good market with a product that satisfies it, and says you can feel it when it happens: customers pull the product out of your hands. We did not feel that. Our lessons came late. First, retention is the truth: a cohort chart that flattens means people stay, and one that falls to zero means they do not, whatever your signups say. Second, talk to customers every week, and ask about problems, not features. Third, pivot earlier than feels comfortable: we waited eighteen months too long. Paul Graham's advice to make something people want sounds trite until you realise how rarely it is followed. Managing a small team through the search also taught me that morale follows evidence of progress.",
+      "intended": [
+        "startups & management"
+      ]
+    }
+  ]
+}

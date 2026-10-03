@@ -416,6 +416,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "citations",
   "quiz",
   "faq",
+  "relations",
   "skim",
   "crossrefs",
   "simpleSummary",
@@ -495,6 +496,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("citations.json", revision.citations);
   at("quiz.json", revision.quiz);
   at("faq.json", revision.faq);
+  at("relations.json", revision.relations);
   at("skim.json", revision.skim);
   at("crossrefs.json", revision.crossrefs);
   at("simple-summary.json", revision.simpleSummary);
@@ -628,6 +630,7 @@ one thing that will make the rest of these files make sense.
       illustrated.json     The same argument painted, and where each plate's bytes are.
       quiz.json            Questions generated from the article.
       faq.json             Questions a careful reader might put to the article, and the passages that respond.
+      relations.json       How each paragraph bears on the one before it, one word each.
       skim.json            A route through the quotes, in the order to read them, at three depths.
       crossrefs.json       Links from a phrase in one paragraph to the paragraph that backs it.
       simple-summary.json  A few paragraphs in plain words, and the passages each rests on.
@@ -815,6 +818,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/quiz.json": "Questions generated from the article.",
   "augmentations/faq.json":
     "Questions a careful reader might put to the article, and the passages that respond.",
+  "augmentations/relations.json": "How each paragraph bears on the one before it, one word each.",
   "augmentations/skim.json":
     "A route through the quotes, in the order to read them, at three depths.",
   "augmentations/crossrefs.json":

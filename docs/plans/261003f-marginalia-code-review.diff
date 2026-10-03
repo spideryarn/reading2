@@ -1,0 +1,3271 @@
+diff --git a/docs/plans/261003f-marginalia-plan-review-prompt.md b/docs/plans/261003f-marginalia-plan-review-prompt.md
+new file mode 100644
+index 000000000..2c33caa2a
+--- /dev/null
++++ b/docs/plans/261003f-marginalia-plan-review-prompt.md
+@@ -0,0 +1,11 @@
++You are reviewing a PLAN (not code) in the repo at the current working directory: docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. Read-only: do not edit any file.
++
++Context to read: docs/project/marginalia.md, src/web/marginalia/notes.ts, src/web/marginalia/MarginaliaColumn.tsx, src/web/reader/Reader.tsx (search "marginalia"), src/web/useTimeline.ts, src/web/TimelinePanel.tsx (datingWords, yearsOf), docs/project/timeline.md, docs/project/mode.md section "The artefact, if the mode shows one", src/faq.ts and src/arc.ts as the model for a new step, src/web/useAutoRun.ts and src/web/activation.ts (armActivation), docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md (stage 2), experiments/decorated/build.mjs CONNECTIVE table, docs/project/vision.md anti-goals.
++
++Find what is wrong or missing with the plan, ranked P0/P1/P2, each with the concrete scenario. In particular:
++1. Is the auto-run trigger right (armActivation on the Marginalia press + useAutoRun in OwnerMarginFeed)? Does activation/useAutoRun actually support a target that is not a mode/band, and what breaks (e.g. claimActivation owner semantics, the press arriving before OwnerMarginFeed mounts, the margin being already open)? Is there a simpler correct trigger?
++2. Is the registry list complete for a new step (anything the plan misses that is not compile-checked)?
++3. Timeline placement and the dated/words filter: any wrongness (e.g. occurrences quote check, withYear decision, stale list).
++4. Product: drawn set (so, but, why, e.g., vs) vs density; position of the word in the note; whether visitors should get it.
++5. Anything simpler that does the same job.
++Be concise; under 900 words.
+diff --git a/docs/plans/261003f-marginalia-plan-review-sol.md b/docs/plans/261003f-marginalia-plan-review-sol.md
+new file mode 100644
+index 000000000..01861551b
+--- /dev/null
++++ b/docs/plans/261003f-marginalia-plan-review-sol.md
+@@ -0,0 +1,23 @@
++No P0 findings.
++
++### P1
++
++1. **The proposed activation path is not safe as written.** `useAutoRun` can technically consume any `AutoRunTarget`, and arming before `OwnerMarginFeed` mounts is supported. But Marginalia remains `MODE_TARGET: none`, so its `ModeBoundary` has no `relations` target to retire if rendering fails before the hook claims the token. Reopening later can then spend an old press—the exact bug activation ownership prevents ([activation.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbayajv6-marginalia-relations-timeline/src/web/activation.ts:113), [ModeBoundary.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbayajv6-marginalia-relations-timeline/src/web/reader/ModeBoundary.tsx:151)). It also leaves `modeGenerates("marginalia")` false, so Commands will not disclose that it generates. The already-open command path returns early too ([Reader.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbayajv6-marginalia-relations-timeline/src/web/reader/Reader.tsx:3313)), making its behaviour dependent on where the raw arm is inserted. Simpler: keep a Marginalia-open press nonce in `Reader`, pass it to `OwnerMarginFeed`, and run once after its read settles; or make switch activation a first-class mechanism including boundary retirement and disclosure. Do not bolt raw `armActivation` onto the branch.
++
++2. **Timeline placement can attach a date to the wrong passage.** The stage tries occurrences until one supplies the date, and records that passage in `dating.when.at` ([timeline.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbayajv6-marginalia-relations-timeline/src/timeline.ts:592)). The plan instead chooses the earliest surviving occurrence ([plan](/home/greg/code/spideryarn2/.claude/worktrees/fbayajv6-marginalia-relations-timeline/docs/plans/261003f-marginalia-relation-words-and-timeline-events.md:32)). If an event is mentioned undated first and later as “By 12 July…”, the margin will show “at or before 12 July” beside the undated quote. Place `dated` at `when.at.blockId`; for `words`, place it at an occurrence containing `dating.phrase`.
++
++3. **Timeline voice and year handling are wrong.** `event.label` is model output stored directly, not sliced article text ([timeline.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbayajv6-marginalia-relations-timeline/src/timeline.ts:650)); it needs the AI face, not the author’s. Also, the panel suppresses a single common year only because its head says that year ([TimelinePanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbayajv6-marginalia-relations-timeline/src/web/TimelinePanel.tsx:340)). Marginalia has no such head, so “12 May” silently loses “2026”. Always include years in marginalia, or add equivalent context.
++
++4. **Visitors can receive stale claims.** Both artefacts are carried across revisions. Owners hide stale lists, but public DTOs carry no stale verdict. A refreshed article can therefore show a visitor an old `BUT` against a surviving block id. Timeline’s quote check also cannot detect a stale publication-derived year (`yearFilled`). Either omit relations from visitors in v1, or compute freshness before public projection and omit stale artefacts. Timeline needs the same treatment for publication-dependent dates.
++
++5. **The relation output contract permits silent partial or false success.** Validation drops bad entries but never requires every eligible paragraph to have exactly one answer. A model returning three rows for 100 paragraphs becomes a successful sparse artefact. Conversely, the first paragraph has no predecessor but must receive one of ten relations. Define the exact predecessor sequence, exclude the first or add `none`, and reject/count missing and duplicate classifications rather than merely taking “first wins”.
++
++6. **The fingerprint does not match the prompt.** The plan says the shared `articleWithIds` prefix but fingerprints only blocks and tree. FAQ actually includes the metadata head too. A title/URL change can therefore alter model input while `relations` remains current. Fingerprint every input byte, and include the shared `paperwork(...)` instruction required of whole-article prompts.
++
++### P2
++
++7. **Registry coverage is nearly complete, but misses `CACHEABLE`.** The new GET prefix must be added to [lib/api.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbayajv6-marginalia-relations-timeline/src/web/lib/api.ts:893). Also copy the latest CHECK migration shape, not the 16 September FAQ literal, which still names retired steps and omits newer ones.
++
++8. **The density claim is unproven and already high:** 43 of 108 paragraphs is a mark every 2.5 paragraphs before questions, ideas, FAQ and Timeline. Start by drawing only genuine reversals (`but`, `contrast`) or establish a per-section/article cap; the stored ten-way classification still permits widening later without another call.
++
++9. **The placement example contradicts the prose specification.** It draws `SO` beside the preceding paragraph rather than “That is why…”, inviting an off-by-one implementation. Also make relation words focusable/tap-openable; a passive tooltip leaves touch and keyboard readers unable to learn what ambiguous labels such as “why” and “vs” mean.
+\ No newline at end of file
+diff --git a/docs/plans/261003f-marginalia-relation-words-and-timeline-events.md b/docs/plans/261003f-marginalia-relation-words-and-timeline-events.md
+new file mode 100644
+index 000000000..36b22e7c8
+--- /dev/null
++++ b/docs/plans/261003f-marginalia-relation-words-and-timeline-events.md
+@@ -0,0 +1,186 @@
++# Marginalia: relation words, and Timeline events in the margin
++
++Overseer queue item `qi-cbnydm7c`, from two of Greg's reports (`spya-ayajv6`, `spya-u3dgk7`, both
++checked as his with `feedback-reporter.ts`). Most of both reports has shipped already: the column,
++the Socratic questions, the arc, the idea stamps, and FAQ, Debate, Citations and comments shut by
++default ([marginalia.md](../project/marginalia.md)). **This builds only the two pieces still
++missing.**
++
++> include the "relation-words", e.g. BUT, SO
++>
++> — Greg, 2026-09-30 (spya-u3dgk7)
++
++> it should almost entirely be reusing existing stuff that we've already generated from quotes and
++> ideas and timeline and summary and...
++>
++> — Greg, 2026-09-29 (spya-ayajv6)
++
++Relation words were written up as stage 2 of
++[261001d](261001d-annotations-mode-marginalia-in-a-right-hand-column.md) (its Stage 2)
++and held back until the column had been tried. It has been tried for two days, through seven
++follow-up plans. Timeline events are named in [marginalia.md § Keep an eye out for new
++kinds](../project/marginalia.md#keep-an-eye-out-for-new-kinds) as "not here yet".
++
++**Not in scope, on purpose:** opening Marginalia never runs another mode (decided, marginalia.md §
++What it shows); the dashed underline for ideas in the prose stays deferred (261001d § Deferred,
++named — a second mark inside the author's text); automatic ask-for-help comments stay declined.
++
++## Stage 1 — Timeline events in the margin (no model, no server)
++
++One more shut kind, exactly as FAQ and Debate were added (marginalia.md § Keep an eye out):
++
++- `notes.ts`: `{ kind: "timeline"; items: { event: TimelineEvent; quote: string }[] }`, placed
++  **beside the passage that dates it**: a `dated` event at `when.at`'s block, a `words` event at
++  its earliest mention whose block still holds the phrase. Not simply the first mention, which may
++  give no date (Sol P1-2). The phrase must still be in the block. `GROUPED_ORDER` gets `"timeline"`
++  after `"faq"`. `MarginSources.timeline`.
++- **Only events the piece dates**: `dating.kind` `dated` or `words`. An `untimed` event in the
++  margin is a label with nothing to say about time, and a `rejected` one is our failure; both stay
++  in the band. This keeps the column sparse (the test article's timeline: ten of twenty-six rows
++  untimed).
++- The line: one event → stamp is the date in words (`datingWords`, the panel's own function,
++  **always with its year**: the band drops a shared year because its head says it once, and the
++  margin has no head), line is the event's label; several → stamp *When*, line "3 events".
++  Opened: each event's date, label and the quoted words that mention it. Voices: the label is the
++  model's, the quote and a `words` phrase the author's, a computed date ours.
++- Owner: `useTimelineRead` (exists; reads only) plus `useStepFinished(slug, "timeline", refresh)`
++  in `OwnerMarginFeed`; stale lists not drawn. Visitor: `artefacts.timeline.events`, as FAQ.
++- `tips.ts`: a `timeline` row. Tests: `tests/marginalia-notes.test.ts` (placement, quote check,
++  untimed/rejected left out), the live-refresh test's list of steps the feed listens for, and the
++  note-cards test's keys.
++
++## Stage 2 — relation words (a new step, `relations`)
++
++### What the reader sees
++
++A small-caps word at the top of a paragraph's note — **so**, **but**, **why**, **e.g.**, **vs** —
++saying how this paragraph bears on the one before it. The word is the answer; its card says the
++sentence (260828c § *A symbol that needs a tooltip has already failed*):
++
++| stored | drawn | card says |
++|---|---|---|
++| `therefore` | so | This paragraph draws its conclusion from the one before it. |
++| `but` | but | This paragraph pushes back on what you just read. |
++| `contrast` | vs | Something set against what came before, without denying it. |
++| `because`, `for-example`, `zoom-in`, `zoom-out`, `new-thread`, `restates`, `and-also` | — | stored, not drawn |
++
++**Draw only the turns** (GPT Sol on 261001d: *"classify every paragraph, draw only the turns"*).
++Greg named BUT and SO; `vs` is the other change of direction. On the decorated experiment's 108
++paragraphs that is 33 words, about one paragraph in three, and the undrawn seven are 75. Sol's plan
++review asked for fewer still (`but` and `vs` only); `so` stays because Greg asked for it by name.
++Which words are drawn is one constant (`DRAWN_RELATIONS`), so trying `why` or `e.g.` later, or
++dropping `so`, is a one-line change and no new model call.
++
++```
++ prose                                         │ margin
++ The cost of the method falls with scale.      │
++                                               │
++ Larger labs therefore moved first …           │ SO      ← beside the paragraph it labels
++                                               │
++ The smaller labs had one advantage …          │ BUT
++                                               │ ▸ FAQ  Why didn't small labs …
++```
++
++The word sits first in the block's note, above the question, stamps and shut lines, because it is
++about the paragraph's opening, and it is the shortest thing there. It is a button with a card of
++its own, like the question and the idea stamp, so a keyboard or a finger can ask what "vs" means.
++
++### The step
++
++One model call per article, the shape of `faq`/`arc`:
++
++- **Input**: the article as every whole-article step sends it (the shared `ids` renderer and cached
++  prefix, with the shared `paperwork(...)` instruction), and the ids of the paragraphs to label:
++  body text blocks of at least a sentence (`isBodyEvidence`, the floor the questions use), **all
++  but the first**, which has no paragraph before it. "The one before" is the previous paragraph in
++  that list.
++- **Output**: JSON schema `{ relations: [{ blockId, relation }] }`, `relation` from the closed list
++  of ten above. No prose comes back, so no plain-words rule applies: the file goes in
++  `PLAIN_WORDS_EXEMPT` with that reason.
++- **Validation** (deterministic): the model must answer every listed paragraph once. Unknown ids,
++  repeats (first wins) and words outside the list are dropped and counted; paragraphs it left out
++  are counted as `missing`. **A run that answers fewer than half the list fails** rather than
++  storing a sparse artefact that looks like a quiet article (Sol P1-5). A paragraph after a heading
++  is labelled like any other: "but" across a section break still means something.
++- **Artefact**: `{ version, generator, slug, sourceHash, relations: Record<BlockId, Relation>,
++  generatedAt, elapsedMs }` in a new `article_revisions.relations` `jsonb` column (each artefact has
++  its own column; there is no generic table — tests/store-artefact-manifest.test.ts), and
++  `relations` added to the `revision_step_runs_step` CHECK. **An additive migration**, written by
++  copying `drizzle/20260916150539_faq.sql`; applied locally here, to production by the Overseer's
++  deploy.
++- **Freshness**: FAQ's fingerprint exactly (`articleWithIdsFingerprint`: blocks, tree and the
++  metadata head, every byte the prompt is built from; no profile, because who reads does not change
++  how one paragraph follows another); `PROMPT_VERSION` `relations/1`.
++- **Model**: the `capable` tier, as every whole-article step. One call; the answer is ~10 tokens per
++  paragraph, so the cost is almost all input, and that input is the cached article prefix other
++  steps already write. *Quick* is the cheaper option and a fair later measurement, not a v1 guess.
++- Every registry `mode.md § The artefact` names — `StepName`, `STEP_ORDER`, `STEPS`,
++  `FORCE_ONLY_WHEN_NAMED`, `ARTICLE_OUTPUT_FORMAT`, `STEP_BUDGET_MS`, the `models.ts` rows,
++  `JOB_DISPOSITION`, `ArtifactKind`/`SHAPE`/`STAMP_SOURCE`, the pg reader and `loadRelations`,
++  `REVISION_CARRY_POLICY`, `GET /api/relations/:slug` (and its prefix in `CACHEABLE`,
++  src/web/lib/api.ts), export, and the sharing/reset/rerun rows.
++- **Owner only in v1.** A visitor's payload carries no staleness verdict, the artefact is carried
++  across revisions, and a relation word has no quote to check against its block, so an old *BUT*
++  could sit beside a rewritten paragraph (Sol P1-4). Not in the public projection until that
++  payload can say an artefact is stale.
++
++### When it runs
++
++**On the owner's press that turns Marginalia on**, and never on a mount. Marginalia's row in
++`MODE_TARGET` (src/web/activation.ts) becomes `{ kind: "fixed", target: "relations" }`, the same
++first-class mechanism every self-starting mode uses, rather than a raw `armActivation` bolted on
++(Sol P1-1): the bar arms it, `ModeBoundary` retires the token if the column fails to render, and
++`modeGenerates` tells the command bar it generates. `OwnerMarginFeed` runs `useAutoRun(slug,
++"relations", …)` beside its read: one attempt per article per session, a pasted `?margin=1` link
++spends nothing, a visitor never starts anything. **The press that turns the column off arms
++nothing** (the feed is still mounted for that instant and would claim it). A stale or outdated
++artefact counts as "nothing there", so the next press rewrites it; the unforced run is what the
++pipeline's own stamp check decides.
++
++This is Greg's *"when I run it, perhaps it should first trigger …"* applied to the margin's **own**
++data, which is different from running other modes (still declined: their bands are where they are
++made).
++
++While it runs, nothing in the column says so — the words simply appear when the job's completion is
++announced (`useStepFinished`), like a FAQ made in the band. A failure is silent in the column too;
++the job is visible in the jobs tray like any other. *Rejected alternative:* a "Reading how the
++paragraphs connect…" line under the head. It is one more thing in a column whose risk is too much;
++add it if the gap proves confusing.
++
++## The simpler options passed over
++
++- **No model: the author's own connective.** Read "However," / "So," / "For example," off the
++  paragraph's first words, deterministically, with no step and no migration. Passed over because
++  the paragraphs whose opening word *says* the turn are exactly the ones that need no help; the
++  value is the implicit turns, and those need a reader. It would also make the margin repeat the
++  prose's first word.
++- **Fold the words into an existing call** (the structure step, which already writes each part's
++  question). Passed over: it changes the most important prompt in the app and invalidates every
++  article's tree cache to add a decoration, and it crosses stage ownership.
++
++## Done when
++
++- Stage 1: on an owner's article with a timeline, dated events show as shut *When* lines beside
++  the passage that dates them; untimed ones do not; a visitor of a public article sees the same,
++  as they see the same events in the band. Unit tests red first, then green.
++- Stage 2: pressing Marginalia on an article with no relations starts one `relations` job; when it
++  finishes the words appear without reopening; reopening does not start a second; a visitor issues
++  no POST (tests/visitor-gaps, public-network-trace stay green); `npm test`, `npm run typecheck`
++  green; a browser check on the box (Sonnet subagent, Playwright) with screenshots read by me.
++- GPT Sol has reviewed this plan before building and the code before pushing.
++
++## GPT Sol's plan review, 2026-10-03
++
++[The review](261003f-marginalia-plan-review-sol.md); no P0. Each finding checked against the code:
++
++| # | Finding | Taken? |
++|---|---|---|
++| P1-1 | a raw `armActivation` has no boundary retirement and no disclosure | **Yes**: Marginalia gets a real `MODE_TARGET` row; the off-press arms nothing |
++| P1-2 | earliest mention may be undated | **Yes**: placed at the dating passage |
++| P1-3 | label is the model's; a lone "12 May" loses its year | **Yes** to both |
++| P1-4 | a visitor can get stale relations, and a stale publication year on Timeline | **Relations: yes**, owner only. **Timeline: not here.** The band already shows a visitor the same events with the same year; hiding them in the margin alone fixes nothing. A staleness verdict in the public payload is its own piece of work |
++| P1-5 | a three-row answer would be a successful artefact | **Yes**: every listed paragraph, the first excluded, under half fails |
++| P1-6 | fingerprint narrower than the prompt | **Yes**: FAQ's fingerprint and `paperwork` |
++| P2-7 | `CACHEABLE`; copy the latest CHECK, not FAQ's | **Yes** |
++| P2-8 | 43 of 108 is dense; draw `but` and `vs` only | **Partly**: `why` and `e.g.` dropped; `so` kept because Greg named it |
++| P2-9 | the diagram was off by one; the word must be focusable | **Yes** |
+diff --git a/docs/project/marginalia.md b/docs/project/marginalia.md
+index f01ca6bd9..ba684641b 100644
+--- a/docs/project/marginalia.md
++++ b/docs/project/marginalia.md
+@@ -18,13 +18,14 @@ because the two pads only swapped sides.
+ 
+ ## What it shows
+ 
+-**It generates nothing.** Every note comes from something another mode has already stored, and
+-opening the column never starts a run. The owner's lists are read through each mode's *read half*
+-(`useIdeasRead`, `useFaqRead`, `useDebateRead`), never the full mode hook, because the full hook
++**It generates one thing, its own relation words** ([below](#relation-words)). Every other note
++comes from something another mode has already stored, and opening the column never runs another
++mode. The owner's lists are read through each mode's *read half*
++(`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`), never the full mode hook, because the full hook
+ can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
+ read. A visitor's lists come in their payload.
+ 
+-**So a FAQ, Debate or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
++**So a FAQ, Timeline, Debate or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
+ The column keeps no copy of these lists: it reads them every time it opens, and while it is open
+ it re-reads them when this tab's job engine announces a completion for them — the same feed each
+ band listens to, through
+@@ -37,12 +38,14 @@ one would otherwise be missed; it would not be, so it is not
+ [261002d](../plans/261002d-marginalia-refreshes-when-a-mode-it-reads-finishes.md),
+ `tests/marginalia-live-refresh.test.tsx`).
+ 
++- **A relation word** (*so*, *but*, *vs*) beside a paragraph where the argument turns —
++  [§ Relation words](#relation-words).
+ - **The head**, pinned at the top: which part and section you are in, and the arc's sentence for
+   where the argument has got to. It has a rule under it so it does not read as one more note (Greg,
+   spya-rczgjb).
+ - **Each part's Socratic question**, beside the part's first real paragraph.
+ - **An idea stamp** ("assumes", "introduces") where each idea first occurs.
+-- **Other modes' items, shut by default**: FAQ questions, Debate's claim rows, Citations and comments
++- **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Debate's claim rows, Citations and comments
+   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
+   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
+   quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
+@@ -58,7 +61,8 @@ one would otherwise be missed; it would not be, so it is not
+   | Kind | Beside | Rule |
+   |---|---|---|
+   | FAQ | the question's earliest answering passage that is still there | the quoted words must still be in that block |
+-  | Debate | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
++  | Timeline | the passage that dates the event: where its date was read from, or the earliest mention that holds the article's own phrase for when | only events the piece dates. An untimed event or a date we could not read stays in the band. The date always carries its year, because the margin has no head to say it once ([261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md)) |
++| Debate | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
+   | Citations | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([citations.md](citations.md)) |
+   | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |
+   | Questions | the block the chat is anchored to | **owner only** (a visitor's payload has no chats); in the same line as that block's comments |
+@@ -73,6 +77,39 @@ one would otherwise be missed; it would not be, so it is not
+   written against an older version of the article"). A list written before a block changed could
+   otherwise sit beside prose that no longer says what it quotes.
+ 
++## Relation words
++
++> include the "relation-words", e.g. BUT, SO
++>
++> — Greg, 2026-09-30 (spya-u3dgk7)
++
++A small-caps word first in a paragraph's note, saying how it bears on the paragraph before it:
++**so** (it draws its conclusion from it), **but** (it pushes back on it), **vs** (it sets something
++against it without denying it). The word is a button; its card says the sentence. The plan, the
++options passed over and GPT Sol's review are in
++[261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md).
++
++- **The `relations` step** ([`src/relations.ts`](../../src/relations.ts)): one model call per
++  article. Every body paragraph of at least a sentence, bar the first, gets one of ten relations
++  from a closed list (`RELATIONS` in src/types.ts). The model writes no prose. It must answer every
++  listed paragraph; a run that answers fewer than half fails rather than storing a sparse list
++  that would look like an article with few turns. Stored in `article_revisions.relations`.
++- **Ten are stored, three are drawn.** `DRAWN_RELATIONS` in `notes.ts` is the one place that says
++  which, with a card for each in `tips.ts`. On the 108 paragraphs of the decorated experiment the
++  three are about one paragraph in three; all ten would be a word on every paragraph. Drawing
++  *why* or *e.g.* later is a row in each table and no new model call.
++- **The press that turns the column on asks for it**, and nothing else does. Marginalia's row in
++  `MODE_TARGET` (src/web/activation.ts) is `relations`, so it is the house rule for a mode that
++  starts itself ([`useAutoRun`](../../src/web/useAutoRun.ts)): one attempt per article per session;
++  a pasted `?margin=1` link, a reload and Back spend nothing; the press that turns the column off
++  arms nothing. A stale or outdated list counts as none, so the next press rewrites it. The hook is
++  [`src/web/useRelations.ts`](../../src/web/useRelations.ts).
++- **Nothing in the column says it is running.** The words appear when the job finishes; the job
++  is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
++- **Owner only.** A visitor's payload does not carry them: it has no staleness verdict, and a word,
++  unlike a quote, cannot be checked against its paragraph, so an old *but* could sit beside a
++  rewritten one.
++
+ ## Every note says where it came from
+ 
+ > I can't tell what that Annotation is from or why or whether AI-generated (if so, it should be in
+@@ -107,7 +144,7 @@ default. Adding one is one new kind in `MarginaliaNote`, one loop in `marginalia
+ it at its earliest surviving block and checks its quote, one small component in
+ `MarginaliaColumn.tsx`, and a read half if the mode hook can start a run.
+ [mode.md](mode.md) points here from its checklist. Not here yet, and named so they are not
+-forgotten: Quotes, glossary terms, Timeline events, cross-references. The first two already mark
++forgotten: Quotes, glossary terms, cross-references. The first two already mark
+ the prose.
+ 
+ The constraint each new kind is weighed against is the one the first plan named: the risk is *"a
+diff --git a/drizzle/20261003103702_relations.sql b/drizzle/20261003103702_relations.sql
+new file mode 100644
+index 000000000..f77d3d7dc
+--- /dev/null
++++ b/drizzle/20261003103702_relations.sql
+@@ -0,0 +1,23 @@
++-- Relations: how each paragraph bears on the one before it, one word of ten,
++-- read by Marginalia for the owner —
++-- docs/plans/261003f-marginalia-relation-words-and-timeline-events.md § Stage 2.
++--
++-- One column and a constraint, the shape of 20260930163700_simple_summary.sql.
++--
++-- `article_revisions.relations` is one JSONB column beside `faq`: the WHOLE
++-- artefact, because `sourceHash` is what says whether the article moved
++-- underneath it. Nullable, and nothing is backfilled.
++--
++-- **The CHECK is hand-kept in src/db/schema.ts.** `drizzle-kit generate` emitted
++-- the DROP/ADD pair below from the literal in the schema once that literal had
++-- been widened by hand. Its list is the newest one — 20261002140803_structure_step's,
++-- which has `metadata` and `structure` — plus `relations`.
++-- `tests/db-step-constraint.test.ts` compares the last `ADD CONSTRAINT` here
++-- with `STEP_ORDER` in both directions.
++--
++-- Nothing narrows: `'relations'` is only ADDED and every existing name stays, so
++-- there is no `revision_step_runs` row this can fail to validate against.
++
++ALTER TABLE "spideryarn"."revision_step_runs" DROP CONSTRAINT "revision_step_runs_step";--> statement-breakpoint
++ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "relations" jsonb;--> statement-breakpoint
++ALTER TABLE "spideryarn"."revision_step_runs" ADD CONSTRAINT "revision_step_runs_step" CHECK ("spideryarn"."revision_step_runs"."step_name" in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','citations','crossrefs','simple'));
+\ No newline at end of file
+diff --git a/src/ai-call.ts b/src/ai-call.ts
+index 89f5af527..c7c40aa56 100644
+--- a/src/ai-call.ts
++++ b/src/ai-call.ts
+@@ -1112,6 +1112,8 @@ export type ChatJob = Exclude<
+      request-path call on chat/completions and needs a route below. */
+   | "quiz"
+   | "faq"
++  /* Generation, on the Messages wire like `faq`. src/relations.ts. */
++  | "relations"
+   /* Generation, on the Messages wire like `faq`. src/skim.ts. */
+   | "skim"
+   /* Generation, on the Messages wire like `faq`. src/crossrefs.ts. */
+diff --git a/src/cost-categories.ts b/src/cost-categories.ts
+index 8fa5f8a74..0ca3538bd 100644
+--- a/src/cost-categories.ts
++++ b/src/cost-categories.ts
+@@ -182,6 +182,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
+   illustrated: "step-driven",
+   quiz: "step-driven",
+   faq: "step-driven",
++  relations: "step-driven",
+   crossrefs: "step-driven",
+   simple: "step-driven",
+   /* Simple's fidelity guard, made inside the `simple` step's collector. */
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index e6719f8c8..d132eb100 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -84,6 +84,7 @@ import type {
+   Citation,
+   Debate,
+   Faq,
++  Relations,
+   Crossrefs,
+   SimpleSummary,
+   Skim,
+@@ -939,6 +940,16 @@ export const articleRevisions = spideryarn.table(
+      */
+     faq: jsonb("faq").$type<Faq>(),
+ 
++    /**
++     * How each paragraph bears on the one before it — `Relations`,
++     * src/types.ts, written by the `relations` step.
++     * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
++     *
++     * The WHOLE artefact, like its neighbours; `sourceHash` is FAQ's
++     * fingerprint. **Owner only**: it is in no public projection.
++     */
++    relations: jsonb("relations").$type<Relations>(),
++
+     /**
+      * Links between the article's own blocks — `Crossrefs`, src/types.ts,
+      * written by the `crossrefs` step.
+@@ -2695,7 +2706,7 @@ export const revisionStepRuns = spideryarn.table(
+          the truth. `tests/db-step-constraint.test.ts` compares the last
+          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
+          directions, which is what makes there not be a third drift. */
+-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
++      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','citations','crossrefs','simple')`,
+     ),
+     check(
+       "revision_step_runs_status",
+diff --git a/src/feedback-payload.ts b/src/feedback-payload.ts
+index 5b0ced564..10e4352ad 100644
+--- a/src/feedback-payload.ts
++++ b/src/feedback-payload.ts
+@@ -210,6 +210,7 @@ const STEPS = [
+   "timeline",
+   "quiz",
+   "faq",
++  "relations",
+   "sketch",
+   "illustrated",
+   "debate",
+diff --git a/src/jobs.ts b/src/jobs.ts
+index 156e41003..143008886 100644
+--- a/src/jobs.ts
++++ b/src/jobs.ts
+@@ -729,6 +729,12 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
+      distribution, and being under kills a call the reader has already bought.
+      docs/plans/260916d-faq-mode.md § Progress records the articles and outputs. */
+   faq: 150_000,
++  /* **NOT MEASURED** — `faq`'s figure, taken because it is the same single
++     Messages call over the same bytes, at a lower effort and with a much
++     shorter answer (about ten tokens a paragraph), so it should finish well
++     inside it. Replace with a measurement once it has run on real articles.
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++  relations: 150_000,
+   /* **MEASURED 2026-09-30**, stage 1's real runs: 54 s on a 99-block paper and
+      119 s on a 141-block essay, one Messages call each at `medium` — slower
+      than `faq` at `high`, because the answer is longer and the reasoning ran
+diff --git a/src/mode-catalog.ts b/src/mode-catalog.ts
+index f62f1b4b8..d3f06aaba 100644
+--- a/src/mode-catalog.ts
++++ b/src/mode-catalog.ts
+@@ -557,11 +557,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
+        the button): the questions are `TreeNode.question` on the root and the
+        top-level parts (src/structure.ts § `questionFor`), the sentence at the
+        top is the arc (src/arc.ts), and the stamps are the stored ideas, read
+-       and never generated (src/web/marginalia/MarginaliaColumn.tsx). So
+-       nothing is generated by opening it. The width is
++       and never generated (src/web/marginalia/MarginaliaColumn.tsx). The one
++       thing turning it on generates is its own relation words — so, but, vs
++       (src/relations.ts, plan 261003f); other modes' lists are only read. The
++       width is
+        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
+        drawn. */
+-    how: "Nothing is generated for it: the questions come with the article's parts, the sentence at the top is where the argument has got to, and the ideas appear once they have been made in Ideas. It needs a wide window; on a narrow one the notes are hidden.",
++    how: "Turning it on marks where the argument turns, with one model pass that puts so, but or vs beside those paragraphs. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+     /* `annotations` was the mode's own word until 2026-10-01 (261001n). */
+     aliases: ["annotations", "margin notes", "margin", "sidenotes"],
+     /* **Behind the switch**: a first experiment with a column on the right,
+diff --git a/src/models.ts b/src/models.ts
+index 18b3e4c0a..de2f603ed 100644
+--- a/src/models.ts
++++ b/src/models.ts
+@@ -623,6 +623,10 @@ export type Task =
+      where it responds — docs/plans/260916d-faq-mode.md. Article-reading like
+      `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
+   | "faq"
++  /* How each paragraph bears on the one before it —
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
++     Article-reading like `ideas`, answering block ids, so `articleWithIds`. */
++  | "relations"
+   /* Links between the article's own blocks —
+      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+      Article-reading like `ideas`, naming block ids, so `articleWithIds`. */
+@@ -1019,6 +1023,7 @@ export const TASK_TIER: Record<Task, Tier> = {
+   illustrated: "capable",
+   quiz: "capable",
+   faq: "capable",
++  relations: "capable",
+   crossrefs: "capable",
+   simple: "capable",
+   skim: "capable",
+@@ -1285,6 +1290,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
+   illustrated: "messages",
+   quiz: "messages",
+   faq: "messages",
++  relations: "messages",
+   crossrefs: "messages",
+   simple: "messages",
+   skim: "messages",
+@@ -1413,6 +1419,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
+   illustrated: null,
+   quiz: null,
+   faq: null,
++  relations: null,
+   crossrefs: null,
+   simple: null,
+   skim: null,
+@@ -1715,6 +1722,7 @@ export type ArticleStage =
+   | "timeline"
+   | "quiz"
+   | "faq"
++  | "relations"
+   | "crossrefs"
+   | "simple";
+ 
+@@ -1848,6 +1856,16 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
+      Untested, like every effort choice not yet through
+      evals/results/effort-vs-quality.md. docs/plans/260916d-faq-mode.md. */
+   faq: "high",
++  /* `low`, the lowest value in this table (`sketch`'s, which was measured; this
++     is NOT). What it is paid for is one word of ten per paragraph, each judged
++     against the paragraph before it — the lightest judgment any stage here
++     makes, lighter than the `medium` that `crossrefs` and `quotes` take for
++     reading rather than inference. Its bytes are `faq`'s and its effort is
++     `sketch`'s, but all three schemas differ, so it shares a cached article
++     with nothing. Untested, like every effort choice not yet through
++     evals/results/effort-vs-quality.md; the plan names the quick tier as the
++     next thing to measure. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++  relations: "low",
+   /* `medium`, the plan's call: matching a claim to the paragraph that backs it
+      is reading, not the multi-step inference `ideas` and `quiz` are paid `high`
+      for. **It therefore shares a cached prefix with nothing** — the same bytes
+@@ -1928,6 +1946,10 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
+   /* Every passage names a block id, so the ids have to be on the page — and it
+      sends the body only, byte-identical to `ideas`, so it joins that prefix. */
+   faq: "ids",
++  /* It answers block ids, so the ids have to be on the page — and it sends the
++     body only, byte-identical to `ideas` and `faq`. `low` effort and its own
++     schema, so no share. */
++  relations: "ids",
+   /* Two block ids a row, so the ids have to be on the page — and the body
+      only, byte-identical to `ideas`. The effort differs, so no share. */
+   crossrefs: "ids",
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index a1c9f3157..0f8f33833 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -98,6 +98,12 @@ import {
+   inputFingerprint as faqFingerprint,
+   PROMPT_VERSION as FAQ_PROMPT_VERSION,
+ } from "./faq.js";
++import {
++  RELATIONS_OUTPUT_SCHEMA,
++  generateRelations,
++  inputFingerprint as relationsFingerprint,
++  PROMPT_VERSION as RELATIONS_PROMPT_VERSION,
++} from "./relations.js";
+ import {
+   CROSSREFS_OUTPUT_SCHEMA,
+   generateCrossrefs,
+@@ -351,6 +357,7 @@ export const ARTICLE_OUTPUT_FORMAT: Readonly<Record<ArticleStage, ArticleOutputF
+   timeline: jsonSchemaFormat(TIMELINE_OUTPUT_SCHEMA),
+   quiz: jsonSchemaFormat(QUIZ_OUTPUT_SCHEMA),
+   faq: jsonSchemaFormat(FAQ_OUTPUT_SCHEMA),
++  relations: jsonSchemaFormat(RELATIONS_OUTPUT_SCHEMA),
+   crossrefs: jsonSchemaFormat(CROSSREFS_OUTPUT_SCHEMA),
+   simple: jsonSchemaFormat(SIMPLE_SUMMARY_OUTPUT_SCHEMA),
+ };
+@@ -572,6 +579,10 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
+      a stored `sourceHash`, so a moved article re-runs without being forced.
+      And it replaces rather than appends. docs/plans/260916d-faq-mode.md. */
+   "faq",
++  /* `faq`'s two reasons again: it reads the blocks, the tree and the metadata,
++     nothing in the pipeline reads what it writes, and it replaces rather than
++     appends. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++  "relations",
+   /* The same two reasons: it reads the blocks and tree, and nothing except the
+      separately requested `illustrated` stage reads what it writes, so a
+      positional cascade would buy a model call the reader did not ask for. At
+@@ -4029,6 +4040,68 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+       };
+     },
+   },
++  /* Stage 5q — relations: how each paragraph bears on the one before it, one
++     word of ten, read by Marginalia for the owner. Off DEFAULT_INGEST_STEPS
++     and in FORCE_ONLY_WHEN_NAMED.
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
++
++     **No baseline read**, like `faq`: a relation is keyed by its block's id,
++     so a re-run replaces them. */
++  relations: {
++    name: "relations",
++    label: "Reading how the paragraphs connect",
++    produces: ["relations"],
++    /**
++     * FAQ's stamp exactly: `articleWithIdsFingerprint` over the blocks, the
++     * tree and the cited head, with the **real, nullable** metadata, which is
++     * what `generateRelations` hashes too. **No `profileHash`**.
++     */
++    stamp: async (ctx, store) => {
++      const article = await tryReadArticle(ctx.slug, store);
++      if (!article) return null;
++      return {
++        inputHash: relationsFingerprint(article.blocks, article.tree, article.meta),
++        promptVersion: RELATIONS_PROMPT_VERSION,
++        model: CAPABLE_MODEL,
++      };
++    },
++    async run(ctx, store) {
++      const run = await generateRelations({
++        article: await readArticle(ctx.slug, store),
++        onProgress: ctx.report,
++        signal: ctx.signal,
++        power: ctx.power,
++        cacheArticle: ctx.cacheArticle,
++      });
++      const answered = Object.keys(run.relations.relations).length;
++      plog.info(
++        {
++          slug: ctx.slug,
++          step: "relations",
++          model: run.model,
++          /* False when the article had fewer than two paragraphs and no model
++             was called; the token counts are then all zero. */
++          called: run.called,
++          inputTokens: run.inputTokens,
++          outputTokens: run.outputTokens,
++          cacheReadTokens: run.cacheReadTokens,
++          cacheWriteTokens: run.cacheWriteTokens,
++          maxTokens: run.maxTokens,
++          ms: run.elapsedMs,
++          paragraphs: run.paragraphs,
++          answered,
++          /* Counts only — never a word of the article. `missing` is the one to
++             watch: paragraphs the model was asked about and skipped. */
++          ...run.dropped,
++        },
++        `relations ${ctx.slug}: ${answered} of ${run.paragraphs} paragraphs`,
++      );
++      return {
++        parts: { relations: run.relations },
++        detail: `${answered} ${answered === 1 ? "paragraph" : "paragraphs"}`,
++      };
++    },
++  },
+   /* Stage 5r — Simple: a plain-words orientation, a sub-mode of Summary. Off
+      DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED; run by a press on the
+      plain-words controls, or on Metadata.
+diff --git a/src/plain-words.ts b/src/plain-words.ts
+index 41e9fbde9..0d8f13c09 100644
+--- a/src/plain-words.ts
++++ b/src/plain-words.ts
+@@ -110,6 +110,8 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
+     "copies up to three passages from a paper verbatim and picks one of three words for each; the code stores the paper's characters, not the model's",
+   "src/crossrefs.ts":
+     "writes two block ids and a phrase copied from the article, and the code stores the article's characters, not the model's",
++  "src/relations.ts":
++    "writes a block id and one of ten fixed words per paragraph; the words a reader sees for them are the app's own",
+   "src/pdf-read.ts": "transcribes a PDF verbatim; a transcriber told to prefer common words is invited to tidy",
+   "src/transcribe.ts": "speech to text, verbatim, with no prompt at all",
+   "src/messages-stream.ts": "the wire every Messages call goes through, not a prompt",
+diff --git a/src/relations.ts b/src/relations.ts
+new file mode 100644
+index 000000000..19a890e2a
+--- /dev/null
++++ b/src/relations.ts
+@@ -0,0 +1,474 @@
++/**
++ * Pipeline stage 5q — **relations**: how each paragraph bears on the one
++ * before it, as one word from a closed list of ten. Marginalia draws a few of
++ * them as a small word beside the paragraph (so, but, vs); the rest are stored
++ * and not drawn. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md
++ * § Stage 2 is the design, and GPT Sol's review of it is where the validation
++ * rules below come from.
++ *
++ * **There is no command line here.** Running it against one article is a job:
++ *
++ *   POST /api/jobs { slug, steps: ["relations"] }
++ *
++ * ## What it shares with `faq`, and what it does not
++ *
++ * **The request is Ideas' byte for byte up to the breakpoint** —
++ * `articleWithIds(meta, blocks.filter(isBodyEvidence))` first, carrying the
++ * cache breakpoint, then this stage's instructions (src/models.ts §
++ * `ARTICLE_RENDERER`). The fingerprint is FAQ's exactly.
++ *
++ * What it does not share:
++ *
++ * 1. **The model writes no prose.** It answers a block id and one of ten
++ *    words, so there is no quote to verify and no plain-words rule to apply
++ *    (`PLAIN_WORDS_EXEMPT`, src/plain-words.ts).
++ * 2. **The model is told which paragraphs to answer**, in the user message,
++ *    and must answer every one once. FAQ chooses its own passages.
++ * 3. **A sparse answer fails.** FAQ's empty list is a real answer; here fewer
++ *    than half the listed paragraphs answered throws, because a stored
++ *    artefact with three words in it looks exactly like a quiet article (Sol
++ *    P1-5).
++ * 4. **An article with nothing to label spends nothing**: fewer than two body
++ *    paragraphs stores an empty artefact without a model call.
++ * 5. **Owner only.** Nothing here reaches a visitor — a relation word has no
++ *    quote to check against its block, and a visitor's payload carries no
++ *    staleness verdict (Sol P1-4). src/sharing-steps.ts.
++ */
++
++import type Anthropic from "@anthropic-ai/sdk";
++import type { Article } from "./article-input.js";
++import { articleWithIds } from "./article-prompt.js";
++import { anthropicCallFailed } from "./anthropic-call.js";
++import { isBodyEvidence } from "./block-policy.js";
++import { stageFailure } from "./job-failure.js";
++import { MODEL_REFUSED } from "./messages.js";
++import { streamMessage, wasRefused } from "./messages-stream.js";
++import { effortFor, generatorFor, type ModelPower } from "./models.js";
++import { parseJsonAnswer } from "./parse-json.js";
++import {
++  assertNoBlockIdEnums,
++  validateAnthropicJsonSchema,
++  withMessagesJsonSchema,
++} from "./messages-structured-output.js";
++import {
++  articleWithIdsFingerprint,
++  type BlockFingerprint,
++  fallbackHeadTitle,
++  type MetaFingerprintWithUrl,
++} from "./source-hash.js";
++import { budgetFor, truncationFailure } from "./token-budget.js";
++import { paperwork } from "./paperwork.js";
++import {
++  RELATIONS,
++  type Block,
++  type BlockId,
++  type Meta,
++  type Relation,
++  type Relations,
++  type RelationsDropped,
++  type Tree,
++} from "./types.js";
++
++export type { Relation, Relations, RelationsDropped } from "./types.js";
++
++/** Bumped whenever the prompt changes what a relation *is*, or which paragraphs are asked about. */
++export const PROMPT_VERSION = "relations/1";
++
++/**
++ * A sentence's worth: fewer words than this is a heading, a date or a byline.
++ *
++ * **A twin of `PARAGRAPH_MIN_WORDS` in src/web/marginalia/notes.ts**, which
++ * decides where the margin puts a part's question. Defined again here because
++ * `src/` must not import from `src/web/`; tests/relations.test.ts holds the
++ * two equal. Changing it changes which paragraphs are asked about, so it bumps
++ * `PROMPT_VERSION`.
++ */
++export const PARAGRAPH_MIN_WORDS = 12;
++
++/** One paragraph the model is asked about, and the paragraph it is read against. */
++export interface EligibleParagraph {
++  id: BlockId;
++  /** The paragraph before it in the same list — not always the block before it. */
++  previous: BlockId;
++}
++
++/**
++ * **Which paragraphs get a word**: body text blocks of at least a sentence,
++ * all but the first. "The one before" is the previous paragraph by the same
++ * rule, the first included — so a heading, a figure or a one-line aside
++ * between two paragraphs does not come between them.
++ *
++ * A paragraph after a heading is listed like any other: "but" across a section
++ * break still means something.
++ */
++export function eligibleParagraphs(
++  blocks: readonly Pick<Block, "id" | "kind" | "words" | "treatment">[],
++): EligibleParagraph[] {
++  const paragraphs = blocks.filter(
++    (b) => isBodyEvidence(b) && b.kind === "text" && b.words >= PARAGRAPH_MIN_WORDS,
++  );
++  const out: EligibleParagraph[] = [];
++  for (let i = 1; i < paragraphs.length; i++) {
++    out.push({ id: paragraphs[i]!.id, previous: paragraphs[i - 1]!.id });
++  }
++  return out;
++}
++
++/**
++ * The answer budget in tokens, sized to the list: one row is
++ * `{"blockId":"spya-k3m9qt","relation":"for-example"},`, about twenty tokens,
++ * counted as thirty, plus a base for the JSON around the list. Undersizing does
++ * not degrade: it throws `truncationFailure` and loses the pass.
++ */
++export const TOKENS_PER_PARAGRAPH = 30;
++export function answerTokens(paragraphs: number): number {
++  return 200 + paragraphs * TOKENS_PER_PARAGRAPH;
++}
++
++/**
++ * What this artefact was written from — `articleWithIdsFingerprint`, FAQ's
++ * exactly: the blocks, the tree and the cited metadata head. No profile,
++ * because who reads does not change how one paragraph follows another.
++ */
++export function inputFingerprint(
++  blocks: readonly BlockFingerprint[],
++  tree: Tree,
++  meta: MetaFingerprintWithUrl | null,
++): string {
++  return articleWithIdsFingerprint(blocks, tree, meta);
++}
++
++/** Does this artefact still describe the article, tree and metadata? */
++export function isStale(
++  relations: Relations,
++  blocks: readonly BlockFingerprint[],
++  tree: Tree,
++  meta: MetaFingerprintWithUrl | null,
++): boolean {
++  return relations.sourceHash !== inputFingerprint(blocks, tree, meta);
++}
++
++export function emptyDropped(): RelationsDropped {
++  return { unknown: 0, repeated: 0, offList: 0, missing: 0 };
++}
++
++const RELATION_SET: ReadonlySet<string> = new Set(RELATIONS);
++
++/**
++ * Turn what the model said into one relation per paragraph, believing as
++ * little as possible. Pure.
++ *
++ * In the model's order: a row naming an id that was not asked about — or a row
++ * with no readable id at all — is dropped (`unknown`); a second row for a
++ * paragraph already answered is dropped and the first wins (`repeated`); a
++ * word outside `RELATIONS` is dropped (`offList`) and does not use the
++ * paragraph up. Listed paragraphs left with no answer are `missing`.
++ *
++ * **Fewer than half the listed paragraphs answered throws**, so the job fails
++ * and nothing is stored. An empty list of paragraphs is an empty answer.
++ */
++export function toRelations(
++  raw: unknown,
++  eligibleIds: readonly BlockId[],
++): { relations: Record<BlockId, Relation>; dropped: RelationsDropped } {
++  if (!Array.isArray(raw)) {
++    throw new Error(
++      "The model's answer has no `relations` array in it, so there is nothing to read. " +
++        "That is a failed answer rather than an empty one.",
++    );
++  }
++  const asked: ReadonlySet<string> = new Set(eligibleIds);
++  const dropped = emptyDropped();
++  const found = new Map<string, Relation>();
++  for (const row of raw as readonly unknown[]) {
++    const r = row && typeof row === "object" ? (row as { blockId?: unknown; relation?: unknown }) : {};
++    const blockId = typeof r.blockId === "string" ? r.blockId.trim() : "";
++    if (!asked.has(blockId)) {
++      dropped.unknown++;
++      continue;
++    }
++    if (found.has(blockId)) {
++      dropped.repeated++;
++      continue;
++    }
++    const word = typeof r.relation === "string" ? r.relation.trim() : "";
++    if (!RELATION_SET.has(word)) {
++      dropped.offList++;
++      continue;
++    }
++    found.set(blockId, word as Relation);
++  }
++  dropped.missing = eligibleIds.length - found.size;
++
++  if (found.size * 2 < eligibleIds.length) {
++    throw new Error(
++      `The model answered ${found.size} of ${eligibleIds.length} paragraphs, fewer than half, ` +
++        "so nothing is written: a sparse list would look like an article with few turns in it. " +
++        `Dropped: ${dropped.unknown} naming a paragraph that was not asked about, ` +
++        `${dropped.repeated} repeats, ${dropped.offList} with a word off the list.`,
++    );
++  }
++
++  /* In the article's order rather than the model's, so the stored object reads
++     top to bottom. */
++  const relations = {} as Record<BlockId, Relation>;
++  for (const id of eligibleIds) {
++    const word = found.get(id);
++    if (word) relations[id] = word;
++  }
++  return { relations, dropped };
++}
++
++export const RELATIONS_SYSTEM = `You are reading the article above one paragraph at a time, to say how each
++paragraph follows from the one before it.
++
++WHAT TO DO
++
++The user message lists paragraphs by their ids (like spya-k3m9qt), in reading
++order. Beside each is the id of the paragraph before it. For every listed
++paragraph, say how it bears on that paragraph before it, by choosing exactly
++one word from the list below.
++
++Judge by what the paragraph DOES, not by its first word. A paragraph can push
++back without saying "but", and one that opens with "So" may only be carrying
++on.
++
++THE TEN RELATIONS
++
++  "therefore"   — it draws its conclusion from the one before.
++  "but"         — it pushes back on the one before: an objection, a limit, a
++                  reason to doubt it.
++  "because"     — it gives the reason for the one before.
++  "for-example" — it is an instance of the claim the one before made.
++  "contrast"    — it is set against what came before, without denying it: the
++                  other side, the other case, the other group.
++  "zoom-in"     — the same subject, in more detail.
++  "zoom-out"    — it steps back from the detail to the larger point.
++  "new-thread"  — it starts something the one before did not lead to.
++  "restates"    — it makes the same point again, in other words.
++  "and-also"    — more of the same line of thought, with no change of
++                  direction. This is the default: choose it when nothing else
++                  clearly fits.
++
++Most paragraphs in most pieces simply carry on. Choose "therefore", "but" or
++"contrast" only when the paragraph really does turn that way.
++
++THE RULES
++
++- Answer every listed id exactly once, in the order listed.
++- Answer only the listed ids. Never invent an id, and never answer for a
++  paragraph that is not on the list.
++- A paragraph that follows a heading is judged like any other, against the
++  paragraph named beside it.
++- "relation" must be one of the ten words above, spelled exactly as shown.
++
++${paperwork("pick")}
++
++A listed paragraph that is only paperwork still gets its one word, like every
++other listed paragraph; "new-thread" or "and-also" will usually be right.
++
++OUTPUT
++
++JSON only, no prose, no code fence:
++
++{"relations": [
++  {"blockId": "spya-k3m9qt", "relation": "but"},
++  {"blockId": "spya-p7x2wd", "relation": "and-also"}
++]}`;
++
++/** The user message: the paragraphs to answer, each beside the one before it. */
++export function renderPrompt(paragraphs: readonly EligibleParagraph[]): string {
++  const lines = paragraphs.map((p) => `${p.id} (the paragraph before it: ${p.previous})`);
++  return `Say how each of these ${paragraphs.length} paragraphs bears on the paragraph before it. Answer every one, once, in this order.
++
++=== THE PARAGRAPHS ===
++
++${lines.join("\n")}`;
++}
++
++/**
++ * The closed answer shape. `relation` is an enum of the ten words; `blockId`
++ * is a plain string and is resolved after the parse, never an enum
++ * (`assertNoBlockIdEnums`, docs/project/prompting-guide.md).
++ */
++export const RELATIONS_OUTPUT_SCHEMA = {
++  type: "object",
++  properties: {
++    relations: {
++      type: "array",
++      items: {
++        type: "object",
++        properties: {
++          blockId: { type: "string" },
++          relation: { type: "string", enum: [...RELATIONS] },
++        },
++        required: ["blockId", "relation"],
++        additionalProperties: false,
++      },
++    },
++  },
++  required: ["relations"],
++  additionalProperties: false,
++} as const;
++
++validateAnthropicJsonSchema(RELATIONS_OUTPUT_SCHEMA);
++assertNoBlockIdEnums(RELATIONS_OUTPUT_SCHEMA, ["blockId"]);
++
++export interface RelationsRun {
++  relations: Relations;
++  /** False when there was nothing to label and no model was called. */
++  called: boolean;
++  /** How many paragraphs the model was asked about. */
++  paragraphs: number;
++  dropped: RelationsDropped;
++  model: string;
++  inputTokens: number;
++  outputTokens: number;
++  cacheReadTokens: number;
++  cacheWriteTokens: number;
++  maxTokens: number;
++  elapsedMs: number;
++}
++
++export async function generateRelations(opts: {
++  /** The article, handed in — never a directory to open. src/article-input.ts. */
++  article: Article;
++  onProgress?: (detail: string) => void;
++  signal?: AbortSignal;
++  /** Mark the article as a cache breakpoint — see src/glossary.ts for the note. */
++  cacheArticle?: boolean;
++  /** Which capable model reads it — the article's High-powered AI setting (plan 260930f). */
++  power: ModelPower;
++}): Promise<RelationsRun> {
++  const { blocks, tree, meta: realMeta } = opts.article;
++
++  /* **Two values, deliberately**, as src/faq.ts: the stub is for the prompt's
++     head and the fingerprint gets the real nullable meta, which is what the
++     stamp hashes. tests/meta-fallback-fingerprint.test.ts asks the property. */
++  const meta: Meta = realMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
++  const sourceHash = inputFingerprint(blocks, tree, realMeta);
++
++  /* The body only, applied at the call site as `ideas` does — the same bytes.
++     The paragraphs asked about are a subset of it. */
++  const evidence = blocks.filter(isBodyEvidence);
++  const paragraphs = eligibleParagraphs(blocks);
++  const eligibleIds = paragraphs.map((p) => p.id);
++  const started = Date.now();
++
++  const artefact = (
++    relations: Record<BlockId, Relation>,
++    dropped: RelationsDropped,
++  ): Relations => ({
++    version: PROMPT_VERSION,
++    generator: generatorFor(opts.power),
++    slug: opts.article.slug,
++    sourceHash,
++    relations,
++    dropped: { ...dropped },
++    generatedAt: new Date().toISOString(),
++    elapsedMs: Date.now() - started,
++  });
++
++  /* Fewer than two body paragraphs: nothing has a paragraph before it. A real,
++     empty artefact, and no call. */
++  if (paragraphs.length === 0) {
++    const dropped = emptyDropped();
++    return {
++      relations: artefact({} as Record<BlockId, Relation>, dropped),
++      called: false,
++      paragraphs: 0,
++      dropped,
++      model: generatorFor(opts.power),
++      inputTokens: 0,
++      outputTokens: 0,
++      cacheReadTokens: 0,
++      cacheWriteTokens: 0,
++      maxTokens: 0,
++      elapsedMs: Date.now() - started,
++    };
++  }
++
++  const answer = answerTokens(paragraphs.length);
++  const maxTokens = budgetFor("relations", answer);
++
++  let message: Anthropic.Message;
++  try {
++    const call = streamMessage(
++      "relations",
++      withMessagesJsonSchema(
++        {
++          max_tokens: maxTokens,
++          thinking: { type: "adaptive" },
++          output_config: { effort: effortFor("relations") },
++          /* Article first, then this stage's instructions: byte-identical to
++             `ideas` and `faq` up to the breakpoint. */
++          system: [
++            {
++              type: "text" as const,
++              text: articleWithIds(meta, evidence),
++              ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
++            },
++            { type: "text" as const, text: RELATIONS_SYSTEM },
++          ],
++          messages: [{ role: "user", content: renderPrompt(paragraphs) }],
++        },
++        RELATIONS_OUTPUT_SCHEMA,
++      ),
++      { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
++    );
++
++    if (opts.onProgress) {
++      const report = opts.onProgress;
++      let chars = 0;
++      let last = 0;
++      call.onText((delta) => {
++        chars += delta.length;
++        const now = Date.now();
++        if (now - last < 500) return;
++        last = now;
++        report(`${paragraphs.length} paragraphs, ${Math.round(chars / 1000)}k characters so far`);
++      });
++    }
++
++    /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
++       is what records what this call cost. src/messages-stream.ts. */
++    message = await call.finalMessage();
++  } catch (err) {
++    throw anthropicCallFailed(err);
++  }
++  if (wasRefused(message)) {
++    throw stageFailure(MODEL_REFUSED, {
++      authored: "the model answered with stop_reason: refusal",
++    });
++  }
++  if (message.stop_reason === "max_tokens") {
++    throw truncationFailure("relations", maxTokens, answer, {
++      outputTokens: message.usage.output_tokens,
++      answerChars: message.content
++        .filter((b): b is Anthropic.TextBlock => b.type === "text")
++        .reduce((n, b) => n + b.text.length, 0),
++    });
++  }
++
++  const raw = message.content
++    .filter((b): b is Anthropic.TextBlock => b.type === "text")
++    .map((b) => b.text)
++    .join("");
++  const parsed = parseJsonAnswer<{ relations?: unknown }>(raw, "the model's answer");
++  const { relations, dropped } = toRelations(parsed.relations, eligibleIds);
++
++  /* Nothing is written here — the caller writes through the store. */
++  return {
++    relations: artefact(relations, dropped),
++    called: true,
++    paragraphs: paragraphs.length,
++    dropped,
++    model: generatorFor(opts.power),
++    inputTokens: message.usage.input_tokens,
++    outputTokens: message.usage.output_tokens,
++    cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
++    cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
++    maxTokens,
++    elapsedMs: Date.now() - started,
++  };
++}
+diff --git a/src/rerun-steps.ts b/src/rerun-steps.ts
+index c74aa1f0d..4067dab57 100644
+--- a/src/rerun-steps.ts
++++ b/src/rerun-steps.ts
+@@ -103,6 +103,17 @@ export const METADATA_RERUN_STEPS = [
+   "timeline",
+   "quiz",
+   "faq",
++  /* **Joined on 2026-10-03 with the step**, the way to redo the margin's
++     relation words by hand (the owner's press on Marginalia makes them the
++     first time, and again when they are stale). The three answers: **one**
++     metered call a press — a single `streamMessage`, no tools
++     (`generateRelations`), and none at all on an article with fewer than two
++     paragraphs; **no prerequisite** beyond the article itself; and **safe to
++     publish over a good one**, draft-then-publish — an answer covering fewer
++     than half the paragraphs throws and writes nothing (`toRelations`). Not a
++     mode, so no switch hides it.
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++  "relations",
+   "sketch",
+   "skim",
+   "debate",
+diff --git a/src/reset-role.ts b/src/reset-role.ts
+index 22a942cd4..a48738277 100644
+--- a/src/reset-role.ts
++++ b/src/reset-role.ts
+@@ -71,6 +71,10 @@ export const RESET_ROLE = {
+   timeline: "extra",
+   quiz: "extra",
+   faq: "extra",
++  /* Made on demand by the owner's press that turns Marginalia on, off
++     DEFAULT_INGEST_STEPS, a whole column: the modes' shape, though it is not a
++     mode of its own. */
++  relations: "extra",
+   sketch: "extra",
+   illustrated: "extra",
+   debate: "extra",
+diff --git a/src/routes.ts b/src/routes.ts
+index 953caa513..f86f8027b 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -39,6 +39,7 @@
+  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
+  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
+  *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
++ *   GET    /api/relations/:slug  how each paragraph bears on the one before it, and staleness (owner only)
+  *   GET    /api/crossrefs/:slug  links from a phrase in one block to the block that backs it, and staleness (owner only)
+  *   GET    /api/simple/:slug     a plain-words orientation to the piece, each paragraph's passages, and staleness
+  *   GET    /api/skim/:slug a route through the quotes at three depths, whether it still matches them, and the profile
+@@ -163,6 +164,7 @@ import {
+   loadSketch,
+   loadQuiz,
+   loadFaq,
++  loadRelations,
+   loadCrossrefs,
+   loadSimpleSummary,
+   loadSkim,
+@@ -8786,6 +8788,21 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+     },
+   },
+ 
++  /* Relation words — docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
++     GET only, and no DELETE: the step replaces, so asking again is
++     POST /api/jobs { slug, steps: ["relations"] }. This route never spends.
++     **Owner-authenticated, with no anonymous twin and nothing in the public
++     article payload** (Sol P1-4). 404 when there is none. */
++  {
++    kind: "pattern",
++    method: "GET",
++    pattern: /^\/api\/relations\/([\w.%-]+)$/,
++    article: "first-capture",
++    handler: async ({ request: { res } }, captures) => {
++      send(res, 200, await loadRelations(slugPart(captures, 1)));
++    },
++  },
++
+   /* Cross-references —
+      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
+      GET only, and no DELETE: the step replaces, so asking again is
+diff --git a/src/sharing-steps.ts b/src/sharing-steps.ts
+index 85b7cf30e..2a51a9d2f 100644
+--- a/src/sharing-steps.ts
++++ b/src/sharing-steps.ts
+@@ -83,6 +83,7 @@ export const STEP_SHARING = {
+   timeline: { column: "timeline", reads: [] },
+   quiz: { column: "quiz", reads: [] },
+   faq: { column: "faq", reads: [] },
++  relations: { column: "relations", reads: [] },
+   sketch: { column: "sketch", reads: [] },
+   /* The Sketch is what it paints, and `inputFingerprint` (src/illustrated.ts)
+      hashes it — so a Sketch redrawn mid-run would leave a picture of the old
+diff --git a/src/step-order.ts b/src/step-order.ts
+index 79a1d5887..67cc94571 100644
+--- a/src/step-order.ts
++++ b/src/step-order.ts
+@@ -122,6 +122,12 @@ export const STEP_ORDER = [
+      over the whole article that a reader asks for by opening the mode.
+      docs/plans/260916d-faq-mode.md. */
+   "faq",
++  /* Straight after `faq`, whose article bytes and fingerprint it shares — but
++     at `low` effort, so it is in no cache group (src/models.ts § STAGE_EFFORT).
++     Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`: one model call
++     over the whole article, started by the owner's press that turns Marginalia
++     on. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++  "relations",
+   /* Beside `faq`, a fifth time for the same argument: `high` effort (measured
+      against `medium` in stage 1, src/models.ts § STAGE_EFFORT), the `ids`
+      renderer and the body-only evidence, so it is in the `ideas` … `faq`
+diff --git a/src/store/artifact-storage.ts b/src/store/artifact-storage.ts
+index 3d7a2dcda..19d8aeb47 100644
+--- a/src/store/artifact-storage.ts
++++ b/src/store/artifact-storage.ts
+@@ -31,6 +31,7 @@ export type WholeColumn =
+   | "timeline"
+   | "quiz"
+   | "faq"
++  | "relations"
+   | "skim"
+   | "sketch"
+   | "illustrated"
+@@ -134,6 +135,7 @@ export const STORAGE: {
+   timeline: { timeline: { at: "column", column: "timeline" } },
+   quiz: { quiz: { at: "column", column: "quiz" } },
+   faq: { faq: { at: "column", column: "faq" } },
++  relations: { relations: { at: "column", column: "relations" } },
+   skim: { skim: { at: "column", column: "skim" } },
+   sketch: { sketch: { at: "column", column: "sketch" } },
+   illustrated: { illustrated: { at: "column", column: "illustrated" } },
+diff --git a/src/store/artifacts.ts b/src/store/artifacts.ts
+index c6ca32a8c..bab4183f4 100644
+--- a/src/store/artifacts.ts
++++ b/src/store/artifacts.ts
+@@ -49,6 +49,7 @@ import type {
+   SimpleSummary,
+   Debate,
+   Faq,
++  Relations,
+   Skim,
+   Glossary,
+   Ideas,
+@@ -99,6 +100,7 @@ export type ArtifactKind =
+   | "timeline"
+   | "quiz"
+   | "faq"
++  | "relations"
+   | "skim"
+   | "sketch"
+   | "illustrated"
+@@ -173,6 +175,12 @@ export interface ArtifactMap {
+    * docs/plans/260916d-faq-mode.md.
+    */
+   faq: Faq;
++  /**
++   * How each paragraph bears on the one before it — `Relations`, src/types.ts,
++   * written by the `relations` step and read by Marginalia, for the owner only.
++   * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
++   */
++  relations: Relations;
+   /**
+    * A route through the Quotes, at three depths — `Skim`, src/types.ts,
+    * written by the `skim` step.
+@@ -368,6 +376,13 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
+      model named questions and validation dropped every one.
+      docs/plans/260916d-faq-mode.md (Sol F8). */
+   faq: { field: "questions", ok: isArray },
++  /* A `relations` object keyed by block id, and **an EMPTY one is usable**, as
++     `faq`'s empty list is: an article with fewer than two body paragraphs has
++     nothing to label, and that is a real result stored without a model call.
++     What is not usable is a sparse one, and `toRelations` (src/relations.ts)
++     throws before anything is written when fewer than half the paragraphs
++     were answered. */
++  relations: { field: "relations", ok: (v) => typeof v === "object" && v !== null && !isArray(v) },
+   /* A `stops` array, and **an empty one is NOT usable** — the opposite call
+      from `faq` directly above. There is always a route through a non-empty set
+      of quotes, so `buildSkim` (src/skim.ts) throws on every empty
+@@ -949,6 +964,9 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
+   /* **And deliberately NO `BASELINE` row**, like `quiz`: ids are minted fresh
+      per run because nothing addresses a question yet (Sol F6). */
+   faq: "faq",
++  /* **And deliberately NO `BASELINE` row**, like `faq`: a relation is keyed by
++     the block id it describes and has no id of its own to inherit. */
++  relations: "relations",
+   /* **And deliberately NO `BASELINE` row**: the route holds only quote ids and
+      has no ids of its own to inherit, so a re-run simply replaces it. Its
+      `sourceHash` is the quotes hash, not an article fingerprint. */
+diff --git a/src/store/contracts.ts b/src/store/contracts.ts
+index 467e0a11a..e9812bf15 100644
+--- a/src/store/contracts.ts
++++ b/src/store/contracts.ts
+@@ -93,6 +93,7 @@ import type {
+   SketchFound,
+   QuizFound,
+   FaqFound,
++  RelationsResponse,
+   CrossrefsFound,
+   SimpleSummaryFound,
+   SkimFound,
+@@ -289,6 +290,15 @@ export interface ArticleReader {
+    */
+   loadFaq(slug: string): Promise<FaqFound>;
+ 
++  /**
++   * How each paragraph bears on the one before it, plus whether it still
++   * describes the article — FAQ's two staleness facts, over FAQ's fingerprint.
++   * **Owner-only, and there is no public twin**: a visitor's payload carries no
++   * staleness verdict and a relation word has no quote to check (Sol P1-4).
++   * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
++   */
++  loadRelations(slug: string): Promise<RelationsResponse>;
++
+   /**
+    * The cross-references, plus whether they still describe the article — the
+    * cited head and the top-level skeleton, matching the request's own stamp.
+diff --git a/src/store/export-bundle.ts b/src/store/export-bundle.ts
+index 1099ac9cd..3f79e6623 100644
+--- a/src/store/export-bundle.ts
++++ b/src/store/export-bundle.ts
+@@ -416,6 +416,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
+   "citations",
+   "quiz",
+   "faq",
++  "relations",
+   "skim",
+   "crossrefs",
+   "simpleSummary",
+@@ -495,6 +496,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
+   at("citations.json", revision.citations);
+   at("quiz.json", revision.quiz);
+   at("faq.json", revision.faq);
++  at("relations.json", revision.relations);
+   at("skim.json", revision.skim);
+   at("crossrefs.json", revision.crossrefs);
+   at("simple-summary.json", revision.simpleSummary);
+@@ -628,6 +630,7 @@ one thing that will make the rest of these files make sense.
+       illustrated.json     The same argument painted, and where each plate's bytes are.
+       quiz.json            Questions generated from the article.
+       faq.json             Questions a careful reader might put to the article, and the passages that respond.
++      relations.json       How each paragraph bears on the one before it, one word each.
+       skim.json            A route through the quotes, in the order to read them, at three depths.
+       crossrefs.json       Links from a phrase in one paragraph to the paragraph that backs it.
+       simple-summary.json  A few paragraphs in plain words, and the passages each rests on.
+@@ -815,6 +818,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
+   "augmentations/quiz.json": "Questions generated from the article.",
+   "augmentations/faq.json":
+     "Questions a careful reader might put to the article, and the passages that respond.",
++  "augmentations/relations.json": "How each paragraph bears on the one before it, one word each.",
+   "augmentations/skim.json":
+     "A route through the quotes, in the order to read them, at three depths.",
+   "augmentations/crossrefs.json":
+diff --git a/src/store/export.ts b/src/store/export.ts
+index 0acdfbab8..72df8b5b0 100644
+--- a/src/store/export.ts
++++ b/src/store/export.ts
+@@ -446,6 +446,7 @@ export async function exportArticle(
+   if (revision.citations) await put("article_revisions", "citations.json", revision.citations);
+   if (revision.quiz) await put("article_revisions", "quiz.json", revision.quiz);
+   if (revision.faq) await put("article_revisions", "faq.json", revision.faq);
++  if (revision.relations) await put("article_revisions", "relations.json", revision.relations);
+   if (revision.crossrefs)
+     await put("article_revisions", "crossrefs.json", revision.crossrefs);
+   if (revision.simpleSummary)
+diff --git a/src/store/index.ts b/src/store/index.ts
+index f45c209e5..c58971488 100644
+--- a/src/store/index.ts
++++ b/src/store/index.ts
+@@ -242,6 +242,7 @@ export const loadIdeas = reader.loadIdeas.bind(reader);
+ export const loadTimeline = reader.loadTimeline.bind(reader);
+ export const loadQuiz = reader.loadQuiz.bind(reader);
+ export const loadFaq = reader.loadFaq.bind(reader);
++export const loadRelations = reader.loadRelations.bind(reader);
+ export const loadCrossrefs = reader.loadCrossrefs.bind(reader);
+ export const loadSimpleSummary = reader.loadSimpleSummary.bind(reader);
+ export const loadSkim = reader.loadSkim.bind(reader);
+diff --git a/src/store/pg-revisions.ts b/src/store/pg-revisions.ts
+index faae075ea..69d8f06cc 100644
+--- a/src/store/pg-revisions.ts
++++ b/src/store/pg-revisions.ts
+@@ -341,6 +341,14 @@ export const REVISION_CARRY_POLICY: Record<
+      questions are still worth reading, and minting would empty the band until
+      somebody paid for the call again. docs/plans/260916d-faq-mode.md. */
+   faq: "carry",
++  /* **Carries, like `faq`** — a replace-on-rerun artefact whose `sourceHash`
++     answers at read time whether the article moved underneath it. A carried
++     one that no longer matches is **not drawn**: a relation word has no quote
++     to check against its block, so a stale *but* could sit beside a rewritten
++     paragraph. That is also why no visitor is sent it (Sol P1-4). Carrying
++     keeps it for the day the article moves back, and costs nothing.
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++  relations: "carry",
+   /* **Carries, like `faq`** — a replace-on-rerun list whose `sourceHash`
+      answers at read time whether the article moved underneath it. A carried
+      list that no longer matches is **not drawn** (Sol F8): a link can still
+diff --git a/src/store/pg.ts b/src/store/pg.ts
+index 78a8367ab..20c15c998 100644
+--- a/src/store/pg.ts
++++ b/src/store/pg.ts
+@@ -78,6 +78,11 @@ import {
+   isStale as faqIsStale,
+   PROMPT_VERSION as FAQ_PROMPT_VERSION,
+ } from "../faq.js";
++import {
++  inputFingerprint as relationsFingerprint,
++  isStale as relationsIsStale,
++  PROMPT_VERSION as RELATIONS_PROMPT_VERSION,
++} from "../relations.js";
+ import {
+   inputFingerprint as crossrefsFingerprint,
+   isStale as crossrefsIsStale,
+@@ -175,6 +180,8 @@ import type {
+   DebateFound,
+   Faq,
+   FaqFound,
++  Relations,
++  RelationsResponse,
+   Crossrefs,
+   CrossrefsFound,
+   SimpleSummary,
+@@ -523,6 +530,7 @@ type RevisionReader =
+   | "debate"
+   | "citations"
+   | "faq"
++  | "relations"
+   | "skim"
+   | "crossrefs"
+   | "simpleSummary"
+@@ -572,7 +580,7 @@ const REVISION_READ_POLICY: Record<
+     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
+     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
+     illustrated: "value", debate: "value", assets: "value", citations: "value", faq: "value",
+-    skim: "value", crossrefs: "value", simpleSummary: "value",
++    relations: "value", skim: "value", crossrefs: "value", simpleSummary: "value",
+   },
+   articleId: { publish: "value" },
+   /* `publish` refuses a revision that is not still a draft. */
+@@ -618,6 +626,8 @@ const REVISION_READ_POLICY: Record<
+     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
+        so it is judged on the cited head and the outline as `ideas` is. */
+     faq: "value",
++    /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
++    relations: "value",
+     /* Its article head, so the same cited metadata columns as `faq`. */
+     crossrefs: "value",
+     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
+@@ -641,6 +651,8 @@ const REVISION_READ_POLICY: Record<
+     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
+        so it is judged on the cited head and the outline as `ideas` is. */
+     faq: "value",
++    /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
++    relations: "value",
+     /* Its article head, so the same cited metadata columns as `faq`. */
+     crossrefs: "value",
+     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
+@@ -664,6 +676,8 @@ const REVISION_READ_POLICY: Record<
+     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
+        so it is judged on the cited head and the outline as `ideas` is. */
+     faq: "value",
++    /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
++    relations: "value",
+     /* Its article head, so the same cited metadata columns as `faq`. */
+     crossrefs: "value",
+     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
+@@ -730,6 +744,8 @@ const REVISION_READ_POLICY: Record<
+     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
+        so it is judged on the cited head and the outline as `ideas` is. */
+     faq: "value",
++    /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
++    relations: "value",
+     /* Its article head, so the same cited metadata columns as `faq`. */
+     crossrefs: "value",
+     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
+@@ -784,6 +800,8 @@ const REVISION_READ_POLICY: Record<
+     citations: "value",
+     /* `faq` hashes the outline too: the skeleton is in its user message. */
+     faq: "value",
++    /* FAQ's fingerprint exactly, so the outline too. */
++    relations: "value",
+     /* The top-level skeleton is in its user message, so it needs the tree. */
+     crossrefs: "value",
+     /* Not for a skeleton — its user message is a constant — but for the
+@@ -919,6 +937,11 @@ const REVISION_READ_POLICY: Record<
+   /* Its own reader and the metadata page, and not the library — the call
+      `quiz` and `citations` make. `isCurrent` needs the column for its arm. */
+   faq: { metadata: "value", faq: "value" },
++  /* Its own reader and the metadata page, and not the library — the call
++     `faq` makes. `isCurrent` needs the column for its arm. **And no public
++     read**: src/store/public-reader.ts does not select it (Sol P1-4,
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md). */
++  relations: { metadata: "value", relations: "value" },
+   /* Its own reader and the metadata page, and not the library — the call
+      `faq` makes. `isCurrent` needs the column for its arm, and
+      `personalisedSteps` needs it because the route carries a `profileHash`. */
+@@ -1222,6 +1245,8 @@ export const REVISION_PROJECTIONS = {
+     /* For `isCurrent`'s arm, as `debate` above. */
+     faq: articleRevisions.faq,
+     /* For `isCurrent`'s arm, as `debate` above. */
++    relations: articleRevisions.relations,
++    /* For `isCurrent`'s arm, as `debate` above. */
+     crossrefs: articleRevisions.crossrefs,
+     /* For `isCurrent`'s arm, as `debate` above. */
+     simpleSummary: articleRevisions.simpleSummary,
+@@ -1308,6 +1333,12 @@ export const REVISION_PROJECTIONS = {
+     faq: articleRevisions.faq,
+     ...CITED_FINGERPRINT_COLUMNS,
+   },
++  /* The cited set, as `faq`: the same bytes and the same fingerprint. */
++  relations: {
++    id: articleRevisions.id,
++    relations: articleRevisions.relations,
++    ...CITED_FINGERPRINT_COLUMNS,
++  },
+   /* The cited head and tree its own exact-request fingerprint needs. */
+   crossrefs: {
+     id: articleRevisions.id,
+@@ -1872,6 +1903,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
+   debate: ["article_revisions.debate"],
+   citations: ["article_revisions.citations"],
+   faq: ["article_revisions.faq"],
++  relations: ["article_revisions.relations"],
+   skim: ["article_revisions.skim"],
+   crossrefs: ["article_revisions.crossrefs"],
+   simple: ["article_revisions.simple_summary"],
+@@ -3229,6 +3261,23 @@ const rawPgArticleReader: ArticleReader = {
+             },
+           );
+         }
++        /* `faq`'s stamp exactly: the same fingerprint over the same cited head. */
++        case "relations": {
++          const relations = revision.relations as Relations | null;
++          if (!relations || !tree || blocks.length === 0) return false;
++          return sameStamp(
++            {
++              inputHash: relations.sourceHash,
++              promptVersion: relations.version,
++              model: relations.generator,
++            },
++            {
++              inputHash: relationsFingerprint(blocks, tree, citedFingerprint),
++              promptVersion: RELATIONS_PROMPT_VERSION,
++              model: CAPABLE_MODEL,
++            },
++          );
++        }
+         /* The same stamp shape as `faq`, over its own exact request input. */
+         case "crossrefs": {
+           const crossrefs = revision.crossrefs as Crossrefs | null;
+@@ -3743,6 +3792,47 @@ const rawPgArticleReader: ArticleReader = {
+     };
+   },
+ 
++  /**
++   * The relation words on their own — the Postgres half of `loadRelations`.
++   *
++   * `loadFaq`'s shape: the cited head and the tree, because the fingerprint is
++   * FAQ's. **A 404 is the ordinary case** (the step is off
++   * `DEFAULT_INGEST_STEPS`); an EMPTY object is a 200 — an article with fewer
++   * than two paragraphs — as `SHAPE.relations` decides at the store boundary.
++   * **Owner only**: there is no public twin of this read.
++   * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
++   */
++  async loadRelations(slug: string): Promise<RelationsResponse> {
++    requireSlug(slug);
++    const found = await currentRevision(slug, "relations");
++    if (!found) throw notFound(slug);
++    const relations = found.revision.relations as Relations | null;
++    if (
++      !relations ||
++      typeof relations.relations !== "object" ||
++      relations.relations === null ||
++      Array.isArray(relations.relations)
++    ) {
++      throw Object.assign(
++        new Error(
++          `No relations for "${slug}" yet. Build them with ` +
++            `POST /api/jobs { "slug": "${slug}", "steps": ["relations"] }.`,
++        ),
++        { status: 404 },
++      );
++    }
++    const blocks = await blockHashInputs(found.revision.id);
++    const tree = found.revision.tree as Tree | null;
++    return {
++      relations,
++      // Unknown counts as stale, the same way round as its neighbours.
++      stale:
++        !tree ||
++        relationsIsStale(relations, blocks, tree, citedMetaFingerprintOf(found.revision)),
++      outdated: relations.version !== RELATIONS_PROMPT_VERSION,
++    };
++  },
++
+   /**
+    * The cross-references on their own — the Postgres half of `loadCrossrefs`.
+    *
+diff --git a/src/types.ts b/src/types.ts
+index cf25f3763..631bdce18 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -3104,6 +3104,11 @@ export type StepName =
+      `articleWithIds` over the body at `high` effort, so it joins the
+      `ideas`/`timeline`/`quiz` cached article prefix. */
+   | "faq"
++  /* How each paragraph bears on the one before it, one word of ten —
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
++     Read only by Marginalia, and by the owner only. The same bytes as `faq`
++     at `low` effort, so in no cached prefix group. */
++  | "relations"
+   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
+      Nothing reads what it writes except the one below. The same bytes as
+      `ideas` but at `low` effort since 2026-10-01, so in no cached prefix group
+@@ -4899,6 +4904,68 @@ export interface FaqResponse {
+ /** As `QuizFound`: the same type, because there is no `profileChanged` to omit. */
+ export type FaqFound = FaqResponse;
+ 
++/* -------------------------------------------------------------- relations --
++   How each paragraph bears on the one before it — the `relations` column on
++   `article_revisions`, read by Marginalia (docs/project/marginalia.md) and
++   written by the `relations` step (src/relations.ts).
++   docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++
++/**
++ * **The closed list the model picks one of**, per paragraph. All ten are
++ * stored; which are drawn is the margin's decision (`DRAWN_RELATIONS`), so
++ * drawing more of them later costs no model call.
++ */
++export const RELATIONS = [
++  "therefore",
++  "but",
++  "because",
++  "for-example",
++  "contrast",
++  "zoom-in",
++  "zoom-out",
++  "new-thread",
++  "restates",
++  "and-also",
++] as const;
++export type Relation = (typeof RELATIONS)[number];
++
++/** What validation threw away or found absent. Counts only. */
++export interface RelationsDropped {
++  /** An id that is not one of the paragraphs the model was asked about. */
++  unknown: number;
++  /** A second answer for a paragraph already answered; the first wins. */
++  repeated: number;
++  /** A word outside `RELATIONS`. */
++  offList: number;
++  /** A listed paragraph the model did not answer. */
++  missing: number;
++}
++
++export interface Relations {
++  version: string;
++  generator: string;
++  slug: string;
++  /** `articleWithIdsFingerprint`, as FAQ: blocks, tree and the cited head. */
++  sourceHash: string;
++  /**
++   * One entry per paragraph the model answered: how it bears on the paragraph
++   * before it. The first body paragraph has none, because nothing precedes it.
++   */
++  relations: Record<BlockId, Relation>;
++  dropped: RelationsDropped;
++  generatedAt: string;
++  elapsedMs: number;
++}
++
++/** `GET /api/relations/:slug`. Two staleness facts: no profile is in this stamp. */
++export interface RelationsResponse {
++  relations: Relations;
++  /** The article moved underneath this — blocks, sections or the cited head. */
++  stale: boolean;
++  /** The article is the same and we would write this differently now. */
++  outdated: boolean;
++}
++
+ /* ----------------------------------------------------------------- simple --
+    A plain-words orientation to the piece — the `simple_summary` column on
+    `article_revisions`, written by the `simple` step.
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index 1485b1927..78eb9ebc7 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -1555,6 +1555,7 @@ function useActivateMode(
+   arms: boolean,
+   current: BandMode | undefined,
+   toggles: boolean,
++  margin: boolean,
+ ): (next: Mode) => void {
+   return useCallback(
+     (next: Mode) => {
+@@ -1576,10 +1577,16 @@ function useActivateMode(
+          reopen: the reopen is a fresh press on a fresh mount.
+          docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
+       const again = toggles && next === current;
+-      if (arms && !again) armActivationForMode(slug, next, { diagram });
++      /* **Nor does a Marginalia press while the column is on**, from either
++         door: the bar's press turns it off, with its feed still mounted for
++         that instant, and naming it in the command bar leaves it where it is.
++         Only the press that turns the column on asks for its relation words
++         (plan 261003f). */
++      const marginOn = next === "marginalia" && margin;
++      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram });
+       onMode(next, undefined, toggles);
+     },
+-    [slug, search, diagram, onMode, arms, current, toggles],
++    [slug, search, diagram, onMode, arms, current, toggles, margin],
+   );
+ }
+ 
+@@ -1759,9 +1766,9 @@ export function Dock({
+   /* **Opening a mode**, and it is one callback rather than two calls made
+      twice — `useActivateMode` above holds the whole of the reasoning, which
+      is the reason it is a named thing at all. */
+-  const activateMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, false);
++  const activateMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, false, margin);
+   /* The bar's own buttons: the same door, but a second press closes. */
+-  const pressMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, true);
++  const pressMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, true, margin);
+   const activateSubMode = useActivateSubMode(slug, search, onMode, !isVisitor);
+ 
+   /* **How much of itself the bar spells out is measured, not guessed** — the
+diff --git a/src/web/Metadata.tsx b/src/web/Metadata.tsx
+index 3f9118948..e15a6d03d 100644
+--- a/src/web/Metadata.tsx
++++ b/src/web/Metadata.tsx
+@@ -204,6 +204,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
+ import {
+   Archive,
+   ArrowLeft,
++  ArrowRightLeft,
+   Blocks,
+   Bot,
+   BookA,
+@@ -372,6 +373,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
+   /* The same bubble as `quiz`, reused rather than a new import — the FAQ panel
+      is stage 2 of docs/plans/260916d-faq-mode.md and may choose its own glyph. */
+   faq: MessageCircleQuestionMark,
++  /* Two arrows, one each way: how a paragraph bears on the one before it.
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++  relations: ArrowRightLeft,
+   sketch: PenLine,
+   /* A paintbrush beside the sketch's pen: the same argument, painted rather
+      than drawn. docs/project/diagram.md § Illustrated. */
+diff --git a/src/web/ResetArticle.tsx b/src/web/ResetArticle.tsx
+index d4a0d191f..80cae518a 100644
+--- a/src/web/ResetArticle.tsx
++++ b/src/web/ResetArticle.tsx
+@@ -71,6 +71,7 @@ export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
+   timeline: "Timeline",
+   quiz: "Quiz",
+   faq: "FAQ",
++  relations: "Relation words",
+   sketch: "Sketch",
+   illustrated: "Illustrated",
+   debate: "Debate",
+diff --git a/src/web/activation.ts b/src/web/activation.ts
+index 88005bc9e..79d944490 100644
+--- a/src/web/activation.ts
++++ b/src/web/activation.ts
+@@ -271,10 +271,12 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
+      already there by the time the article is on screen. */
+   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
+   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+-  marginalia: {
+-    kind: "none",
+-    reason: "reads the tree, the arc and any ideas already made; it never starts a job",
+-  },
++  /* Everything else the column shows is read and never made; the relation
++     words are its own, with no band to make them in, so the press that turns
++     the column on asks for them (src/web/useRelations.ts). The press that
++     turns it off arms nothing: Dock.tsx § `useActivateMode`.
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++  marginalia: { kind: "fixed", target: "relations" },
+   /* Nothing exists to fill until the reader has typed. */
+   search: { kind: "none", reason: "stores nothing until the reader types a query" },
+   chat: { kind: "none", reason: "stores nothing until the reader asks something" },
+diff --git a/src/web/auto-run-targets.ts b/src/web/auto-run-targets.ts
+index 1bf95041a..459532f4f 100644
+--- a/src/web/auto-run-targets.ts
++++ b/src/web/auto-run-targets.ts
+@@ -73,6 +73,10 @@ type StepAutoRunTarget = StepTarget<
+   /* Summary's plain-words work, armed by its bar button, command rows, slider
+      or either end button — docs/plans/261002a-summary-generates-on-open.md. */
+   | "simple"
++  /* Marginalia's relation words (so, but, vs): its own artefact, armed by the
++     press that turns the column on —
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++  | "relations"
+ >;
+ 
+ /** The two that are streams, with no job row and no place in `STEP_ORDER`. */
+diff --git a/src/web/lib/api.ts b/src/web/lib/api.ts
+index 51a22ca16..1273f0a43 100644
+--- a/src/web/lib/api.ts
++++ b/src/web/lib/api.ts
+@@ -897,6 +897,7 @@ const CACHEABLE = [
+   "/api/ideas/",
+   "/api/quotes/",
+   "/api/timeline/",
++  "/api/relations/",
+   "/api/quiz/",
+   /* Here with the route rather than with the panel, as `/api/debate/` is: the
+      derived test asks for it the moment the route exists. */
+diff --git a/src/web/marginalia/MarginaliaColumn.tsx b/src/web/marginalia/MarginaliaColumn.tsx
+index 71ea5f8b3..8ae48c346 100644
+--- a/src/web/marginalia/MarginaliaColumn.tsx
++++ b/src/web/marginalia/MarginaliaColumn.tsx
+@@ -24,7 +24,7 @@ import {
+   useState,
+ } from "react";
+ import { ChevronRight } from "lucide-react";
+-import type { CitedWork, Faq, Ideas } from "../../types.js";
++import type { CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
+ import { useDebateRead } from "../useDebate.js";
+ import { useStepFinished } from "../useStepJob.js";
+ import { useFaqRead } from "../useFaq.js";
+@@ -35,9 +35,20 @@ import { captureClientFailure } from "../monitoring.js";
+ import { useRenderCount } from "../perf.js";
+ import { ControlTip, Tooltip } from "../Tooltip.js";
+ import { useIdeasRead } from "../useIdeas.js";
+-import { type HeadStep, type MarginClaim, type MarginEntry, type MarginaliaNote, layoutNotes } from "./notes.js";
++import { useTimelineRead } from "../useTimeline.js";
++import { datingWords } from "../TimelinePanel.js";
++import {
++  DRAWN_RELATIONS,
++  type DrawnRelation,
++  type HeadStep,
++  type MarginClaim,
++  type MarginEntry,
++  type MarginaliaNote,
++  layoutNotes,
++} from "./notes.js";
++import { type RelationsByBlock, useRelations } from "../useRelations.js";
+ import { MARK_KIND_LABEL } from "../comment-nav.js";
+-import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN } from "./tips.js";
++import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
+ import { type Voice, voiceClass, withVoice } from "../voice.js";
+ 
+ /** The gap the collision pass keeps between two notes, in px. */
+@@ -130,6 +141,40 @@ function QuestionNote({ depth, text }: { depth: number; text: string }) {
+   );
+ }
+ 
++/**
++ * **How this paragraph bears on the one before it** — *so*, *but*, *vs*
++ * (plan 261003f). A word, never a symbol: a symbol that needs a tooltip has
++ * already failed (docs/research/260828c-decorated-mode-ideas.md). **A button
++ * with a card of its own**, as the question is and for its reason: there is
++ * nothing to press, so the card is the only thing a keyboard or a finger
++ * could reach. Ours to draw (small caps), but the judgement is the model's,
++ * so it is in the AI's face (fonts.md).
++ */
++function RelationWord({ relation }: { relation: DrawnRelation }) {
++  const [open, setOpen] = useState(false);
++  const tip = RELATION_TIPS[relation];
++  return (
++    <Tooltip
++      placement="bottom"
++      keepSide
++      open={open}
++      onOpenChange={setOpen}
++      content={<ControlTip head={tip.head} what={tip.what} how={tip.how} />}
++    >
++      <button
++        type="button"
++        className={withVoice("marg-relation", "ai")}
++        data-relation={relation}
++        aria-expanded={open}
++        aria-label={`${tip.head}: ${tip.what}`}
++        onClick={() => setOpen((was) => !was)}
++      >
++        {DRAWN_RELATIONS[relation]}
++      </button>
++    </Tooltip>
++  );
++}
++
+ /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
+     prose never carries them. */
+ function MarginNotes({
+@@ -146,12 +191,16 @@ function MarginNotes({
+     <div className="marg-note" data-marg-note="">
+       {notes.map((note) => {
+         switch (note.kind) {
++          case "relation":
++            return <RelationWord key="relation" relation={note.relation} />;
+           case "question":
+             return <QuestionNote key={`q${note.depth}`} depth={note.depth} text={note.text} />;
+           case "idea":
+             return <IdeaStamp key={`i${note.ideaId}`} note={note} />;
+           case "faq":
+             return <FaqNote key="faq" items={note.items} />;
++          case "timeline":
++            return <TimelineNote key="timeline" items={note.items} />;
+           case "debate":
+             return <DebateNote key="debate" items={note.items} />;
+           case "citation":
+@@ -181,6 +230,7 @@ function MarginNotes({
+ function ShutNote({
+   kind,
+   stamp,
++  stampVoice,
+   tip,
+   line,
+   lineVoice,
+@@ -188,6 +238,9 @@ function ShutNote({
+ }: {
+   kind: string;
+   stamp: string;
++  /** Whose words the stamp is, when it is not ours — a Timeline date in the
++      article's own phrase. */
++  stampVoice?: Voice | undefined;
+   /** What this kind of line is and where it came from, on hover — every mark
+       explains itself. A key into tips.ts; the delegated card draws it. */
+   tip: MargTipKey;
+@@ -201,7 +254,7 @@ function ShutNote({
+   const panel = useId();
+   const label = (
+     <span className="marg-shut-label">
+-      <span className="marg-stamp">{stamp}</span>{" "}
++      <span className={stampVoice ? withVoice("marg-stamp", stampVoice) : "marg-stamp"}>{stamp}</span>{" "}
+       <span className={withVoice("marg-shut-line", lineVoice)}>{line}</span>
+     </span>
+   );
+@@ -260,6 +313,44 @@ function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["i
+   );
+ }
+ 
++/**
++ * **When the piece says these things happened** — Timeline's dated events,
++ * beside the passage that first mentions them (plan 261003f). The date always
++ * carries its year: the band says a shared year once in its head, and the
++ * margin has no head to say it in. `words` is the article's own phrase, so
++ * the author's face; a computed date is ours, and the label is the model's.
++ */
++function TimelineNote({ items }: { items: Extract<MarginaliaNote, { kind: "timeline" }>["items"] }) {
++  const only = items.length === 1 ? items[0] : undefined;
++  const when = (event: TimelineEvent) => datingWords(event.dating, true).text;
++  const whenVoice = (event: TimelineEvent): Voice => (event.dating.kind === "words" ? "author" : "ui");
++  return (
++    <ShutNote
++      kind="timeline"
++      stamp={only ? when(only.event) : "When"}
++      stampVoice={only ? whenVoice(only.event) : undefined}
++      tip="timeline"
++      line={only ? only.event.label : plural(items.length, "event", "events")}
++      lineVoice={only ? "ai" : "ui"}
++    >
++      {items.map(({ event, quote }) => (
++        <div key={event.id} className="marg-open-item">
++          {!only && (
++            <p className="marg-open-head">
++              <span className={withVoice("marg-stamp", whenVoice(event))}>{when(event)}</span>{" "}
++              <span className={voiceClass("ai")}>{event.label}</span>
++            </p>
++          )}
++          {/* Our words, then the article's. */}
++          <p className="marg-open-quote">
++            Mentioned here: “<span className={voiceClass("author")}>{quote}</span>”
++          </p>
++        </div>
++      ))}
++    </ShutNote>
++  );
++}
++
+ /** The relation in the reader's words. `unclear` is not a failure, only unsaid. */
+ const RELATION_WORD: Record<MarginClaim["relation"], string> = {
+   disputes: "disputes",
+@@ -564,15 +655,17 @@ function ArcLine({ arc }: { arc: string }) {
+ export type MarginFeed = {
+   ideas: Ideas["ideas"] | null;
+   faq: Faq["questions"] | null;
++  timeline: readonly TimelineEvent[] | null;
+   claims: readonly MarginClaim[] | null;
++  relations: RelationsByBlock;
+ };
+ 
+-export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, claims: null };
++export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: null, claims: null, relations: null };
+ 
+ /**
+- * **The owner's ideas, FAQ and Debate, read and never made.** A component of
++ * **The owner's ideas, FAQ, Timeline and Debate, read and never made.** A component of
+  * its own so the reads happen only while Marginalia is open — the read halves
+- * (`useIdeasRead`, `useFaqRead`, `useDebateRead`), never the full hooks, which
++ * (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`), never the full hooks, which
+  * arm the automatic run and could spend (Debate is the dearest step in the
+  * app). A stale list (the article moved under it) is not drawn: its blocks may
+  * not be these. Owner only: a visitor's lists are in their payload. Citations
+@@ -587,21 +680,29 @@ export function OwnerMarginFeed({
+ }) {
+   const ideasRead = useIdeasRead(slug);
+   const faqRead = useFaqRead(slug);
++  const timelineRead = useTimelineRead(slug);
+   const debateRead = useDebateRead(slug);
++  /* **The one thing here that can spend**: the relation words are Marginalia's
++     own, with no band to make them in, so the press that turned the column on
++     asks for them (useRelations.ts). Never on a mount. */
++  const relations = useRelations(slug);
+   /* **A list made while the margin is open reaches it** — FAQ run in the left
+      band appears here without reopening the margin. The band refreshes its own
+      read when its job finishes; this hears the same completion for the margin's
+      reads, quietly, so mounting still costs nothing. Plan 261002d. */
+   useStepFinished(slug, "ideas", ideasRead.refresh);
+   useStepFinished(slug, "faq", faqRead.refresh);
++  useStepFinished(slug, "timeline", timelineRead.refresh);
+   useStepFinished(slug, "debate", debateRead.refresh);
+   const ideas = ideasRead.status === "ready" && !ideasRead.stale ? (ideasRead.ideas?.ideas ?? null) : null;
+   const faq = faqRead.status === "ready" && !faqRead.stale ? (faqRead.faq?.questions ?? null) : null;
++  const timeline =
++    timelineRead.status === "ready" && !timelineRead.stale ? (timelineRead.timeline?.events ?? null) : null;
+   const claims =
+     debateRead.status === "ready" && !debateRead.stale ? (debateRead.debate?.claims.rows ?? null) : null;
+   useEffect(() => {
+-    onFeed({ ideas, faq, claims });
+-  }, [ideas, faq, claims, onFeed]);
++    onFeed({ ideas, faq, timeline, claims, relations });
++  }, [ideas, faq, timeline, claims, relations, onFeed]);
+   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
+   return null;
+ }
+diff --git a/src/web/marginalia/notes.ts b/src/web/marginalia/notes.ts
+index b8686dcce..c2fecb39c 100644
+--- a/src/web/marginalia/notes.ts
++++ b/src/web/marginalia/notes.ts
+@@ -23,6 +23,8 @@ import type {
+   FaqQuestion,
+   Idea,
+   IdeaProvenance,
++  Relation,
++  TimelineEvent,
+   Tree,
+ } from "../../types.js";
+ import type { PublicClaimDebateRow, PublicComment } from "../../public-types.js";
+@@ -37,7 +39,27 @@ export type MarginClaim = PublicClaimDebateRow;
+ /** A comment or bookmark, the owner's or a visitor's. */
+ export type MarginComment = Comment | PublicComment;
+ 
++/**
++ * **The relation words that are drawn, and the word each is drawn as.** The
++ * step stores one of ten per paragraph (src/types.ts § `RELATIONS`); the margin
++ * draws only the turns, where the argument changes direction or lands a
++ * conclusion — Greg's "BUT, SO", and *vs* beside them. *And-also* on a third
++ * of all paragraphs would be the second article down the margin this mode must
++ * not become. Widening this is one row here and one in tips.ts, and no model
++ * call. Plan 261003f.
++ */
++export const DRAWN_RELATIONS = {
++  therefore: "so",
++  but: "but",
++  contrast: "vs",
++} as const satisfies Partial<Record<Relation, string>>;
++export type DrawnRelation = keyof typeof DRAWN_RELATIONS;
++
++const isDrawn = (relation: Relation): relation is DrawnRelation => Object.hasOwn(DRAWN_RELATIONS, relation);
++
+ export type MarginaliaNote =
++  /** How this paragraph bears on the one before it. First in its note. */
++  | { kind: "relation"; relation: DrawnRelation }
+   /** The question a part — or, at `depth` 0, the whole article — answers. */
+   | { kind: "question"; depth: number; text: string }
+   /** An idea the piece assumes or introduces, occurring in this block. */
+@@ -56,6 +78,9 @@ export type MarginaliaNote =
+       kind: "faq";
+       items: { question: FaqQuestion; quote: string; morePassages: number }[];
+     }
++  /** Events the piece dates in this block, each with the words here that
++      mention it — plan 261003f. */
++  | { kind: "timeline"; items: { event: TimelineEvent; quote: string }[] }
+   /** Pages on the web that answer a claim made in this block. */
+   | { kind: "debate"; items: MarginClaim[] }
+   /** Works first cited in this block. Owner only — the caller's rule. */
+@@ -80,11 +105,14 @@ export type MarginEntry =
+  */
+ export type MarginSources = {
+   faq?: readonly FaqQuestion[] | null;
++  timeline?: readonly TimelineEvent[] | null;
+   claims?: readonly MarginClaim[] | null;
+   citations?: readonly CitedWork[] | null;
+   comments?: readonly MarginComment[] | null;
+   /** Questions the reader asked from a passage — the owner's only; a visitor's payload has no chats. */
+   asked?: readonly AskedQuestion[] | null;
++  /** How each paragraph bears on the one before — the owner's only in v1. */
++  relations?: Readonly<Record<BlockId, Relation>> | null;
+ };
+ 
+ type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
+@@ -92,7 +120,7 @@ type GroupedItems = Partial<{
+   [K in GroupedKind["kind"]]: Extract<GroupedKind, { kind: K }>["items"];
+ }>;
+ /** The order the kinds are drawn in below the question and the stamps. */
+-const GROUPED_ORDER = ["faq", "debate", "citation", "comment"] as const;
++const GROUPED_ORDER = ["faq", "timeline", "debate", "citation", "comment"] as const;
+ 
+ /** Turn the placement accumulator into the discriminated notes the renderer consumes. */
+ function inGroupedOrder(grouped: ReadonlyMap<BlockId, GroupedItems>): Map<BlockId, GroupedKind[]> {
+@@ -134,6 +162,14 @@ export function marginaliaNotes(
+     else out.set(blockId, [note]);
+   };
+ 
++  /* **The relation word first**: it is about the paragraph's opening, and it
++     is the shortest thing in the note. In article order, like everything
++     else, so the column's collision pass sees notes top to bottom. */
++  for (const block of blocks) {
++    const relation = more.relations?.[block.id];
++    if (relation !== undefined && isDrawn(relation)) add(block.id, { kind: "relation", relation });
++  }
++
+   /* **Beside the part's first paragraph, not its first block.** A part's range
+      starts at its heading, or at the date line under the title, and a question
+      drawn level with those reads as a caption for them (GPT Astra's design
+@@ -271,6 +307,34 @@ function groupedNotes(
+       });
+     }
+   }
++  /* **Only the events the piece dates** — a date, or its own words for when
++     ("a month later"). An untimed event is a label with nothing to say about
++     time, and a rejected date is our failure rather than the article's; both
++     stay in the band, which says what each means (timeline.md § The four
++     dating states).
++
++     **Beside the passage the date was read from, not the first mention.** An
++     event mentioned undated and later as "By 12 July…" would otherwise put
++     "at or before 12 Jul" beside words that give no date (GPT Sol, P1 on plan
++     261003f). A date's passage is `when.at`; the article's own phrase is found
++     in the earliest mention whose block still says it. Either way the phrase
++     must still be in the block. */
++  for (const event of more.timeline ?? []) {
++    const { dating } = event;
++    if (dating.kind === "dated") {
++      const { blockId, start } = dating.when.at;
++      if (!holds(blockId, dating.when.phrase, start)) continue;
++      const mention = event.occurrences.find((o) => o.blockId === blockId && holds(o.blockId, o.quote, o.start));
++      put(blockId, "timeline", { event, quote: mention?.quote ?? dating.when.phrase });
++    } else if (dating.kind === "words") {
++      const mention = earliest(
++        event.occurrences,
++        (o) => o.blockId,
++        (o) => holds(o.blockId, dating.phrase) && holds(o.blockId, o.quote, o.start),
++      );
++      if (mention) put(mention.blockId, "timeline", { event, quote: mention.quote });
++    }
++  }
+   for (const row of more.claims ?? []) {
+     if (holds(row.blockId, row.claimQuote)) put(row.blockId, "debate", row);
+   }
+diff --git a/src/web/marginalia/tips.ts b/src/web/marginalia/tips.ts
+index 4ea182e76..23ee4b6a3 100644
+--- a/src/web/marginalia/tips.ts
++++ b/src/web/marginalia/tips.ts
+@@ -16,12 +16,14 @@
+  * origin line from here. docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
+  */
+ 
++import type { DrawnRelation } from "./notes.js";
+ import type { Voice } from "../voice.js";
+ 
+ export type MargTipKey =
+   | "question-article"
+   | "question-part"
+   | "faq"
++  | "timeline"
+   | "debate"
+   | "citation"
+   | "comment-own"
+@@ -45,6 +47,11 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
+     what: "A question a careful reader might ask, which this passage answers. Press it to see the words that answer it.",
+     how: "From FAQ mode. The question was written by AI; the answer is quoted from the article. It sits beside the first passage that answers it.",
+   },
++  timeline: {
++    head: "When",
++    what: "Something the article says happened, with the date it gives. Press it to see the words that mention it.",
++    how: "From Timeline mode. The short description was written by AI; the date is read out of the article's own words, never guessed, and a phrase in quotation marks is the article's own. It sits beside the first passage that mentions the event.",
++  },
+   debate: {
+     head: "Debate",
+     what: "A page elsewhere on the web that responds to a claim made in this passage, and how it bears on it.",
+@@ -67,6 +74,34 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
+   },
+ };
+ 
++/** Where a relation word came from: the same for all of them. */
++const RELATION_ORIGIN =
++  "Written by AI, which read each paragraph against the one before it. Made for Marginalia when you turn it on. Only the turns in the argument are marked; most paragraphs carry on in the same direction and get no word.";
++
++/**
++ * **What each relation word means**, in a card of its own on the word (a
++ * button, so a keyboard or a finger can ask). The word is the answer; this is
++ * the sentence. `Record` over the drawn set, so drawing a new word without
++ * saying what it means is a type error.
++ */
++export const RELATION_TIPS: Record<DrawnRelation, MargTip> = {
++  therefore: {
++    head: "So",
++    what: "This paragraph draws its conclusion from the one before it.",
++    how: RELATION_ORIGIN,
++  },
++  but: {
++    head: "But",
++    what: "This paragraph pushes back on what you just read.",
++    how: RELATION_ORIGIN,
++  },
++  contrast: {
++    head: "Versus",
++    what: "This paragraph sets something against what came before, without denying it.",
++    how: RELATION_ORIGIN,
++  },
++};
++
+ export function isMargTipKey(key: string | null): key is MargTipKey {
+   return key !== null && Object.hasOwn(MARG_TIPS, key);
+ }
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index c6315a7ca..a6b3dc272 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -1524,6 +1524,7 @@ export function Reader({
+      owner-only (citations.md § Who sees it) and the margin is not the place to
+      reverse that quietly. Comments are the one list both arms already share. */
+   const marginaliaFaq = owner ? ownerFeed.faq : (artefacts?.faq?.questions ?? null);
++  const marginaliaTimeline = owner ? ownerFeed.timeline : (artefacts?.timeline?.events ?? null);
+   const marginaliaClaims = owner ? ownerFeed.claims : (artefacts?.debate?.claims.rows ?? null);
+   const marginaliaCitations =
+     owner && owner.citations.status === "ready" && !owner.citations.stale
+@@ -1830,6 +1831,9 @@ export function Reader({
+     if (!marginRoom) return null;
+     const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
+       faq: marginaliaFaq,
++      timeline: marginaliaTimeline,
++      /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
++      relations: owner ? ownerFeed.relations : null,
+       claims: marginaliaClaims,
+       citations: marginaliaCitations,
+       comments,
+@@ -1848,6 +1852,9 @@ export function Reader({
+     article.blocks,
+     marginaliaIdeas,
+     marginaliaFaq,
++    marginaliaTimeline,
++    owner,
++    ownerFeed.relations,
+     marginaliaClaims,
+     marginaliaCitations,
+     comments,
+diff --git a/src/web/rerun-commands.ts b/src/web/rerun-commands.ts
+index 6b32e14b1..f0a76cd25 100644
+--- a/src/web/rerun-commands.ts
++++ b/src/web/rerun-commands.ts
+@@ -49,6 +49,9 @@ export const RERUN_LABEL: Record<MetadataRerunStep, string> = {
+   timeline: "Timeline",
+   quiz: "Quiz",
+   faq: "FAQ",
++  /* Not a mode, so no `MODE_LABEL` to borrow: the small words Marginalia draws
++     beside a paragraph (so, but, vs). */
++  relations: "Relation words",
+   sketch: "Sketch",
+   skim: "Skim",
+   debate: "Debate",
+@@ -115,6 +118,7 @@ const RERUN_MODE: Partial<Record<MetadataRerunStep, Mode>> = {
+  */
+ const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> = {
+   crossrefs: ["cross references", "crossrefs"],
++  relations: ["relations"],
+   simple: ["simple"],
+ };
+ 
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index 381b7ca80..9d2a3a144 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -106,6 +106,26 @@
+   outline: 2px solid var(--rule-strong);
+   outline-offset: 2px;
+ }
++/* A relation word — so, but, vs: how this paragraph bears on the one before
++   it (plan 261003f). The stamp's small capitals, a shade darker so the turns
++   of the argument can be found by running an eye down the column. A button
++   (MarginaliaColumn.tsx § RelationWord), drawn as text; what it means is in
++   its card. */
++.marg-relation {
++  all: unset;
++  display: block;
++  cursor: help;
++  border-radius: 2px;
++  font-size: 0.6875rem;
++  font-weight: 700;
++  letter-spacing: 0.08em;
++  text-transform: uppercase;
++  color: var(--ink-soft);
++}
++.marg-relation:focus-visible {
++  outline: 2px solid var(--rule-strong);
++  outline-offset: 2px;
++}
+ .marg-stamp {
+   font-size: 0.6875rem;
+   font-weight: 600;
+diff --git a/src/web/useRelations.ts b/src/web/useRelations.ts
+new file mode 100644
+index 000000000..51d2d6130
+--- /dev/null
++++ b/src/web/useRelations.ts
+@@ -0,0 +1,88 @@
++/**
++ * **The relation words, as Marginalia sees them**: how each paragraph bears on
++ * the one before it (*so*, *but*, *vs*), read from `GET /api/relations/:slug`,
++ * and the one job that writes them.
++ *
++ * Marginalia otherwise generates nothing (docs/project/marginalia.md). This is
++ * its one artefact of its own, so unlike the FAQ or the Timeline it reads there
++ * is no band to make it in: **the press that turns the column on asks for it**,
++ * through the same activation every self-starting mode uses
++ * (src/web/useAutoRun.ts; Marginalia's row in activation.ts § `MODE_TARGET`).
++ * A mount is not a press, so a pasted `?margin=1` link, a Back step and a
++ * reload all spend nothing.
++ *
++ * Owner only, and not because of a check here: the one caller is
++ * `OwnerMarginFeed`, mounted under the owner's arm. A visitor's payload does
++ * not carry the words at all in v1 — it has no staleness verdict, and a
++ * relation word has no quote to check against its block.
++ * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
++ */
++import { useCallback, useEffect, useState } from "react";
++import type { BlockId, Relation, RelationsResponse } from "../types.js";
++import { apiFetch, readJson } from "./lib/api.js";
++import { useAutoRun } from "./useAutoRun.js";
++import { useOrderedRead } from "./useOrderedRead.js";
++import { useStepJob } from "./useStepJob.js";
++
++type RelationsStatus = "loading" | "none" | "ready" | "error";
++
++/**
++ * The words to draw, or null for none: nothing stored, still loading, or a
++ * list written against an article that has since moved (its blocks may not be
++ * these, and unlike a quote a word cannot be checked against its paragraph).
++ */
++export type RelationsByBlock = Readonly<Record<BlockId, Relation>> | null;
++
++export function useRelations(slug: string): RelationsByBlock {
++  const [status, setStatus] = useState<RelationsStatus>("loading");
++  const [loaded, setLoaded] = useState<RelationsResponse | null>(null);
++
++  /* `current()` after every `await`, before any state is set: false means this
++     reply is about an article the hook has moved on from. useOrderedRead.ts. */
++  const load = useCallback(
++    async (current: () => boolean) => {
++      try {
++        const res = await apiFetch(`/api/relations/${encodeURIComponent(slug)}`);
++        if (!current()) return;
++        if (res.status === 404) {
++          setLoaded(null);
++          setStatus("none");
++          return;
++        }
++        const body = await readJson<RelationsResponse>(res);
++        if (!current()) return;
++        setLoaded(body);
++        setStatus("ready");
++      } catch {
++        if (!current()) return;
++        /* A failed revalidation must not take the words away; only the opening
++           read has nothing to fall back on. As useFaq.ts. */
++        setStatus((was) => (was === "loading" ? "error" : was));
++      }
++    },
++    [slug],
++  );
++  const { reload, refresh } = useOrderedRead(load);
++  useEffect(() => {
++    void reload();
++  }, [reload]);
++
++  /* Quiet: the column stays open for as long as somebody reads, and watching
++     the queue would keep the engine's idle poll going all that time. The job
++     this hook starts is still followed to its end. useStepJob.ts § cadence. */
++  const queue = useStepJob(slug, "relations", refresh, "quiet");
++  const ensure = useCallback(async () => {
++    await queue.start({});
++  }, [queue]);
++
++  /* **Stale or outdated counts as nothing there**, so the next press rewrites
++     it. Unforced: the step's own stamp check decides whether to run, and it
++     will agree, because a stale artefact is exactly what an unforced run
++     regenerates (as useArc.ts). */
++  const unusable = loaded !== null && (loaded.stale || loaded.outdated);
++  useAutoRun(slug, "relations", status === "ready" && unusable ? "none" : status, ensure, reload);
++
++  /* `?.` because a reply that is JSON but not this shape must cost the reader
++     the words, not the column: this runs inside Marginalia's boundary. */
++  return status === "ready" && loaded !== null && !loaded.stale ? (loaded.relations?.relations ?? null) : null;
++}
+diff --git a/tests/a-second-press-closes-the-mode.test.tsx b/tests/a-second-press-closes-the-mode.test.tsx
+index 1b4d13665..b3e870243 100644
+--- a/tests/a-second-press-closes-the-mode.test.tsx
++++ b/tests/a-second-press-closes-the-mode.test.tsx
+@@ -423,6 +423,19 @@ describe("Plain closes both columns", () => {
+     await until(() => !marginInUrl());
+     expect(modeInUrl()).toBe("summary");
+   });
++
++  /* The column's relation words are asked for by the press that turns it on
++     (plan 261003f). The press that turns it off arms nothing: its feed is still
++     mounted for that instant and would claim the token. */
++  it("the press that turns the notes off arms nothing", async () => {
++    await open("?mode=summary&margin=1");
++    armed.length = 0;
++    await pressMarginalia();
++    await until(() => !marginInUrl());
++    expect(armed).toEqual([]);
++    /* That the on-press does arm, and starts the one job, is
++       every-mode-draws-its-surface.test.tsx § marginalia. */
++  });
+ });
+ 
+ describe("the bar is three frames: Plain, the bands, Marginalia", () => {
+diff --git a/tests/artefact-read-hooks.test.tsx b/tests/artefact-read-hooks.test.tsx
+index 77dfe0304..3df6845a8 100644
+--- a/tests/artefact-read-hooks.test.tsx
++++ b/tests/artefact-read-hooks.test.tsx
+@@ -151,7 +151,7 @@ const READS = [
+ ] as const;
+ 
+ describe("the read hooks start no job", () => {
+-  it("the actual owner Marginalia feed performs only its three artefact GETs", async () => {
++  it("the actual owner Marginalia feed performs only its five artefact GETs, and no press means no job", async () => {
+     await act(async () => {
+       root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", onFeed: vi.fn() }));
+     });
+@@ -162,6 +162,10 @@ describe("the read hooks start no job", () => {
+       "/api/debate/read-hooks",
+       "/api/faq/read-hooks",
+       "/api/ideas/read-hooks",
++      /* Marginalia's own artefact. Its hook can start a job, but only on a
++         press (useRelations.ts); a mount, as here, asks for nothing. */
++      "/api/relations/read-hooks",
++      "/api/timeline/read-hooks",
+     ]);
+     expect(jobRequests()).toEqual([]);
+   });
+diff --git a/tests/article-cache-output-format.test.ts b/tests/article-cache-output-format.test.ts
+index 18911ab8e..d651e20e0 100644
+--- a/tests/article-cache-output-format.test.ts
++++ b/tests/article-cache-output-format.test.ts
+@@ -27,6 +27,7 @@ import { type ArticleStage, STAGE_EFFORT } from "../src/models.js";
+ import { ARTICLE_OUTPUT_FORMAT } from "../src/pipeline.js";
+ import { generateQuiz } from "../src/quiz.js";
+ import { generateQuotes } from "../src/quotes.js";
++import { generateRelations } from "../src/relations.js";
+ import { generateSimpleSummary } from "../src/simple-summary.js";
+ import { generateSketch } from "../src/sketch.js";
+ import { generateTimeline } from "../src/timeline.js";
+@@ -68,6 +69,7 @@ const RUNNERS = {
+   timeline: () => generateTimeline({ article, previous: null, power: "standard" }),
+   quiz: () => generateQuiz({ article, power: "standard" }),
+   faq: () => generateFaq({ article, power: "standard" }),
++  relations: () => generateRelations({ article, power: "standard" }),
+   crossrefs: () => generateCrossrefs({ article, power: "standard" }),
+   simple: () => generateSimpleSummary({ article, profile: null, guard: false, power: "standard" }),
+ } satisfies Record<ArticleStage, () => Promise<unknown>>;
+@@ -80,6 +82,7 @@ const STAGES_GAINING_SCHEMAS = [
+   "timeline",
+   "quiz",
+   "faq",
++  "relations",
+   "crossrefs",
+   "simple",
+ ] as const satisfies readonly ArticleStage[];
+diff --git a/tests/authenticated-api-route-contract.test.ts b/tests/authenticated-api-route-contract.test.ts
+index b338e8de9..151d6f918 100644
+--- a/tests/authenticated-api-route-contract.test.ts
++++ b/tests/authenticated-api-route-contract.test.ts
+@@ -559,6 +559,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
+     methods: ["GET"],
+     witnesses: ["/api/faq/w1"],
+   },
++  {
++    match: { kind: "regex", source: "^\\/api\\/relations\\/([\\w.%-]+)$", flags: "" },
++    methods: ["GET"],
++    witnesses: ["/api/relations/w1"],
++  },
+   {
+     match: { kind: "regex", source: "^\\/api\\/crossrefs\\/([\\w.%-]+)$", flags: "" },
+     methods: ["GET"],
+@@ -888,8 +893,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
+ ];
+ 
+ /** Loud failure controls. Never the oracle — see the header. */
+-const EXPECTED_MATCHER_COUNT = 87;
+-const EXPECTED_GUARD_COUNT = 106;
++const EXPECTED_MATCHER_COUNT = 88;
++const EXPECTED_GUARD_COUNT = 107;
+ 
+ /* ------------------------------------------------------------- the source read */
+ 
+@@ -2072,6 +2077,7 @@ describe("the authenticated API's route contract", () => {
+         "GET regex /^\\/api\\/timeline\\/([\\w.%-]+)$/",
+         "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
+         "GET regex /^\\/api\\/faq\\/([\\w.%-]+)$/",
++        "GET regex /^\\/api\\/relations\\/([\\w.%-]+)$/",
+         "GET regex /^\\/api\\/crossrefs\\/([\\w.%-]+)$/",
+         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
+         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
+diff --git a/tests/command-bar.test.tsx b/tests/command-bar.test.tsx
+index 182490f10..bd0a7358d 100644
+--- a/tests/command-bar.test.tsx
++++ b/tests/command-bar.test.tsx
+@@ -571,7 +571,9 @@ describe("the backdrop", () => {
+  * one level down.
+  */
+ const GENERATES: Record<Mode, boolean> = {
+-  marginalia: false,
++  /* Its relation words (so, but, vs), asked for by the press that turns the
++     column on — plan 261003f. Everything else in it is read. */
++  marginalia: true,
+   plain: false,
+   /* Views of one already-built tree, in either of Structure's faces, so
+      nothing to fill. */
+diff --git a/tests/every-mode-draws-its-surface.test.tsx b/tests/every-mode-draws-its-surface.test.tsx
+index cca94f4e3..ff6d2e787 100644
+--- a/tests/every-mode-draws-its-surface.test.tsx
++++ b/tests/every-mode-draws-its-surface.test.tsx
+@@ -768,6 +768,7 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
+   debate: true,
+   citations: true,
+   faq: true,
++  relations: true,
+   skim: true,
+   sketch: true,
+   illustrated: true,
+@@ -805,6 +806,11 @@ function artefact(url: string): Response | null {
+     return has ? json({ citations: CITATIONS, stale: false, outdated: false }) : GONE();
+   if (url.startsWith("/api/faq/"))
+     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
++  /* Marginalia's relation words. */
++  if (url.startsWith("/api/relations/"))
++    return has
++      ? json({ relations: { relations: {} }, stale: false, outdated: false })
++      : GONE();
+   if (url.startsWith("/api/tweets/"))
+     return has ? json({ thread: stamped(THREAD), stale: false, profileChanged: false }) : GONE();
+   if (url.startsWith("/api/skim/"))
+@@ -1193,9 +1199,11 @@ const SPENDS: Record<Mode, Spend> = {
+      press armed nothing and the band waited on "Write it"; Greg asked that
+      opening it start the run (7T, docs/plans/261002a-summary-generates-on-open.md). */
+   summary: { kind: "posts", steps: ["simple"] },
+-  /* The tree's questions, the arc and the ideas already made — read, never
+-     generated. A press that started the Ideas job here would be the bug. */
+-  marginalia: { kind: "none", why: "draws what the article already has; it never starts a job" },
++  /* The tree's questions, the arc and other modes' lists are read, never
++     generated: a press that started the Ideas job here would be the bug. Its
++     own relation words are the one thing the press that turns it on asks for
++     (docs/plans/261003f-marginalia-relation-words-and-timeline-events.md). */
++  marginalia: { kind: "posts", steps: ["relations"] },
+   /* The five artefact modes, each arming its own name. */
+   glossary: { kind: "posts", steps: ["glossary"] },
+   ideas: { kind: "posts", steps: ["ideas"] },
+diff --git a/tests/helpers/fixture-artefacts.ts b/tests/helpers/fixture-artefacts.ts
+index cebc36d9d..bb12bf6dc 100644
+--- a/tests/helpers/fixture-artefacts.ts
++++ b/tests/helpers/fixture-artefacts.ts
+@@ -188,6 +188,7 @@ const LAYOUT: {
+   timeline: { timeline: (at) => path.join(at.dir, "timeline.json") },
+   quiz: { quiz: (at) => path.join(at.dir, "quiz.json") },
+   faq: { faq: (at) => path.join(at.dir, "faq.json") },
++  relations: { relations: (at) => path.join(at.dir, "relations.json") },
+   skim: { skim: (at) => path.join(at.dir, "skim.json") },
+   sketch: { sketch: (at) => path.join(at.dir, "sketch.json") },
+   illustrated: { illustrated: (at) => path.join(at.dir, "illustrated.json") },
+diff --git a/tests/job-state.test.ts b/tests/job-state.test.ts
+index 9b002258b..a347494d0 100644
+--- a/tests/job-state.test.ts
++++ b/tests/job-state.test.ts
+@@ -206,6 +206,8 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
+   timeline: 180_000,
+   quiz: 180_000,
+   faq: 180_000,
++  /* Unmeasured: the fallback. */
++  relations: 180_000,
+   /* Three minutes: past the worst of the sixteen low-effort draws (101s). */
+   sketch: 180_000,
+   illustrated: 600_000,
+diff --git a/tests/marginalia-note-cards.test.tsx b/tests/marginalia-note-cards.test.tsx
+index b1c89f985..bcce37578 100644
+--- a/tests/marginalia-note-cards.test.tsx
++++ b/tests/marginalia-note-cards.test.tsx
+@@ -16,7 +16,7 @@
+ import { act } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+-import type { CitedWork, FaqQuestion } from "../src/types.js";
++import type { CitedWork, FaqQuestion, TimelineEvent } from "../src/types.js";
+ import { BlockLinkProvider } from "../src/web/BlockLinkCard.js";
+ import { MarginNotesSlot } from "../src/web/marginalia/MarginaliaColumn.js";
+ import type { MarginClaim, MarginComment, MarginaliaNote } from "../src/web/marginalia/notes.js";
+@@ -174,6 +174,26 @@ describe("whose words a shut line is (fonts.md)", () => {
+     expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-ai")).toBe(true);
+   });
+ 
++  it("a Timeline label is the AI's; a date in the article's own words is the author's, a computed one ours", () => {
++    const event = (dating: TimelineEvent["dating"]) =>
++      ({ id: "e", label: "The launch", dating, order: 1, modality: "happened", occurrences: [] }) as TimelineEvent;
++    paint([{ kind: "timeline", items: [{ event: event({ kind: "words", phrase: "a month later" }), quote: "q" }] }]);
++    expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-ai")).toBe(true);
++    expect(host.querySelector(".marg-stamp")?.classList.contains("voice-author")).toBe(true);
++    const when = { earliest: "2026-05-12", latest: "2026-05-12", phrase: "12 May" };
++    paint([{ kind: "timeline", items: [{ event: event({ kind: "dated", when } as TimelineEvent["dating"]), quote: "q" }] }]);
++    expect(host.querySelector(".marg-stamp")?.textContent).toBe("12 May 2026");
++    expect(host.querySelector(".marg-stamp")?.classList.contains("voice-ui")).toBe(true);
++  });
++
++  it("a relation word is a button a keyboard can reach, in the AI's face, and says what it means", () => {
++    paint([{ kind: "relation", relation: "contrast" }]);
++    const word = host.querySelector<HTMLButtonElement>("button.marg-relation");
++    expect(word?.textContent).toBe("vs");
++    expect(word?.classList.contains("voice-ai")).toBe(true);
++    expect(word?.getAttribute("aria-label")).toContain("sets something against what came before");
++  });
++
+   it("a comment is the reader's", () => {
+     paint([{ kind: "comment", items: [{ as: "comment", comment }] }]);
+     expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-reader")).toBe(true);
+diff --git a/tests/marginalia-notes.test.ts b/tests/marginalia-notes.test.ts
+index 879150a5d..faa0dd8cc 100644
+--- a/tests/marginalia-notes.test.ts
++++ b/tests/marginalia-notes.test.ts
+@@ -5,10 +5,11 @@
+  */
+ import { describe, expect, it } from "vitest";
+ import { blockIndex } from "../src/section-path.js";
+-import type { Arc, Block, CitedWork, FaqQuestion, Idea, Tree, TreeNode } from "../src/types.js";
++import type { Arc, Block, CitedWork, FaqQuestion, Idea, TimelineEvent, Tree, TreeNode } from "../src/types.js";
+ import {
+   type MarginClaim,
+   type MarginComment,
++  DRAWN_RELATIONS,
+   marginaliaNotes,
+   arcAt,
+   headPath,
+@@ -395,3 +396,114 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
+     expect(kinds).toEqual(["question", "idea", "faq", "debate", "citation", "comment"]);
+   });
+ });
++
++/* Timeline events in the margin — plan 261003f stage 1. Only events the piece
++   dates (`dated` or its own `words`), beside the earliest occurrence whose
++   quoted words are still in their block. */
++function event(
++  id: string,
++  dating: TimelineEvent["dating"],
++  occurrences: { blockId: string; quote: string }[],
++): TimelineEvent {
++  return {
++    id,
++    label: `Event ${id}`,
++    dating,
++    order: 1,
++    modality: "happened",
++    occurrences: occurrences.map((o) => ({ ...o, start: 0 })),
++  } as TimelineEvent;
++}
++/* Dated from words the named block of `quoted` holds. */
++const datedAt = (blockId: string, phrase: string) =>
++  ({
++    kind: "dated",
++    when: { earliest: "2026-05-12", latest: "2026-05-12", phrase, at: { blockId, start: 0, end: phrase.length } },
++  }) as unknown as TimelineEvent["dating"];
++
++describe("marginaliaNotes, Timeline events (plan 261003f)", () => {
++  it("puts a dated event beside the passage its date was read from, not an earlier undated mention", () => {
++    const e = event("e1", datedAt("spya-aaaaa5", "topic 4"), [
++      { blockId: "spya-aaaaa3", quote: say(2) },
++      { blockId: "spya-aaaaa5", quote: say(4) },
++    ]);
++    const notes = marginaliaNotes(null, quoted, null, { timeline: [e] });
++    expect([...notes.keys()]).toEqual(["spya-aaaaa5"]);
++    expect(notes.get("spya-aaaaa5")).toEqual([{ kind: "timeline", items: [{ event: e, quote: say(4) }] }]);
++  });
++
++  it("draws nothing for a date whose words are no longer in their block", () => {
++    const e = event("e5", datedAt("spya-aaaaa5", "12 May"), [{ blockId: "spya-aaaaa5", quote: say(4) }]);
++    expect(marginaliaNotes(null, quoted, null, { timeline: [e] }).size).toBe(0);
++    const gone = event("e7", datedAt("spya-zzzzzz", "topic 4"), [{ blockId: "spya-aaaaa5", quote: say(4) }]);
++    expect(marginaliaNotes(null, quoted, null, { timeline: [gone] }).size).toBe(0);
++  });
++
++  it("puts the article's own phrase beside the earliest mention whose block says it; untimed and rejected stay in the band", () => {
++    const words = event("e2", { kind: "words", phrase: "topic 3" }, [
++      { blockId: "spya-aaaaa2", quote: say(1) },
++      { blockId: "spya-aaaaa4", quote: say(3) },
++    ]);
++    const untimed = event("e3", { kind: "untimed" }, [{ blockId: "spya-aaaaa4", quote: say(3) }]);
++    const rejected = event(
++      "e4",
++      { kind: "rejected", reason: "noYearFrame", phrase: null } as TimelineEvent["dating"],
++      [{ blockId: "spya-aaaaa4", quote: say(3) }],
++    );
++    const notes = marginaliaNotes(null, quoted, null, { timeline: [words, untimed, rejected] });
++    expect([...notes.keys()]).toEqual(["spya-aaaaa4"]);
++    const here = notes.get("spya-aaaaa4") ?? [];
++    expect(here[0]?.kind === "timeline" && here[0].items.map((i) => i.event.id)).toEqual(["e2"]);
++  });
++
++  it("puts the Timeline line after FAQ and before Debate on one block", () => {
++    const kinds = (
++      marginaliaNotes(null, quoted, null, {
++        claims: [claim("https://c.example", "spya-aaaaa2", say(1))],
++        timeline: [event("e6", datedAt("spya-aaaaa2", "topic 1"), [{ blockId: "spya-aaaaa2", quote: say(1) }])],
++        faq: [faqQ("f", [{ blockId: "spya-aaaaa2", quote: say(1) }])],
++      }).get("spya-aaaaa2") ?? []
++    ).map((n) => n.kind);
++    expect(kinds).toEqual(["faq", "timeline", "debate"]);
++  });
++});
++
++/* Relation words — plan 261003f stage 2. Only the turns are drawn, first in
++   the block's note. */
++describe("marginaliaNotes, relation words (plan 261003f)", () => {
++  it("draws only the turns: so, but and vs; the other seven are stored and not drawn", () => {
++    const notes = marginaliaNotes(null, quoted, null, {
++      relations: {
++        "spya-aaaaa2": "therefore",
++        "spya-aaaaa3": "but",
++        "spya-aaaaa4": "contrast",
++        "spya-aaaaa5": "and-also",
++        "spya-aaaaa6": "because",
++      },
++    });
++    expect([...notes.entries()]).toEqual([
++      ["spya-aaaaa2", [{ kind: "relation", relation: "therefore" }]],
++      ["spya-aaaaa3", [{ kind: "relation", relation: "but" }]],
++      ["spya-aaaaa4", [{ kind: "relation", relation: "contrast" }]],
++    ]);
++    expect(Object.keys(DRAWN_RELATIONS).sort()).toEqual(["but", "contrast", "therefore"]);
++  });
++
++  it("skips a paragraph this article no longer has", () => {
++    expect(marginaliaNotes(null, quoted, null, { relations: { "spya-zzzzzz": "but" } }).size).toBe(0);
++  });
++
++  it("puts the word first, above the part's question and everything else", () => {
++    const tree2 = {
++      ...tree,
++      nodes: { ...tree.nodes, a: { ...(tree.nodes.a as TreeNode), range: ["spya-aaaaa2", "spya-aaaaa3"] } },
++    } as Tree;
++    const kinds = (
++      marginaliaNotes(tree2, quoted, null, {
++        faq: [faqQ("f", [{ blockId: "spya-aaaaa2", quote: say(1) }])],
++        relations: { "spya-aaaaa2": "but" },
++      }).get("spya-aaaaa2") ?? []
++    ).map((n) => n.kind);
++    expect(kinds).toEqual(["relation", "question", "faq"]);
++  });
++});
+diff --git a/tests/metadata-rerun-steps.test.ts b/tests/metadata-rerun-steps.test.ts
+index 154669bbc..0890139bb 100644
+--- a/tests/metadata-rerun-steps.test.ts
++++ b/tests/metadata-rerun-steps.test.ts
+@@ -58,6 +58,9 @@ describe("the steps the Metadata page will re-run", () => {
+       "timeline",
+       "quiz",
+       "faq",
++      /* Plan 261003f, 2026-10-03: Marginalia's relation words, made again from
++         Metadata. The three answers are in src/rerun-steps.ts. */
++      "relations",
+       "sketch",
+       "skim",
+       "debate",
+diff --git a/tests/pipeline-artifact-store.test.ts b/tests/pipeline-artifact-store.test.ts
+index 8c995acfd..6c86e7262 100644
+--- a/tests/pipeline-artifact-store.test.ts
++++ b/tests/pipeline-artifact-store.test.ts
+@@ -110,6 +110,11 @@ import {
+   inputFingerprint as faqFingerprint,
+   PROMPT_VERSION as FAQ_VERSION,
+ } from "../src/faq.js";
++import {
++  emptyDropped as emptyRelationsDropped,
++  inputFingerprint as relationsFingerprint,
++  PROMPT_VERSION as RELATIONS_VERSION,
++} from "../src/relations.js";
+ import {
+   emptyDropped as emptyCrossrefsDropped,
+   inputFingerprint as crossrefsFingerprint,
+@@ -256,6 +261,8 @@ const CITATIONS_SOURCE_HASH = citationsFingerprint(BLOCKS, TREE, META);
+ /* `faq` is `articleWithIdsFingerprint` again, over the body — computed through
+    its own module for the same reason. */
+ const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
++/* `relations` is FAQ's fingerprint, through its own module for the same reason. */
++const RELATIONS_SOURCE_HASH = relationsFingerprint(BLOCKS, TREE, META);
+ /* `crossrefs` fingerprints the exact article and skeleton strings it sends. */
+ const CROSSREFS_SOURCE_HASH = crossrefsFingerprint(BLOCKS, TREE, META);
+ /* `simple` fingerprints the exact article string it sends, through its own module. */
+@@ -639,6 +646,18 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
+     generatedAt: new Date().toISOString(),
+     elapsedMs: 1,
+   });
++  /* **An EMPTY object**, which `SHAPE.relations` accepts: an article with fewer
++     than two paragraphs has nothing to label. */
++  store.plant(SLUG, "relations", "relations", {
++    generator: CAPABLE_MODEL,
++    slug: SLUG,
++    sourceHash: RELATIONS_SOURCE_HASH,
++    version: RELATIONS_VERSION,
++    relations: {},
++    dropped: emptyRelationsDropped(),
++    generatedAt: new Date().toISOString(),
++    elapsedMs: 1,
++  });
+   /* **An EMPTY list**, which `SHAPE.crossrefs` accepts, as `faq`'s: nothing in
+      the piece worth linking is a real answer. */
+   store.plant(SLUG, "crossrefs", "crossrefs", {
+diff --git a/tests/relations.test.ts b/tests/relations.test.ts
+new file mode 100644
+index 000000000..60047363e
+--- /dev/null
++++ b/tests/relations.test.ts
+@@ -0,0 +1,342 @@
++/**
++ * **The `relations` step's pure half, and the one request it sends** —
++ * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md § Stage 2.
++ *
++ * What is pinned is what has no visible symptom: which paragraphs are asked
++ * about (never the first, never a heading or a short line, never the
++ * apparatus); that each kind of bad row is counted under its own name; that a
++ * sparse answer FAILS rather than being stored looking like a quiet article
++ * (GPT Sol, P1-5); and that an article with nothing to label spends nothing.
++ */
++import path from "node:path";
++
++import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
++
++import type { Article } from "../src/article-input.js";
++import { cascadeForce } from "../src/jobs.js";
++import { paperwork } from "../src/paperwork.js";
++import { DEFAULT_INGEST_STEPS, FORCE_ONLY_WHEN_NAMED, STEP_ORDER } from "../src/pipeline.js";
++import { articleWithIdsFingerprint } from "../src/source-hash.js";
++import { SHAPE } from "../src/store/artifacts.js";
++import { RELATIONS, type Block, type BlockId, type Tree } from "../src/types.js";
++import {
++  PARAGRAPH_MIN_WORDS,
++  PROMPT_VERSION,
++  RELATIONS_OUTPUT_SCHEMA,
++  RELATIONS_SYSTEM,
++  answerTokens,
++  eligibleParagraphs,
++  generateRelations,
++  isStale,
++  renderPrompt,
++  toRelations,
++} from "../src/relations.js";
++
++/* ------------------------------------------------------- the stubbed model -- */
++
++let answer = "";
++const sent: { task: string; body: unknown }[] = [];
++
++vi.mock("../src/messages-stream.js", async (importOriginal) => {
++  const real = await importOriginal<typeof import("../src/messages-stream.js")>();
++  return {
++    ...real,
++    streamMessage: (task: string, body: unknown) => {
++      sent.push({ task, body: JSON.parse(JSON.stringify(body)) });
++      const message = {
++        id: "msg_stub",
++        type: "message",
++        role: "assistant",
++        model: "stub",
++        content: [{ type: "text", text: answer, citations: null }],
++        stop_reason: "end_turn",
++        stop_sequence: null,
++        usage: { input_tokens: 1, output_tokens: 1 },
++      };
++      return {
++        onText: () => undefined,
++        finalMessage: async () => message,
++        stream: { finalMessage: async () => message },
++      };
++    },
++  };
++});
++
++beforeEach(() => {
++  answer = "";
++  sent.length = 0;
++});
++
++/* ----------------------------------------------------------------- fixtures -- */
++
++const LONG = "one two three four five six seven eight nine ten eleven twelve thirteen";
++
++function block(id: string, over: Partial<Block> = {}): Block {
++  const text = over.text ?? LONG;
++  return {
++    id: id as BlockId,
++    tag: "p",
++    kind: "text",
++    text,
++    words: text.split(/\s+/).length,
++    html: `<p>${text}</p>`,
++    gistable: true,
++    ...over,
++  } as Block;
++}
++
++const ids = (...names: string[]): BlockId[] => names.map((n) => n as BlockId);
++
++/** The real `example/` fixture's tree, under blocks of our own. */
++let TREE: Tree;
++beforeAll(async () => {
++  const { readArticleFromDir } = await import("./helpers/article-from-dir.js");
++  const example = await readArticleFromDir(path.resolve(import.meta.dirname, "..", "example"));
++  TREE = example.tree;
++});
++
++function article(blocks: Block[]): Article {
++  return { slug: "a-piece", blocks, tree: TREE, meta: null } as unknown as Article;
++}
++
++/* ------------------------------------------------------- eligibleParagraphs -- */
++
++describe("eligibleParagraphs", () => {
++  const blocks = [
++    block("spya-hhhhhh", { kind: "heading", tag: "h2", text: "A heading that is certainly long enough to pass the floor if it were prose" } as Partial<Block>),
++    block("spya-aaaaaa"),
++    block("spya-ssssss", { text: "Too short to be a paragraph." }),
++    block("spya-bbbbbb"),
++    block("spya-nnnnnn", { treatment: "supplement", role: "footnote" }),
++    block("spya-cccccc"),
++  ];
++
++  it("lists body paragraphs of a sentence or more, each with the one before it", () => {
++    expect(eligibleParagraphs(blocks)).toEqual([
++      { id: "spya-bbbbbb", previous: "spya-aaaaaa" },
++      { id: "spya-cccccc", previous: "spya-bbbbbb" },
++    ]);
++  });
++
++  it("leaves out the first paragraph, which has nothing before it", () => {
++    expect(eligibleParagraphs(blocks).map((p) => p.id)).not.toContain("spya-aaaaaa");
++  });
++
++  it("leaves out headings, short lines and anything that is not the body", () => {
++    const listed = eligibleParagraphs(blocks).map((p) => p.id);
++    expect(listed).not.toContain("spya-hhhhhh");
++    expect(listed).not.toContain("spya-ssssss");
++    expect(listed).not.toContain("spya-nnnnnn");
++  });
++
++  it("counts exactly the floor as a paragraph, and one word under as not", () => {
++    const at = Array.from({ length: PARAGRAPH_MIN_WORDS }, () => "w").join(" ");
++    const under = Array.from({ length: PARAGRAPH_MIN_WORDS - 1 }, () => "w").join(" ");
++    expect(
++      eligibleParagraphs([block("spya-aaaaaa"), block("spya-bbbbbb", { text: at })]),
++    ).toHaveLength(1);
++    expect(
++      eligibleParagraphs([block("spya-aaaaaa"), block("spya-bbbbbb", { text: under })]),
++    ).toHaveLength(0);
++  });
++
++  it("is empty for an article with fewer than two paragraphs", () => {
++    expect(eligibleParagraphs([])).toEqual([]);
++    expect(eligibleParagraphs([block("spya-aaaaaa")])).toEqual([]);
++  });
++
++  it("keeps the same floor as the margin's own (src/web/marginalia/notes.ts)", async () => {
++    const client = await import("../src/web/marginalia/notes.js");
++    expect(PARAGRAPH_MIN_WORDS).toBe(client.PARAGRAPH_MIN_WORDS);
++  });
++});
++
++/* -------------------------------------------------------------- toRelations -- */
++
++describe("toRelations", () => {
++  const eligible = ids("spya-bbbbbb", "spya-cccccc", "spya-dddddd", "spya-eeeeee");
++
++  it("keeps one relation per listed paragraph", () => {
++    const { relations, dropped } = toRelations(
++      [
++        { blockId: "spya-bbbbbb", relation: "but" },
++        { blockId: "spya-cccccc", relation: "therefore" },
++        { blockId: "spya-dddddd", relation: "and-also" },
++        { blockId: "spya-eeeeee", relation: "contrast" },
++      ],
++      eligible,
++    );
++    expect(relations).toEqual({
++      "spya-bbbbbb": "but",
++      "spya-cccccc": "therefore",
++      "spya-dddddd": "and-also",
++      "spya-eeeeee": "contrast",
++    });
++    expect(dropped).toEqual({ unknown: 0, repeated: 0, offList: 0, missing: 0 });
++  });
++
++  it("counts each kind of drop under its own name, and the first answer wins", () => {
++    const { relations, dropped } = toRelations(
++      [
++        { blockId: "spya-bbbbbb", relation: "but" },
++        { blockId: "spya-bbbbbb", relation: "therefore" }, // repeated
++        { blockId: "spya-zzzzzz", relation: "but" }, // unknown
++        { blockId: "spya-cccccc", relation: "however" }, // offList
++        { blockId: "spya-dddddd", relation: "restates" },
++        "nonsense", // unreadable: an id nobody listed
++      ],
++      eligible,
++    );
++    expect(relations).toEqual({ "spya-bbbbbb": "but", "spya-dddddd": "restates" });
++    expect(dropped).toEqual({ unknown: 2, repeated: 1, offList: 1, missing: 2 });
++  });
++
++  it("an off-list word does not use the paragraph up: a later valid row still counts", () => {
++    const { relations, dropped } = toRelations(
++      [
++        { blockId: "spya-bbbbbb", relation: "SO" },
++        { blockId: "spya-bbbbbb", relation: "therefore" },
++        { blockId: "spya-cccccc", relation: "but" },
++      ],
++      ids("spya-bbbbbb", "spya-cccccc"),
++    );
++    expect(relations).toEqual({ "spya-bbbbbb": "therefore", "spya-cccccc": "but" });
++    expect(dropped).toEqual({ unknown: 0, repeated: 0, offList: 1, missing: 0 });
++  });
++
++  it("FAILS when fewer than half the listed paragraphs are answered", () => {
++    expect(() =>
++      toRelations([{ blockId: "spya-bbbbbb", relation: "but" }], eligible),
++    ).toThrow(/1 of 4/);
++  });
++
++  it("accepts exactly half", () => {
++    const { relations, dropped } = toRelations(
++      [
++        { blockId: "spya-bbbbbb", relation: "but" },
++        { blockId: "spya-cccccc", relation: "but" },
++      ],
++      eligible,
++    );
++    expect(Object.keys(relations)).toHaveLength(2);
++    expect(dropped.missing).toBe(2);
++  });
++
++  it("fails on an answer with no array in it", () => {
++    expect(() => toRelations(undefined, eligible)).toThrow(/no `relations` array/);
++  });
++
++  it("an empty list of paragraphs is an empty answer, not a failure", () => {
++    expect(toRelations([], [])).toEqual({
++      relations: {},
++      dropped: { unknown: 0, repeated: 0, offList: 0, missing: 0 },
++    });
++  });
++});
++
++/* ------------------------------------------------------------ the request -- */
++
++describe("generateRelations", () => {
++  const blocks = [block("spya-aaaaaa"), block("spya-bbbbbb"), block("spya-cccccc")];
++
++  it("an article with fewer than two paragraphs stores an empty artefact and calls no model", async () => {
++    const run = await generateRelations({ article: article([block("spya-aaaaaa")]), power: "standard" });
++    expect(sent).toHaveLength(0);
++    expect(run.relations.relations).toEqual({});
++    expect(run.relations.version).toBe(PROMPT_VERSION);
++    expect(run.called).toBe(false);
++    expect(SHAPE.relations.ok(run.relations.relations)).toBe(true);
++  });
++
++  it("sends the article with ids first, then the instructions, and lists the paragraphs in order", async () => {
++    answer = JSON.stringify({
++      relations: [
++        { blockId: "spya-bbbbbb", relation: "but" },
++        { blockId: "spya-cccccc", relation: "therefore" },
++      ],
++    });
++    const run = await generateRelations({
++      article: article(blocks),
++      power: "standard",
++      cacheArticle: true,
++    });
++    expect(sent).toHaveLength(1);
++    expect(sent[0]!.task).toBe("relations");
++    const body = sent[0]!.body as {
++      system: { text: string; cache_control?: unknown }[];
++      messages: { content: string }[];
++      output_config: { format?: { schema?: unknown } };
++    };
++    expect(body.system[0]!.text).toContain("spya-aaaaaa");
++    expect(body.system[0]!.cache_control).toEqual({ type: "ephemeral" });
++    expect(body.system[1]!.text).toBe(RELATIONS_SYSTEM);
++    const user = body.messages[0]!.content;
++    expect(user.indexOf("spya-bbbbbb")).toBeGreaterThan(-1);
++    expect(user.indexOf("spya-bbbbbb")).toBeLessThan(user.indexOf("spya-cccccc"));
++    expect(body.output_config.format?.schema).toEqual(RELATIONS_OUTPUT_SCHEMA);
++
++    expect(run.called).toBe(true);
++    expect(run.relations.relations).toEqual({ "spya-bbbbbb": "but", "spya-cccccc": "therefore" });
++    expect(run.relations.sourceHash).toBe(articleWithIdsFingerprint(blocks, TREE, null));
++    expect(isStale(run.relations, blocks, TREE, null)).toBe(false);
++    expect(isStale(run.relations, [...blocks, block("spya-dddddd")], TREE, null)).toBe(true);
++  });
++
++  it("fails, storing nothing, when the model answers fewer than half", async () => {
++    const many = [
++      block("spya-aaaaaa"),
++      block("spya-bbbbbb"),
++      block("spya-cccccc"),
++      block("spya-dddddd"),
++      block("spya-eeeeee"),
++    ];
++    answer = JSON.stringify({ relations: [{ blockId: "spya-bbbbbb", relation: "but" }] });
++    await expect(
++      generateRelations({ article: article(many), power: "standard" }),
++    ).rejects.toThrow(/1 of 4/);
++  });
++});
++
++/* ------------------------------------------------- the prompt and the schema -- */
++
++describe("the prompt", () => {
++  it("defines every relation on the list, and no other", () => {
++    for (const r of RELATIONS) expect(RELATIONS_SYSTEM).toContain(`"${r}"`);
++    expect(RELATIONS_OUTPUT_SCHEMA.properties.relations.items.properties.relation.enum).toEqual([
++      ...RELATIONS,
++    ]);
++  });
++
++  it("carries the shared paperwork section", () => {
++    expect(RELATIONS_SYSTEM).toContain(paperwork("pick"));
++  });
++
++  it("never makes block ids an enum", () => {
++    expect(RELATIONS_OUTPUT_SCHEMA.properties.relations.items.properties.blockId).toEqual({
++      type: "string",
++    });
++  });
++
++  it("names each paragraph and the one before it", () => {
++    const text = renderPrompt([{ id: "spya-bbbbbb" as BlockId, previous: "spya-aaaaaa" as BlockId }]);
++    expect(text).toContain("spya-bbbbbb");
++    expect(text).toContain("spya-aaaaaa");
++  });
++
++  it("sizes the answer to the list", () => {
++    expect(answerTokens(100)).toBeGreaterThan(answerTokens(10));
++    expect(answerTokens(100)).toBeGreaterThanOrEqual(100 * 30);
++  });
++});
++
++/* ------------------------------------------------------------ registration -- */
++
++describe("where the step sits", () => {
++  it("is right after faq, is not in an ordinary ingest, and is forced only by name", () => {
++    expect(STEP_ORDER.indexOf("relations")).toBe(STEP_ORDER.indexOf("faq") + 1);
++    expect(DEFAULT_INGEST_STEPS).not.toContain("relations");
++    expect(FORCE_ONLY_WHEN_NAMED.has("relations")).toBe(true);
++    expect(cascadeForce([...STEP_ORDER], new Set(["fetch"])).has("relations")).toBe(false);
++    expect(cascadeForce(["faq", "relations"], new Set(["relations"])).has("relations")).toBe(true);
++  });
++});
+diff --git a/tests/reset-and-regenerate.test.ts b/tests/reset-and-regenerate.test.ts
+index 9261216d8..9dd9f2c96 100644
+--- a/tests/reset-and-regenerate.test.ts
++++ b/tests/reset-and-regenerate.test.ts
+@@ -444,8 +444,9 @@ describe("RESET_ROLE", () => {
+       STEP_ORDER.filter((s) => !DEFAULT_INGEST_STEPS.includes(s) && s !== "labels" && s !== "metadata"),
+     );
+     /* Fourteen since `crossrefs`, 2026-09-30 (plan 260930f); fifteen since
+-       `simple` the same day (plan 260930i). */
+-    expect(extraSteps()).toHaveLength(15);
++       `simple` the same day (plan 260930i); sixteen since `relations`,
++       2026-10-03 (plan 261003f). */
++    expect(extraSteps()).toHaveLength(16);
+   });
+ 
+   it("finds every extra's column in STORAGE, one whole column each", () => {
+diff --git a/tests/sharing-steps.test.ts b/tests/sharing-steps.test.ts
+index 2ed70210a..bdac31948 100644
+--- a/tests/sharing-steps.test.ts
++++ b/tests/sharing-steps.test.ts
+@@ -128,6 +128,8 @@ describe("the policy", () => {
+       [
+         "arc", "tweets", "glossary", "quotes", "ideas", "timeline", "quiz", "faq",
+         "sketch", "illustrated", "skim", "debate", "citations", "crossrefs", "simple",
++        /* 2026-10-03, a whole column that reads nothing — plan 261003f. */
++        "relations",
+       ].sort(),
+     );
+   });
+diff --git a/tests/store-parity.test.ts b/tests/store-parity.test.ts
+index 1d8c745f7..0f3564851 100644
+--- a/tests/store-parity.test.ts
++++ b/tests/store-parity.test.ts
+@@ -465,6 +465,10 @@ describe("the Postgres store, over the whole corpus", () => {
+          exercises the **404**, which is the half that is easiest to get wrong
+          and cheapest to check. */
+       ["quiz", (r: typeof pgArticleReader) => r.loadQuiz(slug)],
++      /* No article in the corpus has relations, so this row is the **404** too
++         — and, because the read runs its projection first, that the
++         `relations` column is really there to select. */
++      ["relations", (r: typeof pgArticleReader) => r.loadRelations(slug)],
+     ] as const) {
+       it(`answers about ${name}, present or absent`, async () => {
+         const fromPg = await read(pgArticleReader).catch((err: unknown) => err);
+diff --git a/tests/store-revision-columns.test.ts b/tests/store-revision-columns.test.ts
+index 2b33cba56..d091f201b 100644
+--- a/tests/store-revision-columns.test.ts
++++ b/tests/store-revision-columns.test.ts
+@@ -257,6 +257,9 @@ const READS = [
+      `quiz`: it sends `articleWithIds` over the body and the skeleton.
+      docs/plans/260916d-faq-mode.md. */
+   "faq",
++  /* Added 2026-10-03 with the `relations` stage. `CITED_FINGERPRINT_COLUMNS`,
++     like `faq`, whose fingerprint it uses. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++  "relations",
+   /* Added 2026-09-30 with the `crossrefs` stage. `CITED_FINGERPRINT_COLUMNS`,
+      like `faq`: its article head carries the cited metadata fields.
+      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */

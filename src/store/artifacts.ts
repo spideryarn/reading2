@@ -49,6 +49,7 @@ import type {
   SimpleSummary,
   Debate,
   Faq,
+  Relations,
   Skim,
   Glossary,
   Ideas,
@@ -99,6 +100,7 @@ export type ArtifactKind =
   | "timeline"
   | "quiz"
   | "faq"
+  | "relations"
   | "skim"
   | "sketch"
   | "illustrated"
@@ -173,6 +175,12 @@ export interface ArtifactMap {
    * docs/plans/260916d-faq-mode.md.
    */
   faq: Faq;
+  /**
+   * How each paragraph bears on the one before it — `Relations`, src/types.ts,
+   * written by the `relations` step and read by Marginalia, for the owner only.
+   * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+   */
+  relations: Relations;
   /**
    * A route through the Quotes, at three depths — `Skim`, src/types.ts,
    * written by the `skim` step.
@@ -368,6 +376,13 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      model named questions and validation dropped every one.
      docs/plans/260916d-faq-mode.md (Sol F8). */
   faq: { field: "questions", ok: isArray },
+  /* A `relations` object keyed by block id, and **an EMPTY one is usable**, as
+     `faq`'s empty list is: an article with fewer than two body paragraphs has
+     nothing to label, and that is a real result stored without a model call.
+     What is not usable is a sparse one, and `toRelations` (src/relations.ts)
+     throws before anything is written when fewer than half the paragraphs
+     were answered. */
+  relations: { field: "relations", ok: (v) => typeof v === "object" && v !== null && !isArray(v) },
   /* A `stops` array, and **an empty one is NOT usable** — the opposite call
      from `faq` directly above. There is always a route through a non-empty set
      of quotes, so `buildSkim` (src/skim.ts) throws on every empty
@@ -949,6 +964,9 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   /* **And deliberately NO `BASELINE` row**, like `quiz`: ids are minted fresh
      per run because nothing addresses a question yet (Sol F6). */
   faq: "faq",
+  /* **And deliberately NO `BASELINE` row**, like `faq`: a relation is keyed by
+     the block id it describes and has no id of its own to inherit. */
+  relations: "relations",
   /* **And deliberately NO `BASELINE` row**: the route holds only quote ids and
      has no ids of its own to inherit, so a re-run simply replaces it. Its
      `sourceHash` is the quotes hash, not an article fingerprint. */

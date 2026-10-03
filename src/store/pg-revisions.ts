@@ -341,6 +341,14 @@ export const REVISION_CARRY_POLICY: Record<
      questions are still worth reading, and minting would empty the band until
      somebody paid for the call again. docs/plans/260916d-faq-mode.md. */
   faq: "carry",
+  /* **Carries, like `faq`** — a replace-on-rerun artefact whose `sourceHash`
+     answers at read time whether the article moved underneath it. A carried
+     one that no longer matches is **not drawn**: a relation word has no quote
+     to check against its block, so a stale *but* could sit beside a rewritten
+     paragraph. That is also why no visitor is sent it (Sol P1-4). Carrying
+     keeps it for the day the article moves back, and costs nothing.
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  relations: "carry",
   /* **Carries, like `faq`** — a replace-on-rerun list whose `sourceHash`
      answers at read time whether the article moved underneath it. A carried
      list that no longer matches is **not drawn** (Sol F8): a link can still

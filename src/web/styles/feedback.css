@@ -202,6 +202,11 @@
   font-size: 0.72rem;
   color: var(--ink-faint);
 }
+/* The page a report was filed from: a path with no spaces in it, so it has to
+   be allowed to break or a long slug pushes the panel sideways on a phone. */
+.fb-earlier-page {
+  overflow-wrap: anywhere;
+}
 /* `pre-wrap` keeps the reader's own line breaks; `anywhere` stops a pasted URL
    from pushing the panel sideways on a phone. */
 .fb-earlier-body {

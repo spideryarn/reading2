@@ -24,12 +24,27 @@
  * which is the trap Claims chose to live with and this one did not have to,
  * because there is nothing here to store.
  *
- * `decodeHtml` (src/fetch.ts) is the one decoder, reused rather than reinvented:
- * a scan that read a `windows-1252` paper as UTF-8 would see mojibake where the
- * words are. `RawSource` does not carry the origin's `Content-Type`, so the
- * sniff falls back to the document's own `<meta charset>` — which is what a
- * browser does for a saved file, and is the same answer for everything in the
- * corpus.
+ * ## How the bytes become text
+ *
+ * **As UTF-8, because that is what stage 1 stored.** `storedDocumentBytes`
+ * (src/fetch.ts) keeps an HTML page as its *decoded* string, so the bytes here
+ * are UTF-8 whatever the origin's `Content-Type` or the page's own
+ * `<meta charset>` once said. Sniffing them a second time is wrong, not merely
+ * redundant, and this file did it until 2026-10-03: `RawSource` carries no
+ * header, so a page with no meta tag — or a stale one — came back
+ * windows-1252. Zero-width characters turned into visible `â€‹` and a
+ * tag-character payload into Latin-1 noise, and the `invisible-characters`
+ * rule reported nothing about either. The same page with
+ * `<meta charset="utf-8">` gave two findings. Sweep item XZ-X3,
+ * docs/plans/261003g-sweep-clusters-2-and-3-scan-decoding-and-four-one-file-fixes.md.
+ *
+ * **The sniff survives as the fallback for bytes that are not UTF-8 at all**
+ * (`storedHtmlText` below). Nothing stored since 2026-08-27 can be that; for
+ * the two days before it (841ed6bd8 to 37806f1db) stage 1 kept the network's
+ * bytes, and a windows-1252 row from then, read as UTF-8 regardless, would put
+ * U+FFFD where the words are and say nothing — the same blindness, moved.
+ * `decodeHtml` (src/fetch.ts) is the one decoder for that, reused rather than
+ * reinvented.
  *
  * ## The cache, and why it is only in this process
  *
@@ -146,6 +161,23 @@ export interface ArticleSourceScan {
 }
 
 /**
+ * A stored HTML document as text — UTF-8, strictly, and the sniff only for
+ * bytes that are not. § *How the bytes become text*, above.
+ *
+ * `fatal` is the whole of it: without the flag a bad sequence becomes U+FFFD
+ * and nothing is thrown, so there would be no telling a stored page from a
+ * legacy one. `ignoreBOM` is left off, so a leading BOM is dropped as the
+ * sniffing decoder would drop it.
+ */
+function storedHtmlText(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return decodeHtml(bytes, null).text;
+  }
+}
+
+/**
  * Scan the document this article was made from, or say there is not one.
  *
  * Does **no** ownership check of its own: the route calls `shelfStore.read`
@@ -181,8 +213,7 @@ export async function scanArticleSource(
     /* A PDF never reaches `decodeHtml`, and `scanRawSource` answers
        `{ examined: "nothing", reason: "pdf" }` for it — the branch that keeps
        the July 2025 incident's own file format from rendering as clean. */
-    const text =
-      source.kind === "html" ? decodeHtml(source.bytes, null).text : undefined;
+    const text = source.kind === "html" ? storedHtmlText(source.bytes) : undefined;
     return scan({ kind: source.kind, ...(text !== undefined ? { text } : {}) });
   })();
   remember(key, running);

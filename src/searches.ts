@@ -133,6 +133,14 @@ export async function loadRuns(slug: string): Promise<SearchRun[]> {
  * different statements — an `UPDATE` that must name the status it expects, and
  * an `INSERT` followed by a trim. A store that reads `run.status` to work that
  * out would get it wrong: both branches produce `pending`.
+ *
+ * **It returns the row and not the list.** Until 2026-10-03 it also returned the
+ * list as it would stand afterwards, trimmed to `MAX_RUNS` — what the filesystem
+ * store wrote back. Nothing has read that since the store went on 2026-09-05:
+ * the trim that runs is the SQL one in src/store/pg-searches.ts § begin, and a
+ * second copy nobody executes is how its Referee twin kept deleting `pending`
+ * rows after this one was fixed
+ * (docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md).
  */
 export function withRun(
   runs: SearchRun[],
@@ -142,7 +150,7 @@ export function withRun(
   at: string,
   sourceHash?: string,
   options: { revises?: boolean } = {},
-): { runs: SearchRun[]; run: SearchRun; kind: "reset" | "revised" | "minted" } {
+): { run: SearchRun; kind: "reset" | "revised" | "minted" } {
   /* **A revision: one typing session's row, re-asked with the new words**
      (plan 261002h). Search-as-you-type keeps one saved row per session, so
      each pause asks the SAME row again rather than adding one per pause. Only
@@ -171,7 +179,7 @@ export function withRun(
       ...(revised.colour === undefined ? {} : { colour: revised.colour }),
       ...(sourceHash === undefined ? {} : { sourceHash }),
     };
-    return { runs: runs.map((r) => (r.id === run.id ? run : r)), run, kind: "revised" };
+    return { run, kind: "revised" };
   }
 
   /* A retry: the same id, the same criterion, **and a row that actually
@@ -238,7 +246,7 @@ export function withRun(
          so a stale hash cannot survive underneath a later answer either. */
       ...(sourceHash === undefined ? {} : { sourceHash }),
     };
-    return { runs: runs.map((r) => (r.id === run.id ? run : r)), run, kind: "reset" };
+    return { run, kind: "reset" };
   }
 
   const taken = new Set(runs.map((r) => r.id));
@@ -262,21 +270,7 @@ export function withRun(
     // disk gets no `"sourceHash": null` for a store that could not answer.
     ...(sourceHash === undefined ? {} : { sourceHash }),
   };
-  // Newest last on disk, oldest dropped first — the panel sorts for display,
-  // so the file stays in the order things happened, which is the order that
-  // makes it readable when somebody opens it in an editor.
-  return { runs: trimRuns([...runs, run]), run, kind: "minted" };
-}
-
-/**
- * The newest `MAX_RUNS`, **except that a `pending` run is never dropped** — the
- * same rule `begin` applies in src/store/pg-searches.ts. A search still being
- * answered would otherwise be deleted under the call that is answering it.
- * The newest run is the one just written, so it is always kept.
- */
-function trimRuns(runs: SearchRun[]): SearchRun[] {
-  const cut = runs.length - MAX_RUNS;
-  return runs.filter((r, i) => i >= cut || r.status === "pending");
+  return { run, kind: "minted" };
 }
 
 

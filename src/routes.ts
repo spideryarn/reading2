@@ -39,6 +39,7 @@
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
  *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
+ *   GET    /api/relations/:slug  how each paragraph bears on the one before it, and staleness (owner only)
  *   GET    /api/crossrefs/:slug  links from a phrase in one block to the block that backs it, and staleness (owner only)
  *   GET    /api/simple/:slug     a plain-words orientation to the piece, each paragraph's passages, and staleness
  *   GET    /api/skim/:slug a route through the quotes at three depths, whether it still matches them, and the profile
@@ -163,6 +164,7 @@ import {
   loadSketch,
   loadQuiz,
   loadFaq,
+  loadRelations,
   loadCrossrefs,
   loadSimpleSummary,
   loadSkim,
@@ -221,7 +223,9 @@ import type { SavedCriterion } from "./saved-criteria.js";
    in for free; `referee-claims-run.js` is the paying call, imported for the same
    reason `findPassagesStream` and `runCriterionStream` above are. */
 import { runClaimsStream } from "./referee-claims-run.js";
-import type { Claim, ClaimsRun } from "./referee-claims.js";
+/* What a claims run is stamped with: the fingerprint of the blocks it was sent. */
+import { hashBlocks } from "./source-hash.js";
+import type { Claim } from "./referee-claims.js";
 /* Referee mode's rule 5, and the one thing under it that costs nothing: the
    deterministic scan of the stored raw source. No model, no gateway, no spend
    attribution — src/source-scan.ts is the caller and src/injection-scan.ts is
@@ -339,7 +343,7 @@ import { type ArticleCost, describeAdminMiss, isAdmin } from "./admin.js";
 import { costCategoryOf } from "./cost-categories.js";
 import { silentLiveSessionsForArticle, spendForArticle } from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
-import type { NewFeedback, Visibility } from "./store/contracts.js";
+import type { ClaimsFinish, NewFeedback, Visibility } from "./store/contracts.js";
 import {
   ADMIN_FEEDBACK_DEFAULT_LIMIT,
   decodeFeedbackCursor,
@@ -4794,6 +4798,18 @@ const pullingClaims = new Set<string>();
  * to put a 400 — and a model asked to find claims in an empty article does not
  * fail, it invents.
  */
+/**
+ * What the older of two overlapping runs is told when the newer one is still
+ * being answered, or answered different blocks. **Never stored**: the row is
+ * the newer run's, and this is only the last frame of a stream whose answer
+ * had nowhere to go. Without it
+ * that stream simply stopped, and the panel said the claims "stopped arriving",
+ * which blames the connection for something the reader did.
+ */
+export const CLAIMS_SUPERSEDED =
+  "A newer claims run for this article started after this one, so this answer was not kept. " +
+  "Reload the page to see the newer run.";
+
 function claimsProblem(blocks: Block[]): string | null {
   return blocks.length === 0
     ? "This article has no text to read yet. Let ingestion finish and try again."
@@ -4818,11 +4834,11 @@ function claimsProblem(blocks: Block[]): string | null {
  *   it have not arrived. So the panel sorts what it is holding on every frame
  *   (src/web/ClaimsPanel.tsx), which is what makes rule 1 true on screen at
  *   every instant rather than only at the end.
- * - **There is no id and no attempt.** One run per article, so `finish` writes
- *   over whatever `begin` wrote and identity is the slug. The cost of that is
- *   real and is written down in src/store/pg-referee-claims.ts: two tabs
- *   running this at once will have the slower answer win, where a criterion's
- *   `attempt` would have refused the stale one.
+ * - **There is no id, and there is an attempt.** One run per article, so
+ *   identity is the slug — but two tabs can each begin one, and the row belongs
+ *   to the later. `finish` presents the token `begin` returned, and an older
+ *   run's answer is refused rather than written over the newer one
+ *   (src/store/pg-referee-claims.ts § One run per article, and still an attempt).
  *
  * The `dropped` counts come back on the outcome and are **not** sent to the
  * client, exactly as Criteria's are not — with the same exception, for the same
@@ -4840,13 +4856,16 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
   const problem = claimsProblem(article.blocks);
   if (problem) throw httpError(400, problem);
 
-  const row = await refereeClaimsStore.begin(slug);
+  /* The fingerprint of the blocks about to be sent, taken from those blocks. A
+     store that read the revision itself could stamp a newer one than the model
+     was shown, if the article was re-extracted since the line above. */
+  const { run: row, attempt } = await refereeClaimsStore.begin(slug, hashBlocks(article.blocks));
   pullingClaims.add(slug);
 
   const { frame } = sse(res);
   frame("begin", row);
 
-  let patch: Pick<ClaimsRun, "status"> & Partial<ClaimsRun>;
+  let patch: ClaimsFinish;
   try {
     let claims: Claim[] = [];
     let model = "";
@@ -4880,10 +4899,26 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
   }
 
   try {
-    const stored = await refereeClaimsStore.finish(slug, patch);
-    /* `null` means the run is not there any more — the article's data went away
-       underneath the call. Silence rather than a resurrection. */
+    const stored = await refereeClaimsStore.finish(slug, patch, attempt);
+    /* `null` means the run is not this call's to finish any more, and what the
+       reader is told depends on what is there instead. Nothing: the article's
+       data went away, and silence is right. A finished row about the same
+       blocks: a newer run (or the sweep) got there first, so `done` carries it.
+       Different blocks: this tab still displays the original article, so the
+       newer answer's citations need a reload to resolve against its prose.
+       A `pending` row: a newer run is still out, this tab cannot
+       follow its stream, and saying so beats a stream that just stops — the
+       panel would call that a dropped connection. Never a resurrection, never
+       an overwrite. */
     if (stored) frame("done", stored);
+    else {
+      const current = await refereeClaimsStore.load(slug);
+      if (current && current.status !== "pending" && current.sourceHash === row.sourceHash) {
+        frame("done", current);
+      } else if (current) {
+        frame("done", { ...current, status: "error", claims: [], error: CLAIMS_SUPERSEDED });
+      }
+    }
   } catch (storeErr) {
     log("store").error(
       { ...errorFields(storeErr), slug },
@@ -5021,9 +5056,20 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
  * empty value would 404 rather than reach a lookup as "undefined".
  *
  * **Not for anything that becomes a path.** See `slugPart`.
+ *
+ * **A capture that will not decode is a 400.** Slug patterns admit `%`, and
+ * `decodeURIComponent("%E0")` raises `URIError`, which names no status — so
+ * until 2026-10-03 `serveApi`'s catch made a mistyped address a 500 and a
+ * Sentry report. `slugFrom` in src/public/routes.ts has caught the same throw
+ * since 2026-08-28 and says why at length. Fixed words, and nothing of the
+ * request's in them: an `httpError` message is logged as `reason`.
  */
 function part(m: RegExpExecArray, group: number): string {
-  return decodeURIComponent(m[group] ?? "");
+  try {
+    return decodeURIComponent(m[group] ?? "");
+  } catch {
+    throw httpError(400, "That is not a path we can read.");
+  }
 }
 
 /**
@@ -7493,8 +7539,9 @@ interface ExactAuthRoute {
  * The handler is handed the **raw `RegExpExecArray`**, not a decoded tuple, and
  * that is the point of the discriminated union: dispatch does no decoding. Which
  * happens first — reading the body or decoding the slug — differs per route and
- * is observable from outside as two different status codes for the same two
- * malformed inputs (§ [DECODE] in
+ * is observable from outside as two different answers to the same two
+ * malformed inputs — two status codes until 2026-10-03, two sentences under one
+ * 400 since `part` began catching its own `URIError` (§ [DECODE] in
  * docs/plans/260907b-split-the-authenticated-api-dispatch-by-domain.md, and two
  * cases in tests/authenticated-api-route-contract.test.ts pin both). A dispatcher
  * that decoded captures for its handlers would have to pick one order for all of
@@ -8124,7 +8171,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      query parameter. `private, no-store` before the await, as
      `/api/admin/feedback` does, because the body is what a reader wrote to us.
      **Picked field by field** rather than passed through, so a store that one
-     day hands back more than four fields still sends four — and a fifth,
+     day hands back more than five fields still sends five — `page` among them
+     since 261003g, the store's label for where the report was filed and never
+     the address it was made from — and a sixth,
      `shipped`, which is ours: whether this build carries a note saying a change
      for the report shipped. `?show=shipped|unshipped` narrows by the same map,
      in the query, so the cap applies after the filter; any other value is a
@@ -8153,11 +8202,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       );
       const counted = page.counts;
       const answer: EarlierFeedbackPage = {
-        reports: page.reports.map(({ id, createdAt, kind, body }) => ({
+        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom }) => ({
           id,
           createdAt,
           kind,
           body,
+          page: filedFrom,
           shipped: isFeedbackShipped(id),
         })),
         more: page.more,
@@ -8783,6 +8833,21 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* **No `withProfileChanged`**: this artefact is not written for a
          profile. `FaqResponse` in src/types.ts has two fields. */
       send(res, 200, await loadFaq(slugPart(captures, 1)));
+    },
+  },
+
+  /* Relation words — docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+     GET only, and no DELETE: the step replaces, so asking again is
+     POST /api/jobs { slug, steps: ["relations"] }. This route never spends.
+     **Owner-authenticated, with no anonymous twin and nothing in the public
+     article payload** (Sol P1-4). 404 when there is none. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/relations\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      send(res, 200, await loadRelations(slugPart(captures, 1)));
     },
   },
 

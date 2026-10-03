@@ -210,6 +210,7 @@ const STEPS = [
   "timeline",
   "quiz",
   "faq",
+  "relations",
   "sketch",
   "illustrated",
   "debate",

@@ -73,6 +73,10 @@ type StepAutoRunTarget = StepTarget<
   /* Summary's plain-words work, armed by its bar button, command rows, slider
      or either end button — docs/plans/261002a-summary-generates-on-open.md. */
   | "simple"
+  /* Marginalia's relation words (so, but, vs): its own artefact, armed by the
+     press that turns the column on —
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  | "relations"
 >;
 
 /** The two that are streams, with no job row and no place in `STEP_ORDER`. */

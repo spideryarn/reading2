@@ -204,6 +204,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import {
   Archive,
   ArrowLeft,
+  ArrowRightLeft,
   Blocks,
   Bot,
   BookA,
@@ -275,7 +276,7 @@ import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.j
 import { TagEditor } from "./TagEditor.js";
 import { editArticleTags, type TagChange } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
-import { AuthorNames } from "./AuthorNames.js";
+import { AuthorNames, AuthorSearchLinks } from "./AuthorNames.js";
 import { howLong, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
@@ -372,6 +373,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   /* The same bubble as `quiz`, reused rather than a new import — the FAQ panel
      is stage 2 of docs/plans/260916d-faq-mode.md and may choose its own glyph. */
   faq: MessageCircleQuestionMark,
+  /* Two arrows, one each way: how a paragraph bears on the one before it.
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  relations: ArrowRightLeft,
   sketch: PenLine,
   /* A paintbrush beside the sketch's pen: the same argument, painted rather
      than drawn. docs/project/diagram.md § Illustrated. */
@@ -998,7 +1002,9 @@ export function Metadata({
             *"At the very least, display them in the Metadata section."* Only
             when stage 2 knew the list (`meta.authors`, plan 260929d); otherwise
             the byline is in the facts line under the title, as it always was.
-            The names link to the shelf searched for them, as in the masthead. */}
+            The names link to the shelf searched for them, as in the masthead,
+            and each has two outside searches under it — where a phone reader
+            finds them, since a tap on a name follows it (plan 261003f). */}
         {meta.authors && (
           /* Shut until opened, since 2026-09-30 — Greg, SPIDERYARN-READING2-6Z:
              *"we can have more of the sections be default collapsed, like
@@ -1020,6 +1026,7 @@ export function Metadata({
                       {a}
                     </span>
                   ))}
+                  <AuthorSearchLinks author={author} />
                 </li>
               ))}
             </ol>
@@ -3529,11 +3536,12 @@ export function Section({
        where it scrolls to — PageContents.tsx, which derives its whole list from
        these rather than from a second array of section names.
 
-       `scroll-mt-24` is 6rem, and `REACHED_PX` over there is deliberately a
+       `scroll-mt-24` is 6rem, and "reached" over there is deliberately a
        little MORE than it — the section a click has just scrolled to must be
        the section the list then marks, and setting the two equal put that on a
-       knife edge that a browser lost. See the constant's docstring; if you
-       change this 24, that number has to stay above it. */
+       knife edge that a browser lost. Since 2026-10-03 it reads this margin off
+       the element (`reachedPx`), so changing the 24 needs no second edit —
+       and neither does a reader whose rem is not 16px. */
     <section
       ref={sectionEl}
       id={sectionId(label)}

@@ -99,6 +99,12 @@ import {
   PROMPT_VERSION as FAQ_PROMPT_VERSION,
 } from "./faq.js";
 import {
+  RELATIONS_OUTPUT_SCHEMA,
+  generateRelations,
+  inputFingerprint as relationsFingerprint,
+  PROMPT_VERSION as RELATIONS_PROMPT_VERSION,
+} from "./relations.js";
+import {
   CROSSREFS_OUTPUT_SCHEMA,
   generateCrossrefs,
   inputFingerprint as crossrefsFingerprint,
@@ -351,6 +357,7 @@ export const ARTICLE_OUTPUT_FORMAT: Readonly<Record<ArticleStage, ArticleOutputF
   timeline: jsonSchemaFormat(TIMELINE_OUTPUT_SCHEMA),
   quiz: jsonSchemaFormat(QUIZ_OUTPUT_SCHEMA),
   faq: jsonSchemaFormat(FAQ_OUTPUT_SCHEMA),
+  relations: jsonSchemaFormat(RELATIONS_OUTPUT_SCHEMA),
   crossrefs: jsonSchemaFormat(CROSSREFS_OUTPUT_SCHEMA),
   simple: jsonSchemaFormat(SIMPLE_SUMMARY_OUTPUT_SCHEMA),
 };
@@ -572,6 +579,10 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      a stored `sourceHash`, so a moved article re-runs without being forced.
      And it replaces rather than appends. docs/plans/260916d-faq-mode.md. */
   "faq",
+  /* `faq`'s two reasons again: it reads the blocks, the tree and the metadata,
+     nothing in the pipeline reads what it writes, and it replaces rather than
+     appends. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  "relations",
   /* The same two reasons: it reads the blocks and tree, and nothing except the
      separately requested `illustrated` stage reads what it writes, so a
      positional cascade would buy a model call the reader did not ask for. At
@@ -4026,6 +4037,65 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return {
         parts: { faq: run.faq },
         detail: `${questions.length} ${questions.length === 1 ? "question" : "questions"}`,
+      };
+    },
+  },
+  /* Stage 5q — relations: how each paragraph bears on the one before it, one
+     word of ten, read by Marginalia for the owner. Off DEFAULT_INGEST_STEPS
+     and in FORCE_ONLY_WHEN_NAMED.
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+
+     **No baseline read**, like `faq`: a relation is keyed by its block's id,
+     so a re-run replaces them. */
+  relations: {
+    name: "relations",
+    label: "Reading how the paragraphs connect",
+    produces: ["relations"],
+    /** The rendered article prefix and ordered eligible paragraph pairs — the
+     * exact dynamic request input `generateRelations` hashes too. No profile. */
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        inputHash: relationsFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: RELATIONS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      const run = await generateRelations({
+        article: await readArticle(ctx.slug, store),
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        power: ctx.power,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const answered = Object.keys(run.relations.relations).length;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "relations",
+          model: run.model,
+          /* False when the article had fewer than two paragraphs and no model
+             was called; the token counts are then all zero. */
+          called: run.called,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          maxTokens: run.maxTokens,
+          ms: run.elapsedMs,
+          paragraphs: run.paragraphs,
+          answered,
+          /* Counts only — never a word of the article. `missing` is the one to
+             watch: paragraphs the model was asked about and skipped. */
+          ...run.dropped,
+        },
+        `relations ${ctx.slug}: ${answered} of ${run.paragraphs} paragraphs`,
+      );
+      return {
+        parts: { relations: run.relations },
+        detail: `${answered} ${answered === 1 ? "paragraph" : "paragraphs"}`,
       };
     },
   },

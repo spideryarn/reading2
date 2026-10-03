@@ -106,6 +106,26 @@
   outline: 2px solid var(--rule-strong);
   outline-offset: 2px;
 }
+/* A relation word — so, but, vs: how this paragraph bears on the one before
+   it (plan 261003f). The stamp's small capitals, a shade darker so the turns
+   of the argument can be found by running an eye down the column. A button
+   (MarginaliaColumn.tsx § RelationWord), drawn as text; what it means is in
+   its card. */
+.marg-relation {
+  all: unset;
+  display: block;
+  cursor: help;
+  border-radius: 2px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.marg-relation:focus-visible {
+  outline: 2px solid var(--rule-strong);
+  outline-offset: 2px;
+}
 .marg-stamp {
   font-size: 0.6875rem;
   font-weight: 600;
