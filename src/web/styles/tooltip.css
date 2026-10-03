@@ -76,7 +76,7 @@
 .where-node.with-of .where-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .where-node.on-path { color: var(--ink-soft); }
 .where-node.here { color: var(--ink); font-weight: 600; }
-.where-node.here::before { content: "▸ "; color: var(--highlight); }
+.where-node.here::before { content: "▸ "; color: var(--highlight-text); }
 .where-node.here.with-of::before { content: "▸"; flex: none; margin-right: 0.25em; }
 .where-more { color: var(--ink-faint); font-style: italic; }
 /* `3 of 8` on a trimmed level's row, in place of the rows it left out

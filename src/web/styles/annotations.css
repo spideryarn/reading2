@@ -63,7 +63,7 @@ mark.cmt[data-mark-end]::after {
   line-height: 1;
   vertical-align: super;
   margin-left: 0.15em;
-  color: var(--highlight);
+  color: var(--highlight-text);
 }
 
 /* A glossary term's occurrences. **Standing, since 2026-08-26**, and the
@@ -692,7 +692,7 @@ mark.hit[data-dir="mixed"]::after {
 mark.cmt.hit[data-mark-end][data-dir]::after {
   content: "−✳";
   content: "−✳" / "counts against";
-  color: var(--highlight);
+  color: var(--highlight-text);
   opacity: 1;
 }
 mark.cmt.hit[data-mark-end][data-dir="for"]::after {
@@ -738,9 +738,13 @@ mark.hit[data-wash][data-hit-open] {
    **The wash here does not undo "quotes outline, search fills".** It is a
    button's `:active` background: momentary, tied to the one row the reader is
    pointing at, gone when they move on. The resting state of every quote on the
-   page is still an outline and nothing else. Judged in Chrome, 2026-09-07. */
+   page is still an outline and nothing else. Judged in Chrome, 2026-09-07.
+
+   "White" means *the most contrast the page has*, so it is `--toward-ink`:
+   white on the dark page, black on the light one, where a white stroke would
+   vanish. Since 2026-10-03. */
 mark.hit[data-quote][data-hit-open] {
-  --quote-stroke-color: #ffffff;
+  --quote-stroke-color: var(--toward-ink);
   background-color: rgb(var(--quote-stroke-rgb) / 0.18);
 }
 /* A comment over a hit keeps its underline: it is the one you can click, and
@@ -976,7 +980,7 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-faint);
   cursor: pointer;
 }
-.cmt-close:hover { color: var(--highlight); }
+.cmt-close:hover { color: var(--highlight-text); }
 
 /* The author's quoted words — the only article text in this panel. */
 .cmt-quote {
@@ -1006,7 +1010,7 @@ td.text.has-hit[data-hues="8"] {
    the call site, so there is nothing here to keep in sync with it. */
 .cmt-spinner {
   flex: none;
-  color: var(--highlight);
+  color: var(--highlight-text);
   animation: cmt-spin 0.7s linear infinite;
 }
 @keyframes cmt-spin { to { transform: rotate(360deg); } }
@@ -1193,7 +1197,7 @@ td.text.has-hit[data-hues="8"] {
   text-underline-offset: 2px;
   cursor: pointer;
 }
-.cmt-dialog button.linky:hover { color: var(--highlight); }
+.cmt-dialog button.linky:hover { color: var(--highlight-text); }
 
 /* Delete is the one button here that destroys something, so it hovers red.
    This used to be written as `.cmt-delete:hover` next to the rule that puts it
@@ -1235,7 +1239,7 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-soft);
   cursor: pointer;
 }
-.cmt-nav button:hover:not(:disabled) { color: var(--highlight); }
+.cmt-nav button:hover:not(:disabled) { color: var(--highlight-text); }
 /* Disabled rather than wrapped: the arrows stop at the ends, and a live arrow
    that goes nowhere reads as "there is more this way" when there isn't. */
 .cmt-nav button:disabled { color: var(--ink-faint); opacity: 0.35; cursor: default; }
@@ -1259,7 +1263,7 @@ td.text.has-hit[data-hues="8"] {
   border-radius: 3px;
 }
 .cmt-search:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
-.cmt-search.on { color: var(--highlight); }
+.cmt-search.on { color: var(--highlight-text); }
 .cmt-search.off { color: var(--ink-faint); opacity: 0.65; }
 .cmt-search svg { display: block; }
 .cmt-search-n { font-size: 0.74rem; font-variant-numeric: tabular-nums; }

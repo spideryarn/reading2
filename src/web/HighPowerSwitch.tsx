@@ -132,7 +132,7 @@ export function HighPowerSwitch({
       </p>
       <p className="tw:m-0 tw:text-xs tw:text-ink-faint" aria-live="polite">
         {error ? (
-          <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
+          <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight-text">
             <TriangleAlert size={12} />
             {error.kind === "refused" ? "Not saved" : "Couldn't confirm that"} — {error.message}
           </span>

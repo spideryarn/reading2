@@ -95,7 +95,7 @@ export function SharedBadge({
 }: { titled?: boolean } = {}) {
   return (
     <span
-      className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight"
+      className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight-text"
       title={titled ? SHARING_ON : undefined}
     >
       <Globe size={11} />
@@ -332,7 +332,7 @@ export function ShelfCard({
         )}
         {entry.comments > 0 && (
           <span
-            className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-highlight"
+            className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-highlight-text"
             title={`${entry.comments} question${entry.comments === 1 ? "" : "s"} asked about this article`}
           >
             <MessageCircle size={13} />
@@ -360,7 +360,7 @@ export function ShelfCard({
           <button
             type="button"
             aria-label={`${note} — details of ${entry.title}`}
-            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight"
+            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight-text"
           >
             {note}
           </button>
@@ -1041,7 +1041,7 @@ export function Actions({
             titled={false}
             onClick={copy}
           >
-            {copied ? <Check size={14} className="tw:text-highlight" /> : <Copy size={14} />}
+            {copied ? <Check size={14} className="tw:text-highlight-text" /> : <Copy size={14} />}
           </IconButton>
         </ActionTip>
 
@@ -1341,7 +1341,7 @@ function ShelfActionsMenu({
               }}
             >
               {copied ? (
-                <Check size={16} aria-hidden="true" className="tw:shrink-0 tw:text-highlight" />
+                <Check size={16} aria-hidden="true" className="tw:shrink-0 tw:text-highlight-text" />
               ) : (
                 <Copy size={16} aria-hidden="true" className="tw:shrink-0" />
               )}

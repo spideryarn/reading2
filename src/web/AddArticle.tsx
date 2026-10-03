@@ -864,7 +864,7 @@ function StepIcon({ status }: { status: JobStep["status"] }) {
     case "running":
       return <LoaderCircle size={13} className="cmt-spinner" />;
     case "done":
-      return <Check size={13} className="tw:text-highlight" />;
+      return <Check size={13} className="tw:text-highlight-text" />;
     case "skipped":
       return <ChevronRight size={13} />;
     case "error":

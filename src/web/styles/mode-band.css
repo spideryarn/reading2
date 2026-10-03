@@ -961,13 +961,15 @@
 .chat-live-btn.on {
   border-color: var(--highlight);
   background: var(--highlight);
-  /* `--page`, which is what `.prof-mic.on` uses — the microphone beside this
-     one, lit the same way. It said `--paper` for about an hour, which is a
+  /* `--primary-foreground`, which is what `.prof-mic.on` uses — the
+     microphone beside this one, lit the same way. (It was `--page` until
+     2026-10-03, the same near-black on the dark page and near-white, at about
+     2.6:1, on the light one.) It said `--paper` for about an hour, which is a
      token this app does not have: an undefined custom property with no fallback
      makes the whole declaration invalid, so the glyph would have *inherited*
      its colour and gone near-invisible on the orange. Nothing errors.
      tests/css-tokens.test.ts is the only thing that would ever have said so. */
-  color: var(--page);
+  color: var(--primary-foreground);
 }
 .chat-live-label {
   font-size: 0.88rem;
@@ -977,7 +979,7 @@
 /* The label follows the button, so "Listening…" carries the same signal the
    colour does — said twice, for the one control in this app worth being
    unambiguous about. */
-.chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--page); }
+.chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--primary-foreground); }
 
 /* **The live session's one status line**: a state word in a pill whose colour
    says it too, then the meter, then a sentence. Listening is the only filled
@@ -1002,7 +1004,7 @@
 .chat-live-status.is-listening .chat-live-state {
   border-color: var(--highlight);
   background: var(--highlight);
-  color: var(--page);
+  color: var(--primary-foreground);
 }
 .chat-live-status.is-error { border-color: var(--destructive); }
 .chat-live-status.is-error .chat-live-state {

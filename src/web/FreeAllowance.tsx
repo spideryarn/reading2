@@ -123,7 +123,7 @@ export function FreeAllowanceBox({ plan, now }: { plan: ReaderPlan; now: number 
           role="status"
           className="tw:m-0 tw:mb-2 tw:flex tw:items-start tw:gap-2 tw:rounded-md tw:bg-highlight/10 tw:px-3 tw:py-2 tw:text-foreground"
         >
-          <GiftIcon size={16} aria-hidden="true" className="tw:mt-0.5 tw:shrink-0 tw:text-highlight" />
+          <GiftIcon size={16} aria-hidden="true" className="tw:mt-0.5 tw:shrink-0 tw:text-highlight-text" />
           <span className="tw:min-w-0 tw:flex-1">
             A gift of {articles(gift.articles)} has been added to your free allowance.
           </span>
@@ -154,7 +154,7 @@ export function FreeAllowanceBox({ plan, now }: { plan: ReaderPlan; now: number 
               size={14}
               data-testid="gift-icon"
               aria-label="Includes a gift"
-              className="tw:shrink-0 tw:self-center tw:text-highlight"
+              className="tw:shrink-0 tw:self-center tw:text-highlight-text"
             />
           )}
           {plan.remaining} left

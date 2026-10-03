@@ -70,7 +70,7 @@ const FIELD =
      outranks it, so a `tw:`-styled field says so itself. */
   "tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight";
 
-const QUIET = "tw:text-xs tw:text-ink-faint tw:hover:text-highlight";
+const QUIET = "tw:text-xs tw:text-ink-faint tw:hover:text-highlight-text";
 
 export function SignInControls({
   initialTab = "sign-in",

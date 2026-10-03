@@ -373,7 +373,7 @@
 .sk-card-jump {
   margin-top: 0.25rem; padding: 0;
   background: none; border: none; cursor: pointer;
-  font-family: inherit; font-size: 0.79rem; color: var(--highlight);
+  font-family: inherit; font-size: 0.79rem; color: var(--highlight-text);
 }
 /* Only the interactive forms underline. A missing BlockRef is a `<span>` and
    keeps the generic dimmed strike-through when pointed at. */
@@ -393,8 +393,8 @@ button.sk-card-jump:hover { text-decoration: underline; }
   line-height: normal;
   letter-spacing: normal;
 }
-a.sk-card-jump.block-ref { color: var(--highlight); opacity: 1; text-decoration: none; }
-a.sk-card-jump.block-ref:hover { color: var(--highlight); text-decoration: underline; }
+a.sk-card-jump.block-ref { color: var(--highlight-text); opacity: 1; text-decoration: none; }
+a.sk-card-jump.block-ref:hover { color: var(--highlight-text); text-decoration: underline; }
 
 /* ---- before there is a picture ---- */
 

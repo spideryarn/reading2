@@ -354,7 +354,7 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   [`styles/tokens.css`](../../styles/tokens.css), and the logo/favicons from
   [`public/`](../../public/) — both lifted from the previous version, see
   [original-version/overview.md](original-version/overview.md). Plain CSS variables, adopt or remap as you like;
-  Spideryarn orange `#DB8A45` is the accent, on a dark-only palette — see
+  Spideryarn orange `#DB8A45` is the accent, on a dark palette with a light one by choice — see
   [web-client.md](web-client.md).
 - **The queue runs in the server process** ([`src/jobs.ts`](../../src/jobs.ts)). Since 2026-08-27 it
   is a claim on a row of the `jobs` table rather than p-queue, and how many jobs may run at once is

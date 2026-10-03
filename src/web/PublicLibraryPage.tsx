@@ -193,7 +193,7 @@ export function PublicLibraryPage({
             >
               <Link
                 href={PUBLIC_SHARING_HREF}
-                className="tw:text-highlight tw:no-underline tw:hover:underline"
+                className="tw:text-highlight-text tw:no-underline tw:hover:underline"
               >
                 {PUBLIC_SHELF_TAKEDOWN}
               </Link>
@@ -231,7 +231,7 @@ export function PublicLibraryPage({
               <button
                 type="button"
                 onClick={again}
-                className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline"
+                className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight-text tw:underline"
               >
                 {PUBLIC_SHELF_RETRY}
               </button>

@@ -446,7 +446,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
           <p className="tw:mt-6 tw:text-sm">
             <Link
               href={PRICING_HREF}
-              className="tw:text-highlight tw:no-underline tw:hover:underline"
+              className="tw:text-highlight-text tw:no-underline tw:hover:underline"
             >
               Pricing, and what a month’s allowance means →
             </Link>

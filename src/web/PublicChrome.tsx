@@ -233,7 +233,7 @@ export function SharedNotice({
 }
 
 /** The banner's links: the house link colour, underlined on hover, as /privacy draws them. */
-const BANNER_LINK = "tw:text-highlight tw:no-underline tw:hover:underline";
+const BANNER_LINK = "tw:text-highlight-text tw:no-underline tw:hover:underline";
 
 /**
  * **The banner's source line** — the published address when there is one, a
@@ -354,7 +354,7 @@ function offerAnAccount(gap: VisitorGap, signedIn: boolean): boolean {
 export function SignUp({ reason }: { reason: string }) {
   return (
     <p className="tw:m-0">
-      <Link href={LOGIN_HREF} className="tw:font-medium tw:text-highlight">
+      <Link href={LOGIN_HREF} className="tw:font-medium tw:text-highlight-text">
         {MAKE_AN_ACCOUNT}
       </Link>{" "}
       {reason}.
@@ -409,7 +409,7 @@ function ClearDeadSessionButton({ label }: { label: string }) {
       type="button"
       onClick={() => void go()}
       disabled={busy}
-      className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-highlight tw:underline tw:disabled:opacity-60"
+      className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-highlight-text tw:underline tw:disabled:opacity-60"
     >
       {label}
     </button>

@@ -103,7 +103,7 @@ assembled. Worth adopting as CSS variables.
 ## Contrast
 
 Their dark-mode values, which are the relevant ones for us
-([web-client.md § Dark mode](../web-client.md#dark-mode)):
+([web-client.md § Appearance](../web-client.md#appearance-light-dark-and-system)):
 
 | Text | Background | Ratio |
 |---|---|---|

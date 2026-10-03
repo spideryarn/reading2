@@ -458,7 +458,7 @@
   font-size: 0.84rem;
   background: none;
   border: none;
-  color: var(--highlight);
+  color: var(--highlight-text);
   text-decoration: underline;
   cursor: pointer;
   padding: 0;

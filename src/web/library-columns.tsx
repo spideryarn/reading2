@@ -339,7 +339,7 @@ function TitleCell({
     <Link
       href={readHref(entry.slug)}
       className={withVoice(
-        "tw:block tw:wrap-anywhere tw:text-foreground tw:no-underline tw:hover:text-highlight",
+        "tw:block tw:wrap-anywhere tw:text-foreground tw:no-underline tw:hover:text-highlight-text",
         articleTitleVoice(Boolean(entry.titleOverridden)),
       )}
     >
@@ -581,7 +581,7 @@ function Count({ value, highlight }: { value: number; highlight?: boolean }) {
   return (
     <span
       className={`${value === 0 ? "tw:opacity-40" : ""} ${
-        highlight && value > 0 ? "tw:text-highlight" : ""
+        highlight && value > 0 ? "tw:text-highlight-text" : ""
       }`}
     >
       {value.toLocaleString()}

@@ -270,7 +270,7 @@ describe("the comment marker", () => {
     expect(host.querySelector(".blk-cmt svg")?.getAttribute("fill")).toBe("currentColor");
     const css = readFileSync("src/web/styles/gutter.css", "utf8");
     const rule = css.match(/^\.blk-cmt \{([^}]*)\}/m)?.[1] ?? "";
-    expect(rule).toContain("color: var(--highlight)");
+    expect(rule).toContain("color: var(--highlight-text)");
     expect(rule).not.toMatch(/opacity: 0\.\d/);
   });
 

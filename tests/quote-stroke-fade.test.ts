@@ -163,6 +163,6 @@ describe("the stylesheet", () => {
   });
 
   it("still overrides the whole colour when a quote is pressed, so the fade never dims it", () => {
-    expect(css).toMatch(/mark\.hit\[data-quote\]\[data-hit-open\]\s*\{[^}]*--quote-stroke-color:\s*#ffffff/);
+    expect(css).toMatch(/mark\.hit\[data-quote\]\[data-hit-open\]\s*\{[^}]*--quote-stroke-color:\s*var\(--toward-ink\)/);
   });
 });

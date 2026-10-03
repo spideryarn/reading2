@@ -93,7 +93,7 @@ function Third({ name, href, children }: { name: string; href: string; children:
         href={href}
         target="_blank"
         rel="noreferrer noopener"
-        className="tw:text-highlight tw:no-underline tw:hover:underline"
+        className="tw:text-highlight-text tw:no-underline tw:hover:underline"
       >
         {name}
       </a>{" "}
@@ -174,7 +174,7 @@ export function PrivacyPage() {
           your data — write to{" "}
           <a
             href={`mailto:${CONTACT_EMAIL}`}
-            className="tw:text-highlight tw:no-underline tw:hover:underline"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
           >
             {CONTACT_EMAIL}
           </a>
@@ -635,7 +635,7 @@ export function PrivacyPage() {
           for it in a form you can take elsewhere. Email{" "}
           <a
             href={`mailto:${CONTACT_EMAIL}`}
-            className="tw:text-highlight tw:no-underline tw:hover:underline"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
           >
             {CONTACT_EMAIL}
           </a>{" "}
@@ -645,7 +645,7 @@ export function PrivacyPage() {
             href="https://ico.org.uk/make-a-complaint/"
             target="_blank"
             rel="noreferrer noopener"
-            className="tw:text-highlight tw:no-underline tw:hover:underline"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
           >
             Information Commissioner’s Office
           </a>
@@ -744,7 +744,7 @@ export function PrivacyPage() {
           So if something of yours is here and you would rather it were not, write to{" "}
           <a
             href={`mailto:${CONTACT_EMAIL}`}
-            className="tw:text-highlight tw:no-underline tw:hover:underline"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
           >
             {CONTACT_EMAIL}
           </a>
@@ -778,7 +778,7 @@ export function PrivacyPage() {
           If you want the fuller picture first —{" "}
           <Link
             href={PUBLIC_SHARING_HREF}
-            className="tw:text-highlight tw:no-underline tw:hover:underline"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
           >
             what we do with an article somebody has made public
           </Link>{" "}

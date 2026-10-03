@@ -54,7 +54,7 @@
    take a complaint, not a call to action — a button that advertises itself in
    the corner of every page is one more thing between the reader and the
    article. */
-.fb-button:hover { color: var(--highlight); }
+.fb-button:hover { color: var(--highlight-text); }
 .fb-button:focus-visible {
   outline: 1px solid var(--highlight);
   outline-offset: -2px;
@@ -226,7 +226,7 @@
 /* A word in the meta line, not a badge: the colour says "good news" without
    shouting over what the reader wrote. */
 .fb-earlier-shipped {
-  color: var(--highlight);
+  color: var(--highlight-text);
   font-weight: 600;
 }
 /* Its opposite, in All only: said, but quietly, so the shipped ones still stand
@@ -261,7 +261,7 @@
   color: var(--ink-soft);
   cursor: pointer;
 }
-.fb-close:hover { color: var(--highlight); border-color: var(--rule-strong); }
+.fb-close:hover { color: var(--highlight-text); border-color: var(--rule-strong); }
 .fb-close:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
 
 /* `.fb-intro` and `.fb-email` were here: the one-line intro under the thanks
@@ -310,7 +310,7 @@
   resize: vertical;
 }
 .fb-input:focus-visible { outline: 1px solid var(--highlight); outline-offset: -1px; }
-.fb-over { font-size: 0.72rem; color: var(--highlight); }
+.fb-over { font-size: 0.72rem; color: var(--highlight-text); }
 
 /* One box now, so it gets the height the three used to have between them.
    docs/plans/260902m-one-feedback-box-with-a-kind-toggle-and-dictation.md. */
@@ -369,7 +369,7 @@
    one source of truth for "chosen", shared by the screen reader and the eye. */
 .fb-kind-button[aria-pressed="true"],
 .fb-show-button[aria-pressed="true"] {
-  color: var(--highlight);
+  color: var(--highlight-text);
   border-color: var(--highlight);
   background: color-mix(in oklch, var(--highlight) 12%, transparent);
 }
@@ -483,7 +483,7 @@
   text-decoration: none;
   cursor: pointer;
 }
-.fb-copy:hover { color: var(--highlight); border-color: var(--rule-strong); }
+.fb-copy:hover { color: var(--highlight-text); border-color: var(--rule-strong); }
 
 /* **The hairline says the buttons are a foot, not the end of the content.**
    Once the middle scrolls under them — a phone with the keyboard up, where
@@ -521,7 +521,7 @@
    — which is the more legible of the two anyway at this size. */
 .fb-send { color: var(--ink); }
 .fb-send:disabled { opacity: 0.45; cursor: default; }
-.fb-send:not(:disabled):hover { color: var(--highlight); border-color: var(--highlight); }
+.fb-send:not(:disabled):hover { color: var(--highlight-text); border-color: var(--highlight); }
 
 /* ---------------------------------------------------------------- the toast --
    The thank-you after a report is filed, since 2026-09-29 — Greg: *"that
@@ -555,7 +555,7 @@
   color: var(--ink);
   font-family: var(--font-ui);
 }
-.toast-icon { flex: none; margin-top: 0.15rem; color: var(--highlight); }
+.toast-icon { flex: none; margin-top: 0.15rem; color: var(--highlight-text); }
 .toast-text { flex: 1; margin: 0; font-size: 0.85rem; line-height: 1.45; }
 .toast-close {
   flex: none;

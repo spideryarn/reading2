@@ -294,7 +294,7 @@ export function LandingPage() {
         <p className="tw:mt-6 tw:text-sm">
           <Link
             href={FEATURES_HREF}
-            className="tw:text-highlight tw:no-underline tw:hover:underline"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
           >
             Everything it does, with pictures →
           </Link>
@@ -366,7 +366,7 @@ export function LandingPage() {
           <p className="tw:mt-6 tw:text-sm">
             <Link
               href={PRICING_HREF}
-              className="tw:text-highlight tw:no-underline tw:hover:underline"
+              className="tw:text-highlight-text tw:no-underline tw:hover:underline"
             >
               Pricing, and what a month’s allowance means →
             </Link>

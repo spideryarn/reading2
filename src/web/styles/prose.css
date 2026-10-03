@@ -188,7 +188,7 @@ td.text.kind-heading:has(> .fold-toggle) {
   .fold-toggle { opacity: 0.75; }
 }
 .fold-toggle:hover,
-.fold-toggle:focus-visible { opacity: 1; color: var(--highlight); }
+.fold-toggle:focus-visible { opacity: 1; color: var(--highlight-text); }
 
 tr.row-active td.text { background: var(--panel); }
 
@@ -569,7 +569,7 @@ td.text .figure-note-link {
   padding: 0;
   background: transparent;
   font: inherit;
-  color: var(--highlight);
+  color: var(--highlight-text);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -589,7 +589,7 @@ td.text .figure-note-icon {
 td.text .figure-note-icon:hover,
 td.text .figure-note-icon:focus-visible {
   opacity: 1;
-  color: var(--highlight);
+  color: var(--highlight-text);
 }
 
 /* The ⤢ itself — see zoomable.ts, and Lightbox.tsx for what it opens.
@@ -631,7 +631,7 @@ td.text .figure-note-icon:focus-visible {
 .prose .zoom-btn:hover,
 .prose .zoom-btn:focus-visible { opacity: 1; }
 .prose .zoom-btn:hover {
-  color: var(--highlight);
+  color: var(--highlight-text);
   border-color: var(--highlight);
 }
 .prose .zoom-btn:focus-visible {

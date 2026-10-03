@@ -56,6 +56,31 @@
   --cite-flash-ms: 2400ms;
   --flash-wash-strong: color-mix(in oklab, var(--spideryarn-orange) 45%, var(--page));
   --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 85%, white);
+  /* **The orange as TEXT, or as a thin line or glyph** — a hover colour, an
+     icon, a "you are here" rule. On the dark page it is the orange itself, so
+     nothing there changed when this arrived; on the light page it is
+     `--highlight-ink`, because the orange on white is ~2.6:1. Fills, borders,
+     outlines and washes stay `--highlight`: an area of orange is legible at
+     any contrast. Tailwind: `text-highlight-text`. Since 2026-10-03. */
+  --highlight-text: var(--highlight);
+
+  /* **Which way is "more contrast", and which way is "quieter"**, as colours to
+     mix towards. On the dark page lifting a colour means mixing in white; on
+     the light page it means mixing in black. A stylesheet that writes
+     `color-mix(…, white)` is right in one theme and backwards in the other, so
+     it writes `var(--toward-ink)` instead, and the light block below flips
+     both. Keywords rather than --foreground/--page on purpose: an achromatic
+     keyword has a *missing* hue, so even a polar mix cannot drag the result
+     round (the --highlight-wash note above). Since 2026-10-03. */
+  --toward-ink: white;
+  --toward-page: black;
+  /* The same direction as bare channels, for a *translucent* lift written
+     `rgb(var(--toward-ink-rgb) / 0.1)` — the marketing pages' hairlines and
+     surfaces (site.css § the ladder), the site footer's rule. Channels rather
+     than a `color-mix(… transparent)` because a browser without `color-mix`
+     drops that declaration and paints `currentColor` instead, a solid line;
+     `--hit-rgb` is the same shape for the same reason. */
+  --toward-ink-rgb: 255 255 255;
 
   /* **A conversation's mark, and it is a different HUE from a comment's rather
      than a different alpha** — the rule docs/project/search.md sets out for its
@@ -357,3 +382,32 @@
 
 * { box-sizing: border-box; }
 
+
+/* ----------------------------------------------------------- light tokens --
+   The semantic layer's light values — the same names as the `:root` block at
+   the top, for `data-theme="light"` (src/web/appearance.ts). The brand
+   palette's light block, and why the page is not simply inverted, are in
+   styles/tokens.css § light. Anything above written as a mix with `--page`
+   (the washes) follows on its own and is not repeated here. */
+:root[data-theme="light"] {
+  /* Soft and faint ascend from --ink again, as they did before the dark page. */
+  --ink-soft: oklch(0.36 0 0);
+  /* On a light ground a raised surface is the lightest thing there. */
+  --surface-raised: oklch(1 0 0);
+  --rule-strong: oklch(0.78 0 0);
+  /* Orange as text, darkened rather than lifted: #DB8A45 on white is ~2.6:1. */
+  --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 72%, black);
+  --highlight-text: var(--highlight-ink);
+  --toward-ink: black;
+  --toward-page: white;
+  --toward-ink-rgb: 0 0 0;
+  --chat-mark: oklch(0.52 0.13 235);
+
+  /* The depth ramp runs coarse to fine in lightness *away from the page*, so on
+     a light page it runs dark to light: the coarsest column is the most
+     visible one, as it is on dark. */
+  --depth-0: oklch(0.55 0.155 52);
+  --depth-1: oklch(0.64 0.120 50);
+  --depth-2: oklch(0.73 0.080 46);
+  --depth-3: oklch(0.82 0.045 40);
+}

@@ -41,7 +41,7 @@
 }
 .dock-qs-field:focus-within {
   border-color: var(--highlight);
-  color: var(--highlight);
+  color: var(--highlight-text);
 }
 
 .dock-qs-input {

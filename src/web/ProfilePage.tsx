@@ -60,6 +60,7 @@ import { AccountSection } from "./AccountSection.js";
 import { BillingSection } from "./BillingSection.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { SettingsSection } from "./SettingsSection.js";
+import { AppearanceSetting } from "./AppearanceSetting.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { useProfile } from "./useProfile.js";
 import { useSlow } from "./useSlow.js";
@@ -266,7 +267,8 @@ export function ProfilePage() {
           "recently read" and "what's running", neither of which is a control.
           docs/project/experimental-features.md. */}
       <Section icon={SlidersHorizontal} label="Settings">
-        <div className={`${CARD} tw:p-4`}>
+        <div className={`${CARD} tw:flex tw:flex-col tw:gap-4 tw:p-4`}>
+          <AppearanceSetting />
           <SettingsSection />
         </div>
       </Section>

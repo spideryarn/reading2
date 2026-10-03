@@ -97,7 +97,7 @@
   color: var(--ink-soft);
   cursor: pointer;
 }
-.lightbox-close:hover { color: var(--highlight); border-color: var(--rule-strong); }
+.lightbox-close:hover { color: var(--highlight-text); border-color: var(--rule-strong); }
 .lightbox-close:focus-visible {
   outline: 1px solid var(--highlight);
   outline-offset: 2px;

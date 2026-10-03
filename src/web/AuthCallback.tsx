@@ -278,7 +278,7 @@ export function AuthCallback() {
             /* The sign-in page, not `/`, since `/` stopped carrying the form —
                docs/plans/261001m, GPT Sol's plan review F3. */
             onClick={() => navigate(signedIn ? LIBRARY_HREF : LOGIN_HREF, { replace: true })}
-            className="tw:mt-4 tw:text-xs tw:text-ink-faint tw:hover:text-highlight"
+            className="tw:mt-4 tw:text-xs tw:text-ink-faint tw:hover:text-highlight-text"
           >
             {signedIn ? "go to your shelf" : "back to the sign-in screen"}
           </button>

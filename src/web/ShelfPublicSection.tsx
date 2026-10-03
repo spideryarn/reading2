@@ -113,7 +113,7 @@ function ShelfPublicResults({
           <button
             type="button"
             onClick={again}
-            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline"
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight-text tw:underline"
           >
             {PUBLIC_SHELF_RETRY}
           </button>

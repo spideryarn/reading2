@@ -388,7 +388,7 @@ export const FEEDBACK_SHAPE = {
        reason that file gives about the two order rows: a floor given to one
        control in a row is a bug report about the one beside it. GPT Sol, P2. */
     button:
-      "fb-masthead tw:inline-flex tw:items-center tw:gap-1.5 tw:p-0 tw:text-xs tw:text-ink-faint tw:pointer-coarse:min-h-10 tw:hover:text-highlight",
+      "fb-masthead tw:inline-flex tw:items-center tw:gap-1.5 tw:p-0 tw:text-xs tw:text-ink-faint tw:pointer-coarse:min-h-10 tw:hover:text-highlight-text",
     word: "",
     icon: 13,
     /* Downwards, like the `Profile` and `Admin` cards it shares a

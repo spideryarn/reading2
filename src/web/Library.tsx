@@ -566,7 +566,7 @@ export function Library({
               >
                 <Link
                   href={PROFILE_HREF}
-                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:pointer-coarse:min-h-10 tw:hover:text-highlight"
+                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:pointer-coarse:min-h-10 tw:hover:text-highlight-text"
                 >
                   <User size={13} />
                   Profile
@@ -584,7 +584,7 @@ export function Library({
                 >
                   <Link
                     href={ADMIN_HREF}
-                    className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:pointer-coarse:min-h-10 tw:hover:text-highlight"
+                    className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:pointer-coarse:min-h-10 tw:hover:text-highlight-text"
                   >
                     <Shield size={13} />
                     Admin
@@ -954,7 +954,7 @@ function EmptyShelf({
           box.focus();
           box.scrollIntoView({ block: "center" });
         }}
-        className="tw:text-highlight tw:underline"
+        className="tw:text-highlight-text tw:underline"
       >
         Paste a link to an article in the box at the top
       </a>{" "}
@@ -966,7 +966,7 @@ function EmptyShelf({
           <button
             type="button"
             onClick={onPublic}
-            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight tw:underline"
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-sm tw:text-highlight-text tw:underline"
           >
             browse what other readers have shared
           </button>
@@ -1370,7 +1370,7 @@ function marked(text: string, query: string) {
     <>
       {from > 0 && "…"}
       {text.slice(from, start)}
-      <strong className="tw:font-semibold tw:text-highlight">{text.slice(start, end)}</strong>
+      <strong className="tw:font-semibold tw:text-highlight-text">{text.slice(start, end)}</strong>
       {text.slice(end, to)}
       {to < text.length && "…"}
     </>
@@ -1444,7 +1444,7 @@ function UndoStrip({ title, onUndo }: { title: string; onUndo: () => void }) {
       <button
         type="button"
         onClick={onUndo}
-        className="tw:inline-flex tw:h-7 tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded-md tw:px-2.5 tw:text-xs tw:text-highlight tw:transition-colors tw:hover:bg-highlight/10"
+        className="tw:inline-flex tw:h-7 tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded-md tw:px-2.5 tw:text-xs tw:text-highlight-text tw:transition-colors tw:hover:bg-highlight/10"
       >
         <Undo2 size={14} />
         Undo

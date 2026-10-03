@@ -135,7 +135,7 @@ adjustments are Tailwind's job, and anything reused across sections should be a 
 
 Use it exactly once, behind the lead glossary shot. Mixed in `oklab`/plain `rgb()` rather than
 `oklch`, per the trap already documented in
-[design-css-overview.md § Colour](../project/design-css-overview.md#colour-one-source-dark-only).
+[design-css-overview.md § Colour](../project/design-css-overview.md#colour-one-source-two-themes).
 
 ### 2. A bordered "app window" frame, no extra markup
 

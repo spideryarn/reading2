@@ -124,7 +124,7 @@ export function SetNewPassword() {
             type="button"
             onClick={() => navigate(LIBRARY_HREF, { replace: true })}
             disabled={busy}
-            className="tw:text-xs tw:text-ink-faint tw:hover:text-highlight"
+            className="tw:text-xs tw:text-ink-faint tw:hover:text-highlight-text"
           >
             not now
           </button>

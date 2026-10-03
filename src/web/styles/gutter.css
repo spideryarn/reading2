@@ -679,7 +679,7 @@ td.text.kind-heading .blk-gutter {
 .block-chat:focus-visible,
 .blk-bookmark:focus-visible,
 .blk-help:focus-visible,
-.blk-more:focus-visible { color: var(--highlight); }
+.blk-more:focus-visible { color: var(--highlight-text); }
 
 /* Copying failed, and the reader is told rather than left with a tick that
    means nothing. The delegated card says what to do instead.
@@ -812,7 +812,7 @@ td.text.kind-heading .blk-gutter {
    **Full strength, and the glyph filled** (BlockGutter.tsx), since 2026-10-02:
    it was an outline at 0.75, and Greg's report 9C was that a bookmark should be
    "a bit more visible". Plan 261002j. */
-.blk-cmt { color: var(--highlight); pointer-events: auto; }
+.blk-cmt { color: var(--highlight-text); pointer-events: auto; }
 .blk-n {
   font-family: var(--font-mono);
   font-size: 0.58rem;
@@ -924,7 +924,7 @@ td.text.kind-heading .blk-gutter[data-open] {
    § the hover reveal is written before it, so the one case it cannot reach
    is said again here. */
 .block-chat.has:hover,
-.block-chat.has:focus-visible { color: var(--highlight); }
+.block-chat.has:focus-visible { color: var(--highlight-text); }
 .block-chat-n {
   font-family: var(--font-mono);
   font-size: 0.58rem;

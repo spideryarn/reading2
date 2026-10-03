@@ -329,7 +329,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   max-width: 100%;
 }
 .origin-link { color: var(--ink-soft); text-decoration: none; }
-.origin-link:hover { color: var(--highlight); text-decoration: underline; }
+.origin-link:hover { color: var(--highlight-text); text-decoration: underline; }
 /* Not a control and not a link — the tooltip is the only thing here, so the
    cursor is what says there is one. Masthead.tsx says why this is not a button. */
 .origin-said { color: var(--ink-faint); cursor: help; }
@@ -371,7 +371,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    it is a guess, and the same hover. */
 .origin-with-guess { flex-wrap: wrap; column-gap: 0.6rem; }
 .origin-guess { color: var(--ink-faint); }
-.origin-guess:hover { color: var(--highlight); }
+.origin-guess:hover { color: var(--highlight-text); }
 /* The **?** is the part of the link that says *guess*, so it is never faded or
    cut with the path: `flex: none`, full strength. */
 .origin-guess-mark { flex: none; }
@@ -422,7 +422,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   cursor: pointer;
 }
 .facts > .fold-all:hover,
-.facts > .fold-all:focus-visible { color: var(--highlight); }
+.facts > .fold-all:focus-visible { color: var(--highlight-text); }
 
 /* One author in the masthead or on the Metadata page: a name first, a link
    second, so it keeps the line's colour until you point at it. AuthorNames.tsx. */
@@ -433,7 +433,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 }
 .author-name:hover,
 .author-name:focus-visible {
-  color: var(--highlight);
+  color: var(--highlight-text);
 }
 
 /* `.about` was here: the provenance list, first behind the masthead's ▾ and

@@ -903,7 +903,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           It didn't get as far as the queue.{" "}
           <button
             type="button"
-            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight tw:underline"
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight-text tw:underline"
             onClick={() => setAttempt((n) => n + 1)}
           >
             Try again
@@ -939,7 +939,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         <p className="tw:mb-0 tw:text-sm tw:text-muted-foreground">
           <button
             type="button"
-            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight tw:underline"
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight-text tw:underline"
             onClick={() => uploadEngine.retry()}
           >
             Try again
@@ -1066,7 +1066,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       {job?.status === "done" && phase.kind === "opened" && <Done job={job} />}
 
       <p className="tw:mt-6 tw:mb-0 tw:text-sm">
-        <Link href={LIBRARY_HREF} className="tw:text-muted-foreground tw:hover:text-highlight">
+        <Link href={LIBRARY_HREF} className="tw:text-muted-foreground tw:hover:text-highlight-text">
           ← Back to the shelf
         </Link>
       </p>
@@ -1286,7 +1286,7 @@ function Sending({ transfer }: { transfer: Transfer }) {
         </span>
         <button
           type="button"
-          className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight tw:underline"
+          className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight-text tw:underline"
           onClick={() => uploadEngine.cancel()}
         >
           Stop
@@ -1328,7 +1328,7 @@ function Done({ job }: { job: Job }) {
   return (
     <p className="tw:mt-4 tw:mb-0 tw:text-sm tw:text-muted-foreground">
       Done —{" "}
-      <Link href={readHref(job.slug)} className="tw:text-highlight">
+      <Link href={readHref(job.slug)} className="tw:text-highlight-text">
         read it
       </Link>
       .

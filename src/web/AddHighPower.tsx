@@ -69,14 +69,14 @@ function line(state: ReturnType<HighPowerIntent["get"]>) {
         : "On — later work in this import uses it.";
     case "refused":
       return (
-        <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
+        <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight-text">
           <TriangleAlert size={12} />
           {state.attempted ? "Not switched on" : "Not switched off"} — {state.message}
         </span>
       );
     case "unknown":
       return (
-        <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
+        <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight-text">
           <TriangleAlert size={12} />
           Couldn't confirm that — {state.message}
         </span>

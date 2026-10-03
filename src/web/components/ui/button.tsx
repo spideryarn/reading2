@@ -48,7 +48,7 @@ const buttonVariants = cva(
         default:
           "tw:bg-primary tw:text-primary-foreground tw:hover:brightness-110",
         destructive:
-          "tw:bg-destructive tw:text-white tw:hover:bg-destructive/90 tw:focus-visible:ring-destructive/20 tw:dark:bg-destructive/60 tw:dark:focus-visible:ring-destructive/40",
+          "tw:bg-destructive tw:text-destructive-foreground tw:hover:bg-destructive/90 tw:focus-visible:ring-destructive/20 tw:dark:bg-destructive/60 tw:dark:focus-visible:ring-destructive/40",
         outline:
           "tw:border tw:border-border tw:bg-transparent tw:text-foreground tw:hover:border-highlight/60 tw:hover:bg-highlight/10 tw:hover:text-foreground",
         secondary:

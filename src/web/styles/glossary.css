@@ -293,7 +293,7 @@
   font-size: 0.88rem;
   line-height: 1.4;
 }
-.gloss-stale svg { flex: none; color: var(--highlight); }
+.gloss-stale svg { flex: none; color: var(--highlight-text); }
 
 /* ---- the list ---- */
 
@@ -525,7 +525,7 @@
   color: var(--ink-faint);
   cursor: help;
 }
-.gloss-globe.on { color: var(--highlight); }
+.gloss-globe.on { color: var(--highlight-text); }
 .gloss-globe:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 /* Host names, one per line. The page title is the useful thing to read and the
    wrong thing to lay out in an 18rem band, so it lives in the hover tooltip. */

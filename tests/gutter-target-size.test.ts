@@ -615,7 +615,7 @@ describe("the column shows as many controls as the row has room for", () => {
     for (const control of [".blk-permalink", ".block-chat", ".blk-bookmark", ".blk-help", ".blk-more"]) {
       const lit = rulesWith(`${control}:hover`);
       expect(lit.length, `${control} has no :hover rule`).toBeGreaterThan(0);
-      expect(lit.map((r) => r.body).join(" "), `${control} does not glow`).toContain("color: var(--highlight)");
+      expect(lit.map((r) => r.body).join(" "), `${control} does not glow`).toContain("color: var(--highlight-text)");
     }
     const shared = css.indexOf(".blk-bookmark:hover");
     expect(css.indexOf(".blk-permalink.failed {")).toBeGreaterThan(shared);
@@ -643,7 +643,7 @@ describe("the column shows as many controls as the row has room for", () => {
     // And the mark's own colour is still declared, outside the query where it
     // applies to every device.
     expect(rule(".block-chat.has")).toContain("color: var(--chat-mark)");
-    expect(rule(".blk-cmt")).toContain("color: var(--highlight)");
+    expect(rule(".blk-cmt")).toContain("color: var(--highlight-text)");
 
     /* **The opacity half of the same trap, which the colour check walks past.**
        Since the reveal became conditional, `.block-chat.has` is not merely a

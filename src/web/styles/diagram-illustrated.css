@@ -182,7 +182,7 @@
   font-size: 0.68rem; line-height: 1.2; letter-spacing: 0.06em;
   color: var(--ink-faint);
 }
-.ill-row:hover .ill-caption { color: var(--highlight); }
+.ill-row:hover .ill-caption { color: var(--highlight-text); }
 .ill-depicts { display: block; font-size: 0.82rem; line-height: 1.35; color: var(--ink); }
 /* **Wraps, and is never clamped.** The quote is how a reader reads the picture
    back against the piece, so cutting it to an ellipsis would take away the
@@ -194,7 +194,7 @@
   font-family: var(--font-reading);
   font-size: 0.82rem; line-height: 1.4; color: var(--ink-faint);
 }
-.ill-row:hover .ill-depicts { color: var(--highlight); }
+.ill-row:hover .ill-depicts { color: var(--highlight-text); }
 .ill-none {
   margin: 0.4rem 0;
   font-family: var(--font-ui); font-size: 0.79rem; line-height: 1.45; color: var(--ink-faint);
@@ -322,7 +322,7 @@
 }
 .ill-back {
   padding: 0; background: none; border: none; cursor: pointer;
-  font-family: inherit; font-size: inherit; color: var(--highlight);
+  font-family: inherit; font-size: inherit; color: var(--highlight-text);
 }
 .ill-back:hover { text-decoration: underline; }
 

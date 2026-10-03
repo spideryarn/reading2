@@ -63,7 +63,7 @@ import { BackLink } from "./BackLink.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 
-const MAIL_CLASS = "tw:text-highlight tw:no-underline tw:hover:underline";
+const MAIL_CLASS = "tw:text-highlight-text tw:no-underline tw:hover:underline";
 
 export function ContactPage() {
   useDocumentTitle(pageTitle({ kind: "contact" }));

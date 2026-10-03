@@ -403,7 +403,7 @@
   gap: 0.2rem;
 }
 .srch-saved-stale::before { content: "·"; margin-right: 0.2rem; }
-.srch-saved-stale svg { flex: none; color: var(--highlight); }
+.srch-saved-stale svg { flex: none; color: var(--highlight-text); }
 
 /* A quick search's row says so before its count — "⚡ quick · 3 passages" —
    in the meta line's own faint ink: it is a fact about the row, not a warning.
@@ -453,7 +453,7 @@
   font-size: 0.88rem;
   line-height: 1.4;
 }
-.srch-stale svg { flex: none; color: var(--highlight); }
+.srch-stale svg { flex: none; color: var(--highlight-text); }
 /* `p.srch-stale-hint`, not `.srch-stale-hint`: the rule above matches every `p`
    in this box and is one class plus one element, so a bare class loses to it and
    the hint would come out flexed, full-size and hard against the line above.

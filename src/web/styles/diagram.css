@@ -119,7 +119,7 @@
   width: 100%;
 }
 .diag-step-btn:hover:not([aria-disabled="true"]) {
-  color: var(--highlight);
+  color: var(--highlight-text);
   border-color: var(--highlight);
   background: var(--highlight-wash);
 }
@@ -308,7 +308,7 @@
 /* ---- you are here ---- */
 
 line.diag-now {
-  stroke: var(--highlight);
+  stroke: var(--highlight-text);
   stroke-width: 1.25;
   stroke-dasharray: 2 3;
   opacity: 0.85;

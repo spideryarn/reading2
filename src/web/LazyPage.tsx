@@ -140,13 +140,13 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
         <p className="tw:mt-4 tw:opacity-70">
           <button
             type="button"
-            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight tw:underline"
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight-text tw:underline"
             onClick={this.props.onRetry}
           >
             Try again
           </button>{" "}
           asks for it once more without reloading. Or go back to{" "}
-          <Link href={LIBRARY_HREF} className="tw:text-highlight tw:underline">
+          <Link href={LIBRARY_HREF} className="tw:text-highlight-text tw:underline">
             your shelf
           </Link>
           .

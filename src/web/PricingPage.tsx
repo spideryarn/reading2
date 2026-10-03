@@ -407,7 +407,7 @@ function Faq() {
         <Answer q="How do I cancel?" wide>
           {/* Greg's, moved from *How it works*, word for word. */}
           Cancel whenever you like, from{" "}
-          <Link href="/profile" className="tw:text-highlight">
+          <Link href="/profile" className="tw:text-highlight-text">
             your profile
           </Link>
           , which opens Stripe's own billing page. You keep the month you have paid for, and nothing
@@ -620,7 +620,7 @@ function PlansForAReader() {
         <CurrentPlan summary={summary} />
       ) : (
         billing.error && (
-          <p className="tw:mt-4 tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-highlight">
+          <p className="tw:mt-4 tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-highlight-text">
             <TriangleAlert size={12} /> Couldn't read your plan — {billing.error}{" "}
             {/* **Not `className="linky"`, which styles nothing here.** That class
                 is scoped in styles.css to `.cmt-dialog`, `.chat-dialog` and
@@ -645,7 +645,7 @@ function PlansForAReader() {
           thing about its own buttons; this is not a shared component because the
           two sit in different layouts and the sentence is the server's. */}
       {billing.actionError && (
-        <p className="tw:mt-4 tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-highlight">
+        <p className="tw:mt-4 tw:m-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-highlight-text">
           <TriangleAlert size={12} /> {billing.actionError}
         </p>
       )}
@@ -830,7 +830,7 @@ function CurrentPlan({ summary }: { summary: BillingSummary }) {
           needs a Stripe customer, and this page does not know whether there is
           one). So the link that means *manage* still points where managing
           happens. docs/plans/260904b § Repoint links. */}
-      <Link href="/profile" className="tw:text-highlight">
+      <Link href="/profile" className="tw:text-highlight-text">
         Change plan
       </Link>
       {needsDetail && copy.detail && (

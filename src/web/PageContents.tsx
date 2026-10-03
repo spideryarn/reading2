@@ -501,7 +501,7 @@ export function PageContents({
                  would have drawn in Arial beside a page of Geist, which is the
                  exact bug this component was shipped alongside a fix for. GPT
                  Sol, 2026-09-03. */
-              className={`tw:block tw:w-full tw:cursor-pointer tw:border-0 tw:border-l-2 tw:bg-transparent tw:py-1 tw:pl-3 tw:text-left tw:font-sans tw:text-xs tw:leading-snug tw:transition-colors tw:hover:text-highlight tw:focus-visible:outline-none tw:focus-visible:text-highlight ${
+              className={`tw:block tw:w-full tw:cursor-pointer tw:border-0 tw:border-l-2 tw:bg-transparent tw:py-1 tw:pl-3 tw:text-left tw:font-sans tw:text-xs tw:leading-snug tw:transition-colors tw:hover:text-highlight-text tw:focus-visible:outline-none tw:focus-visible:text-highlight-text ${
                 here === entry.id
                   ? "tw:border-highlight tw:text-foreground"
                   : "tw:border-border tw:text-ink-faint"

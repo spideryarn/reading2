@@ -87,27 +87,26 @@
    never to a directory containing prose. */
 @source "../../src/web";
 
-/* This app is dark. Not "dark by default" — dark, full stop: tokens.css sets
-   `color-scheme: dark` with no toggle and no prefers-color-scheme, and
-   index.html says the same in a <meta> so the browser paints dark before CSS
-   loads. Greg's call; see docs/project/web-client.md § Dark mode.
+/* `dark:` means **the page is in its dark theme** — `data-theme` on <html> is
+   anything but "light" — and never "the OS is in dark mode". Greg's 2026-08-24
+   dark-only call became a choice on /profile on 2026-10-03 (Light, Dark,
+   System; src/web/appearance.ts resolves System to one of the two), so the
+   attribute is the one fact, and docs/project/web-client.md § Appearance has
+   the whole of it.
 
-   Tailwind does not know that. Its `dark:` variant compiles to
-   `@media (prefers-color-scheme: dark)`, and shadcn's components lean on it —
-   Button alone has `dark:bg-input/30`, `dark:border-input`,
-   `dark:hover:bg-accent/50`. On a machine whose OS is in LIGHT mode, none of
-   those would apply, and the components would render their light-mode branch
-   on our permanently dark page.
+   Tailwind's own `dark:` compiles to `@media (prefers-color-scheme: dark)`,
+   and shadcn's components lean on it — Button alone has `dark:bg-input/30`,
+   `dark:border-input`, `dark:hover:bg-accent/50`. Left alone, a reader who
+   chose Dark on a light-mode OS would get shadcn's light branch on a dark page:
+   invisible to whoever writes the code, because it depends on the OS of whoever
+   VIEWS it. That is the bug this line has prevented since 2026-08-25, when it
+   was `(&)` — always matching, while the app was dark only.
 
-   That failure is invisible to whoever writes the code, because it depends on
-   the OS setting of whoever VIEWS it. It looks perfect on a dark-mode Mac and
-   subtly wrong on a light-mode one, and no test can see either.
-
-   Redefining the variant as always-matching makes `dark:x` mean exactly `x`,
-   which is the truth here. If light mode ever returns, this line is the first
-   thing to change — and the shape it should take is `[data-theme]`, not
-   prefers-color-scheme. */
-@custom-variant dark (&);
+   `:not([data-theme="light"])` rather than `[data-theme="dark"]`, so a page
+   whose before-paint script never ran is dark in its components as well as in
+   its tokens. GPT Sol checked the compiled output under Tailwind 4.3.3 with the
+   `tw:` prefix and `@layer app`, 2026-10-03. */
+@custom-variant dark (&:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *));
 
 /* `hover-none:x` — applies where the pointer cannot hover: a touch screen.
    Tailwind ships `hover:` but no way to say "and what about devices that have
@@ -200,6 +199,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-highlight: var(--spideryarn-orange); /* the ORANGE */
+  --color-highlight-text: var(--highlight-text); /* the orange as TEXT: darker in light */
 
   /* The reading view's own semantic names, so components can use them as
      utilities instead of reaching for arbitrary `[var(--…)]` values.

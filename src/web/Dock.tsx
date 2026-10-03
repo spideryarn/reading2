@@ -3865,7 +3865,7 @@ function DockExperimentalSwitch({
         {/* Visible, and one of three carriers — see the header. `aria-hidden`
             because the sentence it stands for is already in the description. */}
         {broken && (
-          <TriangleAlert className="tw:text-highlight" size={12} aria-hidden="true" />
+          <TriangleAlert className="tw:text-highlight-text" size={12} aria-hidden="true" />
         )}
       </button>
     </Tooltip>

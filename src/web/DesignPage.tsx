@@ -164,6 +164,7 @@ import type { Mode } from "../modes.js";
 const DESIGN_HIGH_POWER_SINCE = new Date(Date.now() - 3 * 86_400_000).toISOString();
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF } from "./router.js";
+import { useTheme } from "./appearance.js";
 
 /**
  * The real run button, with only the state under test varying.
@@ -322,8 +323,8 @@ const SCALES: { name: string; tokens: string[]; note: string; dense?: boolean }[
     name: "Categorical — one per saved search",
     tokens: ["--cat-0", "--cat-1", "--cat-2", "--cat-3", "--cat-4", "--cat-5", "--cat-6", "--cat-7"],
     note:
-      "Okabe–Ito, with three colours lifted for a black page and its black replaced by a light " +
-      "neutral. Look for two that you cannot tell apart at this size — the marks in the prose are " +
+      "Okabe–Ito, with three colours lifted for the dark page and its black replaced by a light " +
+      "neutral; on the light page, back to its published values or darkened to 3:1. Look for two that you cannot tell apart at this size — the marks in the prose are " +
       "2px rules, which is smaller than these chips, and small-field colour discrimination is the " +
       "worst case for any palette.",
   },
@@ -336,18 +337,18 @@ const SCALES: { name: string; tokens: string[]; note: string; dense?: boolean }[
     note:
       "The property to check is monotonic lightness: every step lighter than the one before, no " +
       "bright band in the middle. Squint, or take a greyscale screenshot — if the order survives " +
-      "losing the colour, the ramp is doing its job. The first two stops are darker than the page " +
-      "and are not to be painted on it.",
+      "losing the colour, the ramp is doing its job. The first two stops are nearly the page colour " +
+      "and are not to be painted on it (the light theme reverses the ramp, so this holds in both).",
   },
   {
-    name: "Diverging — blue to red, dark middle",
+    name: "Diverging — blue to red, quiet middle",
     tokens: [
       "--div-0", "--div-1", "--div-2", "--div-3",
       "--div-4", "--div-5", "--div-6", "--div-7", "--div-8",
     ],
     note:
       "The middle is the quietest step, not the loudest — which is the one change from every " +
-      "published diverging scale, all of which pivot on white because they were drawn for paper. " +
+      "published diverging scale on the dark page, all of which pivot on white because they were drawn for paper. " +
       "Lightness should climb toward both ends.",
   },
   {
@@ -476,9 +477,13 @@ function ratio(a: Rgb | null, b: Rgb | null): number | null {
 
 function useMeasured(names: string[]): Record<string, { css: string; rgb: Rgb | null }> {
   const [map, setMap] = useState<Record<string, { css: string; rgb: Rgb | null }>>({});
+  /* Remeasured when the page changes theme, which the token names alone never
+     say: the swatches repaint by themselves, the numbers beside them do not.
+     The *resolved* theme, so System following the OS remeasures too. */
+  const theme = useTheme();
   useEffect(() => {
     setMap(measure(names));
-  }, [names]);
+  }, [names, theme]);
   return map;
 }
 
@@ -595,7 +600,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         <h2>Weight axis</h2>
         <p className="design-note">
           Geist is variable, so these are real weights rather than the browser faking two of them.
-          Body copy sits at 450, not 400 — light text on a dark ground optically thins.
+          Body copy sits at 450 in the dark theme, not 400 — light text on a dark ground optically
+          thins — and back at 400 in the light one, where it does not.
         </p>
         <div className="design-panel">
           {[300, 400, 450, 500, 600, 700, 800].map((w) => (
@@ -1054,8 +1060,8 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         <p className="design-note">
           <strong>Top row: shadcn's Toggle as generated.</strong> Its ON state is{" "}
           <code className="design-token">bg-accent</code>, and in this palette{" "}
-          <code className="design-token">--accent</code> is a raised dark <em>surface</em>, not the
-          brand orange — so ON is dark grey on a near-black page. Not an error, not visibly broken,
+          <code className="design-token">--accent</code> is a raised <em>surface</em>, not the
+          brand orange — so ON is a grey barely off the page, in either theme. Not an error, not visibly broken,
           just the signal quietly gone. That is what it is supposed to look like here, and it is why
           nothing in the app uses the bare component.
         </p>

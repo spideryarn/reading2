@@ -195,6 +195,14 @@
      this picture. */
   mix-blend-mode: plus-lighter;
 }
+/* **The light theme is that light ground**, so it sums the other way:
+   `multiply` darkens where segments cross, which is the same heat map drawn in
+   ink rather than in light. An override rather than a token because it is a
+   blend mode, not a colour. `:where()` keeps it at this rule's specificity, so
+   the `diag-near-*` steps below still switch the blend off. Since 2026-10-03. */
+:where(:root[data-theme="light"]) .diag-trail .diag-link {
+  mix-blend-mode: multiply;
+}
 /* **The global fade is a custom property, not an `opacity`, and that is what
    lets the local ramp compose with it instead of replacing it.**
 

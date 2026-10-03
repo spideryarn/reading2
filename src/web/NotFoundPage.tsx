@@ -79,7 +79,7 @@ export function NotFoundPage({ signedIn }: {
           them to use as one (App.tsx renders this bare when nobody is signed
           in, for the reason PrivacyPage gets the same treatment: the logo links
           at a shelf they do not have). */}
-      <Link href={LIBRARY_HREF} className="tw:text-sm tw:text-highlight">
+      <Link href={LIBRARY_HREF} className="tw:text-sm tw:text-highlight-text">
         {signedIn ? NOT_FOUND_TO_SHELF : NOT_FOUND_TO_HOME}
       </Link>
       {/* No `SiteFooter`, and no sign-in controls. Both were weighed: a

@@ -206,7 +206,7 @@
   text-underline-offset: 2px;
   cursor: pointer;
 }
-.annotate-dialog button.linky:hover { color: var(--highlight); }
+.annotate-dialog button.linky:hover { color: var(--highlight-text); }
 
 .annotate-save {
   padding: 0.32rem 0.6rem;
@@ -409,7 +409,7 @@
   color: var(--ink-faint);
   cursor: pointer;
 }
-.chat-dialog-close:hover { color: var(--highlight); }
+.chat-dialog-close:hover { color: var(--highlight-text); }
 
 .chat-dialog-body {
   flex: 1 1 auto;
@@ -492,7 +492,7 @@
   align-items: center;
   gap: 0.2rem;
 }
-.chat-dialog button.linky:hover { color: var(--highlight); }
+.chat-dialog button.linky:hover { color: var(--highlight-text); }
 /* Beaten into place at 0-4-1, for the reason `.cmt-delete` documents: the
    general link hover above outscores a bare class selector however it is
    ordered, so the only button here that destroys something would otherwise

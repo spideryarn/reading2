@@ -8,6 +8,7 @@ import { startPerf } from "./perf.js";
 import { watchConnection } from "./offline.js";
 import { watchUncaughtErrors } from "./log-buffer.js";
 import { sweepDictations } from "./dictation-keep.js";
+import { startAppearance } from "./appearance.js";
 import { OfflineStrip } from "./OfflineStrip.js";
 import { AppBoundary } from "./AppBoundary.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
@@ -213,6 +214,13 @@ watchUncaughtErrors();
  * docs/plans/260929h-dictation-that-survives-a-closed-tab.md.
  */
 setTimeout(() => void sweepDictations(), 5000);
+
+/**
+ * Keep `<html data-theme>` right after the inline script in index.html set it:
+ * the OS changing under System, another tab changing the choice, a page back
+ * from the back-forward cache. appearance.ts.
+ */
+startAppearance();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

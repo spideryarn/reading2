@@ -112,7 +112,7 @@ function Mail() {
   return (
     <a
       href={`mailto:${CONTACT_EMAIL}`}
-      className="tw:text-highlight tw:no-underline tw:hover:underline"
+      className="tw:text-highlight-text tw:no-underline tw:hover:underline"
     >
       {CONTACT_EMAIL}
     </a>
@@ -133,7 +133,7 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
       <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-10">
         <Link
           href={PUBLIC_LIBRARY_HREF}
-          className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+          className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight-text"
         >
           <ArrowLeft size={13} />
           Shared articles
@@ -165,7 +165,7 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
             When a reader makes an article public, the whole extracted text becomes readable by
             anybody, with no account and nothing to sign up for. It is not an excerpt and there is
             no paywall in front of it. It is also listed on our{" "}
-            <Link href={PUBLIC_LIBRARY_HREF} className="tw:text-highlight tw:no-underline tw:hover:underline">
+            <Link href={PUBLIC_LIBRARY_HREF} className="tw:text-highlight-text tw:no-underline tw:hover:underline">
               shelf of shared articles
             </Link>
             , so somebody who was never sent the link can find it.
@@ -333,7 +333,7 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
             back from the page is a scrubbed error reporter, with session replay and tracing
             deliberately switched off. We do not sell anybody's text, and
             nobody trains a model on it — though, as our{" "}
-            <Link href={PRIVACY_HREF} className="tw:text-highlight tw:no-underline tw:hover:underline">
+            <Link href={PRIVACY_HREF} className="tw:text-highlight-text tw:no-underline tw:hover:underline">
               privacy policy
             </Link>{" "}
             says of the same promise, that rests partly on a setting on our account with our AI
@@ -361,7 +361,7 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
             What <em>taken down</em> means exactly — what happens to the shared link, and what
             happens to the copy the reader who added it still has — is set out on the privacy page,
             under{" "}
-            <Link href={TAKEDOWN_HREF} className="tw:text-highlight tw:no-underline tw:hover:underline">
+            <Link href={TAKEDOWN_HREF} className="tw:text-highlight-text tw:no-underline tw:hover:underline">
               If something here is yours
             </Link>
             .

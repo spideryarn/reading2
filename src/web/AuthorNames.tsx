@@ -82,7 +82,7 @@ export function AuthorNames({ authors, linkToShelf, all = false }: Props) {
           {" "}
           <button
             type="button"
-            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-[inherit] tw:text-[inherit] tw:text-ink-faint tw:underline tw:decoration-dotted tw:hover:text-highlight"
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-[inherit] tw:text-[inherit] tw:text-ink-faint tw:underline tw:decoration-dotted tw:hover:text-highlight-text"
             aria-expanded={expanded}
             aria-label={expanded ? "Show fewer authors" : `Show ${hidden} more authors`}
             onClick={() => setExpanded((open) => !open)}

@@ -66,15 +66,19 @@ started. The rule of thumb:
 The longer version, with the bugs that made each boundary necessary, is
 [260825a-shadcn-migration.md § Which mechanism does what](../plans/260825a-shadcn-migration.md#which-mechanism-does-what).
 
-## Colour: one source, dark only
+## Colour: one source, two themes
 
 [`styles/tokens.css`](../../styles/tokens.css) is the single source of truth. Two things follow
 from that, and both bite:
 
-- **Dark only, unconditionally.** No toggle, no `prefers-color-scheme`, no light fallback —
-  Greg's call, 2026-08-24. [web-client.md § Dark mode](web-client.md#dark-mode) has the quote and
-  what to do if light mode ever comes back.
-- **`--accent` is a raised dark *surface*, not the orange.** That is shadcn's meaning of the name,
+- **Dark by default, Light by choice.** Each token file has a dark `:root` block and a
+  `:root[data-theme="light"]` block of the same names; the reader picks Light, Dark or System on
+  /profile, and `<html data-theme>` carries the resolved one. So a colour is a token, never a
+  literal: a stylesheet that writes `white` to lift something is backwards in the other theme, and
+  mixes towards `--toward-ink` / `--toward-page` instead. Dark only from 2026-08-24 to 2026-10-03, by
+  Greg's call both ways — [web-client.md § Appearance](web-client.md#appearance-light-dark-and-system)
+  has both quotes, the mechanism, and the tests that hold the two palettes level.
+- **`--accent` is a raised *surface*, not the orange.** That is shadcn's meaning of the name,
   and shadcn's own components walk straight into it. Anything meaning the brand orange says
   `--highlight`. See the token block in
   [`src/web/styles/tokens.css`](../../src/web/styles/tokens.css), and
@@ -82,8 +86,8 @@ from that, and both bite:
 
 The semantic layer in [`src/web/styles/tokens.css`](../../src/web/styles/tokens.css)
 (`--ink`, `--page`, `--panel`, `--surface-raised`, `--rule`) sits over the brand tokens so the
-rules below read in reading-view terms rather than in shadcn surface names. On a dark ground the greys run the other way: *soft* and *faint* are darker,
-not lighter.
+rules below read in reading-view terms rather than in shadcn surface names. *Soft* and *faint* run away from the ink — darker on the dark page,
+lighter on the light one.
 
 ### Both of those are checked, because both had already happened
 
