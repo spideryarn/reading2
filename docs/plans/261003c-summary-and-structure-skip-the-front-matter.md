@@ -159,6 +159,30 @@ overridden the "best support" rule. A node-title screen was replaced with a posi
 no-heading abstract is in the corpus already (entropy-24's *"Abstract: …"* paragraph); an
 executive-summary case is not, and is said as a caveat rather than built.
 
+## The result
+
+The full write-up is
+[261003a](../investigations/261003a-summary-and-structure-skip-the-front-matter-prompt-eval.md).
+In short:
+
+- **Questions and claims on the abstract are gone.** Abstract-only nodes with a question: 3 and 2
+  in the old arms, 0 in all three new arms (`after-3` is on the final wording). Abstract-only
+  nodes with a content gist: about 6 and 4, then 0, 0 and 0.
+- **Nothing substantive was lost.** The closing Summary and Conclusions keep their claims, and so
+  does scaling-hypothesis's substantive appendix, in every new arm.
+- **The blind read agrees in direction but is not decisive.** Structure paperwork went new 4:0 and
+  3:0, against an old-against-old control of 3:1. The new side had fewer fidelity faults.
+- **One ship-rule line failed as written.** `after`'s Brief mean was 147.8 words against
+  `before`'s 146.5. That is inside the old prompt's own 7.7-word spread, and pooled, the new arms
+  give 142.2 against the old arms' 142.6. It is recorded rather than re-worded after the fact.
+  Shipped on the screen.
+
+GPT Sol's code review (`…-code-review-sol.md`, no P0) reworded the shared text: "leave
+`question` empty" for paperwork nodes too, and clearer precedence between the two exceptions. It
+also fixed the report's folder scan, validated the abstract bounds, pinned `simple-prompt/6`
+literally, and corrected the baseline counts. That rewording is why `after-3` was bought. Sol's
+one wider finding, that `toc10-frozen.ts` is not frozen, is pre-existing and left as a caveat.
+
 ## Deferred
 
 - **The deterministic strip**, as above.
