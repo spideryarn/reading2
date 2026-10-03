@@ -33,6 +33,7 @@ import { AlertTriangle, Camera, CheckCircle2, Clock } from "lucide-react";
 
 import type { AdminFeedbackDetail, AdminFeedbackReport, FeedbackKind } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { exactly, timeAgo } from "./relative-time.js";
 
 /**
@@ -275,20 +276,111 @@ function Handle({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function FeedbackCard({ report, now }: { report: AdminFeedbackReport; now: number }) {
-  const mirror = mirrorState(report);
-  const when = timeAgo(report.createdAt, now) ?? "";
+/**
+ * **Ignore, and Undo** — the one thing on this page that writes.
+ *
+ * Greg, 2026-10-03 (`spya-g95x4j`): *"I just saw feedback that I wished I could
+ * delete, and there wasn't a way to do it, or at least mark it as to be
+ * ignored."* A mark rather than a delete: it sets one timestamp on the row,
+ * the report stays in the list with its words, and Undo clears it. What it
+ * buys is that `scripts/feedback-unswept.ts` stops handing the report to the
+ * agents that work through them. docs/plans/261003j-….
+ *
+ * **Drawn from the server's answer, not from the press.** The card changes
+ * when the PATCH comes back with the row, so a write that failed leaves the
+ * card as it was and says so beside the button, which can be pressed again.
+ * The write itself is the hook's, because it has to take turns with the
+ * list's own requests — useAdminFeedback.ts § `setIgnored`.
+ */
+type OnIgnore = (report: AdminFeedbackReport, ignored: boolean) => Promise<void>;
+
+function IgnoreControl({
+  report,
+  now,
+  disabled,
+  onIgnore,
+}: {
+  report: AdminFeedbackReport;
+  now: number;
+  disabled: boolean;
+  onIgnore: OnIgnore;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const ignored = report.ignoredAt !== null;
+
+  const press = () => {
+    setError(null);
+    onIgnore(report, !ignored).catch((e: unknown) => {
+      setError(describeFetchFailure(e instanceof Error ? e : new Error(String(e))));
+    });
+  };
 
   return (
-    <li className="tw:mb-4 tw:list-none tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4">
-      <div className="tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-x-4 tw:gap-y-1">
+    <span className="tw:inline-flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1">
+      {report.ignoredAt !== null && (
+        <span className="tw:text-ink-faint" title={exactly(report.ignoredAt)}>
+          Ignored {timeAgo(report.ignoredAt, now) ?? ""}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={press}
+        disabled={disabled}
+        title={
+          ignored
+            ? "Stop ignoring this report, so it is worked through like any other"
+            : "Leave this report out of the ones we work through. It stays here and can be undone."
+        }
+        className="tw:inline-flex tw:h-7 tw:items-center tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-3 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50"
+      >
+        {ignored ? "Undo" : "Ignore"}
+      </button>
+      {error && (
+        <span role="alert" className="tw:basis-full tw:text-destructive">
+          That did not save. {error}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function FeedbackCard({
+  report,
+  now,
+  disabled,
+  onIgnore,
+}: {
+  report: AdminFeedbackReport;
+  now: number;
+  /** The list is loading or another write is out — useAdminFeedback.ts § `setIgnored`. */
+  disabled: boolean;
+  onIgnore: OnIgnore;
+}) {
+  const mirror = mirrorState(report);
+  const when = timeAgo(report.createdAt, now) ?? "";
+  const ignored = report.ignoredAt !== null;
+  /* An ignored report is dimmed, not hidden: Greg can see what he ignored and
+     take it back. The control row below stays at full strength, so Undo is
+     not itself faint. */
+  const dim = ignored ? "tw:opacity-50" : "";
+
+  return (
+    <li
+      data-ignored={ignored ? "true" : undefined}
+      className="tw:mb-4 tw:list-none tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4"
+    >
+      <div
+        className={`tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-x-4 tw:gap-y-1 ${dim}`}
+      >
         <span className="tw:text-sm tw:text-foreground">{report.reporterEmail}</span>
         <span className="tw:text-xs tw:text-muted-foreground" title={exactly(report.createdAt)}>
           {when}
         </span>
       </div>
 
-      <div className="tw:mt-1 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+      <div
+        className={`tw:mt-1 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-1 tw:text-xs tw:text-muted-foreground ${dim}`}
+      >
         {/* The kind, the environment, the slug — and, below, the whole address
             the reader was on. This comment said "never the URL" while sitting
             directly above the element that renders it, from 2026-09-02 until a
@@ -319,7 +411,9 @@ export function FeedbackCard({ report, now }: { report: AdminFeedbackReport; now
         </span>
       </div>
 
-      <Body text={report.body} />
+      <div className={dim}>
+        <Body text={report.body} />
+      </div>
 
       {report.screenshotBytes !== null && report.screenshotBytes > 0 && (
         <Screenshot ownerId={report.ownerId} id={report.id} bytes={report.screenshotBytes} />
@@ -336,7 +430,7 @@ export function FeedbackCard({ report, now }: { report: AdminFeedbackReport; now
       {/* **The correlation handles**, which are Greg's *"anything else that will
           help us correlate it with our Vercel logs"*. `vercel_id` is the only
           thing in this repo that ties a browser to a line in one. */}
-      <div className="tw:mt-3 tw:flex tw:flex-wrap tw:gap-x-4 tw:gap-y-1 tw:border-t tw:border-border tw:pt-2 tw:text-xs">
+      <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-1 tw:border-t tw:border-border tw:pt-2 tw:text-xs">
         <Handle label="report" value={report.id} />
         {report.buildCommit && (
           <Handle label="build" value={report.buildCommit.slice(0, 8)} />
@@ -349,6 +443,11 @@ export function FeedbackCard({ report, now }: { report: AdminFeedbackReport; now
         {report.consented && report.diagnosticsVersion === null && (
           <span className="tw:text-destructive">consented, but no diagnostics arrived</span>
         )}
+        {/* Pushed to the right-hand end of the row, where a wrapped row puts
+            it on a line of its own. */}
+        <span className="tw:ml-auto">
+          <IgnoreControl report={report} now={now} disabled={disabled} onIgnore={onIgnore} />
+        </span>
       </div>
     </li>
   );

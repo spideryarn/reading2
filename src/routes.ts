@@ -349,6 +349,7 @@ import {
   decodeFeedbackCursor,
   isSearchKind,
   parseFeedbackFrom,
+  parseFeedbackIgnorePatch,
 } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { noteArrival } from "./arrivals.js";
@@ -7606,6 +7607,8 @@ type AuthRoute = ExactAuthRoute | PatternAuthRoute;
 const JOBS_PATH = "/api/jobs";
 /* Gift vouchers: GET lists, POST creates (261001m). */
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
+/* One report, by its pair: read with GET, marked ignored with PATCH. */
+const ADMIN_FEEDBACK_REPORT_PATTERN = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/;
 const UPLOAD_PATTERN = /^\/api\/uploads\/([\w-]+)$/;
 const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
 /* Referee mode's criteria: the collection, and one row. `criteria` sits inside
@@ -7878,7 +7881,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   {
     kind: "pattern",
     method: "GET",
-    pattern: /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/,
+    pattern: ADMIN_FEEDBACK_REPORT_PATTERN,
     article: "none",
     handler: async ({ request: { res } }, captures) => {
       const [, owner = "", id = ""] = captures;
@@ -7886,6 +7889,31 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
       res.setHeader("Cache-Control", "private, no-store");
       const report = await adminStore.readFeedbackAcrossOwners(owner, id);
+      if (!report) throw httpError(404, "There is no such report.");
+      send(res, 200, { report });
+    },
+  },
+  /* **Mark a report as ignored, or take the mark back** — the Ignore button on
+     the card, and the only write under `/api/admin/feedback`. Greg, 2026-10-03
+     (`spya-g95x4j`): *"I just saw feedback that I wished I could delete, and
+     there wasn't a way to do it, or at least mark it as to be ignored."* It
+     sets or clears one timestamp; the report itself is never changed.
+     scripts/feedback-unswept.ts leaves a marked report out of the agents'
+     queue. Under `/api/admin/`, so the namespace gate refuses everybody else
+     before this is reached. docs/plans/261003j-…. */
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: ADMIN_FEEDBACK_REPORT_PATTERN,
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [, owner = "", id = ""] = captures;
+      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
+      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
+      const patch = parseFeedbackIgnorePatch(await readBody(req));
+      if (patch === "malformed") throw httpError(400, "The body must be { ignored: true or false }.");
+      res.setHeader("Cache-Control", "private, no-store");
+      const report = await adminStore.setFeedbackIgnoredAcrossOwners(owner, id, patch.ignored);
       if (!report) throw httpError(404, "There is no such report.");
       send(res, 200, { report });
     },

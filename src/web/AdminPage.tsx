@@ -473,7 +473,10 @@ function FeedbackFromToggle({
 
 /** The inbox under one filter. Remounted when the filter changes — see above. */
 function FeedbackInbox({ from }: { from: FeedbackFrom }) {
-  const { reports, error, loading, hasMore, reload, loadMore } = useAdminFeedback(from);
+  const { reports, error, loading, saving, hasMore, reload, loadMore, setIgnored } =
+    useAdminFeedback(from);
+  /* The list and the Ignore write take turns — useAdminFeedback.ts § `setIgnored`. */
+  const busy = loading || saving;
   const now = useNow();
 
   return (
@@ -502,7 +505,7 @@ function FeedbackInbox({ from }: { from: FeedbackFrom }) {
         <button
           type="button"
           onClick={() => void reload()}
-          disabled={loading}
+          disabled={busy}
           aria-label="Refresh the reports"
           title="Refresh the reports"
           className="tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-3 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50"
@@ -529,14 +532,20 @@ function FeedbackInbox({ from }: { from: FeedbackFrom }) {
                  and is unique within an owner, not globally — two readers may
                  legitimately hold the same one, and React would then draw one
                  card where there are two. src/store/pg-admin-feedback.ts. */
-              <FeedbackCard key={`${report.ownerId}:${report.id}`} report={report} now={now} />
+              <FeedbackCard
+                key={`${report.ownerId}:${report.id}`}
+                report={report}
+                now={now}
+                disabled={busy}
+                onIgnore={setIgnored}
+              />
             ))}
           </ul>
           {hasMore && (
             <button
               type="button"
               onClick={() => void loadMore()}
-              disabled={loading}
+              disabled={busy}
               className="tw:mt-2 tw:inline-flex tw:h-8 tw:items-center tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-4 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50"
             >
               {loading ? "Loading…" : "Load older"}

@@ -6605,8 +6605,29 @@ export interface AdminFeedbackReport {
   /** ISO. Sentry acknowledged it. Attempted-but-not-acknowledged is the interesting state. */
   mirroredAt: string | null;
   sentryEventId: string | null;
+  /**
+   * ISO, or `null`. **When an administrator marked this report as one to leave
+   * alone** — a test, a duplicate, nonsense. Not something the reader sent and
+   * not shown to them; the agents' sweep skips a marked report
+   * (scripts/feedback-unswept.ts). src/db/schema.ts § `ignoredAt`.
+   */
+  ignoredAt: string | null;
   /** ISO. */
   createdAt: string;
+}
+
+/**
+ * **The body of `PATCH /api/admin/feedback/:ownerId/:id`**: exactly
+ * `{ ignored: boolean }`. Anything else is refused rather than read
+ * generously, so a field added to this route later cannot be sent by a client
+ * that predates it and quietly dropped.
+ */
+export function parseFeedbackIgnorePatch(raw: unknown): { ignored: boolean } | "malformed" {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return "malformed";
+  const keys = Object.keys(raw);
+  const ignored = (raw as { ignored?: unknown }).ignored;
+  if (keys.length !== 1 || typeof ignored !== "boolean") return "malformed";
+  return { ignored };
 }
 
 /**

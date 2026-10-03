@@ -59,18 +59,23 @@ function report(id: string, ownerId: string, body: string): AdminFeedbackReport 
     mirrorAttemptedAt: null,
     mirroredAt: null,
     sentryEventId: null,
+    ignoredAt: null,
     createdAt: "2026-10-01T09:00:00.000Z",
   };
 }
 
-const jsonOk = (body: AdminFeedbackPage) =>
-  new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 /** Every request the page made, its lifetime, and a hand to answer it when the test says. */
 const asked: {
   url: string;
+  method: string;
+  sent: unknown;
   signal: AbortSignal | null;
   answer: (page: AdminFeedbackPage) => void;
+  /** Any body and status: the Ignore button's PATCH answers `{ report }`, or fails. */
+  reply: (body: unknown, status?: number) => void;
 }[] = [];
 
 let host: HTMLDivElement;
@@ -89,13 +94,17 @@ beforeEach(() => {
             reject(new DOMException("Aborted", "AbortError"));
           };
           signal?.addEventListener("abort", abort, { once: true });
+          const reply = (body: unknown, status = 200) => {
+            signal?.removeEventListener("abort", abort);
+            resolve(json(body, status));
+          };
           asked.push({
             url: String(input),
+            method: init?.method ?? "GET",
+            sent: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
             signal,
-            answer: (page) => {
-              signal?.removeEventListener("abort", abort);
-              resolve(jsonOk(page));
-            },
+            answer: (page) => reply(page),
+            reply,
           });
           if (signal?.aborted) abort();
         }),
@@ -222,5 +231,116 @@ describe("Readers only", () => {
     await settle();
     expect(bodies()).toEqual(["reader"]);
     expect(host.textContent).not.toContain("Load older");
+  });
+});
+
+/**
+ * **Ignore** — Greg, 2026-10-03 (`spya-g95x4j`): *"I just saw feedback that I
+ * wished I could delete, and there wasn't a way to do it, or at least mark it
+ * as to be ignored."* docs/plans/261003j-….
+ */
+describe("Ignore", () => {
+  const card = (body: string): HTMLElement => {
+    const found = [...host.querySelectorAll("li")].find((li) => li.textContent?.includes(body));
+    if (!found) throw new Error(`no card for "${body}"`);
+    return found as HTMLElement;
+  };
+  const within = (li: HTMLElement, name: string): HTMLButtonElement => {
+    const found = [...li.querySelectorAll("button")].find((b) => b.textContent?.trim() === name);
+    if (!found) throw new Error(`no button "${name}" on that card`);
+    return found;
+  };
+
+  async function twoReports(): Promise<void> {
+    await act(async () => root.render(<Page />));
+    await waitFor("the first request", () => asked.length === 1);
+    await act(async () =>
+      asked[0]?.answer({
+        reports: [report("spya-eeeeee", READER, "ASDF1"), report("spya-ffffff", READER, "a real bug")],
+        hasMore: false,
+        nextCursor: null,
+      }),
+    );
+    await waitFor("both cards", () => bodies().length === 2);
+  }
+
+  it("marks the one card from the server's answer, and takes it back", async () => {
+    await twoReports();
+    expect(card("ASDF1").dataset.ignored).toBeUndefined();
+
+    await act(async () => within(card("ASDF1"), "Ignore").click());
+    await waitFor("the PATCH", () => asked.length === 2);
+    expect(asked[1]?.method).toBe("PATCH");
+    expect(asked[1]?.url).toBe(`/api/admin/feedback/${READER}/spya-eeeeee`);
+    expect(asked[1]?.sent).toEqual({ ignored: true });
+    /* Not drawn as ignored until the server has said so. */
+    expect(card("ASDF1").dataset.ignored).toBeUndefined();
+    expect(within(card("ASDF1"), "Ignore").disabled).toBe(true);
+
+    await act(async () =>
+      asked[1]?.reply({
+        report: { ...report("spya-eeeeee", READER, "ASDF1"), ignoredAt: "2026-10-03T10:00:00.000Z" },
+      }),
+    );
+    await waitFor("the ignored card", () => card("ASDF1").dataset.ignored === "true");
+    expect(card("ASDF1").textContent).toContain("Ignored");
+    /* Still in the list, words and all, and the other card untouched. */
+    expect(bodies()).toEqual(["ASDF1", "a real bug"]);
+    expect(card("a real bug").dataset.ignored).toBeUndefined();
+
+    await act(async () => within(card("ASDF1"), "Undo").click());
+    await waitFor("the undo", () => asked.length === 3);
+    expect(asked[2]?.sent).toEqual({ ignored: false });
+    await act(async () => asked[2]?.reply({ report: report("spya-eeeeee", READER, "ASDF1") }));
+    await waitFor("the card back as it was", () => card("ASDF1").dataset.ignored === undefined);
+    within(card("ASDF1"), "Ignore");
+  });
+
+  /* GPT Sol's plan review, F2: a Refresh that read the old row and landed
+     after the PATCH would put *Ignore* back on a report the database is
+     already ignoring. So the list and the write take turns: neither can be
+     started while the other is in flight. */
+  it("takes turns with Refresh, so an older list cannot land on top of the write", async () => {
+    await twoReports();
+
+    await act(async () => button("Refresh").click());
+    await waitFor("the refresh", () => asked.length === 2);
+    expect(within(card("ASDF1"), "Ignore").disabled).toBe(true);
+    await act(async () => within(card("ASDF1"), "Ignore").click());
+    await settle();
+    expect(asked).toHaveLength(2);
+    await act(async () =>
+      asked[1]?.answer({
+        reports: [report("spya-eeeeee", READER, "ASDF1"), report("spya-ffffff", READER, "a real bug")],
+        hasMore: false,
+        nextCursor: null,
+      }),
+    );
+    await waitFor("the button back", () => within(card("ASDF1"), "Ignore").disabled === false);
+
+    await act(async () => within(card("ASDF1"), "Ignore").click());
+    await waitFor("the PATCH", () => asked.length === 3);
+    expect(button("Refresh").disabled).toBe(true);
+    /* Every card waits, not only the one pressed. */
+    expect(within(card("a real bug"), "Ignore").disabled).toBe(true);
+    await act(async () =>
+      asked[2]?.reply({
+        report: { ...report("spya-eeeeee", READER, "ASDF1"), ignoredAt: "2026-10-03T10:00:00.000Z" },
+      }),
+    );
+    await waitFor("the ignored card", () => card("ASDF1").dataset.ignored === "true");
+    expect(button("Refresh").disabled).toBe(false);
+    expect(within(card("a real bug"), "Ignore").disabled).toBe(false);
+  });
+
+  it("leaves the card as it was when the write fails, and says so", async () => {
+    await twoReports();
+    await act(async () => within(card("ASDF1"), "Ignore").click());
+    await waitFor("the PATCH", () => asked.length === 2);
+    await act(async () => asked[1]?.reply({ error: "There is no such report." }, 404));
+    await waitFor("the failure", () => card("ASDF1").querySelector('[role="alert"]') !== null);
+    expect(card("ASDF1").dataset.ignored).toBeUndefined();
+    /* Pressable again: a failure is not a dead button. */
+    expect(within(card("ASDF1"), "Ignore").disabled).toBe(false);
   });
 });

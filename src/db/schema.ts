@@ -4523,6 +4523,18 @@ export const feedback = spideryarn.table(
     /** Null until Sentry **acknowledged** it. See the header on the crash window. */
     mirroredAt: timestamp("mirrored_at", { withTimezone: true }),
     sentryEventId: text("sentry_event_id"),
+    /**
+     * **When an administrator marked this report as one to leave alone**, or
+     * null. The only field on the row the reader did not send and the server
+     * did not record at filing: Greg, 2026-10-03 (`spya-g95x4j`), *"I just saw
+     * feedback that I wished I could delete, and there wasn't a way to do it,
+     * or at least mark it as to be ignored."* A mark rather than a delete, so
+     * it can be taken back and the report itself is never changed.
+     * `scripts/feedback-unswept.ts` leaves a marked row out of the agents'
+     * queue; nothing a reader sees reads it.
+     * docs/plans/261003j-mark-a-feedback-report-as-ignored-from-the-admin-page.md.
+     */
+    ignoredAt: timestamp("ignored_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [

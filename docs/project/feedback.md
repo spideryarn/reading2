@@ -611,6 +611,32 @@ among them: `mirror_attempted_at is not null and mirrored_at is null` cannot tel
 being the only way to read the original is backwards.
 [260902l-admin-feedback-page.md](../plans/260902l-admin-feedback-page.md).
 
+### Ignoring a report, since 2026-10-03
+
+> I just saw feedback that I wished I could delete, and there wasn't a way to do it, or at least
+> mark it as to be ignored.
+>
+> — Greg, 2026-10-03 (`spya-g95x4j`)
+
+Each card on `/admin/feedback` has an **Ignore** button. It is a mark, not a delete: it stamps
+`feedback.ignored_at`, the card stays in the list, dimmed, with its words, and **Undo** clears the
+stamp. The report itself is never edited. It is the only write on the page
+(`PATCH /api/admin/feedback/:ownerId/:id`, body `{ ignored: true | false }`, behind the same admin
+gate as the reads).
+
+**What it does is take the report out of the agents' queue**: `scripts/feedback-unswept.ts` drops a
+marked row and says how many it dropped ([feedback-reports.md § Where the queue lives](feedback-reports.md#where-the-queue-lives)).
+Nothing a reader sees changes. The Earlier tab's shipped status comes from the notes, as before,
+and Sentry's copy is untouched.
+
+The list and the write take turns in the browser. A Refresh that read the old row and landed after
+the write would draw *Ignore* again on a report already ignored, so neither starts while the other
+is in flight (`setIgnored` in [`useAdminFeedback.ts`](../../src/web/useAdminFeedback.ts)).
+
+Not built: a way to add a note to a report (Greg called it lower priority; it is in the Overseer's
+queue), a delete, and a separate "invalid" state.
+[261003j](../plans/261003j-mark-a-feedback-report-as-ignored-from-the-admin-page.md).
+
 Two columns worth knowing when you do:
 
 - **`mirror_attempted_at` and `mirrored_at` are different questions.** The first is set when we hand

@@ -60,6 +60,7 @@ import type { ChooseArticle } from "../shelf-terms/choose.js";
 import type {
   AdminFeedbackDetail,
   AdminFeedbackPage,
+  AdminFeedbackReport,
   Article,
   ArticleMetadata,
   ChatAnchor,
@@ -1660,6 +1661,17 @@ export interface AdminStore {
    * already says what it does, reached from one gated route.
    */
   readFeedbackScreenshotAcrossOwners(ownerId: string, id: string): Promise<Uint8Array | null>;
+  /**
+   * **Mark one report as ignored, or take the mark back** — for
+   * `PATCH /api/admin/feedback/:ownerId/:id`, the one write on this side of the
+   * contract. Sets or clears `ignored_at` and nothing else; `null` for a pair
+   * that is not a report. src/store/pg-admin-feedback.ts.
+   */
+  setFeedbackIgnoredAcrossOwners(
+    ownerId: string,
+    id: string,
+    ignored: boolean,
+  ): Promise<AdminFeedbackReport | null>;
 }
 
 

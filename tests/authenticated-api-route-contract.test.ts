@@ -379,7 +379,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
   },
   {
     match: { kind: "regex", source: "^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$", flags: "" },
-    methods: ["GET"],
+    /* PATCH since 261003j: mark one report ignored, or take the mark back. */
+    methods: ["GET", "PATCH"],
     witnesses: ["/api/admin/feedback/w1/w2"],
   },
   {
@@ -894,7 +895,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 
 /** Loud failure controls. Never the oracle — see the header. */
 const EXPECTED_MATCHER_COUNT = 88;
-const EXPECTED_GUARD_COUNT = 107;
+const EXPECTED_GUARD_COUNT = 108;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2033,6 +2034,8 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/admin\\/voucher-emails\\/([\\w-]+)\\/retry$/",
         "GET literal /api/admin/feedback",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
+        // mark one report ignored, 261003j — beside the read of it
+        "PATCH regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
         // one article's cost, for the metadata page, 260930f
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$/",
