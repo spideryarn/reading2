@@ -244,7 +244,7 @@ IN FLIGHT even while it is waiting to start (`gjd-remote ls` shows "waits").
 | 142 | `spya-buj2gb` | 2026-09-29 | suggestion | Trajectory snippets expand in place (FAQ, ideas) | DONE | note 260929_1435; plan 260929f |
 | 143 | `spya-v6rjvy` | 2026-09-29 | suggestion | Tweets become normal mode + block links | DONE | note 260929_1540; plan 260929f |
 | 144 | `spya-a0ep9m` | 2026-09-29 | problem | Dictation cut off at ~2.5 min | DONE | note; plan 260929f; parts every 2 min |
-| 145 | `spya-d896sz` | 2026-09-29 | suggestion | Trajectory icons, question first, sparkline, where-am-i | PARTLY DONE | note; plan 260929f; WhereCard.tsx; queued qi-jcgdpz6d |
+| 145 | `spya-d896sz` | 2026-09-29 | suggestion | Trajectory icons, question first, sparkline, where-am-i | DONE | notes (2 parts); plans 260929f, 261003d (the spine card, from qi-jcgdpz6d) |
 | 146 | `spya-p6s5a4` | 2026-09-29 | suggestion | Separate sign-in page | DONE | note; plan |
 | 147 | `spya-bumjmy` | 2026-09-29 | suggestion | Space between bottom-bar icons | DONE | note 260930_2233 |
 | 148 | `spya-m3pteb` | 2026-09-29 | suggestion | Thin breadcrumb of headings at top of reading view, experimental-only, with web research | IN FLIGHT | scheduled tmux session (gjd-remote --wait, nothing run yet) fbm3pteb-headings-breadcrumb starts Sat 03 Oct 09:36 BST; no breadcrumb component in src/web |

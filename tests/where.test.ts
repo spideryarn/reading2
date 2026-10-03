@@ -4,7 +4,15 @@
  */
 import { describe, expect, it } from "vitest";
 import type { BlockId, NodeId, Tree, TreeNode } from "../src/types.js";
-import { type WhereRow, type WhereShape, whereForBlock, whereRows } from "../src/web/where.js";
+import type { OutlineEntry } from "../src/web/tree.js";
+import {
+  SPINE_LIMITS,
+  type WhereRow,
+  type WhereShape,
+  whereForBand,
+  whereForBlock,
+  whereRows,
+} from "../src/web/where.js";
 
 interface N {
   id: string;
@@ -23,7 +31,7 @@ const drawn = (rows: WhereRow[]) =>
   rows.map((r) =>
     r.kind === "more"
       ? `${"  ".repeat(r.depth)}…${r.count}`
-      : `${"  ".repeat(r.depth)}${r.here ? ">" : r.onPath ? "*" : ""}${r.title}`,
+      : `${"  ".repeat(r.depth)}${r.here ? ">" : r.onPath ? "*" : ""}${r.title}${r.of ? ` (${r.of.index + 1}/${r.of.total})` : ""}`,
   );
 
 describe("the fisheye", () => {
@@ -55,6 +63,95 @@ describe("the fisheye", () => {
     const top = [node("a"), node("b")];
     expect(drawn(whereRows(top, ["gone"], shape))).toEqual(["A", "B"]);
     expect(whereRows([], ["a"], shape)).toEqual([]);
+  });
+});
+
+describe("the spine's shorter version (plan 261003d)", () => {
+  it("keeps one neighbour either side and counts on the row instead of adding more-rows", () => {
+    const top = Array.from({ length: 8 }, (_, i) => node(`s${i}`, i === 5 ? [node("a"), node("b")] : []));
+    expect(drawn(whereRows(top, ["s5", "b"], shape, SPINE_LIMITS))).toEqual([
+      "S4",
+      "*S5 (6/8)",
+      "  A",
+      "  >B",
+      "S6",
+    ]);
+    /* At the very start, only a next neighbour. */
+    expect(drawn(whereRows(top, ["s0"], shape, SPINE_LIMITS))).toEqual([">S0 (1/8)", "S1"]);
+  });
+
+  it("draws a level of three whole, with no count", () => {
+    const top = [node("a"), node("b"), node("c")];
+    expect(drawn(whereRows(top, ["b"], shape, SPINE_LIMITS))).toEqual(["A", ">B", "C"]);
+  });
+
+  it("never draws more than three rows a level", () => {
+    const wide = (p: string) => Array.from({ length: 20 }, (_, i) => node(`${p}${i}`));
+    const top = wide("t").map((n, i) => (i === 10 ? node(n.id, wide("c")) : n));
+    for (const path of [["t0"], ["t10", "c0"], ["t10", "c10"], ["t10", "c19"], ["t19"]]) {
+      const rows = whereRows(top, path, shape, SPINE_LIMITS);
+      expect(rows.every((r) => r.kind === "node")).toBe(true);
+      for (const depth of [0, 1]) expect(rows.filter((r) => r.depth === depth).length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("leaves Skim's limits as they were", () => {
+    const top = Array.from({ length: 12 }, (_, i) => node(`s${i}`));
+    expect(whereRows(top, ["s6"], shape).some((r) => r.kind === "node" && r.of)).toBe(false);
+  });
+});
+
+describe("from the spine's outline", () => {
+  const entry = (id: string, o: { title?: string; navLabel?: string } = {}, children: OutlineEntry[] = []): OutlineEntry => ({
+    node: { id, depth: children.length ? 1 : 2, parent: "root", children: [], range: [`${id}-a`, `${id}-b`], title: o.title ?? "", ...(o.navLabel ? { navLabel: o.navLabel } : {}) } as unknown as TreeNode,
+    startRow: 0,
+    endRow: 0,
+    words: 0,
+    children,
+  });
+  const leaf = (id: string) => ({ ...entry(id, { navLabel: `para ${id}` }), node: { ...entry(id).node, depth: 3, navLabel: `para ${id}` } as TreeNode });
+  const OUTLINE: OutlineEntry[] = [
+    entry("p1", { title: "Part one" }, [
+      entry("s1", { title: "First" }, []),
+      entry("s2", { navLabel: "Only a nav label" }),
+      entry("s3"),
+      entry("s4"),
+    ]),
+    entry("p2", { title: "Part two" }),
+  ];
+  /* p1's sections are given leaf children, as the real outline's are. */
+  OUTLINE[0]!.children[0]!.children = [leaf("k1"), leaf("k2")];
+
+  it("finds a section by its own id, and stops there", () => {
+    expect(drawn(whereForBand(OUTLINE, "s1"))).toEqual(["*Part one", "  >First (1/4)", "  Only a nav label", "Part two"]);
+  });
+
+  it("finds a part standing in for its own children", () => {
+    expect(drawn(whereForBand(OUTLINE, "p2"))).toEqual(["Part one", ">Part two"]);
+  });
+
+  it("names two untitled siblings by their place, differently", () => {
+    expect(drawn(whereForBand(OUTLINE, "s4"))).toEqual([
+      "*Part one",
+      "  Section 3 of 4",
+      "  >Section 4 of 4 (4/4)",
+      "Part two",
+    ]);
+  });
+
+  it("says a nav label is the model's and a stand-in is ours", () => {
+    const rows = whereForBand(OUTLINE, "s3").filter((r) => r.kind === "node");
+    expect(rows.map((r) => r.kind === "node" && `${r.title}:${r.voice}`)).toEqual(
+      expect.arrayContaining(["Only a nav label:ai", "Section 3 of 4:ui"]),
+    );
+  });
+
+  it("gives an untitled top-level band the same visible fallback", () => {
+    expect(drawn(whereForBand([entry("blank")], "blank"))).toEqual([">Untitled section"]);
+  });
+
+  it("draws nothing for an id it does not have", () => {
+    expect(whereForBand(OUTLINE, "gone")).toEqual([]);
   });
 });
 

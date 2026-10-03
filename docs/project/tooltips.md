@@ -87,7 +87,7 @@ should know which leg it is standing on.
   that already works, on the one surface where the tooltip *is* the feature.
 - Two smaller costs, from the registry sources: shadcn's `tooltip.tsx` is a deliberately inverted
   one-liner (`bg-foreground text-background … text-xs`), and ours is a raised dark card carrying
-  crumb, title, gist, sub-section list and footer — migrating `BandCard` into it means overriding
+  outline, gist, sub-section list and footer — migrating `BandCard` into it means overriding
   essentially every class it ships. And it is the only component in the shortlist that needs
   `tw-animate-css`, a dependency bought solely for this swap.
 

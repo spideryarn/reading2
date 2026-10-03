@@ -416,13 +416,7 @@
 .skim-where[aria-expanded="true"] { background: var(--highlight-wash); }
 .skim-where:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 
-/* The card itself — WhereCard.tsx, where.ts. */
-.where-card { margin: 0; padding: 0; list-style: none; font-size: 0.8rem; line-height: 1.45; }
-.where-node { color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.where-node.on-path { color: var(--ink-soft); }
-.where-node.here { color: var(--ink); font-weight: 600; }
-.where-node.here::before { content: "▸ "; color: var(--highlight); }
-.where-more { color: var(--ink-faint); font-style: italic; }
+/* The card itself is shared with the spine, so its rules are in tooltip.css. */
 .where-tip { max-width: min(18rem, calc(100vw - 1.75rem)); }
 /* A link's look on a real button: these open another mode or move the prose. */
 .skim-link {
