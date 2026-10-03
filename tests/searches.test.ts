@@ -10,7 +10,7 @@
  * the stage-G section). `loadRuns` stayed, because
  * `tests/helpers/seed-reader-state.ts` reads a fixture's file through it to
  * seed `search_runs`; so did the pure half the Postgres store is written
- * against — `MAX_RUNS`, `withRun`, `requireColour`, `isStorableColour`.
+ * against — `withRun`, `requireColour`, `isStorableColour`.
  *
  * **Where the rest went**, because a deleted assertion leaves nothing behind to
  * go red:
@@ -46,7 +46,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   isStorableColour,
   loadRuns,
-  MAX_RUNS,
   MAX_STORED_COLOUR,
   requireColour,
   withRun,
@@ -141,11 +140,6 @@ describe("the colour the reader picked", () => {
   });
 });
 
-/** Every run marked finished, so the cap can apply to it. */
-function done(runs: SearchRun[]): SearchRun[] {
-  return runs.map((r) => ({ ...r, status: "done" as const }));
-}
-
 describe("withRun — which run a begin produces", () => {
   /* The decision itself, with no store under it. `pgSearchStore.begin` runs it
      and `tests/store-searches-pg.test.ts` drives all three of its branches
@@ -156,7 +150,7 @@ describe("withRun — which run a begin produces", () => {
   const at = "2026-08-20T00:00:00.000Z";
 
   it("mints when the id is free, and says so", () => {
-    const { runs, run, kind } = withRun(
+    const { run, kind } = withRun(
       [],
       "arguments against the main claim",
       "meaning",
@@ -166,7 +160,6 @@ describe("withRun — which run a begin produces", () => {
     expect(kind).toBe("minted");
     expect(run.status).toBe("pending");
     expect(run.kind).toBe("meaning");
-    expect(runs).toHaveLength(1);
   });
 
   it("writes the kind it was asked for onto a new run", () => {
@@ -189,7 +182,7 @@ describe("withRun — which run a begin produces", () => {
       error: "the model fell over",
       hits: [],
     };
-    const { runs, run, kind } = withRun(
+    const { run, kind } = withRun(
       [failed],
       "arguments against the main claim",
       "quick",
@@ -197,7 +190,6 @@ describe("withRun — which run a begin produces", () => {
       "2026-08-21T00:00:00.000Z",
     );
     expect(kind).toBe("reset");
-    expect(runs).toHaveLength(1);
     expect(run.id).toBe("spya-k3m9qt");
     expect(run.createdAt).toBe(at);
     expect(run.status).toBe("pending");
@@ -219,52 +211,26 @@ describe("withRun — which run a begin produces", () => {
       error: "the model fell over",
       hits: [],
     };
-    const { runs, run, kind } = withRun(
+    const { run, kind } = withRun(
       [failed],
       "arguments against the main claim",
       "meaning",
       "spya-k3m9qt",
       "2026-08-21T00:00:00.000Z",
     );
+    // A mint under another id is an INSERT, so the failed row is not written to.
     expect(kind).toBe("minted");
     expect(run.id).not.toBe("spya-k3m9qt");
     expect(run.kind).toBe("meaning");
-    expect(runs).toHaveLength(2);
-    expect(runs.find((r) => r.id === "spya-k3m9qt")).toEqual(failed);
   });
 
-  it("keeps at most MAX_RUNS, oldest first", () => {
-    // The oldest end, deliberately: the searches you come back to are the ones
-    // you ran recently.
-    // Each one finished, because a `pending` run is never trimmed — see below.
-    let runs: SearchRun[] = [];
-    for (let i = 0; i < MAX_RUNS + 3; i++) {
-      ({ runs } = withRun(done(runs), `criterion ${i}`, "meaning", undefined, at));
-    }
-    expect(runs).toHaveLength(MAX_RUNS);
-    expect(runs[0]?.criterion).toBe("criterion 3");
-    expect(runs[MAX_RUNS - 1]?.criterion).toBe(`criterion ${MAX_RUNS + 2}`);
-  });
-
-  it("never trims a run that is still pending, however many newer ones begin", () => {
-    /* The deferred finding from docs/plans/260930f-parallel-searches.md: the
-       trim used to spare only the run it had just written, so thirty newer
-       searches begun while an old one was still running deleted it mid-call.
-       docs/plans/261001i-search-pending-rows-survive-the-trim-and-the-duplicate-guard-follows-a-renamed-run.md */
-    let { runs, run: slow } = withRun([], "the slow one", "meaning", undefined, at);
-    for (let i = 0; i < MAX_RUNS + 3; i++) {
-      ({ runs } = withRun(
-        runs.map((r) => (r.id === slow.id ? r : { ...r, status: "done" as const })),
-        `criterion ${i}`,
-        "meaning",
-        undefined,
-        at,
-      ));
-    }
-    expect(runs.find((r) => r.id === slow.id)?.status).toBe("pending");
-    // Everything else is still held to the cap: thirty, plus the one running.
-    expect(runs).toHaveLength(MAX_RUNS + 1);
-  });
+  /* **No trim here.** `withRun` returned the list it would leave behind, trimmed
+     to `MAX_RUNS`, until 2026-10-03, and two cases here held that trim. Nothing
+     in production read the list — the trim that runs is SQL — so the return
+     went, and the cases with it: *never more than MAX_RUNS* and *never trims a
+     search that is still running* in tests/store-searches-pg.test.ts are the
+     same two, against the code that executes.
+     docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md */
 });
 
 describe("withRun — revising a quick search in place (plan 261002h)", () => {
@@ -289,7 +255,7 @@ describe("withRun — revising a quick search in place (plan 261002h)", () => {
 
   it("resets a quick row in place with the new words, keeping id, createdAt and colour", () => {
     const other = quick({ id: "spya-ther22", criterion: "something else" });
-    const { runs, run, kind } = withRun(
+    const { run, kind } = withRun(
       [quick(), other],
       "why replication fails",
       "quick",
@@ -310,9 +276,6 @@ describe("withRun — revising a quick search in place (plan 261002h)", () => {
       colour: 3,
       sourceHash: "new-hash",
     });
-    expect(runs).toHaveLength(2);
-    expect(runs[0]).toEqual(run);
-    expect(runs[1]).toEqual(other);
   });
 
   it("revises a row whatever its status — pending, done or failed", () => {
@@ -335,7 +298,7 @@ describe("withRun — revising a quick search in place (plan 261002h)", () => {
 
   it("does not revise a meaning row: it mints, as a held id with new words always has", () => {
     const meaning = quick({ kind: "meaning" });
-    const { runs, run, kind } = withRun(
+    const { run, kind } = withRun(
       [meaning],
       "new words",
       "meaning",
@@ -346,7 +309,6 @@ describe("withRun — revising a quick search in place (plan 261002h)", () => {
     );
     expect(kind).toBe("minted");
     expect(run.id).not.toBe("spya-k3m9qt");
-    expect(runs.find((r) => r.id === "spya-k3m9qt")).toEqual(meaning);
   });
 
   it("does not revise a quick row into a meaning search", () => {
@@ -387,12 +349,11 @@ describe("withRun — revising a quick search in place (plan 261002h)", () => {
 
   it("an unapplied revision cannot fall through to retry a failed meaning row", () => {
     const meaning = quick({ kind: "meaning", status: "error", error: "failed" });
-    const { runs, run, kind } = withRun(
+    const { run, kind } = withRun(
       [meaning], meaning.criterion, "meaning", meaning.id, later, undefined, { revises: true },
     );
     expect(kind).toBe("minted");
     expect(run.id).not.toBe(meaning.id);
-    expect(runs.find((r) => r.id === meaning.id)).toEqual(meaning);
   });
 
   it("without revises, new words under a held quick id still mint", () => {

@@ -1,0 +1,11 @@
+- **P1 — `docs/plans/261003h-shelf-link-sends-the-hits-own-spelling-and-foldwithmap-offsets.md:46`: The stated regex does not guarantee parity.** For `"A\u05B0\uFF9E"`, it produces `"a\u05B0\u3099"`; the server produces `"a\u3099\u05B0"`. U+FF9E and U+FF9F are non-marks whose decompositions begin with non-starters. **The implementation changed during review and now handles both**, but the plan still specifies the failing regex. Update it. The corrected implementation passed 864 targeted sequences; an exhaustive Unicode 17 scalar scan found no lowercase length changes after NFKD and mark stripping. Hangul, pointed Hebrew and Arabic controls passed.
+
+- **P2 — same plan:66: Source spelling cannot guarantee a rendered-text match.** Reproduced with `block.text = "The symbol \\(\\alpha\\) is here"` and query `alpha`: the link sends `find=alpha`, rendering produces `"The symbol α is here"`, and real `findLiteral` returns zero. Document this limit and test differing `text`/rendered HTML. When the source slice exists unchanged in rendered text and meets the minimum length, the cluster-span approach is sound.
+
+- **P2 — same plan:69: Define widening by usability after trimming.** For `"aﬃ b"` / `ffi`, right gives `"ﬃ "` and fails; left gives `"aﬃ"` and succeeds. The current implementation correctly tries both. It still gives up on `"ﬃ ffi"` despite a searchable second occurrence. Consider trying later occurrences before the next term. Skipping undersized needles entirely is simpler and safe, but sacrifices highlighting.
+
+- **P2 — same plan:84: Nonempty round trips alone miss incorrect endpoints.** `find=cafe` already matches inside decomposed `"cafe\u0301"`, so that test cannot detect a dropped accent. Require exact source-slice/span assertions. The arriving tests already assert the trailing mark; add U+FF9F parity, whitespace-right/usable-left widening, next-term fallback, and genuine rendered-text differences.
+
+`marked()` at `src/web/Library.tsx:1413` correctly consumes the new maps without changes. Importing `MIN_FIND_CHARS` introduces no cycle or DOM initialization problem. The three focused test files passed: **127 tests**. I made no repository edits.
+
+**REVISE — reconcile the stated regex with the fix, bound the rendered-text guarantee, and strengthen the edge tests.**

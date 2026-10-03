@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."referee_claims" ADD COLUMN "attempt_id" text;
