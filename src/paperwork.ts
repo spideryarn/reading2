@@ -129,6 +129,7 @@ export const PAPERWORK_EXEMPT: Record<string, string> = {
   "src/citation-investigate.ts": "investigates one citation, which lives in the reference list",
   "src/converse.ts": "chat, Remember and the tutorial answer the reader, who may ask who funded it",
   "src/live.ts": "talks with the reader, who may ask about the authors or the funding",
+  "src/live-gpt.ts": "the same conversation on the second engine; its backend answers what the reader asks",
   "src/explain.ts": "explains the passage the reader chose, which may be the acknowledgements",
   "src/search.ts": "finds what the reader searched for, which may be the funding",
   "src/quiz-mark.ts": "marks the reader's answer to a question Quiz already chose",

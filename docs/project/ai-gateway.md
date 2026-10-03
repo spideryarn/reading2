@@ -16,9 +16,18 @@ was OpenAI or no live mode, and Greg's own question ("*I'd love to just have a s
 `OPENROUTER_API_KEY`*") is answered at length in
 [live-conversation.md](live-conversation.md).
 
+**The exception holds two engines since 2026-10-03, and so a second endpoint and a text model.**
+GPT-Live, the experimental engine, has no browser token: `src/live.ts` itself posts the browser's
+SDP offer to `/v1/live/sessions`, a request that bills fifteen seconds of voice time. And the text
+model behind its voice (`GPT_LIVE_BACKEND_MODEL`) is a chat-shaped model that would otherwise
+belong on OpenRouter — it cannot go there, because it runs inside OpenAI's session and is never a
+request of ours. Still one exception, one file, one key:
+[live-conversation.md § The second engine](live-conversation.md#the-second-engine-gpt-live-behind-experimental).
+
 Two things about it belong here rather than there, because they are properties of *this* claim.
 **The audio never touches our server** — [`src/live.ts`](../../src/live.ts) mints a short-lived token
-and the browser opens the WebRTC connection itself, so there is no seam the spend passes through.
+(or, for GPT-Live, passes one SDP offer along) and the browser opens the WebRTC connection itself,
+so there is no seam the spend passes through.
 And therefore the usage exists only in the reader's tab: **`npm run cost` sees a live session
 because the browser tells it**, posting what each turn cost to `/api/live/:sessionId/usage`, where
 the server prices it and writes an ordinary `ai_calls` row. That landed on 2026-09-02 (Stage 2B) and
@@ -47,14 +56,16 @@ closed; the decision is kept here because the next reader should be able to see 
 feature with a known hole in its accounting was a choice rather than an oversight.
 
 The part that costs money rather than visibility was closed first: a live session ends itself after
-five minutes of quiet or twenty minutes in total
-([`useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts) § the caps), so a forgotten
+five minutes of quiet (two on GPT-Live, which bills an open minute whether or not anybody speaks) or
+twenty minutes in total
+([`session-shared.ts`](../../src/web/live/session-shared.ts) § the caps), so a forgotten
 tab bills minutes rather than the hour OpenAI would allow. **Measuring is still not limiting** —
 nothing on our server can end somebody's session, and a browser clock is a clock a tab can be wrong
 about.
 
 **What the live figure is worth**, said once: it is our arithmetic over counts a browser reported,
-priced from `REALTIME_PRICES`, and nothing reconciles it. That is `cost_source: "computed"`, which is
+priced from `REALTIME_PRICES` (and `LIVE_BACKEND_PRICES` for GPT-Live's backend), and nothing
+reconciles it. That is `cost_source: "computed"`, which is
 what that value has always meant here. A turn that was never posted because the tab died first is
 simply missing, so the figure is biased low by a probably-small unknown.
 
@@ -935,7 +946,8 @@ Written up in [260828g-ai-spend-outside-the-gateway.md](../plans/260828g-ai-spen
 ## The exception that arrived, and what it costs the rule
 
 Everything above rests on one vendor. **Live conversation — interactive voice dialogue on OpenAI's
-Realtime API — cannot rest on it**, because OpenRouter does not proxy that API. The decision was
+Realtime API, and since 2026-10-03 on its Live API too — cannot rest on it**, because OpenRouter
+proxies neither. The decision was
 made in advance rather than discovered in a diff
 ([realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md)), and both halves were
 built on 2026-09-02 — the server's journal, endpoints and pricing first (Stage 2A), then the
@@ -956,7 +968,9 @@ Three things about it are worth knowing before you touch this file's claims:
   modality on `response.done`; `gpt-live-transcribe`, which writes down what the reader said, is
   billed **per audio minute** and reports on its own event. A meter that watched only `response.done`
   would price half the feature at zero, which is why the report is a discriminated union — token
-  detail *or* seconds.
+  detail *or* seconds. GPT-Live's two bills are different again — seconds the session was open, and
+  the backend's tokens — and the first of them starts with a request this server makes:
+  [live-conversation.md § GPT-Live's two bills](live-conversation.md#gpt-lives-two-bills).
 - **A turn the tab never posted is simply missing.** There is no durable outbox and no ack-based
   retry: GPT Sol cut both for the alpha, as *"what an invoice needs"*. The queue is in memory and
   lives as long as the tab, so the live figure is biased low by a probably-small unknown.

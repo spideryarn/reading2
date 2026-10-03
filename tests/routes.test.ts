@@ -210,6 +210,8 @@ interface ReplyComment {
 interface Reply {
   handled: boolean;
   status: number;
+  /** What the handler set, names lower-cased. */
+  headers: Record<string, string>;
   /* Named where a test needs the field to have a *type* — an id that goes into
      a URL, a status compared against a literal. Everything else is `unknown`,
      which `expect` takes happily: this is a fixture for driving `handleApi`,
@@ -243,6 +245,7 @@ async function call(
 
   let status = 0;
   let text = "";
+  const sentHeaders: Record<string, string> = {};
   const res = {
     set statusCode(v: number) {
       status = v;
@@ -250,14 +253,16 @@ async function call(
     get statusCode() {
       return status;
     },
-    setHeader() {},
+    setHeader(name: string, value: unknown) {
+      sentHeaders[name.toLowerCase()] = String(value);
+    },
     end(chunk: string) {
       text = chunk;
     },
   } as unknown as ServerResponse;
 
   const handled = await handleApi(req, res, verify ?? acceptAny);
-  return { handled, status, body: text ? JSON.parse(text) : {} };
+  return { handled, status, body: text ? JSON.parse(text) : {}, headers: sentHeaders };
 }
 
 /**
@@ -2649,6 +2654,49 @@ describe("the admin gate", () => {
       expect(list).toHaveBeenCalledTimes(2);
     } finally {
       list.mockRestore();
+    }
+  });
+
+  /* **Ignore** (`spya-g95x4j`, docs/plans/261003j-…): the one write under
+     `/api/admin/feedback`. The same gate, the same two-part key, and a body
+     that is exactly `{ ignored: boolean }`. The store's own test proves what
+     the write does to a row; this proves what reaches the store. */
+  it("marks a report ignored for the administrator, and for nobody else", async () => {
+    const set = vi.spyOn(adminStore, "setFeedbackIgnoredAcrossOwners");
+    const path = `/api/admin/feedback/${ADMIN_USER_ID_LOCAL}/spya-k3m9qt`;
+    try {
+      /* Refused before the body is read or the store is asked. */
+      const refused = await call("PATCH", path, { ignored: true }, asSomebodyElse);
+      expect(refused.status).toBe(403);
+      expect(set).not.toHaveBeenCalled();
+
+      for (const bad of [{}, { ignored: "yes" }, { ignored: true, body: "edited" }, [true], "true"]) {
+        const r = await call("PATCH", path, bad);
+        expect(r.status, JSON.stringify(bad)).toBe(400);
+      }
+      for (const wrong of [
+        `/api/admin/feedback/not-a-uuid/spya-k3m9qt`,
+        `/api/admin/feedback/${ADMIN_USER_ID_LOCAL}/not-an-id`,
+      ]) {
+        expect((await call("PATCH", wrong, { ignored: true })).status, wrong).toBe(400);
+      }
+      expect(set).not.toHaveBeenCalled();
+
+      /* A well-formed pair that names no report is a 404, not a quiet 200. */
+      const missing = await call("PATCH", path, { ignored: true });
+      expect(missing.status).toBe(404);
+      expect(set).toHaveBeenLastCalledWith(ADMIN_USER_ID_LOCAL, "spya-k3m9qt", true);
+
+      set.mockResolvedValueOnce({ id: "spya-k3m9qt", ignoredAt: null } as never);
+      const undone = await call("PATCH", path, { ignored: false });
+      expect(undone.status).toBe(200);
+      expect(undone.body).toEqual({ report: { id: "spya-k3m9qt", ignoredAt: null } });
+      /* The answer is a reader's report, so no cache keeps a copy of it. */
+      expect(undone.headers["cache-control"]).toBe("private, no-store");
+      expect(missing.headers["cache-control"]).toBe("private, no-store");
+      expect(set).toHaveBeenLastCalledWith(ADMIN_USER_ID_LOCAL, "spya-k3m9qt", false);
+    } finally {
+      set.mockRestore();
     }
   });
 

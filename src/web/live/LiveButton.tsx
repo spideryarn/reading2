@@ -3,10 +3,17 @@
  * feedback, and the microphone and noise-reduction settings, live in
  * LiveStatus, beside the composer (docs/plans/261002j-live-voice-chat-cleanup.md
  * § 1d).
+ *
+ * **One exception, and only with Experimental features on: the voice-engine
+ * choice** (plan 261003a). It is here rather than under LiveStatus's Advanced
+ * because that panel exists only during and after a call, and the engine is
+ * chosen before one and pinned for the whole of it.
  */
 import { LoaderCircle, PhoneOff, Radio, X } from "lucide-react";
 
 import { ControlTip, Tooltip } from "../Tooltip.js";
+import { useExperimental } from "../useExperimental.js";
+import { ENGINE_COPY, effectiveEngine, parseEngine, rememberEngine, useEnginePreference } from "./engine.js";
 import type { LiveApi } from "./useLiveConversation.js";
 
 export function LiveButton({ live, disabled, onStart, labelled, continues }: {
@@ -26,6 +33,11 @@ export function LiveButton({ live, disabled, onStart, labelled, continues }: {
    */
   continues?: boolean | undefined;
 }) {
+  /* **Which engine the next call uses**, offered only while Experimental
+     features are on. With the switch off there is no choice and the engine is
+     Realtime, as it was before there were two. ./engine.ts, ./useLive.ts. */
+  const experimental = useExperimental();
+  const engine = effectiveEngine(useEnginePreference(), experimental.on);
   const connecting = live.phase === "connecting";
   const on = live.phase === "live";
   const closing = live.phase === "closing";
@@ -56,6 +68,30 @@ export function LiveButton({ live, disabled, onStart, labelled, continues }: {
           </span>
         </button>
       </Tooltip>
+      {experimental.on && <Tooltip placement="top" keepSide className="tip-soon" content={
+        <ControlTip head="Voice engine"
+          what={`${ENGINE_COPY.realtime.label}: ${ENGINE_COPY.realtime.tip.toLowerCase()}.`}
+          how={`${ENGINE_COPY["gpt-live"].label}: ${ENGINE_COPY["gpt-live"].tip.toLowerCase()}.`}
+          state={on || connecting || closing ? "Hang up to change it." : undefined}
+        />
+      }>
+        {/* One small select. Disabled for the whole of a call: the engine is
+            pinned to the call, and a control that could be changed mid-call
+            would say otherwise. */}
+        <label className="chat-live-engine">
+          <span className="sr-only">Voice engine</span>
+          <select value={engine} disabled={on || connecting || closing}
+            onKeyDown={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              const next = parseEngine(e.target.value);
+              if (next) rememberEngine(next);
+            }}
+          >
+            <option value="realtime" title={ENGINE_COPY.realtime.tip}>{ENGINE_COPY.realtime.label}</option>
+            <option value="gpt-live" title={ENGINE_COPY["gpt-live"].tip}>{ENGINE_COPY["gpt-live"].label}</option>
+          </select>
+        </label>
+      </Tooltip>}
     </span>
   );
 }
