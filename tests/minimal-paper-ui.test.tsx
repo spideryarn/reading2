@@ -277,13 +277,13 @@ describe("the reading address of a paper not read through yet", () => {
         JSON.stringify({ error: "Not read through yet. [np-read]", code: "not-processed", paper: PAPER }),
         { status: 409 },
       );
-    const { access } = await resolveAccess("a-paper", true, load());
+    const { access } = await resolveAccess("a-paper", "reader-1", load());
     expect(access).toEqual({ kind: "unread", paper: PAPER });
   });
 
   it("leaves any other 409 an error, with its own sentence", async () => {
     answer = () => new Response(JSON.stringify({ error: "Something else. [x-y]" }), { status: 409 });
-    await expect(resolveAccess("a-paper", true, load())).rejects.toThrow("Something else. [x-y]");
+    await expect(resolveAccess("a-paper", "reader-1", load())).rejects.toThrow("Something else. [x-y]");
   });
 
   it("does not accept another article's paper body on this owned route", async () => {
@@ -296,7 +296,7 @@ describe("the reading address of a paper not read through yet", () => {
         }),
         { status: 409 },
       );
-    await expect(resolveAccess("a-paper", true, load())).rejects.toThrow("Not read through yet");
+    await expect(resolveAccess("a-paper", "reader-1", load())).rejects.toThrow("Not read through yet");
   });
 
   it("draws the title, the authors, the abstract, the DOI and the PDF, and does not start the import", () => {
