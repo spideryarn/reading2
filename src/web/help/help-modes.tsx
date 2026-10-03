@@ -111,7 +111,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   chat: {
-    keywords: "ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph",
+    keywords:
+      "ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action",
     whenToUse: (
       <>
         <p>
@@ -164,6 +165,12 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           <kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an
           answer still arriving. <strong>Answer again</strong> gets a fresh answer, and the pencil lets
           you rewrite your question.
+        </p>
+        <p>
+          <strong>Buttons in an answer.</strong> Chat can offer a button when you ask it to bookmark a
+          passage, add or remove a tag, look a term up in the glossary, or show where the article first
+          says something. Nothing happens until you press the button; Chat cannot do any of these
+          itself.
         </p>
         <p>
           <strong>Talking instead of typing.</strong> The microphone turns your speech into text in
@@ -318,7 +325,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     reading: (
       <>
         <p>
-          <strong>Hidden instructions</strong>, at the top, checks the original web page for text a
+          <strong>Hidden instructions</strong>, behind the Notices button, checks the original web page for text a
           person would not see but an AI would read — text the colour of its background, too small to
           read, invisible characters, instructions written to a model. It reports and blocks nothing.
           “Nothing found” is not a clean bill: PDFs and some parts of a page are not checked, and it

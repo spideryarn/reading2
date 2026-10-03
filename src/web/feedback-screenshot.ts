@@ -34,6 +34,17 @@
  * writes it again from the raster regardless, so this is belt and braces on
  * purpose — work done in a browser is never validation, only the first half.
  *
+ * ## Shrunk until it fits, since 2026-10-03
+ *
+ * The size of the file the reader picked never matters; what matters is how big
+ * a PNG of those pixels is, and PNG is poor at photographs. A screenshot of flat
+ * UI is a few hundred kilobytes at 1600 pixels; the same page with a cover
+ * photograph on it is one to three megabytes. Until 2026-10-03 this encoded
+ * once and refused the second kind, with a sentence that said "even after
+ * shrinking it" about a single attempt — Greg's report `spya-wa7wms`. Now it
+ * walks `SCREENSHOT_LONG_EDGES` downwards and sends the first that fits:
+ * docs/plans/261003k-feedback-screenshot-shrinks-to-fit-and-profile-sections-collapse.md.
+ *
  * ## What this module does not do
  *
  * No DOM event listeners: `imageFileFromPaste` and `imageFileFromDrop` are pure
@@ -58,10 +69,38 @@ import { MAX_FEEDBACK_SCREENSHOT_BYTES } from "../types.js";
  * browser bundle (tests/client-imports.test.ts).
  *
  * 1600 is enough to read our own UI back off a screenshot taken on a 2×
- * display, and small enough that a full-screen capture lands inside
- * `MAX_FEEDBACK_SCREENSHOT_BYTES` with room to spare.
+ * display. Whether a capture at that size lands inside the byte limit depends
+ * on what is in it, which is what the ladder below is for.
  */
 export const SCREENSHOT_LONG_EDGE = 1600;
+
+/**
+ * The long edges tried, largest first. **The first whose PNG fits is sent.**
+ *
+ * A short ladder rather than a search for the largest size that fits: each rung
+ * is a full draw and encode of up to 2.5 million pixels on the reader's main
+ * thread, and five is the most anybody waits through. 640 is where our own UI
+ * stops being readable, so a picture that does not fit there is refused rather
+ * than sent as a thumbnail.
+ *
+ * **With today's numbers that refusal is a backstop, not something a picture
+ * reaches**: 640 × 640 × 4 is 1.64 MB of raster, under the 1.8 MB target, so
+ * even uncompressed noise fits at the bottom rung. Lower the limit or raise
+ * the bottom rung and that stops being true.
+ */
+export const SCREENSHOT_LONG_EDGES: readonly number[] = [SCREENSHOT_LONG_EDGE, 1280, 1024, 800, 640];
+
+/**
+ * What an attempt has to come in under: **90% of the limit, not the limit**.
+ *
+ * The server takes the PNG apart and writes it again with its own deflate
+ * (src/feedback-image.ts), and applies the limit to what *it* built, which can
+ * be a little bigger than what the browser built. So a file that only just fits
+ * here could be refused there, after the dialog had said it was fine. Applied to
+ * every attempt, the first included. It is measured headroom, not a guarantee —
+ * the server still checks, and the dialog still has a sentence for its 413.
+ */
+export const SCREENSHOT_TARGET_BYTES = Math.floor(MAX_FEEDBACK_SCREENSHOT_BYTES * 0.9);
 
 /**
  * Why a screenshot did not become a field. **A closed set**, because the dialog
@@ -87,21 +126,37 @@ export type ScreenshotOutcome =
   | { ok: false; problem: ScreenshotProblem };
 
 /**
- * The size to draw at: the long edge capped, the aspect ratio kept, and **never
- * bigger than it arrived**.
+ * The size to draw at: the long edge capped at `edge`, the aspect ratio kept,
+ * and **never bigger than it arrived**.
  *
- * The capped edge is assigned the constant rather than computed from the scale,
- * so a downscaled screenshot is exactly 1600 on its long side rather than 1599
+ * The capped edge is assigned the cap rather than computed from the scale, so a
+ * downscaled screenshot is exactly 1600 on its long side rather than 1599
  * because of a float. The other edge rounds, and is floored at 1 so that a
  * one-pixel strip stays a picture a canvas will accept.
  */
-function fitWithin(width: number, height: number): { width: number; height: number } {
+function fitWithin(
+  width: number,
+  height: number,
+  edge: number,
+): { width: number; height: number } {
   const long = Math.max(width, height);
-  if (long <= SCREENSHOT_LONG_EDGE) return { width, height };
-  const scale = SCREENSHOT_LONG_EDGE / long;
+  if (long <= edge) return { width, height };
+  const scale = edge / long;
   return width >= height
-    ? { width: SCREENSHOT_LONG_EDGE, height: Math.max(1, Math.round(height * scale)) }
-    : { width: Math.max(1, Math.round(width * scale)), height: SCREENSHOT_LONG_EDGE };
+    ? { width: edge, height: Math.max(1, Math.round(height * scale)) }
+    : { width: Math.max(1, Math.round(width * scale)), height: edge };
+}
+
+/**
+ * The long edges to try for a picture that arrived this big, largest first.
+ *
+ * Starts at the size it arrived when that is under the top rung, and leaves out
+ * every rung that would not be smaller than that: an 800-pixel picture is drawn
+ * at 800 and then 640, never three times at 800 under three different names.
+ */
+function edgesFor(long: number): number[] {
+  const first = Math.min(long, SCREENSHOT_LONG_EDGE);
+  return [first, ...SCREENSHOT_LONG_EDGES.filter((edge) => edge < first)];
 }
 
 /**
@@ -132,7 +187,8 @@ function toPng(canvas: HTMLCanvasElement): Promise<Blob | null> {
 }
 
 /**
- * **A screenshot, downscaled and re-encoded as PNG, ready to be posted.**
+ * **A screenshot, downscaled until it fits and re-encoded as PNG, ready to be
+ * posted.**
  *
  * Never throws: every failure is a `problem`, because the caller is a dialog
  * that has to say a sentence either way and an exception there would take the
@@ -158,33 +214,45 @@ export async function screenshotFromFile(file: File): Promise<ScreenshotOutcome>
   }
 
   try {
-    const size = fitWithin(bitmap.width, bitmap.height);
-    if (size.width < 1 || size.height < 1) return { ok: false, problem: "unreadable" };
+    if (bitmap.width < 1 || bitmap.height < 1) return { ok: false, problem: "unreadable" };
 
-    const canvas = document.createElement("canvas");
-    canvas.width = size.width;
-    canvas.height = size.height;
-    const context = canvas.getContext("2d");
-    if (!context) return { ok: false, problem: "unreadable" };
-    context.drawImage(bitmap, 0, 0, size.width, size.height);
+    /* Each rung is drawn from the decoded bitmap, never from the rung before:
+       one resample of the original is sharper than a resample of a resample,
+       and the bitmap is already in memory either way. */
+    for (const edge of edgesFor(Math.max(bitmap.width, bitmap.height))) {
+      const size = fitWithin(bitmap.width, bitmap.height, edge);
 
-    const blob = await toPng(canvas);
-    if (!blob) return { ok: false, problem: "unreadable" };
-    const bytes = new Uint8Array(await blob.arrayBuffer());
+      const canvas = document.createElement("canvas");
+      canvas.width = size.width;
+      canvas.height = size.height;
+      const context = canvas.getContext("2d");
+      if (!context) return { ok: false, problem: "unreadable" };
+      context.drawImage(bitmap, 0, 0, size.width, size.height);
+
+      const blob = await toPng(canvas);
+      if (!blob) return { ok: false, problem: "unreadable" };
+      /* `blob.size` before the copy, so a rung that is over costs an encode
+         and not a second multi-megabyte buffer as well. The cap is the
+         server's own (src/types.ts) less the headroom above, and is on decoded
+         bytes, which is what these are — the base64 expansion is the route's
+         own body limit's problem. */
+      if (blob.size > SCREENSHOT_TARGET_BYTES) continue;
+
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      return {
+        ok: true,
+        base64: base64(bytes),
+        width: size.width,
+        height: size.height,
+        bytes: bytes.length,
+      };
+    }
+
     /* Refused here rather than posted and 413'd, so the reader is told what to
        do about it while the dialog is still open and their words are still in
-       it. The cap is the server's own (src/types.ts) and is on decoded bytes,
-       which is what these are — the base64 expansion is the route's own body
-       limit's problem. */
-    if (bytes.length > MAX_FEEDBACK_SCREENSHOT_BYTES) return { ok: false, problem: "too-big" };
-
-    return {
-      ok: true,
-      base64: base64(bytes),
-      width: size.width,
-      height: size.height,
-      bytes: bytes.length,
-    };
+       it. Only now is "even after shrinking it" true of every size we were
+       willing to send. */
+    return { ok: false, problem: "too-big" };
   } catch {
     /* `drawImage` and `toBlob` both throw on a bitmap the engine decoded and
        cannot paint. The same thing to act on as a decode failure. */

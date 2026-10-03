@@ -1514,7 +1514,7 @@ const DRAWS: Record<Mode, Draws> = {
   search: { kind: "band", where: ".mode-band.srch", says: SEARCH_CRITERION, about: "corner" },
   /* The referee's own criterion, off the saved list — and the band opens on
      Criteria, so this is the sub-mode a press actually lands on. */
-  referee: { kind: "band", where: ".mode-band.referee", says: CRITERION_TEXT, about: { exempt: "its how-this-works card opens inside the band; too long for a tooltip, and already its (i)" } },
+  referee: { kind: "band", where: ".mode-band.referee", says: CRITERION_TEXT, about: "corner" },
   /* **The two conversation bands share a component and a class**, so the
      negation is what keeps these two rows apart: Remember's band carries
      `remember` as well as `chat`, and without `:not()` a Remember panel drawn

@@ -78,11 +78,23 @@ a model, and an eval cannot reuse it faithfully. Three pieces sit between the ba
 3. **A confirmation gate enforced in code**, not in a prompt. Anything whose risk class writes or
    spends goes through it, whoever asked.
 
+**All three exist since 2026-10-03, for the commands that take an argument**
+([261003f](../plans/261003f-commands-take-arguments-tags-dictation-and-chat-tools.md)). The
+descriptor is `CommandProposal` with its `RISK` class and its stored token; the dispatcher is
+`runProposal`, over the runners the page supplies, where a missing runner is "not available here"
+(both in [`command-proposal.ts`](../../src/web/command-proposal.ts)); and the gate is the press —
+a typed row's Enter in the bar, a button in a chat answer. Seven ids: jump to the first X, find,
+open or ask for a glossary term, add or remove a tag, bookmark. **The bar's other rows — modes,
+pages, re-runs, archive — are still closures in React**, so an interface model choosing among all
+of them needs the descriptor widened to cover them first.
+
 That decides the order of the work. **Every row added to the bar now is one more thing the model
 can do later.** And the bar is useful without the model: instant, needing no model to choose, and free except where a row says `generates`. Since
 2026-10-02 the bar re-runs any mode, opens Metadata's sections, archives and exports
-([261002c](../plans/261002c-commands-do-more-and-an-interface-model-vision.md)). It also takes one
-argument: `find <words>`, the deterministic ancestor of *"do they talk about X?"*
+([261002c](../plans/261002c-commands-do-more-and-an-interface-model-vision.md)). It also takes
+arguments, each behind a verb the reader types: `find <words>`, the deterministic ancestor of *"do
+they talk about X?"*, and since 2026-10-03 the jump, the glossary look-up and the tags
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)).
 
 What the model adds on top of the bar:
 
@@ -139,7 +151,7 @@ reader then sees the bar's ordinary filtered list instead of a guess.
 
 Three sources, from most to least curated:
 
-1. **The Help page** (`/help`, for readers, being written as fb85). It is the first thing to search
+1. **The Help page** (`/help`, for readers — [help-page.md](help-page.md)). It is the first thing to search
    because it is written for exactly this reader, and nothing in it is internal. It ships as TSX
    rather than Markdown, so the model needs either a text export of it at build time or a search
    over the rendered text.
@@ -158,7 +170,8 @@ building once the Help outgrows a prompt.
 ## The line: what it may do without asking
 
 This is the part that is a **defence** ([security-map.md](security-map.md)). Greg accepted it as the
-starting rule on 2026-10-02 (§ Decided); it is not built yet.
+starting rule on 2026-10-02 (§ Decided). It is built for the bar's argument rows and for chat's
+buttons (§ Where we are); the interface model it was written for is not.
 
 Chat has held one line since 2026-08-26: *nothing chat can call writes a file, deletes anything, or
 spends money* ([chat-tools.md § Security](chat-tools.md#security-a-tool-result-is-data-and-one-of-them-is-a-strangers)).
@@ -193,13 +206,16 @@ exactly the untrusted text the line above keeps away from actions. So in chat:
 - **Navigation and finding** can be tools today in all but name. `search_article_words` already is
   one, and *"show me"* could open the result.
 - **Anything in the "proposed" rows** must come back as a button in the answer that the reader
-  presses: the same row, rendered in the transcript, run by a click and never by the model. The
-  first one is the one chat-tools.md § Not built already recommends: *plant a question on a
-  section*.
+  presses: the same row, rendered in the transcript, run by a click and never by the model.
+  **Built 2026-10-03** for bookmark, tags, the glossary look-up, jump and find —
+  [chat-tools.md § Command buttons](chat-tools.md#command-buttons-chat-proposes-the-reader-presses).
+  Still to come is the one chat-tools.md § Not built recommends: *plant a question on a section*.
 - **The never row stays never.**
 
-The order this suggests: the bar's interface model first (no article in context, so the line is easy
-to hold), and chat's command buttons second, reusing its command list and its proposal rendering.
+The order this suggested was the bar's interface model first (no article in context, so the line is
+easy to hold) and chat's command buttons second. It went the other way round: Greg asked for the
+chat half directly (`spya-wh2xys`), and a button the reader presses holds the line without needing
+the interface model.
 
 ## Where we are
 
@@ -207,11 +223,16 @@ to hold), and chat's command buttons second, reusing its command list and its pr
   the bar's Metadata commands, re-run per mode, sections by name, archive, export, and `find <words>`.
 - **Measured**: Jev choosing a command, once, on a hand-made set (§ Jev first).
 - **Built** (2026-10-03, [261003d](../plans/261003d-your-own-tags-on-articles-on-the-shelf-and-the-metadata-page.md)):
-  tags themselves — [library.md § Your own tags](library.md#your-own-tags). Not yet a command: "add a
-  tag of X" would call `editArticleTags(slug, { add: [X] })` (src/web/article-tags.ts) after
-  validating X with `normaliseTag` (src/tags.ts), and needs a tags controller on the bar's `ShelfRow`
-  and a proposed row, per the table above.
-- **Not built**: the interface model, Help search, chat command buttons, the tag command.
+  tags themselves — [library.md § Your own tags](library.md#your-own-tags).
+- **Built** (2026-10-03, [261003f](../plans/261003f-commands-take-arguments-tags-dictation-and-chat-tools.md)):
+  the descriptor and the dispatcher (§ The command list is the tool list); the bar's argument
+  commands, Greg's *"add a tag of X to this paper"* among them; the experimental switch as a row;
+  dictation in the bar's box ([dictation.md](dictation.md)); and chat's command buttons
+  ([chat-tools.md § Command buttons](chat-tools.md#command-buttons-chat-proposes-the-reader-presses)),
+  with their eval
+  ([261003b](../investigations/261003b-chat-proposes-commands-as-chips.md)).
+- **Not built**: the interface model, Help search. Until the first, the bar matches the verbs in
+  its table, not paraphrase.
 
 ## Decided
 
@@ -222,6 +243,6 @@ Greg's answers, 2026-10-02, to the four questions this section used to ask:
    That is the rule the first interface model is built to.
 2. **One run on the stronger model:** *"maybe let's hold off on changes to this for now."* It stays
    two commands: High-powered AI, then Run again.
-3. **Speech in the bar:** *"ok"*. Queued with the bar's next session (`fbwh2xys`).
+3. **Speech in the bar:** *"ok"*. Shipped 2026-10-03 (`fbwh2xys`, § Where we are).
 4. **Tags:** *"we definitely do want to be able to add tags, but it can wait till tomorrow's
-   session"* (`fbqmev0s`).
+   session"* (`fbqmev0s`). Shipped 2026-10-03, and the tag command with them (§ Where we are).

@@ -90,10 +90,11 @@ the offline cache. Each of those is a state where a press would write a value no
 [`useExperimental`](../../src/web/useExperimental.ts) has the reasoning, and GPT Sol's review
 (2026-08-31, in `docs/plans/`) is where two of the three came from.
 
-## The two controls
+## The three controls
 
-Since 2026-09-03 the setting can be moved from either end of the app. They read one store, so they
-cannot disagree; they say the same two sentences, from
+Since 2026-09-03 the setting can be moved from either end of the app, and since 2026-10-03 from the
+command bar as well (the paragraph under the table). They read one store, so they cannot disagree;
+the first two say the same two sentences, from
 [`experimental-copy.ts`](../../src/web/experimental-copy.ts), so they cannot tell a reader two
 stories about what they turned on. Greg asked for the second one mid-run:
 
@@ -106,6 +107,18 @@ stories about what they turned on. Greg asked for the second one mid-run:
 | Who sees it | anybody on their own profile | **signed-in readers only** — there is no account to save it to otherwise, and a control a stranger cannot use is an advertisement for an account |
 | Also says | *when* it was turned on | nothing else; the bar is eighteen icons |
 | Inert by | `disabled` | `aria-disabled`, so the tooltip explaining *why* is still reachable — a `disabled` button fires no hover and takes no focus, which fails in exactly the states that need explaining |
+
+**The third is a row in the command bar** — *Turn experimental features on*, or *off*: one row whose
+label follows the state, typed-only, found by `experimental` and `labs`
+([`CommandBar.tsx`](../../src/web/CommandBar.tsx) § `experimentalRows`). Greg, 2026-09-29
+(`spya-wh2xys`): *"a command to turn on the experimental features or off … turning on the
+experimental features might be disabled if it's already on."* One row rather than a greyed twin,
+so there is nothing to press that does nothing — and for the same reason **no row at all** before
+the store has loaded, for nobody signed in, and while a save is out, when the store would drop the
+press. To make a refusal sayable, **`set` is awaitable**: it resolves to an
+`ExperimentalSaveOutcome` ([`experimental-store.ts`](../../src/web/experimental-store.ts)) — saved,
+failed, not sent, abandoned — and the bar stays open with the reason on anything but the first. The
+two switches ignore the answer; the store's state already draws everything they show.
 
 **A toggle, not a link to `/profile`**: one press, where the effect is — the modes it reveals are
 three inches to the left of it, and so are the four Diagram pictures.

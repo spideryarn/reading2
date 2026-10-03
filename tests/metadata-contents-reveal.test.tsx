@@ -2,7 +2,7 @@
 /**
  * **The Metadata page's contents list opens, scrolls to and flashes a section,
  * and the search box above it finds one** — PageContents.tsx § reveal, and
- * Metadata.tsx § Section, which listens for `SECTION_REVEAL`.
+ * PageSection.tsx § Section, which listens for `SECTION_REVEAL`.
  *
  * Greg, SPIDERYARN-READING2-7Y, 2026-10-01:
  *

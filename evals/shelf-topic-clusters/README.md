@@ -14,6 +14,13 @@ The judge is a fresh Opus subagent per case that reads only `results/pairs/<case
 `results/judgements/<case>.json`. Check each file landed: one judge reported writing a file it had
 not written.
 
+## The shipped tree
+
+`hier.ts` (**paid**, about eight cents) runs the product's own `rethink` and `fileWorks` on
+greg-wide and on `shelves/expert.json`, and writes `results/hier-<shelf>.md`: the tree, how well it
+matches what the articles were written to be about, and how well held-out articles are filed
+afterwards. Its header says what it does not show.
+
 ## One real shelf
 
 `npm run shelf-topics:preview -- --owner <email or uuid> [--archived] [--members]`

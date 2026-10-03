@@ -81,7 +81,7 @@ export function SettingsSection() {
                two PATCHes racing can leave the switch showing the opposite of
                what is stored. */
             disabled={!experimental.loaded || experimental.saving}
-            onChange={(e) => experimental.set(e.target.checked)}
+            onChange={(e) => void experimental.set(e.target.checked)}
           />
           <FlaskConical size={13} className="tw:text-ink-faint" />
           <span>{EXPERIMENTAL_NAME}</span>

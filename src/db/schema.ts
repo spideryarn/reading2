@@ -1554,6 +1554,95 @@ export const shelfTopicScores = spideryarn.table(
   ],
 );
 
+/**
+ * **The model's topic set for one reader's whole shelf** — the topics it named
+ * and which article sits under which — docs/plans/261003f-shelf-topics-named-by-a-model-as-concepts-not-phrases.md;
+ * written through src/store/pg-shelf-terms.ts (`readTopicSet` and its
+ * neighbours).
+ *
+ * - **One row per owner**, no scope: the set covers active and archived
+ *   together, and the shelf proper is a filter over it.
+ * - **Two writes land in it.** A *re-think* replaces the whole result group
+ *   and stamps `rethought_at`; a *filing* merges new articles into `members`
+ *   and stamps `filed_at`. There is no input hash: what is stale is decided by
+ *   the caller from `members` against the shelf.
+ * - **The claim is two columns and a lease**, as on `shelf_topic_scores` minus
+ *   its hash: `claim_id` fences the write, `claimed_until` bounds a claimant
+ *   that died.
+ * - **`failures` and `retry_after` are the backoff**, the same schedule as the
+ *   scores'. Reset by a success.
+ * - **`topics` and `members` are JSONB on purpose**, under docs/project/sql.md
+ *   § Columns, not JSON: a small tree and a map, produced by one model call,
+ *   read and written whole, never filtered, joined or indexed into. The checks
+ *   below hold their outer shape and refuse an empty successful tree.
+ * - **A cache of a model call**, so the owner key is ON DELETE CASCADE, like
+ *   `shelf_topic_scores` (appended by hand to this table's migration).
+ *   Dropping every row costs one re-think per shelf.
+ */
+export const shelfTopicSets = spideryarn.table(
+  "shelf_topic_sets",
+  {
+    /** `auth.users(id)`. FK appended to the migration by hand, as with every `owner_id`. */
+    ownerId: uuid("owner_id").primaryKey(),
+    /** Null until the first re-think succeeds; set with the seven below it, or none of them. */
+    model: text("model"),
+    promptVersion: integer("prompt_version"),
+    /**
+     * sha256 hex of the reader's normalised profile as the re-think was shown
+     * it, or `''` for a reader with none — a string either way, so it sits in
+     * the result group. The profile is model input: a differing hash is what
+     * lets a profile edit trigger a re-think.
+     */
+    profileHash: text("profile_hash"),
+    /**
+     * `StoredTopic[]` (src/store/contracts.ts). **JSON, not a table**: a small
+     * tree the model returns whole and a re-think replaces whole; nothing
+     * queries into it.
+     */
+    topics: jsonb("topics").$type<{ id: string; key: string; label: string; parent: string | null; depth: number }[]>(),
+    /**
+     * `articles.id` → topic ids; an empty list means "seen, placed nowhere".
+     * **JSON, not a table**: read whole on every topic request and merged whole
+     * by a filing (`members || $new`); never joined to `articles`, so a deleted
+     * article's key simply stops being looked up.
+     */
+    members: jsonb("members").$type<Record<string, string[]>>(),
+    /** How many distinct works the re-think read. */
+    works: integer("works"),
+    /** How many of them it placed in no topic. */
+    unplaced: integer("unplaced"),
+    /** When the stored topics were last chosen afresh. */
+    rethoughtAt: timestamp("rethought_at", { withTimezone: true }),
+    /** When articles were last filed into the stored topics; null straight after a re-think. */
+    filedAt: timestamp("filed_at", { withTimezone: true }),
+    claimId: uuid("claim_id"),
+    claimedUntil: timestamp("claimed_until", { withTimezone: true }),
+    failures: integer("failures").notNull().default(0),
+    retryAfter: timestamp("retry_after", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("shelf_topic_sets_failures", sql`${t.failures} >= 0`),
+    check(
+      "shelf_topic_sets_result",
+      sql`num_nonnulls(${t.model}, ${t.promptVersion}, ${t.profileHash}, ${t.topics}, ${t.members}, ${t.works}, ${t.unplaced}, ${t.rethoughtAt}) in (0, 8)`,
+    ),
+    /* A filing only ever follows a re-think. */
+    check("shelf_topic_sets_filed", sql`${t.filedAt} is null or ${t.rethoughtAt} is not null`),
+    check("shelf_topic_sets_topics_array", sql`${t.topics} is null or jsonb_typeof(${t.topics}) = 'array'`),
+    /* A successful re-think always has at least one usable top-level topic.
+       Do not let an empty array masquerade as a current model answer. CASE
+       avoids calling jsonb_array_length on a malformed non-array value. */
+    check(
+      "shelf_topic_sets_topics_nonempty",
+      sql`case when ${t.topics} is null then true when jsonb_typeof(${t.topics}) = 'array' then jsonb_array_length(${t.topics}) > 0 else false end`,
+    ),
+    check("shelf_topic_sets_members_object", sql`${t.members} is null or jsonb_typeof(${t.members}) = 'object'`),
+    check("shelf_topic_sets_counts", sql`(${t.works} is null or ${t.works} >= 0) and (${t.unplaced} is null or ${t.unplaced} >= 0)`),
+    check("shelf_topic_sets_claim", sql`num_nonnulls(${t.claimId}, ${t.claimedUntil}) in (0, 2)`),
+  ],
+);
+
 /* ----------------------------------------------------- referee criteria -- */
 
 /**
@@ -4704,7 +4793,7 @@ export const feedback = spideryarn.table(
     ),
     check(
       "feedback_screenshot_size",
-      sql`${t.screenshot} is null or octet_length(${t.screenshot}) <= 400000`,
+      sql`${t.screenshot} is null or octet_length(${t.screenshot}) <= 2000000`,
     ),
     /**
      * An event id without a time it was mirrored would be a row that says Sentry

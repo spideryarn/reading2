@@ -1,6 +1,274 @@
 # 261003f — Shelf topics named by a model, as concepts rather than phrases
 
-**Status: not built. Waiting on Greg** — [§ The questions for Greg](#the-questions-for-greg).
+**Status: Greg answered on 2026-10-03 and v1 is built, for shelves of up to 150 works** —
+[§ Greg's answer, and v1](#gregs-answer-and-v1). The sections from *The proposal* down to *The
+questions for Greg* are the first proposal, kept for its reasoning; where they disagree with v1, v1
+is what is built.
+
+## Greg's answer, and v1
+
+> Okay, that sounds good. I guess what will it have as input? Will it take in the sort of titles and
+> summaries or what? I guess the prompt probably needs to take into account the variety and number
+> of articles.
+>
+> Because if there aren't that many, we probably don't want that many topic pills. If there are
+> loads, then we probably need more. And indeed, if some topics have loads, then we probably need a
+> mix of coarse and fine-grained topic pills. Because, you know, if I'm a neuroscience expert and I
+> have a thousand neuroscience papers, and then a few others that are on a mix of topics like
+> Buddhism and carpentry, for example, then, you know, I want neuroscience, Buddhism and carpentry
+> as high-level categories, but then I also want a whole bunch, a crap load of fine-grained topic
+> pills, you know, within those.
+>
+> And I guess ideally what we want would be a little bit of metadata for each topic pill for how
+> sort of coarse or fine-grained, ranging from zero to one. And then we might order the topic pills
+> by coarseness. So it's all the coarse ones first. And then, for example, if I pick neuroscience,
+> then it'll hide all of the non-neuroscience-related topic pills.
+>
+> And then I can easily filter down within those at sort of increasing levels of granularity. And it
+> should keep the existing machinery for, you know, mapping the topic pill colours so that similar
+> topic pills get a similar colour. If you can see any other improvements, go for it.
+>
+> If you have questions that you need to ask, ask me, but I'd probably prefer you proceed
+> autonomously.
+>
+> — Greg, 2026-10-03, relayed by the Overseer
+
+> One more thing. You said it costs a cent per shelf each time topics are worked out. I guess so
+> potentially that means we need to do it every time we add a new paper or a new batch of paper
+> articles. Could be a bit on the expensive side.
+>
+> I wonder if maybe I don't understand how this would work, because if we add a new paper, do we
+> have to rerun this automatically? Do we can we just add the topic pills that exist for the new
+> paper? If it adds new topic pills, how does it backfill existing papers?
+>
+> I know if you feel like you have a plan that's clear and that will work, go for it. But we need to
+> keep one eye on cost. One approach would be, you know, for the user to be able to click a button
+> to refresh the topic pills. And that way it would only happen every so often.
+>
+> But the key thing is new papers and articles need to be included automatically. That shouldn't be
+> something that the user has to do. Maybe we need some evals. Yeah, so I guess we're trying to
+> prioritize a bunch of objectives.
+>
+> One of them is, you know, new papers should always be included and that things should be up to
+> date. So correctness, I suppose. Then the next would be cost. And then the next would be latency.
+>
+> And actually also quite a high priority that this shouldn't require much thought from the user.
+> And another high priority is this should be really clear and helpful to the user.
+>
+> — Greg, 2026-10-03, relayed by the Overseer
+
+And, asked directly whether to build and whether his shelf may be read: *"Yes, build the first
+version. Yes, it's allowed to read my shelf from production."* The permission classifier still
+refused the production read from this session, so his shelf has not been looked at; the one-command
+script in question 1 is still how he sees it.
+
+### His questions, answered
+
+**What does it take as input?** Each article's title and its one-sentence summary (the abstract,
+for a paper that has no summary yet), and the reader's "about you" if they wrote one. Never the
+article text.
+
+**If we add a new paper, do we have to rerun everything?** No. There are two jobs:
+
+- **Filing.** A new article is shown the existing topic names and asked which it belongs in. That
+  is one small call, about $0.00005 an article, and it happens by itself the next time the shelf is
+  opened, within seconds. Nothing for the reader to do. This is his "can we just add the topic
+  pills that exist for the new paper?", and the answer is yes.
+- **A re-think.** Now and then the whole tree is worked out again, which is when new topics can
+  appear, and because it reads every article it files all the old ones under the new topics too.
+  That is the backfill. It happens when the shelf has grown by a quarter since the last one, or
+  when enough articles have turned up that fit no existing topic.
+
+**Against his priorities, in his order:**
+
+1. *New articles are always included.* Sorting them in is automatic: by filing, or by a re-think
+   when one is due anyway, since a re-think reads every article. An article that fits no topic is
+   recorded as seen and counted towards the next re-think, so a new subject does not stay
+   invisible. Until it is sorted, the row says *Sorting 1 new article into topics…*, because for
+   those seconds it is missing under a chosen topic.
+2. *Cost.* Filing is a two-hundredth of a penny per article. A re-think of a 150-article shelf was
+   a cent and a half. Over a shelf's first 150 articles the two together come to roughly a
+   twentieth of a penny per article, most of it re-thinks ([§ What v1 costs](#what-v1-costs)).
+3. *Latency.* The row draws at once from what is stored. Filing a handful of new articles takes
+   15 to 30 seconds in the background and the row updates without a reload. A re-think takes one
+   to two minutes in the background; the old topics stay up until it lands.
+4. *Little thought from the reader.* There is no button and no setting in v1. The refresh button
+   he floated is deferred: with filing automatic it is a convenience, not a need
+   ([§ Deferred](#deferred-with-a-queue-entry-each)).
+5. *Clear and helpful.* Broad subjects first; choosing one hides the unrelated pills and brings its
+   finer topics forward; a finer pill is marked `›` and its card says which subject it is inside.
+
+**Where v1 stops short of what he asked: it re-thinks shelves of up to 150 works, not a thousand.**
+[§ The 150-work cap](#the-150-work-cap) says why and what is queued.
+
+### The tree, and the 0-to-1 number
+
+A re-think asks for the shelf's **broad subjects** first: the separate fields a librarian would make
+top-level sections, as many as the shelf really has. A field that most of the shelf belongs to is
+one topic however large. Then **every topic with twelve works or more is asked about again, by
+itself**, for the finer topics inside it, and those again, to three levels. The count at each level
+follows how many works are there (about √n, between 3 and 20), which is his "if there aren't that
+many, we probably don't want that many topic pills. If there are loads, then we probably need more".
+
+**Granularity is the level, not the size**: 0 for a broad subject, 0.5 for a topic inside one, 0.75
+inside that (`1 − 2^−depth`). *Buddhism* with seven articles is as broad a subject as *Neuroscience*
+with 160, which a number based on size would get wrong. It is sent with each pill, and the row is
+ordered by it, broad first, then by how many articles.
+
+**Picking a pill narrows the rest** with the rule the row already had: a pill with nothing to show
+is not drawn. Choose *Neuroscience* and *Buddhism* and *Woodworking* go; its finer topics stay.
+**The colours are untouched**: they are worked out from which articles topics share, so a subject
+and the topics inside it land on neighbouring hues by themselves.
+
+**A name already taken.** If *Consciousness* is already a broad topic, a finer *Consciousness* inside
+*Neuroscience* is not made: two pills of one name at different levels cannot be told apart, and
+choosing the two existing pills together already gives those articles. If two subjects each have a
+finer topic of one name (*Methods* inside *Neuroscience* and inside *AI*), both are kept: they are
+told apart by which subject is chosen, and each card says what it is inside.
+
+### What was measured
+
+[`evals/shelf-topic-clusters/hier.ts`](../../evals/shelf-topic-clusters/hier.ts) runs the shipped
+code (`rethink` and `fileWorks` in `src/shelf-terms/model-topics.ts`) on synthetic shelves that
+record what each article was written to be about. One run each, on the final code:
+[hier-expert-150.md](../../evals/shelf-topic-clusters/results/hier-expert-150.md),
+[hier-greg-wide.md](../../evals/shelf-topic-clusters/results/hier-greg-wide.md),
+[hier-expert.md](../../evals/shelf-topic-clusters/results/hier-expert.md).
+
+- **expert-150** is Greg's own example at the size v1 re-thinks: 141 neuroscience articles over ten
+  sub-areas, 6 Buddhism, 3 carpentry. The top level came back as exactly *Neuroscience 141 ·
+  Buddhism 6 · Woodworking 3*; inside *Neuroscience*, 13 topics (*Memory, Reward & decisions,
+  Predictive processing, Vision, Synaptic plasticity, Motor control, Attention, Sleep* …); inside
+  those, 44 finer ones. All 13 intended categories were matched (mean F1 0.90). 12 calls,
+  **$0.016, 104 seconds**.
+- **greg-wide** (96 articles, twelve areas): 11 broad topics and 15 finer ones; 11 of 12 intended
+  areas matched (mean F1 0.82; *startups*, six articles, reached only 0.55). 5 calls, **$0.005, 57
+  seconds**.
+- **expert**, all 172 articles, is above the cap, so it exercises the sample-and-file path the
+  product does not use yet: the same three broad subjects, 15 topics inside *Neuroscience*, 59
+  finer. 16 calls, $0.02, 162 seconds.
+- **Filing, judged against what the articles were written to be about** (not against the model's
+  own earlier answer, which was GPT Sol's objection to the first test): every fifth article is held
+  out, the rest re-thought, the held-out filed.
+
+  | shelf | filed articles: share of their intended topics they are in | the same for articles the re-think placed | share of a filed article's topics that are wrong | cost an article |
+  |---|---|---|---|---|
+  | expert-150 | 0.93 | 0.93 | 0.02 (0.00 for the re-think) | $0.00005 |
+  | greg-wide | 0.84 | 0.77 | 0.10 (0.04) | $0.00004 |
+  | expert (172) | 0.95 | 0.93 | 0.03 (0.01) | $0.00005 |
+
+  No held-out article was left in no topic. On greg-wide two intended categories had no topic to be
+  scored against in the smaller tree (*history of science*, *startups*), which left one article
+  unscored; that is a miss by the re-think, not by filing, and is counted in the 11 of 12 above.
+
+**One thing was changed after seeing a result, and it is the important one.** The first top-level
+prompt asked for "about √n broad topics". On the expert shelf that produced fifteen top-level
+neuroscience topics beside *Buddhism* and *Woodworking*, and no *Neuroscience*: the opposite of what
+Greg asked for. The prompt now asks for the shelf's separate fields, "as many as the shelf really
+has and no more", and says a dominant field is one topic. Two smaller rules were also added after
+the first greg-wide run: a name a broader topic already has is not reused, and a finer topic needs
+three works.
+
+**What this does not show**: variance between runs, the effect of article order, whether a re-think
+keeps the previous labels (the instruction is in the prompt and unmeasured), a real shelf, or
+anything above 172 articles.
+
+### The 150-work cap
+
+**A re-think is attempted only on a shelf of up to 150 distinct works** (`MAX_WORKS`). Above that:
+a shelf that already has a tree keeps it, and new articles are still filed into it; a shelf that
+never had one keeps the phrase pills.
+
+Why, from GPT Sol's review of this design (findings 1 and 2), both of which hold:
+
+- **A rare subject would be missed.** Above 150, a level is named from a sample of its works and the
+  rest are filed into those names. With five carpentry papers among a thousand, the sample holds
+  less than one of them on average, a topic needs three, and filing cannot invent a name. That is
+  precisely Greg's *Buddhism and carpentry* case, and it would fail silently.
+- **It would not finish.** A 3,000-work re-think is some seventy filing calls at the top level
+  alone before the finer levels start, which can outlast both the ten-minute claim and the
+  function's 800-second limit, and then start again.
+
+The fix is known and is the next stage: name candidates from **every** chunk of the shelf, merge
+them in one more call, file everything into the merged names, and make the re-think a job that can
+stop and resume across requests. It is queued, not built. **This is the one place v1 does not do
+what Greg described**, and whether it matters now depends on how many articles his shelf holds.
+
+### How it runs
+
+- **One stored tree per reader**, over active and archived articles together (`shelf_topic_sets`):
+  the tree, each article's topics, the profile it was made with, when it was last re-thought and
+  last filed. Membership is cut to the articles in view when it is read, so the same tree serves the
+  shelf with and without *Include archived*.
+- **Exact copies are one work**: the model sees one line per work and every copy gets its topics.
+  The deterministic phrase reader finishes the exact-copy hashes over active and archived first;
+  naming and filing wait rather than treating a not-yet-read copy as a separate work. While it
+  does, `pending` may include an archived article outside the active view because the tree spans
+  both halves of the shelf.
+- **On each request to the topics route**: answer at once from the stored tree (or, when there is
+  none yet or the shelf is under eight works, with the phrase pills); then, if anything is due,
+  claim it, **read everything again under the claim and decide again**, take the allowance, and do
+  the work after the answer has gone. Due means, in this order: a re-think (no tree yet; the prompt
+  version, the model or the reader's profile changed; the shelf has grown or shrunk by a quarter
+  and at least five works since the last one; or the works that fit no topic have grown by five and
+  a tenth of the shelf since then), else filing whatever is not yet in the tree.
+- **Arrivals during a re-think are filed in the same handler**: after the write, an optimistic shelf
+  read finds whether anything arrived; if it did, the drain takes a second claim and reads the row
+  and shelf again under it before filing. It therefore cannot file ids from its old tree into a
+  newer one that another request wrote between the two claims.
+- **Never judged by hashing a prompt that contains the previous answer.** The previous labels are
+  given to a re-think as context ("keep a label that still fits") and play no part in deciding
+  whether one is due.
+- **A failed call** counts, backs off as the scoring did (2, 8, 32, 128 minutes, then six hours),
+  and leaves the stored tree in use. A call for one subject's finer topics is tried twice; if it
+  fails twice the whole re-think fails, because a tree stored with a branch missing would look
+  complete.
+- **Below eight works**, nothing is asked and a stored tree is not shown; the row behaves as before.
+- **The old scoring call is no longer made.** Its stored scores still shape the phrase pills a
+  reader sees until their first tree lands.
+- **The client asks again every 10 seconds for up to three minutes** while the server says work is
+  under way, so a re-think is seen landing without a reload. It was 8 seconds, four times.
+- **Security** is the list under the first proposal's stage 1: no tools, a strict schema, works and
+  topics named only by ids this prompt showed, a label of one clipped line with a fixed-alphabet
+  key, text-only rendering, nothing of the shelf logged, an owner-scoped row.
+- **One known gap**: the "fits no topic" trigger compares two totals, so if as many unplaced works
+  are deleted as new ones fail to fit, it does not fire. The size trigger still does in time.
+
+### What v1 costs
+
+Measured, GPT-6 Luna, 2026-10-03, one run each. A re-think was $0.005 at 96 articles, $0.016 at 150
+and $0.02 at 172: **between $0.00006 and $0.00012 an article per re-think**, more on the shelf with
+the deeper tree, because each article is read once per level. Filing is **$0.00004 to $0.00005 an
+article**.
+
+| | |
+|---|---|
+| adding one article | about $0.00005 (filing) |
+| one re-think of a 150-article shelf | about $0.016 (measured) |
+| a shelf's first 150 articles, in total | about $0.05 to $0.10: 150 filings ($0.01) and re-thinks at each quarter of growth |
+| per article, averaged | **about 0.03¢ to 0.07¢** |
+| each article past 150 | about $0.00005, filing only, until the large-shelf stage exists |
+
+The totals are arithmetic from the measured prices: re-thinking at each quarter of growth means the
+shelf is read about five times its final size over its life. What bounds it: 12 pieces of work an
+hour and 40 a day per reader, 3,000 a day across everyone, each at most one re-think of 150 works.
+So the worst day is under a dollar for one reader and about $60 for everyone together, if every
+allowed piece of work were a full re-think.
+
+### Deferred, with a queue entry each
+
+- **Shelves over 150 works**: naming from every chunk and a re-think that can resume, as
+  [§ The 150-work cap](#the-150-work-cap) describes, with its own eval on shuffled 1,000- and
+  3,000-article shelves holding a few rare subjects. The allowance should be weighed by calls or
+  dollars rather than counted in jobs before the cap is lifted (Sol, finding 11).
+- **A *Redo topics* button.** Greg floated it as a way to keep cost down; with filing automatic it
+  is no longer needed for that, and he asked for no thought from the reader. Worth adding if a tree
+  comes out wrong and somebody wants it redone now.
+- **Removing the old scoring path** (`model-scores.ts`, `shelf_topic_scores`, the scoring half of
+  `shelf-topics.ts`) once v1 has been seen on real shelves.
+- **Greg's own shelf.** `npm run shelf-topics:preview` shows the flat first proposal, not this
+  tree. The live row is now the better look; the script should be retired or taught the tree.
+- **Editing topics** (rename, hide, pin), as before.
 
 Report `spya-ntyes8`
 ([note](../user-feedback/260930_0715-shelf-topics-as-concepts-topic-model-or-clustering.md)), Greg,
@@ -294,6 +562,67 @@ measured; no embeddings; the fallback is today's program list; the eight-work mi
 topic set per reader rather than one per scope.
 
 ## Reviews
+
+**GPT Sol, review of the v1 code, 2026-10-03** —
+[prompt](261003f-shelf-topics-named-by-a-model-v1-code-review-prompt.md),
+[answer](261003f-shelf-topics-named-by-a-model-v1-code-review-sol.md). No P0. It fixed six P1s in
+place, each with a test, and I read its diff and ran the gates:
+
+1. A failed call in a parallel batch left the others running after the allowance was handed back;
+   the pool now stops taking work and waits for what is in flight.
+2. The drain of arrivals filed into the tree this request had written, though another request could
+   have replaced it between the two claims; it now re-reads under its second claim.
+3. **Paid work now waits until every article's text hash is stored**, active and archived. Without
+   it, exact copies could be named as separate works and later inherit whichever copy's topics came
+   first. The cost is that a shelf's first tree waits for the phrase program to finish reading it,
+   which the row already shows as *Reading N more articles…*.
+4. Several failure paths could leave a claim held; a failed release now tries the fenced failure
+   path, and the route completes the claim and allowance even if sending the answer throws.
+5. Keys were not unique in every collision; a qualified key now takes a suffix when it must.
+6. An empty tree could have been written; `rethink` refuses it and the table's CHECK does too.
+
+Two smaller ones: labels also lose Unicode format controls, and same-label topics order by key. One
+left for a decision and not changed: the eval lets several intended categories match one topic,
+which can flatter the category and filing scores; the results files say so. Sol's sandbox could not
+reach Postgres, so I ran both Postgres files and the migration tests afterwards: green.
+
+**Browser check, 2026-10-03** (a Sonnet subagent, Playwright, the server's answer replaced by a
+made-up tree over the local shelf): the row broad first with `›` on finer pills, choosing
+*Neuroscience* then *Vision*, a pressed pill not moving, both cards, More detail, *Sorting 3 new
+articles into topics…*, and the URL rule with and without `refreshing`, at 1280 and 390 wide, light
+and dark. All passed, no console errors. Not checked: a real re-think landing, because the shared
+local database could not take the migration.
+
+**GPT Sol, review of the v1 design, 2026-10-03** —
+[prompt](261003f-shelf-topics-named-by-a-model-v1-plan-review-prompt.md),
+[answer](261003f-shelf-topics-named-by-a-model-v1-plan-review-sol.md). Thirteen findings, read while
+the build was under way and applied before anything was pushed:
+
+1. *A 150-work sample cannot find a rare subject among thousands.* Accepted. **v1 is capped at 150
+   works** and the large-shelf stage is queued.
+2. *A large re-think can outlast the lease and the function.* Accepted; the same cap.
+3. *A request that read an older row could claim and overwrite a newer one; arrivals during a
+   re-think waited on the browser.* Fixed: everything is read again under the claim and decided
+   again, and arrivals are filed in the same handler.
+4. *A failed finer-topic call was stored as "no finer topics".* Fixed: tried twice, then the whole
+   re-think fails.
+5. *A shelf that shrinks below eight kept its tree; a large shrink never re-thought.* Fixed both.
+6. *One count cannot tell new unplaced works from old.* **Not fixed**; recorded as the known gap
+   above. Closing it means storing which works were unplaced, and the size trigger covers it late.
+7. *A profile edit never refreshed the tree.* Fixed: the profile's hash is stored and compared.
+8. *Dropping a duplicate name is wrong when two subjects share one.* Fixed: dropped only when a
+   broader topic has the name; kept under the parent's key when a sibling subject does.
+9. *The filing eval scored recall only and hid what it could not score.* Fixed: wrong placements,
+   unmatched categories and unscored articles are reported. Variance and order effects are still
+   unmeasured and listed as such.
+10. *The answer carried the phrase program's counts.* Fixed: the model path reports its own, and no
+    longer zeroes `pending`.
+11. *The fuse counts jobs, and a job is now many calls.* Bounded by the cap for now; weighing it by
+    cost is on the deferred item.
+12. *The prose said filing comes first; the row gave no sign an article was waiting.* Corrected,
+    and the row now says *Sorting N new articles into topics…*.
+13. *Keys dropped non-ASCII labels and could cut a character.* Fixed for both. Two labels that
+    differ only in punctuation (*C++*, *C#*) still share a key and are merged; left.
 
 **GPT Sol, plan review, 2026-10-03** — [prompt](261003f-shelf-topics-named-by-a-model-plan-review-prompt.md),
 [answer](261003f-shelf-topics-named-by-a-model-plan-review-sol.md). Thirteen findings; it recomputed

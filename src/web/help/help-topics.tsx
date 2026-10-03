@@ -347,7 +347,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
 
   keyboard: {
     title: "Keyboard shortcuts",
-    keywords: "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate",
+    keywords:
+      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define tag untag microphone dictate speak",
     body: (
       <>
         <ul>
@@ -357,6 +358,15 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <em>feedback</em> — and press <kbd>Enter</kbd>. Rows marked <strong>generates</strong>{" "}
             start the AI writing something. The <kbd>⌘</kbd> button in the bottom bar opens the same
             thing.
+          </li>
+          <li>
+            The command bar also takes a few whole requests. <em>where does it first mention entropy</em>{" "}
+            jumps to the first place the article says it, and <em>find entropy</em> shows every place.{" "}
+            <em>look up entropy</em> opens a matching term already visible in the glossary, or, once
+            the article has a glossary, offers to look it up and add it.{" "}
+            <em>tag as methods</em> and <em>untag methods</em> change your own tags, and{" "}
+            <em>experimental</em> turns experimental features on or off. Press the microphone in the
+            box to say it instead of typing.
           </li>
           <li>
             <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the

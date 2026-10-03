@@ -32,7 +32,14 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { getDb, type Db } from "../db/client.js";
-import { articleRevisions, articles, revisionBlocks, revisionPhraseRuns, shelfTopicScores } from "../db/schema.js";
+import {
+  articleRevisions,
+  articles,
+  revisionBlocks,
+  revisionPhraseRuns,
+  shelfTopicScores,
+  shelfTopicSets,
+} from "../db/schema.js";
 import { currentOwnerId } from "../owner.js";
 import { type ChooseArticle, type ChooseResult, chooseTerms } from "../shelf-terms/choose.js";
 import {
@@ -49,8 +56,11 @@ import type {
   ShelfTermsStore,
   ShelfTopicArticle,
   StoredTopicScores,
+  StoredTopicSet,
   TopicScope,
   TopicScoresResult,
+  TopicSetResult,
+  TopicShelfArticle,
 } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
@@ -83,6 +93,33 @@ export interface ShelfScope {
 }
 
 /**
+ * **The shelf boundary, once**: owned by the ambient reader, on the shelf, and
+ * a current revision the shelf can show (the caller joins it). Both
+ * `shelfRevisionsQuery` and `topicShelfQuery` take it, so the two cannot
+ * disagree about which articles are the reader's shelf.
+ */
+function shelfBoundary(scope: ShelfScope) {
+  return and(
+    ownedByReader(),
+    onTheShelf(),
+    /* `listArticles` drops these two cases after its query. Mirror that
+       exact readable-revision boundary here so a slug cannot receive a
+       topic while having no card (or get a cache row for a revision the
+       shelf does not expose). The scalar fallback is the same one
+       `scalarsForShelf` uses: a stored count wins; older rows with no
+       count are judged by their actual block rows. */
+    sql`${articleRevisions.tree} is not null`,
+    sql`coalesce(
+      ${articleRevisions.blockCount},
+      (select count(*)::integer from ${revisionBlocks}
+       where ${revisionBlocks.revisionId} = ${articleRevisions.id})
+    ) > 0`,
+    /* `=== "1"` upstream; here, both halves or the shelf proper. */
+    scope.archived ? undefined : isNull(articles.archivedAt),
+  );
+}
+
+/**
  * **The one owner-scoped query**, taking its builder so a test can read the
  * SQL it sends. Newest first, by the shelf's own `ADDED_AT`, which is the order
  * the fill works in.
@@ -100,26 +137,7 @@ export function shelfRevisionsQuery(db: Pick<Db, "select">, scope: ShelfScope) {
     })
     .from(articles)
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
-    .where(
-      and(
-        ownedByReader(),
-        onTheShelf(),
-        /* `listArticles` drops these two cases after its query. Mirror that
-           exact readable-revision boundary here so a slug cannot receive a
-           topic while having no card (or get a cache row for a revision the
-           shelf does not expose). The scalar fallback is the same one
-           `scalarsForShelf` uses: a stored count wins; older rows with no
-           count are judged by their actual block rows. */
-        sql`${articleRevisions.tree} is not null`,
-        sql`coalesce(
-          ${articleRevisions.blockCount},
-          (select count(*)::integer from ${revisionBlocks}
-           where ${revisionBlocks.revisionId} = ${articleRevisions.id})
-        ) > 0`,
-        /* `=== "1"` upstream; here, both halves or the shelf proper. */
-        scope.archived ? undefined : isNull(articles.archivedAt),
-      ),
-    )
+    .where(shelfBoundary(scope))
     .orderBy(desc(ADDED_AT), asc(articles.slug));
 }
 
@@ -475,6 +493,195 @@ export async function releaseTopicScores(scope: TopicScope, claimId: string, ret
     .where(and(ownedScoreRow(scope), eq(shelfTopicScores.claimId, claimId)));
 }
 
+/* --------------------------------------------- the model's topic set -- */
+
+/**
+ * **The topic model's view of the shelf, in one query**: every article inside
+ * `shelfBoundary` — active **and** archived — newest first, with the stored
+ * phrase run's `text_hash` for the current revision at this extractor version
+ * (left join: null when there is no run yet; nothing is filled here).
+ *
+ * `article_revisions` is read by three short text columns, named directly as
+ * `shelfRevisionsQuery` names its own; this is not one of
+ * `REVISION_PROJECTIONS`' reads (src/store/pg.ts).
+ */
+export function topicShelfQuery(db: Pick<Db, "select">) {
+  return db
+    .select({
+      articleId: articles.id,
+      slug: articles.slug,
+      archivedAt: articles.archivedAt,
+      title: articleRevisions.title,
+      titleOverride: articles.titleOverride,
+      rootGist: articleRevisions.rootGist,
+      abstract: articleRevisions.abstract,
+      textHash: revisionPhraseRuns.textHash,
+    })
+    .from(articles)
+    .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+    .leftJoin(
+      revisionPhraseRuns,
+      and(
+        eq(revisionPhraseRuns.revisionId, articleRevisions.id),
+        eq(revisionPhraseRuns.extractorVersion, EXTRACTOR_VERSION),
+      ),
+    )
+    .where(shelfBoundary({ archived: true }))
+    .orderBy(desc(ADDED_AT), asc(articles.slug));
+}
+
+export async function topicShelf(): Promise<TopicShelfArticle[]> {
+  const rows = await topicShelfQuery(getDb());
+  return rows.map((r) => ({
+    articleId: r.articleId,
+    slug: r.slug,
+    archived: r.archivedAt !== null,
+    title: r.titleOverride ?? r.title ?? r.slug,
+    gist: r.rootGist ?? r.abstract ?? null,
+    textHash: r.textHash,
+  }));
+}
+
+/**
+ * The ambient reader's topic-set row. Every statement below names it — the
+ * owner from the request's own box — so one reader can neither read nor claim
+ * nor fence nor overwrite another's row. Nothing here is logged: the row is
+ * topics named from the reader's own reading.
+ */
+function ownedTopicSetRow() {
+  return eq(shelfTopicSets.ownerId, currentOwnerId());
+}
+
+export async function readTopicSet(): Promise<StoredTopicSet | null> {
+  const [r] = await getDb().select().from(shelfTopicSets).where(ownedTopicSetRow());
+  if (!r) return null;
+  /* The CHECK constraints hold each group to all-or-nothing; the tests are
+     spelled out so the compiler sees each field non-null. */
+  const result =
+    r.model !== null &&
+    r.promptVersion !== null &&
+    r.profileHash !== null &&
+    r.topics !== null &&
+    r.members !== null &&
+    r.works !== null &&
+    r.unplaced !== null &&
+    r.rethoughtAt !== null
+      ? {
+          model: r.model,
+          promptVersion: r.promptVersion,
+          profileHash: r.profileHash,
+          topics: r.topics,
+          members: r.members,
+          works: r.works,
+          unplaced: r.unplaced,
+          rethoughtAt: r.rethoughtAt,
+          filedAt: r.filedAt,
+        }
+      : null;
+  const claim = r.claimId !== null && r.claimedUntil !== null ? { until: r.claimedUntil } : null;
+  return { result, claim, failures: r.failures, retryAfter: r.retryAfter };
+}
+
+/**
+ * **One statement, so two concurrent requests cannot both claim** —
+ * `claimTopicScores` without the input hash: insert the row with the claim, or
+ * update the existing one, and the update's `where` refuses while a live claim
+ * stands or the backoff has not passed. `returning` is empty exactly when it
+ * refused. The database's clock throughout.
+ */
+export async function claimTopicSet(leaseMs: number): Promise<string | null> {
+  const claimId = randomUUID();
+  const rows = await getDb()
+    .insert(shelfTopicSets)
+    .values({
+      ownerId: currentOwnerId(),
+      claimId,
+      claimedUntil: sql`now() + make_interval(secs => ${leaseMs / 1000})`,
+    })
+    .onConflictDoUpdate({
+      target: shelfTopicSets.ownerId,
+      set: { claimId: sql`excluded.claim_id`, claimedUntil: sql`excluded.claimed_until` },
+      setWhere: sql`(${shelfTopicSets.claimedUntil} is null or ${shelfTopicSets.claimedUntil} <= now())
+        and (${shelfTopicSets.retryAfter} is null or ${shelfTopicSets.retryAfter} <= now())`,
+    })
+    .returning({ claimId: shelfTopicSets.claimId });
+  return rows[0]?.claimId === claimId ? claimId : null;
+}
+
+export async function writeTopicSet(claimId: string, result: TopicSetResult): Promise<boolean> {
+  const rows = await getDb()
+    .update(shelfTopicSets)
+    .set({
+      model: result.model,
+      promptVersion: result.promptVersion,
+      profileHash: result.profileHash,
+      topics: result.topics,
+      members: result.members,
+      works: result.works,
+      unplaced: result.unplaced,
+      rethoughtAt: sql`now()`,
+      filedAt: null,
+      claimId: null,
+      claimedUntil: null,
+      failures: 0,
+      retryAfter: null,
+    })
+    .where(and(ownedTopicSetRow(), eq(shelfTopicSets.claimId, claimId)))
+    .returning({ ownerId: shelfTopicSets.ownerId });
+  return rows.length > 0;
+}
+
+/**
+ * Merge `members` over the stored map — `||`, so a key in both takes the new
+ * value whole. **Refuses when there is no stored result** (`rethought_at is
+ * not null` in the `where`): there are no topics to file into, and
+ * `null || x` is null. A refusal leaves the claim standing, for the caller to
+ * fail or release.
+ */
+export async function fileIntoTopicSet(claimId: string, members: Record<string, string[]>): Promise<boolean> {
+  const rows = await getDb()
+    .update(shelfTopicSets)
+    .set({
+      members: sql`${shelfTopicSets.members} || ${JSON.stringify(members)}::jsonb`,
+      filedAt: sql`now()`,
+      claimId: null,
+      claimedUntil: null,
+      failures: 0,
+      retryAfter: null,
+    })
+    .where(
+      and(ownedTopicSetRow(), eq(shelfTopicSets.claimId, claimId), sql`${shelfTopicSets.rethoughtAt} is not null`),
+    )
+    .returning({ ownerId: shelfTopicSets.ownerId });
+  return rows.length > 0;
+}
+
+/** The scores' schedule: `SCORE_BACKOFF_FIRST_SECONDS`, ×4 each time, capped at `SCORE_BACKOFF_MAX_SECONDS`. */
+export async function failTopicSet(claimId: string): Promise<void> {
+  await getDb()
+    .update(shelfTopicSets)
+    .set({
+      claimId: null,
+      claimedUntil: null,
+      failures: sql`${shelfTopicSets.failures} + 1`,
+      retryAfter: sql`now() + make_interval(secs => least(
+        ${SCORE_BACKOFF_MAX_SECONDS}::double precision,
+        ${SCORE_BACKOFF_FIRST_SECONDS}::double precision * power(4, ${shelfTopicSets.failures})))`,
+    })
+    .where(and(ownedTopicSetRow(), eq(shelfTopicSets.claimId, claimId)));
+}
+
+export async function releaseTopicSet(claimId: string, retryAfterMs: number): Promise<void> {
+  await getDb()
+    .update(shelfTopicSets)
+    .set({
+      claimId: null,
+      claimedUntil: null,
+      retryAfter: sql`now() + make_interval(secs => ${retryAfterMs / 1000})`,
+    })
+    .where(and(ownedTopicSetRow(), eq(shelfTopicSets.claimId, claimId)));
+}
+
 const rawPgShelfTermsStore: ShelfTermsStore = {
   terms: (scope, opts) => shelfTerms(scope, opts),
   snapshot: (scope, opts) => shelfSnapshot(scope, opts),
@@ -483,6 +690,13 @@ const rawPgShelfTermsStore: ShelfTermsStore = {
   writeScores: (scope, claimId, result) => writeTopicScores(scope, claimId, result),
   failScores: (scope, claimId) => failTopicScores(scope, claimId),
   releaseScores: (scope, claimId, retryAfterMs) => releaseTopicScores(scope, claimId, retryAfterMs),
+  topicShelf: () => topicShelf(),
+  readTopicSet: () => readTopicSet(),
+  claimTopicSet: (leaseMs) => claimTopicSet(leaseMs),
+  writeTopicSet: (claimId, result) => writeTopicSet(claimId, result),
+  fileIntoTopicSet: (claimId, members) => fileIntoTopicSet(claimId, members),
+  failTopicSet: (claimId) => failTopicSet(claimId),
+  releaseTopicSet: (claimId, retryAfterMs) => releaseTopicSet(claimId, retryAfterMs),
 };
 
 /** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */

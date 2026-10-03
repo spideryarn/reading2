@@ -588,8 +588,8 @@ deferred: [261003d](../plans/261003d-your-own-tags-on-articles-on-the-shelf-and-
   `owner_id` — ownership comes through the article, as for every table under `articles`. Reader
   state, so on `articles` and not on a revision, for § Shelf state's reason.
 - **One write, additive**: `PATCH /api/library/:slug/tags { add?, remove? }` answers the tags after.
-  Two tabs cannot clobber each other the way a replace-the-set PUT would, and the command bar's
-  later "add a tag of X" is `{ add: [X] }` through the same client function
+  Two tabs cannot clobber each other the way a replace-the-set PUT would, and a single add or
+  remove from anywhere is one small request through the same client function
   ([`src/web/article-tags.ts`](../../src/web/article-tags.ts)). The edit locks the article row, so
   the 30-per-article cap holds under a race —
   [`tests/store-tags-pg.test.ts`](../../tests/store-tags-pg.test.ts) has the test that goes red
@@ -603,6 +603,16 @@ deferred: [261003d](../plans/261003d-your-own-tags-on-articles-on-the-shelf-and-
 - **A Tags row above Topics** ([`ShelfTagFilter.tsx`](../../src/web/ShelfTagFilter.tsx)), built on the
   client from the entries' own tags and narrowing by the Topics row's rules — AND across every chip in
   both rows, one count — [shelf-terms.md § Your own tags, in the row above](shelf-terms.md#your-own-tags-in-the-row-above).
+- **A command, and a button chat can offer**, since 2026-10-03: *tag as X*, *add a tag of X*,
+  *untag X* in the command bar give *Add the tag “x”* / *Remove the tag “x”*, showing the tag as
+  `normaliseTag` will store it; a tag it refuses is still a row, whose Enter says why
+  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). The
+  bar edits through a **tags controller on its shelf row** (`ShelfRow.tags`,
+  [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), not through `editArticleTags` directly: on
+  Metadata that controller is the `TagEditor`'s own save, so the editor on screen follows, and the
+  two admit one write at a time ([`Metadata.tsx`](../../src/web/Metadata.tsx) § `saveTags`). Chat's
+  button is the same proposal —
+  [chat-tools.md § Command buttons](chat-tools.md#command-buttons-chat-proposes-the-reader-presses).
 
 ### The tooltip
 

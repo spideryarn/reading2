@@ -482,6 +482,14 @@ const SHARED = new Set([
      calling this is what makes the counter true.
      See src/citable.ts and docs/plans/chat-markdown.md. */
   "citable.js",
+  /* The shape of a command token in a chat answer (`[cmd:<id>:<argument>]`),
+     and which tokens stand on a line of their own. On the list for
+     `citable.js`'s reason, and imported by it: the renderer lifts a token out
+     of a text node before it looks for citations, and the server's citation
+     counters must blank the same span, or the id in
+     `[cmd:bookmark:spya-k3m9qt]` is counted as a citation nobody was shown.
+     It imports nothing at all. See src/command-token.ts and plan 261003f. */
+  "command-token.js",
   /* The `data-spya-*` namespace — the attributes stage 2 leaves on the article
      so stage 3 can read them back. On the list because it imports **nothing at
      all**, deliberately and for this reason: its own header says so, since a
