@@ -55,6 +55,7 @@ import {
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
 import type { BlockId, CitedWork, GlossaryEntry, Job, PagePreview, Quote } from "../types.js";
 import { LABEL as QUOTE_SCORE_LABEL } from "./QuotesPanel.js";
+import { aiProvenance } from "./quote-band-rows.js";
 import { urlKey } from "../ingest.js";
 import { hostOf } from "../urls.js";
 /* The same words-per-minute the masthead and the shelf card use. A second
@@ -1629,6 +1630,12 @@ export interface QuoteCardSource {
   byKey: ReadonlyMap<string, Quote>;
   /** Quotes is the mode already, so there is nothing to open. */
   inQuotesMode: boolean;
+  /**
+   * When the list was last written — the *on or before* bound for a quote with
+   * no `addedAt` of its own (`aiProvenance`). An owner's artefact and a
+   * visitor's public list both carry it; optional for a surface that has none.
+   */
+  generatedAt?: string | undefined;
   /** Write `?quote=` for Quotes mode and go to the quote's block. */
   onGo(quote: Quote): void;
   /** Reveal and select it, then open Quotes mode on its row. */
@@ -1650,6 +1657,10 @@ export interface QuoteCardSource {
  * - **‹ ›** step the outlined quotes down the page, whatever order the band is
  *   using. Disabled at either end; the card closes on a step, and the reader
  *   points at the next.
+ * - **Who chose it, and when**, last and in the app's face — the line the
+ *   band's ⓘ ends with too (`aiProvenance`). Greg, 2026-10-03 (spya-ma5h9b):
+ *   *"quotes should as well, maybe saying when it was applied and whether it's
+ *   AI generated or human highlights."*
  */
 function QuoteCard({
   quote,
@@ -1707,6 +1718,7 @@ function QuoteCard({
           <span className={voiceClass("ai")}>{quote.reason}</span>
         </p>
       )}
+      <p className="prose-card-meta prose-card-quote-prov">{aiProvenance(quote, source.generatedAt)}</p>
       <p className="prose-card-foot prose-card-quote-foot">
         <button
           type="button"

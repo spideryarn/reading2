@@ -49,7 +49,7 @@
  * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  */
 import { useLayoutEffect, useRef, useState, type ReactElement } from "react";
-import { ChevronLeft, ChevronRight, Info, Quote as QuoteIcon, RotateCcw, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info, Pencil, Quote as QuoteIcon, RotateCcw, TriangleAlert } from "lucide-react";
 import { MAX_QUOTES_TOTAL, type BlockId, type Job, type Quote, type QuoteDrops, type Quotes, type QuoteStroke, type QuoteTier } from "../types.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
@@ -66,6 +66,13 @@ import { AboutMade } from "./BandAbout.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 import { applyThreshold, floorToGateStep, hiddenNote, type ThresholdResult } from "./threshold.js";
+import {
+  aiProvenance,
+  quoteBandRows,
+  readerProvenance,
+  withYours,
+  type ReaderRowComment,
+} from "./quote-band-rows.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job choosing the
@@ -85,8 +92,30 @@ export type QuotesOwner = UseQuotes;
  * visitor's arm.
  */
 export type QuotesAccess =
-  | { kind: "owner"; owner: QuotesOwner; quotes: QuoteList | null }
-  | { kind: "visitor"; quotes: QuoteList; owner?: never };
+  | { kind: "owner"; owner: QuotesOwner; quotes: QuoteList | null; yours?: ReaderHighlights }
+  | { kind: "visitor"; quotes: QuoteList; owner?: never; yours?: never };
+
+/**
+ * **The reader's own highlights, as rows among the quotes** — Greg, 2026-10-03
+ * (spya-ma5h9b): *"highlights show up alongside quotes."* src/web/quote-band-rows.ts.
+ *
+ * **On the owner arm only, and `yours?: never` on the other is the gate.** A
+ * visitor's page carries comments too — the sharer's, public by their choice —
+ * and showing those here is a product call nobody has made (what would the row
+ * say: *the sharer's highlight*?). So it is not something a careless
+ * `comments={comments}` can turn on: `Reader` builds this from the owner
+ * capability and the type refuses it anywhere else. GPT Sol, 261003h Q6.
+ *
+ * Optional, absent meaning none — the band before the comments read lands.
+ */
+export interface ReaderHighlights {
+  /** `readerRowComments` over the owner's comments. */
+  rows: readonly ReaderRowComment[];
+  /** The article's blocks in reading order, which is all the interleave needs. */
+  blocks: readonly { id: BlockId }[];
+  /** Go to the highlight and open its comment — `jumpToComment`, from `Reader`. */
+  onOpen(id: string): void;
+}
 
 /**
  * The list this panel draws, from either side of the owner/visitor line.
@@ -95,7 +124,16 @@ export type QuotesAccess =
  * fact about the list on screen rather than about our pipeline, so a visitor
  * gets it too. src/public-types.ts § PublicQuotes has the argument.
  */
-type QuoteList = { quotes: Quote[]; discarded?: QuoteDrops };
+type QuoteList = {
+  quotes: Quote[];
+  discarded?: QuoteDrops;
+  /**
+   * When the list was last written. Only for a quote with no `addedAt` of its
+   * own, whose card says *on or before* this. On both arms: the public
+   * projection carries it for exactly that line (src/public-types.ts).
+   */
+  generatedAt?: string;
+};
 
 interface Props {
   access: QuotesAccess;
@@ -677,7 +715,24 @@ export function QuotesPanel({
      one function or they are two expressions that agree until somebody edits
      one. `bar` and `rank` above are still needed on their own,
      by the slider and by the RankBar's pressed state. */
-  const shown = quotes ? markedQuotes(all, chosenRank, chosenBar) : [];
+  const shownAiQuotes = quotes ? markedQuotes(all, chosenRank, chosenBar) : [];
+  /* **The model's list is on screen**: there is one, and — for its owner — the
+     read has settled. Everything about the list (the stale banner, the rows)
+     waits for this; the reader's own rows below do not. */
+  const listReady = quotes !== null && (owner === null || owner.status === "ready");
+  /* **What the band draws: `shownAiQuotes` with the reader's highlights placed
+     among them.** A projection for the markup below and nothing else — the
+     bar, the count, `?quote=`, the stepper and the prose all go on reading
+     `Quote[]` (quote-band-rows.ts § A projection for the panel). Owner only:
+     the visitor arm has no `yours` to read. */
+  const yours = access.kind === "owner" ? (access.yours ?? null) : null;
+  const yoursCount = yours?.rows.length ?? 0;
+  const bandRows = quoteBandRows(
+    listReady ? shownAiQuotes : [],
+    yours?.rows ?? [],
+    rank,
+    yours?.blocks ?? [],
+  );
 
   /**
    * **The selected row follows into view** when the selection changes — by
@@ -716,7 +771,7 @@ export function QuotesPanel({
   const about = quotes ? (
     <>
       <p>
-        {all.length === 1 ? "One quote" : `${all.length} quotes`}
+        {withYours(all.length === 1 ? "One quote" : `${all.length} quotes`, yoursCount)}
         {made?.passes && made.passes > 1 ? `, found in ${made.passes} passes` : ""}.
       </p>
       {discarded && <p>{discarded}</p>}
@@ -780,6 +835,57 @@ export function QuotesPanel({
         runningLabel="Finding more…"
       />
     </div>
+  );
+
+  /* One `<ol>` for both places the rows are drawn: under the model's list's
+     own furniture when there is a list, and on their own before there is. */
+  const rowList = (
+    <ol className="quotes-list-items">
+      {bandRows.map((row) =>
+        row.by === "reader" ? (
+          <YoursRow
+            key={`yours:${row.comment.id}`}
+            comment={row.comment}
+            onOpen={() => {
+              /* **Both in one tick, and the clear is here rather than inside
+                 `jumpToComment`.** Without it the quote the reader had selected
+                 stays selected under the comment's dialog — its row lit, its
+                 ring in the prose, the stepper still on it — and Escape hands
+                 that stale selection back. `jumpToComment` is the drawer's
+                 too, and knows nothing about Quotes. nuqs queues both writes
+                 onto one history entry. GPT Sol, 261003h Q5. */
+              onQuote(null);
+              yours?.onOpen(row.comment.id);
+            }}
+            onJump={onJump}
+          />
+        ) : (
+          <QuoteRow
+            key={row.quote.id}
+            quote={row.quote}
+            generatedAt={quotes?.generatedAt}
+            selected={row.quote.id === quoteId}
+            scores={rowScores(row.quote, rank)}
+            /* An unscored quote got here without clearing anything, and
+               in an unheaded list a row with no numbers otherwise reads
+               as though it had. A `title` and nothing visible — the same
+               call the glossary makes, for the same reason. */
+            unscored={rank === "prioritised" && priorityOf(row.quote) === undefined}
+            onSelect={() => {
+              // Pressing the selected quote again clears it. Since
+              // 2026-09-05 that takes the *ring* off the passage and
+              // leaves the wash, because every visible quote is marked
+              // whether or not one is selected. A selection you cannot
+              // cancel is a mode inside a mode.
+              if (row.quote.id === quoteId) return onQuote(null);
+              onQuote(row.quote.id);
+              onJump(row.quote.blockId);
+            }}
+            onJump={onJump}
+          />
+        ),
+      )}
+    </ol>
   );
 
   return (
@@ -861,7 +967,15 @@ export function QuotesPanel({
           number rather than picking from a list, and a number that means nothing
           in the other three orders would just be furniture. */}
       {quotes && rank === "prioritised" && (
-        <BarSlider quotes={all} bar={bar} moved={chosenBar !== null} onBar={onBar} />
+        <BarSlider quotes={all} bar={bar} moved={chosenBar !== null} onBar={onBar} yours={yoursCount} />
+      )}
+
+      {/* **The reader's highlights, before there is a list to put them in** —
+          not started, running, failed, or still loading. They are the reader's
+          own and cost nothing, so they do not wait for the model; the status
+          and the offer below stay exactly as they were. Plan 261003h, Q6. */}
+      {!listReady && bandRows.length > 0 && (
+        <div className="quotes-list quotes-list-yours-only">{rowList}</div>
       )}
 
       {owner?.error && <p className="quotes-error">{owner.error}</p>}
@@ -888,7 +1002,7 @@ export function QuotesPanel({
         </div>
       )}
 
-      {quotes && (owner === null || owner.status === "ready") && (
+      {listReady && (
         <>
           {/* Two different facts, and the first matters more here than on any
               sibling panel. `stale` means the article moved underneath these
@@ -940,32 +1054,7 @@ export function QuotesPanel({
               below it instead of grouping it — with nothing to contrast,
               "worth keeping" was a heading over the whole list. */}
           <div className="quotes-list" ref={listRef}>
-            <ol className="quotes-list-items">
-              {shown.map((quote) => (
-                <QuoteRow
-                  key={quote.id}
-                  quote={quote}
-                  selected={quote.id === quoteId}
-                  scores={rowScores(quote, rank)}
-                  /* An unscored quote got here without clearing anything, and
-                     in an unheaded list a row with no numbers otherwise reads
-                     as though it had. A `title` and nothing visible — the same
-                     call the glossary makes, for the same reason. */
-                  unscored={rank === "prioritised" && priorityOf(quote) === undefined}
-                  onSelect={() => {
-                    // Pressing the selected quote again clears it. Since
-                    // 2026-09-05 that takes the *ring* off the passage and
-                    // leaves the wash, because every visible quote is marked
-                    // whether or not one is selected. A selection you cannot
-                    // cancel is a mode inside a mode.
-                    if (quote.id === quoteId) return onQuote(null);
-                    onQuote(quote.id);
-                    onJump(quote.blockId);
-                  }}
-                  onJump={onJump}
-                />
-              ))}
-            </ol>
+            {rowList}
           </div>
         </>
       )}
@@ -1086,11 +1175,18 @@ function BarSlider({
   bar,
   moved,
   onBar,
+  yours,
 }: {
   quotes: Quote[];
   bar: number;
   moved: boolean;
   onBar(bar: number | null): void;
+  /**
+   * How many of the reader's own highlights are in the list as well. Said
+   * beside the count and **never added into it**: the bar reads a score, a
+   * highlight has none, and "5 of 14" is about the model's fourteen.
+   */
+  yours: number;
 }) {
   const stops = barStops(quotes);
   /* **One pass, and every number here comes out of it.** The list above, the
@@ -1107,7 +1203,7 @@ function BarSlider({
           bar
         </label>
         <span className="quotes-bar-value">
-          {bar.toFixed(2)} · {count}
+          {bar.toFixed(2)} · {withYours(count, yours)}
         </span>
         {/* Only once there is something to undo. A reset that is always there is
             a permanent invitation to a state you are already in. */}
@@ -1159,10 +1255,17 @@ function BarSlider({
  * **The row is one button and the ⓘ is another, beside it — never inside it.**
  * A button inside a button is invalid HTML and the browser's recovery is not
  * something to design against. The layout is a flex row so the two read as one
- * item, and the ⓘ is only rendered when there is a reason to show.
+ * item.
+ *
+ * **The ⓘ is on every row since 2026-10-03**, where it used to be drawn only
+ * when the model gave a reason: its card now ends with who chose the line and
+ * when (`aiProvenance`), which every quote has. Greg, spya-ma5h9b: *"quotes
+ * should as well, maybe saying when it was applied and whether it's AI
+ * generated or human highlights."*
  */
 function QuoteRow({
   quote,
+  generatedAt,
   selected,
   scores,
   unscored,
@@ -1170,6 +1273,8 @@ function QuoteRow({
   onJump,
 }: {
   quote: Quote;
+  /** The list's time: the *on or before* bound for a quote with no `addedAt`. */
+  generatedAt: string | undefined;
   selected: boolean;
   scores: RowScore[];
   /**
@@ -1234,26 +1339,105 @@ function QuoteRow({
         />
       </button>
       <div className="quotes-row-side">
-        {quote.reason && (
-          <Tooltip
-            content={quote.reason}
-            placement="left"
-            open={why}
-            onOpenChange={setWhy}
-            className="quotes-why-card"
+        {/* The card is the model's (`.quotes-why-card` is in its face,
+            voices.css); the last line is ours, so it sets the app's face on
+            itself. docs/project/fonts.md. */}
+        <Tooltip
+          content={
+            <>
+              {quote.reason && <span className="quotes-why-reason">{quote.reason}</span>}
+              <span className="quotes-prov">{aiProvenance(quote, generatedAt)}</span>
+            </>
+          }
+          placement="left"
+          open={why}
+          onOpenChange={setWhy}
+          className="quotes-why-card"
+        >
+          <button
+            type="button"
+            className={`quotes-why${why ? " on" : ""}`}
+            aria-label={quote.reason ? "Why this one" : "Who chose this, and when"}
+            aria-expanded={why}
+            onClick={() => setWhy((was) => !was)}
           >
-            <button
-              type="button"
-              className={`quotes-why${why ? " on" : ""}`}
-              aria-label="Why this one"
-              aria-expanded={why}
-              onClick={() => setWhy((was) => !was)}
-            >
-              <Info size={12} />
-            </button>
-          </Tooltip>
-        )}
+            <Info size={12} />
+          </button>
+        </Tooltip>
         <BlockRef id={quote.blockId} onJump={onJump} className="quotes-where" />
+      </div>
+    </li>
+  );
+}
+
+/**
+ * **One of the reader's own highlights, as a row** — quote-band-rows.ts.
+ *
+ * The same shape as `QuoteRow` so the list reads as one list, and different in
+ * every way that says whose it is:
+ *
+ * - **a bar down the left edge in the highlight's own colour**, at full
+ *   strength (`--hl-*-solid`; the wash in the prose is too pale to carry a 3px
+ *   edge), and **the word *yours***, for anyone who cannot tell four colours
+ *   apart;
+ * - **no scores and no "why"** — nobody judged it;
+ * - **no `data-quote-row`, no `aria-pressed`, never `.on`**: those are
+ *   `?quote=`'s, and a highlight's own selection is `?note=`. Pressing it opens
+ *   its comment, where the colour can be changed and the note read or written.
+ *
+ * The words are the comment's stored `quote` — the article's characters, as the
+ * browser's selection sliced them — so they are drawn as the article's, in the
+ * same `<blockquote>`. A highlight whose words a re-extraction took away still
+ * shows here, as it still shows in the drawer.
+ */
+function YoursRow({
+  comment,
+  onOpen,
+  onJump,
+}: {
+  comment: ReaderRowComment;
+  onOpen(): void;
+  onJump(id: BlockId): void;
+}) {
+  const [about, setAbout] = useState(false);
+  return (
+    <li className="quotes-row quotes-row-yours" data-yours-row={comment.id} data-colour={comment.colour}>
+      <button type="button" className="quotes-quote" onClick={onOpen}>
+        <blockquote className="quotes-text">{comment.quote}</blockquote>
+        <span className="quotes-yours">yours</span>
+      </button>
+      <div className="quotes-row-side">
+        {/* Keyed from `body`, the note this mark promises: an answer from the
+            model is not the reader's note. Not a button — the row itself opens
+            the comment. */}
+        {comment.body && (
+          <span className="quotes-yours-noted" title="Has your note" role="img" aria-label="Has your note">
+            <Pencil size={11} />
+          </span>
+        )}
+        <Tooltip
+          content={
+            <>
+              {comment.body && <span className="quotes-yours-note">{comment.body}</span>}
+              <span className="quotes-prov">{readerProvenance(comment)}</span>
+            </>
+          }
+          placement="left"
+          open={about}
+          onOpenChange={setAbout}
+          className="quotes-yours-card"
+        >
+          <button
+            type="button"
+            className={`quotes-why${about ? " on" : ""}`}
+            aria-label="About your highlight"
+            aria-expanded={about}
+            onClick={() => setAbout((was) => !was)}
+          >
+            <Info size={12} />
+          </button>
+        </Tooltip>
+        <BlockRef id={comment.blockId} onJump={onJump} className="quotes-where" />
       </div>
     </li>
   );
