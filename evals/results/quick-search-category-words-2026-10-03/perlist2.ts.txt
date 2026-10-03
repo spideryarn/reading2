@@ -1,0 +1,16 @@
+/* Per query, at the chosen rule (empty -> >=0.5, best 8): right/shown per fallback list, second judge. */
+import { readFileSync } from "node:fs";
+import { DIR } from "./lib.ts";
+import { QUERIES } from "./abstract-run.ts";
+import { VARIANTS } from "./round2-run.ts";
+const raw = JSON.parse(readFileSync(`${DIR}/abstract-raw.json`, "utf8"));
+const r2 = JSON.parse(readFileSync(`${DIR}/round2-raw.json`, "utf8"));
+const j2 = JSON.parse(readFileSync(`${DIR}/judged2.json`, "utf8"));
+const es: any[] = [];
+for (const Q of QUERIES) if (Q.set !== "absent") es.push({ k: `${Q.slug}|${Q.q}`, q: Q.q, reps: raw.find((x: any) => x.slug === Q.slug && x.q === Q.q).reps });
+for (const V of VARIANTS) if (V.how !== "request") es.push({ k: `${V.slug}|${V.base}`, q: V.q, reps: r2.find((x: any) => x.slug === V.slug && x.q === V.q).reps });
+for (const e of es) {
+  const cells = e.reps.map((r: any) => { const s = (Object.entries(r.scores) as [string, number][]).sort((a, b) => b[1] - a[1]); if (s[0]![1] >= 0.7) return "normal"; const ids = s.filter(([, p]) => p >= 0.5).slice(0, 8).map(([id]) => id); return ids.length ? `${ids.filter((id) => j2[e.k]?.verdicts[id] === "y").length}/${ids.length}` : "empty"; });
+  if (cells.some((c: string) => c !== "normal")) console.log(`${e.k.slice(0, 10)} | ${e.q.padEnd(16)} ${cells.join("  ")}`);
+}
+process.exit(0);

@@ -1,0 +1,136 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "final-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "fc011bba35fa885f87fa082f4180775115c28eccecc873503a26e7069c39165a",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [],
+      "background": "A Google engineer dismissed in 2022 after publicly claiming the company's chatbot was conscious and had feelings, which set off wide public debate about AI sentience."
+    },
+    {
+      "name": "LaMDA",
+      "kind": "work",
+      "aliases": [],
+      "background": "A conversational AI chatbot built by Google using large language model technology, best known publicly through Blake Lemoine's claim that it was sentient."
+    },
+    {
+      "name": "David Chalmers",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher known for formulating the 'hard problem of consciousness' and for arguing that machine consciousness may be achievable before long. He is closely linked to the neural replacement thought experiment the essay critiques."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "kind": "person",
+      "aliases": [],
+      "background": "A computer scientist often called a godfather of deep learning, awarded the 2024 Nobel Prize in Physics for his work on neural networks. He has publicly said he believes some AI systems are already conscious."
+    },
+    {
+      "name": "Thomas Nagel",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher best known for his essay asking what it is like to be a bat, which framed conscious experience as there being something it feels like, from the inside, to be a given creature."
+    },
+    {
+      "name": "AlphaFold",
+      "kind": "work",
+      "aliases": [],
+      "background": "An AI system built by DeepMind that predicts the three-dimensional shape a protein folds into from its genetic sequence, using neural network methods similar to those behind large language models."
+    },
+    {
+      "name": "Computational functionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The claim that running the right kind of computation, in any suitable material, is by itself enough to produce consciousness. The essay treats this as an unproven and possibly false assumption behind most hopes for conscious AI, rather than a settled fact."
+    },
+    {
+      "name": "McCulloch-Pitts neuron",
+      "kind": "concept",
+      "aliases": [
+        "McCulloch-Pitts"
+      ],
+      "background": "An early mathematical model of a brain cell, proposed by Warren McCulloch and Walter Pitts in the 1940s, that represents a neuron as a simple unit summing weighted inputs to produce an output. It is the direct ancestor of the artificial neurons used in today's neural network AI."
+    },
+    {
+      "name": "Generative entrenchment",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "How deeply a system's parts become locked together over time, so that no single part can be swapped out without changing or breaking the whole. The essay uses it to explain why a single brain cell likely cannot be perfectly replaced by a silicon substitute."
+    },
+    {
+      "name": "Neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "neural replacement"
+      ],
+      "senseHere": "An imagined experiment in which brain cells are swapped one by one for silicon parts that behave identically, meant to show that a mind could survive in non-biological material. The essay argues it fails because no silicon part could truly copy everything a living neuron does, such as clearing its own metabolic waste.",
+      "background": "Commonly associated with philosopher David Chalmers, who uses it to argue that consciousness does not depend on being made of biological tissue."
+    },
+    {
+      "name": "Turing world",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Seth's own label for the common view that treats the brain as nothing more than an abstract algorithm running on neutral biological hardware. He argues real brains, unlike computers, cannot be cleanly separated into software and hardware this way."
+    },
+    {
+      "name": "Mortal computation",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A notion, introduced by Geoffrey Hinton, for computation so tightly bound to one specific physical material that it effectively dies along with that material, unlike ordinary software that can be copied anywhere. The essay cites it as an example of computing ideas that break from the usual assumption that computation can run on any suitable hardware."
+    },
+    {
+      "name": "Watt governor",
+      "kind": "concept",
+      "aliases": [
+        "steam engine governor"
+      ],
+      "senseHere": "A simple mechanical device that keeps a steam engine running at a steady speed using spinning weights and a valve, with no calculation or symbols involved at all. The essay uses it, following philosopher Tim van Gelder, to show that a system can regulate itself intelligently without being any kind of computer."
+    },
+    {
+      "name": "Biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being a living organism, not just processing information in the right pattern, may be necessary for consciousness. The essay uses it to argue a machine could copy a brain's computations exactly and still feel nothing."
+    },
+    {
+      "name": "John Searle",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher famous for the 'Chinese Room' argument against machine understanding, and for proposing that consciousness is produced by the biology of the brain rather than by any abstract program."
+    },
+    {
+      "name": "Nick Bostrom",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher who proposed the simulation argument, reasoning that advanced future civilizations would likely run vast numbers of simulated realities, making it statistically plausible we already live inside one."
+    },
+    {
+      "name": "Simulation hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "simulation argument"
+      ],
+      "senseHere": "The idea that our entire reality could itself be a computer simulation created by a far more advanced civilization. The essay argues this idea quietly assumes that a simulated brain would actually be conscious, the very assumption it spends most of its space challenging."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A classic visual illusion in which two identical-length lines look different because of arrowhead-like marks at their ends, an effect that persists even once you know the lines are equal."
+    },
+    {
+      "name": "Garland test",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A proposed test for whether a person keeps feeling a machine is conscious even after being plainly told it is only a machine. The essay separates this from any test of whether the machine actually is conscious.",
+      "background": "Named after Alex Garland, writer and director of the film 'Ex Machina,' which centers on a robot built to seem convincingly conscious."
+    }
+  ]
+}

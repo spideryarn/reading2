@@ -1,0 +1,186 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "before-2",
+  "promptVersion": "glossary/8",
+  "sourceSha256": {
+    "glossary.ts": "c0f77fe893b2d17d662dd423edb92f6a2b640a26fea7dd3558fe76164d467e61",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "scaling hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "strong scaling hypothesis"
+      ],
+      "senseHere": "The idea that intelligence itself emerges simply from applying a scalable architecture to huge amounts of data and compute, with no special new algorithm needed, so making models bigger is the path to AGI."
+    },
+    {
+      "name": "GPT-3",
+      "kind": "work",
+      "aliases": [
+        "GPT3"
+      ],
+      "senseHere": "A 175-billion-parameter language model from OpenAI that, despite using an old, unmodified architecture, showed it could learn new tasks on the fly just from a few examples in its prompt, rather than needing retraining.",
+      "background": "Released by OpenAI in May 2020, GPT-3 was at the time the largest neural network ever trained, over ten times bigger than its predecessor GPT-2."
+    },
+    {
+      "name": "meta-learning",
+      "kind": "concept",
+      "aliases": [
+        "learning to learn"
+      ],
+      "senseHere": "A model's ability, developed unintentionally just from being trained on enough varied data, to figure out and perform a brand-new task from a few examples given at run time rather than from dedicated training on that task."
+    },
+    {
+      "name": "GPT-2",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "The predecessor model that could already summarize and generate text well but, unlike GPT-3, had not developed the ability to learn new tasks from a handful of examples.",
+      "background": "OpenAI's earlier large language model, released in 2019, notable at the time for its surprisingly fluent text generation."
+    },
+    {
+      "name": "blessings of scale",
+      "kind": "concept",
+      "aliases": [
+        "blessing of dimensionality"
+      ],
+      "senseHere": "The counterintuitive pattern that in deep learning, problems get easier rather than harder as models, data, and compute grow larger, with stability, generalization, and new abilities like meta-learning appearing automatically."
+    },
+    {
+      "name": "Transformer",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A neural network architecture built around a mechanism called self-attention, which lets it weigh relationships between all parts of an input; it underlies GPT-3 and most modern large language models."
+    },
+    {
+      "name": "OpenAI",
+      "kind": "organization",
+      "aliases": [
+        "OA",
+        "OpenAI LP"
+      ],
+      "senseHere": "The lab portrayed as the one organization willing to bet heavily on the scaling hypothesis, restructuring itself to take investment so it could afford ever-larger models like GPT-3.",
+      "background": "An AI research company founded as a nonprofit that later created a for-profit subsidiary, OpenAI LP, to fund large-scale compute-intensive research."
+    },
+    {
+      "name": "Hans Moravec",
+      "kind": "person",
+      "aliases": [
+        "Moravec"
+      ],
+      "senseHere": "Cited for decades-old forecasts, based on projecting computing hardware costs forward, that predicted roughly when affordable compute would reach insect-, then mouse-, then human-level, forecasts the piece says are holding up.",
+      "background": "A robotics researcher and early advocate of the idea that AI progress tracks the falling cost of computing power, writing on this from the 1990s."
+    },
+    {
+      "name": "AlphaGo Zero",
+      "kind": "work",
+      "aliases": [
+        "AlphaZero"
+      ],
+      "senseHere": "Used as an example of the blessings of scale: it reached superhuman play at Go by training a large model on richer self-play data, without any built-in search tricks, and later versions (AlphaZero, MuZero) showed even search itself could be learned rather than hand-coded.",
+      "background": "A game-playing AI system from DeepMind that learned Go purely by playing against itself, without using any human game records."
+    },
+    {
+      "name": "the Bitter Lesson",
+      "kind": "concept",
+      "aliases": [
+        "Bitter Lesson"
+      ],
+      "senseHere": "The lesson that approaches relying on brute-force computation and learning consistently beat approaches relying on hand-built human knowledge and clever engineering, however unwelcome that conclusion is to researchers.",
+      "background": "An idea associated with machine learning researcher Rich Sutton, who argued that decades of AI history show general methods that scale with compute win out over methods encoding human insight."
+    },
+    {
+      "name": "DeepMind",
+      "kind": "organization",
+      "aliases": [
+        "DM"
+      ],
+      "senseHere": "Described as holding only a 'weak' version of the scaling hypothesis: it believes AGI requires assembling many separately-engineered brain-like modules, each of which can scale, rather than betting everything on scale alone.",
+      "background": "A Google-owned AI research lab known for game-playing systems like AlphaGo and for drawing heavily on neuroscience for inspiration."
+    },
+    {
+      "name": "MuZero",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "Cited as evidence that a network trained end-to-end just to predict rewards can implicitly learn the equivalent of tree search, outperforming AlphaZero's explicit, hand-designed search.",
+      "background": "A DeepMind reinforcement learning system that masters games like chess and Go without being told the rules in advance, learning a model of the game itself."
+    },
+    {
+      "name": "lottery ticket hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Invoked as part of the explanation for why bigger models generalize better: a large network contains many smaller 'sub-networks,' and training effectively finds and strengthens the few that happen to solve the problem well.",
+      "background": "A machine learning finding that large neural networks contain small subnetworks which, if isolated, can be trained alone to match the full network's performance."
+    },
+    {
+      "name": "pretraining thesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The argument that simply training a model to predict the next word as accurately as possible forces it, in order to keep improving, to progress from superficial letter and word patterns all the way up to real-world knowledge, logic, and reasoning."
+    },
+    {
+      "name": "Norbert Wiener",
+      "kind": "person",
+      "aliases": [],
+      "senseHere": "Quoted on how simply knowing a hard problem has a solution (as with the atomic bomb) is often the biggest clue needed for others to rapidly solve it too, a point applied here to AI scaling.",
+      "background": "A mathematician who founded the field of cybernetics and wrote about the social implications of automation and information theory."
+    },
+    {
+      "name": "hardware overhang",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A situation where powerful-enough computers already exist and are affordable, but no one has yet used them for a given purpose, meaning that purpose could suddenly become achievable once someone tries, as Moravec argued happened with supercomputers before neural networks took off."
+    },
+    {
+      "name": "Ilya Sutskever",
+      "kind": "person",
+      "aliases": [
+        "Sutskever"
+      ],
+      "senseHere": "Quoted as one of the few researchers who, well before GPT-3, held firm conviction that scaling existing methods with enough data and compute would simply work, likening the result to 'alchemy.'",
+      "background": "A co-founder and chief scientist of OpenAI, and a leading deep learning researcher who trained under Geoffrey Hinton."
+    },
+    {
+      "name": "intentional stance",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The habit of explaining a system's behavior by treating it as if it has beliefs and goals, which the author argues is not just a convenient fiction but a genuinely useful and often mathematically valid shortcut, applicable even to rivers or planetary orbits.",
+      "background": "A concept from philosopher Daniel Dennett describing one of three stances for predicting behavior, alongside explaining a system by its physical parts or by its design."
+    },
+    {
+      "name": "Daniel Dennett",
+      "kind": "person",
+      "aliases": [
+        "Dennett"
+      ],
+      "background": "A philosopher known for work on the mind and consciousness, particularly for proposing the 'intentional stance' as a way of explaining and predicting behavior."
+    },
+    {
+      "name": "Conway's Game of Life",
+      "kind": "concept",
+      "aliases": [
+        "Game of Life",
+        "GoL"
+      ],
+      "senseHere": "Used as a test case for whether even a simple rule-based mathematical system can induce an 'agent-like' way of thinking in a model, since its patterns naturally get chunked into entities like 'gliders' that move and die.",
+      "background": "A famous cellular automaton, a grid of cells that live or die each step according to fixed simple rules, which can give rise to complex self-propagating patterns."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "TM"
+      ],
+      "senseHere": "Used as the most general possible abstract computing system to test whether training a model to predict its behavior could still smuggle in agency, for instance by forcing the model to infer which unseen rule-set it is following.",
+      "background": "A simple mathematical model of computation, introduced by Alan Turing, consisting of a tape and a set of rules for reading, writing, and moving along it."
+    },
+    {
+      "name": "Occam's razor",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Used to describe how a large neural network, acting like an average over countless internal sub-models, is biased toward simple solutions that only grow more complex as the data forces it, rather than memorizing superficial shortcuts."
+    }
+  ]
+}

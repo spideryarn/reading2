@@ -1,0 +1,42 @@
+/* Probe, not a decision: a request ("what were the results?") scores far higher
+   than the bare word. Does wrapping EVERY query in a request do the same, and
+   what does it do to absent topics, near-misses, and this morning's fixture
+   queries? Shipped question wording throughout; only state.query changes.
+   Two runs each. SPENDS (Jev, about 15 cents). */
+import { readFileSync, writeFileSync } from "node:fs";
+import { DIR, jevSearch, pool, totalSpend } from "./lib.ts";
+import { QUERIES, load } from "./abstract-run.ts";
+import { VARIANTS } from "./round2-run.ts";
+
+const FRAMES: Record<string, (q: string) => string> = {
+  about: (q) => `passages about: ${q}`,
+  where: (q) => `Where does the article mention, discuss or show this: ${q}`,
+};
+const hard = JSON.parse(readFileSync(`${DIR}/hard-negatives.json`, "utf8")) as { slug: string; q: string }[];
+const old = JSON.parse(readFileSync(`/home/greg/code/spideryarn2/.claude/worktrees/fbjp5nxn-quick-search-finds-too-little/evals/results/quick-search-recall-2026-10-03/jev-raw.json`, "utf8"));
+const FIX = new Set(["constitution", "noema-mythology-of-conscious-ai", "openai-huggingface"]);
+const all = [
+  ...QUERIES.map((q) => ({ slug: q.slug, q: q.q, group: q.set === "absent" ? "absent" : "bare" })),
+  ...VARIANTS.map((v) => ({ slug: v.slug, q: v.q, group: v.how === "request" ? "request" : "bare" })),
+  ...hard.map((h) => ({ slug: h.slug, q: h.q, group: "hard" })),
+  /* This morning's queries on the three fixtures (shipped-wording scores are saved there). */
+  ...(Object.values(old) as any[]).filter((e) => e.wording === "mention" && FIX.has(e.slug)).map((e) => ({ slug: e.slug, q: e.q, group: `am-${e.set}` })),
+];
+const out: any[] = [];
+for (const [name, frame] of Object.entries(FRAMES)) {
+  await pool(all, 5, async (Q) => {
+    const blocks = load(Q.slug);
+    const reps = [];
+    for (let i = 0; i < 2; i++) { const r = await jevSearch("mention", frame(Q.q), blocks); reps.push({ scores: r.scores }); }
+    out.push({ frame: name, ...Q, reps });
+  });
+  writeFileSync(`${DIR}/framing-raw.json`, JSON.stringify(out, null, 1));
+  for (const g of ["bare", "request", "absent", "hard", "am-old", "am-short", "am-holdout", "am-negative"]) {
+    const runs = out.filter((o) => o.frame === name && o.group === g).flatMap((o) => o.reps);
+    if (!runs.length) continue;
+    const n70 = runs.map((r) => (Object.values(r.scores) as number[]).filter((p) => p >= 0.7).length);
+    console.log(`${name.padEnd(6)} ${g.padEnd(12)} runs ${String(runs.length).padStart(3)}  empty ${String(n70.filter((n) => !n).length).padStart(3)}  kept mean ${(n70.reduce((a, b) => a + b, 0) / runs.length).toFixed(1)}  max ${Math.max(...n70)}`);
+  }
+}
+console.log(`spend so far $${totalSpend().toFixed(4)}`);
+process.exit(0);

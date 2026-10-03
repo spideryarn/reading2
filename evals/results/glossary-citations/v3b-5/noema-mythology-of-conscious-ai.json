@@ -1,0 +1,140 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "v3b-5",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "406c56f8eeec02fba123307afd30a72408ef30ed21ed2c5d7b21783a328481f6",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [],
+      "background": "A Google engineer who in 2022 publicly claimed that a chatbot he worked on was conscious and had feelings, a claim widely reported but not taken seriously by most experts; Google subsequently dismissed him over a confidentiality breach."
+    },
+    {
+      "name": "LaMDA",
+      "kind": "work",
+      "aliases": [],
+      "background": "A Google conversational AI chatbot that Blake Lemoine claimed, in 2022, was sentient and possessed feelings, sparking public debate about machine consciousness."
+    },
+    {
+      "name": "David Chalmers",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher well known for formulating the 'hard problem' of consciousness and for proposing thought experiments, such as gradually replacing brain parts with silicon equivalents, to argue that consciousness could in principle be substrate-independent."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "kind": "person",
+      "aliases": [],
+      "background": "A pioneering AI researcher and Nobel laureate often called a 'godfather of deep learning,' who has publicly stated he believes some AI systems are already conscious."
+    },
+    {
+      "name": "Thomas Nagel",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher famous for arguing that an organism is conscious exactly when there is 'something it is like' to be that organism, a formulation widely used to define subjective experience."
+    },
+    {
+      "name": "Pareidolia",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The tendency to see meaningful patterns, like a face, in random or ambiguous stimuli, such as a face appearing in toast. The piece borrows this idea from writer Adam Becker to describe projecting consciousness onto AI systems that merely resemble conscious beings in superficial ways."
+    },
+    {
+      "name": "Computational functionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The assumption that running the right kind of computation or information-processing is enough, by itself, to produce consciousness, regardless of what material does the computing. The author argues this assumption is usually taken for granted rather than defended, and that it may well be false."
+    },
+    {
+      "name": "Alan Turing",
+      "kind": "person",
+      "aliases": [],
+      "background": "A mathematician and founding figure of computer science who defined computation in terms of an abstract 'Turing machine' manipulating symbols step by step, and who also proposed an early test for machine intelligence."
+    },
+    {
+      "name": "Autopoiesis",
+      "kind": "term",
+      "aliases": [
+        "self-production"
+      ],
+      "senseHere": "A living system's continual work of regenerating its own material and structure just to keep existing, down to the level of a single cell maintaining itself. The piece uses this to argue brains cannot be cleanly split into 'software' running on indifferent 'hardware' the way computers can."
+    },
+    {
+      "name": "Generative entrenchment",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The way a biological system's parts are woven together across so many interacting scales that no single part can be swapped out and replaced without disturbing the whole. The author uses it to argue you cannot substitute a real neuron with a silicon one that behaves identically, since the neuron's biology is inseparable from its function."
+    },
+    {
+      "name": "Mortal computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A form of computing where the program is so tightly bound to its particular physical hardware that it effectively 'dies' once that specific hardware is destroyed, unlike ordinary software that can run on any compatible machine. The author cites it as an example of computation that is not substrate-flexible in the way standard digital computation is."
+    },
+    {
+      "name": "Biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being alive, not just processing information in the right pattern, is necessary for consciousness to exist. The author treats this as a serious possibility rather than a settled fact, noting every system anyone agrees is conscious is also a living organism."
+    },
+    {
+      "name": "John Searle",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher known for arguing that computer programs alone cannot produce genuine understanding or consciousness, and for proposing that biological properties of the brain are what actually generate mental states."
+    },
+    {
+      "name": "Controlled hallucination",
+      "kind": "term",
+      "aliases": [
+        "predictive processing"
+      ],
+      "senseHere": "The idea that what we consciously perceive is the brain's best guess about the causes of its sensory signals, constantly checked and corrected against those signals, rather than a direct readout of the world. The author extends this to explain feelings of emotion, mood and selfhood as the brain's predictions about the body's own condition."
+    },
+    {
+      "name": "Interoceptive inference",
+      "kind": "term",
+      "aliases": [
+        "interoception"
+      ],
+      "senseHere": "The brain's ongoing best-guessing about the body's internal physiological state, such as heart rate or oxygen levels, used both to perceive and to regulate the body. The author uses this to connect emotional experience directly to the biological business of staying alive."
+    },
+    {
+      "name": "Simulation hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The idea, associated with philosopher Nick Bostrom, that we are statistically more likely to be living inside an advanced computer simulation than in 'base' physical reality. The author points out this argument silently assumes that a suitably programmed computer would be conscious, an assumption he thinks is unjustified."
+    },
+    {
+      "name": "Nick Bostrom",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher known for arguing, via statistical reasoning, that we may well be living inside a computer simulation created by a technologically advanced future civilization."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A visual illusion in which two lines of equal length look different because of the arrow-like shapes added to their ends, an illusion that persists even once you know the lines are equal. The author uses it to suggest our feeling that an AI is conscious might be similarly resistant to correction by what we know intellectually."
+    },
+    {
+      "name": "Neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "neuron replacement thought experiment"
+      ],
+      "senseHere": "A widely cited thought experiment imagining brain parts being swapped one by one for functionally identical silicon equivalents, meant to show that mind and consciousness don't depend on being made of biological tissue. The author argues the thought experiment fails because a truly identical silicon neuron isn't achievable in the first place."
+    },
+    {
+      "name": "The Garland test",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A test, named after the director of 'Ex Machina,' for whether a human will still feel a machine is conscious even after being told outright that it is just a machine. The author distinguishes this from actually testing whether a machine is conscious — it only measures how easily humans are convinced."
+    }
+  ]
+}

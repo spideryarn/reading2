@@ -1,0 +1,37 @@
+/* Reproduce Greg's quick searches on arxiv-2610-spya-bfrbaj as production sends
+   them, and once more with headings left in. SPENDS (Jev, well under 1 cent). */
+import { readFileSync, writeFileSync } from "node:fs";
+import { DIR, JEV, WORDINGS, chunkBlocks, decide, jevSearch, quickBlocks, totalSpend } from "./lib.ts";
+
+const d = JSON.parse(readFileSync(`${DIR}/bfrbaj.json`, "utf8"));
+const blocks = d.blocks.map((b: any) => ({ ...b, treatment: b.treatment ?? undefined, role: b.role ?? undefined }));
+const byId = new Map<string, any>(blocks.map((b: any) => [b.id, b]));
+const asked = quickBlocks(blocks);
+console.log(`blocks ${blocks.length}, asked ${asked.length}, chunks ${chunkBlocks(asked).map((c: any[]) => c.length).join("/")}`);
+
+const queries = process.argv.slice(2).length ? process.argv.slice(2) : ["results", "Results", "dreaming", "Limitations", "linear algebra"];
+const out: any[] = [];
+for (const q of queries) {
+  for (let i = 0; i < 2; i++) {
+    const r = await jevSearch("mention", q, blocks);
+    const sorted = Object.entries(r.scores).sort((a, b) => b[1] - a[1]);
+    const kept = sorted.filter(([, v]) => v >= 0.7);
+    out.push({ q, rep: i, arm: "production", ms: r.ms, kept: kept.length, scores: r.scores });
+    console.log(`\n${q} #${i} production: kept>=0.7 ${kept.length}, >=0.5 ${sorted.filter(([, v]) => v >= 0.5).length}, ${r.ms}ms`);
+    for (const [id, v] of sorted.slice(0, 12)) console.log(`   ${v.toFixed(2)} ${id} ${byId.get(id).kind} ${String(byId.get(id).text.length).padStart(5)}ch`);
+  }
+  /* The same request with headings left in: every block with text. */
+  const withHeads = blocks.filter((b: any) => b.text.trim() !== "" && (b.kind === "heading" || asked.includes(b)));
+  const w = WORDINGS.mention!;
+  const r = await decide(JEV, { query: q, passages: Object.fromEntries(withHeads.map((b: any) => [b.id, b.text])) },
+    Object.fromEntries(withHeads.map((b: any) => [b.id, { type: "noul", instructions: w(b.id) }])));
+  if (r.status !== 200) { console.log("with headings failed", r.status, r.error?.slice(0, 300)); continue; }
+  const scores: Record<string, number> = Object.fromEntries(Object.entries(r.body.answers).map(([k, v]: any) => [k, v.noul]));
+  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  out.push({ q, arm: "with-headings", scores });
+  console.log(`${q} WITH HEADINGS: kept>=0.7 ${sorted.filter(([, v]) => v >= 0.7).length} (headings ${sorted.filter(([id, v]) => v >= 0.7 && byId.get(id).kind === "heading").length})`);
+  for (const [id, v] of sorted.slice(0, 14)) console.log(`   ${v.toFixed(2)} ${id} ${byId.get(id).kind}${byId.get(id).kind === "heading" ? " " + JSON.stringify(byId.get(id).text.slice(0, 50)) : ""}`);
+}
+writeFileSync(`${DIR}/out-repro-jp5nxn.json`, JSON.stringify(out, null, 1));
+console.log(`spend so far $${totalSpend().toFixed(4)}`);
+process.exit(0);

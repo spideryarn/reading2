@@ -1,0 +1,285 @@
+{
+ "arxiv-2610-spya-bfrbaj|results": {
+  "candidates": [
+   "spya-rmssw4",
+   "spya-jaxsn0",
+   "spya-cgga04",
+   "spya-zwruz8",
+   "spya-f2g408",
+   "spya-dcepy8",
+   "spya-fnwmpt"
+  ],
+  "decoys": [
+   "spya-n8cdph",
+   "spya-kvfyeu",
+   "spya-ckzcze",
+   "spya-y9x2gt",
+   "spya-e5wpq0",
+   "spya-fkqh2b",
+   "spya-vrkure"
+  ]
+ },
+ "arxiv-2610-spya-bfrbaj|linear algebra": {
+  "candidates": [
+   "spya-ft0zvv",
+   "spya-y5e8ck",
+   "spya-kc7qcw",
+   "spya-hbx0rq",
+   "spya-dy4aud",
+   "spya-zubvtq",
+   "spya-w8dggn",
+   "spya-xtvpa0",
+   "spya-bkcvuq",
+   "spya-csux0a",
+   "spya-wjs5qx",
+   "spya-cgga04",
+   "spya-w94mj8",
+   "spya-hwk7bz"
+  ],
+  "decoys": [
+   "spya-dtt39z",
+   "spya-egznrr",
+   "spya-p82nr6",
+   "spya-kefnyr",
+   "spya-y8zhee",
+   "spya-esjsrv",
+   "spya-fnwmpt",
+   "spya-pgpck8",
+   "spya-p399vv",
+   "spya-smkcxb",
+   "spya-rmssw4",
+   "spya-g2p4hz",
+   "spya-dcepy8",
+   "spya-ssdecm"
+  ]
+ },
+ "arxiv-2610-spya-bfrbaj|human memory": {
+  "candidates": [
+   "spya-zwruz8",
+   "spya-z79m3x",
+   "spya-fenz04",
+   "spya-ft0zvv",
+   "spya-q7xf2d",
+   "spya-jaxsn0",
+   "spya-y5e8ck",
+   "spya-kc7qcw",
+   "spya-f2g408",
+   "spya-rmssw4",
+   "spya-cgga04"
+  ],
+  "decoys": [
+   "spya-v2zd2v",
+   "spya-r3eb4q",
+   "spya-p654cm",
+   "spya-cqu6pt",
+   "spya-kefnyr",
+   "spya-pgpck8",
+   "spya-uf8ype",
+   "spya-tucxtj",
+   "spya-mq5t6s",
+   "spya-cq4u0y",
+   "spya-esjsrv"
+  ]
+ },
+ "constitution|examples": {
+  "candidates": [
+   "spya-tabzzj",
+   "spya-m5228n",
+   "spya-gnvhk6",
+   "spya-v2n4fx"
+  ],
+  "decoys": [
+   "spya-uqedqz",
+   "spya-u8yfd9",
+   "spya-sw3v9u",
+   "spya-hek4mp"
+  ]
+ },
+ "constitution|definitions": {
+  "candidates": [
+   "spya-u8yfd9",
+   "spya-hxz0a3",
+   "spya-nnh6hn",
+   "spya-aj4dr2",
+   "spya-ctqg0n",
+   "spya-ujk7d4",
+   "spya-bh2faf",
+   "spya-c5kghx",
+   "spya-p4a4rd",
+   "spya-dqx7dn",
+   "spya-sw3v9u",
+   "spya-vby4sy",
+   "spya-enueab",
+   "spya-nuqt3t",
+   "spya-kgzqvu",
+   "spya-uqedqz",
+   "spya-kgdywh",
+   "spya-ahd063",
+   "spya-aj0j5f"
+  ],
+  "decoys": [
+   "spya-a2tws4",
+   "spya-g9r8cr",
+   "spya-z5mzhp",
+   "spya-d3ytg6",
+   "spya-hek4mp",
+   "spya-wqaafx",
+   "spya-uftaze",
+   "spya-ut5bsd",
+   "spya-x8b23s",
+   "spya-pwrpcx",
+   "spya-n58h2w",
+   "spya-egkyk2",
+   "spya-mn286g",
+   "spya-t3mubq",
+   "spya-s0gn3k",
+   "spya-dajzd7",
+   "spya-mr5qbt",
+   "spya-pd58xp",
+   "spya-jdee9s"
+  ]
+ },
+ "constitution|philosophy": {
+  "candidates": [
+   "spya-aj4dr2",
+   "spya-ctqg0n",
+   "spya-tabzzj"
+  ],
+  "decoys": [
+   "spya-waxdw8",
+   "spya-qhr04v",
+   "spya-p75b5w"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|criticism": {
+  "candidates": [
+   "spya-cqh2pq",
+   "spya-pbcr03",
+   "spya-qu7j89",
+   "spya-ymbpwn",
+   "spya-fdefb5",
+   "spya-ahtr6e",
+   "spya-t29n67",
+   "spya-y4vjdg",
+   "spya-wepmnr",
+   "spya-n0bnf9",
+   "spya-qwvjwn",
+   "spya-vnkr36",
+   "spya-mcaa4g",
+   "spya-d89xf7",
+   "spya-gvzuc4"
+  ],
+  "decoys": [
+   "spya-j0a9rq",
+   "spya-fz5xq5",
+   "spya-dfujdu",
+   "spya-cf70dt",
+   "spya-hzp9yz",
+   "spya-nj888h",
+   "spya-v52g4f",
+   "spya-sq7un9",
+   "spya-v5vz2t",
+   "spya-z4bud7",
+   "spya-a8jgf4",
+   "spya-un9fjn",
+   "spya-ps0kap",
+   "spya-b228ay",
+   "spya-gjy45p"
+  ]
+ },
+ "openai-huggingface|methods": {
+  "candidates": [
+   "spya-m24kgb",
+   "spya-vqvmhz",
+   "spya-s9a3he",
+   "spya-zfbcb4",
+   "spya-ast6bs",
+   "spya-ckcyzp",
+   "spya-vfq66b",
+   "spya-xvkm3j",
+   "spya-gy8fb4",
+   "spya-d6p0aa",
+   "spya-cc5uhs",
+   "spya-w9ctpd",
+   "spya-asbjy9",
+   "spya-vpd027",
+   "spya-gj5bbr",
+   "spya-acvnjw",
+   "spya-cx56k0",
+   "spya-m45y0k",
+   "spya-kyxy7b",
+   "spya-nayjhs",
+   "spya-khwx0h",
+   "spya-rnag5c"
+  ],
+  "decoys": [
+   "spya-g9tjds",
+   "spya-bh44xd",
+   "spya-z83ezv",
+   "spya-peudft",
+   "spya-c2bkgz",
+   "spya-c3dppu",
+   "spya-b0wbhk",
+   "spya-r4jn5b",
+   "spya-chdu2z",
+   "spya-m42hxd",
+   "spya-av2uwp",
+   "spya-fhj3z4",
+   "spya-td87ke",
+   "spya-ekhrbu",
+   "spya-h6yxz3",
+   "spya-qen9hh",
+   "spya-mdta39",
+   "spya-matth4",
+   "spya-cbv8uf",
+   "spya-jauf7s",
+   "spya-c2ck7h",
+   "spya-f07bw5"
+  ]
+ },
+ "openai-huggingface|results": {
+  "candidates": [
+   "spya-gb7ze2",
+   "spya-c2ck7h",
+   "spya-b0wbhk",
+   "spya-g9tjds",
+   "spya-cbv8uf",
+   "spya-wtguds",
+   "spya-m4gku9",
+   "spya-vqcwj0",
+   "spya-nayjhs",
+   "spya-bgtdqz",
+   "spya-c2bkgz",
+   "spya-ebtbnm",
+   "spya-khwx0h",
+   "spya-vsujby"
+  ],
+  "decoys": [
+   "spya-h6yxz3",
+   "spya-fhj3z4",
+   "spya-td87ke",
+   "spya-q33vy8",
+   "spya-nakhtw",
+   "spya-ekhrbu",
+   "spya-m42hxd",
+   "spya-rnag5c",
+   "spya-bh44xd",
+   "spya-f07bw5",
+   "spya-gu6jbj",
+   "spya-mdta39",
+   "spya-fmww2n",
+   "spya-c3dppu"
+  ]
+ },
+ "openai-huggingface|statistics": {
+  "candidates": [
+   "spya-ms8rup",
+   "spya-cbv8uf"
+  ],
+  "decoys": [
+   "spya-peudft",
+   "spya-rzxkcd",
+   "spya-m42hxd"
+  ]
+ }
+}

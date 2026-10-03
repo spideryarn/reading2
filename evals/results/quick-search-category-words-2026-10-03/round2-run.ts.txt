@@ -1,0 +1,55 @@
+/* Round 2 (after GPT Sol's plan review, F1 and F5). Two more query sets on the
+   shipped wording, three runs each. SPENDS (Jev, about 10 cents).
+   - `variant`: the same nine intents typed differently (case, number, a
+     natural-language request), written before any was run. `base` names the
+     query whose blind verdicts carry over.
+   - `hard`: near-miss topics a subagent wrote from the article text alone
+     (hard-negatives.json), without seeing any score. */
+import { readFileSync, writeFileSync } from "node:fs";
+import { DIR, jevSearch, pool, totalSpend } from "./lib.ts";
+import { BFR, load } from "./abstract-run.ts";
+
+const C = "constitution", N = "noema-mythology-of-conscious-ai", O = "openai-huggingface";
+export const VARIANTS: { slug: string; base: string; q: string; how: "case" | "number" | "request" }[] = [
+  { slug: BFR, base: "results", q: "Results", how: "case" },
+  { slug: BFR, base: "results", q: "result", how: "number" },
+  { slug: BFR, base: "results", q: "what were the results?", how: "request" },
+  { slug: BFR, base: "linear algebra", q: "Linear algebra", how: "case" },
+  { slug: BFR, base: "linear algebra", q: "passages that use linear algebra", how: "request" },
+  { slug: BFR, base: "Limitations", q: "limitations", how: "case" },
+  { slug: BFR, base: "Limitations", q: "limitation", how: "number" },
+  { slug: C, base: "examples", q: "Examples", how: "case" },
+  { slug: C, base: "examples", q: "example", how: "number" },
+  { slug: C, base: "examples", q: "where does it give examples?", how: "request" },
+  { slug: C, base: "definitions", q: "Definitions", how: "case" },
+  { slug: C, base: "definitions", q: "definition", how: "number" },
+  { slug: C, base: "definitions", q: "where does it define its terms?", how: "request" },
+  { slug: C, base: "philosophy", q: "Philosophy", how: "case" },
+  { slug: C, base: "philosophy", q: "the philosophy behind the document", how: "request" },
+  { slug: N, base: "criticism", q: "Criticism", how: "case" },
+  { slug: N, base: "criticism", q: "criticisms", how: "number" },
+  { slug: N, base: "criticism", q: "what does the author criticise?", how: "request" },
+  { slug: O, base: "methods", q: "Methods", how: "case" },
+  { slug: O, base: "methods", q: "method", how: "number" },
+  { slug: O, base: "results", q: "Results", how: "case" },
+  { slug: O, base: "results", q: "what happened in the end?", how: "request" },
+  { slug: O, base: "statistics", q: "Statistics", how: "case" },
+  { slug: O, base: "statistics", q: "numbers and statistics", how: "request" },
+];
+
+if (process.argv[1]!.endsWith("round2-run.ts")) {
+  const hard = JSON.parse(readFileSync(`${DIR}/hard-negatives.json`, "utf8")) as { slug: string; q: string }[];
+  const all = [...VARIANTS.map((v) => ({ ...v, set: "variant" })), ...hard.map((h) => ({ slug: h.slug, q: h.q, set: "hard" }))];
+  const out: any[] = [];
+  await pool(all, 4, async (Q: any) => {
+    const blocks = load(Q.slug);
+    const reps = [];
+    for (let i = 0; i < 3; i++) { const r = await jevSearch("mention", Q.q, blocks); reps.push({ ms: r.ms, scores: r.scores }); }
+    out.push({ ...Q, reps });
+    console.log(`[${Q.set}${Q.how ? " " + Q.how : ""}] ${Q.slug.slice(0, 12)} | ${Q.q}${Q.base ? "  (base: " + Q.base + ")" : ""}: ` + reps.map((r) => { const s = Object.values(r.scores as Record<string, number>).sort((a, b) => b - a); return `top ${s[0]!.toFixed(2)} n70=${s.filter((p) => p >= 0.7).length} n50=${s.filter((p) => p >= 0.5).length}`; }).join(" | "));
+  });
+  out.sort((a, b) => all.findIndex((q) => q.slug === a.slug && q.q === a.q) - all.findIndex((q) => q.slug === b.slug && q.q === b.q));
+  writeFileSync(`${DIR}/round2-raw.json`, JSON.stringify(out, null, 1));
+  console.log(`spend so far $${totalSpend().toFixed(4)}`);
+  process.exit(0);
+}

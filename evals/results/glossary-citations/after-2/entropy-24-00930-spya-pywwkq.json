@@ -1,0 +1,171 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "arm": "after-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "ca281278da17c7ad6fd52995ef8c0c21f438e65eb7bb0e296fa9265b4d57e796",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Partial Information Decomposition",
+      "kind": "concept",
+      "aliases": [
+        "PID"
+      ],
+      "senseHere": "A method for splitting the total information two or more sources carry about a target into separate pieces: information they share redundantly, information each gives uniquely, and information that only appears when considering them jointly (synergy). The piece treats the synergistic piece as a signature of genuine neural computation, not just information passing through."
+    },
+    {
+      "name": "Rich club",
+      "kind": "concept",
+      "aliases": [
+        "rich clubs"
+      ],
+      "senseHere": "A tightly interconnected core set of the best-connected neurons in a network, connected to each other far more densely than chance would predict. The article finds these neurons carry a disproportionate share of synergistic computation in cortical circuits."
+    },
+    {
+      "name": "Mutual information",
+      "kind": "concept",
+      "aliases": [
+        "I(X;Y)"
+      ],
+      "senseHere": "A measure of how much knowing one variable's state reduces uncertainty about another's, used here as an undirected measure of statistical dependence between two neurons' activity.",
+      "background": "A standard quantity in information theory, originally formalized by Claude Shannon, that quantifies shared information between two random variables."
+    },
+    {
+      "name": "Transfer entropy",
+      "kind": "concept",
+      "aliases": [
+        "TE"
+      ],
+      "senseHere": "A directional measure of how much a source neuron's past activity reduces uncertainty about a target neuron's future activity, beyond what the target's own past already explains. The article uses it to build directed 'effective' networks of information flow between neurons."
+    },
+    {
+      "name": "Functional connectivity",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A description of statistical similarity between two neurons' activity patterns without implying a direction of influence, as distinct from effective connectivity. The article equates this with what mutual information measures."
+    },
+    {
+      "name": "Effective connectivity",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A description of directed influence between neurons, i.e. which neuron's past activity shapes another's future activity, as distinct from mere correlation. The article equates this with what transfer entropy measures."
+    },
+    {
+      "name": "Synergy",
+      "kind": "concept",
+      "aliases": [
+        "synergistic information",
+        "Syn"
+      ],
+      "senseHere": "Information about a target neuron's activity that can only be learned by looking at two or more source neurons together, not from any one source alone. The article treats high synergy as evidence that a neuron is combining its inputs into something new, i.e. performing a computation."
+    },
+    {
+      "name": "Redundancy",
+      "kind": "concept",
+      "aliases": [
+        "Red",
+        "redundant information"
+      ],
+      "senseHere": "Information about a target that is disclosed equally by two or more sources, so counting it from each source separately would double-count it. The article uses the relative balance of redundancy versus synergy to characterize how a brain region processes information during different tasks."
+    },
+    {
+      "name": "Unique information",
+      "kind": "concept",
+      "aliases": [
+        "Unq"
+      ],
+      "senseHere": "The portion of information about a target that only one particular source discloses and no other source can provide."
+    },
+    {
+      "name": "Redundancy function",
+      "kind": "concept",
+      "aliases": [
+        "I∩",
+        "Imin"
+      ],
+      "senseHere": "A formal rule for quantifying exactly how much information counts as 'redundant' between sources, which is needed to make the partial information decomposition mathematically solvable. The article notes there is no single agreed-upon choice, and different ones (like the original Imin) have different strengths and weaknesses."
+    },
+    {
+      "name": "Computational triad",
+      "kind": "concept",
+      "aliases": [
+        "triads",
+        "triad"
+      ],
+      "senseHere": "The basic unit of analysis in the article's studies: two source neurons both connected to one common target neuron, on which a partial information decomposition is performed to see how the target combines their inputs."
+    },
+    {
+      "name": "Partial information lattice",
+      "kind": "concept",
+      "aliases": [
+        "PI lattice"
+      ],
+      "senseHere": "A structured diagram of all the distinct ways multiple sources can share information about a target, ordered so that simpler combinations sit below more complex ones; it is used to compute every redundant, unique, and synergistic piece at once via a recursive subtraction procedure (Mobius inversion)."
+    },
+    {
+      "name": "Mobius inversion",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The recursive calculation used to work out the value of each individual piece of the information lattice, by subtracting out whatever simpler combinations of sources already account for."
+    },
+    {
+      "name": "Organotypic cultures",
+      "kind": "concept",
+      "aliases": [
+        "organotypic cortical cultures"
+      ],
+      "senseHere": "Thin slices of mouse cortex grown in a dish that preserve much of the brain's original cell arrangement and connections, used as the living neural tissue recorded from in the article's main experiments.",
+      "background": "This culturing technique lets researchers keep a piece of brain tissue alive and active for recording while retaining much of its natural circuit structure, rather than using dissociated single cells."
+    },
+    {
+      "name": "Feedforward, feedback, and recurrent connections",
+      "kind": "concept",
+      "aliases": [
+        "feedforward connections",
+        "feedback connections",
+        "recurrent connections"
+      ],
+      "senseHere": "Within a three-neuron triad, feedforward links run from the two source neurons to the target, feedback links run from the target back to the sources, and recurrent links connect the two sources to each other; the article tests how the presence of each type relates to synergy."
+    },
+    {
+      "name": "Dedekind number",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A rapidly growing count used here to describe how many distinct information-sharing pieces (lattice atoms) exist for a given number of source neurons, explaining why full decompositions become computationally impossible once there are many sources.",
+      "background": "In mathematics this number counts a particular class of logical structures (monotone Boolean functions), and it is known to grow so explosively that only the first nine values have ever been computed."
+    },
+    {
+      "name": "O-information",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A simplified, more computationally manageable measure of overall redundancy versus synergy in a group of variables, offered as a scalable alternative when a full partial information decomposition is impractical for many sources."
+    },
+    {
+      "name": "Local PID",
+      "kind": "concept",
+      "aliases": [
+        "local information decomposition"
+      ],
+      "senseHere": "A version of the decomposition applied to single specific moments or configurations of activity rather than averaged over all possibilities, allowing redundancy, uniqueness, and synergy to be tracked as a time-resolved sequence."
+    },
+    {
+      "name": "Neuronal avalanches",
+      "kind": "concept",
+      "aliases": [
+        "avalanche"
+      ],
+      "senseHere": "Cascading bursts of coordinated neural activity treated as a hallmark of complex, self-organized dynamics in brain tissue; the article notes these events have distinctive patterns of redundancy and synergy across their course."
+    },
+    {
+      "name": "Integrated information decomposition",
+      "kind": "concept",
+      "aliases": [
+        "ΦID"
+      ],
+      "senseHere": "An extension of partial information decomposition that handles multiple target variables (not just one) and can decompose how a system's past jointly constrains its future, enabling richer analyses like tracking synergy changes with consciousness or over time."
+    }
+  ]
+}

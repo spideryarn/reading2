@@ -1,0 +1,116 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "after-4",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "ca281278da17c7ad6fd52995ef8c0c21f438e65eb7bb0e296fa9265b4d57e796",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A glowing, free-floating ball-shaped flash seen during thunderstorms that lasts a few seconds and then vanishes, with or without leaving marks. It appears unpredictably, is almost never caught on camera or instruments, and has no agreed scientific explanation."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "P18"
+      ],
+      "senseHere": "A European research collaboration bringing together lightning scientists to study the physics of lightning, including ball lightning. Its proposal document stated that researchers no longer doubted ball lightning was a real phenomenon, even without a settled explanation."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as scattered across many disconnected theories, isolated case collections, and separate lab experiments that never come together into one agreed body of knowledge."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "senseHere": "A US project that photographed the night sky every night for over a decade to track meteors falling to Earth. Searching its huge photo archive turned up only two possible ball lightning images, showing how rarely the phenomenon gets caught on film."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "Austria's network of ground stations that detects and locates every lightning strike across the country, giving exact time, position, and electrical strength. The author used its records to check whether reported ball lightning sightings lined up with real detected strikes."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's lightning-detection network, similar to Austria's ALDIS, that records the location, timing and strength of lightning strikes. It was used to confirm a very strong lightning strike coinciding with a 1994 ball lightning sighting in Neuruppin."
+    },
+    {
+      "name": "positive and negative lightning strokes",
+      "kind": "term",
+      "aliases": [
+        "positive strokes",
+        "negative strokes"
+      ],
+      "senseHere": "A way of classifying cloud-to-ground lightning strikes by which electrical charge they carry down to the ground. The author found an unusually high share of positive strokes, which are normally rarer than negative ones, among lightning linked to ball lightning sightings."
+    },
+    {
+      "name": "St Petersburg Academy of Sciences",
+      "kind": "organization",
+      "aliases": [
+        "Imperial Academy of Sciences at Vienna"
+      ],
+      "background": "A leading 18th-century Russian scientific institution that supported research into natural philosophy, including early studies of electricity. Richmann was a member when he died during an experiment on atmospheric electricity."
+    },
+    {
+      "name": "angular diameter",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "How large an object appears to an observer, measured as an angle in degrees rather than as its actual physical size. Observers used it, along with an estimate of distance, to work out how big a ball lightning object truly was."
+    },
+    {
+      "name": "Cavendish Laboratory",
+      "kind": "place",
+      "aliases": [],
+      "background": "The physics department of Cambridge University in England, one of the world's most prominent centres for experimental physics, home to many major discoveries in atomic and nuclear physics."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "An 18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences who studied atmospheric electricity. He died in 1753 when an ungrounded lightning rod in his apparatus electrocuted him during an experiment, an event later misremembered in popular culture as a ball lightning strike."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or numbness in part of the body caused by being struck or affected by lightning. Charcot used it to separate this quickly-fading physical shock from the longer-lasting nervous disorders a lightning encounter could also trigger."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A pioneering French physician often called the founder of modern neurology, based at the Salpêtrière Hospital in Paris. He taught Sigmund Freud, who translated his lectures into German, and used case studies of patients to link physical trauma to nervous disorders."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The idea that ball lightning forms when an ordinary lightning bolt hits the ground and vaporizes soil minerals, creating a glowing ball of burning particles. A spectrum recorded from a 2012 Chinese sighting showed chemical elements matching this theory."
+    }
+  ]
+}
