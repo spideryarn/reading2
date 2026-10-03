@@ -27,7 +27,7 @@
  * left*, read exactly once — before anything paints — to decide which address
  * you arrive at. From that moment the URL is the only writer, exactly as
  * before. Same shape as the other per-browser keys url-state.md lists, such as
- * referee-card.ts, install-hint.ts and mic-devices.ts.
+ * install-hint.ts and mic-devices.ts.
  *
  * ## What is remembered, and what is deliberately not
  *

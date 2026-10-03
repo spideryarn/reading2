@@ -104,7 +104,8 @@ export const MODES = [
      docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
   "remember",
   /* **`outline` was the eighth, 2026-08-28 to 2026-09-10, and it is not a mode
-     any more** — the whole document as one nested list that never scrolls. It
+     any more** — the whole document as one nested list that never scrolled (it may
+     since 2026-10-03, plan 261003k). It
      became `structure`'s narrow face: where the band is too narrow for
      Structure's two columns, Structure draws Outline's list instead, and the
      word left this vocabulary. `?mode=outline` still works, through
