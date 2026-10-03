@@ -157,3 +157,37 @@ GPT Sol reviews this plan before the build and the code after. Browser check by 
 - A time for a recolour.
 - Filtering Quotes to "only mine" or by colour.
 - The floating selection menu, still `[Q-highlight-menu]`.
+
+## GPT Sol's plan review, 2026-10-03: build with changes
+
+[261003h-highlights-in-quotes-plan-review-sol.md](261003h-highlights-in-quotes-plan-review-sol.md).
+Three P1s, five P2s, all accepted. **Where this section and the design above disagree, this
+section wins.**
+
+- **Q1 the two `start`s are different offset spaces** (`Quote.start` in `block.text`,
+  `Comment.start` in rendered text), so they are never compared. **Interleaving is by block only;
+  inside one block the reader's rows come first**, in their own `start` order, then the model's in
+  theirs. That is occasionally the wrong order within one paragraph, and it is stated in the code.
+  Sol's simpler alternative, a *Your highlights* group above an unchanged list in every order, was
+  passed over: Greg approved the interleaved mockup, and reading order is what makes the band one
+  list to review. The block-only merge costs one small pure function.
+- **Q2 `QuoteBandRow[]` is a panel-only projection, built at render.** `rankQuotes`,
+  `visibleQuotes`, `markedQuotes`, `effectiveRank`, `barStops`, `barNote`, `barToReveal`,
+  `steppable`, the stepper, `?quote=`, `data-quote-row`, the prose quote card, the spine strip,
+  Skim, and the stored and public `Quotes.quotes` all stay `Quote[]` and the model's only. Name the
+  two things `shownAiQuotes` and `bandRows`.
+- **Q3 visitors need the time too.** The public DTO carries `Quote.addedAt`, and `PublicQuotes`
+  carries `generatedAt` for the "on or before" fallback. Projection tests for both.
+- **Q4 a replace that keeps an id must keep its `addedAt`.** `idsByText` / `inheritIds` carry
+  `{ id, addedAt? }`, preserving absence. One completion timestamp per run, used for the new quotes
+  and for `generatedAt`.
+- **Q5 pressing a reader's row clears `?quote=`** in the same tick as `jumpToComment`, at the
+  Quotes call site, not inside `jumpToComment`.
+- **Q6 owner only, by construction.** The reader's rows are a prop on the owner arm of the band's
+  access type only, derived from the owner capability, never from the merged `comments` (which is
+  the visitor's on a shared link). They render when there are any, even with no quote list yet.
+- **Q7 the date is when it was saved, and says so**: *Your highlight · saved {date}*. A comment
+  coloured later keeps its creation date; "when the colour was applied" is not stored. Deferred.
+- **Q8 no Referee placements**: a reader's row needs `quote`, `colour` and no `criterionId`. And
+  the wording about "both": the drawer lists it because it is the same comment; the margin shows it
+  when it has words. The note mark on a Quotes row keys from `body`.
