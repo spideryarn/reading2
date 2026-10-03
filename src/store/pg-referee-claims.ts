@@ -24,6 +24,21 @@
  * is the one state a referee cannot interpret — and it is survivable because
  * the whole thing is one model call away from being rebuilt.
  *
+ * ## One run per article, and still an attempt
+ *
+ * No id does not mean no identity. Two tabs can each `begin`, and the row then
+ * belongs to the second: `begin` writes a fresh `attempt_id`, and `finish` lands
+ * only on a `pending` row carrying the token it was given. The first tab's
+ * answer finds nothing to write to and is dropped, as a criterion's would be.
+ * Until 2026-10-03 `finish` updated by article id alone and the slower answer
+ * overwrote the newer run
+ * (docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md).
+ *
+ * And `begin` is **told** the fingerprint rather than reading it. The caller has
+ * already loaded the blocks it is about to send; a re-extraction between that
+ * load and a read here would label an answer about the old blocks with the new
+ * revision's hash, and a stale answer would read as current.
+ *
  * ## What may be logged from this file
  *
  * Slugs, statuses, counts. **Never a claim, never a quote, never a passage's
@@ -59,6 +74,8 @@
  * request back.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { and, eq, lt } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
@@ -67,10 +84,9 @@ import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type { Claim, ClaimsRun } from "../referee-claims.js";
 import { CLAIMS_TIMEOUT_MS } from "../referee-claims-run.js";
-import type { RefereeClaimsStore } from "./contracts.js";
+import type { ClaimsFinish, RefereeClaimsStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
-import { READ_COMMITTED } from "./isolation.js";
-import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
+import { articleIdForOwned, sourceHashFor } from "./pg.js";
 
 const logger = log("store");
 
@@ -165,84 +181,77 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
 
   async begin(
     slug: string,
+    sourceHash: string,
     now: () => string = () => new Date().toISOString(),
-  ): Promise<ClaimsRun> {
+  ): Promise<{ run: ClaimsRun; attempt: string }> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
     const at = now();
+    const attempt = randomUUID();
 
-    const run = await db.transaction(async (tx) => {
-      await lockArticleRow(tx, articleId);
-      /* Inside the lock, so the fingerprint and the row are written against one
-         state of the article — pg-referee-criteria.ts § begin. */
-      const sourceHash = await sourceHashFor(articleId, tx);
+    /* **An upsert, and the `set` clause is the whole shape of this sub-mode.**
+       Every field is written, not merged: `claims` back to `[]`, `model` and
+       `error` to null. Leaving any of them would put a finished answer's
+       claims, or a failed attempt's error, underneath a run that has not
+       happened yet — and the panel would show both.
 
-      /* **An upsert, and the `set` clause is the whole shape of this sub-mode.**
-         Every field is written, not merged: `claims` back to `[]`, `model` and
-         `error` to null. Leaving any of them would put a finished answer's
-         claims, or a failed attempt's error, underneath a run that has not
-         happened yet — and the panel would show both.
+       One statement and no article lock. The lock was there so the fingerprint
+       read and the row agreed on one state of the article, and the fingerprint
+       is no longer read here: it is the caller's, of the blocks it is sending.
 
-         `owner_id` is set from `currentOwnerId()` on both paths rather than left
-         alone on the update. `articleIdFor` has already refused a slug this
-         reader does not own, so the two can only agree; writing it keeps the row
-         self-describing instead of inheriting an owner from a previous write. */
-      const [written] = await tx
-        .insert(refereeClaims)
-        .values({
-          articleId,
+       `owner_id` is set from `currentOwnerId()` on both paths rather than left
+       alone on the update. `articleIdFor` has already refused a slug this
+       reader does not own, so the two can only agree; writing it keeps the row
+       self-describing instead of inheriting an owner from a previous write. */
+    const [written] = await db
+      .insert(refereeClaims)
+      .values({
+        articleId,
+        ownerId: currentOwnerId(),
+        status: "pending",
+        claims: [],
+        createdAt: new Date(at),
+        sourceHash,
+        attemptId: attempt,
+      })
+      .onConflictDoUpdate({
+        target: refereeClaims.articleId,
+        set: {
           ownerId: currentOwnerId(),
           status: "pending",
           claims: [],
+          model: null,
+          claimsOmitted: null,
+          error: null,
+          /* Re-stamped, and that is not cosmetic: `created_at` is the sweep's
+             clock (see the column), so a second run keeping the first run's
+             date would be sweepable the instant it started. */
           createdAt: new Date(at),
-          sourceHash: sourceHash ?? null,
-        })
-        .onConflictDoUpdate({
-          target: refereeClaims.articleId,
-          set: {
-            ownerId: currentOwnerId(),
-            status: "pending",
-            claims: [],
-            model: null,
-            claimsOmitted: null,
-            error: null,
-            /* Re-stamped, and that is not cosmetic: `created_at` is the sweep's
-               clock (see the column), so a second run keeping the first run's
-               date would be sweepable the instant it started. */
-            createdAt: new Date(at),
-            sourceHash: sourceHash ?? null,
-          },
-        })
-        .returning();
-
-      // `written!`: an insert with `returning()` yields the row it wrote.
-      return toRun(written!);
-    }, READ_COMMITTED);
+          sourceHash,
+          // The row is this run's now; an older run's `finish` matches nothing.
+          attemptId: attempt,
+        },
+      })
+      .returning();
 
     logger.info({ slug }, "claims run started");
-    return run;
+    // `written!`: an insert with `returning()` yields the row it wrote.
+    return { run: toRun(written!), attempt };
   },
 
-  async finish(
-    slug: string,
-    patch: Pick<ClaimsRun, "status"> & Partial<ClaimsRun>,
-  ): Promise<ClaimsRun | null> {
+  async finish(slug: string, patch: ClaimsFinish, attempt: string): Promise<ClaimsRun | null> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
 
-    /* **No attempt fence, and no `status = 'pending'` guard**, which is a
-       deliberate parity choice rather than an omission. `RefereeClaimsStore` has
-       no attempt token to present — there is one run and identity is the slug —
-       so a guard here would refuse writes the filesystem store accepts, and two
-       stores disagreeing about what a bad request *is* is the divergence a
-       happy-path parity test never sees. The cost is the one src/routes.ts
-       already writes down: two tabs running Claims at once have the slower
-       answer win, where a criterion's attempt would have refused the stale one.
+    /* **Three parts to the predicate below, as in pg-referee-criteria.ts §
+       finish.** The article says which row, `pending` says it is still waiting,
+       and the attempt says it is waiting for *this* call. A run that a newer
+       `begin` replaced, or that the sweep has already failed, matches nothing
+       and gets `null` — the same answer as a row that went away.
 
-       `createdAt` and `sourceHash` are not settable, exactly as the filesystem
-       store takes them from the row on disk rather than from the patch: a finish
-       must not re-date a run or claim it was answered against a different
-       version of the paper than the one `begin` fingerprinted.
+       `createdAt` and `sourceHash` are not settable: a finish must not re-date
+       a run or claim it was answered against a different version of the paper
+       than the one `begin` was told.
 
        **Every other field of `ClaimsRun` is written here, and a new one has to
        be added to this list.** `claimsOmitted` arrived on 2026-09-01 while this
@@ -261,14 +270,22 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
         ...(patch.model === undefined ? {} : { model: patch.model }),
         ...(patch.claimsOmitted === undefined ? {} : { claimsOmitted: patch.claimsOmitted }),
         ...(patch.error === undefined ? {} : { error: patch.error }),
+        // The attempt is over either way.
+        attemptId: null,
       })
-      .where(eq(refereeClaims.articleId, articleId))
+      .where(
+        and(
+          eq(refereeClaims.articleId, articleId),
+          eq(refereeClaims.status, "pending"),
+          eq(refereeClaims.attemptId, attempt),
+        ),
+      )
       .returning();
 
     if (patch.status === "error") logger.warn({ slug }, "claims run failed");
     /* Zero rows is `null`, never a resurrection: the row went away underneath
-       the call, and inserting one here would store an answer for a paper nobody
-       asked about any more. */
+       the call, or it is no longer this attempt's to write. Inserting one here
+       would store an answer for a paper nobody asked about any more. */
     return rows[0] ? toRun(rows[0]) : null;
   },
 
@@ -285,7 +302,7 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
       const cutoff = new Date(Date.now() - CLAIMS_ORPHAN_GRACE_MS);
       const swept = await db
         .update(refereeClaims)
-        .set({ status: "error", error: CLAIMS_SWEPT })
+        .set({ status: "error", error: CLAIMS_SWEPT, attemptId: null })
         .where(
           and(
             eq(refereeClaims.articleId, articleId),

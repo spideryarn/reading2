@@ -18,10 +18,11 @@
  * - The results are three shapes rather than one, discriminated by that kind,
  *   and `validateResults` in src/referee-criteria.ts stamps it. Nothing here
  *   looks inside a result.
- * - Everything else — the fingerprint, the retry rule, the colour, the trim —
- *   is deliberately identical, and where it is identical it is *imported* from
- *   src/searches.ts rather than copied (`MAX_CRITERIA` mirrors `MAX_RUNS`;
- *   `pg-referee-criteria.ts` imports `requireColour` from there directly).
+ * - Everything else — the fingerprint, the retry rule, the colour — is
+ *   deliberately identical, and where it is identical it is *imported* from
+ *   src/searches.ts rather than copied (`pg-referee-criteria.ts` imports
+ *   `requireColour` from there directly). The trim is each Postgres store's
+ *   own, in SQL: `MAX_CRITERIA` mirrors `MAX_RUNS`.
  *
  * ## What may be logged from this file
  *
@@ -35,7 +36,7 @@
 
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import type { RefereeCriterionConfig } from "./referee-criteria.js";
-import { MAX_CRITERIA, type SavedCriterion } from "./saved-criteria.js";
+import type { SavedCriterion } from "./saved-criteria.js";
 
 /**
  * Which criterion a `begin` produces, as a value. **Pure — no clock, no disk.**
@@ -63,6 +64,9 @@ import { MAX_CRITERIA, type SavedCriterion } from "./saved-criteria.js";
  * `kind` tells the caller which branch ran, because in SQL the two are
  * different statements. A store reading `status` to work it out would get it
  * wrong: both branches produce `pending`.
+ *
+ * **It returns the row and not the list** — `withRun` says why. The trim to
+ * `MAX_CRITERIA` is the SQL one in src/store/pg-referee-criteria.ts § begin.
  */
 export function withCriterion(
   criteria: SavedCriterion[],
@@ -71,7 +75,7 @@ export function withCriterion(
   wantedId: string | undefined,
   at: string,
   sourceHash?: string,
-): { criteria: SavedCriterion[]; row: SavedCriterion; kind: "reset" | "minted" } {
+): { row: SavedCriterion; kind: "reset" | "minted" } {
   const existing = wantedId
     ? criteria.find(
         (c) => c.id === wantedId && c.criterion === criterion && c.status === "error",
@@ -99,11 +103,7 @@ export function withCriterion(
       // The **new** attempt's article, not the failed one's.
       ...(sourceHash === undefined ? {} : { sourceHash }),
     };
-    return {
-      criteria: criteria.map((c) => (c.id === row.id ? row : c)),
-      row,
-      kind: "reset",
-    };
+    return { row, kind: "reset" };
   }
 
   const taken = new Set(criteria.map((c) => c.id));
@@ -121,9 +121,7 @@ export function withCriterion(
     // `"sourceHash": null` on disk for a store that could not answer.
     ...(sourceHash === undefined ? {} : { sourceHash }),
   };
-  // Newest last on disk, oldest dropped first. The panel sorts for display, so
-  // the file stays in the order things happened.
-  return { criteria: [...criteria, row].slice(-MAX_CRITERIA), row, kind: "minted" };
+  return { row, kind: "minted" };
 }
 
 

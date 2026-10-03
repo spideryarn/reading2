@@ -39,7 +39,7 @@ import { currentOwnerId } from "../src/owner.js";
 import type { RefereeCriterionConfig, RefereeResult } from "../src/referee-criteria.js";
 import { withCriterion } from "../src/referee-criteria-store.js";
 import { pgRefereeCriteriaStore } from "../src/store/pg-referee-criteria.js";
-import { MAX_CRITERIA, type SavedCriterion } from "../src/saved-criteria.js";
+import type { SavedCriterion } from "../src/saved-criteria.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -126,14 +126,11 @@ describe("withCriterion — which row a request produces", () => {
     expect(made.config).toEqual(DIVERGING);
   });
 
-  it("keeps at most MAX_CRITERIA, oldest first", () => {
-    let rows: SavedCriterion[] = [];
-    for (let i = 0; i < MAX_CRITERIA + 3; i++) {
-      rows = withCriterion(rows, `c${i}`, SINGLE, undefined, `t${i}`).criteria;
-    }
-    expect(rows).toHaveLength(MAX_CRITERIA);
-    expect(rows[0]?.criterion).toBe("c3");
-  });
+  /* **No trim here** — `withCriterion` stopped returning the list on 2026-10-03,
+     because nothing in production read it and the trim that runs is SQL.
+     *never trims a criterion that is still being answered* in
+     tests/store-parity-referee.test.ts holds the cap against the code that
+     executes. docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md */
 
   /* `withColour` used to live beside `withCriterion` and had two cases here.
      It went with the filesystem criteria store on 2026-09-05

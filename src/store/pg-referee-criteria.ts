@@ -34,7 +34,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { refereeCriteria } from "../db/schema.js";
@@ -234,9 +234,18 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
          the last N array elements and this keeps the N newest by timestamp;
          pg-searches.ts § the trim works through exactly how far apart those two
          can get and why the guarantee that matters — *the row this `begin`
-         returns survives this transaction* — is the one a reader needs. */
+         returns survives this transaction* — is the one a reader needs.
+
+         **And a `pending` row past the cap is skipped, not deleted** — the rule
+         pg-searches.ts gained on 2026-10-01 and this copy did not, until
+         2026-10-03. A retry keeps its `created_at`, so the oldest row can be the
+         one still being answered; deleting it made its fenced `finish` update
+         nothing and the paid answer was gone on reload. It becomes trimmable
+         once it finishes or the sweep fails it. So the cap is twenty plus
+         however many older criteria are still running.
+         docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md */
       const others = await tx
-        .select({ id: refereeCriteria.id })
+        .select({ id: refereeCriteria.id, status: refereeCriteria.status })
         .from(refereeCriteria)
         .where(
           and(
@@ -246,14 +255,14 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
         )
         .orderBy(sql`${refereeCriteria.createdAt} desc`, sql`${refereeCriteria.id} desc`)
         .offset(MAX_CRITERIA - 1);
-      if (others.length) {
+      const past = others.filter((r) => r.status !== "pending").map((r) => r.id);
+      if (past.length) {
         await tx.delete(refereeCriteria).where(
           and(
             eq(refereeCriteria.articleId, articleId),
-            inArray(
-              refereeCriteria.id,
-              others.map((r) => r.id),
-            ),
+            inArray(refereeCriteria.id, past),
+            // Repeated in SQL for the reason the reset's predicate is above.
+            ne(refereeCriteria.status, "pending"),
           ),
         );
       }

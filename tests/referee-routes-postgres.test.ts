@@ -80,11 +80,20 @@ let CLAIM: Claim;
 /** The one result the mocked criterion run answers with, likewise. */
 let RESULT: RefereeResult;
 
+/**
+ * Run by the mocked claims call before it answers, so a case can have a second
+ * run begin — or begin and finish — while the first is still "at the model".
+ * Null for every case that is not about two runs.
+ */
+let duringClaimsRun: (() => Promise<void>) | null = null;
+
 vi.mock("../src/referee-claims-run.js", async () => ({
   ...(await vi.importActual<typeof import("../src/referee-claims-run.js")>(
     "../src/referee-claims-run.js",
   )),
   runClaimsStream: async function* () {
+    /* What another tab does while this run's model call is out. */
+    if (duringClaimsRun) await duringClaimsRun();
     yield {
       type: "done" as const,
       outcome: {
@@ -122,7 +131,7 @@ await pgReady({
   max: 2,
 });
 
-const { handleApi } = await import("../src/routes.js");
+const { CLAIMS_SUPERSEDED, handleApi } = await import("../src/routes.js");
 const { refereeClaimsStore, refereeCriteriaStore } = await import("../src/store/index.js");
 
 
@@ -264,6 +273,51 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
 
     const reply = await call("GET", `/api/referee/claims/${SLUG}`);
     expect((reply.body.run as { status: string }).status).toBe("done");
+  });
+
+  /* Two tabs, sweep 5's X4
+     (docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md). The
+     older run's answer used to be written over the newer run's row. It is now
+     refused by the store, and these two say what the older tab is told instead
+     of its stream simply stopping. */
+  it("tells an older run that a newer one is still out, and keeps the newer run's row", async () => {
+    duringClaimsRun = async () => {
+      await asTestOwner(() => refereeClaimsStore.begin(SLUG, "feedfacefeedface"));
+    };
+    try {
+      const posted = await call("POST", `/api/referee/claims/${SLUG}`);
+      const done = frame(posted.text, "done");
+      expect(done?.status).toBe("error");
+      expect(done?.error).toBe(CLAIMS_SUPERSEDED);
+    } finally {
+      duringClaimsRun = null;
+    }
+    /* The row is the newer run's, untouched: still waiting, no claims, and the
+       sentence above was never stored. */
+    const stored = await asTestOwner(() => refereeClaimsStore.load(SLUG));
+    expect(stored?.status).toBe("pending");
+    expect(stored?.claims).toEqual([]);
+    expect(stored?.error).toBeUndefined();
+  });
+
+  it("hands an older run the newer run's finished answer rather than its own", async () => {
+    duringClaimsRun = async () => {
+      const { attempt } = await asTestOwner(() => refereeClaimsStore.begin(SLUG, "feedfacefeedface"));
+      await asTestOwner(() =>
+        refereeClaimsStore.finish(SLUG, { status: "done", claims: [], model: "the-newer-run" }, attempt),
+      );
+    };
+    try {
+      const posted = await call("POST", `/api/referee/claims/${SLUG}`);
+      const done = frame(posted.text, "done");
+      expect(done?.status).toBe("done");
+      expect(done?.model).toBe("the-newer-run");
+    } finally {
+      duringClaimsRun = null;
+    }
+    const stored = await asTestOwner(() => refereeClaimsStore.load(SLUG));
+    expect(stored?.model).toBe("the-newer-run");
+    expect(stored?.claims).toEqual([]);
   });
 
   it("refuses a slug that is not an article, before a header is written", async () => {

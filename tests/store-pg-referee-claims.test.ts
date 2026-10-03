@@ -80,6 +80,9 @@ const BLOCK_ID = "spya-qwm234";
  */
 const OUTSIDER = "00000000-0000-4000-8000-0000000000f4" as OwnerId;
 
+/** A fingerprint for runs whose fingerprint is not what the test is about. */
+const HASH = "feedfacefeedface";
+
 await pgReady({
   suite: "tests/store-pg-referee-claims.test.ts",
   tables: ["spideryarn.referee_claims"],
@@ -154,6 +157,9 @@ async function ageRunBy(ms: number): Promise<void> {
 }
 
 describe("the Postgres claims store", { timeout: 20_000 }, () => {
+  /** The token of the run the previous case began, for the case that ends it. */
+  let lastAttempt = "no run has begun yet";
+
   beforeAll(async () => {
     await clean();
     const db = getDb();
@@ -202,13 +208,14 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
   });
 
   it("stores a run and reads the same one back", async () => {
-    const begun = await store.begin(SLUG);
+    const { run: begun, attempt } = await store.begin(SLUG, HASH);
     expect(begun.status).toBe("pending");
     expect(begun.claims).toEqual([]);
-    /* The article has blocks, so the fingerprint is a real hash rather than the
-       `undefined` an unreadable article gets — which `isStale` counts as stale. */
-    expect(begun.sourceHash).toBe(await store.sourceHash(SLUG));
-    expect(begun.sourceHash).toMatch(/^[0-9a-f]{8,}$/);
+    /* The fingerprint is the one `begin` was told — the blocks the caller is
+       sending — and not one the store read for itself. That the caller's hash
+       of loaded blocks equals `store.sourceHash` for an unchanged article is
+       tests/referee-claims-routes.test.ts's to hold. */
+    expect(begun.sourceHash).toBe(HASH);
 
     const finished = await store.finish(SLUG, {
       status: "done",
@@ -223,7 +230,7 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
          into "we did not record it", which is the distinction the column is
          nullable for. */
       claimsOmitted: 0,
-    });
+    }, attempt);
     expect(finished?.status).toBe("done");
 
     const back = await store.load(SLUG);
@@ -253,7 +260,10 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
     const before = await store.load(SLUG);
     expect(before?.claims).toHaveLength(1);
 
-    const again = await store.begin(SLUG);
+    const { run: again, attempt } = await store.begin(SLUG, HASH);
+    /* Kept for the next case, which fails this run: the cases in this file
+       share one row and run in order. */
+    lastAttempt = attempt;
     expect(again.status).toBe("pending");
     /* The corollary src/store/pg-referee-claims.ts writes down: starting a run
        throws away the last answer before the new one exists, deliberately,
@@ -273,9 +283,9 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
   });
 
   it("clears a failed run's error when the next one starts", async () => {
-    await store.finish(SLUG, { status: "error", error: "the provider refused" });
+    await store.finish(SLUG, { status: "error", error: "the provider refused" }, lastAttempt);
     expect((await store.load(SLUG))?.error).toBe("the provider refused");
-    const again = await store.begin(SLUG);
+    const { run: again } = await store.begin(SLUG, HASH);
     /* Left behind, this would sit under a `pending` row and the panel would
        print a failure about a run that has not happened yet. */
     expect(again.error).toBeUndefined();
@@ -283,14 +293,14 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
   });
 
   it("leaves a run this process is running alone", async () => {
-    await store.begin(SLUG);
+    await store.begin(SLUG, HASH);
     await ageRunBy(CLAIMS_ORPHAN_GRACE_MS * 2);
     const swept = await store.sweep(SLUG, true);
     expect(swept?.status).toBe("pending");
   });
 
   it("leaves another process's young run alone, which is what the window is for", async () => {
-    await store.begin(SLUG);
+    await store.begin(SLUG, HASH);
     /* No ageing: `live` is false, so a store with only the boolean guard would
        error this run — and on Vercel the second process is the ordinary case,
        not an edge one. */
@@ -300,7 +310,7 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
   });
 
   it("sweeps an abandoned run once it is past the window", async () => {
-    await store.begin(SLUG);
+    await store.begin(SLUG, HASH);
     await ageRunBy(CLAIMS_ORPHAN_GRACE_MS + 60_000);
     const swept = await store.sweep(SLUG, false);
     expect(swept?.status).toBe("error");
@@ -309,9 +319,52 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
     expect((await store.sweep(SLUG, false))?.status).toBe("error");
   });
 
+  it("refuses a stale run's answer when a newer run has begun", async () => {
+    /* Sweep 5, X4 (docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md).
+       Two tabs: A begins, B begins, A's model call comes back first. `finish`
+       used to update by article id alone, so A's claims and `done` landed on
+       B's row, under B's date and fingerprint, until B overwrote them. */
+    const a = await store.begin(SLUG, HASH);
+    const b = await store.begin(SLUG, HASH);
+    expect(a.attempt).not.toBe(b.attempt);
+
+    expect(
+      await store.finish(SLUG, { status: "done", claims: [aClaim()], model: "tab-a" }, a.attempt),
+    ).toBeNull();
+    const waiting = await store.load(SLUG);
+    expect(waiting?.status).toBe("pending");
+    expect(waiting?.claims).toEqual([]);
+
+    const landed = await store.finish(SLUG, { status: "done", claims: [], model: "tab-b" }, b.attempt);
+    expect(landed?.model).toBe("tab-b");
+
+    /* And an attempt is spent once it has landed: the same token again writes
+       nothing, so a replayed finish cannot turn a `done` into an `error`. */
+    expect(await store.finish(SLUG, { status: "error", error: "late" }, b.attempt)).toBeNull();
+    expect((await store.load(SLUG))?.status).toBe("done");
+  });
+
+  it("refuses the answer of a run the sweep has already failed", async () => {
+    const { attempt } = await store.begin(SLUG, HASH);
+    await ageRunBy(CLAIMS_ORPHAN_GRACE_MS + 60_000);
+    await store.sweep(SLUG, false);
+    expect(await store.finish(SLUG, { status: "done", claims: [aClaim()] }, attempt)).toBeNull();
+    expect((await store.load(SLUG))?.error).toBe(CLAIMS_SWEPT);
+  });
+
+  it("fingerprints the blocks the caller sent, not whatever the article is by now", async () => {
+    /* The handler loads the blocks, then begins. A re-extraction between the two
+       used to stamp the new revision's hash on an answer about the old blocks,
+       so a stale answer read as current. `begin` now stores what it is told. */
+    const { run } = await store.begin(SLUG, "0123456789abcdef");
+    expect(run.sourceHash).toBe("0123456789abcdef");
+    expect((await store.load(SLUG))?.sourceHash).toBe("0123456789abcdef");
+    expect(await store.sourceHash(SLUG)).not.toBe("0123456789abcdef");
+  });
+
   it("answers null rather than resurrecting a run that went away", async () => {
     await getDb().delete(refereeClaims).where(eq(refereeClaims.articleId, ARTICLE_ID));
-    expect(await store.finish(SLUG, { status: "done", claims: [aClaim()] })).toBeNull();
+    expect(await store.finish(SLUG, { status: "done", claims: [aClaim()] }, lastAttempt)).toBeNull();
     expect(await store.load(SLUG)).toBeNull();
   });
 
@@ -319,8 +372,9 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
 
   describe("asked for by somebody who does not own the paper", () => {
     beforeAll(async () => {
-      await store.begin(SLUG);
-      await store.finish(SLUG, { status: "done", claims: [aClaim()], model: "test-model" });
+      const { attempt } = await store.begin(SLUG, HASH);
+      lastAttempt = attempt;
+      await store.finish(SLUG, { status: "done", claims: [aClaim()], model: "test-model" }, attempt);
     });
 
     const asOutsider = <T>(fn: () => Promise<T>) =>
@@ -338,12 +392,12 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
     });
 
     it("cannot start a run over it", async () => {
-      await expect(asOutsider(() => store.begin(SLUG))).rejects.toMatchObject({ status: 404 });
+      await expect(asOutsider(() => store.begin(SLUG, HASH))).rejects.toMatchObject({ status: 404 });
     });
 
     it("cannot write an answer onto it", async () => {
       await expect(
-        asOutsider(() => store.finish(SLUG, { status: "done", claims: [] })),
+        asOutsider(() => store.finish(SLUG, { status: "done", claims: [] }, lastAttempt)),
       ).rejects.toMatchObject({ status: 404 });
     });
 

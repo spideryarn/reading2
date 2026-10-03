@@ -1811,6 +1811,18 @@ export const refereeClaims = spideryarn.table(
      * same reason: not knowing is not the same as knowing it is fine.
      */
     sourceHash: text("source_hash"),
+    /**
+     * **Which run is in flight, so an older run's answer cannot land on a newer
+     * one.** `begin` writes a fresh token, `finish` must present it and clears
+     * it, and the sweep clears it. Two tabs running Claims at once used to have
+     * the slower answer overwrite the faster — sweep 5, X4,
+     * docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md.
+     *
+     * One column where `referee_criteria` has two: `created_at` above is already
+     * this table's sweep clock, so there is no `attempt_started_at` and no
+     * both-or-neither check. `text`, like `search_runs` and `referee_criteria`.
+     */
+    attemptId: text("attempt_id"),
   },
   (t) => [
     check("referee_claims_status", sql`${t.status} in ('pending','done','error')`),
