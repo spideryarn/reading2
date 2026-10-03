@@ -166,9 +166,30 @@ C3 and C4 were stale lines in `search.md` from before this job; fixed.
 
 **Stage A.** The eval is
 [261003c](../investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md);
-spend about $1.50. The cause was the question's verb. Shipped: the question asks whether a passage
-*mentions or discusses* what the reader wants, not whether it *matches*. The floor (0.7) and the cap
-(20) stay. Checked on the real code path after the change: "Buddhism" on Greg's article returns the
+spend about $1.50. On the old wording the paragraph Greg wanted was Jev's top answer at 0.70–0.75,
+on the 0.7 floor, and scores move between runs; his exact zero was not reproduced (29 runs all
+cleared it), so "it fell just under" is likely, not shown. Shipped: the question asks whether a
+passage *mentions or discusses* what the reader wants, not whether it *matches*, which scores that
+paragraph 0.96. The floor (0.7) and the cap (20) stay. Checked on the real code path after the change: "Buddhism" on Greg's article returns the
 Buddhist no-self paragraph at 95–96, three runs of three, and a topic the article lacks returns
 nothing. Not shipped, and asked of Greg: an ids-only LLM as a middle tier, and literal matches
 ahead of Jev's hits.
+
+GPT Sol reviewed the conclusion from the raw results
+([261003i-quick-search-stage-a-review-sol.md](261003i-quick-search-stage-a-review-sol.md)) and
+reproduced the recall numbers. Its verdict: ship it, **as a trade of more found for more wrong
+hits**, not as "no worse". It corrected the write-up, the comments and `search.md` where they
+overclaimed (A1, A3, A4, A5): the new wording also returns more wrong paragraphs (known wrong hits
+on the spike's 16 queries rose from 35 to 54 across the runs; "Evolution" on Greg's article returns
+18–20 paragraphs with 5–7 judged wrong); a floor of 0.5 does find three more targets, with more
+junk; and the LLM arms are not 15 times dearer. A6 stands as a limit: nothing dated proves the
+targets were declared before the arms ran. A2: the first commit of the investigation (`035a2d9c7`)
+quoted seven words and two words of the production article; they are removed in the next commit and
+remain in that one commit's history, which this repo's no-rewrite rule leaves there.
+
+**The browser check** (Sonnet, Playwright, 1440 / 820 / 390) passed B1–B3 and the tap fix, and
+caught the pressed ring on a quick hit: on the inline mark it drew a box round every line. It is now
+one outline on the paragraph's cell, under its own attribute so a meaning quote in the same
+paragraph does not look pressed. Known and left: on a browser with classic scrollbars the outline's
+right edge falls under the scrollbar; at 820 wide a quick row's meta line wraps to three short
+lines; the *thorough* button is 66×21px on touch.

@@ -194,17 +194,22 @@ from that shape:
   [`src/quick-search.ts`](../../src/quick-search.ts), `MAX_HITS` shared with meaning). There is no
   natural break in Jev's scores, so the floor is a measurement, not a gap: the plan said 0.8, and
   re-measured on the wording actually sent, 0.8 kept about half the meaning search's hits and 0.7
-  about three-quarters, with what lay between nearly all genuine. The cap does real work on queries
-  about the whole piece, where 34–59 blocks clear 0.7. Re-measured on the wording below and kept:
-  a lower floor found no more and let in more wrong paragraphs.
+  about three-quarters before the cap, with what lay between nearly all genuine. The cap does real work on queries
+  about the whole piece. On the new wording, up to 94 of 505 blocks cleared 0.7 in the eval.
+  Floors of 0.6 and 0.65 found no more literal targets on its short-topic set and let in more
+  known wrong paragraphs; 0.5 recovered three more target opportunities with more junk.
 - **The question says *mention or discuss*, not *match*** — since 2026-10-03, from Greg's report
   `spya-ats9dk`: a quick search for *Buddhism* found nothing in an article with a paragraph on
-  Buddhist no-self. That paragraph was Jev's top answer and scored 0.70–0.75, on the floor. *Match*
-  made Jev ask whether the paragraph **is** the thing, so a one-word topic mentioned in passing
-  scored low: on 18 one-word queries the old wording returned nothing at all on 56% of runs and
-  missed 109 of 141 literal mentions. The new one misses 17, found 27 of 27 on queries held back
-  until it was chosen, and does a little better on phrases and questions too (0.78 of the meaning
-  search's hits against 0.70). A topic the article does not have still returns nothing.
+  Buddhist no-self. In the eval that target was Jev's top answer at 0.70–0.75 on the old wording;
+  Greg's zero-hit result was not reproduced with the identical query. On 18 short-topic queries
+  the old wording returned nothing on 56% of runs and missed 109 of 141 literal-target
+  opportunities (47 targets measured three times). The new one misses 17 and finds 27 of 27 on
+  the reported held-back set (9 targets measured three times). It improves average reference
+  overlap on phrases and questions (0.78 against 0.70), while adding known wrong results; full
+  precision after the cap was not established on that set. The six absent-topic controls still
+  return nothing. These measurements support the wording change, not a general non-regression
+  claim; [261003c](../investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md)
+  records the judging and declaration limits.
 - **Headings are never asked about.** Jev rates the title highly against any query about the
   article. They are dropped in `quickBlocks`, not in the shared `isSearchable`, because they are
   searchable — a meaning search may land on one. Notes and references stay in, as they do for
@@ -257,7 +262,7 @@ things, all in the browser (`onAsk` in
 So a quick hit is **bare**: `Found.bare`, set from the run's kind, becomes `Mark.bare`, and
 `annotateHtml` leaves a bare mark out of the wash, its strength and the coloured rules. The
 `<mark>` is still drawn with its `data-hit`, because the scroll and the flash find the passage by it,
-and a pressed quick hit gets the ring without a wash. It is not the `whole` flag: that one means a
+and a pressed quick hit gets one outline round its paragraph (on the cell, under its own attribute, `data-hit-open-bare`) and no wash. It is not the `whole` flag: that one means a
 meaning hit's quote could not be placed, and that hit keeps its wash, as a words match does. Whether
 a meaning hit should lose its wash too is [open](#what-is-still-open).
 
@@ -1499,9 +1504,12 @@ a hope.
   paragraph, with the bar and the spine only; the quote is what *thorough* buys.
 - **A small LLM that answers with block ids was measured and not adopted** (2026-10-03,
   [261003c](../investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md)).
-  It takes 1.2–2.2 seconds against Jev's 0.4 and costs 2 to 15 times as much; on one-word topics it
-  is level with Jev's new wording and keeps more junk, and on phrases and questions it is better
-  (0.91 of the meaning search's hits against 0.78). A middle tier is Greg's call. So is putting
+  The LLMs complete typical-article searches in 1.18–1.45 seconds against Jev's 0.37. DeepSeek
+  improves short-topic recall while keeping more known wrong hits; its measured cached calls
+  cost less than Jev's, and its cached long-article first hit arrives sooner. Its phrase/question
+  reference overlap is also higher (0.91 against 0.78), with full-list precision unestablished.
+  The eval favours keeping Jev for typical quick searches on speed grounds. A middle tier is
+  Greg's call. So is putting
   literal matches of the typed word ahead of Jev's hits, which would take literal misses to zero.
 - **Should a meaning hit lose its wash too?** A quick hit's words are no longer washed
   (`spya-m59qg0`). A meaning hit's still are, because there the words are a real quote inside the

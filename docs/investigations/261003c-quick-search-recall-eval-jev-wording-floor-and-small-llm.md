@@ -26,19 +26,22 @@ measured.
 
 ## The short answer
 
-- **The wording is the cause.** "Does passage X *match*…" makes Jev ask whether the paragraph *is
-  the thing*. A paragraph that only mentions the topic scores 0.4 to 0.75. On 18 one-word queries
-  the shipped search returned **nothing at all on 56% of runs** and missed 109 of 141 literal
-  mentions.
-- **One changed verb fixes it.** *"Does passage X mention or discuss what the reader is looking for
-  (query)?"* scores the same paragraphs 0.81 to 0.97. Literal mentions missed fall from 109 to 17 of
-  141. On 8 queries held back until the wording was chosen, it found 27 of 27. It also does
-  better on the spike's 16 phrase and question queries (0.78 against 0.70).
-- **The floor stays at 0.7.** With the new wording a lower floor finds nothing more and keeps more
-  junk. A floor relative to the top score is worse on every count.
-- **A small LLM that answers with ids works, and is not better enough to switch.** It takes 1.2 to
-  2.2 seconds against Jev's 0.4, costs 2 to 15 times as much, and on the one-word shape it is level
-  with Jev plus the new wording while keeping more junk.
+- **The wording strongly affects short-topic retrieval.** On 18 short-topic queries the old
+  wording returned **nothing at all on 56% of runs** and missed 109 of 141 literal-target
+  opportunities (47 distinct query/block targets, each measured three times). The exact cause of
+  Greg's saved zero-hit run remains unproved.
+- **Changing the question substantially improves that measure.** *"Does passage X mention or
+  discuss what the reader is looking for (query)?"* misses 17 of 141 opportunities. On the 8
+  queries reported as held back, it found 27 of 27 opportunities (9 targets, three runs each).
+  Reference recall on the spike's 16 phrases and questions rises from 0.70 to 0.78; this does
+  **not** establish that their results are no worse, because known wrong hits also increase and
+  many displayed hits are unjudged.
+- **Keep the floor at 0.7 as a trade-off.** Floors of 0.6 and 0.65 find no more literal targets
+  and keep more known junk; 0.5 recovers three more opportunities with more junk and unjudged hits.
+- **Retain Jev for quick search on speed grounds.** The ids-only LLMs generally take longer on
+  typical articles and keep more known junk on the short set, though DeepSeek improves recall.
+  Costs depend on caching: its measured cached calls were cheaper than Jev. The detailed
+  comparison below supports retaining Jev as a product choice, not an unqualified LLM defeat.
 
 ## What was measured
 
@@ -59,14 +62,14 @@ of its text is in the results: block ids, scores and timings only.
 | set | n | what | used for |
 |---|---|---|---|
 | old | 16 | the spike's phrases and questions, with its saved Sonnet answers | does a change hurt what already worked? |
-| short | 18 | one or two words, mostly passing mentions: "Buddhism", "Freud", "cancer", "doctor", "poverty", "Google", "Twitter", "podcast"… Two have no literal match at all ("religion", "war") | choosing the wording and floor |
+| short | 18 | short topics, mostly passing mentions: "Buddhism", "Freud", "cancer", "doctor", "poverty", "Google", "Twitter", "podcast"… Two have no literal match at all ("religion", "war") | choosing the wording and floor |
 | held back | 8 | the same shape ("Heraclitus", "puberty", "lawyer", "coffee", "Mafia"…), written after the short set had run and before these were run | confirming the choice |
 | absent | 6 | topics the article does not contain ("football", "cryptocurrency", "Buddhism" on the Constitution…) | false positives |
 
 **The yardstick.** For the short set: the real meaning search (`findPassages`, standard power) once
 per query, **plus** every askable block containing the query's stem (`/buddh/i`, `/freud/i`…). The
-stems and their target blocks were fixed before any arm ran. A reader who types one word expects at
-least what find-in-page would give, so each literal mention an arm fails to return is counted on its
+author reports that stems and target blocks were fixed before any arm ran. A reader who types one
+word expects at least what find-in-page would give, so each literal mention an arm fails to return is counted on its
 own ("literal missed"). For the held-back set the literal targets are the yardstick. For the old set
 it is the saved Sonnet hits, restricted to askable blocks; that number is **reference recall**, not
 recall, because Sonnet's list is not complete (261002o § Quality).
@@ -75,7 +78,9 @@ recall, because Sonnet's list is not complete (261002o § Quality).
 pooled per query and listed in article order, with no arm name and no score (`pool.ts.txt`), and
 marked yes or no: 200 judgements in `judged.json`. On the old set only each arm's top 5 were pooled.
 
-**Everything is measured after the cap of 20**, three runs per query.
+**Retrieval counts are measured after the cap of 20**, three runs per query. Precision excludes
+unjudged hits rather than counting them as right or wrong. On the old set this leaves 114 displayed
+hit occurrences unjudged for plain and 116 for mention, so it is not full-list precision.
 
 **Spend: about $1.50** of a $5 ceiling. Jev $0.60, the Sonnet reference $0.27 (from the spend
 ledger), Gemini $0.30, Luna about $0.17 (its responses report a cost of 0, so this is tokens at list
@@ -95,8 +100,7 @@ What Greg saw, from his saved runs (`greg-saved-runs.json`):
 The quick run is stored with no hits, so nothing on the page hid them: the `?conf=` bar filters what
 a run holds and this one held nothing.
 
-The paragraph is `spya-p2wrn0`, the seventh block. It names "Buddhist and Indic conceptions of the
-no-Self" in one clause. Sending exactly what production sends:
+The target is `spya-p2wrn0`, the seventh block. Sending exactly what production sends:
 
 | question | answer |
 |---|---|
@@ -106,16 +110,20 @@ no-Self" in one clause. Sending exactly what production sends:
 | Its rank | **1 of 58**, every time. The next block scored 0.55. |
 | The cap | Not involved. At most one block cleared 0.7. |
 
-**So it is the floor.** The best paragraph in the article sits on 0.7, and Jev's score for the same
-request moves between runs (by up to 0.11, per the spike). Greg's run landed under; mine landed just
-over. I did not reproduce the zero with a capital B in 29 tries. Lower-case "buddhism" scored 0.71,
-0.69 and 0.71, so one in three of those returned nothing.
+**The floor is a plausible explanation, not a reproduced cause.** The target sits close to 0.7,
+but none of 29 capital-B requests went below it. Greg's saved run stores no rejected scores;
+it cannot show whether this target fell below 0.7. Lower-case "buddhism" scored 0.71, 0.69 and 0.71,
+so one in three of those returned nothing. Both Greg's saved run and the eval name
+`typesafe/jev-1.13-20260917`; the saved evidence does not establish a different model snapshot.
+The saved eval probabilities are hundredths: no hidden sub-0.7 score rounded to 70 appears in
+these files. Production filters the raw probability before rounding the displayed confidence, so
+rounding could matter for an unsaved score, but it is not evidence for what happened in Greg's run.
 
 How sensitive it is, on the shipped wording (three runs each, `out-repro.json`):
 
 | query | target's score | kept |
 |---|---|---|
-| Buddhism | 0.70–0.75 | 1 |
+| Buddhism | 0.71–0.73 | 1 |
 | buddhism | 0.69–0.71 | 1, 0, 1 |
 | Buddhist | 0.78–0.81 | 1 |
 | no-self | 0.87–0.88 | 1 |
@@ -135,9 +143,9 @@ the paragraph scored against "Buddhism" with less of the article beside it.
 | the *other* half, without its neighbours | 0.59–0.62 | 0.93–0.94 |
 | alone | 0.54–0.58 | 0.88–0.90 |
 
-Context matters a little: without its neighbours the paragraph loses about 0.1. But with every bit
-of context it still only reaches 0.73. The wording moves it by 0.23. **It is a wording problem, with
-a small context effect on top.**
+Context matters: without its neighbours the target loses about 0.1. With full context these
+control runs score 0.71–0.75 on plain and 0.96 on mention. That supports a large wording effect
+on this target, without identifying the cause of the earlier zero-hit run.
 
 ## Results
 
@@ -160,7 +168,7 @@ a small context effect on top.**
 | relates | 22 | 6% | 0.86 | 0.52 | not judged | 0.92 | 16.6 / 292 | not judged |
 
 On the 6 absent topics every wording kept **nothing**, at any floor from 0.5 up. The top score was
-0.14 at most on "mention" and 0.22 on "relates", the loosest.
+0.11 at most on "mention" and 0.22 on "relates", the loosest.
 
 The 6% is one query, "war" on the Agents article. Nothing there says "war"; Sonnet offered the
 soldiers analogy and "Philip of Macedon". No wording found it (top score 0.34). The 17 literal
@@ -191,13 +199,15 @@ words longer, which adds 1.6% to the input.
 **Lowering the floor does not rescue the shipped wording.** Even at 0.5 it misses 61 literal
 mentions and returns nothing on 28% of runs. "doctor" tops out at 0.39, "Google" at 0.49.
 
-**With "mention", 0.7 is still the right floor.** Below it, nothing more is found (17 missed at 0.6,
-0.65 and 0.7) and more junk is kept. Above it, real mentions drop out.
+**With "mention", retain 0.7 as the measured compromise.** Floors of 0.6 and 0.65 find no more
+literal targets (17 missed at all three floors) and keep more known junk. At 0.5, misses fall to 14,
+but known wrong hits rise from 20 to 32 across the 54 short-set runs, with 24 further displayed
+hits unjudged. Above 0.7, real mentions drop out. This does not prove an optimum for all queries.
 
 **A relative floor is the wrong tool.** Rescuing only a top score that falls just short
 (`≥ 0.7, or within 0.05 of the top and ≥ 0.6`) changed nothing with the new wording. A floor that is
 only relative, with no absolute part, kept **20 blocks on every absent-topic query**, because
-something always scores highest (0.04 to 0.14 here). "Within 0.15 of the top" also throws away good
+something always scores highest (0.04 to 0.11 here). "Within 0.15 of the top" also throws away good
 hits on the old set (0.72 against 0.78).
 
 ### A small LLM that answers with block ids
@@ -244,18 +254,19 @@ that plainly contains the word: "doctor" 0.39, "Google" 0.49, "Twitter" 0.47, "m
 answering the question it was asked. A paragraph listing "a doctor, lawyer, financial advisor" does
 not *match* "doctor"; it mentions one.
 
-**What "mention" keeps that it should not.** Little, and of one kind: the wider theme. Across the
+**What "mention" keeps that it should not.** Mostly the wider theme. Across the
 26 one-word queries (short and held back) it kept a wrong block on three:
-- "Evolution" on Greg's article kept 18 to 20 blocks. Six or seven a run were paragraphs on
-  metamorphosis, regeneration and embryos that never speak of evolution. This is the flood the
-  spike warned about, on an article half about the query. The cap holds it at 20.
+- "Evolution" on Greg's article kept 20, 20 and 18 blocks, of which the saved labels mark 7, 6
+  and 5 wrong respectively: 28–35% of the displayed results. The cap bounds the count, not the
+  proportion of wrong hits. It found 12, 13 and 12 of the 17 literal targets.
 - "Twitter" kept, on two runs of three, a paragraph about what "the general public" knows.
 - "kamikaze" kept one paragraph about the agents' secret channel. Its other 8 or 9 are right: the
   two that say the word, and the self-sacrifice episode around them, which is the concept the word
   names.
 
-**What it finds that Sonnet did not.** "Buddhism" also returned the closing paragraph, which calls
-the paradox a "Zen-like riddle". "immortality" returned the paragraph on an "undying essence".
+**What it finds that Sonnet did not.** On Greg's article, "Buddhism" also returned
+`spya-nrvjwg`, judged relevant. On the Noema fixture, "immortality" returned the paragraph on
+an "undying essence".
 "mental health" and "lawyer" both returned the Constitution's line about failing to answer
 "medical, legal, financial, psychological" questions.
 
@@ -268,10 +279,14 @@ DeepSeek returned 20 blocks on every run and Luna 20, 14 and 13: most of the Con
 helpfulness section. On "psychotherapy" Luna returned 5, 6 and 1. Their answers change more between
 runs: Luna's hit count moved by up to 11 on one query, where Jev's moved by 2.
 
-**The old set is not hurt.** Junk in the top 5 went from 0.40 to 0.50 a search, which is one extra
-wrong block every ten searches. The kinds are the ones 261002o lists: bibliography entries on the
-Wikipedia article, and polarity ("things Claude should never do" still returns the list of ways it
-is over-cautious).
+**The old set gains reference overlap but is not uniformly better.** Junk in the top 5 went from
+0.40 to 0.50 a search. Across all displayed hits, known wrong occurrences went from 35 of 472 to
+54 of 550, with 114 and 116 further occurrences unjudged respectively. On "Did any of the agents
+blow the whistle?", plain has no known wrong hits in 10 displayed occurrences; mention has 4 in
+16, while finding only 3 of the 4 reference targets on each run. Its extra results do not all
+help. Three queries lose some reference overlap, and the 505-block article can still fill the cap:
+94 blocks clear the floor on one query. Only the top five of each arm were pooled for judging on
+this set, so full-list non-regression is untested.
 
 ## Recommendation, easiest and most valuable first
 
@@ -281,8 +296,9 @@ is over-cautious).
    Does passage ${id} mention or discuss what the reader is looking for (query)?
    ```
 
-   Keep `QUICK_FLOOR = 0.7` and the cap of 20. This alone fixes the shape Greg hit, without
-   flooding: 3.1 blocks kept on a one-word search, nothing kept on an absent topic. The numbers for
+   Keep `QUICK_FLOOR = 0.7` and the cap of 20. This improves the short-topic shape: 3.1 blocks
+   kept on average, nothing kept on the six absent-topic controls. That average hides the
+   18–20-hit "Evolution" search with 5–7 wrong hits per run. The numbers for
    the constants' comments, all on this wording, 48 queries, 3 runs, 2026-10-03:
 
    | | measured |
@@ -293,7 +309,7 @@ is over-cautious).
    | the same at 0.6 / 0.75 / 0.8 | 17 / 29 / 43 |
    | held-back one-word queries | 27 of 27 found, 0.08 wrong blocks a search |
    | blocks over the floor before the cap, worst case | 94 of 505 (shipped wording: 56) |
-   | absent topics | 0 kept; top score 0.04–0.14 |
+   | absent topics | 0 kept; top score 0.04–0.11 |
    | latency, typical article | 372 ms median, 444 ms p90 |
    | latency, 505 blocks in 4 chunks | 557 ms median (15 runs; one took 1.1 s) |
    | cost | $0.0005 typical, $0.0027 for 505 blocks |
@@ -309,8 +325,12 @@ is over-cautious).
    which code cannot do), so it is a small design job rather than a constant. With the new wording
    the gain is small: 17 missed becomes 0, nearly all of it on one broad query.
 
-3. **Do not switch to an ids-only LLM now.** On the shape that failed it is level with the fixed
-   Jev, keeps more junk, is three to five times slower, and its answers vary more. Its real
+3. **Do not switch to an ids-only LLM now.** On the short set, DeepSeek misses 10 literal-target
+   opportunities against Jev's 17, but keeps 1.83 known wrong blocks per search against 0.37.
+   The LLMs complete typical-article searches in 1.18–1.45 s against Jev's 0.37 s, and their hit
+   counts vary more. DeepSeek's cached long-article result completes in 0.72 s against 0.56 s;
+   its first usable hit arrives sooner, and its measured cached calls cost less than Jev's.
+   No uncached long-article DeepSeek timing was measured. Its real
    advantage is on phrases and questions, where DeepSeek flash reached 0.91 reference recall against
    0.78. That is a reason to consider it later as a middle tier between quick and thorough, not a
    reason to replace quick. It would need a new prompt, a model constant, a spend declaration and
@@ -334,6 +354,17 @@ is over-cautious).
 
 ## What this does not show
 
+- **The literal yardstick measures mention coverage, not semantic relevance.** It deliberately
+  favours finding stems and counts those hits as good without separate relevance judging. The
+  improvement supports that intended use; it cannot establish general semantic precision.
+- **Predeclaration and the held-back choice are author reports.** The saved scripts describe
+  targets frozen before running and a wording chosen before confirmation, but the committed
+  artifacts contain no timestamped target manifest or choice record. There is no affirmative
+  evidence of leakage, and the chronology cannot be independently verified from these files.
+- **Three runs do not establish broad non-regression.** Old-set mean reference recall ranges
+  0.677–0.716 across plain's repeats and 0.774–0.790 across mention's: the aggregate gain exceeds
+  that observed noise. Some per-query changes amount to one target on one repeat. Neither this
+  small sample nor the single judge establishes equivalence or significance on unseen queries.
 - **The judging was one reader's**, mine, and the yes/no line for "is this about Evolution" is a
   judgement. The literal counts and the reference recall do not depend on it.
 - **The held-back set has no meaning-search reference**, only literal targets. It confirms that
@@ -341,7 +372,9 @@ is over-cautious).
 - **Greg's zero was not reproduced exactly.** 29 requests scored the paragraph 0.70 to 0.75. His
   saved run has no hits. The explanation (a score sitting on the floor, which moves between runs)
   fits, and lower-case did go under once, but I did not see a capital-B run under 0.7.
-- **Long-article latency is 15 runs per wording.** The 1.1 s p90 for "mention" is one slow request.
+- **Long-article latency is 15 runs per wording.** The 1.1 s p90 is the second-highest duration
+  (nearest-rank percentile), so the upper tail is based on only two runs. Typical-article timing
+  includes six runs on two superseded query strings in addition to the declared query set.
 - **LLM costs for Luna are estimates** at list price, because its responses report a cost of 0.
 - **Only one long article.** A 505-block article entirely about a one-word query would fill the cap
   on any wording; the "mention" wording gets there sooner.

@@ -977,12 +977,26 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
       expect(mark?.hasAttribute("data-wash")).toBe(false);
     });
 
-    it("still says which one the reader pressed, and the stylesheet rings it without a wash", () => {
+    it("says which one the reader pressed under its own name, and the stylesheet rings the cell", () => {
       const mark = host(annotateHtml(html, [{ ...bare, open: true }])).querySelector("mark.hit");
-      expect(mark?.hasAttribute("data-hit-open")).toBe(true);
+      expect(mark?.hasAttribute("data-hit-open-bare")).toBe(true);
       expect(mark?.hasAttribute("data-wash")).toBe(false);
-      // The washed ring needs `data-wash`; this is the rule that does not.
-      expect(readerCssNoComments()).toContain("mark.hit[data-hit-open]:not([data-wash]):not([data-quote])");
+      // On the cell: a ring on an inline mark as long as a paragraph is one box per line.
+      expect(readerCssNoComments()).toContain("td.text:has(mark.hit[data-hit-open-bare])");
+    });
+
+    it("a pressed quick hit does not ring a meaning hit it overlaps", () => {
+      /* `data-hit-open` is what rings a washed phrase. A quick hit covers its
+         whole paragraph, so if pressing it set that, every meaning quote in the
+         paragraph would look pressed too. */
+      const out = annotateHtml(html, [
+        { ...bare, open: true },
+        { id: "m1", start: 3, end: 10, kind: "hit", strength: 0.9 },
+      ]);
+      const washed = host(out).querySelector("mark.hit[data-wash]");
+      expect(washed).not.toBeNull();
+      expect(washed?.hasAttribute("data-hit-open")).toBe(false);
+      expect(washed?.hasAttribute("data-hit-open-bare")).toBe(true);
     });
   });
 

@@ -793,7 +793,12 @@ function annotate(html: string, marks: readonly Mark[]): string {
          (src/sanitize-policy.ts) for the same reason the others are. */
       if (comments.some((m) => m.open)) el.setAttribute("data-cmt-open", "");
       if (chats.some((m) => m.open)) el.setAttribute("data-chat-open", "");
-      if (hits.some((m) => m.open)) el.setAttribute("data-hit-open", "");
+      /* A pressed bare hit says so under its own name. It covers its whole
+         paragraph, so under `data-hit-open` every washed phrase inside it would
+         wear the pressed ring as though the reader had pressed that one. The
+         stylesheet rings the cell instead (annotations.css § a pressed quick hit). */
+      if (hits.some((m) => m.open && !m.bare)) el.setAttribute("data-hit-open", "");
+      if (hits.some((m) => m.open && m.bare)) el.setAttribute("data-hit-open-bare", "");
       if (terms.some((m) => m.open)) el.setAttribute("data-term-open", "");
       el.textContent = piece;
       fragment.appendChild(el);

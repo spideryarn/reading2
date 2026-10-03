@@ -767,14 +767,25 @@ mark.hit[data-wash][data-hit-open] {
   background-color: rgb(var(--hit-wash-rgb) / calc(var(--hit-a) * 0.55));
   box-shadow: 0 0 0 1px rgb(var(--hit-wash-rgb) / 0.8);
 }
-/* **A pressed quick hit: the same ring, and no wash.** A quick hit paints
-   nothing on its words (annotate.ts § `Mark.bare`), so it has no `data-wash`
-   for the rule above to hang off — and without this one, pressing its row
-   would show nothing in the prose at all. The ring alone, because the reader
-   asked which paragraph this row is; a wash is what they asked not to see
-   (`spya-m59qg0`, plan 261003i B4). */
-mark.hit[data-hit-open]:not([data-wash]):not([data-quote]) {
-  box-shadow: 0 0 0 1px rgb(var(--hit-wash-rgb) / 0.8);
+/* **A pressed quick hit: one ring round its paragraph, and no wash.** A quick
+   hit paints nothing on its words (annotate.ts § `Mark.bare`), so it has no
+   `data-wash` for the rule above to hang off — and without this one, pressing
+   its row would show nothing in the prose at all. No wash, because that is
+   what the reader asked not to see (`spya-m59qg0`, plan 261003i B4).
+
+   **On the cell, not on the mark.** The mark is inline and as long as the
+   paragraph, so a ring on it is drawn round every line box separately: a
+   ragged stack of overlapping boxes, with one more round each `<em>`. That
+   was the first version, and the browser check caught it. An outline rather
+   than a shadow, because the cell's shadow and background are the paragraph
+   bar's (`td.text.has-hit`, below).
+
+   `data-hit-open-bare`, not `data-hit-open`: the quick hit covers every phrase
+   in its paragraph, and under the shared name a meaning quote inside it would
+   wear the rule above as though it had been the one pressed. */
+td.text:has(mark.hit[data-hit-open-bare]) {
+  outline: 1px solid rgb(var(--hit-wash-rgb) / 0.8);
+  outline-offset: -1px;
 }
 /* **A pressed quote changes colour rather than getting thicker**, and that took
    three attempts to get right. The first two added pixels to the ring — a
