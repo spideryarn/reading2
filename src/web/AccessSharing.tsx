@@ -847,19 +847,19 @@ function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
 /**
  * The link, and a button that puts it on the clipboard.
  *
- * **Three states, not two, and a failure is one of them.** `navigator.clipboard`
- * is a promise and a copy that failed looks exactly like one that worked — and
- * until 2026-10-03 it looked exactly like one that was never tried: with no
- * clipboard object the handler returned, a refusal set `copied` to the `false`
+ * **Three states, not two, and a failure is one of them.** The clipboard's
+ * `writeText` returns a promise. Until 2026-10-03 a failed copy looked exactly
+ * like one that was never tried: with no clipboard object the handler
+ * returned, a refusal set `copied` to the `false`
  * it already was, and an owner pasted whatever they had copied before. A
  * failure now says so beside the button, in words, and names the way round —
  * the link is in the box and selects itself on focus. It stays until the next
  * press rather than timing out: it is an instruction, and a reader is part-way
  * through following it. GPT Sol, fifth sweep; plan 261003g § 5.
  *
- * The status line is the live region too, and is always mounted: a glyph swap
- * inside a button is not an event a screen reader hears, and a live region
- * added at the moment it has something to say is not announced.
+ * The status line is the live region too, and is always mounted, so assistive
+ * technology can observe its text changing. The success glyph alone does not
+ * communicate a failure.
  *
  * The guard is a statement rather than `navigator.clipboard?.writeText(…)` —
  * where there is no clipboard object at all the optional chain evaluates to

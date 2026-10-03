@@ -2691,6 +2691,15 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
       expect(reply.body.error).toBe("That is not a path we can read.");
     });
 
+    it.each(["%E0", "%GG", "article%", "%C0%AF"])(
+      "answers 400 for the undecodable capture %s, not just a bare percent",
+      async (capture) => {
+        const reply = await call("PATCH", `/api/library/${capture}`, acceptAny, "{}");
+        expect(reply.status).toBe(400);
+        expect(reply.body.error).toBe("That is not a path we can read.");
+      },
+    );
+
     it("sends the two different answers to the same two malformed inputs", async () => {
       /* The pair, asserted as a pair. Either case alone could go green because
          both routes started answering the same way — which is precisely the

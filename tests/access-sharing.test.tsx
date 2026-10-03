@@ -940,6 +940,8 @@ describe("copying the link", () => {
     const written: string[] = [];
     setClipboard({ writeText: async (text: string) => void written.push(text) });
     await mount(SHARED);
+    const status = host.querySelector("[data-copy-status]");
+    expect(status).not.toBeNull();
     expect(announced()).toBe("");
 
     press("Copy");
@@ -948,6 +950,7 @@ describe("copying the link", () => {
     expect(written).toEqual([LINK]);
     expect(host.querySelector<HTMLInputElement>('input[aria-label="The link to share"]')?.value).toBe(LINK);
     expect(buttonSays("Copied")).toBe(true);
+    expect(host.querySelector("[data-copy-status]")).toBe(status);
     expect(announced()).toBe("Link copied.");
     expect(host.textContent).not.toContain(SHARING_COPY_FAILED);
   });
@@ -955,10 +958,14 @@ describe("copying the link", () => {
   it("says so when the browser has no clipboard at all", async () => {
     setClipboard(undefined);
     await mount(SHARED);
+    const status = host.querySelector("[data-copy-status]");
+    expect(status).not.toBeNull();
+    expect(status?.className).toContain("sr-only");
 
     press("Copy");
     await settle();
 
+    expect(host.querySelector("[data-copy-status]")).toBe(status);
     expect(announced()).toBe(SHARING_COPY_FAILED);
     expect(host.querySelector("[data-copy-status]")?.className).not.toContain("sr-only");
     expect(buttonSays("Copied")).toBe(false);
@@ -971,10 +978,14 @@ describe("copying the link", () => {
       },
     });
     await mount(SHARED);
+    const status = host.querySelector("[data-copy-status]");
+    expect(status).not.toBeNull();
+    expect(status?.className).toContain("sr-only");
 
     press("Copy");
     await settle();
 
+    expect(host.querySelector("[data-copy-status]")).toBe(status);
     expect(announced()).toBe(SHARING_COPY_FAILED);
     expect(host.querySelector("[data-copy-status]")?.className).not.toContain("sr-only");
     expect(buttonSays("Copied")).toBe(false);

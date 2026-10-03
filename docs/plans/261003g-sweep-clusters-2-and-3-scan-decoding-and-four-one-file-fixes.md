@@ -40,7 +40,7 @@ for it.
   high byte is almost never valid UTF-8, so it takes the fallback and scans as it does now.
 - **Simpler option passed over:** unconditional UTF-8. One line fewer, but a legacy raw page would
   then scan as U+FFFD noise with nothing said — the same silent blindness, moved.
-- **Tests (red first), in `tests/source-scan.test.ts`,** every page stored through the real
+- **Tests (red first), in `tests/source-scan.test.ts`,** current-page cases stored through the real
   `storedDocumentBytes`: (a) the control — zero-width characters and a Unicode-tag payload, with
   `<meta charset="utf-8">`; (b) the same page with **no** meta finds the same; (c) the same page
   with a stale `<meta charset="windows-1252">` finds the same, so "believe the meta when there is
@@ -85,11 +85,11 @@ for it.
 - **Re-checked:** `CopyLink` returns silently with no clipboard and maps a rejection to
   `copied = false`, which is the idle look.
 - **Fix:** three states — idle, copied, failed — as `CopyAnswer` in `ChatPanel.tsx` has. A failure
-  shows on the button and is announced, and says the link can be selected and copied by hand. The
-  sentence goes in `src/messages.ts` beside `SHARING_COPY_TIP`, which is one file outside the
-  cluster's list and is where reader-facing words live.
+  shows beside the button in a pre-mounted polite live region, and says the link can be selected
+  and copied by hand. The sentence goes in `src/messages.ts` beside `SHARING_COPY_TIP`, which is
+  one file outside the cluster's list and is where reader-facing words live.
 - **Tests (red first), Sol's PR-4:** no clipboard object, and a clipboard that rejects, are two
-  paths and each gets a case — the button says it failed, the live region says so, and the
+  paths and each gets a case — the live region beside the button says it failed, and the
   by-hand guidance is on screen; and a copy that works puts the exact link on the clipboard.
 - **Passed over:** a shared copy-button hook. That is cluster 20, which names this cluster as a
   predecessor.

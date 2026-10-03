@@ -34,7 +34,7 @@ let root: Root;
 
 /** Where each section's top is, and what scroll margin its style computes to. */
 let tops: Record<string, number>;
-let margin: string;
+let margin: string | Record<string, string>;
 
 beforeEach(() => {
   page = document.createElement("div");
@@ -65,8 +65,10 @@ beforeEach(() => {
     const style = real(el, pseudo);
     if (!(el instanceof HTMLElement) || !el.hasAttribute("data-section")) return style;
     return new Proxy(style, {
-      get: (target, key) =>
-        key === "scrollMarginTop" ? margin : Reflect.get(target, key, target),
+      get: (target, key) => {
+        if (key === "scrollMarginTop") return typeof margin === "string" ? margin : margin[el.id] ?? "";
+        return Reflect.get(target, key, target);
+      },
     });
   });
 });
@@ -80,7 +82,7 @@ afterEach(() => {
 });
 
 /** Mount with the middle section's top at `beta`, and say which entry is marked. */
-function markedWith(beta: number, scrollMargin: string): string | null {
+function markedWith(beta: number, scrollMargin: string | Record<string, string>): string | null {
   tops = { "sec-a": -400, "sec-b": beta, "sec-c": 900 };
   margin = scrollMargin;
   const ref = createRef<HTMLElement>();
@@ -123,7 +125,14 @@ describe("how far down a heading counts as reached", () => {
     expect(markedWith(83, "80px")).toBe("Beta");
   });
 
-  it.each(["", "normal", "auto"])("falls back to 100px when the margin computes to %j", (value) => {
+  it.each([
+    [122, "120px", "96px", "Beta"],
+    [90, "80px", "120px", "Alpha"],
+  ] as const)("uses Beta's own %s position and %s margin, not Alpha's %s", (top, beta, alpha, expected) => {
+    expect(markedWith(top, { "sec-a": alpha, "sec-b": beta, "sec-c": "96px" })).toBe(expected);
+  });
+
+  it.each(["", "normal", "auto", "0px"])("falls back to 100px when the margin computes to %j", (value) => {
     expect(markedWith(99, value)).toBe("Beta");
     act(() => root.unmount());
     root = createRoot(host);
