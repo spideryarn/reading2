@@ -1,6 +1,6 @@
 # GPT-Live alongside Realtime for live conversation
 
-**Status: Stage 0 (spike) done; plan under review.**
+**Status: Stages 0 and 1 landed; plan reviewed by GPT Sol ([review](261003a-gpt-live-alongside-realtime-plan-review-sol.md)) and revised; Stage 2 next.**
 
 ## What this is for
 
@@ -81,7 +81,8 @@ pure reducers beside them.
 **Choosing the engine.** With Experimental features on, the Live control's menu (where microphone
 placement already is) gains a choice: *Realtime* or *GPT-Live (new)*, remembered in `localStorage`.
 With the switch off there is no choice and the engine is Realtime, as today. The default with the
-switch on is GPT-Live, so the comparison happens without hunting for a setting.
+switch on stays Realtime until Stage 4's real-browser check has passed, and becomes GPT-Live in
+that stage (Sol F9), so the comparison happens without hunting for a setting.
 
 ### The article split
 
@@ -124,29 +125,47 @@ Add receipts the day a live tool writes.
 
 The stored shape does not change: a spoken exchange is a user row and an assistant row, written by
 the existing `speak` → `/spoken` path with `expectedTailId`. What changes is how an exchange is
-found, since GPT-Live gives no turn ids:
+found, since GPT-Live gives no turn ids and both sides can talk at once.
 
-- Fragments are ordered by `start_ms` and grouped into runs by role.
-- An exchange is a reader run followed by a companion run. A new exchange begins when the reader
-  speaks again after the companion has spoken.
-- **Backchannel rule** (WhatNext's `voice-merge.ts`): a reader interjection of at most four words,
-  where the companion resumes within 0.7 s, does not split the companion's answer. It shows in the
-  live transcript and is left out of the stored rows: "mm-hm" is not a question.
-- An exchange is written once it has **settled**: the next exchange has begun, or nothing has
-  arrived from either side for a few seconds and no delegation is outstanding, or the call is
-  ending.
-- The companion speaking first (a greeting) is stored with an empty question, which `SpokenTurn`
-  already permits ("may be empty if the transcription failed").
-- The answer stored is **what was spoken** (the output transcript), not the backend's text. The
-  backend's tool runs and passages attach to the exchange that was open when the delegation began
-  (`session.delegation.created.offset_ms` on the same timeline).
-- `model` on the row is set server-side, as now; the `/spoken` body gains an `engine` so the server
-  can say `gpt-live-1` rather than `LIVE_MODEL`.
+**What the stored pairs promise is chronology, not ownership.** GPT-Live does not say which
+question a stretch of speech answers, so nothing here claims to know. The rows read back in the
+order things were said, and no words are dropped. Sol's plan review (F1, F2) showed that the first
+draft — a backchannel rule that discarded short interjections, and a "quiet for a few seconds"
+settle — could lose "Don't continue" and could freeze an answer at its preamble.
 
-**Passed over:** storing speaker segments rather than pairs (Sol R5). More faithful to an
-interleaved conversation, but `recentHistory`, the renderer, retry and the prompt builder all assume
-adjacent pairs, and this is an experiment that may be deleted. If GPT-Live wins and pairs prove
-lossy, that is the follow-up.
+- **Segments are the record.** Fragments are de-duplicated by `event_id`, ordered by `start_ms`,
+  and grouped into speaker segments. The reducer keeps every segment for the life of the call.
+- **Pairs are a projection.** An exchange is one or more reader segments followed by the companion
+  segments up to the next reader segment. *Every* reader segment that follows companion speech
+  begins a new exchange, however short — so "mm-hm" becomes a short question whose answer is the
+  rest of what the companion was saying. Lossless and in order, at the price of an odd-looking row.
+- **`interrupted`** is set on an exchange whose answer the reader cut into with more than four
+  words (the companion's last fragment and the reader's first are closer than 0.7 s or overlap).
+  A shorter interjection splits the rows but does not set the flag, so `recentHistory` keeps the
+  pair. This is WhatNext's backchannel rule, deciding a flag rather than deleting words.
+- **An exchange is written when it can no longer change:** a later exchange has begun, or the call
+  is ending. Not on silence. A backend answer can be spoken seconds after the backend finishes
+  (3.5 s in the spike's `allow` trace), and silence cannot tell "finished" from "not started".
+  The cost: the last exchange of a call is written at hang-up, so a tab that dies loses it — the
+  same size of loss the meter already accepts.
+- **Written means frozen.** Each exchange has a sequence number and is handed to `speak` exactly
+  once, with its payload and tail fixed across retries. A fragment that arrives for a frozen
+  exchange starts a new one (a companion-first exchange has an empty question, which `SpokenTurn`
+  already permits).
+- **Tool runs and passages** are held per `delegation_id` and attached to the exchange that is
+  open when that delegation's final backend response completes — where its answer is being, or is
+  about to be, spoken. Anything still held at hang-up goes on the last exchange. A reader who
+  speaks in the gap between the backend finishing and the voice answering moves the receipts one
+  exchange early; accepted, and named here.
+- The answer stored is **what was spoken** (the output transcript), never the backend's text.
+- `model` on the row is set server-side; the `/spoken` body gains an `engine` so the server can say
+  `gpt-live-1` rather than `LIVE_MODEL`.
+
+**Passed over:** storing speaker segments as rows (Sol R5, and again F1). It is the faithful shape
+for full-duplex speech, but `recentHistory`, the renderer, retry and edit all assume adjacent
+pairs, and this engine may be deleted. If GPT-Live wins, segment rows are the first follow-up. Sol
+still prefers segments as the stored record; overruled for the length of the experiment because
+the projection above loses no words and no order, which were the two harms it named.
 
 ### Seeding and the microphone barrier
 
@@ -160,7 +179,8 @@ History goes in `session.input` at creation (text only, 128 messages / 8,192 tok
 One new route, `POST /api/chat/:slug/:threadId/live-session`, body `{sdp, placement?, useProfile?}`.
 It builds the config, journals the session row **before** calling OpenAI's create (the create bills
 15 s, so the row must exist first — the reverse of the token route's order, where the mint is
-free), does the SDP exchange, and returns `{sdp, sessionId, liveSessionId, tailId, expiresAt}`. No
+free), does the SDP exchange, records how the create went (the provider's session id and the
+15 s it billed on success; a failure closes the row with a reason), and returns `{sdp, sessionId, liveSessionId, tailId, expiresAt}`. No
 instructions, tools or article reach the browser in that response. (They can reach it in the
 `session.started` snapshot; prompts are not secrets here, and the allowlist keeps lifecycle
 snapshots to the ones the hook needs.)
@@ -190,25 +210,50 @@ Two bills, both browser-reported, both priced on the server:
   response id the way Realtime's `response` reports are on their event id. Priced on the backend
   model's rate card, cached input separately.
 
-Schema, additive only: `realtime_sessions` gains `backend_model` (nullable) and
-`voice_seconds_reported` (integer, default 0). `model` is `gpt-live-1`; `transcription_model` is
-null. `acceptsUntil` is the browser cap plus tolerance, as now. The same accepted loss as today: a
+**The 15 seconds billed at create are recorded by the server**, not left to the browser: on a
+successful create the route advances the high-water mark to 15 and writes that priced row, so a
+call abandoned before it connects is not free in the ledger, and the browser's first report of 15
+adds nothing (Sol F4). `connected_at` stays unset until the browser says the channel opened.
+
+Schema, additive only: `realtime_sessions` gains `backend_model` (nullable),
+`provider_session_id` (nullable) and `voice_seconds_reported` (integer, default 0); `ai_calls`'
+`event_kind` check and `RealtimeEventKind` gain `voice` and `backend` (Sol F5), and voice seconds
+are stored as their own quantity, not as transcription seconds. The mark's read, advance and row
+insert happen under one row lock in one transaction, tested against real Postgres with repeated,
+reordered and concurrent reports. `model` is `gpt-live-1`; `transcription_model` is null. `acceptsUntil` is the browser cap plus tolerance, as now. The same accepted loss as today: a
 closed laptop's last seconds are never reported.
 
 ### Lifecycle and stalls
 
 Reused as they are: the session epoch, the startup deadline, Send/thread-switch/pagehide endings,
-the 409 repair, the five-minute idle and twenty-minute session caps, the microphone and connection
-stalls, Reconnect. Hang-up sends `session.close` and waits briefly for `session.closed` (which
-carries the final seconds) before tearing the connection down.
+the 409 repair, the twenty-minute session cap, the microphone-paused and connection stalls,
+Reconnect.
 
-The reply stall is GPT-Live's own (after WhatNext's `stall.ts`): a reply is owed from the later of
-the reader's last words and the last tool to finish, and from the start of any tool still running;
-any companion speech pays it. Owed for 20 s shows the existing notice with Reconnect. This is the
-rule that catches the spike's eleventh run.
+**Not reusable, because GPT-Live sends no voice-detector or playback events** (Sol F6). Realtime's
+hook reads `input_audio_buffer.speech_started/stopped` and `output_audio_buffer.*`; here the only
+evidence is transcript fragments, which trail the audio. So in `useGptLive`:
+
+- `hearing` and `speaking` are estimates: a fragment from that side in the last second or so.
+- The five-minute idle cap resets on reader fragments.
+- Hang-up: disable and release the microphone at once; keep the channel and the meter alive while
+  fragments are still arriving (bounded, about 2.5 s); send `session.close` and wait up to 3 s for
+  `session.closed`, which carries the final seconds; write the last exchange; tear down.
+- There is no "open turn" stall, since nothing says a turn is open.
+
+**The reply stall is per delegation** (after WhatNext's `stall.ts`, corrected by Sol F7). A
+delegation owes speech from the moment its final backend response completes — the one with no
+function calls — until a companion fragment begins after that moment. A filler line spoken before
+then pays nothing. A reply is also owed from the reader's last words while no delegation exists.
+Owed for 20 s shows the existing notice with Reconnect. This catches the spike's eleventh run,
+and the "one moment… then nothing" order that a single global debt would miss.
 
 `session.closed` reasons `expired`, `content`, `connection_lost` and `remote_hangup` each get a
 sentence in the panel.
+
+**The engine is pinned to the call** (Sol F8). Three things, kept apart: the remembered preference
+(`localStorage`), the engine the next start would use (the preference, if Experimental is on *now*;
+else Realtime), and the engine that owns the current call, which does not change until its Stop
+has finished. Turning Experimental off mid-call ends a GPT-Live call first. Reconnect asks again.
 
 ### The prompt
 
@@ -263,3 +308,8 @@ Experimental off, nothing a reader sees has changed except the Realtime prompt.
 ## Log
 
 - 2026-10-03 — research, Sol consult, spike. Decision: alongside.
+- 2026-10-03 — Stage 1 landed (`66b001ae4`): the Realtime prompt gains a preamble before slow
+  tools, an unclear-audio rule and language pinning. Not measured with real audio.
+- 2026-10-03 — Sol plan review: build with the P0–P1 changes. F1–F9 all taken, except that pairs
+  stay the stored shape (see "Passed over" under fragments). R2 receipts and R8 acoustics: Sol
+  agrees neither costs a stage.
