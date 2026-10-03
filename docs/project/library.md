@@ -1317,6 +1317,25 @@ body, so the first paint can show an old title or a card the reader deleted, and
 jump when the live answer lands. Accepted rather than overlooked — renames are cosmetic and Archive
 is a flag.
 
+## The five opened most recently are fetched while the shelf is on screen
+
+Since 2026-10-03, the shelf fetches the payloads of the five articles opened most recently
+(`lastOpenedAt`, not archived), so opening one of them does not wait on the server. That wait is
+the serverless function behind `GET /api/article/<slug>`, again. Greg's report, spya-j78fff:
+
+> if I've been reading an article and then I click to go back to the home page, and then I click on
+> the article again, it still takes a few seconds to load
+
+The preload is held in memory only, and it can never put an old article on screen. Each one is
+**used once**, lives **60 seconds**, and is thrown away by **any write** other than the two that
+leaving an article always sends. It is handed only to **the reader whose session fetched it**, and
+only if it was a real 200. The reading view draws it as its one first draw, so there is never a
+stale-then-fresh repaint. The rules are at the top of
+[`src/web/lib/prefetch-article.ts`](../../src/web/lib/prefetch-article.ts), and which writes are
+exempt and why is in [`src/web/lib/writes.ts`](../../src/web/lib/writes.ts). The plan, and the
+three designs passed over (a repaint from the offline copy, HTTP caching, a service worker), is
+[261003d](../plans/261003d-preload-recent-shelf-articles.md).
+
 ## Offline, the shelf lists only what it can open
 
 A reader who has lost the network still gets a shelf: `apiFetch` saves every GET body to IndexedDB

@@ -100,6 +100,7 @@ import { type ArchivedTally, ShelfSearchAlso } from "./ShelfSearchAlso.js";
 import { useNow } from "./useNow.js";
 import { useSession } from "./useSession.js";
 import { useShelf } from "./useShelf.js";
+import { usePreloadRecent } from "./usePreloadRecent.js";
 import { useSlow } from "./useSlow.js";
 import { useRenderCount } from "./perf.js";
 import { layoutViewportWidth } from "./reader/measure.js";
@@ -130,6 +131,9 @@ export function Library({
   const { user } = useSession();
   const shelf = useShelf(readerId);
   const { articles, error, reload } = shelf;
+  /* The five opened most recently, fetched now so that reopening one does not
+     wait on the server — report spya-j78fff, usePreloadRecent.ts. */
+  usePreloadRecent(articles);
   const slow = useSlow(articles === null);
 
   /* Every one of these is in the URL rather than in `useState`, which is the
