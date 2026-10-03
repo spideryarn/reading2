@@ -843,10 +843,17 @@ export function buildGlossary(
      swaps the stamp for the old entry's time (or takes it off, where the old
      entry had none), and `merge` keeps the incumbent's. What reaches the end
      still carrying `completedAt` is exactly what this pass added. It is in no
-     hash and no prompt — src/types.ts § `GlossaryEntry.addedAt`. */
+     hash and no prompt — src/types.ts § `GlossaryEntry.addedAt`.
+
+     **The fresh entries are merged with each other before any inherits.** The
+     other order let an earlier fresh entry absorb a later one that had just
+     been handed the old id, and the id and its time went with the loser (GPT
+     Sol's review of docs/plans/261003j, F8). */
   const fresh = inheritIds(
-    toEntries(raw, taken, opts.scores ?? noGlossaryScoreDrops()).map(
-      (entry): GlossaryEntry => ({ ...entry, addedAt: completedAt }),
+    dedupe(
+      toEntries(raw, taken, opts.scores ?? noGlossaryScoreDrops()).map(
+        (entry): GlossaryEntry => ({ ...entry, addedAt: completedAt }),
+      ),
     ),
     opts.inherit ?? null,
   );

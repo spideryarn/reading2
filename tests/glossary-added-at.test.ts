@@ -287,6 +287,33 @@ describe("a rewrite that inherits an id", () => {
     const times = Object.fromEntries(g.entries.map((e) => [e.id === "spya-oldold" ? "old" : "new", e.addedAt]));
     expect(times).toEqual({ old: MONDAY, new: TUESDAY });
   });
+
+  /* GPT Sol's code review, F8. Inheritance used to run before the fresh entries
+     were merged with each other, so an earlier fresh entry could absorb the
+     later one that had just been handed the old id — and the old id and its
+     time went with the loser. */
+  for (const [label, addedAt] of [
+    ["timed", MONDAY],
+    ["untimed", undefined],
+  ] as const) {
+    it(`two fresh entries that merge into one still inherit the old id (${label} incumbent)`, () => {
+      const before = stored([
+        entry({ id: "spya-oldold", name: "Seth", ...(addedAt === undefined ? {} : { addedAt }) }),
+      ]);
+      const g = buildGlossary(
+        {
+          entries: [
+            { name: "Anil Seth", background: "Full name." },
+            { name: "Seth", aliases: ["Anil Seth"], background: "Same person." },
+          ],
+        },
+        { ...opts, existing: null, inherit: idsByTerm(before), now: TUESDAY },
+      );
+      expect(g.entries).toHaveLength(1);
+      expect(g.entries[0]?.id).toBe("spya-oldold");
+      expect(g.entries[0]?.addedAt).toBe(addedAt);
+    });
+  }
 });
 
 describe("the field stays out of the prompt", () => {

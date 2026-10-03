@@ -250,12 +250,14 @@ describe("createdAtProblems, shown failing", () => {
  */
 function inventedTimes(file: string, sqlText: string): string[] {
   return sqlText
-    .split("\n")
-    .filter((line) => !line.trimStart().startsWith("--"))
-    .filter((line) => /ADD COLUMN\s+"[^"]+"\s+timestamp[^;]*DEFAULT\s+(now\(\)|CURRENT_TIMESTAMP)/i.test(line))
+    .replace(/^\s*--.*$/gm, "")
+    .split(";")
+    .filter((line) =>
+      /ADD COLUMN\s+"[^"]+"\s+timestamp[^;]*DEFAULT\s*\(*\s*(now\s*\(\s*\)|CURRENT_TIMESTAMP)/i.test(line),
+    )
     .map(
       (line) =>
-        `${file}: \`${line.trim().replace(/--> statement-breakpoint$/, "")}\` stamps every existing row with the ` +
+        `${file}: \`${line.replace(/--> statement-breakpoint/, "").trim().replace(/\s+/g, " ")}\` stamps every existing row with the ` +
         "migration's own time. Split it: ADD COLUMN with no default, then ALTER COLUMN … SET DEFAULT now() — " +
         "docs/project/sql.md § Store when it happened.",
     );
@@ -286,6 +288,21 @@ describe("no migration invents a time for rows that already exist", () => {
       'ALTER TABLE "spideryarn"."citation_finds" ALTER COLUMN "created_at" SET DEFAULT now();',
     ].join("\n");
     expect(inventedTimes("made_up.sql", split)).toEqual([]);
+    /* Statements, not lines: a statement broken across lines, or a bracketed
+       default, backfills just the same (GPT Sol's code review, F9). A formatting
+       guard, not a SQL parser. */
+    expect(
+      inventedTimes(
+        "made_up.sql",
+        'ALTER TABLE "spideryarn"."citation_finds"\nADD COLUMN "created_at" timestamp with time zone\nDEFAULT now();',
+      ),
+    ).toHaveLength(1);
+    expect(
+      inventedTimes(
+        "made_up.sql",
+        'ALTER TABLE "spideryarn"."citation_finds"\nADD COLUMN "created_at" timestamp with time zone DEFAULT (now());',
+      ),
+    ).toHaveLength(1);
     /* A new table is not an existing row: `CREATE TABLE` may default freely. */
     expect(
       inventedTimes("made_up.sql", '\t"created_at" timestamp with time zone DEFAULT now() NOT NULL,'),
