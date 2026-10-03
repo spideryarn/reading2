@@ -51,6 +51,11 @@ const SHARED = new Set([
      and the date order read it again, so both sides keep one reading. Imports
      `types.js` and nothing else. Plan 261001a, stages 5 and 6. */
   "registry-work.js",
+  /* Which influence a Citations row shows — the web one from a kept *Dig
+     deeper* answer, else the list's own — read by the band and by chat's
+     `article_citations` tool, so the two cannot disagree. Imports `types.js`
+     (types only) and nothing else. Plan 261003m, stage 2. */
+  "citation-effective-influence.js",
   "ids.js", // minting and validating block ids
   /* Whether a section title is the author's heading kept (`sameHeading`), and
      the heading tree's own preamble title — the pipeline checks the claim with

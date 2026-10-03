@@ -732,7 +732,7 @@ describe("CitationsPanel", () => {
     const said = `${card.head} ${card.body}`;
     expect(said).toMatch(/not confident/i);
     expect(said).toMatch(/no usable.*score/i);
-    expect(said).toMatch(/Dig deeper looks for it on the web/);
+    expect(said).toMatch(/Dig deeper looks on the web/);
     expect(said).not.toMatch(/Dig deeper (will|fills)/i);
   });
 

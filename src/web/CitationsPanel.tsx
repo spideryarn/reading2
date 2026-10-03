@@ -579,7 +579,7 @@ export const INFLUENCE_UNKNOWN = "influence unknown";
 
 /** The card on those words, as a visitor reads it: they have no *Dig deeper*. */
 const INFLUENCE_UNKNOWN_NOTE_SHARED =
-  "No usable influence score was saved for this work. New lists leave influence unknown when the model is not confident it knows the work; a missing or rejected score also appears as unknown. In prioritised order, the threshold uses this row's relevance alone.";
+  "No usable influence score for this work: the model was not confident it knows it, or its score was missing. In prioritised order the bar goes by this row's relevance alone.";
 
 /**
  * The card on those words, for the owner. It says only what is built: since
@@ -587,7 +587,7 @@ const INFLUENCE_UNKNOWN_NOTE_SHARED =
  * its web search returns. A look, not a promise: a press that finds no page
  * about the work saying how well known it is leaves the row unknown.
  */
-export const INFLUENCE_UNKNOWN_NOTE = `${INFLUENCE_UNKNOWN_NOTE_SHARED} Dig deeper looks for it on the web, and fills it in when a page about the work says how well known it is. Most searches find no such page.`;
+export const INFLUENCE_UNKNOWN_NOTE = `${INFLUENCE_UNKNOWN_NOTE_SHARED} Dig deeper looks on the web for a page that says how well known the work is. Most searches find none.`;
 
 /**
  * **A piece that cites nothing is a real answer**, not an error, and no retry is
