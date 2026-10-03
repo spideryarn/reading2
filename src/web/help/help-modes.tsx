@@ -700,6 +700,14 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             mean the model did not know the work, until regenerated from Metadata.
           </li>
           <li>
+            <strong>Dig deeper</strong> also looks for a work’s influence on the web. When one of the
+            pages its search finds is about the work and says how well known it is, the row’s influence
+            bar is drawn from that and marked <em>from the web</em>; point at those words, or tap
+            them, to see the site, the day and the page’s own words. It is an AI estimate from web
+            evidence, not a citation count, and the page’s words may be about something else on that
+            page. Often no page says, and the row stays as it was.
+          </li>
+          <li>
             <strong>first cited</strong> jumps to where the article first cites it.{" "}
             <em>only in the references</em> means the article lists it but never cites it in the text.
           </li>

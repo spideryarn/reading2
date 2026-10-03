@@ -25,6 +25,7 @@
  * `tests/store-revision-columns.test.ts` already draws for the owner's reads.
  */
 
+import { effectiveInfluence, INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
 import { describe, expect, it } from "vitest";
 
 import type { Assets } from "../src/assets.js";
@@ -1196,6 +1197,16 @@ describe("the artefacts a shared link carries", () => {
             readAt: "2026-10-01T10:00:00.000Z",
             passages: [{ chunk: "c1", page: 1, text: "paper passage sentinel from the pdf", bears: "supports" }],
           },
+          /* Plan 261003m stage 2: the influence Dig deeper read from the web
+             is the owner's too. A different number from the list's own 0.7,
+             so a visitor's row can be seen to keep the list's. */
+          influence: {
+            value: 0.31,
+            quote: "web influence quote sentinel from a page",
+            sourceUrl: "https://web-influence-source-sentinel.example/page",
+            sourceTitle: "web influence title sentinel",
+            version: INFLUENCE_VERSION,
+          },
         },
         /* The work's reference entry (plan 260930i) — owner-only until the
            public DTO names it, which is Greg's call on a defence. */
@@ -1962,10 +1973,31 @@ describe("the artefacts a shared link carries", () => {
       "paper-selection-sentinel",
       "paper passage sentinel from the pdf",
       '"sentWords"',
+      /* The web influence (plan 261003m stage 2). */
+      "web influence quote sentinel from a page",
+      "web-influence-source-sentinel.example",
+      "web influence title sentinel",
+      '"sourceUrl"',
+      INFLUENCE_VERSION,
     ]) {
       expect(json, sentinel).not.toContain(sentinel);
     }
     expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("investigation");
+  });
+
+  /* Plan 261003m stage 2, GPT Sol's F6: the owner's row draws the web number
+     through `effectiveInfluence`; the list's own field is never overwritten,
+     so the visitor's row carries the list's 0.7 and reads as the list's. */
+  it("carries the list's own influence, never the one Dig deeper found on the web", () => {
+    const owners = CITATIONS.citations.find((w) => w.id === "w-clean");
+    expect(owners && effectiveInfluence(owners), "the fixture's web influence is live for the owner").toMatchObject({
+      value: 0.31,
+      from: "web",
+    });
+    const visitors = built.citations?.citations.find((w) => w.id === "w-clean");
+    expect(visitors?.influence).toBe(0.7);
+    expect(visitors && effectiveInfluence(visitors)).toEqual({ value: 0.7, from: "list" });
+    expect(JSON.stringify(built.citations)).not.toContain("0.31");
   });
 
   /**

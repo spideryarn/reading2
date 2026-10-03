@@ -872,6 +872,13 @@ export async function exportArticle(
         paperSelectionVersion: row.paperSelectionVersion,
         paperReadAt: row.paperReadAt?.toISOString() ?? null,
         paperPassages: row.paperPassages,
+        /* The web influence (plan 261003m stage 2), column for column; all
+           null when the press kept none. */
+        influence: row.influence,
+        influenceQuote: row.influenceQuote,
+        influenceSourceUrl: row.influenceSourceUrl,
+        influenceSourceTitle: row.influenceSourceTitle,
+        influenceVersion: row.influenceVersion,
       };
     }
     await put("citation_investigations", "citation-investigations.json", { investigations });

@@ -57,6 +57,7 @@ import {
 } from "../src/chat-tools.js";
 import type { Block, CitedWork, Citations, Meta } from "../src/types.js";
 import { CitationsListNotFound } from "../src/store/citations-list-not-found.js";
+import { INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
 
 const work = (over: Partial<CitedWork> = {}): CitedWork => ({
   id: "cw-default",
@@ -171,6 +172,62 @@ describe("citationRows — the formatter, as arithmetic", () => {
     delete bare.relevance;
     const row = citationRows(list([bare])).rows[0] ?? "";
     expect(row).toContain("relevance not scored · influence 0.95");
+  });
+
+  /* Plan 261003m stage 2, GPT Sol's F6: chat reads influence through the same
+     `effectiveInfluence` the panel does, so a row whose influence Dig deeper
+     found on the web is not still called unknown here. */
+  describe("an influence Dig deeper found on the web", () => {
+    const answer = (influence: NonNullable<CitedWork["investigation"]>["influence"]): NonNullable<CitedWork["investigation"]> => ({
+      answer: "A kept answer.",
+      sources: [{ url: "https://en.wikipedia.org/wiki/Reversible_computing" }],
+      extractsRead: 1,
+      longestExtractWords: 40,
+      matchedHost: null,
+      searches: 1,
+      searchesFrom: "x",
+      model: "m",
+      at: "2026-10-03T12:00:00.000Z",
+      contextHash: "h",
+      promptVersion: "p",
+      ...(influence ? { influence } : {}),
+    });
+    const WEB = {
+      value: 0.85,
+      quote: "widely cited as the founding paper of reversible computing",
+      sourceUrl: "https://en.wikipedia.org/wiki/Reversible_computing",
+      sourceTitle: "The Thermodynamics of Computation - Wikipedia",
+      version: INFLUENCE_VERSION,
+    };
+
+    it("prints the web number, and says it is an AI estimate from a page on that host", () => {
+      const dug = { ...THREE[2]!, investigation: answer(WEB) };
+      const row = citationRows(list([dug])).rows[0] ?? "";
+      expect(row).toContain("relevance 0.50 · influence 0.85 (an AI estimate from the web, from a page on en.wikipedia.org)");
+      expect(row).not.toContain("influence unknown");
+      /* The page's words and its address are a stranger's; the row names the host only. */
+      expect(row).not.toContain(WEB.quote);
+    });
+
+    it("puts the web number before the list's own, and says so only then", () => {
+      const dug = { ...THREE[0]!, investigation: answer(WEB) };
+      expect(citationRows(list([dug])).rows[0]).toContain("influence 0.85 (an AI estimate from the web");
+      const plain = citationRows(list([THREE[0]!])).rows[0] ?? "";
+      expect(plain).toContain("influence 0.95");
+      expect(plain).not.toContain("from the web");
+    });
+
+    it("ignores one written under another version", () => {
+      const stale = { ...THREE[2]!, investigation: answer({ ...WEB, version: "citation-influence/0" }) };
+      expect(citationRows(list([stale])).rows[0]).toContain("influence unknown");
+    });
+
+    it("tells the model, outside the fence, what a web estimate is", () => {
+      const out = citationsOutcome(found(list(THREE)), "");
+      const ours = out.content.slice(0, out.content.indexOf("<<<UNTRUSTED"));
+      expect(ours).toMatch(/an AI estimate from the web/);
+      expect(ours).toMatch(/Dig deeper/);
+    });
   });
 
   it("tells the model what unknown means, in our own words outside the fence", () => {

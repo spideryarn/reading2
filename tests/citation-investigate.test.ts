@@ -36,6 +36,8 @@ import {
   type InvestigateEvent,
 } from "../src/citation-investigate.js";
 import { PASSAGES_TIMEOUT_MS } from "../src/citation-paper-passages.js";
+import { INFLUENCE_TIMEOUT_MS } from "../src/citation-influence.js";
+import { INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
 import {
   DIG_ANSWER_TOKENS,
   DIG_DEEPER_MODEL,
@@ -207,6 +209,9 @@ interface Harness {
   paperError?: Error;
   /** What *Dig deeper*'s forced search finds, or throws (plan 261001p stage 2). Default `NO_PAGES`. */
   search?: DigFindings | Error;
+  /** What the influence call answers, throws, or takes its time over (plan 261003m stage 2). Default: all null. */
+  influenceReply?: unknown | Error | (() => Promise<unknown>);
+  influenceTimeoutMs?: number;
 }
 
 /**
@@ -243,9 +248,12 @@ function harness(h: Harness) {
   const removedFindAts: string[] = [];
   const paperInputs: PaperEvidenceInput[] = [];
   const passagesCalls: AiRequestBody[] = [];
+  const influenceCalls: AiRequestBody[] = [];
   const searches: DigRequest[] = [];
   /** Which paid step ran, in order: `search`, `lookup`, `passages`, `answer`. */
   const order: string[] = [];
+  /** `order`, and also the influence call starting and settling and the allowance being released (plan 261003m). */
+  const timeline: string[] = [];
   let reads = 0;
   const listed = h.rows ?? [work(h.lookup ? { lookup: h.lookup } : {})];
   const deps: InvestigateCitationDeps = {
@@ -273,6 +281,7 @@ function harness(h: Harness) {
     searchFirst: async (req) => {
       searches.push(req);
       order.push("search");
+      timeline.push("search");
       if (h.search instanceof Error) throw h.search;
       return h.search ?? NO_PAGES;
     },
@@ -291,10 +300,21 @@ function harness(h: Harness) {
     passagesCall: async (body): Promise<JsonCall> => {
       passagesCalls.push(body);
       order.push("passages");
+      timeline.push("passages");
       const reply = h.passagesReply === undefined ? jsonAnswer('{"passages": []}') : h.passagesReply;
       if (reply instanceof Error) throw reply;
       return { json: reply, answeredBy: "anthropic/claude-sonnet-5", generationId: null };
     },
+    influenceCall: async (body): Promise<JsonCall> => {
+      influenceCalls.push(body);
+      timeline.push("influence");
+      const given = h.influenceReply === undefined ? jsonAnswer('{"influence": null, "source": null, "quote": null}') : h.influenceReply;
+      const reply = typeof given === "function" ? await (given as () => Promise<unknown>)() : given;
+      timeline.push("influence-settled");
+      if (reply instanceof Error) throw reply;
+      return { json: reply, answeredBy: "anthropic/claude-opus-5.5", generationId: null };
+    },
+    ...(h.influenceTimeoutMs === undefined ? {} : { influenceTimeoutMs: h.influenceTimeoutMs }),
     investigations: {
       save: async (_slug, _id, inv) => {
         if (h.save) await h.save(inv);
@@ -309,11 +329,13 @@ function harness(h: Harness) {
       },
       finish: async (id) => {
         finished.push(id);
+        timeline.push("released");
       },
     },
     run: async function* (args: StreamRun) {
       runs.push(args);
       order.push("answer");
+      timeline.push("answer");
       let text = "";
       for (const d of h.deltas) {
         text += d;
@@ -341,8 +363,10 @@ function harness(h: Harness) {
     removedFindAts,
     paperInputs,
     passagesCalls,
+    influenceCalls,
     searches,
     order,
+    timeline,
     taken: () => buckets.length,
   };
 }
@@ -686,13 +710,14 @@ describe("refusals before anything is spent", () => {
     expect(ceiling).toBeGreaterThan(50 - INVESTIGATE_PRESS_BUDGET_USD);
   });
 
-  it("leases the slot for every deadline in a press — the search, the lookup, the paper, its passages, the reading — plus the margin (Sol P-5, F8)", () => {
+  it("leases the slot for every deadline in a press — the search, the lookup, the paper, its passages, the influence call, the reading — plus the margin (Sol P-5, F8)", () => {
     expect(INVESTIGATE_RATE_POLICY.leaseMs).toBe(
       DIG_SEARCH_TIMEOUT_MS +
         FIND_TIMEOUT_MS +
         PAPER_REGISTRY_MS +
         PAPER_READ_MS +
         PASSAGES_TIMEOUT_MS +
+        INFLUENCE_TIMEOUT_MS +
         INVESTIGATE_TIMEOUT_MS +
         30_000,
     );
@@ -1425,5 +1450,151 @@ describe("the paper itself (plan 261001a stage 3)", () => {
     const { error } = await drain((await h.investigate(SLUG, ID, null)).stream());
     expect((error as Error).message).toMatch(/\[cite-quoted\]$/);
     expect(h.saved).toHaveLength(0);
+  });
+});
+
+describe("the work's influence, from the press's own search (plan 261003m stage 2)", () => {
+  const STANDING = "This 2020 paper by Kaplan is widely cited as a seminal work on scaling in deep learning";
+  const ABOUT = {
+    url: "https://en.wikipedia.org/wiki/Scaling_laws",
+    title: `${TITLE} - Wikipedia`,
+    excerpt: `Kaplan and colleagues published it in 2020. ${STANDING}.`,
+  };
+  const SURVEY = {
+    url: "https://survey.example/deep-learning",
+    title: "A survey of deep learning results",
+    excerpt: `${TITLE} (Kaplan, 2020) is one of many. Other Work has 8,000 citations and is the standard reference.`,
+  };
+  const FOUND: DigFindings = { sources: [SURVEY, ABOUT], searches: 1, libraryQuery: null, library: [] };
+  const influenceOf = (a: unknown) => jsonAnswer(JSON.stringify(a));
+  const GOOD = influenceOf({ influence: 0.9, source: 2, quote: STANDING });
+  const KEPT = { value: 0.9, quote: STANDING, sourceUrl: ABOUT.url, sourceTitle: ABOUT.title, version: INFLUENCE_VERSION };
+
+  it("stores the checked influence on the answer's own row, and sends it in `done`", async () => {
+    const h = harness({ deltas: ["An answer."], search: FOUND, influenceReply: GOOD });
+    const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(error).toBeNull();
+    expect(h.saved).toHaveLength(1);
+    expect(h.saved[0]?.influence).toEqual(KEPT);
+    const done = events.find((e) => e.type === "done");
+    expect(done?.type === "done" ? done.investigation.influence : null).toEqual(KEPT);
+    /* The streamed answer's version is not bumped: a kept answer stays kept. */
+    expect(h.saved[0]?.promptVersion).toBe(CITATION_INVESTIGATE_VERSION);
+  });
+
+  it("asks on Dig deeper's model, with no tools, about the fresh row and the search's own pages", async () => {
+    const h = harness({
+      deltas: ["An answer."],
+      search: FOUND,
+      influenceReply: GOOD,
+      lookup: LOOKUP,
+      /* The list is made again while the press runs: the id survives, the authors change (Sol F3). */
+      rowsAfter: [work({ lookup: LOOKUP, authors: "Kaplan, Jared and McCandlish, Sam" })],
+    });
+    await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(h.influenceCalls).toHaveLength(1);
+    const body = h.influenceCalls[0] as AiRequestBody & { tools?: unknown; messages: { content: string }[] };
+    expect(body.model).toBe(DIG_DEEPER_MODEL);
+    expect(body.tools).toBeUndefined();
+    const user = body.messages[1]?.content ?? "";
+    expect(user).toContain(`The work: ${TITLE}`);
+    expect(user).toContain("Authors: Kaplan, Jared and McCandlish, Sam");
+    expect(user).toContain(`[1] ${SURVEY.url}`);
+    expect(user).toContain(`[2] ${ABOUT.url}`);
+  });
+
+  it("judges the pages against the fresh row: a page titled for the old title is no longer about this work (Sol F3)", async () => {
+    const h = harness({
+      deltas: ["An answer."],
+      search: FOUND,
+      influenceReply: GOOD,
+      lookup: LOOKUP,
+      rowsAfter: [work({ lookup: LOOKUP, title: "A Different Title Entirely Now" })],
+    });
+    const { error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(error).toBeNull();
+    expect(h.influenceCalls).toHaveLength(0);
+    expect(h.saved[0]).toBeDefined();
+    expect(h.saved[0]).not.toHaveProperty("influence");
+  });
+
+  it("makes no call when the search returned no page about the work", async () => {
+    const h = harness({ deltas: ["An answer."], search: { ...FOUND, sources: [SURVEY] }, influenceReply: GOOD });
+    const { error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(error).toBeNull();
+    expect(h.influenceCalls).toHaveLength(0);
+    expect(h.saved[0]).toBeDefined();
+    expect(h.saved[0]).not.toHaveProperty("influence");
+  });
+
+  it.each([
+    ["answers null", influenceOf({ influence: null, source: null, quote: null })],
+    ["names a page that is not about the work (Sol F1)", influenceOf({ influence: 0.9, source: 1, quote: "Other Work has 8,000 citations and is the standard reference" })],
+    ["quotes words that are not on the page", influenceOf({ influence: 0.9, source: 2, quote: "It is the most cited paper of the decade" })],
+    ["answers out of range", influenceOf({ influence: 8000, source: 2, quote: STANDING })],
+    ["answers something unreadable", jsonAnswer("It is famous.")],
+    ["is refused", new ProviderRefused(429, "", new Headers())],
+    ["fails in transport", new TypeError("fetch failed")],
+  ])("keeps the answer and stores no influence when the call %s", async (_name, influenceReply) => {
+    const h = harness({ deltas: ["An answer."], search: FOUND, influenceReply });
+    const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(error, "a failed influence call must not fail the press").toBeNull();
+    expect(h.influenceCalls).toHaveLength(1);
+    expect(h.saved).toHaveLength(1);
+    expect(h.saved[0]?.answer).toBe("An answer.");
+    expect(h.saved[0]).not.toHaveProperty("influence");
+    expect(events.at(-1)?.type).toBe("done");
+  });
+
+  it("gives up on the call's own deadline and carries on", async () => {
+    const h = harness({
+      deltas: ["An answer."],
+      search: FOUND,
+      influenceReply: () => new Promise(() => {}),
+      influenceTimeoutMs: 20,
+    });
+    const { error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(error).toBeNull();
+    expect(h.influenceCalls).toHaveLength(1);
+    expect(h.saved).toHaveLength(1);
+    expect(h.saved[0]).not.toHaveProperty("influence");
+  });
+
+  it("is settled before the answer starts, and nothing of it runs after the allowance is released (Sol F4)", async () => {
+    const h = harness({
+      deltas: ["An answer."],
+      search: FOUND,
+      /* Slower than the paper read, which answers at once here. */
+      influenceReply: () => new Promise((resolve) => setTimeout(() => resolve(GOOD), 40)),
+    });
+    await drain((await h.investigate(SLUG, ID, null)).stream());
+    const at = (step: string) => h.timeline.indexOf(step);
+    expect(at("influence")).toBeGreaterThan(at("search"));
+    expect(at("influence-settled")).toBeGreaterThan(at("influence"));
+    expect(at("answer")).toBeGreaterThan(at("influence-settled"));
+    expect(at("released")).toBeGreaterThan(at("answer"));
+    expect(h.saved[0]?.influence).toEqual(KEPT);
+  });
+
+  it("runs beside the paper's passages call, not after it", async () => {
+    const h = harness({ deltas: ["An answer."], search: FOUND, influenceReply: GOOD, paper: paperRead() });
+    await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect(h.timeline.indexOf("influence")).toBeGreaterThan(-1);
+    expect(h.timeline.indexOf("influence")).toBeLessThan(h.timeline.indexOf("passages"));
+    expect(h.timeline.indexOf("answer")).toBeGreaterThan(h.timeline.indexOf("passages"));
+  });
+
+  it("is settled before the allowance is released when the paper read fails the press", async () => {
+    const h = harness({
+      deltas: ["An answer."],
+      search: FOUND,
+      paperError: new Error("a bug in our paper reading"),
+      influenceReply: () => new Promise((resolve) => setTimeout(() => resolve(GOOD), 40)),
+    });
+    const { error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    expect((error as Error).message).toBe("a bug in our paper reading");
+    expect(h.runs).toHaveLength(0);
+    expect(h.timeline.indexOf("influence-settled")).toBeGreaterThan(-1);
+    expect(h.timeline.indexOf("released")).toBeGreaterThan(h.timeline.indexOf("influence-settled"));
   });
 });

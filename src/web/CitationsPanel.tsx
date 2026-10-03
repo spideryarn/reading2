@@ -50,6 +50,7 @@ import {
   type RegistrySource,
 } from "../types.js";
 import { readCitationRegistry, REGISTRY_NAME, registryAuthorsText } from "../registry-work.js";
+import { effectiveInfluence, type EffectiveInfluence } from "../citation-effective-influence.js";
 import { Link } from "./Link.js";
 import { readHref } from "./router.js";
 import type { PublicCitations, PublicCitedWork } from "../public-types.js";
@@ -297,12 +298,20 @@ export function quotedCitingWords(quote: string): string {
 /**
  * **The one place this panel reads a work's influence**: the bar, the two
  * orders, the row's bars and whether the influence order is offered all go
- * through it. Today it is the list's own number, or nothing when the model said
- * it does not know the work (`citations/6`) or left no usable score. Plan
- * 261003m stage 2 puts a second source behind this one function.
+ * through it. It is `effectiveInfluence` (src/citation-effective-influence.ts,
+ * plan 261003m stage 2), the read path chat shares: the number a kept *Dig
+ * deeper* answer read from the web when there is a current one, else the
+ * list's own, else nothing — the model said it does not know the work
+ * (`citations/6`) or left no usable score.
  */
 function influenceOf(work: ShownWork): number | undefined {
-  return work.influence;
+  return effectiveInfluence(work)?.value;
+}
+
+/** The web influence on this row and where it came from, or `undefined` when the influence is the list's or unknown. */
+function webInfluenceOf(work: ShownWork): Extract<EffectiveInfluence, { from: "web" }> | undefined {
+  const influence = effectiveInfluence(work);
+  return influence?.from === "web" ? influence : undefined;
 }
 
 /**
@@ -367,6 +376,10 @@ export function canPrioritise(works: readonly ShownWork[]): boolean {
  */
 export function effectiveOrder(works: readonly ShownWork[], order: CiteOrder): CiteOrder {
   if (order === "date") return works.some((w) => publicationYear(w) !== null) ? "date" : "document";
+  /* Each score order under the condition `orderOptions` offers it on: a saved
+     `?citeby=relevance` on a list with no relevance must not reorder the rows
+     while no button is pressed (GPT Sol's F14, the class of F10). */
+  if (order === "relevance") return works.some((w) => w.relevance !== undefined) ? "relevance" : "document";
   if (order === "influence") return works.some((w) => influenceOf(w) !== undefined) ? "influence" : "document";
   if (order !== "prioritised") return order;
   return canPrioritise(works) ? "prioritised" : "document";
@@ -464,9 +477,13 @@ export function scoresOf(work: ShownWork): { key: string; label: string; value: 
   if (work.relevance !== undefined) {
     out.push({ key: "relevance", label: "relevance to this piece", value: work.relevance });
   }
-  const influence = influenceOf(work);
+  const influence = effectiveInfluence(work);
   if (influence !== undefined) {
-    out.push({ key: "influence", label: "influence in its field (the model's memory)", value: influence });
+    out.push({
+      key: "influence",
+      label: influence.from === "web" ? INFLUENCE_LABEL_WEB : INFLUENCE_LABEL_LIST,
+      value: influence.value,
+    });
   }
   return out;
 }
@@ -534,19 +551,43 @@ export function sourceOf(work: Pick<CitedWork, "url" | "linkFrom">): Source {
  */
 export const CAPPED_NOTE = `This piece cites more than ${MAX_CITATIONS} works; these are the ${MAX_CITATIONS} we judged it leans on most.`;
 
+/** What the influence bar measures, by where the number came from — the bar's tooltip and its spoken label. */
+const INFLUENCE_LABEL_LIST = "influence in its field (the model's memory)";
+const INFLUENCE_LABEL_WEB = "influence in its field (an AI estimate from web evidence)";
+
 /** Under every non-empty list: the weaker of the two scores, said plainly. */
 export const INFLUENCE_NOTE =
   "Influence is the model's own memory of how much a work mattered in its field, not a citation count. New lists give a score only when the model is confident it knows the work; older lists keep their scores. “influence unknown” means no usable influence score was saved. In prioritised order, a row with unknown influence is judged on its relevance alone when available.";
 
+/**
+ * The owner's (i) adds this after `INFLUENCE_NOTE` (plan 261003m stage 2). Not
+ * a visitor's: they have no *Dig deeper*, and their rows never carry what it found.
+ */
+export const INFLUENCE_WEB_NOTE =
+  "Dig deeper also looks for a work's influence on the web. A row marked “from the web” shows an AI estimate read from one page the search found, in place of the model's memory, and its card shows that page's words.";
+
+/** Beside the influence bar when the number came from *Dig deeper*'s web search. */
+const INFLUENCE_FROM_WEB = "from the web";
+
+/** The card on those words: our sentence, with the host and the day in it. The page's own words follow, marked as the page's. */
+function influenceFromWebNote(host: string, day: string): string {
+  return `This influence is an AI estimate from web evidence, not a citation count: Dig deeper read it from a page on ${host} on ${day}. The estimate may be wrong, and the words may be about something else on that page. The page says:`;
+}
+
 /** The words on a row with no influence, in place of a bar. Never a bar at zero. */
 export const INFLUENCE_UNKNOWN = "influence unknown";
 
-/**
- * The card on those words. It says only what is built: *Dig deeper* does not
- * fill influence in until plan 261003m stage 2, so it is not named here yet.
- */
-export const INFLUENCE_UNKNOWN_NOTE =
+/** The card on those words, as a visitor reads it: they have no *Dig deeper*. */
+const INFLUENCE_UNKNOWN_NOTE_SHARED =
   "No usable influence score was saved for this work. New lists leave influence unknown when the model is not confident it knows the work; a missing or rejected score also appears as unknown. In prioritised order, the threshold uses this row's relevance alone.";
+
+/**
+ * The card on those words, for the owner. It says only what is built: since
+ * plan 261003m stage 2 *Dig deeper* looks for the work's standing on the pages
+ * its web search returns. A look, not a promise: a press that finds no page
+ * about the work saying how well known it is leaves the row unknown.
+ */
+export const INFLUENCE_UNKNOWN_NOTE = `${INFLUENCE_UNKNOWN_NOTE_SHARED} Dig deeper looks for it on the web, and fills it in when a page about the work says how well known it is.`;
 
 /**
  * **A piece that cites nothing is a real answer**, not an error, and no retry is
@@ -761,6 +802,7 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
       <>
         {citations.capped && <p>{CAPPED_NOTE}</p>}
         <p>{INFLUENCE_NOTE}</p>
+        {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
         <p>
           {all.length} {all.length === 1 ? "work" : "works"} cited.
         </p>
@@ -942,7 +984,7 @@ function orderOptions(works: readonly ShownWork[]): { key: CiteOrder; label: str
             key: "influence" as const,
             label: "influence",
             title:
-              "The model's memory of how influential each work is in its field — not a citation count. Works with unknown influence come after, by relevance",
+              "How influential each work is in its field — the model's memory, or an AI estimate from the web where Dig deeper found one; not a citation count. Works with unknown influence come after, by relevance",
           },
         ]
       : []),
@@ -1089,6 +1131,7 @@ function WorkRow({
   const source = work.url === undefined ? null : sourceOf({ url: work.url, linkFrom: work.linkFrom });
   const note = investigate?.note ?? null;
   const scores = scoresOf(work);
+  const web = webInfluenceOf(work);
   const line = workByLine(work);
   const by = byLineOf(work);
   /* The found page's own title, in the tooltip: the search result's words,
@@ -1122,8 +1165,9 @@ function WorkRow({
       <LookupReading work={work} />
       <p className="cite-meta">
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}
+        {web !== undefined && <WebInfluence influence={web} />}
         {influenceIsUnknown(work) && (
-          <UnknownInfluence />
+          <UnknownInfluence canDig={investigate !== null} />
         )}
         {source === null ? null : source.kind === "address" ? (
           <span className="cite-source">
@@ -1189,12 +1233,61 @@ function WorkRow({
   );
 }
 
-/** The explanation opens on hover, focus or tap; a finger's card closes on scroll. */
-function UnknownInfluence() {
+/** A dated snapshot: the day the press finished, never "current". */
+function dayOf(iso: string): string {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime())
+    ? "an unknown day"
+    : at.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
+
+/**
+ * ***from the web*, beside the influence bar** (plan 261003m stage 2): the
+ * number came from one page of *Dig deeper*'s web search, not from the model's
+ * memory. The card says so in our words, names the host and the day, and then
+ * shows the page's own words, in a `<q>` so they read as the page's and not
+ * ours. The quote stays in the app's face: third-party text is left UI
+ * (docs/project/fonts.md § Whose voice is it). No link: the address is in the
+ * answer's own sources below. Opens on hover, focus or tap, as
+ * `UnknownInfluence` does.
+ */
+function WebInfluence({ influence }: { influence: Extract<EffectiveInfluence, { from: "web" }> }) {
   const reveal = useTapReveal(false);
   return (
     <Tooltip
-      content={INFLUENCE_UNKNOWN_NOTE}
+      content={
+        <>
+          {influenceFromWebNote(hostOf(influence.sourceUrl), dayOf(influence.at))}{" "}
+          <q className="cite-influence-quote">{influence.quote}</q>
+        </>
+      }
+      placement="left"
+      className="score-bars-card"
+      open={reveal.open}
+      onOpenChange={reveal.onOpenChange}
+    >
+      <button
+        type="button"
+        className="cite-influence-web"
+        aria-expanded={reveal.open}
+        onPointerDown={reveal.onPointerDown}
+        onPointerCancel={reveal.onPointerCancel}
+        onClick={(e) => {
+          if (reveal.commit(e)) reveal.onOpenChange(!reveal.open);
+        }}
+      >
+        {INFLUENCE_FROM_WEB}
+      </button>
+    </Tooltip>
+  );
+}
+
+/** The explanation opens on hover, focus or tap; a finger's card closes on scroll. */
+function UnknownInfluence({ canDig }: { canDig: boolean }) {
+  const reveal = useTapReveal(false);
+  return (
+    <Tooltip
+      content={canDig ? INFLUENCE_UNKNOWN_NOTE : INFLUENCE_UNKNOWN_NOTE_SHARED}
       placement="left"
       className="score-bars-card"
       open={reveal.open}

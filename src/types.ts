@@ -4399,6 +4399,35 @@ export interface CitationInvestigation {
    * stage**, which the row draws exactly as it did then.
    */
   paper?: InvestigatedPaper;
+  /**
+   * **How influential the work is, read from one page of this press's own web
+   * search** (plan 261003m stage 2, src/citation-influence.ts) — an AI
+   * estimate, kept only where code found the quoted words on a search result
+   * whose title names the work. **Absent** when the press found nothing code
+   * could keep, and on an answer from before that stage. Read it through
+   * `effectiveInfluence` (src/citation-effective-influence.ts), never directly:
+   * that is where a stale `version` is dropped.
+   */
+  influence?: CitationWebInfluence;
+}
+
+/**
+ * **A cited work's influence, as one web page states it** — plan 261003m stage
+ * 2. The number is the model's; the quote is the page's own characters as code
+ * found them; the address and title are copied from the search result by code.
+ * When it happened is the investigation's own `at`.
+ */
+export interface CitationWebInfluence {
+  /** 0–1, on the list's rubric. */
+  value: number;
+  /** The page's own words the number rests on. */
+  quote: string;
+  /** The search result's address, through `safeUrl`. */
+  sourceUrl: string;
+  /** The search result's own title. A kept source always had one; optional for a stored row that lost it. */
+  sourceTitle?: string;
+  /** `INFLUENCE_VERSION` when it was written: the prompt and the checking rules. */
+  version: string;
 }
 
 /** How code confirmed a fetched PDF is the cited work — src/paper-evidence.ts § confirmIdentity. */
@@ -4481,7 +4510,8 @@ export interface InvestigateCitationDone {
  * stage 2); then (plan 260930d) `finding`
  * — the lookup that looks for the work's own page, only when the row has no
  * current `assessed` one — then `reading-paper` (plan 261001a stage 3: the
- * paper itself fetched and checked, and when read, its passages asked for),
+ * paper itself fetched and checked, and when read, its passages asked for;
+ * and beside it, since plan 261003m stage 2, the influence call),
  * then `reading`, the streamed answer. Sent as a `stage` frame (`{ stage }`);
  * a `lookup` frame after `finding` carries the lookup's answer, the same
  * `FindCitationResponse` `POST …/find` answers.
