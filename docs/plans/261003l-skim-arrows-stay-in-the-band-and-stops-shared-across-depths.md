@@ -256,7 +256,7 @@ desktop, iPad and phone-portrait shows a re-planned route with a carried stop ma
 - **[Q-mark-every-row]** The pips are on every row of a route that has any carried stop. The
   alternative is to draw them only on the carried rows, which is quieter but makes the mark appear
   and disappear down the list. Built: every row.
-- **[Q-carry-cap]** A pass may carry at most half as many earlier stops as it has new ones (so a
+- **[Q-carry-cap]** A pass may carry at most half as many earlier stops as it has new ones, rounded up (so a
   More of six new stops repeats at most three). Built after Sol's F7. The alternatives are a
   tighter cap, or nothing carried into Most at all, where the repeats that looked redundant sat.
 - **[Q-read-mark]** Whether to also build the reading-time version of the mark.
@@ -315,3 +315,7 @@ check each by id.
   the cap and Sol's fixes; screenshots `261003l-shot-1` to `-5`. Notes: the pips are clear on a
   phone and at the lower limit of legible at desktop 1x; a deep link whose `?depth=` its stop is
   not walked in keeps the stale `depth` in the address until the first step (as before this plan).
+- 2026-10-03: [Sol's narrow second round](261003l-skim-code-review-2-sol.md) on `9f216614a`:
+  **F7 closed**, the stated guarantee accurate and every number recomputed from the JSON; one P3,
+  F11 — three passages said "half" or "no limit" where the code says half rounded up — corrected
+  in the docs. *Land after fixes (F11).*

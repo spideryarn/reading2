@@ -791,6 +791,9 @@ export function validateRoute(
  * carried stop is the useful one. Measured, the model keeps under the cap
  * itself once the prompt states it (2 entries cut in 12 runs), so this is a
  * backstop; if it starts cutting often, change the prompt, not the cut order.
+ * The prompt's own sentence is a shade stricter ("never as many as it adds",
+ * which a pass of one would break at one carried); that wording is the one
+ * measured, and the validator is the looser of the two on purpose.
  */
 export function maxCarried(ownStops: number): number {
   return Math.ceil(ownStops / 2);

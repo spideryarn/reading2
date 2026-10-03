@@ -366,8 +366,8 @@ when each pass walked only its own. So:
 - **Two things the measurement changed.** The first wording put every carried stop at the head of
   More, as a recap, because the old prompt already listed Gist stops first; the prompt now says the
   route is one order with the depths mixed. And wording alone let one run carry every Gist stop and
-  the next none, so **a pass carries at most half as many earlier stops as it has of its own**
-  (`maxCarried`, src/skim.ts), said in the prompt and enforced in `validateRoute` (GPT Sol, code
+  the next none, so **a pass carries at most half as many earlier stops as it has of its own, rounded
+  up** (`maxCarried`, src/skim.ts: one into a pass of one or two, two into a pass of three), said in the prompt and enforced in `validateRoute` (GPT Sol, code
   review F7). The model kept under it in 10 of 12 runs once told.
 
 Not built, and named in the plan: a mark for "I have actually read this", from reading time — the
@@ -451,8 +451,9 @@ Three things follow from Greg's words and they shape everything below:
   only the stops it adds (above, under *Each pass walks only its own stops*). The route is still
   one order, planned as nesting passes; only the walk changed. **Amended 2026-10-03**: part of the
   way back — a pass may carry earlier stops chosen by the route and marked with pips (above, under
-  *A stop may be walked at more than one depth*). There is currently no enforced limit; measured
-  routes sometimes carried all of Gist into More.
+  *A stop may be walked at more than one depth*). Capped since the same day at half as many as the
+  pass has of its own, rounded up (`maxCarried`); before the cap, measured routes sometimes carried
+  all of Gist into More.
 
 **Who is reading changes the route.** When the reader has said who they are
 ([reader-profile.md](reader-profile.md) — *About you*) or why they are reading this piece (the

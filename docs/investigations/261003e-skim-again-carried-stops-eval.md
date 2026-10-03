@@ -654,8 +654,9 @@ better on the two things that were wrong:
   same family as the model that wrote the routes, and the read is blind to the side but not really
   to the arm: a More stop that repeats a Gist stop is visibly the new one. A reader coming from
   Gist still meets about half of Gist again (21 of 44 stops).
-- **That the spread is fixed.** One round of 12 runs with no none-to-all swing. The cap bounds the
-  top at 40% of a walk; nothing bounds the bottom, and NEW-a and NEW-b each had a run that carried
+- **That the spread is fixed.** One round of 12 runs with no none-to-all swing. The cap is `ceil(own / 2)`:
+  a third of a walk when the pass's own count is even, 40% for a pass of three, and half for a
+  pass of one (not met in these runs, where the most observed was 40%); nothing bounds the bottom, and NEW-a and NEW-b each had a run that carried
   nothing.
 - **Anything about Most.** It was never judged blind. It is where most entries are carried (28
   against 21), where every repeat in this round sits, and where the cap does least. Not carrying
