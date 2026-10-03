@@ -60,43 +60,59 @@ One stage. The bar loses a button; Summary gains a third choice.
    its prompt, its stored shape or the public DTO changes. This is deliberate: Greg is trying this
    out, and leaving the data alone makes going back a client-only revert. Stopping the third call
    (about a third of a Summary press) is a follow-up question for him, queued, not built.
-6. **The thread follows the ordinary rule: a press spends, arriving does not.** Pressing the Thread
-   segment, the command bar's Thread row, or the Summary bar button while `?summary=thread`, writes
-   the thread when there is none. Arriving on a link shows the empty state with *Write it*. So
-   `useTweets` moves from `useAutoRunOnArrival` to `useAutoRun`, the `arrival` kind leaves
-   `ModeActivation`, `useAutoRunOnArrival` is deleted (it had one caller), and `tweets` leaves
-   `NEEDS_AN_EXPLICIT_PRESS`. Summary's `MODE_TARGET` row becomes `delegated` on a new
-   `PressContext.summary` (`thread` → `tweets`, else `simple`); `subModeTarget` and `bandTarget`
-   give the same answer.
-7. **The add page still queues the thread.** `autoModes()` derives from `MODES`, so retiring the
-   mode would silently drop the `tweets` step from *Generate the main modes*. It goes into
-   `AUTO_EXTRA_STEPS` with the reason, so an import makes what it made yesterday.
-8. **Words**: `MODE_CATALOG.summary` gains the aliases `thread`, `tweets`, `twitter`, `x`, `social`
-   and its `description`/`how` mention the thread; the command bar's sub-mode rows are Brief, Fuller,
-   Thread, and typing "tweets" must offer the Thread row. Help page: Tweets' section folds into
-   Summary's. The visitor's and owner's sharing sentences (`OWNER_MODE_NOTE`, shared-inventory) must
-   still name the thread when one is stored — a public article's thread is still readable by a
-   visitor through `VisitorTweetsBand`, and where none is stored the visitor's Thread view says so in
-   a line (Summary stays `available` in `POLICY`).
+6. **The thread still writes itself when its owner opens it, however they arrived** — Greg's
+   2026-09-12 rule, kept (see § Decision 6 below; the first draft of this plan changed it and Sol's
+   review, F7, showed the smaller way). `useTweets` and `useAutoRunOnArrival` are untouched. So a
+   press on Thread arms **nothing**: Summary's `MODE_TARGET` row becomes `delegated` on a new
+   `PressContext.summary` (`thread` → `null`, else `simple`), and `subModeTarget` and `bandTarget`
+   give the same answer. The `arrival` kind leaves `ModeActivation` (no mode has it now), and
+   `subModeGenerates` says yes for Thread by name, as it does for Diagram's pictures, so the command
+   bar still marks the row `generates`. A last-view restore must not open the thread: `last-view.ts`
+   drops `mode` from a restore when it is `summary` **and** the remembered `summary` is `thread`
+   (the `tweets` entry in `NEEDS_AN_EXPLICIT_PRESS` goes; `?summary=thread` itself stays remembered
+   and dormant, as `?diagram=` does). Pressing the Summary bar button while it is already showing
+   still closes the band and arms nothing (F6).
+   **`PressContext.summary` comes from the same parsed React state that picks the band, never from
+   `location.search` at render** (F1): nuqs flushes the address late, and a context read from the
+   old address would arm `simple` while Thread is on screen, leaving a token for Back to spend.
+7. **The add page queues what it queued yesterday.** `autoModes()` derives from `MODES` through
+   `modeStep`, which answers `null` for a delegated row and no longer sees `tweets` at all, so the
+   change would silently drop **both** `simple` and `tweets` from *Generate the main modes* (F2).
+   Both stay, and `autoModesDetail()` still names Summary. The test asserts the whole request list.
+8. **Words and the places that name the mode.**
+   - Command bar: the sub-mode rows are Brief, Fuller, Thread. **Typing "tweets" (or `thread`,
+     `twitter`, `x`, `social`) and pressing Enter opens Thread**, not Summary at Brief (F3): the
+     aliases belong to the Thread row, with precedence over Summary's own row, not to
+     `MODE_CATALOG.summary`. Summary's `description` and `how` are rewritten for two lengths and a
+     thread.
+   - Re-run commands: `RERUN_MODE.tweets` goes with the mode, and "rerun tweets" must still force
+     the `tweets` step while "rerun summary" forces `simple` and never a thread (F5).
+   - Old addresses: `?mode=tweets` and `/read/<slug>/tweets` land on Thread on a cold load, on a
+     client navigation and on Back/Forward between query entries on one article (F4). The legacy
+     spelling wins over any carried `summary=brief|fuller`, leaves no duplicate `summary` pair, and
+     keeps unrelated state. Tested with a public article that has a thread and no summary.
+   - Help page: Tweets' section folds into Summary's. `FeaturesPage.tsx`'s Tweets tile points at
+     Summary's Thread.
+   - Sharing: the owner's *make public* inventory still lists the thread **when one is stored** and
+     not otherwise — a presence-sensitive entry of its own, since `POLICY.summary` is `available`
+     and cannot say. A visitor reads a stored thread through `VisitorTweetsBand`; with none stored
+     the Thread view says so in a line.
 9. **Docs**: `tweets.md`, `summaries.md`, `mode.md` (the arrival exception goes),
    `reading-view-overview.md`, `url-state.md`, `help-page` tables.
 
-### Decision 6 is the one that changes something Greg asked for
+### Decision 6: the thread keeps writing on arrival
 
-On 2026-09-12 he asked that the thread *"automatically start generating … when opened (without
-having to click a button to kick it off)"*, when it was a page reached by a link. On 2026-10-01 he
-made the general rule *"opening a mode should always trigger generation if it hasn't happened
-already"*, which every mode honours through the press. Under this plan the thread is written by
-every press that opens it; what is lost is one case — arriving by a pasted link or a reload at an
-article whose thread nobody has written, which now shows *Write it* as every other mode does.
+On 2026-09-12 Greg asked that the thread *"automatically start generating … when opened (without
+having to click a button to kick it off)"*, and in this report *"keep all of the tweet thread.
+Functionality and UI"*. So it is kept.
 
-**The simpler option passed over** (fewer lines changed): leave `useTweets` on
-`useAutoRunOnArrival`. It was passed over because the exception would then live *inside* a mode that
-follows the ordinary rule: `?summary=` is remembered, so a last-view restore of
-`?mode=summary&summary=thread` would spend unless last-view learned to strip one *value* of one
-parameter; the `arrival` activation kind would have to become a per-sub-mode answer; and the bar
-press, the chip and the band would each need the special case. One rule everywhere is fewer parts.
-It goes to Greg as a question in the debrief, and is a small change to reverse.
+**The option passed over**: make the thread follow the ordinary rule (a press spends, arriving does
+not) and delete `useAutoRunOnArrival` and the `arrival` kind — one rule everywhere. The first draft
+chose it, arguing the exception needed more machinery inside Summary than it does. Sol's F7 showed it
+does not: a delegated row may already answer `null`, as Diagram's free pictures do, and the restore
+exception is one condition. Converting the thread's generation lifecycle during a grouping trial
+would also have taken away something Greg asked for by name. It goes to Greg as a question in the
+debrief: unify later, or leave it.
 
 ### Not built, and why
 
@@ -113,10 +129,11 @@ It goes to Greg as a question in the debrief, and is a small change to reverse.
 ## Tests
 
 Red first where a behaviour changes: the lift (`?mode=tweets` → summary's thread), the parser
-(`simple` → `brief`, `thread` parses), the press (a Thread segment press arms `tweets`; arriving
-arms nothing and posts nothing), last-view (a restore of `summary=thread` posts nothing), the band
-shape, `autoModeSteps()` still containing `tweets`, and the command bar offering Thread for
-"tweets". Then the tables [mode.md § Retiring a mode](../project/mode.md#retiring-a-mode) lists, and
+(`simple` → `brief`, `thread` parses), the press (a Thread segment press arms nothing and the band's arrival run posts the one `tweets` step; a second press before the
+address flushes leaves no token armed and Back posts nothing), last-view (a restore never opens the
+thread), the band
+shape, the whole `autoModeSteps()` list, "tweets" + Enter in the command bar opening Thread, "rerun
+tweets" and "rerun summary", and the old addresses on a tweets-only public article. Then the tables [mode.md § Retiring a mode](../project/mode.md#retiring-a-mode) lists, and
 the whole suite, because four of them are keyed on `string` and only the suite sees them.
 
 Browser check (Sonnet, Playwright on the box): desktop, iPad portrait and landscape, phone — the
@@ -195,3 +212,15 @@ All of this goes to Greg as questions in the debrief; none of it is built here.
 
 - 2026-10-03 — plan written. `git log` on the area: nobody has started this; `fb-fewer-modes` is
   this session's queue entry (`qi-h99jjy25`).
+- 2026-10-03 — Opus product opinion (read-only subagent): build Brief | Fuller | Thread; keep Simple
+  generated during the trial; not Marginalia as an umbrella. Folded into § The wider question.
+- 2026-10-03 — GPT Sol plan review,
+  [261003l-fewer-modes-plan-review-sol.md](261003l-fewer-modes-plan-review-sol.md): *build with
+  changes*. F1 (P0, reasoned: stale press context) → decision 6's last paragraph. F2 (P1: the queue
+  would also lose `simple`) → decision 7. F3 (P1: aliases on Summary open Brief) → decision 8.
+  F4 (P1: a boot-only rewrite) → decision 8. F5 (P1: re-run commands) → decision 8. F6 (P1: the
+  closing press) → decision 6. F7 (P2: keeping arrival is smaller) → **accepted, and it reversed
+  decision 6**. Its two closing notes (FeaturesPage; a presence-sensitive sharing entry) → decision
+  8. Its note that the hidden Simple level can still fail the all-or-none store is true today as
+  well and is part of the question to Greg about dropping it. All seven checked against the code
+  before accepting.
