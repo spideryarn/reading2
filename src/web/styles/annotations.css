@@ -341,13 +341,11 @@ mark.xref:focus-visible {
    highlight would hide the model's uncertainty, which is the opposite of what
    vision.md § Principles asks for.
 
-   A fill rather than an underline, and a *different hue* from everything else
-   on this page. Both are deliberate and both come from
-   docs/project/original-version/highlighting.md: a fill because the extent is
-   the information here (a comment says "there is a note", a hit says "this much
-   of it matches"), and a different hue because a comment, a glossary term and a
-   hit can all cover the same sentence, at which point three meanings separated
-   only by opacity is one hue too few.
+   An outline rather than an underline, and a *different hue* from everything
+   else on this page. Both are deliberate: the closed shape carries the extent
+   (a comment says "there is a note", a hit says "this much of it matches"), and
+   a different hue lets a comment, a glossary term and a hit all cover the same
+   sentence without three meanings separated only by opacity.
 
    The words themselves still do not change colour. Same rule as `mark.cmt` and
    `mark.term`: this is the verbatim column, and recolouring the author's prose
@@ -355,14 +353,13 @@ mark.xref:focus-visible {
    refuses. */
 mark.hit {
   /* **`background: none`, and it is load-bearing rather than tidy.** The UA
-     sheet paints every `<mark>` a solid yellow (`background-color: Mark`), and
-     this rule used to override it by accident — it set a background
-     unconditionally. Since the wash moved to `[data-wash]` below, a quote-only
-     mark sets none, and without this line the browser's yellow comes back:
-     every quote in the article drawn as a highlighter pen, which is precisely
-     the treatment this change exists to replace. Found by a probe page that
-     rendered exactly that, 2026-09-07. `mark.cmt` and `mark.term` each carry the
-     same line for the same reason. */
+     sheet paints every `<mark>` a solid yellow (`background-color: Mark`). A
+     quote replaces that below with its own purple fill, but a resting search
+     hit and a bare quick hit set no background colour at all; without this
+     reset the browser's yellow would turn both into highlighter marks. Found
+     by a probe page in 2026-09-07; which kind needs the reset changed when the
+     quote and search paintings swapped. `mark.cmt` and `mark.term` each carry
+     the same line for the same reason. */
   background: none;
   color: inherit;
   border-radius: 2px;
@@ -419,7 +416,7 @@ mark.hit[data-wash] {
   /* **Whose colour the outline is.** The first of the band's colours, so a hit
      from one search (the usual case) is a box in that search's colour. A
      literal match has no saved search and wears the fixed search hue.
-     `--hit-stroke-rgb` is set here on every washed mark, so nothing depends on
+     `--hit-stroke-rgb` is set here on every search mark, so nothing depends on
      what a mark might inherit from its cell, which sets `--h0` too. */
   --hit-stroke-rgb: var(--hit-rgb);
   /* **Confidence is how firmly the box is closed.** It was the depth of the
@@ -456,18 +453,12 @@ mark.hit[data-wash] {
      the inline-start/end padding, the true corners a border-radius rounds.
      This one never does, so the two modes have nothing to disagree about.
 
-     So `clone` stays, because it costs nothing and it is the mode this rule
-     is written as though it were in — and because the day somebody replaces
-     that `100%` with a pixel width, `slice` starts mattering and the bug is
-     conditional on a line break, which is the kind that hides. Untested in
-     Safari and Firefox, where `box-decoration-break` has a history of
-     diverging; that is the other reason to keep it rather than tidy it away.
-
      **Since 2026-10-03 this rule is `slice`**, for the caps, and the paragraph
      above is the observation it rests on: the band renders the same either
      way in Chrome. A quote-over-search mark had been `slice` since 2026-09-08
-     with nothing reported. Firefox and Safari remain untested; if a wrapped
-     hit's band ever looks wrong there, this is the first suspect. */
+     with nothing reported, and the finished treatment was checked in WebKit.
+     Firefox remains untested; if a wrapped hit's band ever looks wrong there,
+     this is the first suspect. */
 }
 mark.hit[data-wash][data-hues] {
   --hit-stroke-rgb: var(--h0);
@@ -550,8 +541,9 @@ mark.hit[data-quote][data-quote-start]:dir(rtl) {
 }
 
 /* ------------------------------------------------------- stacked hues ----
-   Which searches found these words, as one coloured rule each under the wash.
-   `--h0` … `--h3` are set inline by annotate.ts and hold *palette references*
+   Which searches found these words, as one coloured rule each along the
+   outline's bottom edge.
+   `--h0` … `--h5` are set inline by annotate.ts and hold *palette references*
    (`var(--cat-3-rgb)`), never colours — the slot belongs to the search and the
    hue belongs to styles/colourscales.css, and neither half should be able to
    change the other. See docs/project/colour-scales.md.
@@ -767,12 +759,15 @@ mark.cmt.hit[data-mark-end][data-dir="mixed"]::after {
 
 /* The one the reader pressed in the panel, so the list and the passage are
    visibly the same thing after a jump. Same job `mark.cmt[data-cmt-open]` does.
-   One attribute per kind, so an overlap cannot draw somebody else's mark as
-   pressed — annotate.ts says what that used to do.
-   The ring is in the neutral wash colour rather than in any of the hues: it
-   means *this is the row you pressed*, which is a different fact from which
-   search found it, and a ring that borrowed a hue would be a fourth thing
-   wearing a colour that already means something. */
+   One attribute per `MarkKind`, so a comment, chat or term overlapping the hit
+   cannot draw it as pressed — annotate.ts says what that used to do. Quotes and
+   searches are both `hit`, however: on a run carrying both, pressing either
+   writes this same attribute. The quote rule below deliberately wins there,
+   giving the shared run its filled-quote treatment and full ink ring while the
+   search's coloured bottom band remains.
+   The top edge and ends move to the page's strongest ink: they mean *this is
+   the row you pressed*, while the coloured bottom band continues to say which
+   search found it. */
 mark.hit[data-wash][data-hit-open] {
   --hit-stroke-color: var(--toward-ink);
 }
@@ -847,12 +842,12 @@ mark.cmt.hit:not([data-colour]) {
 }
 
 /* The bar down the left of a matched paragraph — findable while scrolling past
-   at speed, which a wash behind one phrase is not.
+   at speed, which an outline round one phrase is not.
 
-   **Scaled harder than the fill** (×1.5, clamped), which is the one piece of
-   the borrowed implementation worth copying verbatim: *a wash faint enough to
-   keep text readable is too faint to notice; the border carries the signal, the
-   fill carries the extent.*
+   **Scaled harder than the outline's confidence edge** (×1.5, clamped), which
+   is the one piece of the borrowed implementation worth copying verbatim: a
+   faint edge is too quiet to catch while scrolling, so the paragraph bar
+   carries the glanceable signal.
 
    An inset shadow rather than a `border-left`, because a border changes the
    cell's width and every marked paragraph would then jump sideways as you type

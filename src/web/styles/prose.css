@@ -279,10 +279,10 @@ td.text.has-hit[data-hues].block-flash-still {
    fill of its own, which this covers while it flashes and returns to.
 
    **No `100%` keyframe**, on purpose: an omitted end keyframe animates back to
-   the element's own value, which for the current stop is the rung quote's
-   0.18 tint (`mark.hit[data-quote][data-hit-open]`) — so the wash fades into
-   the ring instead of dropping to transparent and snapping back. The still
-   rule is `td.text`-scoped so it outranks that later, equal-weight rule. */
+   the element's own value, which for the current stop is the quote's priority
+   fill (`mark.hit[data-quote]`) — so the wash fades into the fill inside its
+   ring instead of dropping to transparent and snapping back. The still
+   rule is `td.text`-scoped so it outranks the later quote-fill rule. */
 @keyframes passage-flash {
   0%, 35% { background-color: var(--highlight-wash); }
 }

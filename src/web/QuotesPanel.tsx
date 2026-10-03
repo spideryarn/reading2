@@ -314,22 +314,22 @@ export function priorityOf(quote: Quote): number | undefined {
  *
  * What the two controls still agree on is **order**: raising the bar removes
  * scored light quotes before scored heavy ones, because both read `priorityOf`.
- * Not "what survives is exactly the heavy strokes" — the bar snaps to real
+ * Not "what survives is exactly the heavy fills" — the bar snaps to real
  * scores, so there may be no stop at `0.80`, and an unscored quote survives
- * every bar while drawing light. docs/project/quotes.md § The stroke.
+ * every bar while drawing light. docs/project/quotes.md § A highlighter pen.
  */
 export const QUOTE_HEAVY_AT = 0.8;
 
 /**
  * How heavily this quote is drawn in the prose — the priority the reader can see
- * without opening the panel. docs/project/quotes.md § The stroke.
+ * without opening the panel. docs/project/quotes.md § A highlighter pen.
  *
  * **`priorityOf`, not `importance`.** Greg asked for *"an indicator of the Quote
  * priority"*, and `priorityOf` is what `?bar=` already thresholds on. Driving the
- * stroke from `importance` alone would let the two disagree — raising the bar
- * could hide a heavy stroke and leave a light one on the page, which reads as a
+ * fill from `importance` alone would let the two disagree — raising the bar
+ * could hide a heavy fill and leave a light one on the page, which reads as a
  * bug in the feature whose whole job is to say what matters. On this the bar and
- * the stroke are the same statement.
+ * the fill are the same statement.
  *
  * **A quote with no score at all is light, not absent.** It has earned no
  * emphasis, but it must still be drawn: a quote scored on neither axis survives
@@ -365,17 +365,17 @@ const QUOTE_FADE_FROM = 0.5;
  * > perhaps slightly fade the border based on the priority-score (but even
  * > low-priority quotes should still be clearly visible)
  *
- * **Weight and fade move the same way, so they reinforce rather than
- * cancel.** A higher priority is thicker *and* brighter; nothing is ever
- * thick-but-faint or thin-but-bright. `quoteTier` keeps the coarse step — two
- * weights, because the blind test found a third indistinguishable — and this is
+ * **Tier and fade move the same way, so they reinforce rather than
+ * cancel.** A higher priority has a stronger tier *and* a brighter fade;
+ * `quoteTier` keeps the coarse step — two levels, because the earlier stroke
+ * test found a third indistinguishable — and this is
  * the continuous one inside and across them, which nobody has to identify
  * pairwise: it is an impression across a page. 260907c's acceptance pass had
  * already found that *"the priority does help skimming — but through
  * brightness more than thickness"*, and this spends that finding.
  *
  * `priorityOf`, like the weight and the bar, so raising the bar still takes
- * away the faintest and thinnest first. Unscored is the floor: visible,
+ * away the faintest and lightest first. Unscored is the floor: visible,
  * claiming nothing — the argument `quoteTier` makes for drawing it light.
  * docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md § 1.
  */
@@ -386,7 +386,7 @@ export function quoteAlpha(quote: Quote): number {
   return Math.round((QUOTE_ALPHA_FLOOR + (1 - QUOTE_ALPHA_FLOOR) * along) * 100) / 100;
 }
 
-/** Tier and brightness together — `QuoteStroke` in src/types.ts — which is what crosses into the marks. */
+/** Tier and brightness together — still named `QuoteStroke` — which is what crosses into the marks. */
 export function quoteStroke(quote: Quote): QuoteStroke {
   return { tier: quoteTier(quote), alpha: quoteAlpha(quote) };
 }

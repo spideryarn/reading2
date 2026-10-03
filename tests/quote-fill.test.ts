@@ -50,9 +50,9 @@ describe("quoteAlpha", () => {
     expect(quoteAlpha(q(undefined, 0.75))).toBe(0.85);
   });
 
-  it("moves the same way as the weight at every priority, so the two never cancel", () => {
-    /* The failure this rules out is thick-but-faint or thin-but-bright: a
-       quote the weight says matters more and the fade says matters less. */
+  it("moves the same way as the tier at every priority, so the two never cancel", () => {
+    /* The failure this rules out is strong-but-faint or light-but-bright: a
+       quote the tier says matters more and the fade says matters less. */
     const priorities = Array.from({ length: 101 }, (_, i) => i / 100);
     for (const [i, lo] of priorities.entries()) {
       for (const hi of priorities.slice(i + 1)) {
@@ -62,8 +62,11 @@ describe("quoteAlpha", () => {
     }
   });
 
-  it("is continuous across the weight's step — a heavy quote is never fainter than a light one", () => {
-    expect(quoteAlpha(q(0.8))).toBeGreaterThanOrEqual(quoteAlpha(q(0.79)));
+  it("does not reset at the tier's step — it advances by one ordinary fade step", () => {
+    const below = quoteAlpha(q(0.79));
+    const at = quoteAlpha(q(0.8));
+    expect(at).toBeGreaterThanOrEqual(below);
+    expect(at - below).toBeCloseTo(0.01, 10);
   });
 });
 

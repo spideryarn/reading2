@@ -336,6 +336,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-xgqv50": "shipped",
   "spya-xjuxde": "shipped",
   "spya-xpxmjn": "shipped",
+  "spya-xrgste": "shipped",
   "spya-xunuum": "shipped",
   "spya-xw9bd4": "shipped",
   "spya-xxt0z5": "shipped",

@@ -97,8 +97,12 @@ Applies to every mark with `data-wash`: thorough-search hits, literal matches, R
 
 ### A quote that is also a search hit
 
-Draws both: the teal fill and the search's outline and band. That was the point of the two channels
-on 2026-09-07 and it survives the swap.
+Draws both: the purple fill and the search's outline and band. That was the point of the two channels
+on 2026-09-07 and it survives the swap. Quote and search marks share `data-hit-open`, so pressing
+either on this shared run gives it the quote's explicit precedence: purple fill, full
+`--toward-ink` ring, and the search's coloured bottom band. Splitting the open attribute by subtype
+was passed over because both rows point at the same words and the shared selected treatment is
+unambiguous.
 
 ## Not changing
 

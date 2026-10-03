@@ -48,29 +48,29 @@
        the letters hold this between their beats (src/web/styles/logo-animations.css § Strain). */
     --wordmark-ink: var(--foreground);
 
-    /* The search wash — and it is deliberately NOT the orange.
+    /* The fixed search hue — and it is deliberately NOT the orange.
        docs/project/original-version/highlighting.md records the exact mistake this avoids: that
        app drew search hits, glossary terms and semantic highlights all in #DB8A45, separated only
        by opacity, and got away with it only because it could never show two at once. We can — a
        comment, a selected term and a search hit can all land on one sentence — so the third mark
        needs a different hue rather than a different alpha. On a near-black page that matters twice
        over: a low-alpha orange here is not subtle, it is invisible.
-       Held as three numbers, not as a colour, because the confidence wash is `rgb(var(--hit-rgb) /
-       <alpha>)` and the space-separated form is the one that takes a variable alpha. */
+       Held as three numbers, not as a colour, because a literal match's
+       confidence-bearing outline is `rgb(var(--hit-rgb) / <alpha>)` and the
+       space-separated form is the one that takes a variable alpha. */
     --hit-rgb: 96 178 214;
     --hit: rgb(var(--hit-rgb));
-    /* And the wash behind the words, which since 2026-08-26 is NOT --hit-rgb.
-       With several searches showing at once, each in its own categorical hue
-       (styles/colourscales.css), the two channels had to be split: the wash
-       carries the model's confidence and the rules under it carry which search
-       found the words. A coloured wash would then be a third thing competing
-       with eight — and worse, a *blue* wash is one of the eight, so a reader
-       would have to learn that this particular blue means something different
-       from the blue two lines up.
+    /* The low-chroma wash used only inside a pressed search hit since
+       2026-10-03. Before then it sat behind every hit and carried confidence,
+       while the categorical rules carried which search found the words. A
+       coloured wash would have been a third thing competing with eight — and
+       worse, a *blue* wash is one of the eight, so a reader would have had to
+       learn that this particular blue meant something different from the blue
+       two lines up.
 
-       So it is deliberately low-chroma: a slate that reads as "marked" without
-       reading as any of the palette's answers to "marked by which". Alpha is
-       always applied to it, hence the triplet — see the note above. */
+       It remains deliberately low-chroma: a slate that reads as "pressed"
+       without reading as any of the palette's answers to "marked by which".
+       Alpha is always applied to it, hence the triplet — see the note above. */
     --hit-wash-rgb: 148 158 168;
     /* The ordinary-colour alias, exactly as `--hit` is for `--hit-rgb`. Every
        triplet here needs one: a bare `148 158 168` is not a colour, so

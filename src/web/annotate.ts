@@ -554,8 +554,8 @@ function annotate(html: string, marks: readonly Mark[]): string {
         const style: string[] = [];
         if (washes.length > 0) {
           el.setAttribute("data-wash", "");
-          /* The wash intensity, as a custom property the stylesheet multiplies a
-             colour by (styles.css § search mode). Written as a *number* rather
+          /* The outline intensity, as a custom property the stylesheet uses for
+             its top edge and ends (annotations.css § search hits). Written as a *number* rather
              than as a colour on purpose: the colour belongs to the design tokens
              and the confidence belongs to the model, and a component that mixed
              them here would put a hex value beyond the reach of the theme.
@@ -585,9 +585,10 @@ function annotate(html: string, marks: readonly Mark[]): string {
           const alpha = Math.max(...strokes.map((q) => q.alpha));
           style.push(`--quote-a:${clamp(alpha, 0, 1).toFixed(2)}`);
         }
-        /* And which searches found these words, as one rule each stacked under
-           the wash — Greg's call on 2026-08-26, over blending the washes
-           together. Blending is prettier for two and turns to mud at three, and
+        /* And which searches found these words, as one rule each stacked along
+           the outline's bottom edge — Greg's call on 2026-08-26, preserved when
+           the fill became an outline. Blending fills is prettier for two and
+           turns to mud at three, and
            the mud is a colour that is not in the palette, so the reader cannot
            look it up; stacked rules stay identifiable however many there are,
            and the text's contrast never changes at all.
@@ -683,18 +684,15 @@ function annotate(html: string, marks: readonly Mark[]): string {
         /* Only when there is something to say. A quote-only run has no wash and
            no stripes, and `style=""` on every such mark is bytes for nothing. */
         if (style.length > 0) el.setAttribute("style", style.join(";"));
-        /* **Where each quote begins and ends, which is what lets an outline
-           survive being split.** A mark becomes one `<mark>` per text node and
-           splits again at every annotation boundary, so one quote containing an
-           `<em>` is three sibling elements — and three closed rings around one
-           sentence read as three separate quotes, which a wash never did.
+        /* **Where each quote begins and ends, which is what lets its fill and a
+           pressed ring survive being split.** A mark becomes one `<mark>` per
+           text node and splits again at every annotation boundary, so one quote
+           containing an `<em>` is three sibling elements. Rounding every piece
+           would notch the fill, and closing every ring would read as three quotes.
 
-           So the stylesheet draws the rules above and below on every fragment
-           and the inline end-caps only on the two that carry these, and the
-           outline runs continuously across the joins. Measured in Chrome on
-           2026-09-07: no gap at the seam, only a 14% antialias dip visible at
-           4×. The same pattern, and the same reason, as `data-mark-end` for a
-           comment's asterisk.
+           So the stylesheet rounds only the two fragments that carry these and
+           uses them as the end-caps when a ring is present. The same pattern,
+           and the same reason, as `data-mark-end` for a comment's asterisk.
 
            Derived from the mark's own offsets rather than from its position
            among its siblings, so a quote that starts mid-node is still capped

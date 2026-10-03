@@ -599,7 +599,7 @@ well under the size at which a mark's exact position can be read off, so this is
 *zone* indicator — near the start, halfway, near the end. The number that says exactly is in the
 hover card ("62% in") and in the bar's accessible name.
 
-**Neutral grey, not the search hue.** The hue means *a match* everywhere else in this mode — the wash
+**Neutral grey, not the search hue.** The hue means *a match* everywhere else in this mode — the outline
 in the prose, the bar down a matched paragraph, the selected matcher, the confidence chip — and a
 second thing wearing it would be a reader having to learn that this particular blue sometimes means
 something else. Two channels, two colours, and neither carries its meaning by colour alone: the
@@ -750,8 +750,7 @@ the honest ceiling on how many anyone can tell apart.
 
 **A search hit is drawn as an outline, and a quote as a fill.** Greg, `spya-xrgste`: *"I think the
 quotes should be like with a highlighter pen, so filled in, and the searches should have an
-outline."* It was the other way round from 2026-09-07, and most of this page was written then, so
-where a paragraph below says *the wash*, read this section first.
+outline."* It was the other way round from 2026-09-07.
 
 - **The band of coloured rules under the words is the outline's bottom edge.** It is unchanged: one
   rule per search, stacked, full strength.
@@ -770,19 +769,17 @@ The rules are `annotations.css` § `data-wash`; the plan is
 [261003l](../plans/261003l-quotes-filled-like-a-highlighter-pen-and-search-hits-outlined.md); the
 quote half is [quotes.md § A highlighter pen](quotes.md#a-highlighter-pen-which-is-how-a-quote-says-how-much-it-matters).
 
-**Overlap is stacked rules, not blended washes.** Where two searches cover the same words, the words
-get one wash and *two* thin coloured rules under it, stacked. The alternative — each search painting
+**Overlap is stacked rules, not blended fills.** Where two searches cover the same words, the words
+get *two* thin coloured rules under them, stacked. The alternative — each search painting
 its own translucent wash, mixing where they meet — is prettier for two and turns to mud at three,
 and the mud is a colour that **is not in the palette**, so a reader cannot look it up. Worse, each
 extra layer eats the text's contrast. Stacked rules stay identifiable however many there are, and
 the contrast of the prose underneath never changes at all.
 
-That forced a split that turns out to be the good part of the design: **the wash carries confidence,
-the rules carry identity.** The wash is now a deliberately low-chroma slate (`--hit-wash-rgb`) so it
-can never be mistaken for one of the eight; the rules are at full strength, so a low-confidence match
-is still unmistakably *blue* rather than fading toward grey. Before this the wash carried both and
-the two would have fought: a 35%-confidence blue and a 35%-confidence pink are both nearly the same
-faint nothing.
+That forced a split that turns out to be the good part of the design: **the outline's top and ends
+carry confidence; its bottom rules carry identity.** The rules stay at full strength, so a
+low-confidence match is still unmistakably *blue* rather than fading toward grey. A
+35%-confidence blue fill and a 35%-confidence pink fill would both be nearly the same faint nothing.
 
 The rules are drawn as a gradient inside the mark's own box, in `padding-bottom` — which grows the
 mark's background downward into the leading **without touching the line box**, so switching a search
@@ -791,7 +788,7 @@ the band growing; past **six** they are not drawn at all (`HUE_STRIPES` in
 [`annotate.ts`](../../src/web/annotate.ts)). It was four, and a GPT Sol review pointed out that the
 justification for that — a fifth stripe would be sub-pixel — was simply arithmetic nobody had done:
 six stripes in six pixels is one pixel each. The bar down the paragraph has no such cap, because it
-is as tall as the paragraph and can show all eight. There is a `box-decoration-break: clone` on that rule, and the story of it is worth keeping
+is as tall as the paragraph and can show all eight. There is a `box-decoration-break: slice` on that rule, and the story behind that choice is worth keeping
 because it is a good example of a plausible rationale that was simply untrue. The comment beside it
 claimed the default, `slice`, would draw a bottom-anchored stripe once at the foot of the last line
 and leave the first line of a wrapped phrase bare. A GPT Sol review disputed it; a browser pass
@@ -801,9 +798,9 @@ antialiasing.
 
 The reason is what to remember: the stripe is sized and positioned in *percentages*, which resolve
 against each fragment's own box. `slice` only differs where a declaration reaches for the unwrapped
-box — an absolute background size, the inline-start/end padding, the corners a radius rounds. So
-`clone` is kept as insurance (it is free, Safari and Firefox are untested, and the day someone
-replaces that `100%` with a pixel width it starts mattering), not as the thing making this work.
+box — an absolute background size, the inline-start/end padding, the corners a radius rounds.
+`slice` is now needed so a wrapped outline is capped at its true ends rather than once per line.
+The checked WebKit specimen shows the same wrapped and capped treatment; Firefox remains untested.
 
 **The bar down the left of the paragraph is divided too**, and it answers a coarser question on
 purpose: *is any of my searches in this paragraph*, which is the thing you catch while scrolling

@@ -303,9 +303,9 @@ describe("things the first draft got wrong", () => {
     expect(out).toContain("forged"); // the words are still the author's
   });
 
-  it("does not let an article forge the quote outline or its priority", () => {
-    /* Since 2026-09-07 a quote is drawn as a stroke whose **thickness is our
-       claim about how much the passage matters** — so a forged `data-quote` is
+  it("does not let an article forge the quote fill or its priority", () => {
+    /* A quote's fill strength is **our claim about how much the passage matters**
+       — so a forged `data-quote` is
        an article printing *"Spideryarn says this is one of the most important
        lines in the piece"* on a sentence its own author chose, which is a
        stronger lie than a forged highlight. `data-wash` is here too: it is what

@@ -288,7 +288,7 @@ const SWATCHES: { group: string; names: string[] }[] = [
   },
   { group: "States", names: ["--ring", "--destructive", "--primary", "--primary-foreground"] },
   {
-    group: "The search mark (the wash is a slate; the colour is in the rules)",
+    group: "The search mark (the outline carries confidence; its colour carries identity)",
     /* `--hit-wash`, not `--hit-wash-rgb`. The `-rgb` form is three numbers, and
        this page paints its swatches with `background: var(...)` — which for a
        bare triplet is an invalid declaration that silently keeps the previous
@@ -1387,7 +1387,7 @@ function LogoGlyph({ wrapper }: { wrapper: "logo-text" | "dock-btn-label" }) {
  * sibling marks, and that only the outer two carry the end-caps — are the
  * annotator's, not ours.
  *
- * docs/project/quotes.md § The stroke; docs/project/design-css-overview.md.
+ * docs/project/quotes.md § A highlighter pen; docs/project/design-css-overview.md.
  */
 export const SPECIMEN_HTML =
   "<p>He rejects the idea that mind is <em>software</em> running on wet hardware, " +
@@ -1477,8 +1477,8 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
   },
   {
     /* The other overlap that is reachable today: the quotes are marked in every
-       mode, so any citation inside a quoted sentence draws both. A stroke and a
-       background do not compete with a text decoration, which is the claim this
+       mode, so any citation inside a quoted sentence draws both. A fill does not
+       compete with a text decoration, which is the claim this
        row exists to let somebody check. */
     label: "A citation inside a quote — the fill and the dashed rule, neither redrawn",
     marks: [

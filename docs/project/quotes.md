@@ -412,7 +412,7 @@ Greg, in two feedback reports:
   reading, not a word they point at; still a guess to be felt in use.
 - **In Quotes mode, ‹ › under the list and ← / →** step the band's own list, in its order, through
   one rule (`stepQuote`) — [keyboard.md](keyboard.md) § ← / → in Quotes. Both step only
-  over quotes the prose outlines (`useQuoteMarks`' `steppable`), so a row whose block is gone is
+  over quotes the prose fills (`useQuoteMarks`' `steppable`), so a row whose block is gone is
   skipped rather than selected with nowhere to go. The selected row scrolls into view in the list
   (its own `scrollTop`, never `scrollIntoView`).
 
@@ -513,7 +513,9 @@ rejected too, for the older rule: the verbatim column is not restyled to adverti
 **A quote over a search hit draws both**, the fill and the outline. `data-wash` says which marks
 want search painting and `--hit-a` is computed over those only, so a quote never repaints a search's
 confidence. What the overlap costs is cosmetic: `[data-wash]`'s `padding-bottom: 2px` makes the
-shared fragment 2px taller, so the fill steps down across the hit and back up.
+shared fragment 2px taller, so the fill steps down across the hit and back up. Both kinds share
+`data-hit-open`; pressing either gives the shared run the quote's purple fill and full ink ring,
+with the search's coloured bottom band still visible.
 
 #### Before 2026-10-03: an outline
 
@@ -955,7 +957,7 @@ wrong — but worth knowing.
   threshold slider, and the condition attached to keeping model scores
 - [ideas.md](ideas.md) — the mode this took its lifecycle from until 2026-09-11: replaces rather
   than appends, one verb, no DELETE. Find more swapped the first for the glossary's append
-- [search.md](search.md) — where `Found`, the wash and the rail lane come from
+- [search.md](search.md) — where `Found`, the outline and the rail lane come from
 - [block-ids.md](block-ids.md) — why a passage is a block id and never an offset
 - [url-state.md](url-state.md) — `?mode=quotes`, `?quote=`, `?rank=`, `?bar=`
 - [security.md](security.md) — the sanitiser, and the `hit` class this mode's marks made it reserve

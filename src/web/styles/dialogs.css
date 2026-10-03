@@ -562,7 +562,7 @@
 /* ------------------------------------------------------------ chat marks -- */
 /* A conversation started from a selection. A different hue from a comment's
    wash rather than a different alpha, so the two are told apart by kind rather
-   than by strength — the rule search.md sets out for its own wash. */
+   than by strength — the rule search.md sets out for its own mark. */
 
 mark.chat {
   background: none;
@@ -590,4 +590,3 @@ mark.chat[data-chat-end]::before {
   margin-left: 0.15em;
   color: var(--chat-mark);
 }
-

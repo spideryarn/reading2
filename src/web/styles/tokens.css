@@ -121,12 +121,13 @@
      One set, because the app is dark only (styles/tokens.css § DARK ONLY); if
      light mode ever comes back these need a light twin like everything else.
 
-     Kept clear of the three washes already in the prose — "don't put three
-     meanings on one hue" (original-version/highlighting.md): the yellow sits
-     at 100°, well round from the orange (58°) that `--highlight-wash` and the
-     gist's active cell mean; the blue at 270°, away from a chat's 235°; and
-     all four are chromatic, where a search's `--hit-wash-rgb` is a deliberately
-     grey slate. Tinted into the page in oklab, for the reason the long note on
+     Kept clear of the other fills in the prose — "don't put three meanings on
+     one hue" (original-version/highlighting.md): the yellow sits at 100°, well
+     round from the orange (58°) that `--highlight-wash` and the gist's active
+     cell mean; the blue at 270°, away from a chat's 235°; and the nearest two
+     stay about 40° from the model quote's purple at 310°. Search is an outline
+     at rest; its pressed-only slate fill is deliberately achromatic. Tinted
+     into the page in oklab, for the reason the long note on
      `--highlight-wash` gives, and at a strength that keeps the light prose
      comfortably legible on top. */
   --hl-yellow: color-mix(in oklab, oklch(0.88 0.16 100) 30%, var(--page));
