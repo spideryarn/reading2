@@ -68,7 +68,7 @@
  * The four designs this was chosen from, and the two things it is a bet on, are
  * in docs/plans/260826b-glossary-prioritised-order.md.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import {
   ExternalLink,
   Eye,
@@ -82,6 +82,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { AddedTerm, BlockId, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
+import { parseAskedTerm } from "../asked-term.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
@@ -109,8 +110,10 @@ import {
 } from "./threshold.js";
 import type { LookKept, UseGlossary } from "./useGlossary.js";
 import type { StepFailure } from "./useStepJob.js";
+import { putKeyboardAway } from "./useVisualViewport.js";
 import { builtButEmpty, codeOfMessage } from "../messages.js";
 import { MAX_ASKED_TERM } from "../asked-term.js";
+import { pendingGlossaryAsk, subscribeGlossaryAsk, takeGlossaryAsk } from "./glossary-ask-handoff.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
@@ -819,7 +822,7 @@ export function gateMax(entries: readonly GlossaryEntry[], gate: number): number
 /**
  * The gate that would put this term on screen, or null if nothing should move.
  *
- * **"In the glossary" on a prose hover card is a deliberate request to reveal a
+ * **"Open glossary" on a prose hover card is a deliberate request to reveal a
  * term**, and it writes `?term=`. Once the bar hides rather than groups, doing
  * only that on a below-bar term opens the band on nothing at all — the panel
  * has been asked to select a row it is not drawing. So `App.tsx` lowers the
@@ -1641,13 +1644,50 @@ function AskATerm({
     setTerm("");
   }, [addedId, addedHasArrived, onTerm, clearAsked]);
 
+  /* **A term the command bar asked for** — its *Look up “X” in this article*
+     row (plan 261003f, Stage 1.2) moved the reader here and left the term in
+     a one-shot hand-off (glossary-ask-handoff.ts). Taken once, put in the box
+     so the reader sees what was asked, and asked exactly as the Look up button
+     asks: one `POST …/ask`, and no glossary run (GPT Sol's F1).
+
+     **Taken on a timer, not in the effect.** `<StrictMode>` runs this effect,
+     its cleanup, and the effect again on mount; useGlossary.ts's slug cleanup
+     runs `clearAsked` in that same gap, which would abort an ask started by
+     the first run. The timer the first run sets is cleared by its cleanup, so
+     only the second asks — and the take is atomic besides.
+     tests/glossary-ask-from-the-command-bar.test.tsx. */
+  const readHandOff = useCallback(() => pendingGlossaryAsk(owner.slug), [owner.slug]);
+  const handOff = useSyncExternalStore(subscribeGlossaryAsk, readHandOff, readHandOff);
+  useEffect(() => {
+    if (handOff === null) return;
+    const timer = setTimeout(() => {
+      const asked = takeGlossaryAsk(owner.slug, handOff);
+      if (asked === null) return;
+      /* The command is a new lookup, just as editing this box and pressing Look
+         up again is. Disown an older stream before asking: `ask` deliberately
+         admits only one request, so without this a command pressed over a live
+         lookup was consumed and then dropped while the old answer carried on
+         under the new term. */
+      clearAsked();
+      setTerm(asked);
+      void ask(asked);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [handOff, owner.slug, ask, clearAsked]);
+
   return (
     <div className="gloss-ask">
       <form
         className="gloss-ask-row"
         onSubmit={(e) => {
           e.preventDefault();
+          if (asking) return;
           void ask(term);
+          /* A locally refused term still needs correcting. Use the hook's
+             parser before giving up the caret, while ask supplies the refusal. */
+          if (parseAskedTerm(term).ok) {
+            putKeyboardAway(e.currentTarget.querySelector("input"));
+          }
         }}
       >
         {/* `type="search"`, so a phone offers the right keyboard and the browser

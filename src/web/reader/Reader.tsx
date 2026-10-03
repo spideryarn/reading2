@@ -43,7 +43,7 @@ import { blocksOnScreenNow } from "../on-screen.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import type { ReadSoFar } from "../read-filter.js";
 import { countsTowardReadingTime } from "../../block-policy.js";
-import { addressWithout, useAddress } from "../router.js";
+import { addressWithout, carriedSearch, navigate, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
 import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
@@ -96,6 +96,10 @@ import { Dock } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
 import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import { shownEntries } from "../glossary-shown.js";
+import { editArticleTags } from "../article-tags.js";
+import { chatExecutor, readingExecutor, type TagsControl } from "../command-runners.js";
+import { ChatCommands } from "../CommandChip.js";
+import { findHref } from "../CommandBar.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
   blockHues,
@@ -130,6 +134,7 @@ import { isMarginaliaModeWord } from "../../modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
+import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { modePress } from "./mode-press.js";
@@ -140,7 +145,7 @@ import { BandBackChip } from "../BandBackChip.js";
 import { MODE_LABEL } from "../../title-text.js";
 import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
 import { xrefTarget, type XrefResolver } from "../xref.js";
-import { flushPendingFlash, resetFlash } from "../flash.js";
+import { flushPendingFlash, resetFlash, type JumpAim } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
 import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
 import {
@@ -253,6 +258,8 @@ export function Reader({
    * drift apart. The visitor's `available` is read the same way.
    */
   const owner = capability.kind === "owner" ? capability : null;
+  /** The same fact as a boolean, for a hook that needs only that — `owner` is a new object every render. */
+  const isOwner = owner !== null;
   /**
    * The visitor's half, read the same way and for the same reason.
    *
@@ -658,8 +665,10 @@ export function Reader({
     setBandAway(true);
   }, [bandAway, rememberBandFocus]);
   const bandJump = useCallback(
-    (blockId: BlockId, passage?: string) => {
-      jumpTo(blockId, passage);
+    /* `aim`: a passage key (Skim, Citations), or the quotation a chip in a
+       model's answer follows, to be painted on landing — flash.ts § `JumpAim`. */
+    (blockId: BlockId, aim?: JumpAim) => {
+      jumpTo(blockId, aim);
       if (!bandCovers) return;
       rememberBandFocus();
       setBandAway(true);
@@ -1067,7 +1076,7 @@ export function Reader({
   );
 
   /**
-   * Point at a term in the prose and press "in the glossary": open the band on
+   * Point at a term in the prose and press "Open glossary": open the band on
    * that entry.
    *
    * The `?term=` subscription that `GlossaryBand` deliberately keeps to itself
@@ -1082,7 +1091,7 @@ export function Reader({
    * be opened.**
    *
    * Since 2026-09-03 the prioritised glossary hides what is below the gate
-   * rather than grouping it, so pressing "in the glossary" on a low-scoring
+   * rather than grouping it, so pressing "Open glossary" on a low-scoring
    * term would take the reader to a band with no such row in it — the panel
    * asked to select something it is not drawing. `gateToReveal` answers the
    * gate that puts it back, and null when the current one already shows it.
@@ -1437,13 +1446,14 @@ export function Reader({
       listed,
       byKey,
       inQuotesMode: mode === "quotes",
+      generatedAt: quoteSource?.generatedAt,
       onGo: (quote) => goToQuote(quote, jumpTo),
       onOpenInQuotes: (quote) => {
         revealQuote(quote.id);
         void setMode("quotes");
       },
     };
-  }, [allQuotes, proseMarked, mode, goToQuote, jumpTo, revealQuote, setMode]);
+  }, [allQuotes, proseMarked, mode, goToQuote, jumpTo, revealQuote, setMode, quoteSource?.generatedAt]);
   useArrowNav(
     nav,
     article.blocks,
@@ -1564,6 +1574,31 @@ export function Reader({
      while stepping between them is traversal and must not — twenty questions
      cannot cost twenty presses of Back. The argument, and why the split is
      better than either half alone, is comment-jump.ts. GPT Sol F9. */
+
+  /**
+   * **The owner's highlights, for the Quotes band** — rows among the model's
+   * quotes (QuotesPanel.tsx § ReaderHighlights; plan 261003h).
+   *
+   * **From `owner.comments`, never from `comments` above**: that variable is
+   * either arm's list, and on a shared link it is the sharer's public comments,
+   * which carry colours too. Passing it would quietly turn on "a visitor sees
+   * the sharer's highlights in Quotes", which is deferred and unworded. Only
+   * `QuotesBand` (the owner's) takes this; `VisitorQuotesBand` has no prop for
+   * it. tests/quotes-yours-rows.test.tsx holds the line.
+   *
+   * Pressing one is the drawer's jump, with `bandJump` so a narrow window's
+   * band steps aside as it does for a quote. The panel clears `?quote=` in the
+   * same tick.
+   */
+  const ownerComments = owner?.comments.comments;
+  const quoteHighlights = useMemo(
+    () => ({
+      rows: ownerComments ? readerRowComments(ownerComments) : [],
+      blocks: article.blocks,
+      onOpen: (id: string) => jumpToComment(ownerComments ?? [], id, setNote, bandJump),
+    }),
+    [ownerComments, article.blocks, setNote, bandJump],
+  );
 
   /** The drawer's list: a jump, so there is a way back from it. */
   const openCommentFromDrawer = useCallback(
@@ -1834,7 +1869,7 @@ export function Reader({
       faq: marginaliaFaq,
       timeline: marginaliaTimeline,
       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
-      relations: owner ? ownerFeed.relations : null,
+      relations: isOwner ? ownerFeed.relations : null,
       claims: marginaliaClaims,
       citations: marginaliaCitations,
       comments,
@@ -1854,7 +1889,7 @@ export function Reader({
     marginaliaIdeas,
     marginaliaFaq,
     marginaliaTimeline,
-    owner,
+    isOwner,
     ownerFeed.relations,
     marginaliaClaims,
     marginaliaCitations,
@@ -2114,6 +2149,70 @@ export function Reader({
     };
   }, [createComment, setNote]);
 
+  /**
+   * **What the command bar's argument rows can do on this page** — *Jump to
+   * the first “X”*, *Glossary: “term”*, *Look up “X” in this article* — and,
+   * for chat's chips in Stage 2, the bookmark. Plan 261003f, Stage 1; who gets
+   * which is command-runners.ts § `readingExecutor`.
+   *
+   *  - `jump` is **`jumpTo`**, the deliberate jump that pushes history and
+   *    feeds the return chip (GPT Sol's F3) — not `bandJump`, since the bar is
+   *    not under a band, and never a write to `?at=`.
+   *  - `terms` is the **visible** list (F2), and `ready` is the owner's
+   *    glossary read having settled with a glossary in it (F1): loading, an
+   *    error and no glossary at all each offer no ask.
+   *  - `openGlossary` is the **plain** mode setter, never the Dock's press,
+   *    which arms generate-on-open (F1). The term travels in the one-shot
+   *    hand-off (glossary-ask-handoff.ts), not the address.
+   *  - `bookmark` under the same gate as the prose's own bookmark button (F6).
+   */
+  const glossaryReady = glossaryRead?.status === "ready" && glossaryRead.glossary !== null;
+  const canBookmark = owner !== null && owner.comments.loaded && owner.comments.loadError === null;
+  const executor = useMemo(
+    () =>
+      readingExecutor({
+        slug,
+        blocks: article.blocks,
+        jump: jumpTo,
+        glossary: isOwner
+          ? {
+              ready: glossaryReady,
+              terms,
+              openTerm: openTermInGlossary,
+              openGlossary: () => void setMode("glossary"),
+            }
+          : undefined,
+        bookmark: canBookmark ? bookmarkBlock : undefined,
+      }),
+    [slug, article.blocks, jumpTo, isOwner, glossaryReady, terms, openTermInGlossary, setMode, canBookmark, bookmarkBlock],
+  );
+  /**
+   * **The reader's tags on this article, for the bar** (`ShelfRow.tags`). The
+   * reading view draws no tag editor, so there is nothing on screen to keep in
+   * step and a plain `editArticleTags` is the whole controller; the Metadata
+   * page hands in its editor's own save instead (F4).
+   */
+  const tagsControl = useMemo<TagsControl>(
+    () => ({ edit: (change) => editArticleTags(slug, change) }),
+    [slug],
+  );
+  /**
+   * **What a command chip in a chat answer presses through** (plan 261003f,
+   * Stage 2; CommandChip.tsx) — `executor` above, plus the tags and a find,
+   * which the bar gets from its shelf row and from an address. One per surface
+   * because the jump differs: the band's steps a covering band aside, the
+   * dialog's does not. Who gets what is command-runners.ts § `chatExecutor`.
+   *
+   * The find reads the address at the press, not at the render: it carries
+   * `?at=`, which the reader's scrolling rewrites.
+   */
+  const chatCommands = useMemo(() => {
+    const find = (words: string) => navigate(findHref(slug, carriedSearch(window.location.search), words));
+    const forJump = (jump: (blockId: BlockId) => void) =>
+      chatExecutor({ reading: executor, blocks: article.blocks, jump, tags: tagsControl, find });
+    return { band: forJump(bandJump), dialog: forJump(jumpTo) };
+  }, [slug, executor, article.blocks, tagsControl, bandJump, jumpTo]);
+
   const selectProse = useCallback(
     /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes
        a drag it refused from no drag at all, and TableView stops on the first
@@ -2124,7 +2223,7 @@ export function Reader({
          press. So it is silent: they keep their selection and the page does not
          grow a box about an account. The ask lives where they went looking for
          something — the marked modes and the notice under the title. */
-      if (!owner) return;
+      if (!isOwner) return;
       /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
          call the reader had not asked for; then it opened an ask box; since
          2026-08-28 it opens a *comment* box, where saving is free and the model
@@ -2140,7 +2239,14 @@ export function Reader({
          stored until the reader asks — so clearing it would leave them looking
          at a quote in a box with no idea which words on the page it came from. */
     },
-    [owner, setNote, setThread],
+    /* **`isOwner`, not `owner`.** The capability is a new object on every
+       render of `OwnedReader` (ArticlePage.tsx), and a reading-time step is one
+       of those — so depending on the object made this a new function each
+       time, and it is `memo(TableView)`'s `onSelect`. GPT Sol's F2 on
+       docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md;
+       tests/spine-reading.test.ts verifies a reach update leaves TableView's
+       render count unchanged, including with marginalia open. */
+    [isOwner, setNote, setThread],
   );
 
   /**
@@ -2226,16 +2332,21 @@ export function Reader({
            switch, the reader carries the other conversation across. See
            ConversationBand. */
         return owner ? (
-          <ConversationBand
-            key={mode}
-            slug={slug}
-            blocks={blockText}
-            onJump={bandJump}
-            kind="chat"
-            onScreen={chatOnScreen}
-            handoff={chatHandoff}
-            onHandoffTaken={handoffTaken}
-          />
+          /* Chat's answers may carry command chips; Remember's and
+             Candidates' prompts never ask for one, so only this arm and the
+             chat dialog below are given the executor. CommandChip.tsx. */
+          <ChatCommands executor={chatCommands.band}>
+            <ConversationBand
+              key={mode}
+              slug={slug}
+              blocks={blockText}
+              onJump={bandJump}
+              kind="chat"
+              onScreen={chatOnScreen}
+              handoff={chatHandoff}
+              onHandoffTaken={handoffTaken}
+            />
+          </ChatCommands>
         ) : null;
       /* **Remember is two bands behind one mode**, and the choice between them
          is `?remember=`. The wrapper exists so that the parameter and its
@@ -2394,7 +2505,13 @@ export function Reader({
       case "quotes":
         if (owner)
           return (
-            <QuotesBand slug={slug} read={owner.quotes} onJump={bandJump} steps={steppableQuotes} />
+            <QuotesBand
+              slug={slug}
+              read={owner.quotes}
+              onJump={bandJump}
+              steps={steppableQuotes}
+              yours={quoteHighlights}
+            />
           );
         return artefacts?.quotes ? (
           <VisitorQuotesBand quotes={artefacts.quotes} onJump={bandJump} steps={steppableQuotes} />
@@ -2755,7 +2872,7 @@ export function Reader({
           outline={outline}
           layoutKey={layoutKey}
           matches={hitBlocks}
-          reading={owner?.readingTime.levels}
+          reading={owner?.readingTime.reach}
           quotes={quoteRail}
           onJump={jumpTo}
         />
@@ -3055,46 +3172,48 @@ export function Reader({
           be visible at the branch, not inferred from two other pieces of state
           being empty. */}
       {owner && overlay && (
-        <ChatDialog
-          slug={slug}
-          target={overlay}
-          at={at}
-          blocks={blockText}
-          onJump={jumpTo}
-          onClose={() => {
-            setChatDraft(null);
-            void setThread(null);
-          }}
-          onThread={(id) => {
-            /* The draft has become a conversation. Cleared in the same commit
-               that names the thread, so the slot never holds both — the panel
-               becomes the conversation rather than closing and reopening. */
-            /* **And the comment learns which conversation it started.** The
-               link itself was written by the server, which is the only place a
-               real thread id exists; this is the browser catching up, so the
-               mark and the dialog are right *now* rather than after a reload.
-               Read `chatDraft` before it is cleared — it is the only thing that
-               knows this conversation came from a comment. Fires again with the
-               server's correction if the id we guessed was overruled, and the
-               last word wins. */
-            const from = chatDraft?.kind === "draft" ? chatDraft.sourceCommentId : undefined;
-            if (from) owner.comments.noteThread(from, id);
-            setChatDraft(null);
-            void setThread(id);
-          }}
-          onOpenFull={() => {
-            /* One id, so this is the whole of it: the band reads the same
-               `?thread=` the panel was reading. */
-            setChatDraft(null);
-            void setMode("chat");
-          }}
-          /* **The draft branch, on purpose**, not `chatAboutBlock` — which
-             would find this very conversation and reopen it, so the button
-             would do nothing. ChatDialog.tsx § `onNewConversation`. */
-          onNewConversation={startChatAboutBlock}
-          onCreated={owner.chatAnchors.add}
-          onDropped={owner.chatAnchors.drop}
-        />
+        <ChatCommands executor={chatCommands.dialog}>
+          <ChatDialog
+            slug={slug}
+            target={overlay}
+            at={at}
+            blocks={blockText}
+            onJump={jumpTo}
+            onClose={() => {
+              setChatDraft(null);
+              void setThread(null);
+            }}
+            onThread={(id) => {
+              /* The draft has become a conversation. Cleared in the same commit
+                 that names the thread, so the slot never holds both — the panel
+                 becomes the conversation rather than closing and reopening. */
+              /* **And the comment learns which conversation it started.** The
+                 link itself was written by the server, which is the only place a
+                 real thread id exists; this is the browser catching up, so the
+                 mark and the dialog are right *now* rather than after a reload.
+                 Read `chatDraft` before it is cleared — it is the only thing that
+                 knows this conversation came from a comment. Fires again with the
+                 server's correction if the id we guessed was overruled, and the
+                 last word wins. */
+              const from = chatDraft?.kind === "draft" ? chatDraft.sourceCommentId : undefined;
+              if (from) owner.comments.noteThread(from, id);
+              setChatDraft(null);
+              void setThread(id);
+            }}
+            onOpenFull={() => {
+              /* One id, so this is the whole of it: the band reads the same
+                 `?thread=` the panel was reading. */
+              setChatDraft(null);
+              void setMode("chat");
+            }}
+            /* **The draft branch, on purpose**, not `chatAboutBlock` — which
+               would find this very conversation and reopen it, so the button
+               would do nothing. ChatDialog.tsx § `onNewConversation`. */
+            onNewConversation={startChatAboutBlock}
+            onCreated={owner.chatAnchors.add}
+            onDropped={owner.chatAnchors.drop}
+          />
+        </ChatCommands>
       )}
       {/* **Mounted for a visitor too, since 2026-09-04**, with an `access` of
           `{ kind: "visitor" }` — which carries none of the eight verbs below,
@@ -3430,8 +3549,11 @@ export function Reader({
         /* The command bar's Archive and Export (CommandBar.tsx §
            `CommandBarArticle.shelfRow`). `archive` arrives only from
            `OwnedArticle`, which exists only for the reader's own article —
-           so its presence is the shelf row's, and a visitor gets neither. */
-        shelfRow={archive === undefined ? undefined : { archive }}
+           so its presence is the shelf row's, and a visitor gets neither —
+           nor the tag rows that come with it (`tagsControl`). */
+        shelfRow={archive === undefined ? undefined : { archive, tags: tagsControl }}
+        /* The bar's argument rows — `executor` above. */
+        executor={executor}
         drawer={
           owner
             ? {

@@ -9,6 +9,7 @@ import {
   gutterCss,
   type ReadLevel,
   readLevel,
+  readReach,
   shareVisible,
   spentWords,
 } from "../src/web/reading-time.js";
@@ -55,6 +56,89 @@ describe("readLevel", () => {
   ];
   it.each(cases)("%s seconds on %s words is level %s", (seconds, words, level) => {
     expect(readLevel(seconds, words)).toBe(level);
+  });
+});
+
+/**
+ * `readReach` — how far across the rail a block's reading time reaches, in
+ * sixteenths. docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md.
+ */
+describe("readReach", () => {
+  /** The representable doubles either side of `x`. */
+  const f64 = new Float64Array(1);
+  const u64 = new BigUint64Array(f64.buffer);
+  const below = (x: number) => {
+    f64[0] = x;
+    u64[0] = u64[0]! - 1n;
+    return f64[0]!;
+  };
+  const above = (x: number) => {
+    f64[0] = x;
+    u64[0] = u64[0]! + 1n;
+    return f64[0]!;
+  };
+
+  it("draws nothing for nothing, a glance, or a number that is not one", () => {
+    for (const s of [0, -1, Number.NaN, 0.1, 0.349]) expect(readReach(s, 0)).toBe(0);
+  });
+
+  /* Zero words is one expected second, so seconds *is* the ratio. */
+  const boundaries: [number, number][] = [
+    [0.35, 4],
+    [0.7, 8],
+    [1.4, 12],
+    [2.8, 16],
+  ];
+  it.each(boundaries)("at %s of the reading time the reach is %s sixteenths, and one fewer just under", (ratio, reach) => {
+    expect(readReach(ratio, 0)).toBe(reach);
+    expect(readReach(above(ratio), 0)).toBe(reach);
+    /* GPT Sol's F1: the bare log formula answers 12 at 1.3999999999999997 and
+       16 at 2.7999999999999994, a step ahead of `readLevel`. */
+    expect(readReach(below(ratio), 0)).toBe(reach === 4 ? 0 : reach - 1);
+  });
+
+  it("holds the same boundaries against a real word count", () => {
+    /* 230 words take 60 s, so the boundaries are 21, 42, 84 and 168 s. */
+    expect(readReach(below(21), 230)).toBe(0);
+    expect(readReach(21, 230)).toBe(4);
+    expect(readReach(below(42), 230)).toBe(7);
+    expect(readReach(42, 230)).toBe(8);
+    expect(readReach(below(84), 230)).toBe(11);
+    expect(readReach(84, 230)).toBe(12);
+    expect(readReach(below(168), 230)).toBe(15);
+    expect(readReach(168, 230)).toBe(16);
+    expect(readReach(10_000, 230)).toBe(16);
+  });
+
+  it("steps through every sixteenth between the levels, a quarter of a doubling each", () => {
+    /* 0.35 × 2^(k/4), nudged off the boundary so the test is about the steps
+       and not about how a power rounds. */
+    for (let k = 0; k < 12; k++) {
+      expect(readReach(0.35 * 2 ** ((k + 0.5) / 4), 0), `step ${k}`).toBe(4 + k);
+    }
+  });
+
+  it("never disagrees with readLevel: the level is the reach's quarter, for every input", () => {
+    const probe = (seconds: number, words: number) => {
+      const reach = readReach(seconds, words);
+      const ok = Number.isInteger(reach) && (reach === 0 || (reach >= 4 && reach <= 16));
+      if (!ok || Math.floor(reach / 4) !== readLevel(seconds, words)) {
+        throw new Error(`${seconds} s on ${words} words: reach ${reach}, level ${readLevel(seconds, words)}`);
+      }
+    };
+    for (const words of [0, 1, 7, 230, 300, 1234]) {
+      for (let i = 0; i <= 4000; i++) probe((i / 1000) * expectedSeconds(words), words);
+      for (const edge of [0.35, 0.7, 1.4, 2.8]) {
+        let lo = edge * expectedSeconds(words);
+        let hi = lo;
+        for (let n = 0; n < 50; n++) {
+          probe(lo, words);
+          probe(hi, words);
+          lo = below(lo);
+          hi = above(hi);
+        }
+      }
+    }
   });
 });
 

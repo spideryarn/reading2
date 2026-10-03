@@ -30,7 +30,8 @@ import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle }
 import { type QuizRead, useQuiz } from "../../useQuiz.js";
 import type { ReadSoFar } from "../../read-filter.js";
 import { useChat } from "../../useChat.js";
-import { useLiveConversation } from "../../live/useLiveConversation.js";
+import { softKeyboardIsUp } from "../../useVisualViewport.js";
+import { useLive } from "../../live/useLive.js";
 import { ChatPanel } from "../../ChatPanel.js";
 
 /**
@@ -491,19 +492,25 @@ export function ConversationBand({
    * microphone stays open, the events go nowhere, and the exchange in flight is
    * never written down. docs/plans/260831l-live-conversation-in-chat.md § 5.
    *
-   * The three things it is given are the three things a live session cannot
+   * The four things it is given are the four things a live session cannot
    * work out for itself:
    *
    * - `speak`, which is `useChat`'s — so a spoken exchange goes through the
    *   same controller as every typed turn, as an operation with an identity and
    *   a projection, rather than a second writer beside it;
+   * - `blocks`, so a passage the model points at is checked against this
+   *   article before it is shown or stored (`shownPassage`, live/session-shared.ts);
    * - `tailNow`, so the seeding barrier can tell whether the conversation moved
    *   while the session was connecting;
    * - `onThreadId`, so `?thread=` follows if the server names the conversation
    *   something other than what this tab invented.
+   *
+   * `useLive` holds both engines' hooks (Realtime and GPT-Live) and hands back
+   * the one that owns the call, as the same `LiveApi`. ../../live/useLive.ts.
    */
-  const live = useLiveConversation(slug, {
+  const live = useLive(slug, {
     speak,
+    blocks,
     tailNow: (id) => threadsRef.current.find((t) => t.id === id)?.messages.at(-1)?.id ?? null,
     onThreadId: (id, startedThreadId) => {
       // A delayed spoken append may finish after the reader has left its thread.
@@ -775,7 +782,12 @@ export function ConversationBand({
           ...(onScreen ? { visible: onScreen() } : {}),
         });
         void setThread(id);
-        setFocusNonce((n) => n + 1);
+        /* **Not on a soft keyboard.** The send lets go of the keys there so
+           the answer can be read (useVisualViewport.ts § `putKeyboardAway`),
+           and a raised nonce would have the replacement composer take focus
+           and bring them straight back. Asked before the old box blurs, which
+           is after this returns. GPT Sol, plan review of 261003h. */
+        if (!softKeyboardIsUp()) setFocusNonce((n) => n + 1);
       }}
       /* **Start over is offered only on a settled conversation** — stored,
          named by the server, nothing of this tab's still out for it (`settled`

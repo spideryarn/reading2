@@ -72,6 +72,12 @@ export const PAID_ENDPOINT_PATHS: readonly string[] = [
      261002e — so no `Declaration` for it), and two evals through declared
      bypasses below, `shelf-topics-jev` and `command-pick-jev`. */
   "/api/alpha/decisions",
+  /* GPT-Live's create-and-connect (added 2026-10-03, plan 261003a). Unlike the
+     Realtime token mint, this request itself is billed: fifteen seconds of
+     voice time per session created. The one caller in `src/` is
+     `createGptLiveSession` in src/live.ts, whose route records that charge as
+     an `ai_calls` row. */
+  "/v1/live/sessions",
 ];
 
 export interface Declaration {
@@ -526,6 +532,13 @@ export const UNMETERED_SPEND: readonly UnmeteredSpend[] = [
     what: "The live-mode evals. Realtime sessions on gpt-realtime-2.1 plus transcription arms, and jargon-recovery also buys text-to-speech from /v1/audio/speech to say the test sentences. A few cents a run, on a key nothing else in this report can see. gpt-live-spike also opens gpt-live-1 sessions with a gpt-6-luna backend, and a full run of it is about ten dollars. spike-live-push-to-talk is one gpt-realtime-2.1 session plus two TTS sentences, a few cents.",
     why: "An eval opens its own realtime session and talks over it, with no server of ours in the middle and no browser to report from — so neither seam applies: declaredFetch wraps a fetch and reads a response body, and the acceptance endpoints that meter the app’s own live conversation (Stage 2B, 2026-09-02) are authenticated and expect a session this server journalled.",
     since: "2026-09-02",
+  },
+  {
+    file: "evals/live/gpt-live-spike/spike-server.ts",
+    account: "OPENAI_API_KEY — a separate bill, and outside the OpenRouter spend cap",
+    what: "The GPT-Live spike's server (plan 261003a, Stage 0). Each session it creates is a gpt-live-1 voice session at about $0.05 a minute, fifteen seconds minimum, plus gpt-6-luna backend tokens. Twelve short sessions on 2026-10-03; it runs only when a person starts it.",
+    why: "The same as the live-mode evals above: the session is a WebRTC connection from a headless browser to OpenAI, with nothing of ours that reads a response body for declaredFetch to wrap, and no journalled session for the acceptance endpoints to price a report against. The app's own GPT-Live calls are not this: they are journalled and priced by src/routes.ts.",
+    since: "2026-10-03",
   },
   {
     file: "scripts/run-codex.ts",

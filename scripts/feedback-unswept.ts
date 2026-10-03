@@ -71,6 +71,12 @@ export interface UnsweptRow {
   slug: string | null;
   mirroredAt: Date | null;
   sentryEventId: string | null;
+  /**
+   * When an administrator pressed Ignore on `/admin/feedback`, or null. A
+   * marked row is never listed (`unswept`). Null on a database that does not
+   * have the column yet — § `SELECT_FROM`.
+   */
+  ignoredAt: Date | null;
 }
 
 /** The feedback row id's shape, as in `feedback-endings.ts`. */
@@ -138,8 +144,33 @@ export function queueSources(read: QueueRead): string[] {
     .filter((source): source is string => source !== null);
 }
 
+/**
+ * **An ignored row goes first, whatever else is true of it.** The mark is on
+ * the row, `(owner_id, id)`, so it is exact where coverage by id is not: of two
+ * owners sharing an id, the ignored one is dropped and the other is still
+ * listed as ambiguous. Greg, 2026-10-03 (`spya-g95x4j`).
+ */
 export function unswept(rows: readonly UnsweptRow[], covered: ReadonlySet<string>): UnsweptRow[] {
-  return rows.filter((row) => row.idOccurrences > 1 || !covered.has(row.id));
+  return rows.filter(
+    (row) => row.ignoredAt === null && (row.idOccurrences > 1 || !covered.has(row.id)),
+  );
+}
+
+/**
+ * The listing's first line. It counts the ignored rows when there are any, so
+ * "nothing left to do" and "three were ignored" are different sentences.
+ */
+export function summary(
+  rows: readonly UnsweptRow[],
+  left: readonly UnsweptRow[],
+  since: Date,
+): string {
+  const ignored = rows.filter((row) => row.ignoredAt !== null).length;
+  return [
+    `${rows.length} report(s) since ${since.toISOString()}`,
+    ...(ignored > 0 ? [`${ignored} marked ignored by an admin on /admin/feedback and left out`] : []),
+    `${left.length} named by no note header and no queue item's source.`,
+  ].join("; ");
 }
 
 /** One line per report: enough to find it, classify it and fetch its words. */
@@ -154,6 +185,7 @@ export function renderUnswept(row: UnsweptRow, admin: boolean): string {
     admin ? "admin" : "reader",
     row.kind ?? "no kind",
     ...(row.idOccurrences > 1 ? [`id shared by ${row.idOccurrences} owners; coverage is ambiguous`] : []),
+    ...(row.ignoredAt === null ? [] : [`ignored by an admin ${row.ignoredAt.toISOString()}`]),
     sentry,
     row.url ?? "no url",
     ...(row.slug === null ? [] : [`slug ${row.slug}`]),
@@ -226,6 +258,7 @@ interface StoredRow extends QueryResultRow {
   slug: string | null;
   mirrored_at: Date | null;
   sentry_event_id: string | null;
+  ignored_at: Date | null;
 }
 
 const toRow = (r: StoredRow): UnsweptRow => ({
@@ -238,6 +271,7 @@ const toRow = (r: StoredRow): UnsweptRow => ({
   slug: r.slug,
   mirroredAt: r.mirrored_at,
   sentryEventId: r.sentry_event_id,
+  ignoredAt: r.ignored_at,
 });
 
 /**
@@ -280,35 +314,57 @@ async function readProduction<T extends QueryResultRow>(
   return { target, rows };
 }
 
+/**
+ * **`ignored_at`, read so that a database without the column answers null
+ * rather than failing.** This script reads production, and it reaches `dev`
+ * before the deploy that adds the column there; a plain `f.ignored_at` would
+ * make every sweep exit 2 in between. The inner `ignored_at` resolves to the
+ * row's own column when the table has one, and otherwise falls through to
+ * `absent.ignored_at` in `SELECT_FROM`, which is null. Still one `select`.
+ * tests/admin-feedback-store.test.ts runs it against a table with the column
+ * and one without. docs/plans/261003j-….
+ */
 const COLUMNS =
-  "f.id, f.owner_id, f.created_at, f.kind, f.url, f.slug, f.mirrored_at, f.sentry_event_id";
+  "f.id, f.owner_id, f.created_at, f.kind, f.url, f.slug, f.mirrored_at, f.sentry_event_id, " +
+  "(select ignored_at from (select f.*) as present) as ignored_at";
+const absentIgnoredAt = "cross join (select null::timestamptz as ignored_at) as absent";
 /* A report id is unique only within one owner. Notes and queue sources carry
    no owner id, so coverage by id is safe only when the database says the id is
    globally unambiguous. The count deliberately ranges over the whole table,
    not only the --since window: an old covered row must not hide a new reader's
    chosen collision. */
-const ID_OCCURRENCES = `(select count(*)::int
-  from spideryarn.feedback as same_id
+const idOccurrences = (table: string): string => `(select count(*)::int
+  from ${table} as same_id
   where same_id.id = f.id) as id_occurrences`;
+
+/**
+ * The two statements, as text. `table` is a parameter only so the test can
+ * point them at a copy of the table that lacks `ignored_at`.
+ */
+export function listSql(table = "spideryarn.feedback"): string {
+  return `select ${COLUMNS}, ${idOccurrences(table)}
+       from ${table} as f ${absentIgnoredAt}
+      where f.created_at >= $1
+      order by f.created_at`;
+}
+export function showSql(table = "spideryarn.feedback"): string {
+  return `select ${COLUMNS}, f.body, ${idOccurrences(table)}
+       from ${table} as f ${absentIgnoredAt}
+      where f.id = $1
+      order by f.created_at`;
+}
 
 async function list(since: Date): Promise<number> {
   /* The queue before production: a queue that cannot be read stops the run
      before anything is printed that could be taken as the list. */
   const sources = queueSources(readQueue(queueRoot()));
   const { covered, problems } = coveredReportIds(readNotes(), sources);
-  const { target, rows } = await readProduction<StoredRow>(
-    `select ${COLUMNS}, ${ID_OCCURRENCES}
-       from spideryarn.feedback as f
-      where f.created_at >= $1
-      order by f.created_at`,
-    [since],
-  );
-  const left = unswept(rows.map(toRow), covered);
+  const { target, rows: stored } = await readProduction<StoredRow>(listSql(), [since]);
+  const rows = stored.map(toRow);
+  const left = unswept(rows, covered);
   console.log(`Target: ${target}`);
   for (const problem of problems) console.log(`note header unreadable, so it covers nothing: ${problem}`);
-  console.log(
-    `${rows.length} report(s) since ${since.toISOString()}; ${left.length} named by no note header and no queue item's source.`,
-  );
+  console.log(summary(rows, left, since));
   for (const row of left) console.log(renderUnswept(row, isAdmin(row.ownerId)));
   return 0;
 }
@@ -319,13 +375,7 @@ async function list(since: Date): Promise<number> {
  * `feedback-reporter.ts`, which proves it — this does not.
  */
 async function show(id: string): Promise<number> {
-  const { target, rows } = await readProduction<StoredRow & { body: string }>(
-    `select ${COLUMNS}, f.body, ${ID_OCCURRENCES}
-       from spideryarn.feedback as f
-      where f.id = $1
-      order by f.created_at`,
-    [id],
-  );
+  const { target, rows } = await readProduction<StoredRow & { body: string }>(showSql(), [id]);
   console.log(`Target: ${target}`);
   if (rows.length === 0) {
     console.log(`no report ${id} in production`);

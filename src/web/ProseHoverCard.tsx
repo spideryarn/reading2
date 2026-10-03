@@ -55,6 +55,7 @@ import {
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
 import type { BlockId, CitedWork, GlossaryEntry, Job, PagePreview, Quote } from "../types.js";
 import { LABEL as QUOTE_SCORE_LABEL } from "./QuotesPanel.js";
+import { aiProvenance } from "./quote-band-rows.js";
 import { urlKey } from "../ingest.js";
 import { hostOf } from "../urls.js";
 /* The same words-per-minute the masthead and the shelf card use. A second
@@ -74,6 +75,7 @@ import {
   CITE_QUOTE_LABEL,
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
+  showsWhy,
   InSpideryarn,
   readNoteOf,
   registryConflictNote,
@@ -1629,6 +1631,12 @@ export interface QuoteCardSource {
   byKey: ReadonlyMap<string, Quote>;
   /** Quotes is the mode already, so there is nothing to open. */
   inQuotesMode: boolean;
+  /**
+   * When the list was last written — the *on or before* bound for a quote with
+   * no `addedAt` of its own (`aiProvenance`). An owner's artefact and a
+   * visitor's public list both carry it; optional for a surface that has none.
+   */
+  generatedAt?: string | undefined;
   /** Write `?quote=` for Quotes mode and go to the quote's block. */
   onGo(quote: Quote): void;
   /** Reveal and select it, then open Quotes mode on its row. */
@@ -1650,6 +1658,10 @@ export interface QuoteCardSource {
  * - **‹ ›** step the outlined quotes down the page, whatever order the band is
  *   using. Disabled at either end; the card closes on a step, and the reader
  *   points at the next.
+ * - **Who chose it, and when**, last and in the app's face — the line the
+ *   band's ⓘ ends with too (`aiProvenance`). Greg, 2026-10-03 (spya-ma5h9b):
+ *   *"quotes should as well, maybe saying when it was applied and whether it's
+ *   AI generated or human highlights."*
  */
 function QuoteCard({
   quote,
@@ -1707,6 +1719,7 @@ function QuoteCard({
           <span className={voiceClass("ai")}>{quote.reason}</span>
         </p>
       )}
+      <p className="prose-card-meta prose-card-quote-prov">{aiProvenance(quote, source.generatedAt)}</p>
       <p className="prose-card-foot prose-card-quote-foot">
         <button
           type="button"
@@ -1736,7 +1749,7 @@ function QuoteCard({
             }}
           >
             <QuoteIcon size={10} />
-            open in Quotes
+            open Quotes
           </button>
         )}
       </p>
@@ -1962,11 +1975,17 @@ function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryar
       )}
 
       <div className="prose-card-part prose-card-part-why">
-        <p className="prose-card-label">{CITE_WHY_LABEL}</p>
-        <p className="prose-card-text">{work.why}</p>
-        {/* The band's line, from the band's function: we have not read the
-            work, so `why` above is the article's claim, not the work's content.
-            CitationsPanel.tsx § what we have and have not read. */}
+        {/* `why` only beside the verdict that was checked against it
+            (CitationsPanel.tsx § showsWhy, plan 261003j). The lookup alone:
+            this card draws no *Dig deeper* answer. */}
+        {showsWhy({ lookup: work.lookup }) && (
+          <>
+            <p className="prose-card-label">{CITE_WHY_LABEL}</p>
+            <p className="prose-card-text">{work.why}</p>
+          </>
+        )}
+        {/* The band's line, from the band's function: what we have read of
+            the work. CitationsPanel.tsx § what we have and have not read. */}
         <p className="prose-card-cite-read">{readNoteOf(work)}</p>
       </div>
       <CiteCardReading work={work} />
@@ -2162,7 +2181,13 @@ function TermCard({
         </div>
       )}
 
-      <p className="prose-card-foot">
+      {/* **One row**, since 2026-10-03. Greg (spya-za77hj): *"it shows a
+          tooltip with dig deeper, hide, and in the glossary. They should all
+          be on the same row to minimize vertical space"*. Until then the
+          owner's two verbs were a second row under this one (plan 261002c § 3).
+          The row wraps rather than overflowing: an entry with a link and a
+          *Dig deeper again* is wider than the card. */}
+      <p className="prose-card-foot prose-card-term-foot">
         {entry.url && (
           /* `noreferrer` as well as `noopener`, as in the panel: the article's
              own URL is a reading history and a model-supplied link should not be
@@ -2172,51 +2197,52 @@ function TermCard({
             {hostOf(entry.url)}
           </a>
         )}
+        {/* **The three buttons are one group that never breaks**, pushed right.
+            When a link beside them leaves no room, the group moves to a line
+            of its own whole, rather than *Hide* parting from *Dig deeper* or
+            *Open glossary* landing alone (GPT Sol, plan review of 261003h). */}
+        <span className="prose-card-term-acts">
+        {/* The owner's two verbs, beside the way out. Plain buttons, like
+            that one: a tap inside the card is left entirely alone by the touch
+            path (useHoverCard.ts § "Inside the card"), so they work on a
+            finger as it does. */}
+        {actions && (
+          <>
+            <button
+              type="button"
+              className="prose-card-act"
+              disabled={digBusy || unquoted}
+              title={unquoted ? DIG_DEEPER_UNQUOTED : DIG_DEEPER_SAYS}
+              onClick={dig}
+            >
+              {digging ? <LoaderCircle size={10} className="cmt-spinner" /> : <Globe size={10} />}
+              {digging ? "Digging deeper…" : entry.lookup ? "Dig deeper again" : "Dig deeper"}
+            </button>
+            <button
+              type="button"
+              className="prose-card-act"
+              disabled={hiding}
+              /* Statements, not two instructions in one run — spya-d886ah's rule
+                 (Tooltip.tsx § `ControlTip.press`). Until 2026-10-02 it ended
+                 "Unhide it from the glossary's Hidden list." */
+              title="Takes this term out of your glossary and its underlines, for you only. The glossary's Hidden list brings it back."
+              onClick={() => void hide()}
+            >
+              <Trash2 size={10} />
+              Hide
+            </button>
+          </>
+        )}
         {/* The way out to the full entry. Without it the underline is a
             dead end: the mark itself stays inert to a click, because pressing
-            prose has always meant selecting it. */}
+            prose has always meant selecting it. It said "in the glossary" until
+            2026-10-03; Greg asked for a label that says what pressing it does. */}
         <button type="button" className="prose-card-open" onClick={onOpen}>
           <BookA size={10} />
-          in the glossary
+          Open glossary
         </button>
+        </span>
       </p>
-
-      {/* The owner's two verbs, a row of their own under the ways out, so the
-          foot does not wrap in an 18rem card. Plain buttons, like *in the
-          glossary*: a tap inside the card is left entirely alone by the touch
-          path (useHoverCard.ts § "Inside the card"), so they work on a finger
-          as that one does. */}
-      {actions && (
-        <p className="prose-card-acts">
-          <button
-            type="button"
-            className="prose-card-act"
-            disabled={digBusy || unquoted}
-            title={unquoted ? DIG_DEEPER_UNQUOTED : DIG_DEEPER_SAYS}
-            onClick={dig}
-          >
-            {digging ? (
-              <LoaderCircle size={10} className="cmt-spinner" />
-            ) : (
-              <Globe size={10} />
-            )}
-            {digging ? "Digging deeper…" : entry.lookup ? "Dig deeper again" : "Dig deeper"}
-          </button>
-          <button
-            type="button"
-            className="prose-card-act"
-            disabled={hiding}
-            /* Statements, not two instructions in one run — spya-d886ah's rule
-               (Tooltip.tsx § `ControlTip.press`). Until 2026-10-02 it ended
-               "Unhide it from the glossary's Hidden list." */
-            title="Takes this term out of your glossary and its underlines, for you only. The glossary's Hidden list brings it back."
-            onClick={() => void hide()}
-          >
-            <Trash2 size={10} />
-            Hide
-          </button>
-        </p>
-      )}
       {hideFailed && <p className="prose-card-text prose-card-failed">{hideFailed}</p>}
     </div>
   );

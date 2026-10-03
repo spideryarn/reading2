@@ -1,0 +1,20 @@
+/* Checks behind the write-up's "read by hand" sentences: what the mention wording kept outside
+   the yardstick, per query; the relates wording on absent topics; which LLM flooded where. No spend. */
+import { readFileSync } from "node:fs";
+import { DIR } from "./lib.ts";
+import { ALL } from "./queries.ts";
+import { RULES, select, truth } from "./analyse-lib.ts";
+const jev = JSON.parse(readFileSync(`${DIR}/jev-raw.json`, "utf8"));
+const llm = JSON.parse(readFileSync(`${DIR}/llm-raw.json`, "utf8"));
+const judged = JSON.parse(readFileSync(`${DIR}/judged.json`, "utf8"));
+const rule = RULES.find((r) => r.name === ">=0.7")!;
+for (const s of ALL.filter((q) => q.set === "short" || q.set === "holdout")) {
+  const { Y, R } = truth(s);
+  const extra = new Map<string, number>();
+  for (const rep of jev[`mention|${s.slug}|${s.q}`].reps) for (const id of select(rep.scores, s.slug, rule).ids) if (!Y.has(id)) extra.set(id, (extra.get(id) ?? 0) + 1);
+  const refFound = [...R].filter((id) => select(jev[`mention|${s.slug}|${s.q}`].reps[0].scores, s.slug, rule).ids.includes(id));
+  console.log(`${s.q.padEnd(20)} extra: ${[...extra].map(([id, n]) => `${id.slice(5)}x${n}=${judged[`${s.slug}|${s.q}`]?.[id] ?? "?"}`).join(" ") || "-"}   ref found (run 0): ${refFound.map((x) => x.slice(5)).join(",")} of ${[...R].map((x) => x.slice(5)).join(",")}`);
+}
+for (const s of ALL.filter((q) => q.set === "negative")) console.log(`relates ${s.q}: kept>=0.5 ${jev[`relates|${s.slug}|${s.q}`].reps.map((r: any) => Object.values(r.scores).filter((v: any) => v >= 0.5).length).join("/")} top ${jev[`relates|${s.slug}|${s.q}`].reps.map((r: any) => Math.max(...(Object.values(r.scores) as number[]))).join("/")}`);
+for (const e of Object.values(llm) as any[]) if (e.q === "psychotherapy" || e.q === "coding") console.log(e.model, e.q, e.reps.map((r: any) => r.ids.length).join("/"));
+process.exit(0);

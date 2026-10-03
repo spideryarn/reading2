@@ -26,7 +26,7 @@ import type { PublicQuotes } from "../../../public-types.js";
 import { barParam, quoteParam, rankParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { useQuotes, type QuotesRead } from "../../useQuotes.js";
-import { QuotesPanel } from "../../QuotesPanel.js";
+import { QuotesPanel, type ReaderHighlights } from "../../QuotesPanel.js";
 
 /**
  * Quotes, and the job machinery that belongs to it.
@@ -43,6 +43,7 @@ export function QuotesBand({
   read,
   onJump,
   steps,
+  yours,
 }: {
   slug: string;
   /** The opening read, mounted in `OwnedReader`. src/web/useQuotes.ts § QuotesRead. */
@@ -50,13 +51,19 @@ export function QuotesBand({
   onJump(id: BlockId): void;
   /** What ‹ › step through — `useQuoteMarks`' `steppable`. QuotesPanel.tsx § Props. */
   steps: readonly Quote[];
+  /**
+   * The owner's own highlights, as rows among the quotes. **Only this band
+   * takes them** — `VisitorQuotesBand` below has no such prop, on purpose.
+   * QuotesPanel.tsx § ReaderHighlights.
+   */
+  yours: ReaderHighlights;
 }) {
   useRenderCount("QuotesBand");
   const quotes = useQuotes(slug, read);
   const band = useQuotesMode();
   return (
     <QuotesPanel
-      access={{ kind: "owner", owner: quotes, quotes: quotes.quotes }}
+      access={{ kind: "owner", owner: quotes, quotes: quotes.quotes, yours }}
       {...band}
       onJump={onJump}
       steps={steps}

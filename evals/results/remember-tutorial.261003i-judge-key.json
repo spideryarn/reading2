@@ -1,0 +1,722 @@
+[
+ {
+  "n": 1,
+  "arm": "noema-before-2",
+  "reader": "remembers",
+  "turn": 5
+ },
+ {
+  "n": 2,
+  "arm": "noema-after-1",
+  "reader": "notRead",
+  "turn": 5
+ },
+ {
+  "n": 3,
+  "arm": "noema-after-1",
+  "reader": "richRecall",
+  "turn": 4
+ },
+ {
+  "n": 4,
+  "arm": "entropy-after-1",
+  "reader": "terseGoal",
+  "turn": 1
+ },
+ {
+  "n": 5,
+  "arm": "noema-before-2",
+  "reader": "notRead",
+  "turn": 1
+ },
+ {
+  "n": 6,
+  "arm": "noema-before-1",
+  "reader": "notRead",
+  "turn": 1
+ },
+ {
+  "n": 7,
+  "arm": "entropy-after-1",
+  "reader": "richRecall",
+  "turn": 3
+ },
+ {
+  "n": 8,
+  "arm": "entropy-before-1",
+  "reader": "richRecall",
+  "turn": 2
+ },
+ {
+  "n": 9,
+  "arm": "entropy-after-1",
+  "reader": "richRecall",
+  "turn": 4
+ },
+ {
+  "n": 10,
+  "arm": "noema-before-1",
+  "reader": "expert",
+  "turn": 4
+ },
+ {
+  "n": 11,
+  "arm": "noema-before-2",
+  "reader": "expert",
+  "turn": 1
+ },
+ {
+  "n": 12,
+  "arm": "entropy-after-2",
+  "reader": "terseGoal",
+  "turn": 3
+ },
+ {
+  "n": 13,
+  "arm": "entropy-before-1",
+  "reader": "richRecall",
+  "turn": 5
+ },
+ {
+  "n": 14,
+  "arm": "entropy-before-1",
+  "reader": "terseGoal",
+  "turn": 5
+ },
+ {
+  "n": 15,
+  "arm": "entropy-before-2",
+  "reader": "richRecall",
+  "turn": 4
+ },
+ {
+  "n": 16,
+  "arm": "noema-before-2",
+  "reader": "richRecall",
+  "turn": 2
+ },
+ {
+  "n": 17,
+  "arm": "noema-after-2",
+  "reader": "notRead",
+  "turn": 5
+ },
+ {
+  "n": 18,
+  "arm": "noema-after-2",
+  "reader": "expert",
+  "turn": 5
+ },
+ {
+  "n": 19,
+  "arm": "noema-after-2",
+  "reader": "notRead",
+  "turn": 2
+ },
+ {
+  "n": 20,
+  "arm": "noema-before-2",
+  "reader": "remembers",
+  "turn": 1
+ },
+ {
+  "n": 21,
+  "arm": "noema-before-2",
+  "reader": "expert",
+  "turn": 4
+ },
+ {
+  "n": 22,
+  "arm": "noema-after-2",
+  "reader": "richRecall",
+  "turn": 5
+ },
+ {
+  "n": 23,
+  "arm": "entropy-after-1",
+  "reader": "terseGoal",
+  "turn": 3
+ },
+ {
+  "n": 24,
+  "arm": "noema-before-1",
+  "reader": "richRecall",
+  "turn": 3
+ },
+ {
+  "n": 25,
+  "arm": "entropy-before-1",
+  "reader": "richRecall",
+  "turn": 1
+ },
+ {
+  "n": 26,
+  "arm": "noema-after-2",
+  "reader": "notRead",
+  "turn": 1
+ },
+ {
+  "n": 27,
+  "arm": "entropy-after-2",
+  "reader": "richRecall",
+  "turn": 5
+ },
+ {
+  "n": 28,
+  "arm": "noema-before-1",
+  "reader": "remembers",
+  "turn": 1
+ },
+ {
+  "n": 29,
+  "arm": "noema-before-2",
+  "reader": "notRead",
+  "turn": 2
+ },
+ {
+  "n": 30,
+  "arm": "noema-after-2",
+  "reader": "remembers",
+  "turn": 1
+ },
+ {
+  "n": 31,
+  "arm": "noema-before-2",
+  "reader": "notRead",
+  "turn": 4
+ },
+ {
+  "n": 32,
+  "arm": "entropy-before-2",
+  "reader": "terseGoal",
+  "turn": 5
+ },
+ {
+  "n": 33,
+  "arm": "noema-after-1",
+  "reader": "remembers",
+  "turn": 5
+ },
+ {
+  "n": 34,
+  "arm": "entropy-after-1",
+  "reader": "richRecall",
+  "turn": 1
+ },
+ {
+  "n": 35,
+  "arm": "noema-after-2",
+  "reader": "richRecall",
+  "turn": 1
+ },
+ {
+  "n": 36,
+  "arm": "entropy-before-2",
+  "reader": "terseGoal",
+  "turn": 4
+ },
+ {
+  "n": 37,
+  "arm": "entropy-after-2",
+  "reader": "terseGoal",
+  "turn": 1
+ },
+ {
+  "n": 38,
+  "arm": "noema-before-1",
+  "reader": "richRecall",
+  "turn": 1
+ },
+ {
+  "n": 39,
+  "arm": "entropy-before-2",
+  "reader": "richRecall",
+  "turn": 1
+ },
+ {
+  "n": 40,
+  "arm": "entropy-after-1",
+  "reader": "terseGoal",
+  "turn": 5
+ },
+ {
+  "n": 41,
+  "arm": "noema-before-1",
+  "reader": "remembers",
+  "turn": 4
+ },
+ {
+  "n": 42,
+  "arm": "entropy-after-2",
+  "reader": "richRecall",
+  "turn": 3
+ },
+ {
+  "n": 43,
+  "arm": "noema-after-2",
+  "reader": "notRead",
+  "turn": 3
+ },
+ {
+  "n": 44,
+  "arm": "entropy-before-2",
+  "reader": "terseGoal",
+  "turn": 3
+ },
+ {
+  "n": 45,
+  "arm": "noema-before-1",
+  "reader": "remembers",
+  "turn": 5
+ },
+ {
+  "n": 46,
+  "arm": "noema-after-1",
+  "reader": "expert",
+  "turn": 5
+ },
+ {
+  "n": 47,
+  "arm": "noema-before-1",
+  "reader": "richRecall",
+  "turn": 5
+ },
+ {
+  "n": 48,
+  "arm": "noema-after-2",
+  "reader": "richRecall",
+  "turn": 2
+ },
+ {
+  "n": 49,
+  "arm": "noema-after-2",
+  "reader": "expert",
+  "turn": 4
+ },
+ {
+  "n": 50,
+  "arm": "noema-before-1",
+  "reader": "notRead",
+  "turn": 3
+ },
+ {
+  "n": 51,
+  "arm": "noema-after-1",
+  "reader": "richRecall",
+  "turn": 5
+ },
+ {
+  "n": 52,
+  "arm": "noema-after-1",
+  "reader": "expert",
+  "turn": 3
+ },
+ {
+  "n": 53,
+  "arm": "noema-after-1",
+  "reader": "richRecall",
+  "turn": 1
+ },
+ {
+  "n": 54,
+  "arm": "noema-before-2",
+  "reader": "richRecall",
+  "turn": 5
+ },
+ {
+  "n": 55,
+  "arm": "noema-after-1",
+  "reader": "expert",
+  "turn": 2
+ },
+ {
+  "n": 56,
+  "arm": "noema-before-2",
+  "reader": "expert",
+  "turn": 2
+ },
+ {
+  "n": 57,
+  "arm": "entropy-before-1",
+  "reader": "terseGoal",
+  "turn": 2
+ },
+ {
+  "n": 58,
+  "arm": "noema-after-2",
+  "reader": "expert",
+  "turn": 3
+ },
+ {
+  "n": 59,
+  "arm": "noema-before-2",
+  "reader": "remembers",
+  "turn": 2
+ },
+ {
+  "n": 60,
+  "arm": "noema-before-2",
+  "reader": "richRecall",
+  "turn": 1
+ },
+ {
+  "n": 61,
+  "arm": "entropy-before-2",
+  "reader": "terseGoal",
+  "turn": 2
+ },
+ {
+  "n": 62,
+  "arm": "noema-after-1",
+  "reader": "richRecall",
+  "turn": 2
+ },
+ {
+  "n": 63,
+  "arm": "noema-after-2",
+  "reader": "richRecall",
+  "turn": 4
+ },
+ {
+  "n": 64,
+  "arm": "entropy-before-2",
+  "reader": "richRecall",
+  "turn": 5
+ },
+ {
+  "n": 65,
+  "arm": "entropy-after-2",
+  "reader": "richRecall",
+  "turn": 4
+ },
+ {
+  "n": 66,
+  "arm": "noema-after-1",
+  "reader": "notRead",
+  "turn": 3
+ },
+ {
+  "n": 67,
+  "arm": "noema-before-1",
+  "reader": "remembers",
+  "turn": 3
+ },
+ {
+  "n": 68,
+  "arm": "noema-before-2",
+  "reader": "richRecall",
+  "turn": 4
+ },
+ {
+  "n": 69,
+  "arm": "noema-after-2",
+  "reader": "notRead",
+  "turn": 4
+ },
+ {
+  "n": 70,
+  "arm": "noema-after-2",
+  "reader": "remembers",
+  "turn": 5
+ },
+ {
+  "n": 71,
+  "arm": "noema-after-1",
+  "reader": "expert",
+  "turn": 4
+ },
+ {
+  "n": 72,
+  "arm": "noema-before-2",
+  "reader": "notRead",
+  "turn": 3
+ },
+ {
+  "n": 73,
+  "arm": "entropy-after-2",
+  "reader": "terseGoal",
+  "turn": 4
+ },
+ {
+  "n": 74,
+  "arm": "noema-after-2",
+  "reader": "remembers",
+  "turn": 4
+ },
+ {
+  "n": 75,
+  "arm": "entropy-before-2",
+  "reader": "terseGoal",
+  "turn": 1
+ },
+ {
+  "n": 76,
+  "arm": "entropy-before-1",
+  "reader": "richRecall",
+  "turn": 3
+ },
+ {
+  "n": 77,
+  "arm": "noema-before-2",
+  "reader": "expert",
+  "turn": 5
+ },
+ {
+  "n": 78,
+  "arm": "noema-before-1",
+  "reader": "notRead",
+  "turn": 5
+ },
+ {
+  "n": 79,
+  "arm": "entropy-after-1",
+  "reader": "terseGoal",
+  "turn": 2
+ },
+ {
+  "n": 80,
+  "arm": "noema-before-1",
+  "reader": "expert",
+  "turn": 2
+ },
+ {
+  "n": 81,
+  "arm": "noema-before-1",
+  "reader": "richRecall",
+  "turn": 2
+ },
+ {
+  "n": 82,
+  "arm": "noema-after-2",
+  "reader": "expert",
+  "turn": 1
+ },
+ {
+  "n": 83,
+  "arm": "noema-before-2",
+  "reader": "richRecall",
+  "turn": 3
+ },
+ {
+  "n": 84,
+  "arm": "noema-after-1",
+  "reader": "expert",
+  "turn": 1
+ },
+ {
+  "n": 85,
+  "arm": "noema-before-2",
+  "reader": "remembers",
+  "turn": 3
+ },
+ {
+  "n": 86,
+  "arm": "noema-before-1",
+  "reader": "richRecall",
+  "turn": 4
+ },
+ {
+  "n": 87,
+  "arm": "noema-before-1",
+  "reader": "expert",
+  "turn": 5
+ },
+ {
+  "n": 88,
+  "arm": "entropy-before-1",
+  "reader": "terseGoal",
+  "turn": 1
+ },
+ {
+  "n": 89,
+  "arm": "entropy-after-2",
+  "reader": "terseGoal",
+  "turn": 2
+ },
+ {
+  "n": 90,
+  "arm": "noema-after-1",
+  "reader": "notRead",
+  "turn": 2
+ },
+ {
+  "n": 91,
+  "arm": "noema-before-2",
+  "reader": "notRead",
+  "turn": 5
+ },
+ {
+  "n": 92,
+  "arm": "noema-before-1",
+  "reader": "notRead",
+  "turn": 2
+ },
+ {
+  "n": 93,
+  "arm": "noema-after-1",
+  "reader": "remembers",
+  "turn": 2
+ },
+ {
+  "n": 94,
+  "arm": "noema-before-2",
+  "reader": "remembers",
+  "turn": 4
+ },
+ {
+  "n": 95,
+  "arm": "entropy-before-1",
+  "reader": "richRecall",
+  "turn": 4
+ },
+ {
+  "n": 96,
+  "arm": "noema-before-1",
+  "reader": "expert",
+  "turn": 1
+ },
+ {
+  "n": 97,
+  "arm": "noema-before-2",
+  "reader": "expert",
+  "turn": 3
+ },
+ {
+  "n": 98,
+  "arm": "noema-before-1",
+  "reader": "remembers",
+  "turn": 2
+ },
+ {
+  "n": 99,
+  "arm": "entropy-after-1",
+  "reader": "richRecall",
+  "turn": 5
+ },
+ {
+  "n": 100,
+  "arm": "noema-after-2",
+  "reader": "remembers",
+  "turn": 2
+ },
+ {
+  "n": 101,
+  "arm": "noema-before-1",
+  "reader": "notRead",
+  "turn": 4
+ },
+ {
+  "n": 102,
+  "arm": "noema-after-2",
+  "reader": "remembers",
+  "turn": 3
+ },
+ {
+  "n": 103,
+  "arm": "entropy-after-1",
+  "reader": "terseGoal",
+  "turn": 4
+ },
+ {
+  "n": 104,
+  "arm": "entropy-before-2",
+  "reader": "richRecall",
+  "turn": 3
+ },
+ {
+  "n": 105,
+  "arm": "noema-before-1",
+  "reader": "expert",
+  "turn": 3
+ },
+ {
+  "n": 106,
+  "arm": "noema-after-1",
+  "reader": "remembers",
+  "turn": 1
+ },
+ {
+  "n": 107,
+  "arm": "entropy-after-2",
+  "reader": "terseGoal",
+  "turn": 5
+ },
+ {
+  "n": 108,
+  "arm": "noema-after-1",
+  "reader": "remembers",
+  "turn": 3
+ },
+ {
+  "n": 109,
+  "arm": "entropy-after-2",
+  "reader": "richRecall",
+  "turn": 2
+ },
+ {
+  "n": 110,
+  "arm": "entropy-after-2",
+  "reader": "richRecall",
+  "turn": 1
+ },
+ {
+  "n": 111,
+  "arm": "noema-after-1",
+  "reader": "notRead",
+  "turn": 4
+ },
+ {
+  "n": 112,
+  "arm": "noema-after-2",
+  "reader": "expert",
+  "turn": 2
+ },
+ {
+  "n": 113,
+  "arm": "entropy-before-1",
+  "reader": "terseGoal",
+  "turn": 3
+ },
+ {
+  "n": 114,
+  "arm": "noema-after-1",
+  "reader": "richRecall",
+  "turn": 3
+ },
+ {
+  "n": 115,
+  "arm": "noema-after-1",
+  "reader": "remembers",
+  "turn": 4
+ },
+ {
+  "n": 116,
+  "arm": "entropy-before-2",
+  "reader": "richRecall",
+  "turn": 2
+ },
+ {
+  "n": 117,
+  "arm": "entropy-after-1",
+  "reader": "richRecall",
+  "turn": 2
+ },
+ {
+  "n": 118,
+  "arm": "noema-after-2",
+  "reader": "richRecall",
+  "turn": 3
+ },
+ {
+  "n": 119,
+  "arm": "noema-after-1",
+  "reader": "notRead",
+  "turn": 1
+ },
+ {
+  "n": 120,
+  "arm": "entropy-before-1",
+  "reader": "terseGoal",
+  "turn": 4
+ }
+]

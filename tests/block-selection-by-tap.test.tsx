@@ -236,6 +236,25 @@ function inProse(id: string, selector: string): Element {
 }
 
 describe("tapping a paragraph selects the block", () => {
+  it("selects an invisible quick hit on touch, while overlapping controls keep their taps", async () => {
+    const loaded = await readArticleFromDir(DIR);
+    const marked = plainBlocks(loaded)[2];
+    if (!marked) throw new Error("the fixture has too few plain-prose blocks");
+    pretendHover(false);
+    const bare: Mark = { id: "quick-1", start: 0, end: marked.text.length, kind: "hit", bare: true };
+    const comment: Mark = { id: "comment-1", start: 3, end: 8 };
+    await draw(propsFor(articleFrom(loaded), new Map([[marked.id, [bare, comment]]])));
+    await tap(inProse(marked.id, "mark.cmt.hit"));
+    expect(selectedRows(), "a comment still owns its tap").toEqual([]);
+    const quick = inProse(marked.id, "mark.hit:not(.cmt)");
+    expect(quick.hasAttribute("data-wash")).toBe(false);
+    expect(quick.getAttribute("data-hit")).toBe("quick-1");
+    await compatibilityHover(quick);
+    expect(selectedRows()).toEqual([]);
+    await tap(quick);
+    expect(selectedRows(), "the invisible quick hit blocked the gutter").toEqual([marked.id]);
+  });
+
   it("selects the row when the tap lands on plain prose", async () => {
     /* The feature itself. Without it the gutter is unreachable on a touch
        device altogether: nothing else sets `hoveredRow`, because a finger fires

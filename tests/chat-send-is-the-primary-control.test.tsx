@@ -153,7 +153,19 @@ describe("the send button", () => {
       ".chat-send:focus-visible",
       ".remember .chat-send",
       ".chat-send.stop",
+      /* Quiz borrows the box for Answer and for Next, neither of them a
+         `submit` in a form, so its fill is keyed on a class of its own
+         (quiz.css; plan 261003i). The same tokens as Send's, asserted below. */
+      '.chat-send.quiz-go:not([aria-disabled="true"])',
+      '.chat-send.quiz-go:not([aria-disabled="true"]):hover',
     ]);
+  });
+
+  it("fills Quiz's Answer and Next with the tokens Send uses", () => {
+    const go = rule('.chat-send.quiz-go:not([aria-disabled="true"])');
+    expect(go).toMatch(/background:\s*var\(--primary\)/);
+    expect(go).toMatch(/border-color:\s*var\(--primary\)/);
+    expect(go).toMatch(/color:\s*var\(--primary-foreground\)/);
   });
 
   it("keeps Remember's send control on the far right after the stance picker is gone", () => {

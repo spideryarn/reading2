@@ -450,7 +450,7 @@ Three details worth knowing before changing it:
 - **A mark carrying two terms commits to neither.** Where two entries overlap the same phrase the
   card draws both, because which matched the longer phrase is not something the mark records. A
   second tap there does nothing and leaves the reader the two named buttons.
-- **An owner's card has *Dig deeper* and *Hide*** too, since 2026-10-02, in a row under the foot.
+- **An owner's card has *Dig deeper* and *Hide*** too, since 2026-10-02, in the foot beside *Open glossary* (one row since 2026-10-03; they were a row under it).
   Greg: *"We have a 'Dig deeper' in Glossary mode. Add that to the in-text glossary tooltip."*
   (spya-p09u4s). *Dig deeper* starts the same lookup the band's button does, opens the band on that
   term (through `openTermInGlossary`, which lowers the threshold if it would hide the row) and
@@ -460,7 +460,7 @@ Three details worth knowing before changing it:
   the band no longer disowns a running dig. *Hide* is [below](#hiding-an-entry); the card closes
   only once the write has landed, and says a refusal on a line of its own. A visitor gets neither:
   `termActions` is the owner's read and a visitor has none. Both are plain buttons, so a finger
-  reaches them the way it reaches *in the glossary* — a tap inside the card is left alone.
+  reaches them the way it reaches *Open glossary* — a tap inside the card is left alone.
 
 ## Hiding an entry
 
@@ -890,6 +890,16 @@ so the article's proper-noun list (`vocabulary-sources.ts` § names, which the p
 miss the commonest case while looking confident. A guess here is
 [the postmortem's fault](../postmortems/260904c-the-glossary-said-the-term-was-not-there.md) in a
 friendlier tone.
+
+**The command bar and chat can send a term here** (2026-10-03): *look up X* in the bar, or a
+button in a chat answer, opens the entry when the **visible** glossary has the term, and otherwise
+moves to this band and hands the box the term, which makes its one ordinary ask. That move must
+**never arm generate-on-open** and never ride in the URL — two paid runs for one press, and a link
+that spends — so the term waits in a one-shot, in-memory hand-off, and the row exists only once the
+glossary read has settled with a glossary in it:
+[`glossary-ask-handoff.ts`](../../src/web/glossary-ask-handoff.ts), held by
+`tests/glossary-ask-from-the-command-bar.test.tsx` (one ask, no job).
+[reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar).
 
 **The article's own words are what the model is told about**, not the reader's — type *attention
 head* at a piece that says *Attention Heads* and the quote is the plural, because that is the text

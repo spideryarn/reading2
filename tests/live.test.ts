@@ -93,6 +93,9 @@ describe("the tools, in the shape realtime actually takes", () => {
 
 describe("what the model is told", () => {
   const text = liveInstructions({ meta, blocks });
+  /* The prompt is hard-wrapped, so a phrase can straddle a newline; rewrapping
+     a paragraph must not redden a test about what it says. */
+  const flat = text.replace(/\s+/g, " ");
 
   it("contains the whole article, with its ids", () => {
     expect(text).toContain("The rainstorm does not compute.");
@@ -107,6 +110,26 @@ describe("what the model is told", () => {
        end of every claim, which out loud is unusable. */
     expect(text).not.toContain("CITING THE ARTICLE — THE ONE RULE THAT MATTERS");
     expect(text).toContain("NEVER SAY A BLOCK ID OUT LOUD");
+  });
+
+  it("fills the wait before a slow tool, and does not answer noise", () => {
+    /* Three rules that pull against each other, so they are pinned together.
+       A few words before a slow tool turn a second of dead air into "let me
+       look that up"; the did-not-catch rule stops a cough becoming a web
+       search; and neither may loosen the one rule this prompt exists for.
+       The wording is dev's (plan 261002j, WHEN TO THINK), which replaced plan
+       261003a Stage 1's longer version of the same two rules at the merge.
+       Phrases, not paragraphs — the wording will move. */
+    expect(flat).toContain("Before a tool that makes them wait, a few words");
+    expect(flat).toContain("Never before show_passage");
+    expect(flat).toContain("If you did not catch what they said, ask them to say it again rather than guessing");
+    expect(flat).toContain("NEVER SAY A BLOCK ID OUT LOUD");
+  });
+
+  it("does not change language on an accent", () => {
+    expect(flat).toContain("English, unless the reader is clearly speaking another language");
+    expect(flat).toContain("An accent or one foreign word is not a change of language");
+    expect(flat, "the old line pinned English with no way out").not.toContain("Plain spoken English");
   });
 
   it("puts the rules before the article", () => {

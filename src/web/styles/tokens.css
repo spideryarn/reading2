@@ -101,6 +101,18 @@
   --chat-mark: oklch(0.72 0.12 235);
   --chat-mark-wash: color-mix(in oklab, var(--chat-mark) 18%, var(--page));
 
+  /* **Where you have spent time reading**, on the spine: the area's fill (at
+     0.4) and its edge (opaque) — spine.css § reading time. A cyan, because the
+     rail's own ground is the part tint, an orange at hue ~52, and this has to
+     be told from it at a glance in a strip twelve pixels wide. It sits between
+     the quote strip's green (~165) and `--chat-mark`'s blue (235) and is
+     lighter than either. **Not a hue nothing else uses** — there is none left
+     (styles/tokens.css § --quote-stroke-rgb says the same): two of the
+     reader-picked search colours, `--cat-11` and `--cat-12`, are its
+     neighbours, and are told from it by being thin lanes on the rail's other
+     side. docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md. */
+  --read-time: oklch(0.82 0.11 200);
+
   /* **A highlight's four washes** — the reader's own colours, stored by name on
      the comment (`HighlightColour`, src/types.ts) so they can be retuned here
      without a migration. docs/plans/261003e-span-highlights-with-a-colour.md.
@@ -120,6 +132,16 @@
   --hl-green: color-mix(in oklab, oklch(0.80 0.15 150) 28%, var(--page));
   --hl-blue: color-mix(in oklab, oklch(0.72 0.14 270) 32%, var(--page));
   --hl-pink: color-mix(in oklab, oklch(0.76 0.16 350) 30%, var(--page));
+
+  /* **The same four at full strength**, for a thin edge rather than a wash —
+     the bar down a reader's own row in the Quotes band (styles/quotes.css §
+     the reader's own highlights; plan 261003h). The wash is mixed mostly into
+     the page so prose stays legible on it, which makes it too pale to carry a
+     3px line; these are the washes' own bases, unmixed. Light twins below. */
+  --hl-yellow-solid: oklch(0.88 0.16 100);
+  --hl-green-solid: oklch(0.80 0.15 150);
+  --hl-blue-solid: oklch(0.72 0.14 270);
+  --hl-pink-solid: oklch(0.76 0.16 350);
 
   /* Left-edge tints that distinguish the granularity columns at a glance.
      One hue family, so the columns read as one system rather than as a rainbow —
@@ -428,6 +450,8 @@
   --toward-page: white;
   --toward-ink-rgb: 0 0 0;
   --chat-mark: oklch(0.52 0.13 235);
+  /* The same cyan, darkened: on the light rail the edge has to be a dark line. */
+  --read-time: oklch(0.5 0.1 200);
 
   /* The reader's four highlighter washes (span highlights, plan 261003e-span-highlights): the
      same bases, mixed into the light page a little harder, because a share
@@ -437,6 +461,14 @@
   --hl-green: color-mix(in oklab, oklch(0.80 0.15 150) 36%, var(--page));
   --hl-blue: color-mix(in oklab, oklch(0.72 0.14 270) 30%, var(--page));
   --hl-pink: color-mix(in oklab, oklch(0.76 0.16 350) 32%, var(--page));
+
+  /* The solids, darker: a 3px edge is a non-text mark and wants 3:1 against
+     the page, and the dark theme's pale bases — the yellow above all — come
+     nowhere near that on near-white. Same hues, lower lightness. */
+  --hl-yellow-solid: oklch(0.64 0.14 95);
+  --hl-green-solid: oklch(0.60 0.15 150);
+  --hl-blue-solid: oklch(0.56 0.16 270);
+  --hl-pink-solid: oklch(0.60 0.18 350);
 
   /* The depth ramp runs coarse to fine in lightness *away from the page*, so on
      a light page it runs dark to light: the coarsest column is the most

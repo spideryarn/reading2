@@ -27,6 +27,16 @@ type PassThrough = Omit<
   "type" | "onClick" | "disabled" | "title" | "aria-label" | "className" | "children"
 >;
 
+/**
+ * The quiet square, as a string, for the one caller that cannot be an
+ * `IconButton` all the time: Quiz's Next is this until its answer is marked and
+ * the filled primary box afterwards, and it has to stay **one element** across
+ * the change or keyboard focus is dropped as the mark lands (QuizPanel.tsx).
+ * Everything else should use the component.
+ */
+export const ICON_BUTTON_CLASS =
+  "tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:aria-disabled:cursor-default tw:aria-disabled:opacity-40 tw:aria-disabled:hover:bg-transparent tw:aria-disabled:hover:text-muted-foreground";
+
 export function IconButton({
   label,
   onClick,
@@ -123,7 +133,7 @@ export function IconButton({
       /* `aria-disabled:` rather than `disabled:`, matching the attribute above,
          and the hover lift is taken away with it — a control that lights up
          under the pointer is claiming it will do something. */
-      className="tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground tw:aria-disabled:cursor-default tw:aria-disabled:opacity-40 tw:aria-disabled:hover:bg-transparent tw:aria-disabled:hover:text-muted-foreground"
+      className={ICON_BUTTON_CLASS}
     >
       {children}
     </button>

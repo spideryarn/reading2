@@ -269,6 +269,12 @@ comment underlines. They are different marks in different places — a 2px rule 
 against an underline on the text — so they are told apart by position rather than by hue. Worth
 knowing before anyone moves either.
 
+**And a second, since 2026-10-03: `--read-time`**, the cyan (hue 200) of the spine's reading-time
+area ([reading-time.md](reading-time.md)), is not a scale and lives in
+[`src/web/styles/tokens.css`](../../src/web/styles/tokens.css), but it sits between slots 11 (teal,
+191) and 12 (cyan-blue, 213), the two a reader can pick for a search. Told apart by position again:
+an area from the rail's left edge against a thin lane on its right.
+
 ### Assigning a colour to a search
 
 [`src/web/hit-colours.ts`](../../src/web/hit-colours.ts) hands out **slot numbers**, never colours,

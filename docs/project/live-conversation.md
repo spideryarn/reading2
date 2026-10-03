@@ -87,22 +87,27 @@ empty conversation — SPIDERYARN-READING2-70,
 | | |
 | --- | --- |
 | [`src/live.ts`](../../src/live.ts) | The server half: what the model is told, what it may call, what the transcriber is primed with. The **only** file that touches `OPENAI_API_KEY`. |
-| [`src/web/live/useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts) | The browser half: the peer connection, the data channel, and the three orderings named below. |
-| [`src/web/live/exchanges.ts`](../../src/web/live/exchanges.ts) | Turns a stream of events into conversation turns. Read its header before touching anything about ordering. |
-| [`src/web/live/wiring.ts`](../../src/web/live/wiring.ts) | The two requests a session makes of our own server *before* it has anything to write, behind one seam. |
+| [`src/live-gpt.ts`](../../src/live-gpt.ts) | What a GPT-Live session is told: the two prompts, the outline budget, the seed, the data-channel allowlist. Pure; the request and the key stay in `src/live.ts`. |
+| [`src/web/live/useLive.ts`](../../src/web/live/useLive.ts), [`engine.ts`](../../src/web/live/engine.ts) | Which engine a call uses, and the one `LiveApi` the page sees. Both go when an engine is deleted. |
+| [`src/web/live/useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts) | Realtime's browser half: the peer connection, the data channel, and the three orderings named below. |
+| [`src/web/live/gpt-live/`](../../src/web/live/gpt-live/useGptLive.ts) | GPT-Live's browser half: `useGptLive.ts`, kept thin over three pure reducers — [`segments.ts`](../../src/web/live/gpt-live/segments.ts) (fragments to chat rows), [`delegations.ts`](../../src/web/live/gpt-live/delegations.ts) (the tool loop), [`stall.ts`](../../src/web/live/gpt-live/stall.ts) (is a reply owed) — and [`meter.ts`](../../src/web/live/gpt-live/meter.ts). |
+| [`src/web/live/session-shared.ts`](../../src/web/live/session-shared.ts) | The clocks and sentences both hooks use. |
+| [`src/web/live/exchanges.ts`](../../src/web/live/exchanges.ts) | Realtime only. Turns a stream of events into conversation turns. Read its header before touching anything about ordering. |
+| [`src/web/live/wiring.ts`](../../src/web/live/wiring.ts) | The requests a session makes of our own server *before* it has anything to write, behind one seam. |
 | [`src/web/live/mic-placement.ts`](../../src/web/live/mic-placement.ts) | Where the microphone is, which is what noise reduction wants to know. |
-| [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | The one button: Live, Cancel or Hang up. |
+| [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | The one button: Live, Cancel or Hang up — and, with Experimental on, the engine choice beside it. |
 | [`src/web/live/LiveStatus.tsx`](../../src/web/live/LiveStatus.tsx) | The state pill, connecting steps, input level, notices, errors with Try again, and the Advanced disclosure (device, noise reduction, Reconnect). |
 | [`src/web/live/LiveTail.tsx`](../../src/web/live/LiveTail.tsx), [`tail.ts`](../../src/web/live/tail.ts) | The unsaved words, in the thread after the saved turns, grouped by exchange. |
 | [`src/web/live/stall.ts`](../../src/web/live/stall.ts) | Which stall a live session is in, if any — the pure rules behind the notice and **Reconnect**. |
-| [`src/web/live/tool-responses.ts`](../../src/web/live/tool-responses.ts) | One continuation after a response's tool results settle; a newer spoken turn supersedes the old continuation. |
+| [`src/web/live/tool-responses.ts`](../../src/web/live/tool-responses.ts) | Realtime only. One continuation after a response's tool results settle; a newer spoken turn supersedes the old continuation. |
 | [`src/web/PassageLinks.tsx`](../../src/web/PassageLinks.tsx) | Shared live and saved passage references, using stable block ids. |
 | [`src/chat.ts`](../../src/chat.ts) `withSpokenTurn` | The write: both rows, both `done`, one transaction. |
 
 The plans are [live-conversation.md](../plans/260831g-live-conversation.md) — the wire, proven first as a
 spike — and [260831l-live-conversation-in-chat.md](../plans/260831l-live-conversation-in-chat.md), which is where it
 became a turn in a conversation. GPT Sol refused the first version of the second one; the design
-that shipped is the one it recommended instead.
+that shipped is the one it recommended instead. The second engine is
+[261003a](../plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md).
 
 ## Which model, and why not GPT-Live yet
 
@@ -119,6 +124,11 @@ it rewrites the three orderings below, the meter and the browser handshake. Not 
 and the four conditions that would change the answer are in
 [261002r](../investigations/261002r-gpt-live-spike.md).
 
+**That is the answer for the default engine, and it stands**: a reader who has not switched
+Experimental features on gets Realtime and nothing else. The question is re-asked in use rather than
+on paper — GPT-Live is built beside it as a second engine, behind that switch:
+[§ The second engine](#the-second-engine-gpt-live-behind-experimental).
+
 The same measurement found where today's wait actually is, and it is not reasoning (low effort was
 no faster than the default): the model calls `show_passage` before its first word (~1.2 s, and
 telling it not to changed nothing), and `semantic_vad` waits up to several seconds after a hesitant
@@ -128,12 +138,15 @@ question. Neither is fixed yet.
 
 The browser opens a `RTCPeerConnection` straight to OpenAI with a short-lived `ek_…` token our
 server minted. That is not a shortcut, it is the only shape available: relayed audio needs a
-long-lived socket and a Vercel function does not have one.
+long-lived socket and a Vercel function does not have one. GPT-Live has no such token, so there our
+server passes the browser's SDP offer to OpenAI once and hands the answer back; the media still
+goes browser to OpenAI.
 
-Our server sees six requests and none of them carries audio: `POST /api/chat/:slug/:threadId/live`
-for a ticket, `POST /api/chat/:slug/live-tool` to run a tool the model called,
+A call makes six kinds of request to our server and none of them carries audio: one to open it
+(`POST /api/chat/:slug/:threadId/live` for a Realtime ticket, or `POST …/live-session` for
+GPT-Live's SDP exchange), `POST /api/chat/:slug/live-tool` to run a tool the model called,
 `POST /api/chat/:slug/:threadId/spoken` once per finished exchange, and the three accounting
-endpoints under `/api/live/:sessionId/` below.
+endpoints under `/api/live/:sessionId/` below. Seven routes in all, six per call.
 
 **This is the one exception to "every paid call goes through OpenRouter"**
 ([ai-gateway.md](ai-gateway.md)), because OpenRouter has no realtime API at all. Two consequences
@@ -142,7 +155,7 @@ follow and both are written down rather than hoped about:
 - **The meter is browser-reported**, because the numbers exist in the tab and nowhere else — see
   § The meter below.
 - **Nothing is capped on the server.** The browser ends its own session after five minutes of quiet
-  or twenty in total — see § What is not built — which is a clock a tab can be wrong about. A
+  (two on GPT-Live) or twenty in total — see § What is not built — which is a clock a tab can be wrong about. A
   per-reader ceiling this server could enforce does not exist.
 
 ## The meter
@@ -232,6 +245,36 @@ retry, deliberately: GPT Sol cut both as what an invoice needs rather than what 
 does. *"Add the durable outbox before usage affects an allowance, an invoice, or a promise made to
 users."*
 
+### GPT-Live's two bills
+
+The second engine ([261003a](../plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md))
+is metered through the same three endpoints and the same session row, with two report kinds of its
+own, read off the wire by [`gpt-live/meter.ts`](../../src/web/live/gpt-live/meter.ts).
+
+- **`voice` — seconds, as a running total.** OpenAI reports one cumulative figure for the session,
+  so two reports are not two bills. The session row holds a high-water mark
+  (`voice_seconds_reported`); a report is priced as the difference from it, and a repeat or an older
+  figure adds nothing. The mark and the `ai_calls` row are written under one row lock, in one
+  transaction — `advanceVoiceSeconds` in
+  [`src/store/realtime-sessions-pg.ts`](../../src/store/realtime-sessions-pg.ts). The seconds go in
+  their own column, `voice_seconds`, not `transcription_seconds`.
+- **`backend` — the text model's tokens**, one row per backend response id. Priced on the model the
+  session row names, cached input at its own rate. `LIVE_BACKEND_PRICES` in
+  [`src/pricing.ts`](../../src/pricing.ts) says where each number came from, and names the
+  long-context tier it does not model.
+
+**The create call is the server's own, and it bills fifteen seconds.** So
+`POST /api/chat/:slug/:threadId/live-session` writes the session row *before* it asks OpenAI — the
+reverse of the ticket route — and records those fifteen seconds as a priced row itself, so a call
+abandoned before it connects is not free in the ledger. A create that does not yield a usable
+session closes the row with no connected time, under a reason that says whether money moved
+(`liveChatSession` in [`src/routes.ts`](../../src/routes.ts)): refused, lost in transit, or created
+and unusable — which is still charged. A report for the other engine's bill is refused in both
+directions. The cases are in
+[`tests/realtime-usage.test.ts`](../../tests/realtime-usage.test.ts),
+[`tests/store-realtime-sessions.test.ts`](../../tests/store-realtime-sessions.test.ts) and
+[`tests/live-session-routes.test.ts`](../../tests/live-session-routes.test.ts).
+
 **Verification, 2026-09-06:** the journal exists in local Postgres; the earlier migration blocker
 is no longer current. [`tests/live-session-routes.test.ts`](../../tests/live-session-routes.test.ts)
 now exercises the client's projection, HTTP route and priced Postgres rows for both bills. The
@@ -246,6 +289,10 @@ explicitly unpriced rather than guessed.
 
 Every one of these fails **silently**: no error, nothing in a console, a transcript that is merely
 wrong. That is why each has a test that has been watched to fail.
+
+They are the Realtime engine's. GPT-Live has no item ids, no seed acknowledgements and no turn
+boundaries, so it keeps the same three promises by other means —
+[§ The second engine](#the-second-engine-gpt-live-behind-experimental).
 
 **1. The transcription of what you said arrives after the answer to it.** Not an edge case — the
 ordinary case whenever anybody talks over the model. So order comes from OpenAI's own item ids, and
@@ -333,12 +380,17 @@ not this feature's, and it went when the filesystem store did.
 - **`passages`** — what the answer pointed at. A spoken answer never cites in its text, because it
   is forbidden to say `spya-k3m9qt` aloud and is given `show_passage` instead. Without a stored
   field these would be uncited claims, which is what the chat contract exists to prevent.
+  Only ids the article has, and at most four: the browser checks each id when the model points
+  (`shownPassage` in [`session-shared.ts`](../../src/web/live/session-shared.ts), both engines)
+  and tells the model which were not there, because the server refuses the whole append for one
+  unknown id and a refused append ends the call.
 - **`interrupted`** — the spoken answer ended early, through interruption, hangup or provider
   failure. Its transcript may be incomplete or run past what was heard. The saved row says so
   without blaming the reader, and `recentHistory` ([`src/converse.ts`](../../src/converse.ts))
   excludes the pair from future model context. The existing flag carries this; no invented
   assistant text or new status is needed.
-- **`model`** — set server-side to `LIVE_MODEL`, never taken from the browser. It is what lets the
+- **`model`** — set server-side, never taken from the browser: `LIVE_MODEL`, or `GPT_LIVE_MODEL`
+  when the `/spoken` body names that engine. The browser names an engine, never a model. It is what lets the
   citation instruments tell a spoken answer from a typed one that happened to cite nothing.
 
 ## Three things that are not obvious and cost an afternoon each
@@ -360,6 +412,113 @@ only — the reader's words are theirs. Found by Fable, 2026-08-31.
 The transcriber invented the whole vocabulary list during a pause with background noise. Switching
 model alone fixed that and dropped jargon recovery from 4/4 to 2/4, because `gpt-live-transcribe`
 ignores `prompt`. Only building the second eval caught it. Both live in [`evals/live/`](../../evals/live/).
+
+## The second engine: GPT-Live, behind Experimental
+
+Two engines sit behind one `LiveApi`, and **one of them will be deleted**. Asked whether to move to
+GPT-Live or fix Realtime:
+
+> My intention when I wrote this was to say move to GPT-Live, but I don't have a clear sense of what
+> the tradeoffs are. I'm inclined to say we should just move over. Alternatively, we could sort of
+> implement it alongside and then we'd have both and then get rid of one eventually. […] all I know
+> is that WhatNext seems to be working better than Spideryarn is. So I'm open to trying to have
+> both. Trying to fix the GPT real-time implementation and implement GPT Live alongside it and
+> compare them. But eventually I think we only want one. […] use your judgment
+>
+> — Greg, 2026-10-02
+
+So nothing is abstracted into a provider framework: each engine has its own hook and reducers, and
+deleting the loser is deleting files. Which one survives is Greg's to decide, in use —
+[open-questions.md § Q12](open-questions.md#q12). The design, what it passed over and GPT Sol's
+findings are in [261003a](../plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md);
+what is below is what you would otherwise have to reverse-engineer.
+
+**Choosing, and pinning.** With Experimental features on, a select beside the Live button offers
+*Realtime* or *GPT-Live (new)*, remembered per browser. With the switch off there is no choice and
+the engine is Realtime. Three things are kept apart — the remembered preference, the engine the
+next start would use, and the engine that owns the call in progress — and the owner does not move
+until its hang-up has finished; turning Experimental off mid-call ends a GPT-Live call by the
+ordinary hang-up. The rules are the headers of [`engine.ts`](../../src/web/live/engine.ts) and
+[`useLive.ts`](../../src/web/live/useLive.ts). `DEFAULT_EXPERIMENTAL_ENGINE` is the one constant
+that decides what a switched-on reader gets before choosing.
+
+**The shape.** GPT-Live is a voice model that listens and speaks, with a text model behind it (the
+*backend*) that it hands questions to — a *delegation* — and which is the one that calls tools.
+Our server makes one request, the SDP exchange (`createGptLiveSession` in
+[`src/live.ts`](../../src/live.ts)). After that **the browser relays the backend's tool calls** over
+the data channel: a call arrives, the tab runs it through the same `live-tool` route Realtime uses,
+and sends the result back ([`delegations.ts`](../../src/web/live/gpt-live/delegations.ts)). There is
+**no server sideband**, for the reason there is no audio relay: it would be a long-lived socket, and
+Vercel has none. The cost is that tool work stops when the tab does. Reader speech cancels nothing
+here — Realtime's "drop the pending continuation" would leave the backend waiting for ever.
+
+**The article goes to only one of them.** The voice model's instructions are capped at 16,384
+tokens and most articles are longer, so the voice gets the title and the outline and the backend
+gets the whole article, the evidence rules and the tools, `show_passage` included. The same split
+for every article, short ones too. **Anything that depends on what the article says is delegated,
+always**: a claim about its content, a quotation, "where does it say that", showing a passage,
+anything needing a lookup. The voice has not read the piece, and an answer that was never checked
+against it is the worst failure a reading app has. The two prompts are in
+[`src/live-gpt.ts`](../../src/live-gpt.ts).
+
+**What the stored pairs promise is chronology, not ownership.** Transcripts arrive as 200 ms
+fragments with no item ids and no "done", and both sides can talk at once, so nothing says which
+question a stretch of speech answers and the rows do not claim to know. They read back in the order
+things were said, and no word is dropped — which is why "mm-hm" in the middle of an answer becomes
+a short question of its own rather than being discarded. **An exchange is written when it can no
+longer change** — a later one has begun, or the call is ending — never on silence and never because
+the backend finished; and **written means frozen**: handed to `speak` once, its payload and tail
+fixed across retries, with a late fragment starting a new exchange rather than amending an old one.
+So the last exchange of a call is written at hang-up, and a tab that dies loses it. What is stored
+as the answer is what was *spoken*, never the backend's text. Rules and the reasons for each:
+[`segments.ts`](../../src/web/live/gpt-live/segments.ts).
+
+**What this engine does not have.** GPT-Live sends no voice-detector and no playback events, so:
+
+- Listening and Speaking are **estimates** — a transcript fragment from that side in the last
+  second or so — and trail the audio.
+- There is **no open-turn stall**, since nothing says a turn is open, and so **no tap to talk**,
+  which that notice is the only way into.
+- There is **no microphone placement**: no noise-reduction setting exists to map it onto. The route
+  checks the field and ignores it.
+- No vocabulary `keywords`, and no seeding barrier: the history goes in the create request, and the
+  microphone opens on `session.started` and the tail check.
+
+**The reply stall is per delegation.** A delegation owes speech from the moment its final backend
+response completes until the companion says something that *began* after that; filler spoken
+before then pays nothing. Owed for twenty seconds shows the ordinary no-reply notice with
+Reconnect. **The trap is that there are two clocks.** A backend final is timed by the tab; a
+fragment is timed on the session's own timeline, which was once measured standing still for 26 s
+and then stays that far behind — after which every answer looks older than the final it answers and
+the notice shows over a working conversation. `timelineOrigin` in
+[`gpt-live/stall.ts`](../../src/web/live/gpt-live/stall.ts) corrects for it, and says what that
+gives up. Never key anything on `start_ms` alone.
+
+**The idle cap is two minutes, not five**, because GPT-Live bills every minute a session is open,
+silence included, where Realtime bills nothing while nobody speaks — and a reader reads between
+questions. The clock does not run while a delegation does. `GPT_LIVE_IDLE_CAP_MS` in
+[`useGptLive.ts`](../../src/web/live/gpt-live/useGptLive.ts) has what it counts and the one case
+decided against the reader.
+
+**Sounds in brackets are not words.** The transcript writes a hum as `[hum]`, split across
+fragments. `SoundFilter` in `segments.ts` takes them out before a line, a question or an answer
+sees them, and the idle and stall clocks run on speech only.
+
+**What the measurements showed, and will bite.** From the spike in
+[`evals/live/gpt-live-spike/`](../../evals/live/gpt-live-spike/) and
+[261002r](../investigations/261002r-gpt-live-spike.md):
+
+- **Filler.** 32 of 36 turns opened with "Checking." or a hum. The voice prompt now asks for
+  nothing, or two or three words, once.
+- **Thinner answers.** A median 28 spoken words against Realtime's 48, with the mechanism gone:
+  the voice paraphrases a smaller model. Both prompts now ask for the reason as well as the claim.
+- **A completed backend is not a spoken answer.** In one spike run both backend rounds finished
+  with the right text and nothing was said. Do not treat `response.completed` as the reader having
+  heard anything; the per-delegation stall exists for this.
+- **Fifteen seconds are billed at create**, before a word — § GPT-Live's two bills.
+
+**None of the prompt changes made in answer to these has been measured against the provider**, and
+no part of this engine has been tried with a real microphone in a real room.
 
 ## The lifecycle, which is the most failure-prone part
 
@@ -383,8 +542,17 @@ thread, and start a fresh seeded session if the reader wants one.
 | **Tap to talk** | Offered only by the `open-turn` notice, because Reconnect sends a reader in a street back into the same street. The voice detector hears other people's voices as the reader's: it answers bystanders, lets them cut the reply off, and holds a turn open for as long as they talk (measured against OpenAI's server, [`scripts/spike-live-push-to-talk.ts`](../../scripts/spike-live-push-to-talk.ts)). For the rest of that call it is OpenAI's documented push-to-talk: `turn_detection: null`, a clear and the microphone on at **Talk**, the microphone off and a commit at **Done**, and `response.create` once the commit comes back. **Ready**, **Listening**, **Sending** are `TalkMode`'s states. Talk waits while the companion answers, so it is a walkie-talkie. A provider error against one of its own `event_id`s (`spya-tap-…`) is a notice, not the end of the call. It survives a Reconnect, a start the reader makes is hands-free, and there is no way back to hands-free within the call. [261003d](../plans/261003d-tap-to-talk-when-noise-holds-the-live-turn-open.md). |
 | **Startup never finishes** | One deadline covers device discovery, ticket, permission, transport and seed acknowledgements. It belongs to that attempt and is cleared on every exit; Cancel stays available throughout. |
 
+**On GPT-Live** the table holds, with these differences. Startup has no ticket step, and the
+microphone is opened *before* the request to our server, because the SDP offer needs a track — so a
+reader who refuses the microphone costs nothing. Hang-up still gives the device back first; it then
+waits for the fragments to stop, sends `session.close`, and waits briefly for `session.closed`,
+which carries the final billed seconds. When OpenAI ends the call instead, the panel has a sentence
+for each reason it gives. Of the stalls, only the microphone, the connection and no-reply exist
+(§ The second engine), plus a delegation still running after a minute; there is no Tap to talk.
+
 **Every one of those endings names itself** to the session journal; the current reasons live beside
-`endedBecause` in [`useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts). Free text
+`endedBecause` in each hook ([`useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts),
+[`useGptLive.ts`](../../src/web/live/gpt-live/useGptLive.ts)). Free text
 with a length bound on the server rather than a union, deliberately: the list belongs to the browser, and a server-side
 union that lagged it would refuse a true report about how a conversation ended. It is best-effort
 either way — a closed laptop says nothing, and a session with no `closed_at` is ordinary rather than
@@ -398,12 +566,19 @@ one still running.
 
   The **cap** in the browser is built, because it is the half that costs money rather than
   visibility: a session
-  ends itself after five minutes of quiet or twenty minutes in total, so a forgotten tab bills
-  minutes rather than the hour OpenAI would allow. Only the reader's own voice resets the idle
+  ends itself after five minutes of quiet (two on GPT-Live, which bills silence) or twenty minutes
+  in total, so a forgotten tab bills minutes rather than the hour OpenAI would allow. Only the reader's own voice resets the idle
   clock — a session that kept itself alive by answering its own last question would be exactly the
   case the cap is for.
 - **Live conversation in the comment dialog.** Chat and the existing Remember composer share
   the thread-backed controls; comments do not yet have them.
+- **On GPT-Live:** tap to talk, microphone placement, and anything that finishes tool work with the
+  tab closed. Speaker segments are not stored as rows — pairs are a projection of them, and segment
+  rows are the first follow-up if this engine wins. Answering first and pointing second, the first
+  latency lever, is untried. Each is argued in
+  [261003a § Not in this job](../plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md#not-in-this-job).
+- **Deleting the losing engine.** A follow-up plan once Greg has compared them, not open-ended
+  coexistence.
 
 ## See also
 

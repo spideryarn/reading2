@@ -696,7 +696,7 @@ describe("the schema keeps the promises the plan makes", () => {
            CASCADE, for `link_summaries`' reason: the model's scores for a
            reader's shelf topics are a cache, worth nothing once they are gone. */
         "shelf_topic_scores_owner_fk",
-        /* drizzle/20261003144031, appended by hand to the generated migration.
+        /* drizzle/20261003161906, appended by hand to the generated migration.
            CASCADE, for the same reason: the model's topic set is a cache. */
         "shelf_topic_sets_owner_fk",
         "uploads_owner_fk",

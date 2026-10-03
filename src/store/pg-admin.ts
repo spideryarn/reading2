@@ -100,6 +100,7 @@ import {
   listFeedbackAcrossOwners,
   readFeedbackAcrossOwners,
   readFeedbackScreenshotAcrossOwners,
+  setFeedbackIgnoredAcrossOwners,
 } from "./pg-admin-feedback.js";
 import { onTheShelf } from "./pg.js";
 
@@ -725,6 +726,7 @@ const rawPgAdminStore: AdminStore = {
   listFeedbackAcrossOwners,
   readFeedbackAcrossOwners,
   readFeedbackScreenshotAcrossOwners,
+  setFeedbackIgnoredAcrossOwners,
 };
 
 /** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */

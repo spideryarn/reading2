@@ -111,7 +111,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   chat: {
-    keywords: "ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph",
+    keywords:
+      "ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action",
     whenToUse: (
       <>
         <p>
@@ -166,6 +167,12 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           you rewrite your question.
         </p>
         <p>
+          <strong>Buttons in an answer.</strong> Chat can offer a button when you ask it to bookmark a
+          passage, add or remove a tag, look a term up in the glossary, or show where the article first
+          says something. Nothing happens until you press the button; Chat cannot do any of these
+          itself.
+        </p>
+        <p>
           <strong>Talking instead of typing.</strong> The microphone turns your speech into text in
           the box, to edit before you send; a recording stops after five minutes.{" "}
           <strong>Live</strong>, beside it, is a spoken conversation you can interrupt. Your audio goes
@@ -201,7 +208,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
       <>
         <p>
           Clicking an underlined word does nothing: point at it for the card, and use the card’s{" "}
-          <strong>in the glossary</strong> button for the full entry. On a touchscreen, tap once for
+          <strong>Open glossary</strong> button for the full entry. On a touchscreen, tap once for
           the card and again for the entry. Press <kbd>G</kbd> in a paragraph to jump to its terms.
         </p>
         <p>In an entry:</p>
@@ -244,9 +251,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           fast model scores every paragraph, and the ones that match are marked whole, with no
           reasons. It searches whenever you pause typing, and what you type keeps one saved search,
           updated as you go rather than a new one each time. Press Enter when you are done; typing
-          again after that, or after a break, starts a new one. Use it for a first look;{" "}
-          <strong>flesh out</strong> on a quick search runs the full meaning search on the same
-          words.
+          again after that, or after a break, starts a new one. Its paragraphs are marked with a
+          bar down the side and a mark in the spine, not a highlight over the words. Use it for a
+          first look; <strong>thorough</strong> on a quick search runs the full meaning search on
+          the same words, in about half a minute, and replaces the quick one.
         </p>
         <p>
           To start a quick search from anywhere in the article, type in the{" "}
@@ -472,8 +480,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Tutorial</strong>: short turns, a little of the piece at a time. Say what you
-            remember, or that you haven’t read it yet, and each reply teaches one small piece,
-            links the passage, and asks you to put it in your own words, give an example or push back.
+            remember; it’s fine if you haven’t read it yet, or haven’t finished. Each reply teaches
+            one small piece, links the passage, and asks you to put it in your own words, explain
+            why the author needs it or connect it to an earlier part. It is about what the author
+            is saying; now and then it asks what you think.
             Now and then it comes back to an earlier point. It takes your profile and your reason for
             reading into account. Typed or dictated; there is no Live conversation here yet.
           </li>

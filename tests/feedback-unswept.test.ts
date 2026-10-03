@@ -19,6 +19,7 @@ import {
   renderUntrustedWords,
   renderUnswept,
   SHOW_END,
+  summary,
   type UnsweptRow,
   unswept,
 } from "../scripts/feedback-unswept.js";
@@ -36,6 +37,7 @@ function row(id: string, over: Partial<UnsweptRow> = {}): UnsweptRow {
     mirroredAt: null,
     sentryEventId: null,
     idOccurrences: 1,
+    ignoredAt: null,
     ...over,
   };
 }
@@ -132,6 +134,43 @@ describe("unswept", () => {
     expect(unswept([ambiguous], new Set([ambiguous.id])).map((r) => r.id)).toEqual([
       "spya-aaaaaa",
     ]);
+  });
+});
+
+describe("a report an administrator marked as ignored", () => {
+  /* Greg, 2026-10-03 (`spya-g95x4j`): the Ignore button on /admin/feedback
+     sets `ignored_at`, and this is the reader of it. docs/plans/261003j-…. */
+  const ignoredAt = new Date("2026-10-03T10:00:00Z");
+
+  it("is left out, covered or not, and whoever else shares its id", () => {
+    const rows = [
+      row("spya-aaaaaa", { ignoredAt }),
+      row("spya-bbbbbb"),
+      /* The mark is on the row, so it is exact where coverage by id is not:
+         one owner's ignored report goes, the other owner's stays listed. */
+      row("spya-cccccc", { idOccurrences: 2, ignoredAt }),
+      row("spya-cccccc", { idOccurrences: 2, ownerId: "99999999-2222-3333-4444-555555555555" }),
+    ];
+    const left = unswept(rows, new Set());
+    expect(left.map((r) => r.id)).toEqual(["spya-bbbbbb", "spya-cccccc"]);
+    expect(left[1]?.ownerId).toBe("99999999-2222-3333-4444-555555555555");
+  });
+
+  it("is counted in the summary, so nothing listed and three ignored are different sentences", () => {
+    const rows = [row("spya-aaaaaa", { ignoredAt }), row("spya-bbbbbb")];
+    const text = summary(rows, unswept(rows, new Set()), new Date("2026-09-03T00:00:00Z"));
+    expect(text).toContain("2 report(s)");
+    expect(text).toContain("1 marked ignored by an admin");
+    expect(text).toContain("1 named by no note header");
+    /* And says nothing about ignoring when nothing is. */
+    expect(summary([row("spya-bbbbbb")], [row("spya-bbbbbb")], new Date())).not.toContain("ignored");
+  });
+
+  it("says so on its line when it is shown", () => {
+    expect(renderUnswept(row("spya-aaaaaa", { ignoredAt }), true)).toContain(
+      "ignored by an admin 2026-10-03T10:00:00.000Z",
+    );
+    expect(renderUnswept(row("spya-aaaaaa"), true)).not.toContain("ignored");
   });
 });
 

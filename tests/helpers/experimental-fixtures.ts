@@ -34,7 +34,7 @@ const BASE: DockExperimental = {
   saving: false,
   error: null,
   loadError: null,
-  set: () => {},
+  set: async () => ({ kind: "saved" }),
   reload: () => {},
 };
 
