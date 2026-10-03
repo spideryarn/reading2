@@ -191,3 +191,22 @@ section wins.**
 - **Q8 no Referee placements**: a reader's row needs `quote`, `colour` and no `criterionId`. And
   the wording about "both": the drawer lists it because it is the same comment; the margin shows it
   when it has words. The note mark on a Quotes row keys from `body`.
+
+## Landed, 2026-10-03
+
+On dev as b8e634928 and bab13e129. Built as reviewed; nothing in the plan changed during the build.
+
+- GPT Sol's code review: [land after fixes](261003h-highlights-in-quotes-code-review-sol.md), no
+  P0 to P2, one doc correction (the Referee exception in `comments.md`). The Postgres test it asked
+  for (`store-roundtrip`) passes.
+- Browser-checked (Sonnet subagent, Playwright, `/read/fowler-phrenology`, 48 AI quotes): the rows
+  interleave by paragraph with their colour bar and *yours*; the note mark; `48 quotes + 3 yours`
+  and `23 of 48 + 3 yours`; the bar never hides a reader's row; reader rows first under the two
+  score orders; pressing one gives `?note=` and no `?quote=`; the stepper stays AI-only; removing a
+  colour removes the row with no reload; both provenance lines, in the band and on the prose card;
+  light theme and 400px.
+- **Not checked:** a signed-out visitor on a shared article (no public article locally). The
+  visitor path is held by the type (`yours?: never`), a source assertion and the DTO tests.
+- Every quote stored before today shows *on or before* its list's date; only quotes found from now
+  on carry their own time.
+- The ⓘ on a quote with no reason is labelled "Who chose this, and when".
