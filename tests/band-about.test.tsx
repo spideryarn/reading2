@@ -153,6 +153,32 @@ describe("ModeSurface's about", () => {
     expect(navigate).toHaveBeenCalledWith(null, "", "/help#mode-summary");
   });
 
+  it("lets a real mouse take over when it enters a touch-open interactive card directly", async () => {
+    vi.useFakeTimers();
+    draw(<ModeSurface label="Tweets" mode="summary">body</ModeSurface>);
+    const button = host.querySelector(".band-about") as HTMLButtonElement;
+    const touchDown = new MouseEvent("pointerdown", { bubbles: true });
+    Object.defineProperty(touchDown, "pointerType", { value: "touch" });
+    await act(async () => {
+      button.dispatchEvent(touchDown);
+      button.click();
+    });
+    await act(async () => vi.advanceTimersByTime(500));
+    const card = document.querySelector(".tooltip-anchor") as HTMLElement;
+    expect(card).not.toBeNull();
+
+    /* On a hybrid device the cursor can approach the portalled card without
+       crossing its trigger. That real mouse entry ends the tap's exemption. */
+    const mouseOver = new MouseEvent("pointerover", { bubbles: true });
+    Object.defineProperty(mouseOver, "pointerType", { value: "mouse" });
+    card.dispatchEvent(mouseOver);
+    card.dispatchEvent(new MouseEvent("mouseenter"));
+    card.dispatchEvent(new MouseEvent("mouseleave", { relatedTarget: document.body }));
+    card.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+    for (const _ of [0, 1, 2]) await act(async () => vi.advanceTimersByTime(500));
+    expect(document.querySelector(".band-about-card")).toBeNull();
+  });
+
   it("has an (i) from the mode alone, when there is nothing to add yet", () => {
     draw(<ModeSurface label="Tweets" mode="summary" about={null}>body</ModeSurface>);
     expect(host.querySelector("aside > .band-about")).not.toBeNull();

@@ -292,13 +292,42 @@ describe("a search result's card closes", () => {
     expect(hitCards()).toHaveLength(0);
   });
 
-  it("but not on the mouseleave a touch tap synthesises after its own click", async () => {
-    /* Measured in Chrome with touch on, 2026-10-03 (plan 261003p): a tap sent
-       `pointerdown` (touch), `click`, and then a compatibility `mouseleave`
-       some 100ms later, which shut the card about 20ms after it opened. Since
-       the legend above the list went the same day, this card is the only
-       thing on a touch screen that says what the number and the bar are, so a
-       card a tap cannot hold open is an explanation that does not exist. */
+  it.each(["touch", "pen"] as const)(
+    "but not on the mouseleave a %s tap synthesises after its own click",
+    async (pointerType) => {
+      /* Measured in Chrome with touch on, 2026-10-03 (plan 261003p): a tap sent
+         `pointerdown` (touch), `click`, and then a compatibility `mouseleave`
+         some 100ms later, which shut the card about 20ms after it opened. Since
+         the legend above the list went the same day, this card is the only
+         thing on a touch screen that says what the number and the bar are, so a
+         card a tap cannot hold open is an explanation that does not exist. */
+      await mountPanel();
+      const touchDown = new MouseEvent("pointerdown", { bubbles: true });
+      Object.defineProperty(touchDown, "pointerType", { value: pointerType });
+      await act(async () => {
+        gutter().dispatchEvent(touchDown);
+        gutter().dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        gutter().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await wait(150);
+      expect(hitCards(), "the precondition: the tap opened it").toHaveLength(1);
+      gutter().dispatchEvent(new MouseEvent("mouseleave"));
+      gutter().dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+      await wait();
+      await wait();
+      expect(hitCards()).toHaveLength(1);
+      /* And a tap somewhere else still takes it away. */
+      await act(async () => {
+        document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      });
+      await wait();
+      await wait();
+      expect(hitCards()).toHaveLength(0);
+    },
+  );
+
+  it("on a real mouse leave after a touch tap, without requiring a mouse press", async () => {
     await mountPanel();
     const touchDown = new MouseEvent("pointerdown", { bubbles: true });
     Object.defineProperty(touchDown, "pointerType", { value: "touch" });
@@ -308,17 +337,90 @@ describe("a search result's card closes", () => {
       gutter().dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await wait(150);
-    expect(hitCards(), "the precondition: the tap opened it").toHaveLength(1);
+    expect(hitCards(), "the precondition: the touch tap opened it").toHaveLength(1);
+
+    /* A hybrid device can move from touch to its trackpad or mouse without a
+       mouse press. `pointerover` is what React turns into the trigger's
+       `onPointerEnter`; the following native mouse events are what Floating UI
+       listens to directly. The compatibility leave from the touch must be
+       ignored, but this real mouse leave must not inherit that exemption. */
+    const mouseOver = new MouseEvent("pointerover", { bubbles: true });
+    Object.defineProperty(mouseOver, "pointerType", { value: "mouse" });
+    gutter().dispatchEvent(mouseOver);
+    gutter().dispatchEvent(new MouseEvent("mouseenter"));
     gutter().dispatchEvent(new MouseEvent("mouseleave"));
     gutter().dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
     await wait();
     await wait();
-    expect(hitCards()).toHaveLength(1);
-    /* And a tap somewhere else still takes it away. */
+    expect(hitCards()).toHaveLength(0);
+  });
+
+  it("on a real mouse leave when its cursor was already over the touch target", async () => {
+    await mountPanel();
+    const touchDown = new MouseEvent("pointerdown", { bubbles: true });
+    Object.defineProperty(touchDown, "pointerType", { value: "touch" });
+    await act(async () => {
+      gutter().dispatchEvent(touchDown);
+      gutter().dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      gutter().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await wait(150);
+    expect(hitCards(), "the precondition: the touch tap opened it").toHaveLength(1);
+
+    /* A laptop's mouse cursor can already be over the same target when a
+       finger taps it, so its next event is a leave, not another enter. */
+    const mouseOut = new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body });
+    Object.defineProperty(mouseOut, "pointerType", { value: "mouse" });
+    gutter().dispatchEvent(mouseOut);
+    gutter().dispatchEvent(new MouseEvent("mouseleave"));
+    gutter().dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+    await wait();
+    await wait();
+    expect(hitCards()).toHaveLength(0);
+  });
+
+  it("does not let a cancelled touch press taint a later keyboard-opened card", async () => {
+    await mountPanel();
+    const touchDown = new MouseEvent("pointerdown", { bubbles: true });
+    Object.defineProperty(touchDown, "pointerType", { value: "touch" });
+    const touchCancel = new MouseEvent("pointercancel", { bubbles: true });
+    Object.defineProperty(touchCancel, "pointerType", { value: "touch" });
+    await act(async () => {
+      gutter().dispatchEvent(touchDown);
+      gutter().dispatchEvent(touchCancel);
+      gutter().focus();
+    });
+    await wait();
+    expect(hitCards(), "the precondition: keyboard focus opened it").toHaveLength(1);
+    gutter().dispatchEvent(new MouseEvent("mouseleave"));
+    gutter().dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+    await wait();
+    await wait();
+    expect(hitCards()).toHaveLength(0);
+  });
+
+  it("forgets the touch exemption after the card has closed", async () => {
+    await mountPanel();
+    const touchDown = new MouseEvent("pointerdown", { bubbles: true });
+    Object.defineProperty(touchDown, "pointerType", { value: "touch" });
+    await act(async () => {
+      gutter().dispatchEvent(touchDown);
+      gutter().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await wait(150);
+    expect(hitCards(), "the precondition: the touch tap opened it").toHaveLength(1);
     await act(async () => {
       document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
-      document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });
+    await wait();
+    await wait();
+    expect(hitCards(), "the outside press closed it").toHaveLength(0);
+
+    await act(async () => gutter().focus());
+    await wait();
+    expect(hitCards(), "keyboard focus reopened it").toHaveLength(1);
+    gutter().dispatchEvent(new MouseEvent("mouseleave"));
+    gutter().dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
     await wait();
     await wait();
     expect(hitCards()).toHaveLength(0);

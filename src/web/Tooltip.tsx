@@ -222,10 +222,16 @@ export function Tooltip({
    * be read at all (docs/plans/261003p-…). A card with `interactive` escaped
    * only by accident, through `safePolygon`.
    *
-   * A mouse press sets it back, so on a laptop with a touch screen the mouse
-   * keeps closing cards by leaving.
+   * It belongs to this opening, not to the mounted component forever: closing
+   * the card clears it, and a real mouse reaching or leaving the trigger (or
+   * reaching an interactive card directly) clears it even while the
+   * touch-opened card is still up. Thus a hybrid device does not need a mouse
+   * press before hover works normally again.
    */
   const byTouch = useRef(false);
+  useEffect(() => {
+    if (!open) byTouch.current = false;
+  }, [open]);
 
   /**
    * **What an interactive card does about focus when something asks it to
@@ -374,6 +380,12 @@ export function Tooltip({
   };
   const ownPointerDown = (childProps as { onPointerDown?: (event: ReactPointerEvent) => void })
     .onPointerDown;
+  const ownPointerEnter = (childProps as { onPointerEnter?: (event: ReactPointerEvent) => void })
+    .onPointerEnter;
+  const ownPointerLeave = (childProps as { onPointerLeave?: (event: ReactPointerEvent) => void })
+    .onPointerLeave;
+  const ownPointerCancel = (childProps as { onPointerCancel?: (event: ReactPointerEvent) => void })
+    .onPointerCancel;
   const merged = getReferenceProps({
     ...childProps,
     ref,
@@ -383,6 +395,25 @@ export function Tooltip({
          left as a mouse, which is the behaviour there was. */
       byTouch.current = event.pointerType === "touch" || event.pointerType === "pen";
       ownPointerDown?.(event);
+    },
+    onPointerEnter(event: ReactPointerEvent) {
+      /* A real mouse may follow a touch on a hybrid device without pressing.
+         Its entry is enough to end the touch exemption; touch and pen entries
+         precede their pointerdown and leave the decision to that press. */
+      if (event.pointerType === "mouse") byTouch.current = false;
+      ownPointerEnter?.(event);
+    },
+    onPointerLeave(event: ReactPointerEvent) {
+      /* The cursor may already be over the trigger when the finger taps it;
+         then its first real mouse event is the leave, with no new enter. */
+      if (event.pointerType === "mouse") byTouch.current = false;
+      ownPointerLeave?.(event);
+    },
+    onPointerCancel(event: ReactPointerEvent) {
+      /* A cancelled touch became a scroll or another gesture and will not
+         produce the click that could open this card. */
+      byTouch.current = false;
+      ownPointerCancel?.(event);
     },
   });
   const describedBy =
@@ -403,7 +434,14 @@ export function Tooltip({
             /* The name goes through `getFloatingProps` beside the role `useRole`
                put there, so the two arrive together — and `undefined` for a
                plain tooltip, which takes its name from nothing. */
-            {...getFloatingProps({ "aria-label": interactive?.label })}
+            {...getFloatingProps({
+              "aria-label": interactive?.label,
+              onPointerEnter(event: ReactPointerEvent) {
+                /* A hybrid device's mouse can enter an interactive card
+                   directly, without crossing the trigger first. */
+                if (event.pointerType === "mouse") byTouch.current = false;
+              },
+            })}
           >
             <div className={`tooltip${className ? ` ${className}` : ""}`} style={styles}>
               {content}

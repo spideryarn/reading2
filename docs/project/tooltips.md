@@ -604,8 +604,10 @@ And a sixth, found on 2026-10-03, under the old heading because other docs link 
    `interactive` escaped only by accident, through `safePolygon`. So `Tooltip` remembers whether the
    last press on its trigger was a finger or a pen (`byTouch`) and, for a controlled card, drops a
    close whose reason is `hover` when it was. Escape, a press elsewhere and the parent still close
-   it, and a mouse still closes it by leaving. Reproduced in Chrome only; whether Safari on an iPad
-   sends that `mouseleave` is not known.
+   it. That exemption ends when the card closes or a real mouse reaches or leaves the trigger (or
+   reaches an interactive card directly), so a hybrid device does not need a mouse press before
+   leaving closes it normally again. Reproduced in Chrome only; whether Safari on an iPad sends
+   that `mouseleave` is not known.
    [`tests/search-hit-card-on-the-score.test.tsx`](../../tests/search-hit-card-on-the-score.test.tsx),
    [261003p](../plans/261003p-search-results-get-the-room-on-a-landscape-ipad.md).
 

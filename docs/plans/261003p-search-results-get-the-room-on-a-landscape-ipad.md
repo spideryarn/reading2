@@ -17,7 +17,7 @@ by `feedback-reporter.ts`, exit 0), 2026-10-03 19:17 UTC. Overseer queue item `q
 >
 > — Greg, 2026-10-03
 
-**Status: built; the browser check and the code review are in § Progress.**
+**Status: built and reviewed; the browser check and the code review are in § Progress.**
 
 ## What is there now, measured
 
@@ -153,3 +153,18 @@ not enough, this is the next thing to try, and the note will say so rather than 
   `tests/search-hit-card-on-the-score.test.tsx`. **What is not known:** whether Safari on a real
   iPad sends that `mouseleave`. No machine here runs WebKit with touch, so this was reproduced in
   Chrome only. The fix is safe either way; Greg tapping a score on his iPad is the real check.
+- 2026-10-04: GPT Sol code review found one P1 across every controlled card: the remembered touch
+  press survived after the card closed and until a mouse *pressed*, so a hybrid device's mouse could
+  hover in and out without closing it. A red-first regression test now covers touch followed by a
+  real mouse, a cursor already over the trigger, a cancelled touch, and direct entry into an
+  interactive card; `Tooltip` clears the exemption on close or real mouse pointer activity.
+  The review is [here](261003p-search-results-room-code-review-sol.md) (verdict: land with the
+  fixes made; CR-1 above, and CR-2, a stale sentence in tooltips.md about Structure's cards, which
+  is not this change's). The class is written up in
+  [261004a](../postmortems/261004a-input-modality-must-expire-with-the-interaction-it-qualifies.md).
+- 2026-10-04: the browser check, on the reviewer's version, in Chrome with touch on at 1180×740: a
+  tap holds the card open at 500ms and at 2s by three tap methods; it closes on a tap in the prose,
+  on Escape and on a tap on another row's score (which opens that row's); a tap on the row's words
+  still jumps and closes it; a real mouse moved onto the score and off again after a tap closes it;
+  with a mouse only, hover and click behave as before; the band's (i) and the spine's two taps are
+  unchanged. Screenshot of the card held open by a tap: `261003p-shot-after-gutter-card.png`.
