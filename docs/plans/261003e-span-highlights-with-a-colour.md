@@ -100,9 +100,9 @@ Recommended: **a small floating menu at the selection**, instead of the box open
 ```
    …the variance of the estimator falls as n grows, which is why…
        ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
-       ┌────────────────────────────────────────────┐
-       │  ●  ●  ●  ●   │  💬 Comment…  │  ⧉ Copy    │
-       └────────────────────────────────────────────┘
+       ┌─────────────────────────────────┐
+       │  ●  ●  ●  ●   │  💬 Comment…   │
+       └─────────────────────────────────┘
 ```
 
 - A swatch saves a wordless coloured comment **in one press**, clears the browser selection so the
@@ -111,7 +111,6 @@ Recommended: **a small floating menu at the selection**, instead of the box open
 - **Comment…** opens today's `AnnotateDialog`, exactly as letting go does now, with a swatch row
   added (no colour picked by default, so a comment made the old way looks as it does today). The AI
   tick-box stays there, where it is now. The menu does not offer the paid thing in one press.
-- **Copy** copies the quote, as the box's Copy does now, without opening anything.
 - Escape, a click elsewhere, or a new selection dismisses it. It takes no focus on open, so the
   selection survives and ⌘C still works. That fixes the 2026-09-05 copying complaint at the root
   rather than with a button.
@@ -151,6 +150,46 @@ Each stage ends green and committed. Sol reviews the plan before stage 1 and the
   people use colours; not in v1.
 - **Custom colours.** Four fixed names.
 - **Keyboard shortcut** for highlight-in-last-colour. Easy later.
+
+## GPT Sol's plan review, 2026-10-03: build with changes
+
+[261003e-span-highlights-plan-review-sol.md](261003e-span-highlights-plan-review-sol.md). Eleven
+P1s, no P0. All accepted; each checked against the file it cites. What they change:
+
+- **S1 the opening-read gate.** A one-press swatch must wait for `owner.comments.loaded`, as
+  AnnotateDialog's Save does ([260908c](../postmortems/260908c-an-opening-read-can-erase-a-later-write.md)).
+- **S2 the mark cache.** `anchorKey` in `TableView.tsx` excludes every non-anchor field, so a
+  recolour, a removed colour or a body added would leave the old drawing. Colour, "earns a ✳" and a
+  creation priority go on each comment `Mark`, and into the key (or a cheap pass like `applyOpen`).
+  Mounted tests for each change.
+- **S3 write ordering.** `recolour` joins `useComments`' per-comment `queue` beside `edit` and
+  `place`; the picker is controlled by the stored row.
+- **S4 no whole-block colour.** SQL `colour is null or quote is not null`, refused at POST and
+  PATCH, and no picker on a whole-paragraph comment.
+- **S5 one priority for colour and click.** `createdAt` then `id`: the comment whose colour shows is
+  the one a click opens (ids emitted newest-first), keeping the linked comment/chat exception.
+  Tested through `onMouseUp`. A highlight under an author link or a cross-reference opens from
+  the gutter or drawer, not from the words. That is an existing rule, now stated.
+- **S6 search shares the background.** A highlight's wash wins on the overlapping words; search
+  keeps its stripes and paragraph rail; an open highlight gets an outline, not the orange wash.
+  Browser-checked.
+- **S7, S8 the menu's lifecycle** (if built): one draft `{anchor, rect, token}`, geometry from the
+  clamped range, dismissed on scroll, resize, mode change and selection change, re-checked before
+  saving; one state machine `menu → dialog → saved/cancelled` inside `surface.current`, with one
+  Escape owner, Comment… mounting the dialog fresh, visitors silent, Referee straight to the dialog,
+  and pointerdown inside the menu not counted as outside.
+- **S9 kind precedence.** `comment-ai` > `comment` > `highlight` > `bookmark`; Marginalia excludes
+  `highlight` and `bookmark`; `CommentDialog`'s own labels use `commentKind`.
+- **S10 idempotency.** Colour joins `NewComment`, `toComment` and same-Save equality (same id with a
+  different colour is a 409). `Comment.colour` is optional, absent for null.
+- **S11 projections are definite work.** The rollback exporter (`store/export.ts`), the public SQL
+  select, the public mapping and DTO, and `PublicComment` all list fields by hand. Stage 1, with
+  owner/visitor equivalence and export tests.
+- **S12** the menu needs Greg's answer before stage 3. **Copy** is dropped from any menu: if the menu
+  takes no focus, ⌘C already works.
+
+Sol's "simpler version that gets most of the value" is colour in the two existing boxes with the
+selection flow unchanged. That is option A in the question below.
 
 ## The question for Greg
 
