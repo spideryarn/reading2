@@ -429,6 +429,15 @@
   --toward-ink-rgb: 0 0 0;
   --chat-mark: oklch(0.52 0.13 235);
 
+  /* The reader's four highlighter washes (span highlights, plan 261003e-span-highlights): the
+     same bases, mixed into the light page a little harder, because a share
+     of a pale colour over near-white is fainter than the same share over
+     near-black. Dark ink on any of them stays far above 7:1. */
+  --hl-yellow: color-mix(in oklab, oklch(0.88 0.17 100) 45%, var(--page));
+  --hl-green: color-mix(in oklab, oklch(0.80 0.15 150) 36%, var(--page));
+  --hl-blue: color-mix(in oklab, oklch(0.72 0.14 270) 30%, var(--page));
+  --hl-pink: color-mix(in oklab, oklch(0.76 0.16 350) 32%, var(--page));
+
   /* The depth ramp runs coarse to fine in lightness *away from the page*, so on
      a light page it runs dark to light: the coarsest column is the most
      visible one, as it is on dark. */

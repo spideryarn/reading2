@@ -198,7 +198,7 @@
 /* The chosen one carries a ring in the orange the app uses for "selected",
    and `aria-checked` says it in words. */
 .hl-swatch.on { box-shadow: 0 0 0 2px var(--page), 0 0 0 3.5px var(--highlight); }
-.hl-swatch:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.hl-swatch:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 /* "No colour": an empty circle with a slash through it. */
 .hl-swatch[data-colour="none"] {
   background: linear-gradient(

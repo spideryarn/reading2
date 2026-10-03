@@ -200,7 +200,7 @@ export function TagEditor({
   return (
     <div className="tw:relative tw:text-sm">
       <div
-        className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-2 tw:py-1.5 tw:focus-within:border-highlight"
+        className="tw:flex tw:flex-wrap tw:items-center tw:gap-1.5 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-2 tw:py-1.5 tw:focus-within:border-highlight-text"
         aria-busy={busy || undefined}
       >
         {tags.map((tag) => (
