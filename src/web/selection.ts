@@ -72,6 +72,19 @@ export type SelectionRead =
 const NONE: SelectionRead = { kind: "none" };
 
 /**
+ * A read, and the range it was read from.
+ *
+ * `range` is the **clamped** one — the words that will actually be stored — so
+ * anything drawn beside a selection (TouchSelectionChip.tsx) sits beside those
+ * words and not beside the end of a drag that ran on into the next paragraph.
+ * Null unless the read is an anchor.
+ */
+export interface SelectionReadWithRange {
+  read: SelectionRead;
+  range: Range | null;
+}
+
+/**
  * Read the current selection.
  *
  * A selection that runs past the end of its first block is **clamped** to that
@@ -80,12 +93,18 @@ const NONE: SelectionRead = { kind: "none" };
  * doing the first paragraph is far better than appearing to ignore the drag.
  */
 export function readSelection(selection: Selection | null): SelectionRead {
-  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return NONE;
+  return readSelectionWithRange(selection).read;
+}
+
+/** `readSelection`, and the clamped range beside it. One implementation. */
+export function readSelectionWithRange(selection: Selection | null): SelectionReadWithRange {
+  const none: SelectionReadWithRange = { read: NONE, range: null };
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return none;
   const range = selection.getRangeAt(0);
   const prose = proseOf(range.startContainer);
-  if (!prose) return NONE;
+  if (!prose) return none;
   const blockId = prose.closest<HTMLElement>("tr[data-block]")?.dataset.block;
-  if (!blockId) return NONE;
+  if (!blockId) return none;
 
   // Clamp to this block. `cloneRange` so we never mutate what the user sees.
   const clamped = range.cloneRange();
@@ -99,7 +118,10 @@ export function readSelection(selection: Selection | null): SelectionRead {
   const raw = clamped.toString();
   const lead = raw.length - raw.trimStart().length;
   const quote = raw.trim();
-  if (quote.length < MIN_SELECTION_CHARS) return { kind: "too-short" };
+  if (quote.length < MIN_SELECTION_CHARS) return { read: { kind: "too-short" }, range: null };
 
-  return { kind: "anchor", anchor: { blockId, quote, start: rawStart + lead } };
+  return {
+    read: { kind: "anchor", anchor: { blockId, quote, start: rawStart + lead } },
+    range: clamped,
+  };
 }

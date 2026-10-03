@@ -181,8 +181,24 @@ the remote box took production migrations over
 | `-- --dry-run` | every local gate, nothing external. Nothing pushed, no migration applied |
 | `-- --verify-only` | check what is live right now, deploy nothing |
 | `-- --force-gate=test` | named, never blanket, and printed in the summary as `DEPLOYED WITH … FORCED` |
-| `-- --host <url>` | verify a host other than `www.spideryarn.com` |
+| `-- --verify-only --host <url>` | verify a host other than `www.spideryarn.com`. `--host` without `--verify-only` is refused: a deploy always ships to, and verifies, production |
 | `-- --skip-migrations` | do not **apply** them. Still checks, and **refuses to ship** if any are pending |
+
+**That table is the whole grammar, and any other argument reaching the script is refused with
+exit 2 before any deploy step runs.** Until 2026-10-03 the script ignored unfamiliar arguments,
+turning `--verify-onyl` into a full production deploy. A dropped `--` did too: npm takes
+`npm run deploy --verify-only` as its own config and hands the script no arguments at all, which the
+script now notices from the `npm_config_*` key npm leaves behind, and says "use
+`npm run deploy -- --verify-only`". `parseDeployArgs` in
+[`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts);
+[261003g](../plans/261003g-deploy-refuses-unknown-flags.md).
+
+The npm environment check cannot recover flags npm discards without exporting a key, including
+`--_verify-only`, `--/verify-only` and `--@verify-only`. Those still look like a bare deploy.
+Always put script flags after `--`; closing this remaining hole requires explicit permission to
+deploy in the command grammar rather than treating empty arguments as permission. npm's `-n` /
+`--no` do leave `npm_config_yes` empty and are refused; only `yes=true` from an `npx -y` wrapper
+is accepted.
 
 Three things about it are worth knowing before you read the rest of this section,
 because each one is a mistake this page already records:

@@ -8,7 +8,11 @@
  * See docs/project/comments.md § Anchoring.
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { MIN_SELECTION_CHARS, readSelection } from "../src/web/selection.js";
+import {
+  MIN_SELECTION_CHARS,
+  readSelection,
+  readSelectionWithRange,
+} from "../src/web/selection.js";
 
 /** One row of the table, as TableView renders it. */
 function mount(html: string, blockId = "spya-k3m9qt"): HTMLElement {
@@ -121,9 +125,13 @@ describe("readSelection", () => {
     selection.removeAllRanges();
     selection.addRange(range);
 
-    expect(readSelection(selection)).toEqual({
+    const result = readSelectionWithRange(selection);
+    expect(result.read).toEqual({
       kind: "anchor",
       anchor: { blockId: "spya-aaaaaa", quote: "block here.", start: 6 },
     });
+    expect(result.range?.toString(), "the chip's geometry must use the stored block only").toBe(
+      "block here.",
+    );
   });
 });

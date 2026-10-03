@@ -3513,11 +3513,12 @@ export function Section({
        where it scrolls to — PageContents.tsx, which derives its whole list from
        these rather than from a second array of section names.
 
-       `scroll-mt-24` is 6rem, and `REACHED_PX` over there is deliberately a
+       `scroll-mt-24` is 6rem, and "reached" over there is deliberately a
        little MORE than it — the section a click has just scrolled to must be
        the section the list then marks, and setting the two equal put that on a
-       knife edge that a browser lost. See the constant's docstring; if you
-       change this 24, that number has to stay above it. */
+       knife edge that a browser lost. Since 2026-10-03 it reads this margin off
+       the element (`reachedPx`), so changing the 24 needs no second edit —
+       and neither does a reader whose rem is not 16px. */
     <section
       ref={sectionEl}
       id={sectionId(label)}

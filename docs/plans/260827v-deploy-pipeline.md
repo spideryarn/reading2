@@ -8,7 +8,7 @@
 
 Today a deploy is a handful of commands nobody has written down in one place, and the pieces that
 exist — [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts),
-[`scripts/check-production-gate.sh`](../../scripts/check-production-gate.sh),
+`scripts/check-production-gate.sh` (deleted 2026-10-03, 261003g),
 [`/api/health`](../../src/vercel-health.ts) — are each good and none of them knows about the others.
 Nothing runs them in order, nothing checks that the thing now answering on `www.spideryarn.com` is
 the thing you just built, and nobody has ever read the logs of a deploy they made.
@@ -204,7 +204,7 @@ npm run deploy                 # the whole thing
 npm run deploy -- --dry-run    # every local gate, nothing external, print what it would do
 npm run deploy -- --force-gate=test
 npm run deploy -- --skip-migrations
-npm run deploy -- --host https://…   # verify a host without deploying anything
+npm run deploy -- --verify-only --host https://…   # verify a host without deploying anything (--host alone deployed, until 261003g)
 ```
 
 ---
@@ -490,6 +490,7 @@ first real deploy rather than met with a flag.
 4. Push, wait, verify, logs.
 5. Retire `scripts/check-production-gate.sh` into it, or keep it as the standalone "is the gate
    holding right now" tool it is. Decide once the checks are written and duplication is visible.
+   *Decided 2026-10-03: retired — [261003g](261003g-deploy-refuses-unknown-flags.md).*
 6. Rewrite [deployment.md § Deploying](../project/deployment.md#deploying) around the one command.
 7. A real deploy, and write down what it actually did.
 

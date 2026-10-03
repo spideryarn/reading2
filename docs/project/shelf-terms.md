@@ -300,6 +300,13 @@ it Greg runs it with his owner uuid and the production `DATABASE_URL` in the she
 
 ## What v1 does not do
 
+**Proposed, not built, waiting on Greg**: letting the model name the topics as concepts (*Buddhism*,
+*Writing*) and file the articles, rather than only score phrases the articles use, which is why
+*principles* and *writers* can be pills. Plan
+[261003f](../plans/261003f-shelf-topics-named-by-a-model-as-concepts-not-phrases.md), with its eval
+in [investigation 261003b](../investigations/261003b-shelf-topics-as-concepts-not-phrases.md).
+
+
 - No embeddings, no clustering library (the colours' clustering is thirty lines of our own); the
   one model call judges candidates and never writes one.
 - No editing of topics — hide, rename or pin. Zotero-style "hide this automatic tag" is the obvious v2.

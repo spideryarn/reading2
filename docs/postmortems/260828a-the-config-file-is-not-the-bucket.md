@@ -164,7 +164,7 @@ still to come: `scripts/deploy.ts`, and provisioning.
 
 What removes the class is a **check that compares the declaration to the running bucket** and refuses
 when they differ — the shape [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) already
-uses and [`scripts/check-production-gate.sh`](../../scripts/check-production-gate.sh) already argues
+uses and `scripts/check-production-gate.sh` (deleted 2026-10-03, 261003g) already argues
 for:
 
 1. A pure function — `bucketDrift(declared, running)` — that takes the parsed `[storage.buckets.*]`

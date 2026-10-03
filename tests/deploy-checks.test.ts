@@ -3,8 +3,7 @@
  *
  * That ordering is the rule this repo keeps relearning: a checklist whose lines
  * have only ever been seen to pass is not evidence of anything
- * (scripts/check-production-gate.sh's own header, and
- * docs/reusable/silent-success.md). So nearly every `describe` here leads with
+ * (docs/reusable/silent-success.md). So nearly every `describe` here leads with
  * the broken input and only then asserts the happy one.
  *
  * See scripts/deploy-checks.ts and docs/plans/260827v-deploy-pipeline.md.
@@ -40,6 +39,7 @@ import {
   migrationState,
   migratorUrlFrom,
   missingGateFixtures,
+  parseDeployArgs,
   readLogQuery,
   rollbackAdvice,
   sawSmokeLine,
@@ -54,6 +54,149 @@ import {
   postApplyProblems,
 } from "../scripts/deploy-checks.js";
 import { sslDecisionFor } from "../src/db/ssl.js";
+
+describe("what the command line asked for", () => {
+  /* What npm 11.19.0 sets on every `npm run`, flag or no flag — measured with a probe package
+     (docs/plans/261003g-deploy-refuses-unknown-flags.md). A plain deploy must survive all of it. */
+  const NPM_BASELINE = {
+    npm_config_allow_scripts: "",
+    npm_config_cache: "/home/greg/.npm",
+    npm_config_global_prefix: "/usr",
+    npm_config_globalconfig: "/usr/etc/npmrc",
+    npm_config_init_module: "/home/greg/.npm-init.js",
+    npm_config_local_prefix: "/home/greg/code/spideryarn2",
+    npm_config_loglevel: "silent",
+    npm_config_node_gyp: "/usr/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js",
+    npm_config_noproxy: "",
+    npm_config_npm_version: "11.19.0",
+    npm_config_prefix: "/usr",
+    npm_config_user_agent: "npm/11.19.0 node/v26.8.1 linux x64 workspaces/false",
+    npm_config_userconfig: "/home/greg/.npmrc",
+    npm_lifecycle_event: "deploy",
+    PATH: "/usr/bin",
+  };
+  const problem = (argv: string[], env: Record<string, string> = {}) => {
+    const r = parseDeployArgs(argv, { ...NPM_BASELINE, ...env });
+    return r.ok ? null : r.problem.join("\n");
+  };
+  const mode = (argv: string[]) => {
+    const r = parseDeployArgs(argv, NPM_BASELINE);
+    return r.ok ? r.mode : null;
+  };
+
+  /* Each of these was a full production deploy: the investigation's own list. */
+  it.each([
+    ["--verify-onyl"],
+    ["verify-only"],
+    ["--dryrun"],
+    ["--dry_run"],
+    ["--skip-migration"],
+    ["--verify-only=true"],
+    ["--Verify-Only"],
+    ["-n"],
+    [""],
+  ])("refuses an argument it does not know: %j", (arg) => {
+    expect(problem([arg])).toContain(`unknown argument '${arg}'`);
+    /* And a good flag beside it does not rescue it. */
+    expect(problem(["--verify-only", arg])).toContain(`unknown argument '${arg}'`);
+  });
+
+  it("refuses --host unless the run is --verify-only", () => {
+    expect(problem(["--host", "https://staging.example"])).toContain("--host only goes with --verify-only");
+    expect(problem(["--host=https://staging.example"])).toContain("--host only goes with --verify-only");
+    expect(problem(["--dry-run", "--host", "https://staging.example"])).toContain("--host only goes with");
+  });
+
+  it("refuses a --host with no origin after it, rather than eating the next flag", () => {
+    expect(problem(["--verify-only", "--host"])).toContain("--host needs an origin");
+    expect(problem(["--host", "--verify-only"])).toContain("--host needs an origin");
+    expect(problem(["--verify-only", "--host=staging.example"])).toContain("--host needs an origin");
+    expect(problem(["--verify-only", "--host", "https://x.example/some/path"])).toContain("--host needs an origin");
+  });
+
+  it("refuses the space form of --force-gate, which used to be silently ignored", () => {
+    expect(problem(["--force-gate", "test"])).toContain("--force-gate=<name>");
+    expect(problem(["--force-gate="])).toContain("names no gate");
+  });
+
+  it("refuses a deploy flag beside --verify-only instead of ignoring it", () => {
+    expect(problem(["--verify-only", "--dry-run"])).toContain("--dry-run means nothing beside it");
+    expect(problem(["--verify-only", "--skip-migrations"])).toContain("--skip-migrations");
+    expect(problem(["--verify-only", "--force-gate=test"])).toContain("--force-gate");
+  });
+
+  /* `npm run deploy --verify-only`: empty argv, and the flag in the environment. */
+  it.each([
+    ["npm_config_verify_only", "true", "--verify-only"],
+    ["npm_config_dry_run", "true", "--dry-run"],
+    ["npm_config_skip_migrations", "true", "--skip-migrations"],
+    ["npm_config_host", "https://staging.example", "--host"],
+    ["npm_config_force_gate", "test", "--force-gate"],
+    /* A typo and a dropped `--` at once. */
+    ["npm_config_verify_onyl", "true", "--verify-onyl"],
+    ["npm_config_dryrun", "true", "--dryrun"],
+    /* GPT Sol's three, which a match on fragments of our flag names let through to a deploy. */
+    ["npm_config_verfiy_only", "true", "--verfiy-only"],
+    ["npm_config_dr_run", "true", "--dr-run"],
+    /* npm's own, and exactly what somebody checking would type. */
+    ["npm_config_read_only", "true", "--read-only"],
+    ["npm_config_only", "true", "--only"],
+    ["npm_config_force", "true", "--force"],
+    /* `--verify-only=false` leaves the key present and empty. */
+    ["npm_config_verify_only", "", "--verify-only"],
+    ["NPM_CONFIG_VERIFY_ONLY", "true", "--verify-only"],
+  ])("refuses a flag npm swallowed: %s=%j", (key, value, flag) => {
+    const said = problem([], { [key]: value });
+    expect(said).toContain(key);
+    expect(said).toContain(`npm run deploy -- ${flag}`);
+    /* Even when the same flag also arrived properly: something was still lost. */
+    expect(problem(["--dry-run"], { [key]: value })).toContain(key);
+  });
+
+  it("does not mistake ordinary npm configuration for a swallowed flag", () => {
+    /* `host` is in the name, and a fragment match refused a plain deploy over it. */
+    const env = { ...NPM_BASELINE, npm_config_replace_registry_host: "never", npm_config_registry: "https://r.example/" };
+    expect(parseDeployArgs([], env)).toEqual({ ok: true, mode: { op: "deploy", skipMigrations: false, forcedGates: new Set() } });
+  });
+
+  it.each(["", "false"])("refuses npm's negative answer, npm_config_yes=%j", (value) => {
+    /* npm expands `-n`, `--no` and `--no-yes` to yes=false, exported as an
+       empty string. A person saying no must never get a production deploy. */
+    expect(problem([], { npm_config_yes: value })).toContain("npm_config_yes");
+    expect(problem(["--skip-migrations"], { NPM_CONFIG_YES: value })).toContain("NPM_CONFIG_YES");
+  });
+
+  it("accepts the positive npm answer inherited from an npx -y wrapper", () => {
+    expect(parseDeployArgs([], { ...NPM_BASELINE, npm_config_yes: "true" })).toMatchObject({
+      ok: true,
+      mode: { op: "deploy" },
+    });
+  });
+
+  it("accepts the forms the docs name, under npm's ordinary environment", () => {
+    expect(mode([])).toEqual({ op: "deploy", skipMigrations: false, forcedGates: new Set() });
+    expect(mode(["--dry-run"])).toEqual({ op: "dry-run", skipMigrations: false, forcedGates: new Set() });
+    expect(mode(["--verify-only"])).toEqual({ op: "verify", host: null });
+    expect(mode(["--verify-only", "--host", "https://staging.example/"])).toEqual({
+      op: "verify",
+      host: "https://staging.example",
+    });
+    expect(mode(["--host=http://localhost:3000", "--verify-only"])).toEqual({
+      op: "verify",
+      host: "http://localhost:3000",
+    });
+    expect(mode(["--skip-migrations", "--force-gate=test", "--force-gate=changelog"])).toEqual({
+      op: "deploy",
+      skipMigrations: true,
+      forcedGates: new Set(["test", "changelog"]),
+    });
+    expect(mode(["--dry-run", "--force-gate=test"])).toEqual({
+      op: "dry-run",
+      skipMigrations: false,
+      forcedGates: new Set(["test"]),
+    });
+  });
+});
 
 const SHA = "1f032e20f723883f4eecd218b06701c754d320a5";
 const OLD = "d5a9d513a6d298147c81938873096dbad09e6d26";

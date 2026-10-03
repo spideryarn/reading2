@@ -5024,7 +5024,7 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
  *
  * **Not for anything that becomes a path.** See `slugPart`.
  *
- * **A capture that will not decode is a 400.** Every pattern admits `%`, and
+ * **A capture that will not decode is a 400.** Slug patterns admit `%`, and
  * `decodeURIComponent("%E0")` raises `URIError`, which names no status — so
  * until 2026-10-03 `serveApi`'s catch made a mistyped address a 500 and a
  * Sentry report. `slugFrom` in src/public/routes.ts has caught the same throw
