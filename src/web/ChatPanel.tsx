@@ -236,7 +236,7 @@ interface Props {
    */
   kind: ThreadKind;
   /**
-   * **The Recall | Tutorial | Quiz control**, when this panel is one of
+   * **The Recall | Tutorial | Explore | Quiz control**, when this panel is one of
    * Remember's conversation views. Absent in chat mode.
    *
    * A slot rather than a `subMode` value with a callback, because the control
@@ -360,9 +360,9 @@ export function ChatPanel({
   seed,
 }: Props) {
   useRenderCount("ChatPanel");
-  /* **Remember's layout, for both of its conversations** — Recall and
-     Tutorial are each one thread per article, dictated into a tall box, with
-     no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
+  /* **Remember's layout, for all three of its conversations** — Recall,
+     Tutorial and Explore are each one thread per article, dictated into a tall
+     box, with no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
      is words, decided per kind below. */
   const remember = isSingleThreadKind(kind);
   const open = threads.find((t) => t.id === threadId) ?? null;
@@ -485,7 +485,9 @@ export function ChatPanel({
       label={
         kind === "tutorial"
           ? "A tutorial on this article"
-          : remember
+          : kind === "explore"
+            ? "Explore what you think about this article"
+            : remember
             ? "Remember what you took from this article"
             : "Chat about this article"
       }
@@ -495,7 +497,11 @@ export function ChatPanel({
               is one Remember conversation per article, so the title names
               nothing the reader could mistake it for — and it is their first
               sixty characters, often "Um, so…". Plan 261001m § 4. */}
-          <h2>
+          {/* **Read out, not drawn, beside the sub-mode chips.** Four chips left
+              the word one letter wide in a narrow band (the browser pass on
+              261003l), and the Dock already says which mode this is — the
+              reason Quiz's own row dropped its name on 2026-09-05. */}
+          <h2 className={remember && subMode ? "sr-only" : undefined}>
             {remember ? (
               "Remember"
             ) : open ? (
@@ -1203,6 +1209,8 @@ export function Conversation({
         {empty &&
           (kind === "tutorial" ? (
             <TutorialInvitation />
+          ) : kind === "explore" ? (
+            <ExploreInvitation onAsk={(q) => onSend(q)} />
           ) : kind === "remember" ? (
             <RememberInvitation />
           ) : (
@@ -1351,6 +1359,60 @@ function TutorialInvitation() {
         We'll take short turns: a little of the piece at a time, with a link to the passage, and then
         a question for you to answer in your own words.
       </p>
+    </div>
+  );
+}
+
+/**
+ * **The ways into Explore the empty state offers**, each sent as the reader's
+ * first message exactly as written — so what they pressed is what they see in
+ * the transcript, and what `EXPLORE_SYSTEM` (src/converse.ts) answers.
+ *
+ * One per thing Greg asked Explore to do (2026-10-03, quoted in
+ * docs/project/remember-mode.md § Explore): start from *"my comments, my
+ * highlights, my chat threads"*; *"apply to interesting cases of my own"*; and
+ * *"situate the article in terms of the wider world"*. Exported for
+ * tests/remember-panel.test.tsx.
+ */
+export const EXPLORE_STARTERS: readonly string[] = [
+  "Start from what I've marked and discussed",
+  "Help me apply this to my own work",
+  "Where does this sit in the wider world?",
+];
+
+/**
+ * **Explore's empty state says what it is for and offers three ways in.**
+ *
+ * Buttons, where Recall's invitation above refuses them — and the difference
+ * is what the button would say. A Recall starter would be the reader's account
+ * of the piece, written by us. These are requests: each asks the model to make
+ * a move and puts no view in the reader's mouth, so Chat's `Suggestions` shape
+ * fits. The reader may also just type or talk; the box below says so.
+ *
+ * The words here are the app's, so they are set in the app's face. Nothing the
+ * reader marked is drawn here — the notes go to the model, not onto this
+ * screen — so there is nothing to set in the reader's
+ * (docs/project/fonts.md).
+ */
+function ExploreInvitation({ onAsk }: { onAsk(question: string): void }) {
+  return (
+    <div className="chat-suggest">
+      <p className="chat-empty-hint">
+        What do you think about this piece? Explore starts from what you've highlighted, noted and
+        talked about here, and helps you take your own ideas further.
+      </p>
+      <p className="chat-empty-hint">
+        It can try the piece on cases of your own, and look up what others have said about it.
+      </p>
+      <ul>
+        {EXPLORE_STARTERS.map((starter) => (
+          <li key={starter}>
+            <button type="button" className="chat-suggest-btn" onClick={() => onAsk(starter)}>
+              {starter}
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -1689,6 +1751,8 @@ function ToolIcon({ name }: { name: string }) {
     case "article_links":
       return <Link2 size={12} aria-hidden />;
     case "article_glossary":
+    /* The reader's own notes: a page of writing, like the glossary's. */
+    case "reader_notes":
       return <FileText size={12} aria-hidden />;
     case "article_citations":
       return <BookMarked size={12} aria-hidden />;
@@ -2052,7 +2116,7 @@ export function Composer({
      because it outlives this component; this keeps the value because typing
      into it must not repaint the transcript above. */
   const [value, setValue] = useState(draft);
-  /* Recall's and Tutorial's box alike: tall, microphone first. */
+  /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
   const remember = isSingleThreadKind(kind);
   /**
    * **A short band gets a short box.** On a landscape phone the band is about
@@ -2216,7 +2280,9 @@ export function Composer({
             ? "Waiting for the answer…"
             : kind === "tutorial"
               ? "What do you remember about it? It's fine if you haven't read it yet."
-              : remember
+              : kind === "explore"
+                ? "What do you make of it? Say what's on your mind, or where you'd like to take it."
+                : remember
                 ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
                 : (placeholder ?? "Ask about this article…")
         }

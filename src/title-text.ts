@@ -249,6 +249,5 @@ export const MODE_LABEL: Record<Mode, string> = {
   citations: "Citations",
   faq: "FAQ",
   skim: "Skim",
-  tweets: "Tweets",
   marginalia: "Marginalia",
 };

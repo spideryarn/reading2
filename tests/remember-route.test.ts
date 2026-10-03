@@ -354,6 +354,56 @@ describe("a Tutorial turn", () => {
   });
 });
 
+/* Explore, Remember's fourth sub-mode (plan 261003l): its own kind, stored as
+   itself, dictated so it shares Remember's long cap on a send AND on an edit
+   (which names no kind, so the stored thread's has to decide), about the whole
+   article so never anchored, and never given a stance. What its turn carries
+   is tests/explore-digest-route.test.ts. */
+describe("an Explore turn", () => {
+  const long = "so what I keep coming back to is ".repeat(200);
+
+  it("is stored as an Explore thread and takes Remember's long cap", async () => {
+    expect(long.length).toBeGreaterThan(4000);
+    const { status } = await post({ threadId: "spya-x7m2wz", question: long, kind: "explore" });
+    expect(status).not.toBe(413);
+    expect(status).not.toBe(400);
+    const thread = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.kind === "explore");
+    expect(thread?.id).toBe("spya-x7m2wz");
+    expect(thread?.messages[0]?.text).toBe(long.trim());
+  });
+
+  it("keeps the long cap when the opening question is edited", async () => {
+    await post({ threadId: "spya-x7m4wz", question: "a short start", kind: "explore" });
+    const thread = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.kind === "explore");
+    const { status } = await post({
+      threadId: thread?.id,
+      edit: thread?.messages[0]?.id,
+      question: long,
+      expectedTailId: thread?.messages.at(-1)?.id,
+    });
+    expect(status).not.toBe(413);
+    const after = (await asTestOwner(() => chatStore.load(SLUG))).find((t) => t.kind === "explore");
+    expect(after?.messages[0]?.text).toBe(long.trim());
+  });
+
+  it("joins the one Explore thread rather than starting a second", async () => {
+    await post({ threadId: "spya-x7m5wz", question: "first", kind: "explore" });
+    await post({ threadId: "spya-x7m6wz", question: "second, from a stale tab", kind: "explore" });
+    const explore = (await asTestOwner(() => chatStore.load(SLUG))).filter((t) => t.kind === "explore");
+    expect(explore).toHaveLength(1);
+    expect(explore[0]?.id).toBe("spya-x7m5wz");
+    expect(explore[0]?.messages).toHaveLength(4);
+  });
+
+  it("refuses a stance, an anchor and a screenful", async () => {
+    const base = { threadId: "spya-x7m3wz", question: "what do I think", kind: "explore" };
+    expect((await post({ ...base, stance: "balanced" })).status).toBe(400);
+    expect((await post({ ...base, anchor: { blockId: ANCHOR } })).status).toBe(400);
+    expect((await post({ ...base, visible: [ANCHOR] })).status).toBe(400);
+    expect((await asTestOwner(() => chatStore.load(SLUG))).filter((t) => t.kind === "explore")).toHaveLength(0);
+  });
+});
+
 /* Report spya-f3b6ab (Greg, 2026-10-01): "I tried editing a previous message in
    Recall mode, hoping that it would then trigger a response to that modified
    message, but it didn't." The request the real client sends for an edit —

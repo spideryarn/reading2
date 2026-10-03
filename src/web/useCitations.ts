@@ -46,6 +46,7 @@ import type {
   CitationInvestigation,
   Citations,
   CitationsResponse,
+  CitationWebInfluence,
   CitedWork,
   FindCitationResponse,
   InvestigatedPaper,
@@ -628,7 +629,32 @@ function isInvestigation(data: unknown): data is CitationInvestigation {
     (i.matchedHost === null || typeof i.matchedHost === "string") &&
     typeof i.at === "string" &&
     /* Absent on an answer from before plan 261001a stage 3; when present, whole. */
-    (i.paper === undefined || isInvestigatedPaper(i.paper))
+    (i.paper === undefined || isInvestigatedPaper(i.paper)) &&
+    /* Absent when the press kept no influence (plan 261003m stage 2); when present, whole. */
+    (i.influence === undefined || isWebInfluence(i.influence))
+  );
+}
+
+/**
+ * **A web influence, whole or not at all** — a number within 0–1, the page's
+ * words, an http(s) address and a version. It feeds the bar, the threshold and
+ * the order, so a malformed one fails the frame rather than drawing a bar from
+ * a string or a link to anything but a web page.
+ */
+function isWebInfluence(data: unknown): data is CitationWebInfluence {
+  const w = data as Record<string, unknown> | null | undefined;
+  return (
+    !!w &&
+    typeof w === "object" &&
+    typeof w.value === "number" &&
+    Number.isFinite(w.value) &&
+    w.value >= 0 &&
+    w.value <= 1 &&
+    isText(w.quote) &&
+    isText(w.sourceUrl) &&
+    /^https?:\/\//i.test(w.sourceUrl) &&
+    (w.sourceTitle === undefined || typeof w.sourceTitle === "string") &&
+    isText(w.version)
   );
 }
 

@@ -431,6 +431,11 @@ export function liveTools(): unknown[] {
  * handing anything at all to `runTool` — which would answer an unknown name
  * with a helpful sentence listing the others, exactly the wrong reply to a
  * caller that is not the model.
+ *
+ * **Built from `CHAT_TOOLS`, not from `toolsFor`**, and that is what keeps
+ * `reader_notes` out of it: the tool endpoint is given a name and an article
+ * and no thread, so it has nothing to leave out of that tool's list of the
+ * reader's conversations. src/chat-tools.ts § `READER_NOTES_TOOL`.
  */
 export const LIVE_SERVER_TOOLS: ReadonlySet<string> = new Set(
   CHAT_TOOLS.map((t) => t.function.name),

@@ -338,6 +338,25 @@ describe("one card at a time", () => {
 /* ------------------------------------------------------- the row itself ---- */
 
 describe("the row", () => {
+  it("prints the publisher's full day in Published and explains an undated cell", () => {
+    paint([{ ...ENTRY, publishedAt: "2024-03-11T23:30:00-05:00" }, BARE]);
+    const headers = [...host.querySelectorAll("thead th")];
+    const index = headers.findIndex((h) => h.textContent?.includes("Published"));
+    expect(index, "no Published column").toBeGreaterThanOrEqual(0);
+    const cell = (slug: string) => titleLink(slug).closest("tr")?.querySelectorAll("td")[index];
+    const expected = new Intl.DateTimeFormat(undefined, {
+      calendar: "gregory",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date("2024-03-11T00:00:00Z"));
+    expect(flat(cell(ENTRY.slug)?.textContent)).toBe(expected);
+    expect(flat(cell(BARE.slug)?.textContent)).toBe("—no publication date");
+    expect(cell(BARE.slug)?.querySelector("[aria-hidden='true']")?.textContent).toBe("—");
+    expect(cell(BARE.slug)?.querySelector(".tw\\:sr-only")?.textContent).toBe("no publication date");
+  });
+
   it("has no title attribute anywhere in the table body", () => {
     paint([ENTRY, BARE, { ...BARE, slug: "row-card-shared", visibility: "public" }]);
     const titled = [...host.querySelectorAll("tbody [title]")].map((el) => el.outerHTML.slice(0, 80));
@@ -468,5 +487,20 @@ describe("rowCardFacts", () => {
     expect(value(ENTRY, "Comments", ["questions"])).toBe("38");
     expect(value(ENTRY, "Size", ["length"])).toBe("3,456 words · 4 parts · 11 sections · 97 blocks");
     expect(value(BARE, "Last opened", ["opened"])).toBe("never");
+  });
+
+  /** The Published cell prints the whole date, so the card repeats it only when the column is hidden. */
+  it("carries the publication date only when its column is hidden and there is one", () => {
+    const dated = { ...BARE, publishedAt: "2024-03-12" };
+    expect(labels(dated)).not.toContain("Published");
+    const expected = new Intl.DateTimeFormat(undefined, {
+      calendar: "gregory",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date("2024-03-12T00:00:00Z"));
+    expect(value(dated, "Published", ["published"])).toBe(expected);
+    expect(rowCardFacts(BARE, ["published"]).facts.map((f) => f.label)).not.toContain("Published");
   });
 });

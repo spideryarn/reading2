@@ -82,8 +82,14 @@ export interface ThresholdResult<T> {
  *  - **Every literal search match.** Words mode has no confidence at all, so
  *    reading null as zero would empty that list the moment an
  *    `?order=prioritised` link was opened there.
- *  - **A citation missing relevance or influence.** Both are needed for its
- *    weighted score; absence is not evidence that the work is unimportant.
+ *  - **A citation with no relevance.** Its weighted score is mostly relevance,
+ *    and absence is not evidence that the work is unimportant. A citation
+ *    whose *influence* alone is missing is **not** one of these since
+ *    2026-10-03: the model now says "unknown" whenever it is not confident it
+ *    knows the work, which is common, so that row arrives here with a score,
+ *    its relevance alone (`priorityOf` in CitationsPanel.tsx; plan 261003m).
+ *    That is the same arithmetic as assuming its influence equals its
+ *    relevance, which is not neutral and is said so there.
  *
  * In all four, showing it is the lossless direction: a thing the reader can
  * see and judge beats one withheld on the strength of a missing field. Note

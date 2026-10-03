@@ -624,7 +624,8 @@ export async function exportArticle(
            passed through. */
         /* The stored kind whenever it is one we know — Candidates and Tutorial
            were exported as chats until 2026-10-02, because this was a
-           Remember-or-chat ternary. GPT Sol's plan review of 261002i. */
+           Remember-or-chat ternary. GPT Sol's plan review of 261002i. Explore
+           (2026-10-03) rides through `isThreadKind` with nothing to do here. */
         kind: isThreadKind(thread.kind) ? thread.kind : ("chat" as const),
         messages: messageRows.map((row) =>
           compact({
@@ -872,6 +873,13 @@ export async function exportArticle(
         paperSelectionVersion: row.paperSelectionVersion,
         paperReadAt: row.paperReadAt?.toISOString() ?? null,
         paperPassages: row.paperPassages,
+        /* The web influence (plan 261003m stage 2), column for column; all
+           null when the press kept none. */
+        influence: row.influence,
+        influenceQuote: row.influenceQuote,
+        influenceSourceUrl: row.influenceSourceUrl,
+        influenceSourceTitle: row.influenceSourceTitle,
+        influenceVersion: row.influenceVersion,
       };
     }
     await put("citation_investigations", "citation-investigations.json", { investigations });

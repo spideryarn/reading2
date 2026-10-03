@@ -271,7 +271,7 @@ it goes wrong by waiting. The table below is the ones worth a note, not an inven
 | [`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx) — `ArticlePage` | loading and error, **and nothing else** |
 | [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — `Reader` | the reading view, with its mode |
 | [`Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata` |
-| [`Tweets.tsx`](../../src/web/Tweets.tsx) | the Tweets mode's band — `?mode=tweets` on the reading view (a page at `/read/<slug>/tweets` until 2026-09-29, when [the plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) made it a mode; the old address redirects), so its title is the ordinary any-other-mode one |
+| [`Tweets.tsx`](../../src/web/Tweets.tsx) | the thread's band — Summary's Thread view, `?mode=summary&summary=thread` (a page at `/read/<slug>/tweets` until 2026-09-29, when [the plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) made it a mode, and a mode until 2026-10-03, [261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md); both old addresses redirect), so its title is Summary's |
 | [`AddPage.tsx`](../../src/web/AddPage.tsx) | both `/add/` routes |
 | [`ProfilePage.tsx`](../../src/web/ProfilePage.tsx) | `/profile` |
 | [`DesignPage.tsx`](../../src/web/DesignPage.tsx) | `/design` |

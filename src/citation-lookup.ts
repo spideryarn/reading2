@@ -307,7 +307,12 @@ export function titleNamesWork(pageTitle: string | undefined, workTitle: string)
  * **Is this result the work? (R-1)** Stricter than `pageNamesTitle`, which
  * stays *Find it*'s rule for choosing a link.
  */
-export function resultIsTheWork(page: SearchEvidence, context: LookupContext): boolean {
+export function resultIsTheWork(
+  page: SearchEvidence,
+  /* Only what identifies the work — so src/citation-influence.ts can ask the
+     same question of a page without inventing a `why` and a passage. */
+  context: Pick<LookupContext, "title" | "authors" | "year" | "anchor">,
+): boolean {
   const surname = surnameOf(context.authors);
   const seen = new Set(tokens(`${page.title ?? ""} ${page.excerpt ?? ""}`));
   const surnameSeen = surname !== null && seen.has(surname);

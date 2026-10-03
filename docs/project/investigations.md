@@ -22,6 +22,15 @@ is called done.** A plan's § Result or a file under `evals/results/` is not whe
 write-up says what was asked, what was measured, what was decided and what was
 ruled out. It links to the plan and the raw results rather than copying their tables.
 
+The files are not indexed here; list the directory. Two that show the shape, both of a prompt
+measured with scripted readers and a blind judge:
+
+- [261003c](../investigations/261003c-tutorial-prompt-leans-to-retention.md) — Tutorial's prompt
+  weighted towards the author, old against new, with the old run twice as the control.
+- [261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md) —
+  Explore against Chat with the `reader_notes` tool: a product comparison, the numbers set before
+  the run, and the one it did not meet.
+
 ## Naming
 
 The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`, from

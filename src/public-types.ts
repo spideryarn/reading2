@@ -493,9 +493,11 @@ export interface PublicTimeline {
  * nothing; only planning one spends, and nothing in a visitor's client can.
  * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
  *
- * **The stops cross field by field** — `{ quoteId, depth, role, cue }`, all of
- * them about the article: a quote id the payload's `quotes` resolves, a pass,
- * and the model's one line on what to look for there.
+ * **The stops cross field by field** — `{ quoteId, depth, role, cue, again }`,
+ * all of them about the article: a quote id the payload's `quotes` resolves, a
+ * pass, the model's one line on what to look for there, and the deeper passes
+ * the stop is walked in again (`skim/9`, plan 261003l — without it a visitor
+ * would walk a different pass from the owner).
  *
  * **`offered` crosses** for `PublicQuotes.discarded`'s reason: the panel prints
  * it at the deepest pass (*"stops at 12 of the 15 quotes offered to this

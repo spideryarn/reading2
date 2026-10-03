@@ -58,6 +58,7 @@ await pgReady({
 const { handleApi } = await import("../src/routes.js");
 const { investigateCitation } = await import("../src/store/index.js");
 const { pgCitationInvestigationStore } = await import("../src/store/pg-citation-investigations.js");
+const { INFLUENCE_VERSION } = await import("../src/citation-effective-influence.js");
 
 let article: ScratchArticle | undefined;
 const realFetch = globalThis.fetch;
@@ -129,10 +130,16 @@ const SEARCH_STEP = {
   usage: { server_tool_use: { web_search_requests: 1 } },
 };
 
-function provider(first: string, lookup: unknown = NO_MATCH_LOOKUP) {
+function provider(
+  first: string,
+  lookup: unknown = NO_MATCH_LOOKUP,
+  /** Plan 261003m stage 2: another forced-search answer, and what the influence call answers. */
+  more: { search?: unknown; influence?: unknown } = {},
+) {
   let calls = 0;
   let lookups = 0;
   let searches = 0;
+  let influences = 0;
   /** The `model` of every call to the gateway, in order. */
   const models: string[] = [];
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
@@ -158,7 +165,17 @@ function provider(first: string, lookup: unknown = NO_MATCH_LOOKUP) {
         ok: true,
         status: 200,
         headers: new Headers(),
-        text: async () => JSON.stringify(SEARCH_STEP),
+        text: async () => JSON.stringify(more.search ?? SEARCH_STEP),
+      } as unknown as Response);
+    }
+    /* The influence call: the one whose strict schema is named `citation_influence`. */
+    if (body.includes('"citation_influence"')) {
+      influences += 1;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        text: async () => JSON.stringify(more.influence),
       } as unknown as Response);
     }
     /* The lookup is the other call that does not stream. */
@@ -188,6 +205,7 @@ function provider(first: string, lookup: unknown = NO_MATCH_LOOKUP) {
     calls: () => calls,
     lookups: () => lookups,
     searches: () => searches,
+    influences: () => influences,
     models: () => models,
     /** The hosts asked that are not the model gateway — the paper and the registry. */
     outside: () => outside,
@@ -581,5 +599,183 @@ describe("the store's CHECK on extracts", () => {
   it("refuses an answer with no extract when the paper was not read", async () => {
     await expect(save({ ...BASE, paper: { state: "no-address", readAt: "2026-10-01T12:00:00.000Z" } })).rejects.toThrow();
     await expect(save(BASE)).rejects.toThrow();
+  });
+});
+
+/* Plan 261003m stage 2, through the real composition root, the real gateway
+   client and the real store: a press whose forced search returns a page about
+   the work asks the influence call, keeps what code can check, stores it on
+   the answer's row, and a fresh read of the list carries it. Last of the
+   presses on this row, so the cases above see the answers they stored. */
+describe("a press that finds the work's influence on the web", () => {
+  const STANDING = "This 2020 paper by Kaplan is widely cited as a seminal work on scaling in deep learning";
+  const ABOUT = "https://en.wikipedia.org/wiki/Scaling_laws_for_neural_language_models";
+  const ABOUT_TITLE = `${TITLE} - Wikipedia`;
+  const searchWithStanding = {
+    choices: [
+      {
+        finish_reason: "stop",
+        message: {
+          content: '"scaling laws" OR Kaplan',
+          annotations: [
+            {
+              type: "url_citation",
+              url_citation: { url: ABOUT, title: ABOUT_TITLE, content: `Kaplan and colleagues published it in 2020. ${STANDING}.` },
+            },
+          ],
+        },
+      },
+    ],
+    usage: { server_tool_use: { web_search_requests: 1 } },
+  };
+  const influenceAnswer = (answer: unknown) => ({
+    choices: [{ finish_reason: "stop", message: { content: JSON.stringify(answer) } }],
+    usage: { prompt_tokens: 10, completion_tokens: 5 },
+  });
+
+  async function press(influence: unknown) {
+    const stub = provider("Does it back the claim?\n", NO_MATCH_LOOKUP, { search: searchWithStanding, influence });
+    const call = serve("POST", investigateUrl());
+    const handled = handleApi(call.req, call.res, acceptAny);
+    await until(() => call.body().includes("event: delta"));
+    /* Settled before the answer starts: the influence call has been made by the first delta. */
+    const askedByFirstDelta = stub.influences();
+    stub.finish("The abstract on arxiv.org says it does.");
+    await handled;
+    const ends = terminals(call.body());
+    expect(ends.map((f) => f.name)).toEqual(["done"]);
+    return { stub, askedByFirstDelta, done: ends[0]?.data as InvestigateCitationDone };
+  }
+
+  it("stores it with the answer, sends it in `done`, and a fresh read has it on the row", async () => {
+    const { stub, askedByFirstDelta, done } = await press(influenceAnswer({ influence: 0.9, source: 1, quote: STANDING }));
+    expect(askedByFirstDelta).toBe(1);
+    expect(stub.influences()).toBe(1);
+    expect(stub.models().every((m, i) => i === 0 || m === DIG_DEEPER_MODEL)).toBe(true);
+    expect(done.investigation.influence).toEqual({
+      value: 0.9,
+      quote: STANDING,
+      sourceUrl: ABOUT,
+      sourceTitle: ABOUT_TITLE,
+      version: INFLUENCE_VERSION,
+    });
+    const row = await listed();
+    expect(row?.investigation).toEqual(done.investigation);
+    /* The list's own influence is not overwritten: this row never had one. */
+    expect(row).not.toHaveProperty("influence");
+  });
+
+  it("keeps the answer and stores no influence when the model's quote is not on the page, clearing the last press's", async () => {
+    const { done } = await press(influenceAnswer({ influence: 0.9, source: 1, quote: "It is the single most cited paper of the decade" }));
+    expect(done.investigation.answer).toContain("The abstract on arxiv.org says it does.");
+    expect(done.investigation).not.toHaveProperty("influence");
+    expect((await listed())?.investigation).not.toHaveProperty("influence");
+  });
+
+  it("keeps the answer when the gateway refuses the influence call", async () => {
+    const { done } = await press({ error: { message: "no" } });
+    expect(done.investigation).not.toHaveProperty("influence");
+    expect((await listed())?.investigation?.answer).toBe(done.investigation.answer);
+  });
+});
+
+/* Plan 261003m stage 2: the web influence is stored on the press's own row,
+   through its two CHECKs (drizzle/20261003202922_citation_investigation_influence.sql),
+   and read back by `loadCitations`. Its own entry id. */
+describe("the store's CHECKs on the web influence", () => {
+  const ENTRY = "spya-nfwnc2";
+  const BASE = {
+    answer: "An answer from the search results.",
+    sources: [{ url: "https://en.wikipedia.org/wiki/Scaling_laws", title: "Scaling Laws - Wikipedia" }],
+    extractsRead: 1,
+    longestExtractWords: 40,
+    matchedHost: null,
+    searches: 1,
+    searchesFrom: "server_tool_use_details",
+    model: "test/model",
+    at: "2026-10-03T12:00:00.000Z",
+    contextHash: "0123456789abcdef",
+    promptVersion: "citation-investigate/test",
+  };
+  const INFLUENCE = {
+    value: 0.8,
+    quote: "widely cited as a seminal work on scaling",
+    sourceUrl: "https://en.wikipedia.org/wiki/Scaling_laws",
+    sourceTitle: "Scaling Laws - Wikipedia",
+    version: "citation-influence/1",
+  };
+  const save = async (inv: Parameters<typeof pgCitationInvestigationStore.save>[2]) =>
+    runAsOwner(TEST_OWNER, () => pgCitationInvestigationStore.save(SLUG, ENTRY, inv));
+  const stored = async () => {
+    const [row] = await getDb()
+      .select({
+        influence: citationInvestigations.influence,
+        quote: citationInvestigations.influenceQuote,
+        url: citationInvestigations.influenceSourceUrl,
+        title: citationInvestigations.influenceSourceTitle,
+        version: citationInvestigations.influenceVersion,
+        at: citationInvestigations.at,
+      })
+      .from(citationInvestigations)
+      .where(and(eq(citationInvestigations.articleId, article?.articleId ?? ""), eq(citationInvestigations.entryId, ENTRY)));
+    return row;
+  };
+  const where = () =>
+    and(eq(citationInvestigations.articleId, article?.articleId ?? ""), eq(citationInvestigations.entryId, ENTRY));
+
+  it("keeps the number, the page's words, its address, its title and the version, on the row with the answer's own time", async () => {
+    await save({ ...BASE, influence: INFLUENCE });
+    expect(await stored()).toEqual({
+      influence: 0.8,
+      quote: INFLUENCE.quote,
+      url: INFLUENCE.sourceUrl,
+      title: INFLUENCE.sourceTitle,
+      version: INFLUENCE.version,
+      at: new Date(BASE.at),
+    });
+  });
+
+  it("clears it when the next press keeps none", async () => {
+    await save({ ...BASE, influence: INFLUENCE });
+    await save(BASE);
+    expect(await stored()).toMatchObject({ influence: null, quote: null, url: null, title: null, version: null });
+  });
+
+  it("takes a source with no title", async () => {
+    const { sourceTitle: _title, ...untitled } = INFLUENCE;
+    await save({ ...BASE, influence: untitled });
+    expect(await stored()).toMatchObject({ influence: 0.8, title: null });
+  });
+
+  it.each([
+    ["above one", 1.01],
+    ["below zero", -0.01],
+    ["a citation count", 8000],
+    ["not a number", Number.NaN],
+  ])("refuses a number %s", async (_name, value) => {
+    await expect(save({ ...BASE, influence: { ...INFLUENCE, value } })).rejects.toThrow();
+  });
+
+  it("refuses a number without its quote, its address or its version, and a title with no address", async () => {
+    await save(BASE);
+    const db = getDb();
+    await expect(db.update(citationInvestigations).set({ influence: 0.5 }).where(where())).rejects.toThrow();
+    await expect(
+      db.update(citationInvestigations).set({ influence: 0.5, influenceQuote: "q", influenceSourceUrl: "https://a.example/" }).where(where()),
+    ).rejects.toThrow();
+    await expect(
+      db.update(citationInvestigations).set({ influence: 0.5, influenceQuote: "q", influenceVersion: "v" }).where(where()),
+    ).rejects.toThrow();
+    await expect(
+      db.update(citationInvestigations).set({ influence: 0.5, influenceSourceUrl: "https://a.example/", influenceVersion: "v" }).where(where()),
+    ).rejects.toThrow();
+    await expect(db.update(citationInvestigations).set({ influenceQuote: "q" }).where(where())).rejects.toThrow();
+    await expect(db.update(citationInvestigations).set({ influenceSourceTitle: "A title" }).where(where())).rejects.toThrow();
+    /* And the whole set is taken. */
+    await db
+      .update(citationInvestigations)
+      .set({ influence: 0, influenceQuote: "q", influenceSourceUrl: "https://a.example/", influenceVersion: "v" })
+      .where(where());
+    expect(await stored()).toMatchObject({ influence: 0, title: null });
   });
 });

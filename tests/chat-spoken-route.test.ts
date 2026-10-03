@@ -473,7 +473,7 @@ describe("the kind of conversation it creates", () => {
   });
 
   it("refuses a kind a live session cannot have, and a word that is not a kind", async () => {
-    for (const kind of ["tutorial", "candidates", "review", 7]) {
+    for (const kind of ["tutorial", "explore", "candidates", "review", 7]) {
       const out = await post("spya-vaaacc", exchange({ kind }));
       expect(out.status, String(kind)).toBe(400);
     }
@@ -490,5 +490,24 @@ describe("the kind of conversation it creates", () => {
     const stored = (await threads()).find((t) => t.id === first.id);
     expect(stored?.kind).toBe("remember");
     expect(stored?.messages).toHaveLength(2);
+  });
+
+  it.each([
+    ["explore", "spya-vaaacf"],
+    ["tutorial", "spya-vaaacg"],
+  ] as const)("refuses a spoken append to a stored %s thread when kind is omitted", async (kind, threadId) => {
+    const begun = await asTestOwner(() => chatStore.begin(SLUG, {
+      threadId,
+      question: "what do I think",
+      kind,
+    }));
+    await asTestOwner(() => chatStore.finish(SLUG, begun.thread.id, begun.reply.id, {
+      status: "done",
+      text: "a typed reply",
+    }, { attempt: begun.attempt }));
+    const before = (await threads()).find((t) => t.id === begun.thread.id);
+    const out = await post(begun.thread.id, exchange({ expectedTailId: begun.reply.id }));
+    expect(out.status).toBe(409);
+    expect((await threads()).find((t) => t.id === begun.thread.id)).toEqual(before);
   });
 });

@@ -68,7 +68,8 @@ const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
 const { blockIndex } = await import("../src/section-path.js");
 const { PROMPT_VERSION: SKIM_PROMPT_VERSION } = await import("../src/skim.js");
 
-import type { Article, Block, Idea, Quote, Skim, SkimDepth, TreeNode } from "../src/types.js";
+import type { Article, Block, Idea, Quote, SkimDepth, TreeNode } from "../src/types.js";
+import { stopBlocksAtDepth } from "./skim-coverage-route.js";
 
 const DEPTHS: readonly SkimDepth[] = [1, 2, 3];
 
@@ -110,29 +111,6 @@ function topLevelSections(article: Article, idx: ReadonlyMap<string, number>): S
 
 function bodyWordsTotal(blocks: readonly Block[]): number {
   return blocks.reduce((sum, b) => (b.treatment === "supplement" ? sum : sum + b.words), 0);
-}
-
-/** Unique block ids the stops visible at depth `d` sit on, route order preserved. */
-function stopBlocksAtDepth(
-  skim: Skim,
-  quoteBlockOf: ReadonlyMap<string, string>,
-  depth: SkimDepth,
-): { blockIds: string[]; unresolved: number } {
-  const blockIds: string[] = [];
-  const seen = new Set<string>();
-  let unresolved = 0;
-  for (const stop of skim.stops) {
-    if (stop.depth > depth) continue;
-    const blockId = quoteBlockOf.get(stop.quoteId);
-    if (!blockId) {
-      unresolved++;
-      continue;
-    }
-    if (seen.has(blockId)) continue; // stops are already one-per-block by construction; defensive.
-    seen.add(blockId);
-    blockIds.push(blockId);
-  }
-  return { blockIds, unresolved };
 }
 
 interface IdeaCoverage {

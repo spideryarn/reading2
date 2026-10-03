@@ -215,6 +215,8 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "citation-investigate": "interactive request work",
   /* The paper's passages, inside the same *Investigate* press. */
   "citation-paper-passages": "interactive request work",
+  /* The work's influence from the search's pages, inside the same press. */
+  "citation-influence": "interactive request work",
   /* *Dig deeper*'s forced search, before the answer a reader pressed for —
      src/dig-deeper.ts. Request scope, reader-triggered. */
   "dig-deeper-search": "interactive request work",

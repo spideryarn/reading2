@@ -155,8 +155,8 @@ function targetOf(
   kind: ThreadKind | undefined,
 ): ChatThread | undefined {
   const named = threads.find((t) => t.id === threadId);
-  /* Every single-thread kind, not only Remember: Tutorial is one per article
-     too (`SINGLE_THREAD_KINDS`, src/types.ts). */
+  /* Every single-thread kind, not only Remember: Tutorial and Explore are one
+     per article too (`SINGLE_THREAD_KINDS`, src/types.ts). */
   if (named || !isSingleThreadKind(kind)) return named;
   return threads.find((t) => t.kind === kind);
 }
@@ -471,6 +471,15 @@ export function withSpokenTurn(
      replayed request still meets the tail guard below and nothing else. */
   if (existing && kind && existing.kind !== kind) {
     throw new ChatConflict("That conversation is already a different kind.");
+  }
+
+  /* Only a chat or a Recall conversation is spoken into (`SpokenKind`). The
+     request may omit its kind, so the **stored** thread is asked too, inside
+     the transaction and before any row is minted or appended: without this a
+     kind-less spoken turn landed in an Explore thread (GPT Sol's review of
+     261003l, CR-11), and the same door stood open to Tutorial and Candidates. */
+  if (existing && !isSpokenKind(existing.kind)) {
+    throw new ChatConflict("That conversation does not take a live conversation.");
   }
 
   /* **The guard, and it runs before anything is minted.** `null` means the

@@ -32,10 +32,14 @@
  * It carried a card, and that card was hover-only and could not be otherwise —
  * the numeral is a `<span>` inside the jump button, so it takes no focus, and a
  * `tabIndex` there would put a tab stop inside a button. Stage 2 recorded that
- * and named the fix: a visible line above the list. So the line is asserted as a
- * literal, as *not* being printed before any run has returned anything, and as
- * being visible rather than merely present — and the card that used to say the
- * same thing to whoever had a mouse is asserted gone, 2026-09-02.
+ * and named the fix: a visible line above the list, 2026-09-02.
+ *
+ * **The line moved on 2026-10-03**, when Greg chose shorter panels: it is behind
+ * the band's *How to read this* button now, which is a real `<button>` a tap
+ * toggles, so a keyboard and a finger both still reach it (plan 261003m;
+ * tests/referee-notices.test.tsx asserts the sentence as a literal there). What
+ * this file still holds is that the panel prints no second copy, and that the
+ * hover-only card on the numeral has not come back.
  *
  * Harness: `CriteriaBand` over a stubbed API, from
  * tests/referee-criteria-panel.test.tsx.
@@ -280,51 +284,40 @@ describe("the run button, while the criterion is incomplete", () => {
 });
 
 describe("what the big number on a result is", () => {
-  const LINE =
-    "The number beside a passage is the model's ordering of its own answers for that criterion. It is not a score, and nothing here ranks the paper.";
-
-  it("says so in visible words, not only in a hover card", async () => {
-    saved = [withResult()];
-    mount();
-    await flush();
-    /* The card on the numeral is hover-only — a `<span>` inside a button takes
-       no focus — so this sentence is the only route a keyboard or touch reader
-       has to it. Delete the line and the numeral is an unexplained "1" beside a
-       passage the referee is judging. */
-    expect(text(), "the rank has no visible explanation").toContain(LINE);
-  });
-
-  it("is not printed before anything has come back", async () => {
-    saved = [unrun()];
-    mount();
-    await flush();
-    expect(
-      text(),
-      "a referee with no results yet is told about a number they cannot see",
-    ).not.toContain("The number beside a passage");
+  it("is left to the band's how-to-read button, with or without results", async () => {
+    /* The panel printed the sentence above its list until 2026-10-03. One copy
+       is the rule, and it is the button's now. */
+    for (const state of [withResult(), unrun()]) {
+      saved = [state];
+      mount();
+      await flush();
+      expect(text(), "the panel prints a second copy of the rank sentence").not.toContain(
+        "The number beside a passage",
+      );
+    }
   });
 
   /**
-   * **And the stylesheet may not take it away again**, which is the half
-   * `text()` cannot see: jsdom loads no CSS, so a `display: none` on
-   * `.crit-how` would leave every assertion above green and the sentence
-   * invisible in every browser.
+   * **And the button the sentence is behind may not be hidden by the
+   * stylesheet**, which is the half no render can see: jsdom loads no CSS, so a
+   * `display: none` on `.ref-rules` would leave tests/referee-notices.test.tsx
+   * green and the sentence unreachable in every browser.
    */
-  it("is not hidden by a rule in the stylesheet", () => {
+  it("is behind a button no rule in the stylesheet hides", () => {
     /* **The vacuity guard, and this assertion cannot do without one.** What
        follows is a `not.toMatch`, which is satisfied by an empty string — so a
-       `.crit-how` renamed, or a sheet the reader set stopped reaching, would
+       `.ref-rules` renamed, or a sheet the reader set stopped reaching, would
        read here as "nothing hides it" rather than as a broken scan.
 
-       A boundary after the name, not `toContain`: `.crit-how-x` contains
-       `.crit-how`, so a substring guard is satisfied by the very rename it
-       exists to catch. Watched pass that way before this line was written. */
-    expect(rules(), "no `.crit-how` rule in the reader stylesheets").toMatch(/\.crit-how[\s,{]/);
+       A boundary after the name, not `toContain`: `.ref-rules-card` contains
+       `.ref-rules`, so a substring guard is satisfied by the very rename it
+       exists to catch. */
+    expect(rules(), "no `.ref-rules` rule in the reader stylesheets").toMatch(/\.ref-rules[\s,{]/);
     expect(
       rules(),
-      "a rule in the reader stylesheets hides the line this test says is visible",
+      "a rule in the reader stylesheets hides the button the sentence is behind",
     ).not.toMatch(
-      /\.crit-how[^{}]*\{[^}]*(display:\s*none|visibility:\s*hidden|font-size:\s*0(?![.\d]))/,
+      /\.ref-rules(?![-\w])[^{}]*\{[^}]*(display:\s*none|visibility:\s*hidden|font-size:\s*0(?![.\d]))/,
     );
   });
 
@@ -332,15 +325,14 @@ describe("what the big number on a result is", () => {
    * **The numeral's own card is gone, and this is what keeps it gone.**
    *
    * It was hover-only and could not be otherwise — a `<span>` inside a button
-   * takes no focus — so once the visible line above existed the card was a
-   * second copy for the one group that already had the first. A cross-family
-   * review called it redundant on 2026-09-02.
+   * takes no focus — so it was a card for the one group that needed it least.
+   * A cross-family review called it redundant on 2026-09-02.
    *
    * Hovering it must open nothing. The card, if it came back, would be portalled
    * to the end of `<body>` rather than into `host`, so it is looked for in the
    * document — tests/referee-tooltips.test.tsx § `cardFor`.
    */
-  it("says it once, in the visible line, and not again in a hover card", async () => {
+  it("has no hover-only card on the numeral", async () => {
     saved = [withResult()];
     mount();
     await flush();

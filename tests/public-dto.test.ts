@@ -25,6 +25,7 @@
  * `tests/store-revision-columns.test.ts` already draws for the owner's reads.
  */
 
+import { effectiveInfluence, INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
 import { describe, expect, it } from "vitest";
 
 import type { Assets } from "../src/assets.js";
@@ -992,7 +993,9 @@ describe("the artefacts a shared link carries", () => {
    * the route was planned for, and an assertion about a route with a `null`
    * hash would pass a projection that spread the document. One stop carries a
    * `cue` and one does not (routes before `trajectory/5`), so `opt` is
-   * exercised both ways. src/public-types.ts § `PublicSkim`.
+   * exercised both ways — and the same for `again` (`skim/9`, plan 261003l):
+   * the first stop is carried into More and the second is carried nowhere, as
+   * every stop on an older route is. src/public-types.ts § `PublicSkim`.
    */
   const SKIM: Skim = {
     version: "trajectory/7",
@@ -1001,7 +1004,13 @@ describe("the artefacts a shared link carries", () => {
     sourceHash: "abc123",
     profileHash: "profile-of-a-person",
     stops: [
-      { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
+      {
+        quoteId: "spya-quote1",
+        depth: 1,
+        role: null,
+        cue: "Look for what the first example costs the claim.",
+        again: [2],
+      },
       { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
     ],
     visible: [1, 2, 2],
@@ -1195,6 +1204,16 @@ describe("the artefacts a shared link carries", () => {
             selectionVersion: "paper-selection-sentinel",
             readAt: "2026-10-01T10:00:00.000Z",
             passages: [{ chunk: "c1", page: 1, text: "paper passage sentinel from the pdf", bears: "supports" }],
+          },
+          /* Plan 261003m stage 2: the influence Dig deeper read from the web
+             is the owner's too. A different number from the list's own 0.7,
+             so a visitor's row can be seen to keep the list's. */
+          influence: {
+            value: 0.31,
+            quote: "web influence quote sentinel from a page",
+            sourceUrl: "https://web-influence-source-sentinel.example/page",
+            sourceTitle: "web influence title sentinel",
+            version: INFLUENCE_VERSION,
           },
         },
         /* The work's reference entry (plan 260930i) — owner-only until the
@@ -1766,17 +1785,35 @@ describe("the artefacts a shared link carries", () => {
    */
   it("carries the route's stops and the offered count, and not who it was planned for", () => {
     expect(pathsUnder("skim")).toEqual(
-      ["offered", "stops", "stops[].cue", "stops[].depth", "stops[].quoteId", "stops[].role"].sort(),
+      [
+        "offered",
+        "stops",
+        "stops[].again",
+        "stops[].cue",
+        "stops[].depth",
+        "stops[].quoteId",
+        "stops[].role",
+      ].sort(),
     );
     expect(built.skim).toEqual({
       stops: [
-        { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
+        {
+          quoteId: "spya-quote1",
+          depth: 1,
+          role: null,
+          cue: "Look for what the first example costs the claim.",
+          /* Which passes a stop is walked in is the route itself: without it a
+             visitor would walk a different More from the owner (Sol F4). */
+          again: [2],
+        },
         { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
       ],
       offered: 12,
     });
-    /* The cue-less stop crosses with no `cue` key, not an `undefined` one. */
+    /* The cue-less stop crosses with no `cue` key, not an `undefined` one —
+       and the uncarried one with no `again` key. */
     expect("cue" in (built.skim?.stops[1] ?? {})).toBe(false);
+    expect("again" in (built.skim?.stops[1] ?? {})).toBe(false);
     const json = JSON.stringify(built);
     expect(json).not.toContain("profileHash");
     expect(json).not.toContain("profile-of-a-person");
@@ -1962,10 +1999,31 @@ describe("the artefacts a shared link carries", () => {
       "paper-selection-sentinel",
       "paper passage sentinel from the pdf",
       '"sentWords"',
+      /* The web influence (plan 261003m stage 2). */
+      "web influence quote sentinel from a page",
+      "web-influence-source-sentinel.example",
+      "web influence title sentinel",
+      '"sourceUrl"',
+      INFLUENCE_VERSION,
     ]) {
       expect(json, sentinel).not.toContain(sentinel);
     }
     expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("investigation");
+  });
+
+  /* Plan 261003m stage 2, GPT Sol's F6: the owner's row draws the web number
+     through `effectiveInfluence`; the list's own field is never overwritten,
+     so the visitor's row carries the list's 0.7 and reads as the list's. */
+  it("carries the list's own influence, never the one Dig deeper found on the web", () => {
+    const owners = CITATIONS.citations.find((w) => w.id === "w-clean");
+    expect(owners && effectiveInfluence(owners), "the fixture's web influence is live for the owner").toMatchObject({
+      value: 0.31,
+      from: "web",
+    });
+    const visitors = built.citations?.citations.find((w) => w.id === "w-clean");
+    expect(visitors?.influence).toBe(0.7);
+    expect(visitors && effectiveInfluence(visitors)).toEqual({ value: 0.7, from: "list" });
+    expect(JSON.stringify(built.citations)).not.toContain("0.31");
   });
 
   /**

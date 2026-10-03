@@ -227,7 +227,10 @@ rather than in `src/messages.ts`, because that file is about
 **failures a model call can return** and a component that threw while being drawn is not one; and
 none of them has anything to say to `worthRetrying`, which is why `[render]` says outright that
 reloading will probably hit it again, `[chunk]` says reloading usually fixes it — the commonest
-cause is a deploy replacing the assets under an open tab — and `[mode-render]` offers a retry the
+cause is a deploy replacing the assets under a copy of the app that was already open, which since
+2026-10-03 reloads by itself where it can and otherwise offers a Reload button, because the app
+opened from a home-screen icon has no other
+([`stale-shell.ts`](../../src/web/stale-shell.ts)) — and `[mode-render]` offers a retry the
 boundary itself performs. What
 they take from this section is the part about the reader: a code, last, in brackets. And, like every
 message here, **no `error.message`** — its text can be a provider's body, a model's output or the

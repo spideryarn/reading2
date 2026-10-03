@@ -168,7 +168,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               levels; 2026-10-01, the outline removed (spya-b3ggv4, plan 261001p).
               Summary mode, src/web/modes/summary/SummaryMode.tsx. */}
           <Tile name="Summary." mode="summary" span="wide">
-            The piece in plain words — brief, simple or a little fuller — each paragraph linked to the
+            The piece in plain words — brief or a little fuller — each paragraph linked to the
             passages it rests on, beside the prose, never instead of it.
           </Tile>
           {/* Plain mode: the article alone, with the band closed. */}
@@ -308,7 +308,8 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
             from it, link the passage, and usually nudge you to remember a little more — filling the
             gap when you are stuck rather than making you fail. Written not to be annoying,
             patronising or superior. Or choose Tutorial: short turns that teach a little of the piece
-            at a time and ask you to put it in your own words.
+            at a time and ask you to put it in your own words. Or Explore, which starts from what
+            you have marked and helps you work out what you think.
           </Portrait>
           {/* Greg, 2026-08-31, the quiz request; and 2026-09-29
               (SPIDERYARN-READING2-5W, quoted in src/quiz.ts's header), which
@@ -394,10 +395,13 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               passage id, and threads from before tweets/5 have none). GPT Sol's
               code review caught the first draft promising both without the
               limits; "the passages they came from" is unqualified because a
-              post with no surviving id says so in place (`UnlinkedNote`). */}
-          <Tile name="Tweets." mode="tweets">
-            The piece as a thread, in a column beside the text, written the first time you open it
-            on an article of your own. Posts link back to the passages they came from.
+              post with no surviving id says so in place (`UnlinkedNote`).
+              2026-10-03: the thread is Summary's Thread view, so the tile is
+              tagged with Summary and says where to find it (plan 261003l). */}
+          <Tile name="Thread." mode="summary">
+            The piece as a thread, in Summary’s Thread view: a column beside the text, written the
+            first time you open it on an article of your own. Posts link back to the passages they
+            came from.
           </Tile>
           {/* Greg, 2026-09-30, docs/project/cross-references.md, rephrased to
               the reader: "if it describes a result, then it would create an

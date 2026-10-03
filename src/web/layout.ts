@@ -14,6 +14,7 @@
  */
 
 import type { Mode } from "../modes.js";
+import type { SummaryView } from "./params.js";
 
 /**
  * The painted width of the rail, in px. Mirrors `--spine-w` in styles.css —
@@ -292,15 +293,21 @@ export type BandShape = "standard" | "structure" | "wide" | "roomy";
  * Marginalia press's `notesFit`, which had each written the same ternary.
  * Structure's two columns want a band of their own width where they fit
  * (`structureColumnsBand`, docs/plans/260928a-structure-two-columns-readable.md).
- * Tweets' posts are prose, so theirs may grow to a prose column's measure —
- * Greg, 2026-09-29: *"It could be quite a wide left-hand column if that will
+ * The thread's posts are prose, so theirs may grow to a prose column's measure
+ * — Greg, 2026-09-29: *"It could be quite a wide left-hand column if that will
  * help to make it be readable."* Summary's paragraphs get a touch more room
  * (`ROOMY_IDEAL_REM`).
+ *
+ * **The thread is Summary's third view since 2026-10-03**, so Summary's band
+ * is the wide one while `?summary=thread` is showing and the roomy one
+ * otherwise, and the view is part of the question. `summary` is the parsed
+ * state the Reader holds, and it counts only inside Summary: the parameter
+ * outlives the mode, as `?diagram=` does.
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
  */
-export function bandShapeFor(mode: Mode): BandShape {
+export function bandShapeFor(mode: Mode, summary: SummaryView): BandShape {
   if (mode === "structure") return "structure";
-  if (mode === "tweets") return "wide";
-  if (mode === "summary") return "roomy";
+  if (mode === "summary") return summary === "thread" ? "wide" : "roomy";
   return "standard";
 }
 

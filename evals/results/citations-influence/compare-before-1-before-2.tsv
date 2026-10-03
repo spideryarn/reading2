@@ -1,0 +1,211 @@
+
+== antikythera-mechanism-spya-zhxrzm ==
+a before-1: citations/5 prompt cf270e5cfd70 claude-sonnet-5 2026-10-03T19:01:22.637Z
+b before-2: citations/5 prompt cf270e5cfd70 claude-sonnet-5 2026-10-03T19:05:17.119Z
+set	rows	with number	without	<=0.15	0.0	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9+
+a	79	79	0	8	0	8	24	16	11	10	5	1	2	2
+b	37	37	0	0	0	0	3	13	3	6	6	2	0	4
+paired 33 (32 by title, 1 by first author and year); only in a 46; only in b 4; both numbers 33, mean |a-b| 0.035, max 0.20; number in a, unknown in b 0; unknown in a, number in b 0
+infl a	infl b	in	year	authors	title
+0.90	1.00	both	2006	Freeth, Bitsakis, Moussas, Seiradakis, et al.	Decoding the ancient Greek astronomical calculator known as the Antikythera Mechanism
+0.90	0.95	both	1974	Price	Gears from the Greeks. The Antikythera Mechanism: A Calendar Computer from ca. 80 B.C.
+0.80	0.90	both	2008	Freeth, Jones, Steele, Bitsakis	Calendars with Olympiad display and eclipse prediction on the Antikythera Mechanism
+0.80	0.90	both	2012	Freeth, Jones	The Cosmos in the Antikythera Mechanism
+0.70	0.70	both	2021	Freeth, Higgon, Dacanalis, MacDonald, Georgakopoulou, Wojcik	A Model of the Cosmos in the ancient Greek Antikythera Mechanism
+0.60	0.70	both	2017	Jones	A Portable Cosmos: Revealing the Antikythera Mechanism, Scientific Wonder of the Ancient World
+0.60	0.60	both	2010	Evans, Carman, Thorndyke	Solar anomaly and planetary displays in the Antikythera Mechanism
+0.60	0.60	both (author-year; b: Science and Civilisation in China, Vol. 4, Part 2)	2000	Needham	Science and Civilisation in China
+-	0.60	b only		Cicero	De re publica
+0.60	0.50	both	2007	Wright	The Antikythera Mechanism reconsidered
+0.60	-	a only		Cicero	De re publica, Liber Primus
+0.50	0.60	both	2014	Carman, Evans	On the epoch of the Antikythera mechanism and its eclipse predictor
+0.50	0.60	both	2005	Wright	The Antikythera Mechanism: a new gearing scheme
+0.50	0.50	both	2020	Budiselic et al.	Antikythera mechanism: Evidence of a lunar calendar
+0.50	0.50	both	1950	Parker	The Calendars of Ancient Egypt
+0.50	0.50	both	2006	Wright	The Antikythera Mechanism and the early history of the moon phase display
+0.50	0.50	both	2011	Edmunds, Freeth	Using Computation to Decode the First Known Computer
+0.50	0.50	both	2012	Carman, Thorndyke, Evans	On the Pin-and-Slot Device of the Antikythera Mechanism, with a New Application to the Superior Planets
+0.50	-	a only	2016	Anastasiou, Bitsakis, Jones, Moussas, Tselikas, Zafeiropoulou	The Inscriptions of the Antikythera Mechanism
+0.50	-	a only	2009	Freeth	Decoding an Ancient Computer
+0.50	-	a only		Cicero	Cicero, De Natura Deorum II.88
+0.40	0.60	both	2017	Iversen	The Calendar on the Antikythera Mechanism and the Corinthian Family of Calendars
+0.40	0.40	both	2024	Woan, Bayley	An improved calendar ring hole-count for the Antikythera mechanism
+0.40	0.40	both	2024	Malin, Dickens	How Many Days in an Egyptian Year? Evidence from the Antikythera Mechanism
+0.40	0.40	both	2011	Edmunds	An Initial Assessment of the Accuracy of the Gear Trains in the Antikythera Mechanism
+0.40	0.30	both	2018	Jones	'Like Opening a Pyramid and Finding an Atomic Bomb': Derek de Solla Price and the Antikythera Mechanism
+0.40	-	a only	2006	Marchant	In search of lost time
+0.40	-	a only	2013	Freeth	Building the Cosmos in the Antikythera Mechanism
+0.40	-	a only	2013	Bitsakis, Jones	The Inscriptions of the Antikythera Mechanism 3: The Front Dial and Parapegma Inscriptions
+0.40	-	a only	2006	Marchant	Decoding the Heavens
+0.40	-	a only	2007	Netz, Noel	The Archimedes Codex
+0.40	-	a only	2022	Freeth	An Ancient Greek Astronomical Calculation Machine Reveals New Secrets
+0.30	0.30	both	2013	Efstathiou, Basiakoulis, Efstathiou, Anastasiou, Boutbaras, Seiradakis	The Reconstruction of the Antikythera Mechanism
+0.30	0.30	both	2012	Efstathiou, Basiakoulis, Efstathiou, Anastasiou, Seiradakis	Determination of the gears geometrical parameters necessary for the construction of an operational model of the…
+0.30	0.30	both	2022	Voularis, Mouratidis, Vossinakis	The Initial Calibration Date of the Antikythera Mechanism after the Saros spiral mechanical Apokatastasis
+0.30	0.30	both	2025	Wilkins	Ancient computer's gears may not have been able to turn
+0.30	0.30	both	2011	Moussas	Antikythera Mechanism, PINAX
+0.30	0.30	both	2018	Moussas	Antikythera Mechanism the oldest computer
+0.30	0.30	both	2006	Charette	Archaeology: high tech from Ancient Greece
+0.30	0.30	both	1985	Maddison	Early mathematical wheelwork: Byzantine calendrical gearing
+-	0.30	b only	1981	Sleeswyk	Vitruvius' odometer
+-	0.30	b only			On Sphere-Making
+-	0.30	b only	2008	Spinellis	The Antikythera Mechanism: A Computer Science Perspective
+0.30	-	a only	2018	Efstathiou, Efstathiou	Celestial Gearbox: Oldest Known Computer is a Mechanism Designed to Calculate the Location of the Sun, Moon, and Planets
+0.30	-	a only	2019	Steiglitz	The Discrete Charm of the Machine: Why the World Became Digital
+0.30	-	a only	2007	Pinotsis	The Antikythera mechanism: who was its creator and what was its use and purpose?
+0.30	-	a only	2019	Voulgaris, Mouratidis, Vossinakis	Simulation and Analysis of Natural Seawater Chemical Reactions on the Antikythera Mechanism
+0.30	-	a only	2005	Angelakis	Quantum Information Processing: From Theory to Experiment
+0.30	-	a only			Antikythera Mechanism Research Project
+0.30	-	a only	2018	Voulgaris, Mouratidis, Vossinakis	Conclusions from the Functional Reconstruction of the Antikythera Mechanism
+0.30	-	a only		Rorres	Archimedes: Spheres and Planetaria
+0.20	0.30	both	2022	Ouellette	Researchers home in on possible 'day zero' for Antikythera mechanism
+0.20	0.20	both	2021	YouTube video	Antikythera Mechanism SOLVED!
+0.20	0.20	both	2025	Szigety, Arenas	The Impact of Triangular-Toothed Gears on the Functionality of the Antikythera Mechanism
+0.20	0.20	both	1970	Hoepfner	Ein Kombinationsschloss aus dem Kerameikos
+0.20	-	a only	2006	Paphitis	Experts: Fragments an Ancient Computer
+0.20	-	a only		Washington Post	The world's oldest computer is still revealing its secrets
+0.20	-	a only		Sample	Mysteries of computer from 65 BC are solved
+0.20	-	a only	2014	Markoff	On the Trail of an Ancient Mystery – Solving the Riddles of an Early Astronomical Calculator
+0.20	-	a only			Albert Rehm zum Gedächtnis
+0.20	-	a only	2006	Haughton	Hidden History: Lost Civilizations, Secret Knowledge, and Ancient Mysteries
+0.20	-	a only	2018	Bohstrom	Missing Piece of Antikythera Mechanism Found on Aegean Seabed
+0.20	-	a only	2018	Daley	No, Archaeologists Probably Did Not Find a New Piece of the Antikythera Mechanism
+0.20	-	a only	2007	Allen	Were there others? The Antikythera Mechanism Research Project
+0.20	-	a only	2011	Institute for the Study of the Ancient World	The Antikythera Mechanism
+0.20	-	a only	2019	Kampouris	Important New Discoveries from Greece's Ancient Antikythera Shipwreck
+0.20	-	a only	2019	Aikaterini Laskaridis Foundation	The new findings from the underwater archaeological research at the Antikythera Shipwreck
+0.20	-	a only	2008	Wilford	Discovering how Greeks computed in 100 B.C.
+0.20	-	a only	2008	Connor	Ancient Device Was Used To Predict Olympic Games
+0.20	-	a only		BBC News	Olympic link to early 'computer'
+0.20	-	a only		Antikythera Mechanism Research Project	Does it favour a Heliocentric, or Geocentric Universe?
+0.20	-	a only	2021	Freeth	The Antikythera Cosmos (video)
+0.20	-	a only	2011	Pickover	The Physics Book
+0.20	-	a only	2006	Fildes	Ancient Moon 'computer' revisited
+0.20	-	a only		Asia for Educators	The Song Dynasty in China
+0.10	-	a only		Antikythera Mechanism Research Project	The Antikythera Mechanism at the National Archaeological Museum
+0.10	-	a only		Antikythera Mechanism Research	Dimitrios Kontos
+0.10	-	a only		Antikythera Mechanism Research	History
+0.10	-	a only		Columbia Electronic Encyclopedia	Pergamum
+0.10	-	a only	2010	Pavlus	Small Mammal, Behind the Scenes: Lego Antikythera Mechanism
+0.10	-	a only	2017	Google	115 Anniversary of the Antikythera Mechanism Discovery
+0.10	-	a only	2017	Smith	What is the Antikythera mechanism? Google Doodle marks discovery of ancient Greek computer
+0.10	-	a only	2023	Barker	Indiana Jones & The Dial of Destiny's Time Travel Explained
+
+== scaling-hypothesis ==
+a before-1: citations/5 prompt cf270e5cfd70 claude-sonnet-5 2026-10-03T19:03:44.127Z
+b before-2: citations/5 prompt cf270e5cfd70 claude-sonnet-5 2026-10-03T19:07:33.306Z
+set	rows	with number	without	<=0.15	0.0	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9+
+a	64	64	0	0	0	0	8	19	19	6	5	2	1	4
+b	68	68	0	0	0	0	14	28	9	7	4	1	3	2
+paired 45 (28 by title, 17 by first author and year); only in a 19; only in b 23; both numbers 45, mean |a-b| 0.046, max 0.20; number in a, unknown in b 0; unknown in a, number in b 0
+infl a	infl b	in	year	authors	title
+0.95	1.00	both	2020	Brown et al.	Language Models are Few-Shot Learners (GPT-3 paper)
+0.90	0.90	both			AlphaGo Zero
+0.90	0.80	both	2020	Kaplan et al.	Scaling Laws for Neural Language Models
+0.90	0.80	both (author-year; b: Prediction and Entropy of Printed English)	1951	Shannon	Shannon 1951 (prediction and entropy of printed English)
+0.80	0.80	both			AlphaZero
+0.70	0.70	both			MuZero
+0.70	0.60	both (author-year; b: Moravec's forecast of AI hardware progress (1998))	1998	Moravec	Moravec 1998 (on hardware overhang and AI timelines)
+0.60	0.60	both			AlphaStar
+0.60	0.60	both (author-year; b: Natural Language Processing (Almost) from Scratch)	2011	Collobert et al.	Collobert et al. 2011 (natural language processing almost from scratch)
+-	0.60	b only		Dennett	The intentional stance
+0.60	0.40	both (author-year; b: LeCun 2019 remark on GPT and AGI)	2019	LeCun	LeCun 2019 (on whether deep learning is part of AGI)
+0.60	-	a only			T5
+0.60	-	a only			Vision Transformer
+0.50	0.50	both			BigGAN
+0.50	0.50	both			StyleGAN
+0.50	0.50	both		Wiener	The Human Use of Human Beings
+0.50	0.50	both (author-year; b: Meta-Learning with Memory-Augmented Neural Networks)	2016	Santoro et al.	Meta-Learning with Memory-Augmented Neural Networks (and related work)
+-	0.50	b only	2001	Banko, Brill	Banko & Brill 2001
+-	0.50	b only			iGPT / Vision Transformer
+0.50	0.40	both			SayCan
+0.50	-	a only	2015/2018	Schmidhuber	Schmidhuber 2015/2018
+0.40	0.50	both			Jukebox
+0.40	0.40	both			Dactyl
+0.40	0.40	both			GShard
+0.40	0.40	both (author-year; b: Wang et al 2018)	2018	Wang et al.	Wang et al. 2018 (meta-reinforcement learning)
+0.40	0.40	both (author-year; b: Deep Learning Scaling is Predictable, Empirically)	2017	Hestness et al.	Hestness et al. 2017 (deep learning scaling paper)
+-	0.40	b only	2007	Brants et al.	Brants et al 2007
+-	0.40	b only		Sutskever	Ilya Sutskever on scaling and conviction
+0.40	0.30	both			ViLBERT / VideoBERT
+0.40	0.30	both			GQN (Generative Query Network)
+0.40	0.30	both (author-year; b: Clune 2019)	2019	Clune	Clune 2019 (AI-generating algorithms)
+0.40	0.30	both (author-year; b: Hernandez & Brown 2020)	2020	Hernandez, Brown	Hernandez & Brown 2020 (compute-efficiency scaling study)
+0.40	0.30	both (author-year; b: Hendrycks et al 2020)	2020	Hendrycks et al.	Measuring Massive Multitask Language Understanding
+0.40	0.30	both (author-year; b: Schrimpf et al 2020)	2020	Schrimpf et al.	Schrimpf et al. 2020 (language models and brain activity)
+0.40	-	a only			Turing-NLG
+0.40	-	a only			Meena
+0.40	-	a only			MegatronLM
+0.40	-	a only			ResNeXt
+0.40	-	a only			Noisy Student
+0.40	-	a only			iGPT (Image GPT)
+0.40	-	a only	2013	Chelba et al.	One Billion Word Benchmark dataset paper
+0.40	-	a only			ZeRO-2 (Microsoft)
+0.30	0.40	both	2019	Botvinick et al.	Botvinick et al. 2019a
+0.30	0.30	both	2019	Lake	Lake 2019
+0.30	0.30	both	2020	Dojolonga et al.	Dojolonga et al. 2020
+0.30	0.30	both			DD-PPO
+0.30	0.30	both	1963	Anscombe	An Introduction to Wittgenstein's Tractatus
+0.30	0.30	both (author-year; b: Warstadt et al 2020)	2020	Warstadt et al.	Warstadt et al. 2020 (linguistic biases and data scale)
+0.30	0.30	both (author-year; b: Child 2020)	2020	Child	Very Deep VAEs (Child 2020)
+0.30	0.30	both (author-year; b: Vahdat & Kautz 2020)	2020	Vahdat, Kautz	Vahdat & Kautz 2020 (NVAE)
+0.30	0.30	both (author-year; b: The Limits of Automatic Speech Recognition / n-gram entropy study)	1996	Teahan, Cleary	Teahan & Cleary 1996
+-	0.30	b only			Situational Awareness
+-	0.30	b only	2027		AI 2027
+-	0.30	b only	2017	Koehn, Knowles	Koehn & Knowles 2017
+-	0.30	b only			BiT (Big Transfer)
+-	0.30	b only			Procgen / CoinRun
+-	0.30	b only			The Brain as a Universal Learning Machine
+-	0.30	b only		Hawkins	Hawkins (on cortical uniformity)
+-	0.30	b only		Zaremba, Biewald	Zaremba interview on OpenAI Five
+-	0.30	b only		Dean	Jeff Dean on computing slowdown
+-	0.30	b only		Brockman	Greg Brockman on OA5 training
+-	0.30	b only		Chiang	Story Of Your Life
+0.30	0.20	both	2020	Thompson et al.	Thompson et al. 2020
+0.30	0.20	both (author-year; b: Envisioned evolution of NLP research through three eras)	2014	Cambria, White	Cambria & White 2014 (NLP research eras)
+0.30	0.20	both (author-year; b: The Quiet Enemy (in The Legacy of Hiroshima))	1962	Teller	The Legacy of Hiroshima ("The Quiet Enemy")
+0.30	-	a only		Weng	Weng 2018/2019 (meta-learning survey posts)
+0.30	-	a only		Wilde	The Picture of Dorian Gray
+0.30	-	a only			CTRL
+0.30	-	a only			GPipe
+0.30	-	a only			Big Transfer (BiT)
+0.30	-	a only			Procgen
+0.30	-	a only			CoinRun
+0.20	0.30	both			GPT-f
+0.20	0.30	both	2020	Orseau et al.	Orseau et al. 2020
+0.20	0.30	both	2021	Viering, Loog	Viering & Loog 2021
+0.20	0.20	both	2019	Hill et al.	Hill et al. 2019
+0.20	0.20	both	2017	Chaplot et al.	Chaplot et al. 2017
+0.20	0.20	both	2018	Yu et al.	Yu et al. 2018
+0.20	0.20	both			MetaMimic
+-	0.20	b only		Gwern	It Looks Like You're Trying To Take Over The World
+-	0.20	b only			Human-like Neural Nets by Catapulting
+-	0.20	b only		Hsu	Behind Deep Blue
+-	0.20	b only	2020	Li	Chuan Li's compute cost estimate
+-	0.20	b only			DynamicEmbedding
+-	0.20	b only		Norvig, Biewald	Peter Norvig / Lukas Biewald interview
+-	0.20	b only	1999	Gray	Jim Gray 1999 remarks on AI and supercomputers
+0.20	-	a only	2020	Interactive Agents Group	Interactive Agents Group 2020
+
+== openai-huggingface ==
+a before-1: citations/5 prompt cf270e5cfd70 claude-sonnet-5 2026-10-03T19:03:56.076Z
+b before-2: citations/5 prompt cf270e5cfd70 claude-sonnet-5 2026-10-03T19:07:45.604Z
+set	rows	with number	without	<=0.15	0.0	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9+
+a	5	5	0	1	0	1	2	0	0	0	2	0	0	0
+b	4	4	0	0	0	0	1	1	0	0	2	0	0	0
+paired 1 (1 by title, 0 by first author and year); only in a 4; only in b 3; both numbers 1, mean |a-b| 0.100, max 0.10; number in a, unknown in b 0; unknown in a, number in b 0
+infl a	infl b	in	year	authors	title
+-	0.60	b only		OpenAI	OpenAI's report on the incident
+-	0.60	b only			METR and Redwood Research investigation report
+0.60	-	a only			OpenAI incident report
+0.60	-	a only			METR/Redwood Research investigation report
+0.20	0.30	both		Cotra	Blog post with takeaways on the incident
+-	0.20	b only		Patel, Greenblatt	Interview with Ryan Greenblatt
+0.20	-	a only		Patel, Greenblatt	Dwarkesh Podcast interview with Ryan Greenblatt
+0.10	-	a only			ExploitGym paper
+
+== ALL (3 articles) ==
+set	rows	with number	without	<=0.15	0.0	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9+
+a before-1	148	148	0	9	0	9	34	35	30	16	12	3	3	6
+b before-2	109	109	0	0	0	0	18	42	12	13	12	3	3	6
+paired 79 (61 by title, 18 by first author and year); only in a 69; only in b 30; both numbers 79, mean |a-b| 0.042, differ by >=0.2: 2; number in a, unknown in b 0; unknown in a, number in b 0; unknown in both 0

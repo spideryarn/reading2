@@ -443,6 +443,7 @@ import {
 import { errorFields, log, since } from "./log.js";
 import { type CitedCandidate, withCitedInSpideryarn } from "./cited-in-spideryarn.js";
 import { authoredSentence, sayToReader } from "./reader-sentence.js";
+import { readerNotesDigest } from "./reader-notes.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
@@ -2810,6 +2811,65 @@ export function onScreenOf(visible: readonly string[] | undefined, blocks: reado
   return blocks.filter((b) => wanted.has(b.id)).map((b) => b.id);
 }
 
+/**
+ * **The reader's notes digest for an Explore turn**, or `null`.
+ *
+ * Explore starts from what the reader marked and discussed, so it is handed
+ * that without spending a tool round: their comments, highlights and bookmarks
+ * on this article and an index of their other conversations about it, through
+ * the same bounded formatter the `reader_notes` tool uses
+ * (`readerNotesDigest`, src/reader-notes.ts).
+ *
+ * **On every turn, not only the first** (GPT Sol's review of plan 261003l,
+ * PR-1). Only the question is stored and history is rebuilt from the rows, so
+ * a digest sent once would be gone by the second turn, and a retry or an edit
+ * of the opening question would never have had it.
+ *
+ * **The stored thread decides**, never the request: its kind says whether
+ * there is a digest at all, and its id is the conversation left out of the
+ * index. Both stores answer for the signed-in owner only (src/store/pg.ts §
+ * `ownedSlug`), and this is handed a slug, never an owner.
+ *
+ * **A failed load costs the digest, not the turn.** The answer still comes,
+ * the prompt simply has no notes section, and the tool is still offered — and
+ * says so honestly if it fails too. Logged: the slug and counts. Never a
+ * note, a quote or a title.
+ */
+async function exploreNotes(
+  slug: string,
+  thread: Pick<ChatThread, "id" | "kind">,
+  blocks: readonly Block[],
+): Promise<string | null> {
+  if (thread.kind !== "explore") return null;
+  try {
+    const [comments, threads] = await Promise.all([commentStore.load(slug), chatStore.load(slug)]);
+    const digest = readerNotesDigest({ comments, threads, blocks, currentThreadId: thread.id });
+    log("model").info(
+      {
+        slug,
+        notes: digest.notes.total,
+        notesShown: digest.notes.shown,
+        conversations: digest.conversations.total,
+        conversationsShown: digest.conversations.shown,
+        chars: digest.content.length,
+      },
+      "explore: the reader's notes go with the turn",
+    );
+    return digest.content;
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "explore: could not read the reader's notes; answering without them",
+    );
+    return null;
+  }
+}
+
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const {
     threadId,
@@ -2947,9 +3007,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
   const askingRemember = (storedKind ?? wantedKind) === "remember";
-  /* Tutorial is dictated too, so it shares Remember's long cap rather than
-     chat's 4,000 — the same mistake `MAX_REMEMBER_CHARS` exists to avoid. */
-  const longInput = askingRemember || (storedKind ?? wantedKind) === "tutorial";
+  /* Tutorial and Explore are dictated too, so they share Remember's long cap
+     rather than chat's 4,000 — the same mistake `MAX_REMEMBER_CHARS` exists to
+     avoid. */
+  const effectiveKind = storedKind ?? wantedKind;
+  const longInput = askingRemember || effectiveKind === "tutorial" || effectiveKind === "explore";
   /* **Chat only.** Remember's prompt tells the model not to guess how far the
      reader has got, and a screenful is exactly that guess; Candidates sends no
      position at all. The thread's kind decides, as it does for the cap below. */
@@ -3357,6 +3419,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       // The tools need to know which article the reader has open; the prompt
       // does not, and does not get it. src/chat-tools.ts § ToolContext.
       slug,
+      /* From the thread the store wrote, like `kind` below: `reader_notes`
+         leaves the conversation it is called from out of the ones it lists. */
+      threadId: thread.id,
       /* Resolved per turn rather than once per thread, so a reader who edits
          their profile mid-conversation gets the next answer written to the new
          one. The opposite of the job path, which freezes it — and the reason
@@ -3367,6 +3432,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          conclusion held; the reason had rotted. Found by a GPT Sol review,
          2026-08-26.) */
       profile: wantsProfile ? await resolveProfile(slug) : null,
+      /* **What the reader has marked and discussed, on every Explore turn** —
+         send, retry and edit alike, because all three reach this one call. From
+         the stored thread's kind and id, like `kind` below. `null` for every
+         other kind, and for an Explore turn whose notes could not be read. */
+      notes: await exploreNotes(slug, thread, article.blocks),
       /* **From the THREAD the store just wrote, never from the request body.**
          Those two agree only when the request was right, and the request comes
          from a tab that may be several navigations out of date. A retry and an
@@ -4274,6 +4344,12 @@ async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }
  * fetches a URL this server chooses to fetch either way — a reader can already
  * ask a typed conversation to read one — so the defence is the same one, in the
  * same place. docs/project/security.md.
+ *
+ * **`reader_notes` is refused here twice.** It is not in `LIVE_SERVER_TOOLS`,
+ * which is built from the shared `CHAT_TOOLS` and not from `toolsFor`; and the
+ * context below names no `kind`, so `runTool` would call it an unknown tool
+ * even if the first check went. This endpoint has no thread to leave out of
+ * that tool's list — docs/project/chat-tools.md § The reader's notes.
  */
 async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
   const { name, args } = (body ?? {}) as Record<string, unknown>;
