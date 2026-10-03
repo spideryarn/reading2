@@ -71,9 +71,10 @@ export function useLive(slug: string, opts: LiveOptions = {}): LiveApi {
     if (now.current.owner) return;
     const engine = now.current.effective;
     started.current = engine;
-    lastStart.current = o;
+    const opts = devSeam()?.noMicrophone ? { ...o, microphone: false } : o;
+    lastStart.current = opts;
     setLast(engine);
-    now.current.apis[engine].start(o);
+    now.current.apis[engine].start(opts);
   }, []);
 
   const stop = useCallback((): Promise<void> => {
@@ -120,5 +121,26 @@ export function useLive(slug: string, opts: LiveOptions = {}): LiveApi {
     void now.current.apis["gpt-live"].stop();
   }, [gptLiveBusy, experimental.loaded, experimental.on]);
 
-  return { ...apis[shown], start, stop, reconnect };
+  const api = { ...apis[shown], start, stop, reconnect };
+  const seam = devSeam();
+  if (seam) seam.api = api;
+  return api;
+}
+
+/**
+ * **A way in for a browser check that has no microphone**, on the dev server
+ * only. An automation tab cannot answer a permission prompt or speak, so a
+ * check sets `window.__spideryarnLive = { noMicrophone: true }` before pressing
+ * Live — the call then runs on the silent track both hooks already have — and
+ * puts a question in with `window.__spideryarnLive.api.say(…)`. Absent unless
+ * the page created it, and never read in a production build.
+ */
+interface LiveDevSeam {
+  noMicrophone?: boolean;
+  api?: LiveApi;
+}
+
+function devSeam(): LiveDevSeam | undefined {
+  if (!import.meta.env.DEV) return undefined;
+  return (globalThis as { __spideryarnLive?: LiveDevSeam }).__spideryarnLive;
 }
