@@ -31,7 +31,7 @@ import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
-import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
+import { keyboardInsetStyle, putKeyboardAway, useVisualViewport } from "./useVisualViewport.js";
 
 /**
  * **What this reader may do with the comment they are looking at.**
@@ -581,6 +581,9 @@ export function CommentDialog({
             if (!q) return;
             setFollowUp("");
             own.onDiscuss(q);
+            /* The question is in chat now; a soft keyboard has nothing left
+               to do here (useVisualViewport.ts § `putKeyboardAway`). */
+            putKeyboardAway(followUpBox.current);
           }}
         >
           <input

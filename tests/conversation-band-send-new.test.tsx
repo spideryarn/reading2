@@ -229,4 +229,22 @@ describe("the band's onSendNew", () => {
 
     expect(panel?.focusNonce).toBe(before + 1);
   });
+
+  /* On a soft keyboard the send lets go of the keys (useVisualViewport.ts §
+     `putKeyboardAway`), and a raised nonce would have the replacement composer
+     take focus and bring them straight back. GPT Sol's plan review of 261003h,
+     F5. */
+  it("leaves the nonce alone when a soft keyboard is up, so the new composer does not reopen it", async () => {
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("visualViewport", { height: 464, offsetTop: 0, scale: 1 });
+    try {
+      await mount(STORED.id);
+      const before = panel?.focusNonce as number;
+      await sendNew("Something else entirely");
+
+      expect(panel?.focusNonce).toBe(before);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

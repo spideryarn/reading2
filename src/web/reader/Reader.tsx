@@ -130,6 +130,7 @@ import { isMarginaliaModeWord } from "../../modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
 import { jumpToComment, stepToComment } from "../comment-jump.js";
+import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { modePress } from "./mode-press.js";
@@ -1067,7 +1068,7 @@ export function Reader({
   );
 
   /**
-   * Point at a term in the prose and press "in the glossary": open the band on
+   * Point at a term in the prose and press "Open glossary": open the band on
    * that entry.
    *
    * The `?term=` subscription that `GlossaryBand` deliberately keeps to itself
@@ -1082,7 +1083,7 @@ export function Reader({
    * be opened.**
    *
    * Since 2026-09-03 the prioritised glossary hides what is below the gate
-   * rather than grouping it, so pressing "in the glossary" on a low-scoring
+   * rather than grouping it, so pressing "Open glossary" on a low-scoring
    * term would take the reader to a band with no such row in it — the panel
    * asked to select something it is not drawing. `gateToReveal` answers the
    * gate that puts it back, and null when the current one already shows it.
@@ -1437,13 +1438,14 @@ export function Reader({
       listed,
       byKey,
       inQuotesMode: mode === "quotes",
+      generatedAt: quoteSource?.generatedAt,
       onGo: (quote) => goToQuote(quote, jumpTo),
       onOpenInQuotes: (quote) => {
         revealQuote(quote.id);
         void setMode("quotes");
       },
     };
-  }, [allQuotes, proseMarked, mode, goToQuote, jumpTo, revealQuote, setMode]);
+  }, [allQuotes, proseMarked, mode, goToQuote, jumpTo, revealQuote, setMode, quoteSource?.generatedAt]);
   useArrowNav(
     nav,
     article.blocks,
@@ -1564,6 +1566,31 @@ export function Reader({
      while stepping between them is traversal and must not — twenty questions
      cannot cost twenty presses of Back. The argument, and why the split is
      better than either half alone, is comment-jump.ts. GPT Sol F9. */
+
+  /**
+   * **The owner's highlights, for the Quotes band** — rows among the model's
+   * quotes (QuotesPanel.tsx § ReaderHighlights; plan 261003h).
+   *
+   * **From `owner.comments`, never from `comments` above**: that variable is
+   * either arm's list, and on a shared link it is the sharer's public comments,
+   * which carry colours too. Passing it would quietly turn on "a visitor sees
+   * the sharer's highlights in Quotes", which is deferred and unworded. Only
+   * `QuotesBand` (the owner's) takes this; `VisitorQuotesBand` has no prop for
+   * it. tests/quotes-yours-rows.test.tsx holds the line.
+   *
+   * Pressing one is the drawer's jump, with `bandJump` so a narrow window's
+   * band steps aside as it does for a quote. The panel clears `?quote=` in the
+   * same tick.
+   */
+  const ownerComments = owner?.comments.comments;
+  const quoteHighlights = useMemo(
+    () => ({
+      rows: ownerComments ? readerRowComments(ownerComments) : [],
+      blocks: article.blocks,
+      onOpen: (id: string) => jumpToComment(ownerComments ?? [], id, setNote, bandJump),
+    }),
+    [ownerComments, article.blocks, setNote, bandJump],
+  );
 
   /** The drawer's list: a jump, so there is a way back from it. */
   const openCommentFromDrawer = useCallback(
@@ -2394,7 +2421,13 @@ export function Reader({
       case "quotes":
         if (owner)
           return (
-            <QuotesBand slug={slug} read={owner.quotes} onJump={bandJump} steps={steppableQuotes} />
+            <QuotesBand
+              slug={slug}
+              read={owner.quotes}
+              onJump={bandJump}
+              steps={steppableQuotes}
+              yours={quoteHighlights}
+            />
           );
         return artefacts?.quotes ? (
           <VisitorQuotesBand quotes={artefacts.quotes} onJump={bandJump} steps={steppableQuotes} />

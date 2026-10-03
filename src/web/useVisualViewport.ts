@@ -120,3 +120,55 @@ export function useVisualViewport(active: boolean): VisibleViewport | null {
 
   return box;
 }
+
+/**
+ * How much of the layout viewport has to be covered before it is a keyboard.
+ *
+ * An iPad with a hardware keyboard attached still draws a shortcut strip of
+ * about 55px; the smallest soft keyboard, an iPhone's in landscape, is past 160.
+ */
+const SOFT_KEYBOARD_MIN_PX = 120;
+
+/**
+ * **Is an on-screen keyboard covering the page right now?**
+ *
+ * The same sum as `bottomInset` above, with two differences. `offsetTop` is
+ * left out: iOS pans the visual viewport once the keyboard is up, and the
+ * question here is how much is covered, not where a dialog should sit. And the
+ * height is multiplied back by `scale`, because a pinch-zoom makes the visible
+ * box shorter in CSS pixels with no keyboard anywhere.
+ *
+ * **`false` wherever it cannot tell**, and that is the safe direction: no
+ * `visualViewport`, or a browser that shrinks the *layout* viewport for the
+ * keyboard instead (Chromium, under `interactive-widget=resizes-content` in
+ * index.html — so Android Chrome answers `false` with its keyboard up, and
+ * `putKeyboardAway` does nothing there, which is how it behaved before).
+ */
+export function softKeyboardIsUp(): boolean {
+  if (typeof window === "undefined") return false;
+  const vv = window.visualViewport;
+  if (!vv) return false;
+  return window.innerHeight - vv.height * (vv.scale || 1) > SOFT_KEYBOARD_MIN_PX;
+}
+
+/**
+ * **A box whose Enter has done its thing lets go of the keyboard.**
+ *
+ * Greg, from an iPad, 2026-10-03 (spya-gmtt4b): *"what I end up doing is
+ * pressing the carriage return button, and then sometimes I can actually press
+ * the sort of keyboard hide button because the keyboard doesn't disappear."*
+ * The message has gone, the answer is arriving underneath the keys, and there
+ * is nothing left to type.
+ *
+ * **Only a soft keyboard.** At a desk, and on an iPad with a hardware keyboard,
+ * the caret stays where it was: blurring there would cost a click back into the
+ * box for every message. `(any-pointer: coarse)` cannot tell those apart; the
+ * visual viewport can.
+ *
+ * Call it once the send or the search has actually happened, never on a press
+ * that was refused. The rule and the list of boxes are
+ * docs/project/touch.md § What the Enter key promises.
+ */
+export function putKeyboardAway(el: HTMLElement | null | undefined): void {
+  if (el && softKeyboardIsUp()) el.blur();
+}

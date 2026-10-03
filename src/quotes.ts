@@ -912,14 +912,36 @@ export function normaliseQuote(value: string): string {
  * different key, a fresh id, and a dead link. Correct rather than clever — a
  * near-match rule here would hand a link to words the reader did not bookmark.
  */
-export function idsByText(onDisk: Quotes | null): Map<string, string> {
-  const out = new Map<string, string>();
+export function idsByText(onDisk: Quotes | null): Map<string, InheritedQuote> {
+  const out = new Map<string, InheritedQuote>();
   for (const quote of onDisk?.quotes ?? []) {
     const text = normaliseQuote(quote.text);
     const key = inheritKey(quote.blockId, text);
-    if (text && !out.has(key)) out.set(key, quote.id);
+    if (text && !out.has(key)) {
+      out.set(key, {
+        id: quote.id,
+        ...(quote.addedAt === undefined ? {} : { addedAt: quote.addedAt }),
+      });
+    }
   }
   return out;
+}
+
+/**
+ * What a rewritten quote takes from the one it replaces: **its id, and when it
+ * was first chosen.**
+ *
+ * The two travel together because they are the same claim — "this is the quote
+ * the reader already had". A replace that kept the id and stamped today would
+ * say a line chosen on Monday was chosen on Tuesday (GPT Sol, 261003h Q4).
+ *
+ * **Absence is preserved, not filled.** An old quote with no `addedAt` hands on
+ * no `addedAt`, so the tooltip goes on saying *on or before* rather than
+ * claiming the rewrite's time for a choice made earlier.
+ */
+export interface InheritedQuote {
+  id: string;
+  addedAt?: string;
 }
 
 /** A block id never contains a colon (`spya-k3m9qt`), so the key is unambiguous. */
@@ -927,7 +949,7 @@ function inheritKey(blockId: string, normalised: string): string {
   return `${blockId}:${normalised}`;
 }
 
-function inheritIds(fresh: Quote[], inherit: Map<string, string> | null): Quote[] {
+function inheritIds(fresh: Quote[], inherit: Map<string, InheritedQuote> | null): Quote[] {
   if (!inherit || inherit.size === 0) return fresh;
   const used = new Set<string>();
   return fresh.map((quote) => {
@@ -935,9 +957,14 @@ function inheritIds(fresh: Quote[], inherit: Map<string, string> | null): Quote[
     /* `used`, because two fresh quotes can normalise to one old key and an id
        handed out twice is worse than a new one — `?quote=` would then address
        whichever the panel happened to find first. */
-    if (!old || used.has(old)) return quote;
-    used.add(old);
-    return { ...quote, id: old };
+    if (!old || used.has(old.id)) return quote;
+    used.add(old.id);
+    /* The fresh quote's own `addedAt` (this run's) is taken off first, so an
+       old quote that had none still has none — `InheritedQuote`. */
+    const kept: Quote = { ...quote, id: old.id };
+    delete kept.addedAt;
+    if (old.addedAt !== undefined) kept.addedAt = old.addedAt;
+    return kept;
   });
 }
 
@@ -1050,7 +1077,15 @@ export function buildQuotes(
      * Ids from the list this run is replacing — see `idsByText`. Production
      * passes one only on an outdated, same-article rewrite (`generateQuotes`).
      */
-    inherit?: Map<string, string> | null;
+    inherit?: Map<string, InheritedQuote> | null;
+    /**
+     * When this run finished, as an ISO string — **one value, used for every
+     * quote the run adds (`Quote.addedAt`) and for the list's `generatedAt`**,
+     * so "the newest quote is no later than the list" is true by construction
+     * rather than by two clock reads landing in the right order. Optional for
+     * the pure helper's callers; absent means now.
+     */
+    now?: string;
     /**
      * The list this run is **appending to** — `existingFor`. Mutually exclusive
      * with `inherit`: production passes `existing`, `inherit`, or neither.
@@ -1068,6 +1103,7 @@ export function buildQuotes(
   },
 ): Quotes {
   const previous = opts.existing?.quotes ?? [];
+  const completedAt = opts.now ?? new Date().toISOString();
   const placed = dedupeOverlaps(
     /* `undefined` falls through to `place`'s own default, so the one place a
        fresh set is minted stays in one place. */
@@ -1080,7 +1116,7 @@ export function buildQuotes(
      inheritance is about to hand to a different one — or onto one the list
      being extended already uses. */
   const taken = new Set<string>([
-    ...(opts.inherit?.values() ?? []),
+    ...[...(opts.inherit?.values() ?? [])].map((old) => old.id),
     ...previous.map((q) => q.id),
   ]);
   const minted: Quote[] = placed.map((p) => ({
@@ -1091,6 +1127,12 @@ export function buildQuotes(
     ...(p.reason ? { reason: p.reason } : {}),
     ...(p.importance === undefined ? {} : { importance: p.importance }),
     ...(p.striking === undefined ? {} : { striking: p.striking }),
+    /* **When this run chose it.** A quote the list already had is never
+       re-stamped (an append keeps the object; a replace that inherits an id
+       inherits its time — `inheritIds`). Display only: it is in no hash, no
+       freshness test and no dedupe key. docs/project/quotes.md § Your
+       highlights are rows too. */
+    addedAt: completedAt,
   }));
 
   /* **The cap is applied in document order, not in the model's order.** Cutting
@@ -1164,7 +1206,7 @@ export function buildQuotes(
     discarded,
     passes: (opts.existing?.passes ?? (opts.existing ? 1 : 0)) + 1,
     lastAdded: added.length,
-    generatedAt: new Date().toISOString(),
+    generatedAt: completedAt,
     elapsedMs: (opts.existing?.elapsedMs ?? 0) + opts.elapsedMs,
   };
 }
