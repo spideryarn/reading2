@@ -520,7 +520,7 @@ describe("voice duration SQL invariant (expression only; Postgres persistence is
   const constraint = getTableConfig(aiCalls).checks.find((c) => c.name === "ai_calls_voice_seconds_on_voice_rows");
   if (!constraint) throw new Error("missing voice duration constraint");
   const schemaSql = new PgDialect().sqlToQuery(constraint.value).sql;
-  const migration = readFileSync(new URL("../drizzle/20261003105818_gpt_live_sessions_and_usage.sql", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../drizzle/20261003144630_gpt_live_sessions_and_usage.sql", import.meta.url), "utf8");
   const migrationSql = migration.match(/ADD CONSTRAINT "ai_calls_voice_seconds_on_voice_rows" CHECK \((.*)\);/)?.[1];
   if (!migrationSql) throw new Error("missing migration constraint");
 

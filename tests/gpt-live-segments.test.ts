@@ -543,6 +543,32 @@ describe("real traces from the spike", () => {
   });
 });
 
+describe("a pause is not a word boundary", () => {
+  /* GPT Sol's fix check, E1: a 400 ms gap alone put a space inside a year, a
+     word and a decimal, and those strings were then stored. */
+  it("joins a number, a word and a decimal that a pause fell inside", () => {
+    for (const [a, b] of [
+      [" 198", "7"],
+      [" extra", "ordinarily"],
+      [" 3.", "14"],
+    ] as const) {
+      const s = new Segmenter();
+      feed(s, [fragment("companion", 1_000, a), fragment("companion", 1_600, b)]);
+      expect(s.closing().exchanges[0]?.answer).toBe(`${a.trim()}${b}`);
+    }
+  });
+
+  it("still parts a sentence from the one before it", () => {
+    const s = new Segmenter();
+    feed(s, [
+      fragment("companion", 1_000, " Checking."),
+      fragment("companion", 1_600, "He"),
+      fragment("companion", 1_800, " says so."),
+    ]);
+    expect(s.closing().exchanges[0]?.answer).toBe("Checking. He says so.");
+  });
+});
+
 describe("a typed question", () => {
   it("does not mark the answer before it as cut into, because typing interrupts nobody", () => {
     const s = new Segmenter();

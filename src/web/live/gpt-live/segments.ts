@@ -99,8 +99,10 @@
  * bare. The browser check of 2026-10-03 stored "Checking.He says…", the
  * filler and the backend's answer, said seconds apart. So `textOf` puts a
  * space in front of a bare delta when its speaker's previous fragment ended
- * `UTTERANCE_GAP_MS` or more before it began, and it does not begin with
- * closing punctuation. Nobody is silent that long inside a word.
+ * `UTTERANCE_GAP_MS` or more before it began, the text so far ends a
+ * sentence, and the delta begins with a letter. The pause alone is not
+ * enough: it can fall inside "198|7", "extra|ordinarily" or "3.|14" (GPT
+ * Sol's fix check, E1), and a space there would be stored.
  *
  * Passed over: adding the space after any full stop. It is the obvious rule
  * and it needs no clock, but " 3." then "14" and " U." then "S." are both
@@ -150,13 +152,10 @@ export const INTERRUPT_GAP_MS = 700;
 export const BACKCHANNEL_WORDS = 4;
 
 /**
- * A speaker silent for this long has finished an utterance, so a delta after
- * it that brings no space of its own is given one. Two empty 200 ms windows:
- * one can fall inside a slowly spoken year, two cannot fall inside a word.
+ * A speaker silent for this long may have finished an utterance. Necessary
+ * for the space `textOf` supplies, and not sufficient: see § Text.
  */
 export const UTTERANCE_GAP_MS = 400;
-/** A bare delta that begins like this belongs to the word before it, whatever the pause. */
-const CLOSING_PUNCTUATION = /^[,.;:!?…)\]}%'’”]/;
 
 /** One transcript delta, as the wire sends it. */
 export interface TranscriptFragment {
@@ -643,7 +642,10 @@ function textOf(fragments: Fragment[]): string {
   let text = "";
   let heardTo: number | null = null;
   for (const f of fragments) {
-    const bare = !/^\s/.test(f.text) && !CLOSING_PUNCTUATION.test(f.text);
+    /* A pause alone is not a boundary: it can fall inside "198|7",
+       "extra|ordinarily" or "3.|14". So the space also needs a finished
+       sentence before it and a letter after it. */
+    const bare = /^\p{L}/u.test(f.text) && /[.!?…]["')\]]?$/.test(text);
     if (bare && heardTo !== null && f.at - heardTo >= UTTERANCE_GAP_MS) text += " ";
     text += f.text;
     heardTo = Math.max(heardTo ?? 0, f.end);

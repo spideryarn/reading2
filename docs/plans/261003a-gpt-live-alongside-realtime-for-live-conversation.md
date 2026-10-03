@@ -1,6 +1,6 @@
 # GPT-Live alongside Realtime for live conversation
 
-**Status: Stages 0–3 built and merged with `dev`; stage 3 under GPT Sol review; stage 4 (real browser, land) in progress.**
+**Status: built, reviewed, checked in a real browser, landed on `dev` behind Experimental. The comparison and the deletion of one engine are Greg's, and a follow-up.**
 
 ## What this is for
 
@@ -412,3 +412,23 @@ Experimental off, nothing a reader sees has changed except the Realtime prompt.
 
   **Seen and not fixed:** in one run "Thanks, that makes sense." still drew "Checking." and a
   delegation. A prompt-behaviour miss, left for the comparison.
+- 2026-10-03 — browser re-run after the fixes: two GPT-Live calls, every save 200, spacing and the
+  tool row right. It found a typed question marking the answer before it `interrupted` (typing
+  interrupts nobody; fixed, `fa9e5ded0`).
+- 2026-10-03 — Sol's fix check ([answer](261003a-gpt-live-alongside-realtime-stage-4-fix-check-sol.md)):
+  E1, the pause rule could store "198 7" — fixed: the space now also needs a finished sentence
+  before it and a letter after it. E2 (P2), `shownPassage` with no article map still says it showed
+  a passage; only the preview page has no map, left. D1–D4 intact. Discovery is closed.
+- 2026-10-03 — second merge with `dev`: two migrations had landed there, one stamped after ours,
+  so ours was regenerated to come last (`20261003144630`, SQL byte-identical to the reviewed
+  file) rather than left where production's watermark could strand it
+  ([database.md § A watermark is not a ledger](../project/database.md#a-watermark-is-not-a-ledger)).
+- 2026-10-03 — **the default with Experimental on stays Realtime**, against the plan's earlier
+  intent to flip it. The peer measurement says GPT-Live is slower on article questions and bills
+  every open minute, and readers other than Greg have Experimental on. The choice is one select
+  beside the Live button. `DEFAULT_EXPERIMENTAL_ENGINE` in `src/web/live/engine.ts` is the one
+  constant if Greg wants it flipped.
+- **Still unverified:** a real microphone, audible playback, echo and street noise on GPT-Live;
+  overlapping delegations against the provider; whether the prompt changes reduce filler (every
+  browser answer still began "Checking." or "Mm-hmm", and "Thanks, that makes sense" was
+  delegated in all three runs).
