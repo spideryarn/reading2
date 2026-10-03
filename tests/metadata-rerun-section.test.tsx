@@ -713,7 +713,7 @@ describe("the AI processing section", () => {
     expect(heldMetadata).toHaveLength(1);
     expect(metadataReads).toBe(2);
 
-    const input = host.querySelector<HTMLInputElement>('[aria-label="Your tags on this article"]')!;
+    const input = host.querySelector<HTMLInputElement>('[aria-label="Add a tag"]')!;
     await act(async () => {
       input.focus();
       const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
