@@ -24,7 +24,8 @@ import type { GptLiveTicket } from "../src/types.js";
 import type { SpokenLanded } from "../src/web/chat/controller.js";
 import type { GptLiveUsageReport } from "../src/web/live/gpt-live/meter.js";
 import { GPT_LIVE_NO_REPLY_MS } from "../src/web/live/gpt-live/stall.js";
-import { useGptLive } from "../src/web/live/gpt-live/useGptLive.js";
+import { GPT_LIVE_IDLE_CAP_MS, useGptLive } from "../src/web/live/gpt-live/useGptLive.js";
+import { IDLE_CAP_MS } from "../src/web/live/session-shared.js";
 import type { LiveOptions } from "../src/web/live/useLiveConversation.js";
 import type { GptLiveOffer, LiveToolResult, LiveWiring } from "../src/web/live/wiring.js";
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
@@ -57,6 +58,11 @@ class FakeChannel {
   open() {
     this.readyState = "open";
     for (const fn of this.#listeners.get("open") ?? []) fn({});
+  }
+  /** The connection goes away under the call: no `session.closed`, just a dead channel. */
+  drop() {
+    this.readyState = "closed";
+    for (const fn of this.#listeners.get("close") ?? []) fn({});
   }
   deliver(event: Record<string, unknown>) {
     for (const fn of this.#listeners.get("message") ?? []) fn({ data: JSON.stringify(event) });
@@ -783,6 +789,83 @@ describe("what the status strip is told", () => {
     h.unmount();
   });
 
+  /* The peer's measurement saw the session timeline stop for 26 s of wall time
+     (docs/investigations/261002r-gpt-live-spike.md, events/main-Cin-short-s1-r3-stall.jsonl):
+     the question had been asked, and nothing at all arrived. The rule's clock
+     is this tab's, so it must still run when the provider's has stopped. */
+  it("says no reply when the timeline freezes and not one fragment arrives, and stops saying it when the answer does", async () => {
+    const captured = vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = await live({ wiring: wiringFor(ticketWith()), tailNow: () => TAIL });
+    await deliver(said("reader", 1_000, 2_000, " So is that a good thing or a bad thing?"));
+    await pass(GPT_LIVE_NO_REPLY_MS - 2_000);
+    expect(h.get().stall).toBeNull();
+    await pass(3_000);
+    expect(h.get().stall).toBe("no-reply");
+
+    /* 26 s after the question, the answer: 200 ms later on the session's
+       timeline, as in the trace. */
+    await pass(5_000);
+    await deliver(said("companion", 2_200, 2_600, " It's a bad thing,"), said("companion", 2_600, 3_400, " because it doesn't hold up."));
+    await pass(1_000);
+    expect(h.get().stall).toBeNull();
+    captured.mockRestore();
+    h.unmount();
+  });
+
+  /* After a freeze the timeline is 26 s behind this tab's clock for the rest
+     of the call. A backend final is timed on the tab's clock, so speech placed
+     by the old estimate of where the timeline starts looks 26 s older than the
+     final it answers, and never pays for it: a "no reply" notice over the top
+     of every later answer. */
+  it("does not say no reply over an answer that is spoken after a freeze", async () => {
+    const captured = vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = await live({ wiring: wiringFor(ticketWith()), tailNow: () => TAIL });
+    await deliver(said("reader", 1_000, 2_000, " So is that a good thing or a bad thing?"));
+    await pass(26_000);
+    await deliver(said("companion", 2_200, 3_400, " It's a bad thing, because it doesn't hold up."));
+
+    /* The next question, delegated and answered, a few seconds on. */
+    await pass(4_000);
+    await deliver(
+      said("reader", 6_000, 7_000, " And where does he say that it doesn't?"),
+      delegated("d1", "r1"),
+      created("d1", "r1"),
+      completed("d1", "r1"),
+    );
+    await pass(1_500);
+    await deliver(said("companion", 8_500, 9_000, " In the part"));
+    await pass(1_000);
+    await deliver(said("companion", 9_500, 10_000, " about hot fields,"));
+    await pass(1_000);
+    await deliver(said("companion", 10_500, 11_000, " near the end."));
+
+    await pass(GPT_LIVE_NO_REPLY_MS + 5_000);
+    expect(h.get().stall).toBeNull();
+    captured.mockRestore();
+    h.unmount();
+  });
+
+  /* `[hum]` is in the transcript and nobody said it. It must not light the
+     speaking pill, and it must not pay for an answer that is owed. */
+  it("does not count a bracketed sound as the companion speaking, or as the reply", async () => {
+    const captured = vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = await live({ wiring: wiringFor(ticketWith()), tailNow: () => TAIL });
+    await deliver(
+      said("reader", 1_000, 2_000, " What does it say about the lighthouse?"),
+      delegated("d1", "r1"),
+      created("d1", "r1"),
+      completed("d1", "r1"),
+    );
+    await pass(3_000);
+    await deliver(said("companion", 6_200, 6_400, " [hum"), said("companion", 6_400, 6_600, "]"));
+    expect(h.get().speaking).toBe(false);
+    expect(h.get().lines.map((l) => l.text)).toEqual(["What does it say about the lighthouse?"]);
+    await pass(GPT_LIVE_NO_REPLY_MS);
+    expect(h.get().stall).toBe("no-reply");
+    captured.mockRestore();
+    h.unmount();
+  });
+
   it("says the microphone is paused when the device stops giving samples", async () => {
     const h = await live({ wiring: wiringFor(ticketWith()), tailNow: () => TAIL });
     act(() => mic?.mute());
@@ -792,18 +875,101 @@ describe("what the status strip is told", () => {
   });
 });
 
+/* GPT-Live bills five cents for every minute the session is open, silence
+   included (the investigation, § Cost per minute, both ways): a reader who
+   reads for twenty minutes and asks five questions pays four times what
+   Realtime costs. So this engine closes sooner than Realtime does, and Live
+   picks the conversation up again from the thread. */
 describe("the caps", () => {
+  const ended = /nobody had spoken for a couple of minutes.*picks up where it left off/;
+
+  it("has its own idle cap, two minutes, and leaves Realtime's five alone", () => {
+    expect(GPT_LIVE_IDLE_CAP_MS).toBe(2 * 60_000);
+    expect(IDLE_CAP_MS).toBe(5 * 60_000);
+  });
+
   it("ends a call the reader has stopped talking in, and a reader fragment starts the clock again", async () => {
     const h = await live({ wiring: wiringFor(ticketWith()), tailNow: () => TAIL });
-    await pass(4 * 60_000);
-    await deliver(said("reader", 240_000, 241_000, " Still here, just reading this bit."));
-    await pass(4 * 60_000);
+    await pass(100_000);
+    await deliver(said("reader", 100_000, 101_000, " Still here, just reading this bit."));
+    await pass(100_000);
     expect(h.get().phase).toBe("live");
-    await pass(70_000);
-    expect(h.get().error).toMatch(/a few minutes of quiet/);
-    await deliver({ type: "session.closed", reason: "close_requested", usage: { seconds: 550 }, event_id: "ev-closed" });
+    expect(h.get().error).toBeNull();
+    await pass(30_000);
+    expect(h.get().error).toMatch(ended);
+    await deliver({ type: "session.closed", reason: "close_requested", usage: { seconds: 230 }, event_id: "ev-closed" });
     expect(h.get().phase).toBe("idle");
     expect(metered.at(-1)).toMatchObject({ kind: "close", reason: "idle-cap" });
+    h.unmount();
+  });
+
+  it("does not let a cough the transcript wrote down keep a billed call open", async () => {
+    const h = await live({ wiring: wiringFor(ticketWith()), tailNow: () => TAIL });
+    await pass(100_000);
+    await deliver(said("reader", 100_000, 100_200, " [cough"), said("reader", 100_200, 100_400, "]"));
+    await pass(30_000);
+    expect(h.get().error).toMatch(ended);
+    h.unmount();
+  });
+
+  it("never ends a call while the backend is working, and gives the answer two minutes from when it finished", async () => {
+    const captured = vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = await live({ wiring: wiringFor(ticketWith()), tailNow: () => TAIL });
+    await deliver(
+      said("reader", 1_000, 2_000, " What does it say about the lighthouse?"),
+      delegated("d1", "r1"),
+      created("d1", "r1"),
+    );
+    /* Well past two minutes since the reader spoke, and the backend has not finished. */
+    await pass(150_000);
+    expect(h.get().phase).toBe("live");
+    expect(h.get().error).toBeNull();
+
+    /* It finishes. The reply is now owed, and the reader has not spoken for
+       two and a half minutes: the clock starts from here, not from them. */
+    await deliver(completed("d1", "r1"));
+    await pass(100_000);
+    expect(h.get().phase).toBe("live");
+    expect(h.get().error).toBeNull();
+    await pass(30_000);
+    expect(h.get().error).toMatch(ended);
+    captured.mockRestore();
+    h.unmount();
+  });
+});
+
+/* One GPT-Live connection in sixty dropped before `session.closed` in the
+   peer's runs, which is the event that carries the final seconds. Nothing can
+   recover that last figure; what must hold is that everything up to the last
+   `session.usage.updated` was already posted, and that the journal row is
+   closed with a reason and does not read as a call still running. */
+describe("a connection that drops before session.closed", () => {
+  it("has already reported the last usage figure it was given, and closes the journal with a reason", async () => {
+    const { spoken, speak } = recordingSpeak();
+    const h = await live({ wiring: wiringFor(ticketWith()), speak, tailNow: () => TAIL });
+    await deliver(
+      said("reader", 1_000, 2_000, " Is the lighthouse still standing?"),
+      said("companion", 2_500, 3_500, " Yes, it is."),
+      { type: "session.usage.updated", usage: { seconds: 15 }, event_id: "ev-usage-1" },
+    );
+    await pass(15_000);
+    await deliver({ type: "session.usage.updated", usage: { seconds: 30 }, event_id: "ev-usage-2" });
+    /* Posted as it arrived, with the call still up. */
+    expect(kinds()).toEqual(["connected", "usage:voice", "usage:voice"]);
+    expect(metered.at(-1)?.report).toEqual({ kind: "voice", seconds: 30, eventId: "ev-usage-2" });
+
+    await act(async () => { channel?.drop(); });
+    await pass(5_000);
+
+    expect(h.get().phase).toBe("failed");
+    expect(h.get().error).toMatch(/connection ended/);
+    /* Nothing was asked of a channel that is gone. */
+    expect(sent).toEqual([]);
+    expect(kinds()).toEqual(["connected", "usage:voice", "usage:voice", "close"]);
+    expect(metered.at(-1)).toMatchObject({ kind: "close", sessionId: "journal-row-1", reason: "channel-closed" });
+    /* And what was said is still written. */
+    expect(spoken.map((x) => x.answer)).toEqual(["Yes, it is."]);
+    expect(mic?.stopped).toBe(true);
     h.unmount();
   });
 });

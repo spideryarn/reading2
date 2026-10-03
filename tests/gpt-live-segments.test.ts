@@ -20,6 +20,7 @@ import {
   type SegmentEvent,
   type Speaker,
   type SpokenExchange,
+  type TranscriptFragment,
 } from "../src/web/live/gpt-live/segments.js";
 
 let ids = 0;
@@ -489,5 +490,120 @@ describe("real traces from the spike", () => {
     expect(rows(replay("allow"))).toEqual([
       ["", "Alright, checking for that now. The article says it was painted teal in 1987."],
     ]);
+  });
+});
+
+/**
+ * **Sounds the transcript writes as words.** The peer's measurement of this
+ * engine (docs/investigations/261002r-gpt-live-spike.md § What surprised us):
+ * the output transcript carries `[hum]` and `[lip smack]`, and on the wire each
+ * arrives **split across fragments** — " [hum" then "]", " [lip" then
+ * " smack]" (evals/live/results/261002r-gpt-live-spike/events/). So no single
+ * fragment can be recognised as one; the rule is over one speaker's stream.
+ */
+describe("sounds that are not words", () => {
+  it("keeps the spike's two bracketed sounds out of the stored answer", () => {
+    const s = new Segmenter();
+    feed(s, [
+      ...say("reader", 1_000, "Why does he think that?"),
+      fragment("companion", 4_600, " Mm."),
+      fragment("companion", 4_800, " [lip"),
+      fragment("companion", 5_000, " smack]"),
+      fragment("companion", 5_200, " The"),
+      fragment("companion", 5_400, " answer"),
+      fragment("companion", 6_200, " [hum"),
+      fragment("companion", 6_400, "]"),
+      fragment("companion", 6_600, " is here."),
+    ]);
+    expect(rows(s.closing().exchanges)).toEqual([["Why does he think that?", "Mm. The answer is here."]]);
+  });
+
+  it("never shows half of one on a line while the rest is on its way", () => {
+    const s = new Segmenter();
+    feed(s, [fragment("companion", 4_600, " Mm."), fragment("companion", 4_800, " [lip")]);
+    expect(s.lines().map((l) => l.text)).toEqual(["Mm."]);
+    feed(s, [fragment("companion", 5_000, " smack]")]);
+    expect(s.lines().map((l) => l.text)).toEqual(["Mm."]);
+  });
+
+  it("does not let one open a segment: a call with nothing but a hum stores nothing", () => {
+    const s = new Segmenter();
+    feed(s, [fragment("companion", 1_000, " [hum"), fragment("companion", 1_200, "]"), fragment("reader", 3_000, "[cough]")]);
+    expect(s.lines()).toEqual([]);
+    expect(s.segments()).toEqual([]);
+    expect(s.closing().exchanges).toEqual([]);
+  });
+
+  it("does not let one split the reader's sentence, as a whitespace-only fragment cannot", () => {
+    const s = new Segmenter();
+    feed(s, [
+      ...say("reader", 1_000, "Why does he"),
+      fragment("companion", 2_000, " [hum"),
+      fragment("companion", 2_200, "]"),
+      /* A long pause, with only a hum from the companion in it. */
+      ...say("reader", 4_000, "think that?"),
+    ]);
+    expect(rows(s.closing().exchanges)).toEqual([["Why does he think that?", ""]]);
+  });
+
+  it("does not let one settle an exchange: a hum past the reader's last word is not the companion being heard", () => {
+    const before = [
+      ...say("reader", 1_000, "Why does he think that?"),
+      ...say("companion", 2_400, "Because he says so."),
+      ...say("reader", 8_000, "And where is that?"),
+    ];
+    const hummed = new Segmenter();
+    expect(feed(hummed, [...before, fragment("companion", 11_000, " [hum"), fragment("companion", 11_200, "]")])).toEqual([]);
+    /* The control: a word in the same place does settle it. */
+    const spoke = new Segmenter();
+    expect(rows(feed(spoke, [...before, fragment("companion", 11_000, " In")]))).toEqual([
+      ["Why does he think that?", "Because he says so."],
+    ]);
+  });
+
+  it("says whether a fragment was speech, so the hook's clocks do not run on a cough", () => {
+    const s = new Segmenter();
+    const f = (delta: string, at: number): TranscriptFragment => ({ role: "reader", eventId: `t${at}`, startMs: at, endMs: at + 200, delta });
+    expect(s.take(f(" [cough", 1_000)).speech).toBe(false);
+    expect(s.take(f("]", 1_200)).speech).toBe(false);
+    expect(s.take(f(" ", 1_400)).speech).toBe(false);
+    expect(s.take(f(" Hello", 1_600)).speech).toBe(true);
+    /* A repeat is not speech either. */
+    expect(s.take(f(" Hello", 1_600)).speech).toBe(false);
+  });
+
+  /* The other side of the rule. A bracket somebody's words really were written
+     with is kept: the stored row promises no word is dropped. */
+  it.each([
+    ["a capital", "[Laughter] he says"],
+    ["a number", "see [Smith 2019] for that"],
+    ["punctuation", "he wrote [sic!] there"],
+    ["more than three words", "[as he puts it himself] it holds"],
+    ["a bracket glued to a word", "take x[i] here"],
+    ["too long to be a sound", "[uncharacteristically longwinded] yes"],
+  ])("keeps a bracket with %s", (_why, sentence) => {
+    const s = new Segmenter();
+    feed(s, [...say("reader", 1_000, "What then?"), ...say("companion", 2_400, sentence)]);
+    expect(rows(s.closing().exchanges)).toEqual([["What then?", sentence]]);
+  });
+
+  it("keeps the order of the words when what looked like a sound turns out to be speech", () => {
+    const s = new Segmenter();
+    feed(s, [
+      ...say("reader", 1_000, "What then?"),
+      fragment("companion", 2_400, " He says [as"),
+      fragment("companion", 2_600, " he"),
+      fragment("companion", 2_800, " puts"),
+      /* Held until here: a fourth word, so not a sound. Nothing was shown early, nothing is lost. */
+      fragment("companion", 3_000, " it] that"),
+      fragment("companion", 3_200, " it holds."),
+    ]);
+    expect(rows(s.closing().exchanges)).toEqual([["What then?", "He says [as he puts it] that it holds."]]);
+  });
+
+  it("drops a sound the call ended in the middle of", () => {
+    const s = new Segmenter();
+    feed(s, [...say("reader", 1_000, "What then?"), fragment("companion", 2_400, " Yes."), fragment("companion", 2_600, " [hum")]);
+    expect(rows(s.closing().exchanges)).toEqual([["What then?", "Yes."]]);
   });
 });

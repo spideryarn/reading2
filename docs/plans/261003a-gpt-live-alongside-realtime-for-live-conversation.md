@@ -234,7 +234,9 @@ hook reads `input_audio_buffer.speech_started/stopped` and `output_audio_buffer.
 evidence is transcript fragments, which trail the audio. So in `useGptLive`:
 
 - `hearing` and `speaking` are estimates: a fragment from that side in the last second or so.
-- The five-minute idle cap resets on reader fragments.
+- The idle cap resets on reader fragments, and is this engine's own: two minutes, not Realtime's
+  five, because an open minute is billed whether or not anybody speaks (Log, 2026-10-03, review of
+  261002r).
 - Hang-up: disable and release the microphone at once; keep the channel and the meter alive while
   fragments are still arriving (bounded, about 2.5 s); send `session.close` and wait up to 3 s for
   `session.closed`, which carries the final seconds; write the last exchange; tear down.
@@ -259,10 +261,11 @@ has finished. Turning Experimental off mid-call ends a GPT-Live call first. Reco
 
 The voice prompt follows OpenAI's Live prompting guide and WhatNext's sections — Personality,
 Backchannel policy, Interruption policy, Delegation policy — in the plain-words style of
-[prompting-guide.md](../project/prompting-guide.md). Two lines carry the weight: *delegate before
-giving any answer that depends on the article, and never guess the result while you wait*; and
-*while the backend works you may say what you are checking, but do not fill silence for the sake of
-it*.
+[prompting-guide.md](../project/prompting-guide.md). How to talk is `LIVE_SYSTEM`'s own bullets,
+shared as one constant (`SPOKEN_RULES`). Two lines carry the weight: *delegate before giving any
+such answer, and never guess the result while you wait*; and *while the backend works, say nothing,
+or two or three words at most* — tightened from "you may say what you are checking" after
+[261002r](../investigations/261002r-gpt-live-spike.md) heard filler on 32 of 36 turns.
 
 ## Stages
 
@@ -295,6 +298,11 @@ review-and-fix.
   separate, because it touches the microphone path both engines share.
 - **Typing into a live call.** Today's stop-then-type stays.
 - **A server sideband.** Needed only if tool work must finish with the tab closed.
+- **Answer first, point second.** The backend calls `show_passage` and then answers, which is a
+  second Responses round: in [261002r](../investigations/261002r-gpt-live-spike.md)'s table of the
+  round trip, the pointer is complete at 1,857 ms and the answer text does not start until 2,769 ms,
+  of about 3.5 s in all. Reversing the order is untried against the provider. It is the first
+  latency lever to try, before `service_tier: "priority"` and client delegation.
 - **Physical acoustics.** An automation tab has no microphone; real speech, echo and street noise
   are Greg's to try. Said plainly at the end rather than implied by green tests.
 
@@ -337,3 +345,47 @@ Experimental off, nothing a reader sees has changed except the Realtime prompt.
   - **Migrations**: dev's five, then ours as `idx` 127. Disjoint tables, so our snapshot was
     hand-merged onto dev's last one (database.md § When both are applied and disjoint), keeping its
     `id`; `db:generate -- --allow-empty` reports no schema changes. The `.sql` is untouched.
+- 2026-10-03 — read against the peer's measurement of this engine,
+  [261002r](../investigations/261002r-gpt-live-spike.md), and the merged `LIVE_SYSTEM`. Seven
+  things, each with a test watched red, or (where the code was already right) a test shown to fail
+  when the code is broken:
+  1. **Voice prompt.** "How to talk" is now `LIVE_SYSTEM`'s eight bullets, lifted into
+     `SPOKEN_RULES` in `src/live.ts` and used by both prompts; `LIVE_SYSTEM`'s bytes are unchanged
+     (sha256 `4ac8ae9c62c3…` before and after). Stage 1's wording is gone ("two or three sentences",
+     "fifteen seconds", "after any checking preamble", "a sentence or three", "warm"). The
+     Delegation policy gained an ALWAYS list and a NEVER list, with the way back from "never" (a
+     fact not yet said in this conversation means delegate); nothing or two or three words while
+     the backend works, once, no sounds; say the backend's answer with its reason; and what to do
+     with a correction. **None of it is measured against the provider.**
+  2. **Backend prompt.** One or two sentences, about ten seconds, "enough to carry the mechanism,
+     not just the conclusion", and "answer the latest version of the question". It still points
+     before it answers (§ Not in this job).
+  3. **Bracketed sounds.** On the wire `[hum]` arrives as " [hum" then "]", and `[lip smack]` as
+     " [lip" then " smack]", so no single fragment is one. `SoundFilter` in `segments.ts` reads
+     each speaker's stream, holds text back from a `[` while it could still be a sound, drops it at
+     `]`, and gives it back the moment it cannot be one. The rule: one to three lower-case words,
+     at most 24 characters, the `[` not touching a letter or digit. A capital, a digit, punctuation
+     or a fourth word is kept as speech. `Segmenter.take` says whether a fragment was speech, and
+     the hook's clocks (idle, the two pills, the stall rule) now run on speech only.
+  4. **The frozen timeline.** Confirmed: with no fragments at all, the no-reply notice fires on
+     this tab's clock; and `sessionZero`'s minimum is not moved by a late burst. **Found and
+     fixed:** after a freeze, every later fragment was placed 26 s too early against a backend
+     final, which is timed on the tab's clock, so no later answer could pay for its final and the
+     notice would show over each one. `timelineOrigin` in `stall.ts` moves the origin up when the
+     latest fragment is more than `TIMELINE_LAG_CAP_MS` (2 s) behind; one origin for both speakers,
+     so their order is untouched. What it gives up is written there.
+  5. **Idle cost.** `GPT_LIVE_IDLE_CAP_MS`, two minutes, in `useGptLive.ts`; Realtime's five is
+     untouched. The clock starts again at reader speech and when a delegation ends, and does not
+     run while one is running. **Decided:** a reply still owed two minutes after it became owed
+     does not hold the call open. "Never while a reply is owed" taken literally would let a voice
+     that never answers bill silence up to the twenty-minute cap, and by then the no-reply notice
+     has offered Reconnect for a hundred seconds. The reader is told: "The live conversation ended
+     because nobody had spoken for a couple of minutes. Press Live and it picks up where it left
+     off." Help's "five minutes of quiet" describes Realtime and is left alone while this engine is
+     behind Experimental.
+  6. **Lost final usage.** Confirmed: each `session.usage.updated` is posted as it arrives, and a
+     channel that dies before `session.closed` closes the journal with `channel-closed`. No change.
+  7. **`useProfile`. Not done, on purpose.** The Realtime hook does not send it either:
+     `wiring.ticket` posts `{placement}` and nothing else. Both routes read an absent `useProfile`
+     as yes, so both engines already use the reader's profile, and there is no per-reader switch
+     in the client to pass along. Sending `{sdp}` alone is the same behaviour.

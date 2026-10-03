@@ -31,6 +31,9 @@
  * - **No voice-detector or playback events.** `hearing` and `speaking` are
  *   estimates: a fragment from that side in the last second or so. The idle
  *   cap resets on reader fragments. There is no "open turn" stall.
+ * - **An open minute is a billed minute.** Five cents, silence included, where
+ *   Realtime bills nothing while nobody speaks. So this engine has its own,
+ *   shorter idle cap (`GPT_LIVE_IDLE_CAP_MS`).
  * - **The call is closed by asking.** `session.close`, then `session.closed`,
  *   which carries the final seconds billed.
  *
@@ -84,7 +87,6 @@ import {
   DISCONNECT_GRACE_MS,
   GRACE_POLL_MS,
   HANGUP_GRACE_MS,
-  IDLE_CAP_MS,
   SEED_TIMEOUT_MS,
   SESSION_CAP_MS,
   STALL_REPORT_AFTER_MS,
@@ -99,7 +101,36 @@ import { apiWiring } from "../wiring.js";
 import { DelegationLoop, type DelegationEffect } from "./delegations.js";
 import { GptLiveMeter, backendReport, voiceReport, type GptLiveUsageReport } from "./meter.js";
 import { Segmenter, type Speaker, type SpokenExchange as FrozenExchange } from "./segments.js";
-import { gptLiveStallOf, sessionZero, type DelegationDebt } from "./stall.js";
+import { gptLiveStallOf, sessionZero, timelineOrigin, type DelegationDebt } from "./stall.js";
+
+/**
+ * **How long the reader may say nothing before this engine ends the call.**
+ * Two minutes, where Realtime's `IDLE_CAP_MS` (../session-shared.ts) is five.
+ *
+ * GPT-Live bills $0.05 for every minute a session is open, silence included;
+ * Realtime bills by the token and nothing while nobody speaks. A reader reads
+ * between questions, and a peer's measurement put a twenty-minute session with
+ * five questions at about $1.00 here against $0.25 there
+ * (docs/investigations/261002r-gpt-live-spike.md § Cost per minute, both
+ * ways). Closing sooner is what OpenAI's own guide suggests. It costs the
+ * reader one press of Live and a second or two of reconnecting; the
+ * conversation is seeded from the thread, so it picks up where it left off.
+ *
+ * **What the clock counts** (the caps effect below):
+ *
+ * - It starts again at every reader fragment that was speech. Not the
+ *   companion's, and not a cough the transcript wrote in brackets.
+ * - It does not run while a delegation is running: the reader asked, and is
+ *   waiting.
+ * - It starts again when a delegation ends, so the answer and the reader's
+ *   reply to it get the full two minutes however long the backend took.
+ *
+ * So a call is never ended under an answer in flight. A reply that is still
+ * owed two minutes after it became owed does not hold the call open: by then
+ * the no-reply notice has offered Reconnect for a hundred seconds, and holding
+ * on would bill silence up to the twenty-minute cap.
+ */
+export const GPT_LIVE_IDLE_CAP_MS = 2 * 60_000;
 
 /**
  * How recently a fragment must have arrived for that side to count as talking.
@@ -271,6 +302,8 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
    * of where that timeline starts on this tab's clock (`sessionZero`).
    */
   const zero = useRef<number | null>(null);
+  /** `arrived - end_ms` of the latest fragment that was speech: how far behind the timeline is now. */
+  const latestOffset = useRef<number | null>(null);
   const startedAt = useRef<number | null>(null);
   const readerArrived = useRef(0);
   const companionArrived = useRef(0);
@@ -342,6 +375,16 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
 
   const stopRef = useRef<() => Promise<void>>(async () => {});
 
+  /**
+   * Where the session timeline's zero is on this tab's clock, as far as the
+   * fragments so far can say. Before any fragment, the moment the session
+   * started. `./stall.ts` § Two clocks.
+   */
+  const origin = useCallback((now: number): number => {
+    if (zero.current === null) return startedAt.current ?? now;
+    return timelineOrigin(zero.current, latestOffset.current ?? zero.current);
+  }, []);
+
   const failSession = useCallback((message: string, reason: string) => {
     setError(message);
     failed.current = true;
@@ -361,7 +404,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
       return;
     }
     const now = Date.now();
-    const origin = zero.current ?? startedAt.current ?? now;
+    const from = origin(now);
     const lastReader = [...segmenter.current.segments()].reverse().find((s) => s.role === "reader");
     const kind =
       stallOf({
@@ -377,9 +420,9 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
       }) ??
       gptLiveStallOf({
         now,
-        readerLastAt: readerEndMs.current === null ? null : origin + readerEndMs.current,
+        readerLastAt: readerEndMs.current === null ? null : from + readerEndMs.current,
         readerWords: lastReader ? wordsIn(lastReader.text) : 0,
-        companionLastBeganAt: companionStartMs.current === null ? null : origin + companionStartMs.current,
+        companionLastBeganAt: companionStartMs.current === null ? null : from + companionStartMs.current,
         delegations: [...debts.current.values()],
         delegationEndedAt: delegationEndedAt.current,
       });
@@ -409,7 +452,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
       live_disconnects: t.disconnects,
       live_provider_errors: t.providerErrors,
     });
-  }, []);
+  }, [origin]);
 
   /**
    * Queue frozen exchanges for the thread, one at a time, in order.
@@ -616,8 +659,13 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     const delta = e.delta;
     if (typeof startMs !== "number" || typeof endMs !== "number" || typeof delta !== "string") return;
     const eventId = typeof e.event_id === "string" && e.event_id !== "" ? e.event_id : `${role}:${startMs}:${endMs}:${delta}`;
-    if (delta.trim() !== "") {
+    /* The segmenter first: it is the one that knows whether this was speech.
+       A bracketed sound comes in pieces (" [hum" then "]"), so no check on one
+       delta here could tell. */
+    const heard = segmenter.current.take({ role, eventId, startMs, endMs, delta });
+    if (heard.speech) {
       zero.current = sessionZero(zero.current, now, endMs);
+      latestOffset.current = now - endMs;
       fragmentArrived.current = now;
       if (role === "reader") {
         /* Only the reader's voice resets the idle clock. */
@@ -632,7 +680,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
         if (!closing.current) setSpeaking(true);
       }
     }
-    commit(segmenter.current.push({ type: "fragment", role, eventId, startMs, endMs, delta }));
+    commit(heard.exchanges);
     refreshLines();
   }, [commit, refreshLines]);
 
@@ -882,6 +930,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     meter.current = null;
     endedBecause.current = "reader";
     zero.current = null;
+    latestOffset.current = null;
     startedAt.current = null;
     readerArrived.current = Date.now();
     companionArrived.current = 0;
@@ -1161,7 +1210,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     const now = Date.now();
     /* Where "now" is on the session's timeline, so the typed words sit before
        the answer to them. Not fed to `sessionZero`: nothing was spoken. */
-    const at = Math.max(0, now - (zero.current ?? startedAt.current ?? now));
+    const at = Math.max(0, now - origin(now));
     typed.current += 1;
     readerArrived.current = now;
     readerEndMs.current = Math.max(readerEndMs.current ?? 0, at);
@@ -1181,21 +1230,30 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
       item: { type: "message", role: "user", content: [{ type: "input_text", text: trimmed }] },
     });
     send({ type: "response.create" });
-  }, [commit, refreshLines, send]);
+  }, [commit, refreshLines, send, origin]);
 
-  /** The caps. Copied from the Realtime hook, with fragments standing in for the voice detector. */
+  /**
+   * The caps. Copied from the Realtime hook, with fragments standing in for
+   * the voice detector, and with this engine's own idle rule
+   * (`GPT_LIVE_IDLE_CAP_MS` says what the clock counts and why).
+   */
   useEffect(() => {
     if (phase !== "live") return;
+    const delegationRunning = () => [...debts.current.values()].some((debt) => debt.finalAt === null);
     const tick = setInterval(() => {
       const now = Date.now();
       /* Never while the reader is talking: it will fire on the next tick. */
       if (now - readerArrived.current < FRAGMENT_RECENT_MS) return;
-      if (now - readerArrived.current > IDLE_CAP_MS) {
-        setError("The live conversation ended after a few minutes of quiet. Press Live to carry on.");
+      const quietSince = Math.max(readerArrived.current, delegationEndedAt.current ?? 0);
+      if (!delegationRunning() && now - quietSince > GPT_LIVE_IDLE_CAP_MS) {
+        setError(
+          "The live conversation ended because nobody had spoken for a couple of minutes. Press Live and it picks up where it left off.",
+        );
         endedBecause.current = "idle-cap";
         void stopRef.current();
         return;
       }
+      /* Also the backstop for a backend that never finishes, which the idle rule waits on. */
       if (now - began.current > SESSION_CAP_MS) {
         setError("The live conversation has been going a while and has ended. Press Live to carry on.");
         endedBecause.current = "session-cap";

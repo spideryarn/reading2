@@ -31,6 +31,7 @@ import {
   gptLiveCreateFailure,
   LIVE_SYSTEM,
   liveTools,
+  SPOKEN_RULES,
   UNTRUSTED_TOOL_RESULTS,
 } from "../src/live.js";
 import {
@@ -249,12 +250,63 @@ describe("the voice instructions", () => {
     expect(text).toContain("PLAIN WORDS");
   });
 
-  it("carries the two lines the plan says carry the weight, and the audio rules", () => {
-    expect(text).toMatch(/Delegate before giving any answer that depends on the article, and never guess\s+the result while you wait/);
-    expect(text).toMatch(/Do not fill silence for the sake of\s+it/);
-    expect(text).toMatch(/ask in a few words for them to say it again/);
-    expect(text).toMatch(/Speak English, unless the reader is clearly talking to you in another\s+language/);
-    expect(text).toMatch(/Never say a block id aloud/);
+  /** The prompt with its line wrapping taken out, so a rule can be matched as a sentence. */
+  const flat = text.replace(/\s+/g, " ");
+
+  it("carries the delegation rule, and the audio rules", () => {
+    expect(flat).toMatch(/Delegate before giving any such answer, and never guess the result while you wait/);
+    expect(flat).toMatch(/ask in a few words for them to say it again/);
+    expect(flat).toMatch(/Never say a block id aloud/);
+  });
+
+  /* Greg, 2026-09-29: "avoid too much, like, verbal niceties … a bit more quick
+     back and forth". Realtime's prompt was rewritten for that on dev and
+     measured; this engine's must not keep the older, longer rules beside it.
+     One constant, so the two cannot drift. */
+  it("talks by the same rules as Realtime's prompt, word for word, and by no older ones", () => {
+    expect(LIVE_SYSTEM).toContain(SPOKEN_RULES);
+    expect(GPT_LIVE_VOICE_SYSTEM).toContain(SPOKEN_RULES);
+    expect(SPOKEN_RULES).toMatch(/One or two sentences is a normal answer/);
+    expect(SPOKEN_RULES).toMatch(/No pleasantries or filler/);
+    expect(SPOKEN_RULES).toMatch(/English, unless the reader is clearly speaking another language/);
+    /* Stage 1's wording, which dev's rewrite replaced. */
+    expect(flat).not.toMatch(/Two or three sentences/);
+    expect(flat).not.toMatch(/fifteen seconds/);
+    expect(flat).not.toMatch(/checking preamble/);
+    expect(flat).not.toMatch(/sentence or three/);
+    expect(flat).not.toMatch(/warm, direct/);
+  });
+
+  /* The peer's measurement (docs/investigations/261002r-gpt-live-spike.md):
+     32 of 36 turns opened with filler, some with two ("Right. Let me check
+     that." … "Oh, sure."), and non-speech sounds came through as words. */
+  it("allows a word or two while the backend works, and never a sentence, a second one or a guess", () => {
+    expect(flat).toMatch(/While the backend works, say nothing, or two or three words at most \("Checking\."\)/);
+    expect(flat).toMatch(/Never a sentence, never twice for one question, and never a guess at the answer/);
+    expect(flat).not.toMatch(/you may say in one short sentence what you are checking/);
+  });
+
+  /* The same measurement: a follow-up it could answer was delegated in 2 of 3
+     long-article turns, at six to nine seconds each. */
+  it("says which questions need no backend, and which always do", () => {
+    const never = flat.slice(flat.indexOf("NEVER delegate"), flat.indexOf("While the backend works"));
+    expect(never).toMatch(/the reader's own view/);
+    expect(never).toMatch(/"is that good or bad\?"/);
+    expect(never).toMatch(/clarif/);
+    expect(never).toMatch(/small talk/);
+    /* And the way back, so "never" cannot become an answer nobody checked. */
+    expect(never).toMatch(/a fact from the article that has not been said in this conversation yet/);
+    const always = flat.slice(flat.indexOf("ALWAYS delegate"), flat.indexOf("NEVER delegate"));
+    expect(always).toMatch(/what the article says/);
+    expect(always).toMatch(/any quotation/);
+    expect(always).toMatch(/"where does it say that"/);
+  });
+
+  /* One correction in six was missed: no second delegation, and an answer
+     that mixed the two questions. */
+  it("says what to do when the reader corrects the question while it is checking", () => {
+    expect(flat).toMatch(/corrects or changes the question while the backend is checking/);
+    expect(flat).toMatch(/delegate the corrected question at once and answer only that one/);
   });
 
   it("does not hold the article — not one block of it, and no leaf label", () => {
@@ -362,7 +414,13 @@ describe("the backend instructions", () => {
   });
 
   it("asks for a short spoken answer, no ids in it, and show_passage for the evidence", () => {
-    expect(text).toMatch(/One to three short sentences, written to be spoken aloud/);
+    /* The same length Realtime's model is asked for. The peer measured this
+       backend's answers at 28 words against Realtime's 48, with the mechanism
+       gone ("hot fields" lost the many teams chasing one question). */
+    expect(text).toMatch(/One or two sentences is a normal answer, written to be spoken aloud/);
+    expect(text).not.toMatch(/One to three short sentences/);
+    expect(text).toMatch(/Enough to carry the mechanism, not just the conclusion/);
+    expect(text).toMatch(/Answer the latest version of the question/);
     expect(text).toMatch(/No block ids, no markdown, no lists, no web addresses/);
     expect(text).toMatch(/call show_passage with\s+the block ids that support it/);
     expect(text).toMatch(/If the article does not say, say so/);

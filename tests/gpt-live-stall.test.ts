@@ -16,6 +16,8 @@ import {
   gptLiveStallOf,
   replyOwedSince,
   sessionZero,
+  TIMELINE_LAG_CAP_MS,
+  timelineOrigin,
   type GptLiveStallFacts,
 } from "../src/web/live/gpt-live/stall.js";
 
@@ -296,5 +298,79 @@ describe("placing a fragment on the caller's clock", () => {
     /* " Alright" began at 1800 on the timeline, "The" at 4200. */
     expect(zero + 1_800).toBeLessThan(finalAt);
     expect(zero + 4_200).toBeGreaterThan(finalAt);
+  });
+});
+
+/**
+ * **The session timeline is not wall time.** The peer's measurement
+ * (docs/investigations/261002r-gpt-live-spike.md § What surprised us) saw it
+ * stop for 26 s while the wall clock ran. Two ways that could corrupt the
+ * rule, in opposite directions, and one test for each.
+ */
+describe("a timeline that does not keep time", () => {
+  /** Fold fragments, as [arrivedAt, endMs], into the estimate. */
+  const zeroOf = (fragments: [number, number][], from: number | null = null) =>
+    fragments.reduce<number | null>((z, [arrived, end]) => sessionZero(z, arrived, end), from) as number;
+
+  it("is not moved by a burst of fragments that arrive late: old speech stays old", () => {
+    /* A second of speech, heard as it was said: the timeline starts at 2000. */
+    const before = zeroOf([[3_000, 1_000], [3_200, 1_200], [3_400, 1_400]]);
+    expect(before).toBe(2_000);
+    /* Then ten seconds of fragments held up on the network and delivered at once. */
+    const burst: [number, number][] = Array.from({ length: 50 }, (_, i) => [13_500, 1_600 + i * 200]);
+    const after = zeroOf(burst, before);
+    expect(after).toBe(before);
+    /* Words said at 1600 on the timeline are still placed at 3600, ten
+       seconds before they arrived. Placed at their arrival they would pay
+       for a final at 5000 that they were spoken before. */
+    expect(after + 1_600).toBe(3_600);
+    expect(replyOwedSince(facts({
+      companionLastBeganAt: after + 1_600,
+      delegations: [{ id: "d1", startedAt: 4_000, finalAt: 5_000 }],
+      delegationEndedAt: 5_000,
+    }))).toBe(5_000);
+  });
+
+  it("is never raised by a later fragment, whatever order they come in", () => {
+    const late: [number, number][] = [[40_000, 4_800], [9_000, 4_000], [3_936, 1_800], [60_000, 9_400]];
+    expect(zeroOf(late)).toBe(2_136);
+    expect(zeroOf([...late].reverse())).toBe(2_136);
+  });
+
+  it("leaves the origin where the earliest estimate put it while the timeline keeps time", () => {
+    /* The latest fragment is a few hundred milliseconds late, as they all are. */
+    expect(timelineOrigin(2_000, 2_300)).toBe(2_000);
+    /* A burst that catches up: its last fragment is fresh, so nothing moves. */
+    expect(timelineOrigin(2_000, 2_100)).toBe(2_000);
+    /* Up to the cap is still an ordinary delay. */
+    expect(timelineOrigin(2_000, 2_000 + TIMELINE_LAG_CAP_MS)).toBe(2_000);
+  });
+
+  it("moves the origin up after a freeze, so speech that has just arrived is not placed 26 s ago", () => {
+    /* The trace: the timeline stood still for 26 s, so every fragment after
+       it is 26 s further behind the wall clock than the earliest ones were. */
+    const origin = timelineOrigin(2_136, 2_136 + 26_000);
+    expect(origin).toBe(2_136 + 26_000 - TIMELINE_LAG_CAP_MS);
+    /* A fragment that began at 8500 on the timeline, ended at 8700 and
+       arrived at 36,836, so it was really spoken at about 36,636. By the
+       earliest estimate it began at 10,636: long before a final at 34,000,
+       which it could then never pay for. */
+    expect(2_136 + 8_500).toBeLessThan(34_000);
+    expect(origin + 8_500).toBeGreaterThan(34_000);
+    /* Placed early by the cap and no more, and never after it arrived. */
+    expect(36_836 - 200 - (origin + 8_500)).toBe(TIMELINE_LAG_CAP_MS);
+    expect(gptLiveStallOf(facts({
+      now: 34_000 + GPT_LIVE_NO_REPLY_MS + 1,
+      companionLastBeganAt: origin + 8_500,
+      delegations: [{ id: "d1", startedAt: 33_000, finalAt: 34_000 }],
+      delegationEndedAt: 34_000,
+    }))).toBeNull();
+  });
+
+  it("keeps the two speakers in the order the timeline has them, whatever the origin", () => {
+    const [readerEnd, companionStart] = [7_000, 7_400];
+    for (const origin of [timelineOrigin(2_136, 2_200), timelineOrigin(2_136, 28_136)]) {
+      expect(replyOwedSince(facts({ readerLastAt: origin + readerEnd, companionLastBeganAt: origin + companionStart }))).toBeNull();
+    }
   });
 });

@@ -91,6 +91,25 @@
  * one or settle anything. Its space is kept and put in front of that
  * speaker's next delta, which is what makes " " then "1987" read " 1987".
  *
+ * ## Sounds that are not words
+ *
+ * GPT-Live's transcript writes a hum or a lip smack as a word in square
+ * brackets: `[hum]`, `[lip smack]`
+ * (docs/investigations/261002r-gpt-live-spike.md § What surprised us). They
+ * are not something anybody said, so they are taken out before the text
+ * reaches a line, a question or an answer. `SoundFilter` below has the rule
+ * and what it leaves alone.
+ *
+ * **A fragment that is only such a sound is treated as a whitespace-only one
+ * is**: it cannot start a segment, split one or settle anything, and
+ * `take()` reports it as not speech so the hook's clocks do not run on it.
+ *
+ * The filter reads each speaker's fragments **in the order they arrive**,
+ * because one sound is split over two or three of them. That is the one place
+ * arrival order matters here. It is safe because one speaker's fragments come
+ * down one ordered channel; it is the two speakers who arrive out of order
+ * with each other.
+ *
  * ## What it does not decide
  *
  * Whether a hang-up cut an answer short. `closing()` does not set
@@ -190,8 +209,85 @@ interface Pinned extends Receipts {
   at: number;
 }
 
+/**
+ * **Takes bracketed sounds out of one speaker's transcript**, as it streams.
+ *
+ * ## The rule
+ *
+ * A sound is `[`, then one to three words of lower-case letters a to z with
+ * single spaces between them, then `]`, at most `SOUND_MAX_CHARS` characters
+ * in all, and the `[` does not touch a letter or digit before it. `[hum]`,
+ * `[lip smack]`, `[clears throat]`.
+ *
+ * Everything else in brackets is kept as written: a capital (`[Laughter]`), a
+ * digit (`[Smith 2019]`), any punctuation (`[sic!]`), four words or more, or a
+ * bracket glued to a word (`x[i]`). Speech has no brackets of its own, so a
+ * transcript that writes one is nearly always marking a sound; the narrow
+ * rule is for the rest, because a stored row promises that no word is
+ * dropped. What it costs: a sound the provider writes with a capital stays in.
+ * And a typed turn (`say` in useGptLive.ts) goes through the same filter, so
+ * `[sic]` typed there is taken out too; nothing in the app types into a call.
+ *
+ * ## Why it holds text back
+ *
+ * The wire splits one sound across fragments: " [hum" then "]", " [lip" then
+ * " smack]" (the spike's event logs). So from a `[` onwards the text is held,
+ * not passed on, for as long as it could still become a sound. It is dropped
+ * when the `]` arrives, and released in front of the next character the
+ * moment it cannot be one. Nothing is shown and then taken away, and released
+ * words keep their order; they carry the time of the fragment that released
+ * them, a few hundred milliseconds late.
+ *
+ * Text still held when the call ends is dropped: a `[` and a few lower-case
+ * letters with nothing after them is a sound that was cut off.
+ */
+export const SOUND_MAX_CHARS = 24;
+/** Held text that could still become a sound: `[`, up to two finished words, and the start of another. */
+const SOUND_SO_FAR = /^\[(?:[a-z]+ ){0,2}[a-z]*$/;
+/** Held text that is a sound once `]` follows it. */
+const SOUND_BODY = /^\[(?:[a-z]+ ){0,2}[a-z]+$/;
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+export class SoundFilter {
+  /** Empty, or text from a `[` onwards that may yet be a sound. */
+  private held = "";
+  /** The last character passed on was a letter or digit, so a `[` here is part of a word. */
+  private glued = false;
+
+  /** One delta in; the same delta with sounds taken out, and any held text that turned out to be words put back. */
+  feed(delta: string): string {
+    let out = "";
+    const pass = (text: string): void => {
+      if (text === "") return;
+      out += text;
+      this.glued = LETTER_OR_DIGIT.test(text.at(-1) ?? "");
+    };
+    for (const ch of delta) {
+      if (this.held !== "") {
+        if (ch === "]" && SOUND_BODY.test(this.held)) {
+          this.held = "";
+          this.glued = false;
+          continue;
+        }
+        const grown = this.held + ch;
+        if (grown.length < SOUND_MAX_CHARS && SOUND_SO_FAR.test(grown)) {
+          this.held = grown;
+          continue;
+        }
+        /* Not a sound after all. Give the words back, then look at `ch` afresh. */
+        pass(this.held);
+        this.held = "";
+      }
+      if (ch === "[" && !this.glued) this.held = "[";
+      else pass(ch);
+    }
+    return out;
+  }
+}
+
 export class Segmenter {
   private readonly seen = new Set<string>();
+  private readonly sounds: Record<Speaker, SoundFilter> = { reader: new SoundFilter(), companion: new SoundFilter() };
   private open: Fragment[] = [];
   private readonly frozen: SpeakerSegment[] = [];
   /** Which emitted exchange each frozen segment went out in. For `lines()`. */
@@ -207,12 +303,24 @@ export class Segmenter {
   private readonly held = new Map<string, Receipts>();
   private pinned: Pinned[] = [];
 
+  /**
+   * Feed one transcript fragment, and learn whether it was speech.
+   *
+   * `speech` is false for a repeat, for whitespace, and for a bracketed sound
+   * or a piece of one. The hook's clocks (idle, the two pills, the stall rule)
+   * run on speech only: a cough must not keep a billed call open, and a hum
+   * must not pay for an answer that is owed.
+   */
+  take(f: TranscriptFragment): { speech: boolean; exchanges: SpokenExchange[] } {
+    if (!this.add(f)) return { speech: false, exchanges: [] };
+    return { speech: true, exchanges: this.settle() };
+  }
+
   /** Feed one event. Returns the exchanges that can no longer change, in order. */
   push(event: SegmentEvent): SpokenExchange[] {
     switch (event.type) {
       case "fragment":
-        if (!this.add(event)) return [];
-        return this.settle();
+        return this.take(event).exchanges;
       case "tool":
         this.holding(event.delegationId).tools.push(event.tool);
         return [];
@@ -299,12 +407,15 @@ export class Segmenter {
     });
   }
 
-  /** Record a fragment. False when it changes nothing: a repeat, or only whitespace. */
+  /** Record a fragment. False when it adds no words: a repeat, only whitespace, or only a sound. */
   private add(f: TranscriptFragment): boolean {
     if (this.seen.has(f.eventId)) return false;
     this.seen.add(f.eventId);
-    if (f.delta.trim() === "") {
-      if (f.delta !== "") this.space[f.role] = true;
+    /* After the repeat check, never before: the filter keeps state between
+       fragments, and a redelivered one must not be fed to it twice. */
+    const delta = this.sounds[f.role].feed(f.delta);
+    if (delta.trim() === "") {
+      if (delta !== "") this.space[f.role] = true;
       return false;
     }
     const at = Math.max(f.startMs, this.floor);
@@ -314,7 +425,7 @@ export class Segmenter {
       startMs: f.startMs,
       at,
       end,
-      text: (this.space[f.role] ? " " : "") + f.delta,
+      text: (this.space[f.role] ? " " : "") + delta,
       arrival: this.arrivals++,
       line: null,
     });

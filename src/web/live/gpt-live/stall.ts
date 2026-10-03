@@ -64,6 +64,18 @@
  * filler spoken just before the final pay for it. `sessionZero` estimates
  * where the session timeline's zero sits on the caller's clock, so the
  * caller can say when a fragment *began*: `zero + start_ms`.
+ *
+ * **The session timeline can fall behind the wall clock and stay there.** A
+ * peer's measurement saw it stand still for 26 s
+ * (docs/investigations/261002r-gpt-live-spike.md § What surprised us). Two
+ * things follow, and `timelineOrigin` is the second:
+ *
+ * - While nothing arrives, nothing here depends on the timeline moving: `now`
+ *   is the caller's clock, so a reply owed before the freeze is called missing
+ *   twenty seconds later all the same.
+ * - Afterwards, every fragment is that much further behind. Placed by the
+ *   earliest estimate, an answer spoken after a final would look older than
+ *   the final and never pay for it.
  */
 import type { LiveStall } from "../stall.js";
 import { BACKCHANNEL_WORDS } from "./segments.js";
@@ -165,4 +177,40 @@ export function gptLiveStallOf(f: GptLiveStallFacts): Extract<LiveStall, "no-rep
 export function sessionZero(previous: number | null, arrivedAt: number, endMs: number): number {
   const estimate = arrivedAt - endMs;
   return previous === null ? estimate : Math.min(previous, estimate);
+}
+
+/**
+ * How far behind the wall clock a fragment may arrive before the timeline is
+ * taken to have slipped.
+ *
+ * Ordinary fragments in the spike's traces arrive within about 300 ms of the
+ * earliest estimate. Two seconds is far past that, and short enough that an
+ * answer of more than a couple of words still pays for its final after a
+ * freeze.
+ */
+export const TIMELINE_LAG_CAP_MS = 2_000;
+
+/**
+ * **Where to place the timeline now**: `zero`, unless the latest fragment
+ * shows the timeline has slipped behind the wall clock.
+ *
+ * `latestOffset` is `arrivedAt - endMs` for the most recent fragment of either
+ * speaker. The smallest value ever seen is `zero`; the minimum is right while
+ * the timeline keeps time, and a burst of fragments held up on the network
+ * cannot move it, because the last fragment of a burst that catches up is
+ * fresh. After a freeze every later offset is larger by the length of the
+ * freeze, for good. So when the latest one is more than `TIMELINE_LAG_CAP_MS`
+ * past `zero`, the origin moves up to within that cap of it.
+ *
+ * **One origin for both speakers**, so the order the timeline gives the
+ * reader's words and the companion's is never changed by this; only how long
+ * ago they look against the caller's clock.
+ *
+ * What it gives up: after a freeze, speech from before it is placed too late
+ * by the length of the freeze. That can pay a debt that is still owed, and
+ * cannot invent one. A fragment that arrives stale and is followed by nothing
+ * at all looks the same as a freeze, and is treated as one.
+ */
+export function timelineOrigin(zero: number, latestOffset: number): number {
+  return Math.max(zero, latestOffset - TIMELINE_LAG_CAP_MS);
 }
