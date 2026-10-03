@@ -7999,12 +7999,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (!EARLIER_FEEDBACK_SHOWS.some((known) => known === show)) {
         throw httpError(400, `show must be one of ${EARLIER_FEEDBACK_SHOWS.join(", ")}`);
       }
+      const shippedIds = shippedFeedbackIds();
+      /* The counts ride on every answer, whatever `show` is, so the first read
+         labels all three pills; `unshipped` is the remainder, which is what the
+         `out` filter lists (the store says why).
+         docs/plans/261003b-earlier-tab-counts-on-the-pills.md. */
       const page = await feedbackStore.listMine(
         EARLIER_FEEDBACK_LIMIT,
-        show === "all"
-          ? undefined
-          : { ids: shippedFeedbackIds(), keep: show === "shipped" ? "in" : "out" },
+        shippedIds,
+        show === "all" ? undefined : { ids: shippedIds, keep: show === "shipped" ? "in" : "out" },
       );
+      const counted = page.counts;
       const answer: EarlierFeedbackPage = {
         reports: page.reports.map(({ id, createdAt, kind, body }) => ({
           id,
@@ -8014,6 +8019,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           shipped: isFeedbackShipped(id),
         })),
         more: page.more,
+        counts: { all: counted.all, shipped: counted.in, unshipped: counted.all - counted.in },
       };
       send(res, 200, answer);
     },

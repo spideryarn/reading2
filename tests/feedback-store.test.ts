@@ -721,12 +721,12 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       .set({ createdAt: sql`now() - interval '1 hour'` })
       .where(and(eq(feedbackTable.ownerId, ALICE), eq(feedbackTable.id, older)));
 
-    const alices = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10));
+    const alices = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, []));
     expect(alices.more).toBe(false);
     expect(alices.reports.map((r) => r.body)).toEqual(["Alice, second", "Alice, first"]);
     expect(alices.reports.map((r) => r.kind)).toEqual([null, "problem"]);
 
-    const bobs = await runAsOwner(BOB, () => pgFeedbackStore.listMine(10));
+    const bobs = await runAsOwner(BOB, () => pgFeedbackStore.listMine(10, []));
     expect(bobs.reports.map((r) => r.body)).toEqual(["Bob's"]);
   });
 
@@ -742,7 +742,7 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
         }),
       ),
     );
-    const { reports } = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10));
+    const { reports } = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, []));
     expect(reports).toHaveLength(1);
     const [only] = reports;
     expect(Object.keys(only ?? {}).sort()).toEqual(["body", "createdAt", "id", "kind"]);
@@ -756,11 +756,11 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
         pgFeedbackStore.submit(report({ id: mintId(), body: `report ${i}` })),
       );
     }
-    const atLimit = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(3));
+    const atLimit = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(3, []));
     expect(atLimit.reports).toHaveLength(3);
     expect(atLimit.more).toBe(false);
 
-    const pastLimit = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(2));
+    const pastLimit = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(2, []));
     expect(pastLimit.reports).toHaveLength(2);
     expect(pastLimit.more).toBe(true);
   });
@@ -780,22 +780,46 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
          (owner_id, id), so this is legal, and Bob must still see only Bob's. */
       await file(BOB, "Bob, same id", shared);
 
-      const kept = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, { ids: [a1], keep: "in" }));
+      const kept = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, [], { ids: [a1], keep: "in" }));
       expect(kept.reports.map((r) => r.body)).toEqual(["Alice, shipped"]);
 
-      const left = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, { ids: [a1], keep: "out" }));
+      const left = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, [], { ids: [a1], keep: "out" }));
       expect(left.reports.map((r) => r.id)).toEqual([a2]);
 
-      const bobs = await runAsOwner(BOB, () => pgFeedbackStore.listMine(10, { ids: [a1, a2], keep: "in" }));
+      const bobs = await runAsOwner(BOB, () => pgFeedbackStore.listMine(10, [], { ids: [a1, a2], keep: "in" }));
       expect(bobs.reports.map((r) => r.body), "never a row of Alice's").toEqual(["Bob, same id"]);
+    });
+
+    it("counts the owner's reports and those among the ids, matching what the filters list", async () => {
+      /* docs/plans/261003b-earlier-tab-counts-on-the-pills.md. */
+      const shared = mintId();
+      const a1 = await file(ALICE, "Alice, shipped", shared);
+      await file(ALICE, "Alice, not shipped");
+      await file(ALICE, "Alice, also not shipped");
+      await file(BOB, "Bob, same id", shared);
+      const ghost = mintId();
+
+      const ids = [a1, ghost];
+      /* Uncapped and unfiltered: a limit of 1 and a filter change the list, never the counts. */
+      const out = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(1, ids, { ids, keep: "out" }));
+      expect(out.counts, "an id nobody filed counts for nothing").toEqual({ all: 3, in: 1 });
+      expect(out.more, "two are out, so the cap of one cuts it short").toBe(true);
+      const outAll = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, ids, { ids, keep: "out" }));
+      expect(outAll.reports, "all - in is what the out filter lists").toHaveLength(
+        out.counts.all - out.counts.in,
+      );
+
+      const bobs = await runAsOwner(BOB, () => pgFeedbackStore.listMine(10, [a1]));
+      expect(bobs.counts, "never Alice's rows").toEqual({ all: 1, in: 1 });
+      expect((await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, []))).counts).toEqual({ all: 3, in: 0 });
     });
 
     it("means an empty list: in nothing is none, out nothing is all", async () => {
       await file(ALICE, "one");
       await file(ALICE, "two");
-      const none = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, { ids: [], keep: "in" }));
-      expect(none).toEqual({ reports: [], more: false });
-      const all = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, { ids: [], keep: "out" }));
+      const none = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, [], { ids: [], keep: "in" }));
+      expect(none).toEqual({ reports: [], more: false, counts: { all: 2, in: 0 } });
+      const all = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(10, [], { ids: [], keep: "out" }));
       expect(all.reports).toHaveLength(2);
     });
 
@@ -807,11 +831,11 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
         .where(and(eq(feedbackTable.ownerId, ALICE), eq(feedbackTable.id, oldest)));
       for (let i = 0; i < 3; i++) await file(ALICE, `newer ${i}`);
 
-      const page = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(2, { ids: [oldest], keep: "in" }));
+      const page = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(2, [], { ids: [oldest], keep: "in" }));
       expect(page.reports.map((r) => r.id)).toEqual([oldest]);
       expect(page.more).toBe(false);
 
-      const rest = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(2, { ids: [oldest], keep: "out" }));
+      const rest = await runAsOwner(ALICE, () => pgFeedbackStore.listMine(2, [], { ids: [oldest], keep: "out" }));
       expect(rest.reports).toHaveLength(2);
       expect(rest.more).toBe(true);
     });
@@ -819,16 +843,17 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
     it("binds an id that would break an array literal as one harmless element", async () => {
       const id = await file(ALICE, "kept");
       const page = await runAsOwner(ALICE, () =>
-        pgFeedbackStore.listMine(10, { ids: ['a","b', "c\\", "}{", id], keep: "in" }),
+        pgFeedbackStore.listMine(10, [], { ids: ['a","b', "c\\", "}{", id], keep: "in" }),
       );
       expect(page.reports.map((r) => r.id)).toEqual([id]);
     });
   });
 
   it("lists nothing, and no more, for a reader who has filed nothing", async () => {
-    expect(await runAsOwner(BOB, () => pgFeedbackStore.listMine(10))).toEqual({
+    expect(await runAsOwner(BOB, () => pgFeedbackStore.listMine(10, []))).toEqual({
       reports: [],
       more: false,
+      counts: { all: 0, in: 0 },
     });
   });
 

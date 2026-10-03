@@ -373,6 +373,11 @@
   border-color: var(--highlight);
   background: color-mix(in oklch, var(--highlight) 12%, transparent);
 }
+/* The count on an Earlier pill (261003b): the word's own colour, so it keeps
+   the pill's contrast, with tabular figures. */
+.fb-show-count {
+  font-variant-numeric: tabular-nums;
+}
 
 /* The microphone's line under the box. It shared it with a "Not sure what to
    write?" link until 2026-09-04; the guidance is above the box now, so the row

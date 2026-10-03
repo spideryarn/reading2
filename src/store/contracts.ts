@@ -1992,12 +1992,20 @@ export type MyFeedback = Omit<EarlierFeedback, "shipped">;
 export interface MyFeedbackPage {
   reports: MyFeedback[];
   more: boolean;
+  /** Uncapped, unfiltered, and of the same snapshot as `reports`. */
+  counts: MyFeedbackCounts;
 }
 
 /** Keep only these report ids (`in`), or everything but them (`out`). */
 export interface FeedbackIdFilter {
   ids: readonly string[];
   keep: "in" | "out";
+}
+
+/** How many reports this reader has filed, and how many of them are among `countIds`. */
+export interface MyFeedbackCounts {
+  all: number;
+  in: number;
 }
 
 /**
@@ -2269,8 +2277,15 @@ export interface FeedbackStore {
    * shipped/unshipped filter. The store knows nothing of what the ids mean.
    * `shipped` is not the store's to say: the route adds it.
    * docs/plans/260930e-earlier-tab-filters-by-done-from-the-notes.md.
+   *
+   * `counts` is **how many of this reader's reports there are, and how many are
+   * among `countIds`** — the numbers on the Earlier tab's pills — read in the
+   * same read-only snapshot as the list, so "50 most recent of N" cannot
+   * contradict `more`. `in` is the same predicate as `keep: "in"`, so
+   * `all - in` is what `keep: "out"` would list with no cap.
+   * docs/plans/261003b-earlier-tab-counts-on-the-pills.md.
    */
-  listMine(limit: number, filter?: FeedbackIdFilter): Promise<MyFeedbackPage>;
+  listMine(limit: number, countIds: readonly string[], filter?: FeedbackIdFilter): Promise<MyFeedbackPage>;
   /**
    * **We handed it over.** Written the moment `captureFeedback` returns an
    * event id, which is a thing we know.

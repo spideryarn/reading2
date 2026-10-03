@@ -6210,11 +6210,20 @@ export interface EarlierFeedback {
   shipped: boolean;
 }
 
-/** The whole answer: the newest reports, and whether there were more than the cap. */
+/**
+ * The whole answer: the newest reports, whether there were more than the cap,
+ * and how many there are under each filter.
+ */
 export interface EarlierFeedbackPage {
   reports: EarlierFeedback[];
   /** `true` when the reader has filed more than `EARLIER_FEEDBACK_LIMIT`, so the list says so. */
   more: boolean;
+  /**
+   * **How many under each filter**, uncapped, on every answer whatever `?show=`
+   * asked for, so the first read labels all three pills.
+   * docs/plans/261003b-earlier-tab-counts-on-the-pills.md.
+   */
+  counts: Record<EarlierFeedbackShow, number>;
 }
 
 /**
