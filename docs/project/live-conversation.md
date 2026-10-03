@@ -380,6 +380,10 @@ not this feature's, and it went when the filesystem store did.
 - **`passages`** — what the answer pointed at. A spoken answer never cites in its text, because it
   is forbidden to say `spya-k3m9qt` aloud and is given `show_passage` instead. Without a stored
   field these would be uncited claims, which is what the chat contract exists to prevent.
+  Only ids the article has, and at most four: the browser checks each id when the model points
+  (`shownPassage` in [`session-shared.ts`](../../src/web/live/session-shared.ts), both engines)
+  and tells the model which were not there, because the server refuses the whole append for one
+  unknown id and a refused append ends the call.
 - **`interrupted`** — the spoken answer ended early, through interruption, hangup or provider
   failure. Its transcript may be incomplete or run past what was heard. The saved row says so
   without blaming the reader, and `recentHistory` ([`src/converse.ts`](../../src/converse.ts))

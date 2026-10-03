@@ -20,6 +20,8 @@
  * each. Its header lists them.
  */
 
+import { isSpideryarnId } from "../../ids.js";
+
 /**
  * How long the channel is held open after the reader hangs up.
  *
@@ -130,15 +132,56 @@ export function silentTrack(ctx: AudioContext): MediaStreamTrack {
 }
 
 /**
+ * The most passages one pointer shows.
+ *
+ * Both prompts ask for "two or three at most" (`SHOW_PASSAGE_TOOL` in
+ * src/live.ts, and SHOW THE PASSAGE in src/live-gpt.ts). GPT-Live's backend
+ * sent eight in the browser check of 2026-10-03, which is a row of ids longer
+ * than the answer it sits under. One more than asked for, so a model that
+ * counts loosely is not corrected for nothing.
+ */
+export const POINTER_MAX_IDS = 4;
+
+/** How many refused ids the model is read back, and how much of each. A bound on a tool result, not a rule. */
+const REFUSED_NAMED = 4;
+const REFUSED_CHARS = 32;
+
+/**
  * **`show_passage`, answered in the browser** — the one tool with no server
  * behind it. Both engines handle it the same way: read the ids, record the
- * pointer, and tell the model how many passages the reader was shown.
+ * pointer, and tell the model what the reader was shown.
  *
- * The ids are not checked against the article here. The pointer is drawn by
- * `PassageLinks`, which skips an id it cannot find, and the server checks them
- * again when the exchange is written (`parseSpokenPassages` in src/routes.ts).
+ * ## Only ids the article has
+ *
+ * `inArticle` is the article's blocks (`LiveOptions.blocks`). An id is kept
+ * when it is a string, has our shape (`isSpideryarnId`) and is one of them;
+ * the first `POINTER_MAX_IDS` distinct ones are the pointer. With no article
+ * to ask (the preview page) the shape is still checked.
+ *
+ * Until 2026-10-03 nothing was checked here, on the reasoning that
+ * `PassageLinks` skips an id it cannot find and the server checks again when
+ * the exchange is written. The server's check is a refusal of the whole
+ * append (`parseSpokenPassages` in src/routes.ts, which is right to refuse: a
+ * stored dead reference is for ever), and a refused append ends the call. So
+ * one invented id, `spya-gm3xu0a` for `spya-gm3xu0`, cost the reader the
+ * exchange it was in. And `map(String)` made `[null]` the id `"null"`.
+ *
+ * ## The model is told the truth
+ *
+ * `output` says how many passages were shown, which ids were not in the
+ * article, and when nothing was shown at all, so the model can point again
+ * with a real id. It used to say "Showed the reader 1 passage." for an id that
+ * drew nothing.
+ *
+ * **`blockIds` can be empty, and then there is no pointer**: the caller
+ * records none and stores no passage. The tool still ran, and still has a
+ * receipt.
  */
-export function shownPassage(args: Record<string, unknown>): {
+export function shownPassage(
+  args: Record<string, unknown>,
+  inArticle?: { has(id: string): boolean },
+): {
+  /** The ids to show: this article's, distinct, at most `POINTER_MAX_IDS`. Empty when none qualified. */
   blockIds: string[];
   why: string;
   /** What the model is told. */
@@ -147,13 +190,42 @@ export function shownPassage(args: Record<string, unknown>): {
   label: string;
   detail: string;
 } {
-  const blockIds = Array.isArray(args.blockIds) ? args.blockIds.map(String) : [];
+  const given = Array.isArray(args.blockIds) ? args.blockIds : [];
   const why = typeof args.why === "string" ? args.why : "";
+  const known = new Set<string>();
+  const unknown = new Set<string>();
+  let notIds = 0;
+  for (const id of given) {
+    if (typeof id !== "string") notIds += 1;
+    else if (isSpideryarnId(id) && (inArticle?.has(id) ?? true)) known.add(id);
+    else unknown.add(id);
+  }
+  const blockIds = [...known].slice(0, POINTER_MAX_IDS);
+
+  const said: string[] = [];
+  if (given.length === 0) said.push("No block ids were given; nothing was shown.");
+  else if (blockIds.length === 0) said.push("None of those ids are in the article; nothing was shown.");
+  else if (known.size > blockIds.length) {
+    said.push(
+      `Showed the reader the first ${blockIds.length} passages of the ${known.size} given; ${POINTER_MAX_IDS} is the most shown at once.`,
+    );
+  } else said.push(`Showed the reader ${blockIds.length} passage${blockIds.length === 1 ? "" : "s"}.`);
+  if (unknown.size > 0) {
+    const named = [...unknown].slice(0, REFUSED_NAMED).map((id) => id.slice(0, REFUSED_CHARS)).join(", ");
+    const more = unknown.size > REFUSED_NAMED ? ", and others" : "";
+    said.push(
+      blockIds.length === 0
+        ? `Not in the article: ${named}${more}.`
+        : `${unknown.size} id${unknown.size === 1 ? " was" : "s were"} not in the article: ${named}${more}.`,
+    );
+  }
+  if (notIds > 0) said.push(`${notIds} of the values given ${notIds === 1 ? "was not an id" : "were not ids"}.`);
+
   return {
     blockIds,
     why,
-    output: `Showed the reader ${blockIds.length} passage${blockIds.length === 1 ? "" : "s"}.`,
+    output: said.join(" "),
     label: "pointed at",
-    detail: blockIds.join(" "),
+    detail: blockIds.length > 0 ? blockIds.join(" ") : "nothing in this article",
   };
 }

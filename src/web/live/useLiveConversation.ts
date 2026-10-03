@@ -304,6 +304,16 @@ export interface LiveOptions {
   tailNow?: (threadId: string) => string | null;
   /** The URL's `?thread=` follows, when the server overrules the id. */
   onThreadId?: (id: string, startedThreadId: string) => void;
+  /**
+   * The article's blocks, by id: what `show_passage` may point at.
+   *
+   * An id the model gives that is not one of these is dropped before it
+   * becomes a pointer or a stored passage (`shownPassage` in
+   * ./session-shared.ts, which says what an unchecked one cost). Read when the
+   * tool is called, so a re-extraction during a call is honoured. Absent on the
+   * preview page, which has no article; ids are then checked for shape only.
+   */
+  blocks?: { has(id: string): boolean };
 }
 
 /**
@@ -979,13 +989,17 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       };
 
       if (name === "show_passage") {
-        const { blockIds: ids, why, output, label, detail } = shownPassage(args);
-        setPointers((p) => [...p, { blockIds: ids, why, at: Date.now() }]);
-        /* The stored answer's own pointers. A spoken answer cites nothing in
-           its text — it is forbidden to say an id aloud — so without these the
-           transcript is an uncited claim, which is the one thing the chat
-           contract exists to prevent. docs/plans/260831l-live-conversation-in-chat.md § 1b. */
-        ledger.current.passage(callId, { blockIds: ids, why });
+        const { blockIds: ids, why, output, label, detail } = shownPassage(args, wired.current.blocks);
+        /* No id the article has: no pointer, and nothing to store. The model
+           is still answered, and `output` tells it nothing was shown. */
+        if (ids.length > 0) {
+          setPointers((p) => [...p, { blockIds: ids, why, at: Date.now() }]);
+          /* The stored answer's own pointers. A spoken answer cites nothing in
+             its text — it is forbidden to say an id aloud — so without these the
+             transcript is an uncited claim, which is the one thing the chat
+             contract exists to prevent. docs/plans/260831l-live-conversation-in-chat.md § 1b. */
+          ledger.current.passage(callId, { blockIds: ids, why });
+        }
         finish(output, label, detail);
         return;
       }

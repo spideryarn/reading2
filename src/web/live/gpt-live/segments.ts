@@ -91,6 +91,23 @@
  * one or settle anything. Its space is kept and put in front of that
  * speaker's next delta, which is what makes " " then "1987" read " 1987".
  *
+ * **One space is supplied, and only after a pause.** A delta that begins with
+ * no space of its own is nearly always the rest of a word, a number or its
+ * punctuation: in the spike's four traces every such delta ("," "." "7."
+ * "1987") starts in the window right after the one before it. The exception
+ * is the first delta of a new utterance, which the provider sometimes sends
+ * bare. The browser check of 2026-10-03 stored "Checking.He says…", the
+ * filler and the backend's answer, said seconds apart. So `textOf` puts a
+ * space in front of a bare delta when its speaker's previous fragment ended
+ * `UTTERANCE_GAP_MS` or more before it began, and it does not begin with
+ * closing punctuation. Nobody is silent that long inside a word.
+ *
+ * Passed over: adding the space after any full stop. It is the obvious rule
+ * and it needs no clock, but " 3." then "14" and " U." then "S." are both
+ * real shapes for a split, and a stored row that reads "3. 14" is a changed
+ * number. What the pause rule gives up: two sentences run together with no
+ * space and no pause between them stay run together.
+ *
  * ## Sounds that are not words
  *
  * GPT-Live's transcript writes a hum or a lip smack as a word in square
@@ -131,6 +148,15 @@ export const READER_PAUSE_MS = 1_000;
 export const INTERRUPT_GAP_MS = 700;
 /** An interjection of this many words or fewer does not mark the answer before it interrupted. */
 export const BACKCHANNEL_WORDS = 4;
+
+/**
+ * A speaker silent for this long has finished an utterance, so a delta after
+ * it that brings no space of its own is given one. Two empty 200 ms windows:
+ * one can fall inside a slowly spoken year, two cannot fall inside a word.
+ */
+export const UTTERANCE_GAP_MS = 400;
+/** A bare delta that begins like this belongs to the word before it, whatever the pause. */
+const CLOSING_PUNCTUATION = /^[,.;:!?…)\]}%'’”]/;
 
 /** One transcript delta, as the wire sends it. */
 export interface TranscriptFragment {
@@ -605,12 +631,21 @@ function endOf(fragments: Fragment[]): number {
   return fragments.reduce((latest, f) => Math.max(latest, f.end), 0);
 }
 
+/**
+ * One segment's words. `fragments` are one speaker's, in spoken order.
+ *
+ * The header's § Text has the rule for the one space this supplies.
+ */
 function textOf(fragments: Fragment[]): string {
-  return fragments
-    .map((f) => f.text)
-    .join("")
-    .replace(/\s+/g, " ")
-    .trim();
+  let text = "";
+  let heardTo: number | null = null;
+  for (const f of fragments) {
+    const bare = !/^\s/.test(f.text) && !CLOSING_PUNCTUATION.test(f.text);
+    if (bare && heardTo !== null && f.at - heardTo >= UTTERANCE_GAP_MS) text += " ";
+    text += f.text;
+    heardTo = Math.max(heardTo ?? 0, f.end);
+  }
+  return text.replace(/\s+/g, " ").trim();
 }
 
 function wordsIn(text: string): number {

@@ -564,13 +564,17 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     };
 
     if (name === "show_passage") {
-      const passage = shownPassage(args);
-      setPointers((p) => [...p, { blockIds: passage.blockIds, why: passage.why, at: Date.now() }]);
-      segmenter.current.push({
-        type: "passage",
-        delegationId,
-        passage: { blockIds: passage.blockIds, why: passage.why },
-      });
+      const passage = shownPassage(args, wired.current.blocks);
+      /* No id the article has: no pointer, and nothing to store. The backend
+         is still answered, and `output` tells it nothing was shown. */
+      if (passage.blockIds.length > 0) {
+        setPointers((p) => [...p, { blockIds: passage.blockIds, why: passage.why, at: Date.now() }]);
+        segmenter.current.push({
+          type: "passage",
+          delegationId,
+          passage: { blockIds: passage.blockIds, why: passage.why },
+        });
+      }
       settle(passage.output, passage.label, passage.detail);
       return;
     }

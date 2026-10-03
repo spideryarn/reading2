@@ -242,6 +242,56 @@ describe("the wire repeats itself and arrives out of order", () => {
     expect(rows(s.closing().exchanges)).toEqual([["", "teal in 1987. Really."]]);
   });
 
+  /* The browser check of 2026-10-03 stored "Checking.He says AI removes…": the
+     first delta of the backend's spoken answer came with no space of its own,
+     seconds after the filler. */
+  it("puts a space before a delta that has none when the speaker had paused before it", () => {
+    const s = new Segmenter();
+    feed(s, [
+      ...say("reader", 1_000, "What is the main argument?"),
+      fragment("companion", 2_200, " Checking"),
+      fragment("companion", 2_400, "."),
+      fragment("companion", 5_600, "He"),
+      fragment("companion", 5_800, " says"),
+      fragment("companion", 6_000, " so."),
+    ]);
+    expect(rows(s.closing().exchanges)).toEqual([["What is the main argument?", "Checking. He says so."]]);
+    expect(s.lines().at(-1)?.text).toBe("Checking. He says so.");
+  });
+
+  it("puts that space in wherever the fragments arrive in a different order", () => {
+    const s = new Segmenter();
+    feed(s, [
+      fragment("companion", 5_600, "He"),
+      fragment("companion", 5_800, " says so."),
+      fragment("companion", 2_200, " Checking"),
+      fragment("companion", 2_400, "."),
+    ]);
+    expect(rows(s.closing().exchanges)).toEqual([["", "Checking. He says so."]]);
+  });
+
+  it("never puts one inside a number or a word split across neighbouring windows, or before closing punctuation", () => {
+    const s = new Segmenter();
+    feed(s, [
+      fragment("companion", 1_000, " It"),
+      fragment("companion", 1_200, " cost"),
+      fragment("companion", 1_400, " 3."),
+      fragment("companion", 1_600, "14"),
+      fragment("companion", 1_800, " in"),
+      fragment("companion", 2_000, " the"),
+      fragment("companion", 2_200, " U."),
+      fragment("companion", 2_400, "S."),
+      fragment("companion", 2_600, " extra"),
+      fragment("companion", 2_800, "ordinarily"),
+      /* One empty window inside a slowly spoken year is still one number. */
+      fragment("companion", 3_000, " 198"),
+      fragment("companion", 3_400, "7"),
+      /* And punctuation after a long pause stays on its word. */
+      fragment("companion", 6_000, "."),
+    ]);
+    expect(rows(s.closing().exchanges)).toEqual([["", "It cost 3.14 in the U.S. extraordinarily 1987."]]);
+  });
+
   it("does not let a whitespace-only fragment start a row or split one", () => {
     const s = new Segmenter();
     feed(s, [

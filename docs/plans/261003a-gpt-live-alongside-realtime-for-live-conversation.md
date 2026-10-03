@@ -389,3 +389,26 @@ Experimental off, nothing a reader sees has changed except the Realtime prompt.
      `wiring.ticket` posts `{placement}` and nothing else. Both routes read an absent `useProfile`
      as yes, so both engines already use the reader's profile, and there is no per-reader switch
      in the client to pass along. Sending `{sdp}` alone is the same behaviour.
+- 2026-10-03 — a real-browser check of GPT-Live found three defects. Each fixed with a test
+  watched red first:
+  1. **An invented block id ended the call and lost the exchange.** The backend called
+     `show_passage` with `spya-gm3xu0a` (the article has `spya-gm3xu0`); the id was kept unchecked,
+     and `POST …/spoken` refused the whole append with 400, which ends a call. `shownPassage` in
+     `session-shared.ts` now keeps only strings that are ids of this article (`LiveOptions.blocks`,
+     handed down from `ConversationBand`), drops the rest, and says so in the tool result so the
+     model can point again. No id left means no pointer and no stored passage. A non-string is
+     dropped, not stringified (Sol's D5: `[null]` had become `"null"`). **Both engines**: Realtime
+     had the same latent bug and takes the same one-argument change. The server's check is
+     untouched.
+  2. **"Checking.He says…".** The first delta of the backend's spoken answer came with no space.
+     `textOf` in `segments.ts` supplies one before a bare delta when its speaker had been silent
+     for `UTTERANCE_GAP_MS` (400 ms) and the delta is not closing punctuation. Not "after any full
+     stop": the spike's traces split " 198" / "7." and a split "3." / "14" would be changed by it.
+  3. **A tool row's label drawn one character per line**, and eight ids where the prompt asks for
+     two or three. `.chat-tool-detail` was `flex: none`, so the label was the only thing that could
+     shrink; the detail now shrinks first and wraps (`tests/chat-tool-row-css.test.ts`; not looked
+     at in a browser). A pointer is capped at its first four valid ids (`POINTER_MAX_IDS`), in both
+     engines since both prompts say "two or three at most", and the tool result says so.
+
+  **Seen and not fixed:** in one run "Thanks, that makes sense." still drew "Checking." and a
+  delegation. A prompt-behaviour miss, left for the comparison.

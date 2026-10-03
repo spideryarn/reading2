@@ -529,6 +529,86 @@ describe("a question the backend answers with a tool", () => {
     h.unmount();
   });
 
+  /* The browser check of 2026-10-03: the backend pointed at `spya-gm3xu0a`, the
+     article has `spya-gm3xu0`, the server refused the append for it, and the
+     call ended with the reader's words unstored. */
+  it("stores an exchange whose pointer named only ids the article does not have, without passages", async () => {
+    const { spoken, speak } = recordingSpeak();
+    const h = await live({
+      wiring: wiringFor(ticketWith()), speak, tailNow: () => TAIL,
+      blocks: new Set(["spya-gm3xu0", "spya-k3m9qt"]),
+    });
+    await deliver(
+      said("reader", 1_000, 2_000, " Where exactly does it say that?"),
+      delegated("d1", "r1"),
+      created("d1", "r1"),
+      said("companion", 2_200, 2_600, " Checking."),
+      called("d1", "call-1", "show_passage", { blockIds: ["spya-gm3xu0a", null], why: "the prediction" }),
+      completed("d1", "r1"),
+    );
+    /* The backend is told the truth, so its next round can point again. */
+    expect(sent).toEqual([
+      {
+        type: "response.item.create",
+        item: {
+          type: "function_call_output",
+          call_id: "call-1",
+          output: "None of those ids are in the article; nothing was shown. Not in the article: spya-gm3xu0a. 1 of the values given was not an id.",
+        },
+      },
+      { type: "response.create" },
+    ]);
+    expect(h.get().pointers).toEqual([]);
+
+    /* It points again, this time with one real id among the wrong ones. */
+    await deliver(
+      created("d1", "r2"),
+      called("d1", "call-2", "show_passage", { blockIds: ["spya-k3m9qt", "spya-zzzzzz"], why: "the prediction" }),
+      completed("d1", "r2"),
+      created("d1", "r3"),
+      completed("d1", "r3"),
+      said("companion", 5_000, 5_600, " It is in the opening."),
+    );
+    expect(h.get().pointers.map((p) => p.blockIds)).toEqual([["spya-k3m9qt"]]);
+
+    await hangUp(h);
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]).toMatchObject({
+      question: "Where exactly does it say that?",
+      answer: "Checking. It is in the opening.",
+      passages: [{ blockIds: ["spya-k3m9qt"], why: "the prediction" }],
+    });
+    /* Nothing the server would refuse: every stored id is one the article has. */
+    const stored = JSON.stringify(spoken[0]);
+    expect(stored).not.toContain("spya-gm3xu0a");
+    expect(stored).not.toContain("spya-zzzzzz");
+    h.unmount();
+  });
+
+  it("stores no passage at all when no pointer of the exchange survived", async () => {
+    const { spoken, speak } = recordingSpeak();
+    const h = await live({
+      wiring: wiringFor(ticketWith()), speak, tailNow: () => TAIL,
+      blocks: new Set(["spya-gm3xu0"]),
+    });
+    await deliver(
+      said("reader", 1_000, 2_000, " Where exactly does it say that?"),
+      delegated("d1", "r1"),
+      created("d1", "r1"),
+      called("d1", "call-1", "show_passage", { blockIds: ["spya-gm3xu0a"], why: "the prediction" }),
+      completed("d1", "r1"),
+      created("d1", "r2"),
+      completed("d1", "r2"),
+      said("companion", 5_000, 5_600, " It is in the opening."),
+    );
+    await hangUp(h);
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]).toMatchObject({ question: "Where exactly does it say that?", answer: "It is in the opening." });
+    expect(spoken[0]).not.toHaveProperty("passages");
+    expect(JSON.stringify(spoken[0])).not.toContain("spya-gm3xu0a");
+    h.unmount();
+  });
+
   it("answers a failed tool with the failure, so the backend is never left waiting", async () => {
     const runTool = vi.fn<RunTool>(async () => { throw new Error("the search is down"); });
     const h = await live({ wiring: wiringFor(ticketWith(), runTool), tailNow: () => TAIL });

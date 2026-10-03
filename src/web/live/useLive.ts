@@ -141,6 +141,6 @@ interface LiveDevSeam {
 }
 
 function devSeam(): LiveDevSeam | undefined {
-  if (!import.meta.env.DEV) return undefined;
+  if (import.meta.env.PROD) return undefined;
   return (globalThis as { __spideryarnLive?: LiveDevSeam }).__spideryarnLive;
 }
