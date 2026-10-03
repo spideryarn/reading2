@@ -56,6 +56,7 @@ vi.mock("../src/web/SettingsSection.js", () => ({ SettingsSection: () => "SETTIN
 vi.mock("../src/web/SiteFooter.js", () => ({ SiteFooter: () => null }));
 
 const { ProfilePage } = await import("../src/web/ProfilePage.js");
+const { CONTENTS_MARGIN } = await import("../src/web/PageContents.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -148,6 +149,88 @@ describe("the profile page's sections", () => {
     expect(text).not.toContain("undefined");
     for (const el of section("What's running").querySelectorAll("[title]")) {
       expect(el.getAttribute("title")).not.toContain("undefined");
+    }
+  });
+});
+
+/* Greg, 2026-10-03, asked whether Profile gets Metadata's contents list too:
+   *"Probably B"*, B being the list in the left margin with its search box.
+   The list is src/web/PageContents.tsx, which reads the page's sections off
+   the DOM, so these ask only that Profile mounts it and that its entries
+   reach Profile's own sections; how it searches and scrolls is
+   tests/metadata-contents-reveal.test.tsx.
+   docs/plans/261003n-profile-gets-the-contents-list-and-search-box.md. */
+describe("the profile page's contents list", () => {
+  const nav = () => host.querySelector<HTMLElement>('nav[aria-label="Sections of this page"]');
+  const entries = () => [...(nav()?.querySelectorAll<HTMLButtonElement>("li button") ?? [])];
+
+  it("lists the six sections, in the page's order", async () => {
+    await paint();
+    expect(entries().map((b) => b.textContent)).toEqual([
+      "Account",
+      "Plan",
+      "About you",
+      "Settings",
+      "Recently read",
+      "What's running",
+    ]);
+  });
+
+  it("opens a shut section when its entry is pressed", async () => {
+    await paint();
+    expect(toggle("What's running")?.getAttribute("aria-expanded")).toBe("false");
+    act(() => entries().find((b) => b.textContent === "What's running")?.click());
+    expect(toggle("What's running")?.getAttribute("aria-expanded")).toBe("true");
+    expect(section("What's running").textContent).toContain("Which model writes what");
+  });
+
+  it("finds Settings by a word only its keywords carry, and Enter opens it", async () => {
+    await paint();
+    const box = nav()?.querySelector<HTMLInputElement>('input[type="search"]');
+    if (!box) throw new Error("no search box");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(box, "dark mode");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(entries().map((b) => b.textContent)).toEqual(["Settings"]);
+    await act(async () => {
+      box.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(toggle("Settings")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it.each([
+    ["hide experimental features", ["Settings"]],
+    ["archived articles", []],
+    ["font size", []],
+    ["usage", ["Plan"]],
+    ["bill", ["Plan"]],
+  ])("uses Profile's vocabulary for %s", async (query, labels) => {
+    await paint();
+    const box = nav()?.querySelector<HTMLInputElement>('input[type="search"]');
+    if (!box) throw new Error("no search box");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(box, query);
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(entries().map((b) => b.textContent)).toEqual(labels);
+  });
+
+  /* The list is fixed in the margin and assumes its page steps right to clear
+     it (PageContents.tsx § CONTENTS_MARGIN). A page that mounts the list
+     without the class puts it over the prose between 1024px and 1152px. */
+  it("applies the desktop clearance class to its main column", async () => {
+    await paint();
+    const main = host.querySelector("main");
+    expect(CONTENTS_MARGIN).toBe(
+      "tw:lg:ml-[max(calc(12rem_+_var(--safe-left)),calc((100%_-_48rem)/2))]",
+    );
+    for (const cls of CONTENTS_MARGIN.split(" ")) {
+      expect(main?.classList.contains(cls), cls).toBe(true);
     }
   });
 });

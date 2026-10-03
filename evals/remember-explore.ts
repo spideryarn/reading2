@@ -103,7 +103,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { openRouterJson } from "../src/ai-call.js";
 import { type ToolOutcome, describeCall, runTool } from "../src/chat-tools.js";
 import { withLedger } from "../src/cli-ledger.js";
 import { buildConverseMessages, converse } from "../src/converse.js";
@@ -113,6 +112,7 @@ import { CAPABLE_MODEL_OPENROUTER } from "../src/models.js";
 import { renderProfile } from "../src/profile.js";
 import { readerNotesDigest, threadTranscript } from "../src/reader-notes.js";
 import type { Block, BlockId, ChatMessage, ChatThread, Comment, Meta, ThreadKind } from "../src/types.js";
+import { askJudge } from "./remember-explore-judge.js";
 import { loadArticle, quoteCheck, row, words } from "./remember-tutorial.js";
 
 const RESULTS = path.resolve(import.meta.dirname, "results");
@@ -841,20 +841,11 @@ function itemText(turn: Turn, reader: Reader): string {
 async function judgeOne(context: string, item: string): Promise<{ raw: string; labels: Labels | null }> {
   let raw = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const call = await openRouterJson(
-      "eval",
-      {
-        model: JUDGE_MODEL,
-        /* Room for the model's thinking as well as the object: at 700, 46 of
-           the first 60 answers came back empty. */
-        max_tokens: 4000,
-        messages: [
-          { role: "system", content: JUDGE_SYSTEM },
-          { role: "user", content: `${context}\n\n${item}` },
-        ],
-      },
-      { signal: AbortSignal.timeout(120_000) },
-    );
+    /* The call itself lives in ./remember-explore-judge.ts, so this entry
+       module imports no provider seam (tests/paid-cli-ledger.test.ts). Room
+       for the model's thinking as well as the object: at 700 tokens, 46 of
+       the first 60 answers came back empty. */
+    const call = await askJudge(JUDGE_MODEL, JUDGE_SYSTEM, `${context}\n\n${item}`);
     const content = (call.json as { choices?: { message?: { content?: unknown } }[] } | null)?.choices?.[0]?.message?.content;
     raw = typeof content === "string" ? content : "";
     const labels = parseLabels(raw);

@@ -281,7 +281,7 @@
  {
   "id": "mode:remember",
   "label": "Remember",
-  "description": "Work the piece into memory through Recall, a short Tutorial or a Quiz — not saved notes or flashcards",
+  "description": "Work the piece into memory through Recall, a short Tutorial or a Quiz, or Explore what you think of it — not saved notes or flashcards",
   "aliases": [
    "recall"
   ],
@@ -617,6 +617,25 @@
    "Tutorial Remember",
    "Remember Tutorial",
    "Tutorial mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:remember:explore",
+  "label": "Explore",
+  "description": "Think it through for yourself: starts from what you have marked and discussed, and looks beyond the piece",
+  "aliases": [
+   "Remember",
+   "Explore Remember",
+   "Remember Explore",
+   "Explore mode"
   ],
   "kind": "submode",
   "generates": false,

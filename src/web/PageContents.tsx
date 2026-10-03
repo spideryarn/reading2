@@ -53,7 +53,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { scrollToAndFlash } from "./flash.js";
-import { searchSections, type SearchableSection } from "./page-search.js";
+import { searchSections, type SearchableSection, type SynonymTable } from "./page-search.js";
 
 /**
  * The event a section listens for to open itself — sent to the `[data-section]`
@@ -223,14 +223,41 @@ function reachedPx(section: HTMLElement): number {
   return Number.isFinite(margin) && margin > 0 ? margin + REACHED_SLACK_PX : FALLBACK_REACHED_PX;
 }
 
+/**
+ * **The class a page's `<main>` wears to make room for this list.** The list is
+ * fixed in the left margin (the `<nav>` below says why), so the page has to
+ * step right where its centred margin is too narrow to hold it. A page that
+ * mounts `PageContents` without this puts the list over its own text between
+ * 1024px and 1152px wide. One copy, here beside the widths it answers to, so
+ * Metadata and `/profile` cannot drift apart.
+ *
+ * It is `mx-auto`'s own left margin for a 48rem column (`max-w-3xl`, which the
+ * page supplies), but never less than 12rem plus the left safe inset: the list
+ * ends at 12.5rem plus that inset (it is fixed chrome, so it adds it —
+ * tokens.css § safe areas), and the column's text starts 1.5rem inside it, so
+ * a 1rem gap. The `max` picks the centred margin from 1152px plus twice the
+ * left inset of containing-block width (a little more window width with a
+ * classic scrollbar, since `100%` is the width beside it). Below that the page
+ * sits right of centre — by up to 4rem when the inset is zero — so an iPad in
+ * landscape gets the list. Greg, SPIDERYARN-READING2-9M, 2026-10-01: *"not
+ * visible on my iPad, even in landscape mode, even though there's quite a lot
+ * of space on either side."*
+ * docs/plans/261002a-metadata-contents-on-an-ipad-in-landscape.md.
+ */
+export const CONTENTS_MARGIN =
+  "tw:lg:ml-[max(calc(12rem_+_var(--safe-left)),calc((100%_-_48rem)/2))]";
+
 export function PageContents({
   containerRef,
   label,
+  synonyms,
 }: {
   /** The element whose `[data-section]` descendants are the contents. */
   containerRef: RefObject<HTMLElement | null>;
-  /** Names the nav for a screen reader — this page has another one in the bar. */
+  /** Names the nav for a screen reader. */
   label: string;
+  /** This page's vocabulary; omitted, the search keeps Metadata's table. */
+  synonyms?: SynonymTable;
 }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [here, setHere] = useState<string | null>(null);
@@ -399,9 +426,9 @@ export function PageContents({
      query is typed joins the results. */
   const matches = useMemo(() => {
     if (query.trim() === "") return null;
-    const ids = searchSections(query, entries);
+    const ids = searchSections(query, entries, synonyms);
     return ids.flatMap((id) => entries.filter((e) => e.id === id));
-  }, [query, entries]);
+  }, [query, entries, synonyms]);
 
   /* Nothing worth navigating. One entry is furniture rather than help, and an
      empty list is the state before the metadata request has landed. */
@@ -422,8 +449,8 @@ export function PageContents({
        content is `max-w-3xl` (48rem) and centred. With no left safe inset its
        margin holds the list from 1152px up; an inset raises that threshold by
        twice its width. Below it the page steps its column right just far enough
-       to clear the list (Metadata.tsx § `tw:lg:ml-…`) —
-       so this nav assumes its page does that, and a page that mounts it
+       to clear the list (`CONTENTS_MARGIN`, above) —
+       so this nav assumes its page wears that, and a page that mounts it
        without it would put the list over the prose. It was `xl` until Greg,
        SPIDERYARN-READING2-9M, 2026-10-01: *"not visible on my iPad, even in
        landscape mode"*. Plan 261002a.
@@ -432,7 +459,8 @@ export function PageContents({
        search box arrived (plan 261001s), and then every keystroke that
        filtered the list shrank the box and moved the input under the
        reader's cursor. 6rem down, level with the page's first sections; the
-       corner wordmark it once had to clear moved into the dock on 2026-09-06.
+       Metadata's corner wordmark moved into the dock on 2026-09-06;
+       Profile keeps its wordmark above the list.
        The list scrolls inside a column that stops short of the dock, so a
        long page's contents never run under it. Sol, plan review. */
     <nav
