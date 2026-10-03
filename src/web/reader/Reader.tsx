@@ -1865,7 +1865,7 @@ export function Reader({
       faq: marginaliaFaq,
       timeline: marginaliaTimeline,
       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
-      relations: owner ? ownerFeed.relations : null,
+      relations: isOwner ? ownerFeed.relations : null,
       claims: marginaliaClaims,
       citations: marginaliaCitations,
       comments,
@@ -1885,7 +1885,7 @@ export function Reader({
     marginaliaIdeas,
     marginaliaFaq,
     marginaliaTimeline,
-    owner,
+    isOwner,
     ownerFeed.relations,
     marginaliaClaims,
     marginaliaCitations,
@@ -2176,7 +2176,8 @@ export function Reader({
        of those — so depending on the object made this a new function each
        time, and it is `memo(TableView)`'s `onSelect`. GPT Sol's F2 on
        docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md;
-       tests/spine-reading.test.ts reads this list. */
+       tests/spine-reading.test.ts verifies a reach update leaves TableView's
+       render count unchanged, including with marginalia open. */
     [isOwner, setNote, setThread],
   );
 

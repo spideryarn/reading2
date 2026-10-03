@@ -203,8 +203,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
               A tinted area from the left edge, with a brighter line at its edge: where you have
               spent time reading.
             </strong>{" "}
-            The further across the strip it reaches, the longer you spent there. No shading means
-            you have not read that stretch. Use it to find where you had got to after jumping
+            The further across the strip it reaches, the longer you spent there. A quick glance
+            may leave no shading. Use it to find where you had got to after jumping
             around. Only whoever added the article sees it, and it
             is <HelpRef to="experimental-features">experimental</HelpRef>.
           </li>

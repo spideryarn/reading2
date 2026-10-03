@@ -31,6 +31,8 @@ import type { BlockMatch } from "../src/web/search-hits.js";
 import { type Row, readingAreaPaths, readingRuns } from "../src/web/spine-marks.js";
 import type { OutlineEntry } from "../src/web/tree.js";
 import type { BlockId, NodeId, TreeNode } from "../src/types.js";
+import type { ReadReach } from "../src/web/reading-time.js";
+import { readerReadingProbe, readingHarnessOwner, readingHarnessView } from "./helpers/reader-reading-harness.js";
 
 const ROWS = 20;
 const ROW_H = 100;
@@ -234,7 +236,7 @@ describe("the reading layer in the spine", () => {
     expect(layers(), "an owner who has read nothing yet").toHaveLength(0);
   });
 
-  it("draws one svg over the whole track, on the rail's document-pixel ruler", async () => {
+  it("draws the area and the edge over the whole track, on the rail's document-pixel ruler", async () => {
     await mount(
       new Map<BlockId, number>([
         ["b0", 16],
@@ -256,9 +258,18 @@ describe("the reading layer in the spine", () => {
     expect(svg.getAttribute("aria-hidden")).toBe("true");
 
     const paths = [...svg.querySelectorAll("path")];
-    expect(paths.map((p) => p.getAttribute("class"))).toEqual(["spine-read-area", "spine-read-edge"]);
+    expect(paths.map((p) => p.getAttribute("class"))).toEqual(["spine-read-area"]);
     expect(paths[0]?.getAttribute("d")).toBe("M0 0H16V400H0ZM0 400H5V500H0ZM0 700H9V800H0Z");
-    expect(paths[1]?.getAttribute("d")).toBe("M16 0V400H5V500M9 700V800");
+
+    /* The edge is a layer of its own, on the same ruler — the order test below
+       says why. */
+    const line = host.querySelector<SVGSVGElement>("svg.spine-read-line");
+    expect(line?.getAttribute("viewBox")).toBe("0 0 16 2000");
+    expect(line?.getAttribute("preserveAspectRatio")).toBe("none");
+    expect(line?.getAttribute("aria-hidden")).toBe("true");
+    const edges = [...(line?.querySelectorAll("path") ?? [])];
+    expect(edges.map((p) => p.getAttribute("class"))).toEqual(["spine-read-edge"]);
+    expect(edges[0]?.getAttribute("d")).toBe("M16 0V400H5V500M9 700V800");
   });
 
   it("keeps a full-reach edge inside the rail rather than half clipped (GPT Sol's F3)", () => {
@@ -267,7 +278,7 @@ describe("the reading layer in the spine", () => {
        own overflow, so a 1px stroke centred on x = 16 ends exactly at it; and
        the stroke is a pixel whatever the two axes are stretched by. */
     const css = readFileSync("src/web/styles/spine.css", "utf8");
-    const rule = /\.spine-read\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    const rule = /\.spine-read,\s*\.spine-read-line\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
     expect(rule).toMatch(/width:\s*calc\(100% - 0\.5px\)/);
     expect(rule).toMatch(/overflow:\s*visible/);
     const edge = /\.spine-read-edge\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
@@ -300,29 +311,50 @@ describe("the reading layer in the spine", () => {
     expect(last("spine-read"), "under the hairlines").toBeLessThan(first("spine-tick"));
     expect(last("spine-read"), "under the search marks").toBeLessThan(first("spine-matches"));
     expect(last("spine-read"), "under the hit targets").toBeLessThan(first("spine-hit"));
+
+    /* The edge alone goes over the section fill: under it the line kept a
+       fifth of its colour, and the section you are in is where you most want
+       to see how far you got (the browser check on 261003j). Still under the
+       hairlines and everything a reader asked for. */
+    expect(first("spine-read-line"), "the fixture should render the edge").toBeGreaterThanOrEqual(0);
+    expect(first("spine-read-line"), "over the section fill").toBeGreaterThan(last("spine-here"));
+    expect(last("spine-read-line"), "under the hairlines").toBeLessThan(first("spine-tick"));
+    expect(last("spine-read-line"), "under the search marks").toBeLessThan(first("spine-matches"));
   });
 });
 
 describe("what a reach step wakes", () => {
-  /* A reach step re-renders `OwnedReader`, which hands `Reader` a new
-     capability object every render (ArticlePage.tsx), so any callback that
-     depends on the whole `owner` is a new function each time — and
-     `selectProse` goes to `memo(TableView)` as `onSelect`. Nothing in this repo
-     mounts the whole `Reader` (tests/touch-selection-chip.test.tsx says so), so
-     this reads the dependency list: a tripwire, not a render count. GPT Sol's
-     F2 on docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md. */
-  it("selectProse does not depend on the owner object, which is new on every reach step", () => {
-    const source = readFileSync("src/web/reader/Reader.tsx", "utf8");
-    const at = source.indexOf("const selectProse = useCallback(");
-    expect(at, "Reader.tsx no longer has selectProse — this test has lost its subject").toBeGreaterThan(-1);
-    const deps = /\n {4}\[([^\]]*)\],\n {2}\);/.exec(source.slice(at))?.[1];
-    expect(deps, "selectProse's dependency list").toBeDefined();
-    expect(deps?.split(",").map((d) => d.trim())).not.toContain("owner");
+  it.each([false, true])("updates the spine without rendering the prose again (marginalia=%s)", async (margin) => {
+    readerReadingProbe.table.mockClear();
+    readerReadingProbe.spine.mockClear();
+    readerReadingProbe.gutter.mockClear();
+    const owner = readingHarnessOwner();
+    await act(async () => root.render(readingHarnessView(owner, margin)));
+    const before = readerReadingProbe.table.mock.calls.length;
+    expect(before).toBeGreaterThan(0);
+    const firstProps = readerReadingProbe.table.mock.lastCall?.[0] as { margin: unknown };
+    if (margin) expect(firstProps.margin, "the positive control must have marginalia room").toBeInstanceOf(Map);
+    else expect(firstProps.margin).toBeNull();
+    const reach = new Map<BlockId, ReadReach>([["spya-aaaaaa", 5]]);
+    await act(async () => root.render(readingHarnessView({ ...owner, readingTime: { ...owner.readingTime, reach } }, margin)));
+    expect(readerReadingProbe.spine.mock.lastCall?.[0].reading).toBe(reach);
+    expect(readerReadingProbe.gutter.mock.lastCall?.[0].levels).toBe(owner.readingTime.levels);
+    expect(readerReadingProbe.table.mock.calls.length).toBe(before);
   });
+});
 
-  it("Reader hands the spine the reach map, and the gutter the levels", () => {
-    const source = readFileSync("src/web/reader/Reader.tsx", "utf8");
-    expect(source).toContain("reading={owner?.readingTime.reach}");
-    expect(source).toContain("<ReadingTimeStyle levels={owner.readingTime.levels} />");
+describe("the spine's reading-time help", () => {
+  it("allows recorded time below the drawing threshold to leave no shading", async () => {
+    const { readReach } = await import("../src/web/reading-time.js");
+    const { HELP_TOPICS } = await import("../src/web/help/help-topics.js");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    /* Twenty seconds spent on 230 words is recorded, but not yet drawn. */
+    await mount(new Map([["b0", readReach(20, 230)]]));
+    expect(layers()).toHaveLength(0);
+    const help = document.createElement("div");
+    help.innerHTML = renderToStaticMarkup(HELP_TOPICS.spine.body);
+    const words = help.textContent?.replace(/\s+/g, " ") ?? "";
+    expect(words).not.toContain("No shading means you have not read");
+    expect(words).toMatch(/a quick glance.*no shading/i);
   });
 });

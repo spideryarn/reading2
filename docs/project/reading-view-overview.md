@@ -81,7 +81,7 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
 - **[column-context.md](column-context.md)** — history: the fisheye the gist columns had, gone on
   2026-09-29. Open it only to learn why `useColumnContext` is called that — its focus sampling is
   what Structure still uses.
-- **[reading-time.md](reading-time.md)** — the spine thicker where you have spent longer, and a
+- **[reading-time.md](reading-time.md)** — an area chart down the spine of where you have spent longer, and a
   hairline beside each passage: how a second is shared out, what counts, and why a batch is never
   sent twice. Owner only, behind the experimental switch.
 - **[maths.md](maths.md)** — TeX in an article drawn as maths: which delimiters count and why a

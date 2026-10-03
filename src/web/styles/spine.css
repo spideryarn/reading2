@@ -127,7 +127,7 @@
 
 /* **Where you have spent time reading** — an area chart on its side: a tinted
    area from the left edge, further across where longer, with an opaque line
-   down its right-hand edge. One svg over the whole track, sixteen units wide
+   down its right-hand edge. Two svgs over the whole track (area, edge), sixteen units wide
    (reading-time.ts § readReach), so a run the reader sat on reaches across and
    one they skimmed is a sliver; one they scrolled past draws nothing.
 
@@ -145,10 +145,13 @@
    this rule). `non-scaling-stroke` because the two axes are stretched by very
    different amounts and the line must be a pixel on both.
 
-   Painted under `.spine-here` and the ticks — Spine.tsx says why the order is
-   the correctness.
+   Two layers on one ruler: the area (`.spine-read`) is painted under
+   `.spine-here` and the ticks, and the edge (`.spine-read-line`) over
+   `.spine-here` alone, so the line survives the section you are in — Spine.tsx
+   says why the order is the correctness.
    docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md. */
-.spine-read {
+.spine-read,
+.spine-read-line {
   position: absolute;
   top: 0;
   left: 0;

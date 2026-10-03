@@ -204,7 +204,7 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
 **One thing that is not a mode is behind it too: [reading time](reading-time.md)**, since
-2026-09-16 — the spine thicker where the reader has spent longer. Both the recording and the drawing,
+2026-09-16 — an area chart down the spine of where the reader has spent longer. Both the recording and the drawing,
 because it is new code running every second on an owner's article and a new kind of data about a
 person, so it starts with the readers who asked for the unfinished things. The switch is availability
 here, not consent; `/privacy` says we keep it. Fable argued for recording for every owner, since reading

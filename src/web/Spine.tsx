@@ -1094,7 +1094,7 @@ function SpineInner({
 
             That is a width the reader has to learn, which the rail has refused
             for a count of matches (the header); Greg asked for this one by
-            name. **One svg over the whole track**: sixteen units across, the
+            name. **An svg over the whole track** (and a second for the edge, below): sixteen units across, the
             document's pixels down, stretched to the rail on both axes
             (`preserveAspectRatio="none"`), so a run's `top` and `height` are
             the numbers every other mark here is placed by.
@@ -1114,7 +1114,6 @@ function SpineInner({
             viewBox={`0 0 16 ${docHeight}`}
           >
             <path className="spine-read-area" d={readPaths.area} />
-            <path className="spine-read-edge" d={readPaths.edge} />
           </svg>
         )}
 
@@ -1176,6 +1175,26 @@ function SpineInner({
               } as CSSProperties
             }
           />
+        )}
+
+        {/* **The chart's edge line, over the section fill.** The area stays
+            under `.spine-here`; the line alone comes back on top, because
+            under that 0.8 wash it kept a fifth of its colour, and the section
+            you are in is where you most want to see how far you got (the
+            browser check in
+            docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md).
+            One pixel of line costs the *you are here* nothing. Still before
+            the ticks and the search marks, for the reasons above;
+            tests/spine-reading.test.ts asserts both. */}
+        {readPaths && (
+          <svg
+            className="spine-read-line"
+            aria-hidden="true"
+            preserveAspectRatio="none"
+            viewBox={`0 0 16 ${docHeight}`}
+          >
+            <path className="spine-read-edge" d={readPaths.edge} />
+          </svg>
         )}
 
         {/* Subdivision is always drawn, so the shape of the article is visible

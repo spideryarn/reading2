@@ -96,8 +96,9 @@ and the drawing.
   [261001l](../plans/261001l-quieter-experimental-switch-tooltips-on-the-vertical-lines-readers-only-filter-in-admin-feedback.md)).
   gutter.css § reading time;
   [260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md).
-- **The spine layer's place in the track is its correctness**: after the parts, before the section
-  fill, the hairlines and the search marks. [`Spine.tsx`](../../src/web/Spine.tsx),
+- **The spine layers' place in the track is their correctness**: the area after the parts and
+  before the section fill, the hairlines and the search marks; the edge line over the section fill
+  alone, because under it the line could not be read in the section you are in. [`Spine.tsx`](../../src/web/Spine.tsx),
   `tests/spine-reading.test.ts`.
 
 ## Who else reads it

@@ -109,4 +109,27 @@ browser check looks at exactly that.
 
 ## What landed
 
-(filled in at the end)
+- As planned, in `dd80f1158`, plus the commit after it.
+- **The edge line is a second svg, `.spine-read-line`, over `.spine-here`.** The browser check found
+  that inside the section you are in the chart survived only as a ghost: the area a faint tint, the
+  line a washed-out stripe. The area stays under the fill; the 1px line alone moves above it, still
+  under the ticks and the search marks. This is the reorder § Passed over said would not be made
+  silently, so it is in the debrief to Greg; it costs the *you are here* one pixel of line.
+- **Search marks cover the edge where they coincide**, most on a full-reach stretch. Left: the
+  reader asked for the marks, and the chart is intact outside them.
+- **`--read-time` is a cyan**, `oklch(0.82 0.11 200)` dark and `oklch(0.5 0.1 200)` light. No hue on
+  the rail is free; tokens.css says what its neighbours are.
+- **F3 is solved in CSS** (`width: calc(100% - 0.5px)`, `overflow: visible`), not in the path.
+- **Runs under a document pixel apart count as joined**, because row edges are measured floats.
+  Sol: a reasoned concern only — a visible row is 24px at least and a folded one is zero high.
+- **GPT Sol's code review — land after fixes**
+  ([the review](261003j-reading-time-area-chart-code-review-sol.md)). It fixed F5 (`marginNotes`
+  also depended on the whole owner object, so with marginalia open a reach update still re-rendered
+  `TableView`; now a render-count test through the real `Reader`,
+  [postmortem](../postmortems/261003d-a-callback-dependency-check-misses-another-prop-invalidating-the-memo.md))
+  and F6 (Help said no shading means not read; a glance also draws nothing). F7, two signposts
+  still saying "thicker", fixed here.
+- **Browser check** at 1440, 820 and 390 wide, dark and light: read and unread tell apart at a
+  glance; the edge is whole at full reach; the quote strip covers the area's left 4px and no more.
+  Shots: `261003j-shot-*.png`.
+- Not built: anything wider than the rail ([Q-jhe9mc-1]); touch has no card on the chart, as before.
