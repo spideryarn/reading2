@@ -42,13 +42,14 @@ let OUT = path.join(REPO, "evals", "results", "paperwork");
  * blocks for docs/plans/261003c-summary-and-structure-skip-the-front-matter.md:
  * from the abstract's first block to the last block before the body begins, so
  * a trailing keywords line (entropy-24) or the publisher's "Similar content" box
- * (s41598) is inside it. scaling-hypothesis's abstract is its one-paragraph
- * dek; the blockquote after it is body. A paper not listed is not counted.
+ * (s41598) is inside it. scaling-hypothesis is a gwern.net essay: a one-line
+ * description, then the opening blockquote that is the site's abstract, so both
+ * are in it. A paper not listed is not counted.
  */
 const ABSTRACT: Record<string, [string, string]> = {
   "analog-cognition-and-consciousness-4-28-26-spya-f03kqf": ["spya-c5z6sr", "spya-d238cn"],
   "entropy-24-00930-spya-pywwkq": ["spya-xn9j9k", "spya-y66sc5"],
-  "scaling-hypothesis": ["spya-suzdvz", "spya-suzdvz"],
+  "scaling-hypothesis": ["spya-suzdvz", "spya-ewxv9q"],
   "s41598-023-33209-9-spya-s0qydm": ["spya-wrnsf9", "spya-anyy22"],
 };
 
@@ -233,7 +234,13 @@ function readArm(arm: string): ArmFile[] {
 }
 
 function report(): void {
-  const arms = fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory()).sort();
+  /* `pairs` writes sibling `pairs-<a>-vs-<b>` directories under OUT. They hold
+     a Markdown comparison and a JSON key, not ArmFiles; treating the key as an
+     arm made `report` print all real arms and then crash on `r.simple.brief`. */
+  const arms = fs
+    .readdirSync(OUT)
+    .filter((d) => !d.startsWith("pairs-") && fs.statSync(path.join(OUT, d)).isDirectory())
+    .sort();
   for (const arm of arms) {
     console.log(`\n== ${arm}`);
     for (const r of readArm(arm)) {
@@ -253,12 +260,20 @@ function report(): void {
         ? r.versions.simple
         : `Simple prompt unknown (legacy result recorded shape ${r.versions.simple})`;
       const abs = ABSTRACT[r.slug];
-      let inAbstract = "abstract ids: -";
-      if (abs && r.simpleIds && r.ordinals) {
+      let abstractBounds: [number, number] | undefined;
+      if (abs && r.ordinals) {
         const lo = r.ordinals[abs[0]];
         const hi = r.ordinals[abs[1]];
+        if (lo === undefined || hi === undefined || lo > hi) {
+          throw new Error(`bad ABSTRACT range for ${r.slug}: ${abs[0]}..${abs[1]}`);
+        }
+        abstractBounds = [lo, hi];
+      }
+      let inAbstract = "abstract ids: -";
+      if (abstractBounds && r.simpleIds && r.ordinals) {
+        const [lo, hi] = abstractBounds;
         const at = (id: string) => r.ordinals?.[id];
-        const isAbstract = (id: string) => lo !== undefined && hi !== undefined && (at(id) ?? -1) >= lo && (at(id) ?? -1) <= hi;
+        const isAbstract = (id: string) => (at(id) ?? -1) >= lo && (at(id) ?? -1) <= hi;
         const parts: string[] = [];
         for (const level of ["brief", "simple", "fuller"] as const) {
           const all = r.simpleIds[level].flat();
@@ -268,14 +283,14 @@ function report(): void {
         inAbstract = `abstract ids: ${parts.join("; ")}`;
       }
       /* **By position, not by title** (GPT Sol's plan review of 261003c, P2-1):
-         a node that ends inside the abstract and starts at or before it covers
-         only the front matter and the abstract — the nodes the rule labels. A
-         node that runs on into the body is not one, whatever it is called.
-         Titles are printed beside them only for front- and back-matter names. */
+         `parseWholeDocumentAnswer` derives ordered, non-backwards ranges, and
+         each marked abstract range ends at the last block before the body. So
+         an end inside that range is enough: the node can begin in the abstract
+         or earlier front matter, but cannot have run into the body. Titles are
+         printed beside them only for front- and back-matter names. */
       const frontBack: string[] = [];
       if (!failed(r.gists)) {
-        const lo = abs && r.ordinals ? r.ordinals[abs[0]] : undefined;
-        const hi = abs && r.ordinals ? r.ordinals[abs[1]] : undefined;
+        const [lo, hi] = abstractBounds ?? [];
         for (const g of r.gists) {
           if (g.depth === 0) continue;
           const [first, last] = g.range.split("..");

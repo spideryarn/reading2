@@ -1,0 +1,478 @@
+{
+  "arm": "after-2",
+  "slug": "scaling-hypothesis",
+  "at": "2026-10-03T01:38:23.980Z",
+  "sourceSha256": {
+    "structure.ts": "0b8f15b9fef778a0cbc8d689342400ce1102d0005a25d026ed17c02a68773132",
+    "simple-summary.ts": "84dda89c10ed9dbf633474891bacd063945e289beb95aaf761e125657adf14db",
+    "tweets.ts": "20b9218900ea3ee2d6d0d9fcd768020df76a5e5bbd48e24925862cf11228bd8f",
+    "paperwork.ts": "647de890b9e4bfc55b1ed4c2a46e7750a7fc6d26b63d5b65940a3ae5e6cc0995"
+  },
+  "versions": {
+    "toc": "toc/12",
+    "tweets": "tweets/8",
+    "simple": "simple-prompt/6"
+  },
+  "gists": [
+    {
+      "depth": 0,
+      "range": "spya-dfggb3..spya-vbpzva",
+      "title": "The Scaling Hypothesis",
+      "gist": "Scaling simple neural networks in size, data and compute, not clever new algorithms, is what drives GPT-3's unexpected leap toward general intelligence.",
+      "question": "GPT-3 — why does mere scale, not new architecture, produce such surprising general capability? (an extended argument)"
+    },
+    {
+      "depth": 1,
+      "range": "spya-dfggb3..spya-ewxv9q",
+      "title": "Paperwork and summary",
+      "gist": "The author's own summary of the piece."
+    },
+    {
+      "depth": 1,
+      "range": "spya-k8ta9q..spya-dfjr4c",
+      "title": "Meta-Learning",
+      "gist": "GPT-3, 117× larger than GPT-2, learns to solve varied tasks from a few text examples alone, suggesting its attention mechanism learned to learn.",
+      "question": "Meta-learning — how does GPT-3 pick up new tasks from mere prompts without special training? (one explanation)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-k8ta9q..spya-s8rx6n",
+      "title": "Flexing GPT",
+      "gist": "Despite using a crude, outdated architecture on a single impoverished text modality, GPT-3 already shows surprising runtime meta-learning that standard benchmarks fail to capture."
+    },
+    {
+      "depth": 2,
+      "range": "spya-kab3fn..spya-dfjr4c",
+      "title": "Baking The Cake",
+      "gist": "GPT-3 is not the whole of artificial general intelligence but a genuine advance, and its scaling curves keep improving without flattening even at enormous size and cost."
+    },
+    {
+      "depth": 1,
+      "range": "spya-w83b0m..spya-kc39vs",
+      "title": "Scaling",
+      "gist": "Published scaling laws show GPT-3's performance keeps improving smoothly along a predictable curve, with much more potential gain left before any limit is reached.",
+      "question": "Scaling laws — how far can shrinking the model's prediction error still go, and what would emerge? (a projection)"
+    },
+    {
+      "depth": 1,
+      "range": "spya-jwq3zr..spya-wq498y",
+      "title": "Blessings Of Scale",
+      "gist": "Across many domains, deep learning models that are simply made large enough spontaneously develop stability, generalization, and meta-learning without any special architecture, because big models act like ensembles whose simplicity bias favors genuine, generalizable sub-solutions over memorization once the data is rich enough.",
+      "question": "Blessings of scale — why does making neural networks merely bigger make hard problems easier rather than harder? (several examples plus a theoretical account)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-jwq3zr..spya-evn08w",
+      "title": "Why scale helps everywhere",
+      "gist": "Dozens of unrelated deep learning systems, from game-playing agents to robot hands to image generators, show the same pattern of sudden generalization and meta-learning once scaled past a threshold of size and task diversity."
+    },
+    {
+      "depth": 2,
+      "range": "spya-djq0xk..spya-wq498y",
+      "title": "An ensemble explanation",
+      "gist": "Big models implicitly contain huge numbers of competing sub-models that act like an ensemble, so added scale lets genuinely general sub-models eventually outcompete memorizing shortcuts as data grows."
+    },
+    {
+      "depth": 1,
+      "range": "spya-ag750z..spya-emqjaa",
+      "title": "Scaling Hypothesis",
+      "gist": "The strong scaling hypothesis claims that once a flexible architecture like self-attention exists, simply training it ever larger is enough for sophisticated intelligent behavior to emerge on its own.",
+      "question": "Scaling hypothesis — why did the author come to believe mere scale, not new algorithms, explains AI progress? (a personal reversal)"
+    },
+    {
+      "depth": 1,
+      "range": "spya-ce0ts7..spya-sm7bx4",
+      "title": "Why Does Pretraining Work?",
+      "gist": "Because human-generated text implicitly encodes logic, causality and reasoning, a model trained only to predict the next character must progress from spelling to grammar to meaning to approach the deepest, hardest-to-capture bits of true understanding, though whether this truly yields comprehension remains disputed.",
+      "question": "Pretraining — why would predicting text ever require genuine understanding rather than surface pattern-matching? (a staged argument, then objections)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-ce0ts7..spya-g3b5y7",
+      "title": "From letters to meaning",
+      "gist": "As training proceeds, a language model progresses in stages from letter frequencies to spelling to word associations to sentence-level sense, with each stage costing more computation for smaller gains in prediction accuracy."
+    },
+    {
+      "depth": 2,
+      "range": "spya-nhgv5g..spya-u2vxzs",
+      "title": "The hardest remaining bits",
+      "gist": "The final fraction of a bit of prediction error separating models from human performance corresponds to the rarest, highest-stakes judgments, meaning the last gains require the deepest reasoning and understanding."
+    },
+    {
+      "depth": 2,
+      "range": "spya-e5n86h..spya-s0h95g",
+      "title": "Doubts about the thesis",
+      "gist": "The pretraining argument is logically appealing but unproven in practice, since many universal-seeming algorithms never actually deliver intelligence, and scaling could instead stall on data, architecture, or ever more superficial learning."
+    },
+    {
+      "depth": 2,
+      "range": "spya-uett4g..spya-sm7bx4",
+      "title": "An open Q&A on limits",
+      "gist": "A question-and-answer exchange admits that no one predicted GPT-3's capabilities quantitatively in advance, and no one currently knows what a further scaled model, or one reaching near-human loss, would actually learn."
+    },
+    {
+      "depth": 1,
+      "range": "spya-b6zcpu..spya-fyy04z",
+      "title": "Prospects",
+      "gist": "Despite having the hardware and budget, most major labs lack genuine conviction in scaling, leaving OpenAI's startup-like bet on the scaling hypothesis largely unmatched by rivals such as DeepMind or Google.",
+      "question": "Scaling investment — why haven't well-resourced labs raced to replicate or outscale GPT-3? (an organizational explanation)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-b6zcpu..spya-xmcsft",
+      "title": "Who might scale next",
+      "gist": "Hardware and budgets already exist for a far larger GPT-successor, so the limiting factor is organizational will rather than compute, and it is unclear whether any lab is secretly pursuing it."
+    },
+    {
+      "depth": 2,
+      "range": "spya-vr9q2p..spya-vr9q2p",
+      "title": "DeepMind's weak hypothesis",
+      "gist": "DeepMind favors reverse-engineering the brain module by module rather than betting everything on scale, treating compute as a tool for finding right algorithms rather than a sufficient cause of intelligence."
+    },
+    {
+      "depth": 2,
+      "range": "spya-hr5xnj..spya-fyy04z",
+      "title": "OpenAI's startup bet",
+      "gist": "Lacking Google-scale funding, OpenAI restructured to raise capital for its bet that scale alone, combined with simple algorithms, will deliver powerful capabilities before competitors catch on."
+    },
+    {
+      "depth": 1,
+      "range": "spya-bp9mm2..spya-hfcz8w",
+      "title": "Critiquing The Critics",
+      "gist": "Experts who confidently dismissed scaling and brute-force deep learning for a decade were repeatedly proven wrong, yet they face no accountability and keep speaking in the same falsely calm, unfalsifiable tone.",
+      "question": "Expert predictions — why did respected AI researchers keep underestimating scaling, and why no reckoning? (a critique of expert tone)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-bp9mm2..spya-b93jbz",
+      "title": "A decade of being wrong",
+      "gist": "Only a handful of diehard connectionists like Moravec and Sutskever correctly foresaw that scaling compute would yield today's enormous, surprisingly capable models, while mainstream experts dismissed the idea."
+    },
+    {
+      "depth": 2,
+      "range": "spya-m9r8zx..spya-hfcz8w",
+      "title": "The voice of authority",
+      "gist": "Confident experts who declared brute-force scaling would fail were simply wrong and never held accountable, and their reassuring tone resembles historical dismissals of other unlikely but real breakthroughs like the atomic bomb."
+    },
+    {
+      "depth": 1,
+      "range": "spya-djc75w..spya-hjpau9",
+      "title": "It From Byte",
+      "gist": "Because generative models learn by imitating human-generated agentic data, they can develop real agency and goal-pursuing behavior, and this risk cannot easily be removed by filtering out explicitly agent-related training data.",
+      "question": "Emergent agency — can a model trained on data ever avoid becoming an agent itself? (a continuum view, not a yes/no)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-djc75w..spya-f7e8ez",
+      "title": "Agency as a continuum",
+      "gist": "Agency is not a discrete special ingredient but an ordinary continuum built from non-agentic parts, so even models trained on seemingly non-agentic physical data could in principle develop agent-like behavior."
+    },
+    {
+      "depth": 2,
+      "range": "spya-frehf0..spya-agstbd",
+      "title": "Treating systems as agents",
+      "gist": "Humans naturally use an intentional, goal-seeking framing to explain even non-agentic physical systems because it is mathematically equivalent to step-by-step computation yet far simpler, and this trick is exactly the kind of shortcut a neural network would also favor."
+    },
+    {
+      "depth": 2,
+      "range": "spya-wkqdua..spya-myjtg3",
+      "title": "What makes agency emerge",
+      "gist": "Inducing agency-like reasoning is computationally expensive and only pays off with enough richness, diversity and training, so simple single-system settings like Pluto's orbit are unlikely to produce it while broad multi-system settings might."
+    },
+    {
+      "depth": 2,
+      "range": "spya-q3nmj0..spya-usu3q6",
+      "title": "Testing with simple systems",
+      "gist": "Even extremely simple settings like Conway's Game of Life or random Turing machines show early hints of entity-like, goal-inferring behavior once many instances are involved, suggesting no setting is clearly safe from fostering agency."
+    },
+    {
+      "depth": 2,
+      "range": "spya-c8qwnc..spya-hjpau9",
+      "title": "Agency is hard to rule out",
+      "gist": "Because agency behaves like a convergent, useful capability rather than a rare special case, it is extremely difficult to build any sufficiently broad and powerful system that is reliably guaranteed to remain non-agentic."
+    },
+    {
+      "depth": 1,
+      "range": "spya-g9ffua..spya-vbpzva",
+      "title": "Backlinks, related links and bibliography",
+      "gist": "Lists of pages linking here, related links, and the bibliography of references."
+    }
+  ],
+  "simple": {
+    "brief": [
+      "This piece is about GPT-3, a giant computer program trained to predict text, and what its success means for building smart machines. GPT-3 was made much bigger than earlier versions, and surprisingly it did not stop improving as it grew. Even more surprising, it learned to pick up brand-new tasks just from a few examples, without being specially trained for them.",
+      "The author argues this supports the \"scaling hypothesis\": the idea that making neural networks (brain-like learning programs) much bigger, with more data and computing power, is enough to make them much smarter. This matters because many researchers doubted size alone could work, expecting progress to stall. The piece concludes that this growth in ability has not leveled off, so building even bigger models could lead to far more powerful and surprising machines in the near future."
+    ],
+    "simple": [
+      "This piece is about GPT-3, a huge text-predicting computer program, and what its surprising abilities suggest about how artificial intelligence progresses. It argues for the \"scaling hypothesis\": the idea that simply making neural networks (brain-cell-inspired computer systems) and their training data much bigger makes them smarter, without needing clever new designs. GPT-3 did not just know more facts than its predecessor GPT-2; it learned to follow instructions and pick up new tasks from just a few examples, something nobody built into it on purpose.",
+      "This matters because GPT-3 is costly by ordinary standards but still cheap next to big government or corporate budgets, meaning far larger models are possible. The piece says such huge models, trained on raw unlabeled data, could become key building blocks for future AI systems, including robots and reasoning programs. It also argues that AI experts' public reassurances about the pace of progress are not based on any real explanation of why these abilities appear, since almost none of them predicted it.",
+      "The \"blessings of scale\" is the pattern where problems that stump small neural networks often get solved once the networks are made very large. Stability, generalizing to new cases, and even meta-learning (learning how to learn new tasks) can appear as side effects of sheer size. The piece suggests this happens because a big network holds many smaller internal \"sub-models\" that compete; simple ones that just memorize win early, but with enough varied data, more general sub-models eventually win out. Separately, the piece lays out a \"pretraining\" idea: predicting text well enough eventually forces a model to learn real-world reasoning, since human writing is packed with implicit logic and cause and effect.",
+      "The author's main conclusion is the scaling hypothesis itself: once you find a design that can keep growing, like the one GPT-3 uses, simply training it bigger on more data is the easiest way for it to produce ever more sophisticated behavior. The piece says this once-fringe idea, long dismissed as mere numerology, now looks increasingly correct given GPT-3's results."
+    ],
+    "fuller": [
+      "This piece is about GPT-3, a huge text-prediction computer program released in 2020, and what its success means for the future of artificial intelligence. GPT-3 was simply trained to guess the next word in text, using far more computing power and data than its predecessor, GPT-2. Surprisingly, it did not just know more facts: it learned to follow instructions and pick up brand-new tasks from just a few examples, without being specially trained for that.",
+      "This matters because it suggests that simply making these programs bigger, and feeding them more data and computing power, keeps unlocking surprising new abilities, even though it is an old, admittedly flawed design. That points to a bigger claim: that future systems built this way could become vital building blocks for other areas of AI, like robotics. It also raises the question of whether other research labs will treat this as a wake-up call and invest heavily in scaling up their own programs.",
+      "The piece lays out the scaling hypothesis: the idea that intelligence is basically simple learning methods applied to huge amounts of varied experience, at a scale we could not previously reach. As networks are trained on bigger and harder problems, it argues, they become more general and more human-like, almost as a side effect of scale itself, a pattern it calls the blessings of scale. It explains that models work like giant collections of smaller sub-models, and the simplest one that fits enough hard, varied data ends up looking like genuine reasoning rather than memorized tricks.",
+      "The author admits to once doubting this scaling idea, but now says the evidence from GPT-3 has proven it right. The main takeaway is that experts who dismissed this approach for years were wrong, while a few long-doubted believers were right. The piece ends by asking whether other organizations will follow this path of scaling up, since it sees no technical wall stopping further progress, only a lack of belief that it will keep working."
+    ]
+  },
+  "simpleIds": {
+    "brief": [
+      [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ],
+      [
+        "spya-ag750z",
+        "spya-sfkxh8",
+        "spya-ewxv9q"
+      ]
+    ],
+    "simple": [
+      [
+        "spya-ewxv9q",
+        "spya-suzdvz"
+      ],
+      [
+        "spya-ewxv9q",
+        "spya-rbx2kz",
+        "spya-khnsat"
+      ],
+      [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-rjwfkb"
+      ],
+      [
+        "spya-ag750z",
+        "spya-emqjaa"
+      ]
+    ],
+    "fuller": [
+      [
+        "spya-ewxv9q",
+        "spya-m444tq"
+      ],
+      [
+        "spya-ewxv9q",
+        "spya-rbx2kz"
+      ],
+      [
+        "spya-ewxv9q",
+        "spya-ag750z",
+        "spya-jwq3zr"
+      ],
+      [
+        "spya-emqjaa",
+        "spya-rbx2kz",
+        "spya-b93jbz"
+      ]
+    ]
+  },
+  "ordinals": {
+    "spya-dfggb3": 0,
+    "spya-m444tq": 1,
+    "spya-suzdvz": 2,
+    "spya-ewxv9q": 3,
+    "spya-k8ta9q": 4,
+    "spya-aqts9c": 5,
+    "spya-dqwd2g": 6,
+    "spya-pbs0kr": 7,
+    "spya-fvqe70": 8,
+    "spya-s8rx6n": 9,
+    "spya-kab3fn": 10,
+    "spya-d3gzfh": 11,
+    "spya-ye0m0c": 12,
+    "spya-jh78mt": 13,
+    "spya-asr663": 14,
+    "spya-uz2hd5": 15,
+    "spya-dfjr4c": 16,
+    "spya-w83b0m": 17,
+    "spya-sctj6d": 18,
+    "spya-mvp5bn": 19,
+    "spya-hqpffq": 20,
+    "spya-cgxrdc": 21,
+    "spya-vn0xpd": 22,
+    "spya-yq9zuc": 23,
+    "spya-kc39vs": 24,
+    "spya-jwq3zr": 25,
+    "spya-hwr65m": 26,
+    "spya-sfkxh8": 27,
+    "spya-ct5zy9": 28,
+    "spya-ypbup8": 29,
+    "spya-evn08w": 30,
+    "spya-djq0xk": 31,
+    "spya-jg69cy": 32,
+    "spya-grkhs8": 33,
+    "spya-uknzzk": 34,
+    "spya-vkkfzh": 35,
+    "spya-wq498y": 36,
+    "spya-ag750z": 37,
+    "spya-m3gtj6": 38,
+    "spya-emqjaa": 39,
+    "spya-ce0ts7": 40,
+    "spya-n4zu5k": 41,
+    "spya-dx26kt": 42,
+    "spya-h74fhr": 43,
+    "spya-r465ug": 44,
+    "spya-hbr5sy": 45,
+    "spya-s3g2e7": 46,
+    "spya-zqm3e5": 47,
+    "spya-x3c389": 48,
+    "spya-rz8jsm": 49,
+    "spya-s72gxn": 50,
+    "spya-yxu96t": 51,
+    "spya-rjwfkb": 52,
+    "spya-vg8832": 53,
+    "spya-g3b5y7": 54,
+    "spya-nhgv5g": 55,
+    "spya-kmyg3w": 56,
+    "spya-sekb9c": 57,
+    "spya-vss5vs": 58,
+    "spya-u2vxzs": 59,
+    "spya-e5n86h": 60,
+    "spya-faees7": 61,
+    "spya-zhtng9": 62,
+    "spya-s0h95g": 63,
+    "spya-uett4g": 64,
+    "spya-mfqqfm": 65,
+    "spya-edr6mj": 66,
+    "spya-f6zupy": 67,
+    "spya-qvfvx2": 68,
+    "spya-sm7bx4": 69,
+    "spya-b6zcpu": 70,
+    "spya-cn4vbh": 71,
+    "spya-pmtc3q": 72,
+    "spya-rbx2kz": 73,
+    "spya-khnsat": 74,
+    "spya-scr8jb": 75,
+    "spya-xmcsft": 76,
+    "spya-vr9q2p": 77,
+    "spya-hr5xnj": 78,
+    "spya-arrq35": 79,
+    "spya-eexw9k": 80,
+    "spya-fyy04z": 81,
+    "spya-bp9mm2": 82,
+    "spya-b6zw9f": 83,
+    "spya-cty5hx": 84,
+    "spya-ad5qgy": 85,
+    "spya-cxnhav": 86,
+    "spya-mpden3": 87,
+    "spya-ta3e6d": 88,
+    "spya-ay4yw7": 89,
+    "spya-vrq8vj": 90,
+    "spya-epwrdb": 91,
+    "spya-b93jbz": 92,
+    "spya-m9r8zx": 93,
+    "spya-kdcvq7": 94,
+    "spya-zyncdd": 95,
+    "spya-me38yq": 96,
+    "spya-hfcz8w": 97,
+    "spya-djc75w": 98,
+    "spya-mkbrjp": 99,
+    "spya-cw7jg4": 100,
+    "spya-nkzwpu": 101,
+    "spya-fm6pfc": 102,
+    "spya-denmtt": 103,
+    "spya-ueb3d2": 104,
+    "spya-yb6wsc": 105,
+    "spya-jn3pv0": 106,
+    "spya-f7e8ez": 107,
+    "spya-frehf0": 108,
+    "spya-zh9cmm": 109,
+    "spya-tyue6z": 110,
+    "spya-vjs6va": 111,
+    "spya-e23u6n": 112,
+    "spya-g2v6ry": 113,
+    "spya-ehe426": 114,
+    "spya-agstbd": 115,
+    "spya-wkqdua": 116,
+    "spya-dbrxu8": 117,
+    "spya-ufadea": 118,
+    "spya-nxp8hh": 119,
+    "spya-myjtg3": 120,
+    "spya-q3nmj0": 121,
+    "spya-dxftyx": 122,
+    "spya-c874v8": 123,
+    "spya-egwe0x": 124,
+    "spya-q88ypt": 125,
+    "spya-p5tx6f": 126,
+    "spya-etcjwv": 127,
+    "spya-xz4e9d": 128,
+    "spya-ufpyk0": 129,
+    "spya-yzb32b": 130,
+    "spya-f2fcmq": 131,
+    "spya-fx68sk": 132,
+    "spya-usu3q6": 133,
+    "spya-c8qwnc": 134,
+    "spya-msngfz": 135,
+    "spya-cwwvxw": 136,
+    "spya-jrm0w9": 137,
+    "spya-hjpau9": 138,
+    "spya-g9ffua": 139,
+    "spya-nd2ux3": 140,
+    "spya-p056me": 141,
+    "spya-njg345": 142,
+    "spya-bahxu0": 143,
+    "spya-vbpzva": 144,
+    "spya-cbz06n": 145,
+    "spya-cc7uc2": 146,
+    "spya-c5ejjt": 147,
+    "spya-pkfkup": 148,
+    "spya-xqm0bj": 149,
+    "spya-nynr3x": 150,
+    "spya-xcurp2": 151,
+    "spya-qnqmmt": 152,
+    "spya-e2vyhh": 153,
+    "spya-kaz7ph": 154,
+    "spya-btj8jx": 155,
+    "spya-sez7zt": 156,
+    "spya-edeh4m": 157,
+    "spya-zyusv8": 158,
+    "spya-df5sum": 159,
+    "spya-te5z0q": 160,
+    "spya-wynqsj": 161,
+    "spya-pgjtaq": 162,
+    "spya-duxdqy": 163,
+    "spya-r857yq": 164,
+    "spya-aspffh": 165,
+    "spya-p9senf": 166,
+    "spya-z304tg": 167,
+    "spya-uzxpf7": 168,
+    "spya-s5j53b": 169,
+    "spya-k5ct4c": 170,
+    "spya-c43ayy": 171,
+    "spya-dzjmct": 172,
+    "spya-f0xgqt": 173,
+    "spya-g60x5k": 174,
+    "spya-dm7jam": 175,
+    "spya-jgq9gz": 176,
+    "spya-duudyc": 177,
+    "spya-rq5rvp": 178,
+    "spya-qnfqm3": 179,
+    "spya-z2x899": 180,
+    "spya-wmh3uz": 181,
+    "spya-arq53q": 182,
+    "spya-zrv077": 183,
+    "spya-gvvc97": 184,
+    "spya-g7q5mw": 185
+  },
+  "tweets": [
+    "OpenAI's GPT-3 is 117x larger than GPT-2 but uses the same old 2018 architecture, trained the same simple way: predict the next word. Gwern writes that scaling alone made it learn something new — solving tasks from a few examples, not just text.",
+    "Gwern notes GPT-3 is by design unimpressive: a shallow, uniform model trained on raw internet text with crude sampling and known flaws in arithmetic and prompts. Despite that, its loss kept improving smoothly, with no sign of leveling off.",
+    "Gwern writes GPT-3's scaling held smooth and predictable even past the size where many expected diminishing returns, implying a model with trillions of parameters is still affordable — within budgets comparable to other large science projects.",
+    "Gwern finds the same pattern across language, vision, games, and robotics: bigger models, data, and compute make training more stable and push models toward generalizing instead of memorizing, often producing meta-learning nobody designed in.",
+    "Gwern's explanation: a large model holds countless competing internal sub-models, like an ensemble favoring simple solutions. With enough data, memorizing shortcuts become too costly, so sub-models encoding real general rules win out instead.",
+    "This supports what Gwern calls the strong scaling hypothesis: once you have a scalable architecture, just training ever-larger networks on more data and compute will make sophisticated behavior emerge naturally, as scaled-up brains do in nature.",
+    "Why would predicting the next word produce understanding? Gwern lays out the pretraining thesis: human writing is saturated with logic, causality, and world knowledge, so a model that keeps improving its predictions must be learning all of it.",
+    "Gwern notes GPT-3's loss is still above the roughly 0.7 bits-per-character humans reach at this task. He argues the remaining gap is not minor: it is everything — causal reasoning, commonsense, keeping track of who's alive — that only real understanding can close.",
+    "Nobody predicted in advance how far scaling would go, Gwern says, and nobody can yet say what a further 1000x in compute would unlock — whether it would finally close the gap to human-level prediction or hit some other wall.",
+    "Major labs already have the hardware and budgets to try models far larger than GPT-3, Gwern writes. What's missing is not compute but conviction — belief that pure scaling, without new architecture, will keep working.",
+    "Gwern contrasts DeepMind's 'weak' scaling hypothesis — that AGI needs the right algorithms built piece by piece, each one made to scale — with OpenAI's bet that scaling alone, on existing simple architectures, is the secret to intelligence.",
+    "Looking back a decade, Gwern notes that respected experts repeatedly predicted deep learning would hit a wall, sigmoid, or need entirely new approaches — and were wrong every time, with little public reckoning afterward.",
+    "Critics dismiss GPT-3 as 'just' predicting text statistically, Gwern writes — but he argues that is what success in AI must look like: reducing intelligence to a well-defined mechanism is the goal, not evidence against it.",
+    "In an appendix, Gwern argues agency is a continuum, not a discrete special property. Because GPT-3 trains on human text full of agents pursuing goals, it learns to imitate agents — and becomes one when prompted appropriately.",
+    "Gwern argues there is no clean line between 'agentic' and purely 'natural' data, since agency itself is built from non-agentic parts; treating even rivers or physics as goal-seeking turns out to be a useful shortcut a model might learn.",
+    "Even abstract systems like Conway's Game of Life or random Turing machines admit agent-like shortcuts once a model must infer hidden rules from data, Gwern writes — making agency a pervasive capability that's hard to engineer away."
+  ]
+}

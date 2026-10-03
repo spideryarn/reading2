@@ -122,12 +122,13 @@ s41598-023-33209-9 (Scientific Reports, the shape nearest Greg's PMC paper).
 - **The Structure screen is by position, not title** (Sol, P2-1). Each paper's abstract is
   hand-marked in the harness as a block range, from its first block to the last block before the
   body. A node is **abstract-only** when it ends inside that range, so a node that runs on into
-  the body is not counted, whatever it is called. scaling-hypothesis's "Abstract" node runs into
-  the opening blockquote and is rightly not counted.
+  the body is not counted, whatever it is called. On scaling-hypothesis the front summary is the
+  one-line description plus the opening blockquote; both are marked, and the body starts at
+  *Meta-Learning*.
 - **The `before` baseline**, per arm, `before` / `before-2`:
-  - abstract-only nodes with a content gist: 4 / 4;
-  - abstract-only nodes with a question: 2 / 2 (analog-cognition's and s41598's depth-1
-    "Abstract");
+  - abstract-only nodes with a content gist: 6 / 4;
+  - abstract-only nodes with a question: 3 / 2 (analog-cognition's and s41598's depth-1
+    "Abstract", plus scaling-hypothesis's depth-1 *Introduction* in `before`);
   - Summary paragraphs resting on the abstract: about one in four at every level.
 - **Also screened:** Brief's word count, so 261002h is not undone, and the Summary's
   abstract-id share, for information only.
@@ -138,8 +139,8 @@ s41598-023-33209-9 (Scientific Reports, the shape nearest Greg's PMC paper).
   Opus, the same family as the generator, so this is weaker than a cross-family read, and the
   write-up says so.
 - **Ship rule:**
-  - both `after` arms have **no question** on an abstract-only node (against 2 and 2);
-  - at most **one** abstract-only node with a content gist (against 4 and 4);
+  - both `after` arms have **no question** on an abstract-only node (against 3 and 2);
+  - at most **one** abstract-only node with a content gist (against 6 and 4);
   - the judges' Structure wins on (a) exceed the control's split;
   - (c) is no worse;
   - `8. Summary` on entropy-24 keeps a content gist;

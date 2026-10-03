@@ -34,11 +34,11 @@ const KINDS: Record<PaperworkKind, string> = {
 one of the piece's caveats or limits. Name an author only to say who argues
 something.`,
   structure: `A range that is only paperwork still gets its node, because every block
-must be covered. For that node alone, and as an exception to the gist rules
-above: its gist is a short plain label of WHAT it is ("The authors and
+must be covered. For a paperwork-only node, as an exception to the gist rules
+above, its gist is a short plain label of WHAT it is ("The authors and
 where they work.", "Funding and conflict-of-interest statements."), never what
-it says, with no word floor and no claim. Send no "question" on it, at any
-depth. Every other gist, the root's included, ignores it.`,
+it says, with no word floor and no claim. Leave "question" empty on it, at any
+depth. Gists outside that node, the root's included, ignore the paperwork.`,
 };
 
 /**
@@ -66,11 +66,11 @@ it, and the root and the other parts already say what it says. A node whose
 range is only the abstract, or only the abstract and paperwork, gets the
 paperwork node's treatment above: a short plain label of what it is ("The
 authors' summary of the paper."), no claim, no word floor, and no question
-(leave "question" empty). Other gists may still draw on what it says. A
-summary or key-points box at the start is treated the same way only where the
-body goes on to make each of its claims; where it says something the body does
-not, it is content. A "Summary" or "Conclusions" section after the body has
-begun is content, and the usual rules apply.`;
+(leave "question" empty). Gists outside that node may still draw on the
+abstract. A summary or key-points box at the start is treated the same way
+only where the body goes on to make each of its claims; where it says something
+the body does not, it is content. A "Summary" or "Conclusions" section after
+the body has begun is content, and the usual rules apply.`;
 
 export function paperwork(kind: PaperworkKind): string {
   return `PAPERWORK IS NOT THE PIECE
@@ -81,8 +81,9 @@ authors and where they work, contact and correspondence details,
 acknowledgements and thanks, funding and grants, conflict-of-interest and other
 disclosures, ethics approval, author contributions, data-availability
 statements, the publisher's notices, and, at the end, the reference list or
-bibliography and any lists of backlinks or related links. Where it only records
-how the piece was produced, published and sourced, it is paperwork.
+bibliography and any lists of backlinks or related links. Where it only
+identifies the piece or records how it was produced, published and sourced, it
+is paperwork.
 ${KINDS[kind]}
 
 Judge it by what it does, not by its heading. If the piece uses any of these as

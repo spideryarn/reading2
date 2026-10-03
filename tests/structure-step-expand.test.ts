@@ -349,7 +349,7 @@ describe("the constants a scoped call is made with", () => {
   it("is at expand/8, since the prompt carries the paperwork and abstract rules", () => {
     expect(EXPAND_PROMPT_VERSION).toBe("expand/8");
     expect(EXPAND_SYSTEM).toContain("PAPERWORK IS NOT THE PIECE");
-    expect(EXPAND_SYSTEM).toContain('Send no "question" on it, at any\ndepth');
+    expect(EXPAND_SYSTEM).toContain('Leave "question" empty on it, at any\ndepth');
     expect(EXPAND_SYSTEM).toContain("The abstract at the START of a paper");
     expect(EXPAND_SYSTEM).toContain('(leave "question" empty)');
   });

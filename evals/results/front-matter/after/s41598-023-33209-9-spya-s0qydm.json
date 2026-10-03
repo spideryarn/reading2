@@ -1,0 +1,569 @@
+{
+  "arm": "after",
+  "slug": "s41598-023-33209-9-spya-s0qydm",
+  "at": "2026-10-03T01:38:10.956Z",
+  "sourceSha256": {
+    "structure.ts": "0b8f15b9fef778a0cbc8d689342400ce1102d0005a25d026ed17c02a68773132",
+    "simple-summary.ts": "84dda89c10ed9dbf633474891bacd063945e289beb95aaf761e125657adf14db",
+    "tweets.ts": "20b9218900ea3ee2d6d0d9fcd768020df76a5e5bbd48e24925862cf11228bd8f",
+    "paperwork.ts": "647de890b9e4bfc55b1ed4c2a46e7750a7fc6d26b63d5b65940a3ae5e6cc0995"
+  },
+  "versions": {
+    "toc": "toc/12",
+    "tweets": "tweets/8",
+    "simple": "simple-prompt/6"
+  },
+  "gists": [
+    {
+      "depth": 0,
+      "range": "spya-e2bejd..spya-fzpzt9",
+      "title": "Hippocampal inactivation during rearing on hind legs impairs spatial memory",
+      "gist": "Silencing the hippocampus specifically while rats rear up on their hind legs impairs their later spatial memory.",
+      "question": "Rearing on hind legs — why does hippocampal activity during this specific behavior matter for spatial memory? (an optogenetic experiment)"
+    },
+    {
+      "depth": 1,
+      "range": "spya-e2bejd..spya-tt7ry5",
+      "title": "Title and publication info",
+      "gist": "Journal listing, authors, and publication metadata for the paper."
+    },
+    {
+      "depth": 2,
+      "range": "spya-e2bejd..spya-usrsda",
+      "title": "Journal header",
+      "gist": "Title, journal, and basic publication metrics."
+    },
+    {
+      "depth": 2,
+      "range": "spya-zkupc4..spya-tt7ry5",
+      "title": "Authors list",
+      "gist": "The authors and article identifiers."
+    },
+    {
+      "depth": 1,
+      "range": "spya-wrnsf9..spya-anyy22",
+      "title": "Abstract",
+      "gist": "The authors' summary of the paper."
+    },
+    {
+      "depth": 2,
+      "range": "spya-wrnsf9..spya-k5rtta",
+      "title": "Abstract text",
+      "gist": "Summary of the study's aims, methods, and findings."
+    },
+    {
+      "depth": 2,
+      "range": "spya-byt60y..spya-anyy22",
+      "title": "Related content box",
+      "gist": "Links to similar articles shown by the publisher."
+    },
+    {
+      "depth": 1,
+      "range": "spya-gzrzv2..spya-nbwfy3",
+      "title": "Introduction",
+      "gist": "Because rearing correlates with hippocampal theta rhythm linked to memory, the authors hypothesize hippocampal activity during rearing supports spatial encoding, and test this with closed-loop optogenetics.",
+      "question": "Rearing — does hippocampal activity during this behavior matter for forming spatial memories? (a hypothesis and test)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-gzrzv2..spya-dmvnt0",
+      "title": "Rearing as an understudied behavior",
+      "gist": "Unlike locomotion and rest, rearing onto hind legs is a common but understudied behavior whose relevance to hippocampal-dependent spatial memory is unknown."
+    },
+    {
+      "depth": 2,
+      "range": "spya-v3e727..spya-v3e727",
+      "title": "Theta rhythm links rearing to memory",
+      "gist": "Rearing is associated with increased hippocampal high theta activity, and theta itself is tied to memory encoding, suggesting rearing could be a memory-relevant epoch."
+    },
+    {
+      "depth": 2,
+      "range": "spya-nbwfy3..spya-nbwfy3",
+      "title": "Hypothesis and experimental approach",
+      "gist": "The authors hypothesize rearing is a hippocampal-dependent encoding epoch and test it by optogenetically silencing the hippocampus during rearing in a maze memory task."
+    },
+    {
+      "depth": 1,
+      "range": "spya-wkcgqa..spya-hev8b9",
+      "title": "Methods",
+      "gist": "Rats performed a radial-maze memory task while a camera-triggered laser silenced their hippocampus specifically during rearing, delayed rearing, or not at all, then performance was compared statistically.",
+      "question": "Hippocampal inactivation during rearing — how was its effect on memory isolated experimentally? (a closed-loop behavioral experiment)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-wkcgqa..spya-vbrevk",
+      "title": "Animals",
+      "gist": "Adult Long Evans rats, divided into experimental and control groups, were housed, food-restricted, and tested under IACUC-approved procedures without experimenter blinding."
+    },
+    {
+      "depth": 2,
+      "range": "spya-rtsuyf..spya-y7j397",
+      "title": "Apparatus",
+      "gist": "Training used a custom 8-arm radial maze with distal visual cues on the walls and automated doors and food wells for delivering rewards."
+    },
+    {
+      "depth": 2,
+      "range": "spya-hgs63s..spya-c24tea",
+      "title": "Experimental design",
+      "gist": "A 2x3 design crossed opsin expression (experimental vs control) with light timing (off, synchronized to rearing, or delayed), isolating the effect of rearing-targeted hippocampal silencing."
+    },
+    {
+      "depth": 2,
+      "range": "spya-yhkpz3..spya-symbh4",
+      "title": "Behavioral training",
+      "gist": "Rats were habituated, trained to forage the maze, and then learned the delayed win-shift task, where they remember which arms were already visited after a delay."
+    },
+    {
+      "depth": 2,
+      "range": "spya-wd7d50..spya-b6tru4",
+      "title": "Behavioral scoring",
+      "gist": "Memory accuracy was measured as percent correct and arm entries, plus supplemental measures of reentries, rotational bias, and sequence patterns to characterize strategy."
+    },
+    {
+      "depth": 2,
+      "range": "spya-dd0pnf..spya-r8kwhk",
+      "title": "Rear detection",
+      "gist": "A 3D depth camera and custom software detected rearing events in real time by identifying appropriately sized blobs entering a defined zone above the maze, triggering the laser."
+    },
+    {
+      "depth": 2,
+      "range": "spya-nphph5..spya-f4z675",
+      "title": "Optogenetic light delivery",
+      "gist": "Halorhodopsin, a light-activated neural silencer, was used to inhibit hippocampal activity via laser, timed either synchronously with rearing, not at all, or delayed six seconds after rearing."
+    },
+    {
+      "depth": 2,
+      "range": "spya-capxtm..spya-ym4g5t",
+      "title": "Surgery and viral vectors",
+      "gist": "Rats received viral injections and optical fiber implants targeting the dorsal hippocampus to express either the silencing opsin plus reporter or reporter alone."
+    },
+    {
+      "depth": 2,
+      "range": "spya-w7dr5p..spya-q578s9",
+      "title": "Histology",
+      "gist": "After testing, brains were sectioned and stained to confirm and visualize where the viral reporter protein was expressed in hippocampal tissue."
+    },
+    {
+      "depth": 2,
+      "range": "spya-dnshxg..spya-hev8b9",
+      "title": "Statistical analysis",
+      "gist": "A hierarchical statistical model, accounting for differing numbers of trials per rat, tested whether light-delivery timing significantly changed memory performance scores."
+    },
+    {
+      "depth": 1,
+      "range": "spya-dt2k20..spya-b6gdg3",
+      "title": "Results",
+      "gist": "Silencing the hippocampus synchronized to rearing, but not delayed silencing, selectively impaired spatial memory accuracy only in rats expressing the light-sensitive silencing protein.",
+      "question": "Hippocampal inactivation during rearing — does it selectively impair later spatial memory accuracy? (a controlled behavioral comparison)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-dt2k20..spya-pm5k5x",
+      "title": "Task overview",
+      "gist": "The delayed win-shift task tested whether synchronizing hippocampal silencing to rearing, versus no light or delayed light, impaired memory for which maze arms had already been visited."
+    },
+    {
+      "depth": 2,
+      "range": "spya-jnzefy..spya-xgzm5w",
+      "title": "Percent correct impaired by rearing inactivation",
+      "gist": "Silencing the hippocampus during rearing significantly reduced percent correct in experimental rats, but had no effect in control rats lacking the silencing protein."
+    },
+    {
+      "depth": 2,
+      "range": "spya-bjwjv6..spya-bjwjv6",
+      "title": "Arm entries confirm the effect",
+      "gist": "Experimental rats made significantly more arm entries, indicating more errors, when silencing was synchronized to rearing, while control rats and sex comparisons showed no such effect."
+    },
+    {
+      "depth": 2,
+      "range": "spya-egrpx8..spya-egrpx8",
+      "title": "Testing whether timing matters",
+      "gist": "To determine whether synchronization to rearing specifically mattered, the authors compared a delayed-silencing condition against the no-light baseline condition."
+    },
+    {
+      "depth": 2,
+      "range": "spya-b6gdg3..spya-b6gdg3",
+      "title": "Delay condition shows no significant impairment",
+      "gist": "Delayed silencing produced no significant impairment in percent correct and only a weak trend in arm entries, supporting that synchronization with rearing specifically drove the memory deficit."
+    },
+    {
+      "depth": 1,
+      "range": "spya-pedd88..spya-sxyqjf",
+      "title": "Discussion",
+      "gist": "Rearing-synchronized hippocampal silencing selectively impairs memory, extending prior correlational work on rearing and confirming it as a genuine epoch of hippocampal-dependent encoding, though open questions about mechanism and specificity remain.",
+      "question": "Rearing and hippocampal encoding — what do these results reveal about the function of rearing, and what remains unresolved? (a discussion weighing several open questions)"
+    },
+    {
+      "depth": 2,
+      "range": "spya-pedd88..spya-p02v0g",
+      "title": "Summary of main finding",
+      "gist": "Hippocampal silencing selectively during rearing, but not at matched random intervals, impaired spatial memory, showing rearing itself is a hippocampal-dependent encoding epoch."
+    },
+    {
+      "depth": 2,
+      "range": "spya-ghjxuc..spya-ghjxuc",
+      "title": "Confirming Lever's hypothesis",
+      "gist": "These results directly confirm Lever and colleagues' long-standing but previously only indirectly supported hypothesis that rearing serves as a genuine marker of hippocampal learning."
+    },
+    {
+      "depth": 2,
+      "range": "spya-ae6chx..spya-ae6chx",
+      "title": "Advancing beyond prior correlational studies",
+      "gist": "Unlike earlier studies by Wells et al. and Mun et al. that only showed correlations between rearing and hippocampal measures, this work directly demonstrates hippocampal activity during rearing is necessary for memory."
+    },
+    {
+      "depth": 2,
+      "range": "spya-ehqntm..spya-ehqntm",
+      "title": "Possible mechanism: updating a spatial model",
+      "gist": "The hippocampus may switch to a distinct processing mode during rearing to reduce positional uncertainty and update its internal map, and silencing may have blocked this updating."
+    },
+    {
+      "depth": 2,
+      "range": "spya-z65dtg..spya-z65dtg",
+      "title": "What kind of updating occurred",
+      "gist": "Because rats already knew the environment, the updating disrupted was likely trial-specific memory for that day's reward locations rather than learning the space itself from scratch."
+    },
+    {
+      "depth": 2,
+      "range": "spya-b4zvhz..spya-b4zvhz",
+      "title": "Role of the dentate gyrus",
+      "gist": "Although this study cannot localize the effect within the hippocampus, prior evidence points to the dentate gyrus subregion as especially important for processing during rearing."
+    },
+    {
+      "depth": 2,
+      "range": "spya-p0b8zk..spya-p0b8zk",
+      "title": "Supported versus unsupported rearing",
+      "gist": "The study cannot distinguish supported from unsupported rearing since nearly all observed rearing in the narrow maze involved touching a wall, leaving this distinction for future work."
+    },
+    {
+      "depth": 2,
+      "range": "spya-jvweez..spya-jvweez",
+      "title": "Remaining ambiguities",
+      "gist": "Open questions remain about whether all rearing events contribute to memory encoding and whether similar encoding could occur through other attentive behaviors besides rearing."
+    },
+    {
+      "depth": 2,
+      "range": "spya-sxyqjf..spya-sxyqjf",
+      "title": "Final conclusion",
+      "gist": "Disrupting dorsal hippocampal activity during rearing is sufficient to impair spatial memory encoding, confirming rearing as a hippocampal-dependent memory epoch."
+    },
+    {
+      "depth": 1,
+      "range": "spya-v97mxc..spya-pv77pf",
+      "title": "Data availability",
+      "gist": "Statement on how to request the study's datasets."
+    },
+    {
+      "depth": 1,
+      "range": "spya-s2hu9y..spya-fzpzt9",
+      "title": "References and backmatter",
+      "gist": "Reference list, acknowledgements, funding, author contributions, ethics, and licensing information."
+    },
+    {
+      "depth": 2,
+      "range": "spya-s2hu9y..spya-gnxff4",
+      "title": "Reference list",
+      "gist": "Full bibliography of cited works."
+    },
+    {
+      "depth": 2,
+      "range": "spya-ttba0c..spya-wtp97z",
+      "title": "Acknowledgements and funding",
+      "gist": "Thanks to technical and facility support staff and listing of funding sources."
+    },
+    {
+      "depth": 2,
+      "range": "spya-h9stdp..spya-byahma",
+      "title": "Author information",
+      "gist": "Author affiliations, individual contributions, and corresponding author contact."
+    },
+    {
+      "depth": 2,
+      "range": "spya-zh5rqp..spya-jtm84m",
+      "title": "Ethics and competing interests",
+      "gist": "Declaration of no competing interests among the authors."
+    },
+    {
+      "depth": 2,
+      "range": "spya-c7wxff..spya-mj8cyv",
+      "title": "Publisher notice and licensing",
+      "gist": "Publisher's jurisdictional note and the open-access Creative Commons licensing terms."
+    },
+    {
+      "depth": 2,
+      "range": "spya-hqcmkx..spya-fzpzt9",
+      "title": "Citation and publication dates",
+      "gist": "How to cite the article and its submission, acceptance, and publication dates."
+    }
+  ],
+  "simple": {
+    "brief": [
+      "This study asks whether rats need their hippocampus, a brain area key to memory, working while they rear up on their hind legs to explore. Rats often stand up to look around while searching for food, but no one knew if this moment matters for remembering locations. Researchers used light to briefly switch off hippocampus activity only during these rearing moments, in an experiment with rats learning to find hidden food.",
+      "Turning off the hippocampus specifically during rearing made the rats significantly worse at remembering which food locations they had already visited. Turning off the brain area at other times, not matched to rearing, did not hurt their memory in the same way. This shows that rearing up is not just idle behavior: it is a moment when the hippocampus is actively building spatial memories."
+    ],
+    "simple": [
+      "This study asks whether brain activity in the hippocampus, a brain region needed for spatial memory, matters specifically during a behavior called rearing, when rats stand up on their hind legs to look around. Researchers used a technique called optogenetics, which lets them switch off hippocampus activity with light, only during these rearing moments while rats learned where food was hidden in a maze.",
+      "Scientists already knew the hippocampus matters during walking and during quiet rest, but rearing had barely been studied even though animals do it constantly while exploring. Brain recordings during rearing show a distinctive brain wave pattern linked to memory, hinting that rearing might be an important but overlooked moment for learning about space.",
+      "When the hippocampus was switched off during rearing, rats later made more mistakes finding rewards, with correct choices dropping from about 78% to about 66%. They also entered more arms overall to find all the rewards, showing a real memory problem rather than a fluke. This effect disappeared in control rats that lacked the light-sensitive protein, and also disappeared when the light was switched on a few seconds after rearing instead of during it.",
+      "The study concludes that hippocampus activity happening specifically during rearing is necessary for accurate spatial memory. This makes rearing, a very ordinary looking behavior, a genuine window into when and how memories of a place get formed."
+    ],
+    "fuller": [
+      "This is a research article about rats and memory for locations. While exploring a maze, rats often stop walking and rear up onto their hind legs to look around. The study asks whether brain activity in the hippocampus, a brain region known to be needed for spatial memory, matters specifically during these rearing moments.",
+      "Most past work on the hippocampus has looked at what happens while animals walk around or sit quietly grooming, not while they rear up. Rearing lets an animal see and smell more of its surroundings, and animals rear more often in new, unfamiliar places. During rearing, the hippocampus shows a distinctive brain-wave pattern called high theta, which is normally tied to learning and memory, hinting that rearing could be a moment when the brain is encoding spatial information.",
+      "Rats learned a maze task where they first collected food from four of eight arms, then after a break had to remember which arms still had food. Using light to briefly switch off hippocampus activity (a method called optogenetics) exactly when rats reared up during the learning part of the task cut their accuracy at test, from about 78% correct down to about 66%. These same rats also entered more wrong arms when their memory was tested. When the light was switched off for the same total time but delayed by six seconds so it no longer matched the rearing moments, memory was not significantly harmed, and rats without the light-sensitive protein were unaffected either way.",
+      "The authors conclude that hippocampus activity occurring specifically during rearing is important for building accurate spatial memories. Because disrupting the hippocampus right when rats reared impaired memory, while disrupting it at other times did not, rearing itself appears to be a distinct window in which the hippocampus encodes spatial information."
+    ]
+  },
+  "simpleIds": {
+    "brief": [
+      [
+        "spya-k5rtta",
+        "spya-gwzqgg",
+        "spya-nbwfy3"
+      ],
+      [
+        "spya-k5rtta",
+        "spya-egrpx8",
+        "spya-sxyqjf"
+      ]
+    ],
+    "simple": [
+      [
+        "spya-k5rtta",
+        "spya-nbwfy3"
+      ],
+      [
+        "spya-gzrzv2",
+        "spya-v3e727"
+      ],
+      [
+        "spya-jnzefy",
+        "spya-bjwjv6",
+        "spya-b6gdg3"
+      ],
+      [
+        "spya-sxyqjf"
+      ]
+    ],
+    "fuller": [
+      [
+        "spya-k5rtta",
+        "spya-gwzqgg",
+        "spya-gzrzv2"
+      ],
+      [
+        "spya-dmvnt0",
+        "spya-v3e727",
+        "spya-nbwfy3"
+      ],
+      [
+        "spya-jnzefy",
+        "spya-bjwjv6",
+        "spya-b6gdg3"
+      ],
+      [
+        "spya-p02v0g",
+        "spya-sxyqjf"
+      ]
+    ]
+  },
+  "ordinals": {
+    "spya-e2bejd": 0,
+    "spya-ztnqgg": 1,
+    "spya-x44a5m": 2,
+    "spya-yu867u": 3,
+    "spya-ypbv02": 4,
+    "spya-usrsda": 5,
+    "spya-zkupc4": 6,
+    "spya-u8s4jm": 7,
+    "spya-gx8bte": 8,
+    "spya-xfcnn6": 9,
+    "spya-geqqcc": 10,
+    "spya-x5jxyx": 11,
+    "spya-w9pq98": 12,
+    "spya-mfgqf5": 13,
+    "spya-en3wq6": 14,
+    "spya-tt7ry5": 15,
+    "spya-wrnsf9": 16,
+    "spya-k5rtta": 17,
+    "spya-byt60y": 18,
+    "spya-pzkgjc": 19,
+    "spya-s4sk89": 20,
+    "spya-anyy22": 21,
+    "spya-gzrzv2": 22,
+    "spya-j4jhsc": 23,
+    "spya-gwzqgg": 24,
+    "spya-dmvnt0": 25,
+    "spya-v3e727": 26,
+    "spya-nbwfy3": 27,
+    "spya-wkcgqa": 28,
+    "spya-muv6t5": 29,
+    "spya-vbrevk": 30,
+    "spya-rtsuyf": 31,
+    "spya-y7j397": 32,
+    "spya-hgs63s": 33,
+    "spya-c24tea": 34,
+    "spya-yhkpz3": 35,
+    "spya-rfp9k7": 36,
+    "spya-per4j6": 37,
+    "spya-wchyzd": 38,
+    "spya-zhmctn": 39,
+    "spya-xksbhk": 40,
+    "spya-r7w9n4": 41,
+    "spya-symbh4": 42,
+    "spya-wd7d50": 43,
+    "spya-b6tru4": 44,
+    "spya-dd0pnf": 45,
+    "spya-r8kwhk": 46,
+    "spya-nphph5": 47,
+    "spya-z5mpge": 48,
+    "spya-f4z675": 49,
+    "spya-capxtm": 50,
+    "spya-ym4g5t": 51,
+    "spya-w7dr5p": 52,
+    "spya-q578s9": 53,
+    "spya-dnshxg": 54,
+    "spya-hev8b9": 55,
+    "spya-dt2k20": 56,
+    "spya-pm5k5x": 57,
+    "spya-jnzefy": 58,
+    "spya-xgzm5w": 59,
+    "spya-bjwjv6": 60,
+    "spya-egrpx8": 61,
+    "spya-b6gdg3": 62,
+    "spya-pedd88": 63,
+    "spya-p02v0g": 64,
+    "spya-ghjxuc": 65,
+    "spya-ae6chx": 66,
+    "spya-ehqntm": 67,
+    "spya-z65dtg": 68,
+    "spya-b4zvhz": 69,
+    "spya-p0b8zk": 70,
+    "spya-jvweez": 71,
+    "spya-sxyqjf": 72,
+    "spya-v97mxc": 73,
+    "spya-pv77pf": 74,
+    "spya-s2hu9y": 75,
+    "spya-n9nfvq": 76,
+    "spya-rasw9y": 77,
+    "spya-z37ck5": 78,
+    "spya-zkebx8": 79,
+    "spya-jwk2vq": 80,
+    "spya-epndqw": 81,
+    "spya-hunjx8": 82,
+    "spya-kkemq9": 83,
+    "spya-pq8fnb": 84,
+    "spya-mka6j7": 85,
+    "spya-u6hcs2": 86,
+    "spya-c4zf78": 87,
+    "spya-k5pnzm": 88,
+    "spya-h8u0pa": 89,
+    "spya-qb05eh": 90,
+    "spya-qxy6hz": 91,
+    "spya-a8rms2": 92,
+    "spya-qqf897": 93,
+    "spya-h4kbtz": 94,
+    "spya-dd4x99": 95,
+    "spya-ve794p": 96,
+    "spya-ca64g9": 97,
+    "spya-ru74af": 98,
+    "spya-v730ud": 99,
+    "spya-eg48sm": 100,
+    "spya-gcwctk": 101,
+    "spya-hzu7gk": 102,
+    "spya-byptx5": 103,
+    "spya-xtbvur": 104,
+    "spya-xj7nhb": 105,
+    "spya-ccaguu": 106,
+    "spya-c9zseg": 107,
+    "spya-sjn6su": 108,
+    "spya-a68gqk": 109,
+    "spya-gvdqqm": 110,
+    "spya-r5q746": 111,
+    "spya-d95gzn": 112,
+    "spya-qe53zv": 113,
+    "spya-mahcmm": 114,
+    "spya-j2pbse": 115,
+    "spya-sca6d3": 116,
+    "spya-cuz9bb": 117,
+    "spya-muka9j": 118,
+    "spya-qkbrxq": 119,
+    "spya-fcrjqu": 120,
+    "spya-dy507z": 121,
+    "spya-xqxup9": 122,
+    "spya-pr73gs": 123,
+    "spya-brjrp2": 124,
+    "spya-nvbb7n": 125,
+    "spya-az5yp6": 126,
+    "spya-snmhjr": 127,
+    "spya-dvbk0e": 128,
+    "spya-xkzukk": 129,
+    "spya-e86eq7": 130,
+    "spya-tmpnf3": 131,
+    "spya-qgu4xe": 132,
+    "spya-vpdd84": 133,
+    "spya-cws4qc": 134,
+    "spya-c0stbt": 135,
+    "spya-rw2qcq": 136,
+    "spya-ykqagf": 137,
+    "spya-kx5v7c": 138,
+    "spya-janwgt": 139,
+    "spya-fqb6sh": 140,
+    "spya-ezfde4": 141,
+    "spya-zf6txf": 142,
+    "spya-faar70": 143,
+    "spya-yx4p84": 144,
+    "spya-ydc88g": 145,
+    "spya-gnxff4": 146,
+    "spya-ttba0c": 147,
+    "spya-wtp97z": 148,
+    "spya-h9stdp": 149,
+    "spya-taftjs": 150,
+    "spya-wun4gp": 151,
+    "spya-r22g23": 152,
+    "spya-v7km3w": 153,
+    "spya-thqb5w": 154,
+    "spya-zbfkqq": 155,
+    "spya-jxkvdy": 156,
+    "spya-y0fcz9": 157,
+    "spya-z4qqv5": 158,
+    "spya-c47tyy": 159,
+    "spya-t42wba": 160,
+    "spya-byahma": 161,
+    "spya-zh5rqp": 162,
+    "spya-pny8rn": 163,
+    "spya-jtm84m": 164,
+    "spya-c7wxff": 165,
+    "spya-g9zvky": 166,
+    "spya-krcah3": 167,
+    "spya-ut055x": 168,
+    "spya-huqut7": 169,
+    "spya-mj8cyv": 170,
+    "spya-hqcmkx": 171,
+    "spya-cvjjhv": 172,
+    "spya-z3gfzx": 173,
+    "spya-f90ycw": 174,
+    "spya-f2vhvk": 175,
+    "spya-sceb94": 176,
+    "spya-zduanx": 177,
+    "spya-mjh2vc": 178,
+    "spya-nk2x9e": 179,
+    "spya-fzpzt9": 180
+  },
+  "tweets": [
+    "Layfield and colleagues argue that when rats rear up on their hind legs, the hippocampus is actively encoding spatial memory then too, not only during walking or resting.",
+    "Rats often pause to stand up and survey their surroundings, especially in new environments. This rearing had been linked to bursts of hippocampal 'theta' brain rhythm, but only as a correlation.",
+    "To test whether that link was causal, rats ran a maze task: four of eight arms baited with food, a delay, then all eight arms open, with memory tested for which arms had already given rewards.",
+    "A ceiling camera detected rearing in real time and triggered a laser to switch off the dorsal hippocampus for exactly as long as the rear lasted, only during the maze's first (study) phase.",
+    "Three light timings were tested: none (baseline), synced to rearing, or delayed six seconds after rearing (same total light, but not timed to the behavior). This isolated whether timing itself mattered.",
+    "Two groups of rats were compared: one whose hippocampus could actually be silenced by light, and a control group with the same implants and fiber but no light-sensitive protein, ruling out effects of light or surgery alone.",
+    "In the group whose hippocampus could be silenced, syncing the light to rearing cut memory accuracy from about 78% correct to about 66%, and made rats need more wrong turns to find all four rewards.",
+    "Delaying that same light by six seconds, so it no longer lined up with rearing, produced no significant memory loss, only a weak trend, suggesting it's the timing to rearing specifically that matters.",
+    "In the control rats, who had no light-sensitive protein to silence anything, the light made no difference in any condition, which rules out light itself, surgery, or implants explaining the effect.",
+    "The authors read this as support for a decades-old hypothesis: that rearing is not incidental but marks moments when the hippocampus is actively learning about space, now shown directly rather than just observed alongside it.",
+    "They speculate, drawing on past work, that rearing may let rats update an internal model of their surroundings, possibly via the hippocampus's dentate gyrus region, though this mechanism itself wasn't tested here.",
+    "The study doesn't separate rearing where rats braced a paw against a wall from rearing done unsupported, nor test whether silencing just one type would change the result; nearly all rears here involved bracing.",
+    "It's also unclear whether this same hippocampal encoding could happen through other behaviors besides rearing, such as pausing and scanning without standing up, something the authors flag as still open.",
+    "The authors' bottom line: silencing the hippocampus specifically during rearing is enough to disrupt spatial memory, making rearing itself a period of hippocampal-dependent learning, not just a sensory behavior."
+  ]
+}
