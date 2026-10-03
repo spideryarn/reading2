@@ -70,7 +70,9 @@ mark.cmt[data-colour] {
   border-bottom-color: transparent;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
-  border-radius: 2px;
+  /* Square corners: a highlight is cut into one <mark> per text node (around a
+     glossary term, an <em>), and rounded corners on each piece notch the wash
+     between them. Seen in the browser check, 2026-10-03. */
 }
 mark.cmt[data-colour="yellow"] { --hl: var(--hl-yellow); }
 mark.cmt[data-colour="green"] { --hl: var(--hl-green); }
