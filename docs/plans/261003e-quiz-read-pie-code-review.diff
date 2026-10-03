@@ -1,0 +1,159 @@
+diff --git a/docs/project/design-css-overview.md b/docs/project/design-css-overview.md
+index 57deefa53..dd29bbf06 100644
+--- a/docs/project/design-css-overview.md
++++ b/docs/project/design-css-overview.md
+@@ -191,6 +191,29 @@ polar interpolation drags a mix round to 11.7° and the result is quietly pink i
+   because "43 days ago" is worse than the date (that file's header), so an old date shows only the
+   timestamp. A coarser `2mo ago` would make the rule hold everywhere; nobody has built it yet.
+ 
++## Draw a number rather than print it
++
++- **A figure the reader glances at is a small chart or an icon, not a sentence**, with the exact
++  figure and what it measures on a rich card ([tooltips.md](tooltips.md)) and in an `aria-label`.
++  Greg, twice:
++
++  > Prefer to use UI (e.g. a little sparkline/bar rather than numbers) plus tooltip instead of
++  > numbers for the most-striking values, etc.
++  >
++  > — 2026-08-31, about the glossary's and quotes' scores
++
++  > And make a note in design.md or similar to prefer little charts/icons/etc rather than text.
++  >
++  > — 2026-10-01 (spya-mafmm6), about the quiz's "about X% of the piece read so far"
++
++  Reach for what exists before drawing another: [`ScoreBars`](../../src/web/ScoreBars.tsx) for
++  0–1 scores on a list row, [`SharePie`](../../src/web/SharePie.tsx) for a share of a whole. Their
++  headers say what keeps a picture honest: a fixed scale, the exact quantity drawn (an edge too
++  thin to see is the card's words to tell, not a stretched slice), the figure in words for a screen
++  reader, and a trigger a finger and the keyboard can open. This is a preference for glanceable
++  quantities, not a ban on numbers: words stay for a warning, a failure, or anything that is not a
++  quantity.
++
+ ## The band's (i)
+ 
+ Every mode band has an (i) in its top-right corner (`BandAbout`, put there by `ModeSurface`;
+diff --git a/docs/project/quiz.md b/docs/project/quiz.md
+index 990a3775f..fb4ab01c8 100644
+--- a/docs/project/quiz.md
++++ b/docs/project/quiz.md
+@@ -336,7 +336,9 @@ Greg, 2026-09-30 (SPIDERYARN-READING2-61):
+ > questions for the stuff that the user has read.
+ 
+ With [reading time](reading-time.md) on, the band has a tick-box, **Only what I've read**, on by
+-default, and beside it how much of the piece you have read ("about 40% of the piece read so far").
++default, and beside it a small pie of how much of the piece you have read, with the figure on its
++card ("About 40% of the piece read so far";
++[261003e](../plans/261003e-quiz-read-so-far-as-a-small-pie-chart.md), spya-mafmm6).
+ The batch is still written over the whole article; the filter is the panel's, computed in the
+ browser from the levels the page already has. The plan and GPT Sol's six changes to it are
+ [260930e](../plans/260930e-quiz-only-asks-about-what-you-have-read.md).
+diff --git a/src/web/QuizPanel.tsx b/src/web/QuizPanel.tsx
+index 923f0dd96..601a78ff4 100644
+--- a/src/web/QuizPanel.tsx
++++ b/src/web/QuizPanel.tsx
+@@ -88,6 +88,7 @@ import { showPremise } from "./quiz-ladder.js";
+ import { firstWrongIn, type SectionTally, sectionTally, weakSections } from "./quiz-sections.js";
+ import type { Section } from "./position.js";
+ import { lastBefore, questionIsRead, type ReadSoFar, readShareLabel, shareRead } from "./read-filter.js";
++import { SharePie } from "./SharePie.js";
+ import type { Attempt, UseQuiz } from "./useQuiz.js";
+ import { REMEMBER_VIEWS, type RememberView } from "./params.js";
+ import { BlockRef } from "./BlockRef.js";
+@@ -1202,6 +1203,8 @@ function LookAgain({
+ /**
+  * **"Only what I've read", and how much that is.**
+  *
++ * How much is a small pie with the figure on its card, not a line of text
++ * (spya-mafmm6; docs/plans/261003e-quiz-read-so-far-as-a-small-pie-chart.md).
+  * The figure is the share of the body's words in passages read — the same
+  * rule as the tick-box — so the two cannot disagree. Said only once the levels
+  * can be believed: while loading it says nothing, and after a failed read it
+@@ -1219,11 +1222,19 @@ function OnlyRead({
+   const share = readSoFar.status === "loaded" ? shareRead(readSoFar.levels, readSoFar.bodyWords) : null;
+   return (
+     <div className="quiz-only-read">
+-      <label>
+-        <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} /> Only what
+-        I’ve read
+-      </label>
+-      {share !== null && <span className="gloss-hint">{readShareLabel(share)} of the piece read so far</span>}
++      <span className="quiz-only-read-what">
++        <label>
++          <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} /> Only
++          what I’ve read
++        </label>
++        {share !== null && (
++          <SharePie
++            share={share}
++            label={sentenceCase(`${readShareLabel(share)} of the piece read so far`)}
++            detail="Counted in words, from the passages that have been on screen long enough to read."
++          />
++        )}
++      </span>
+       {readSoFar.status === "failed" && on && (
+         <span className="gloss-hint">couldn’t load what you have read, so this is every question</span>
+       )}
+@@ -1231,6 +1242,11 @@ function OnlyRead({
+   );
+ }
+ 
++/** "about 40% of…" → "About 40% of…": the card's line is a sentence. */
++function sentenceCase(text: string): string {
++  return text.charAt(0).toUpperCase() + text.slice(1);
++}
++
+ /**
+  * **The mark, and whose answer it is about.**
+  *
+diff --git a/src/web/styles/quiz.css b/src/web/styles/quiz.css
+index d16310730..20fe1b279 100644
+--- a/src/web/styles/quiz.css
++++ b/src/web/styles/quiz.css
+@@ -353,3 +353,47 @@ td.text .quiz-in-prose-icon {
+   position: relative;
+   top: 0.15em;
+ }
++
++/* ------------------------------------------------------------ § share-pie ----
++   SharePie.tsx: a share of a whole as a small pie, the figure on its card.
++   Generic, but the quiz is its only user so far, so it lives here; move it to
++   its own sheet when a second mode draws one. Plan 261003e. */
++/* A 24px button round a 14px pie: the hit area a finger needs, with the
++   margin taking the extra 10px back so the row is no taller than the pie. */
++.share-pie {
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  width: 24px;
++  height: 24px;
++  margin: -5px;
++  padding: 0;
++  border: 0;
++  border-radius: 50%;
++  background: none;
++  color: var(--ink-soft);
++  cursor: default;
++}
++.share-pie:focus-visible {
++  outline: 1px solid var(--highlight);
++  outline-offset: -2px;
++}
++.share-pie svg {
++  display: block;
++}
++/* The slice is the ink's soft grey rather than the row's faint one: at 14px
++   a faint slice on a faint track read as nearly nothing in the browser look. */
++.share-pie-whole {
++  fill: color-mix(in oklab, var(--ink-faint) 30%, transparent);
++}
++.share-pie-part {
++  fill: currentColor;
++}
++/* The tick-box and its pie wrap as one, so the pie never sits alone on a
++   line with nothing to say what it is a share of. */
++.quiz-only-read-what {
++  display: inline-flex;
++  align-items: center;
++  gap: 0.5rem;
++  white-space: nowrap;
++}

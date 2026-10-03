@@ -353,3 +353,47 @@ td.text .quiz-in-prose-icon {
   position: relative;
   top: 0.15em;
 }
+
+/* ------------------------------------------------------------ § share-pie ----
+   SharePie.tsx: a share of a whole as a small pie, the figure on its card.
+   Generic, but the quiz is its only user so far, so it lives here; move it to
+   its own sheet when a second mode draws one. Plan 261003e. */
+/* A 24px button round a 14px pie: the hit area a finger needs, with the
+   margin taking the extra 10px back so the row is no taller than the pie. */
+.share-pie {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -5px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-soft);
+  cursor: default;
+}
+.share-pie:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: -2px;
+}
+.share-pie svg {
+  display: block;
+}
+/* The slice is the ink's soft grey rather than the row's faint one: at 14px
+   a faint slice on a faint track read as nearly nothing in the browser look. */
+.share-pie-whole {
+  fill: color-mix(in oklab, var(--ink-faint) 30%, transparent);
+}
+.share-pie-part {
+  fill: currentColor;
+}
+/* The tick-box and its pie wrap as one, so the pie never sits alone on a
+   line with nothing to say what it is a share of. */
+.quiz-only-read-what {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
