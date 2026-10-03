@@ -211,6 +211,11 @@ export function libraryColumns(
         label: "Published",
         hint: "When the publisher says it was published",
         ends: ["oldest first", "newest first"],
+        /* **A chip always, a column only if asked for.** The table was already
+           as wide as the page at 1440px; this column made it 78px wider and
+           pushed Actions out of sight (browser check, plan 261003m). The row
+           card carries the date while it is hidden — `rowCardFacts`. */
+        startsHidden: true,
       },
       /* The date itself, not "3 days ago": it is a fact about the piece, not
          about the reader's week. The dash and its words as on Last opened. */

@@ -746,15 +746,17 @@ characters — [`calendarDay`](../../src/web/relative-time.ts) says what goes wr
 
 **An article with no publication date sorts last, both ways**, like any missing value
 ([§ Three rules a browser cannot check](#three-rules-a-browser-cannot-check)). That group is large:
-a PDF never has a date, a paper added by DOI has none, and a web page has one only if its publisher
-states it and it was extracted on or after 2026-08-31. Falling back to the Added date was passed
+a PDF never has a date, and nor does a paper added with only its metadata
+([`paperMeta`](../../src/paper-metadata.ts)). A web page has one only if its publisher states it
+and it was extracted on or after 2026-08-31; that includes a DOI URL that resolves to a web page.
+Falling back to the Added date was passed
 over, because a 1990 paper fetched yesterday would then lead "newest first". Giving papers a year
 is a pipeline change, not a shelf one —
 [261003m](../plans/261003m-shelf-sorts-by-publication-date.md).
 
 The two views are not a real one and a decoration. **The card is a decision aid** — what the piece
 says, how long it will take — and keeps the blurb. **The table is a comparison** — how this article
-stands against the rest of the shelf — and gives the blurb up for seven columns you can run your eye
+stands against the rest of the shelf — and gives the blurb up for six columns you can run your eye
 down. Neither is a fallback for the other.
 
 **The toggle is a radio group**, not two toggle buttons, and each half carries a card rather than a
@@ -791,6 +793,14 @@ carries only what the current row is not showing. [`rowCardFacts`](../../src/web
 is the source of truth for those facts, including values whose columns are hidden. The Added cell's
 old `Details` card stays on the cards view; in the table it repeated the row. The title remains the
 one-tap route into the article on touch rather than becoming a reveal-then-commit control.
+
+**Published is a chip always and a column only if asked for.** It starts hidden, and the Columns
+count reads 1 on a table nobody has touched, which is how a reader learns it is there. The table was
+already as wide as the page at 1440px; a sixth data column made it 78px wider and pushed Actions
+out of sight. While it is hidden the row card carries the date, and a table sorted by Published
+keeps its order and its chip. A reader who shows it is remembered under a second key, because a
+list of hidden ids cannot say "shown" and a list saved before the column existed must not read as
+"show it" — [`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts).
 
 **The six data columns can be hidden; Article and Actions cannot.** The title is the row's identity
 and route into the article, while Actions are controls rather than a value a card can preserve.

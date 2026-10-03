@@ -33,8 +33,9 @@ the browser and adding one column.
 
 Only a web page whose publisher states one in its metadata, and only if the article was extracted
 on or after 2026-08-31, when stage 2 started keeping it. **A PDF never has one**, and nor does a
-paper added by DOI: nothing in the PDF path writes `publishedAt`. Greg filed this from a PDF paper,
-so the gap is one he will see.
+paper added with only its metadata: neither metadata writer produces `publishedAt`. A DOI URL
+that resolves to HTML follows normal web extraction and can have a date. A shelf of
+papers is mostly undated, so the gap is one Greg will see.
 
 ## What gets built
 
@@ -125,6 +126,45 @@ menu, stored hidden-column preferences and `?by=` parsing all derive from the co
 is no other registry to tell. It corrected one claim, folded in above: `publicationDate` is the only
 producer of a new date, not the only writer of the column.
 
+## Code review and browser check
+
+GPT Sol, code review of `dcf7d1755`, 2026-10-03:
+[261003m-shelf-sorts-by-publication-date-code-review-sol.md](261003m-shelf-sorts-by-publication-date-code-review-sol.md).
+Verdict **land after fixes**; it made all three itself and I read and kept them.
+
+- **C1 (P1)** — the printed date now names the Gregorian calendar, so a locale whose default
+  calendar is Buddhist or Persian prints the publisher's year; and ISO year zero prints its era.
+  The second half is more care than a shelf needs, and it is three lines, so it stays.
+- **C2 (P2)** — "a paper added by DOI has none" was false: a DOI address can resolve to a dated
+  web page. library.md and this plan corrected.
+- **C3 (P2)** — the three test files passed with the Published cell printing nonsense. A
+  rendered-cell test added, seen red.
+
+Browser check (Sonnet, Playwright, 1440 / 820 / 390), on `dcf7d1755`: sorting, undated-last in both
+directions, the card notes, the Columns menu, the row card and `?by=published` all pass at all
+three widths; seven chips sit on one line at 1440 and 820 and wrap to two rows at 390; no console
+errors. `2024-03-11T23:30:00-05:00` printed as the 11th. Screenshots: `261003m-shot-*.png`; the desktop table one shows the overflow
+below, before its fix.
+
+**One finding, and it changed the design.** The table was 924px wide in an 846px container at
+1440: the new column added 99px, so Actions sat past the right edge. Before, it was 825px and fit.
+
+**So Published starts hidden in the table** (`meta.startsHidden`), and the passed-over option "a
+chip with no table column" above turns out half right. The chip always sorts; the column is one
+click away in the Columns menu, whose count reads 1 at rest; the row card carries the date while it
+is hidden. Passed over: widening the page in table view (a layout decision for the whole shelf, not
+this report's), and trimming other columns to make room (78px is most of a column).
+
+The cost is a second localStorage key, `spya.shelf.shownColumns`. The existing key lists *hidden*
+ids, which cannot say "shown"; and a list saved before Published existed does not name it, which
+must not read as "show it". A column that starts hidden is hidden unless the second key names it.
+
 ## What landed
 
-*(Filled in at the end.)*
+- `LibraryEntry.publishedAt`, filled by `describeArticle`; no migration, no new query.
+- `calendarDay` in `src/web/relative-time.ts`: the day as a sort number and a printed date.
+- The `published` column, chip, card note and row-card fact in `src/web/library-columns.tsx`;
+  `startsHidden` in `src/web/shelf-hidden-columns.ts`.
+- Docs: library.md § Sorting the shelf and § The table's row card; url-state.md; one sentence on
+  the help page.
+- Not built: a publication year for PDFs and metadata-only papers. A question for Greg.

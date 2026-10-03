@@ -18,7 +18,7 @@
  * The rules being pinned are the ones that look right in a browser and are
  * wrong — see docs/plans/260826y-library-sorting.md § Three rules a browser cannot check.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createTable,
   getCoreRowModel,
@@ -33,6 +33,7 @@ import { sortingFromUrl } from "../src/web/lib/table-sort.js";
 import type { Shelf } from "../src/web/ShelfEntry.js";
 import { sinkLast } from "../src/web/lib/table-sort.js";
 import { naturalDirections, toggleSort } from "../src/web/lib/DataTable.js";
+import { calendarDay } from "../src/web/relative-time.js";
 
 const NOW = Date.parse("2026-08-26T12:00:00.000Z");
 
@@ -226,6 +227,52 @@ describe("the shelf's order", () => {
 
   /* ---- Published: the publisher's own date (plan 261003m, report spya-t3es7k) ---- */
 
+  it.each(["en-GB", "th-TH", "fa-IR", "en-US-u-ca-japanese"])(
+    "prints the publisher's Gregorian day under the %s locale",
+    (locale) => {
+      const format = Date.prototype.toLocaleDateString;
+      const spy = vi.spyOn(Date.prototype, "toLocaleDateString").mockImplementation(function (
+        this: Date,
+        _locales,
+        options,
+      ) {
+        return format.call(this, locale, options);
+      });
+      try {
+        const expected = new Intl.DateTimeFormat(locale, {
+          calendar: "gregory",
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          timeZone: "UTC",
+        }).format(new Date("2024-03-11T00:00:00Z"));
+        expect(calendarDay("2024-03-11T23:30:00-05:00")).toEqual({
+          t: Date.UTC(2024, 2, 11),
+          label: expected,
+        });
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it("distinguishes ISO year zero (1 BC) from year one in the printed date", () => {
+    const format = Date.prototype.toLocaleDateString;
+    const spy = vi.spyOn(Date.prototype, "toLocaleDateString").mockImplementation(function (
+      this: Date,
+      _locales,
+      options,
+    ) {
+      return format.call(this, "en-GB", options);
+    });
+    try {
+      expect(calendarDay("0000-01-01")?.label).toBe("1 Jan 1 BC");
+      expect(calendarDay("0001-01-01")?.label).toBe("1 Jan 1");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("sorts by publication date both ways, with an undated article last in both", () => {
     /* Greg, 2026-10-03: "sorting the Shelf by publication date where
        available". A PDF never has one and nor does anything extracted before
@@ -290,10 +337,14 @@ describe("the shelf's order", () => {
     const note = CARD_NOTES.published;
     if (!note) throw new Error("no card note for published");
     const said = note(entry({ slug: "a", publishedAt: "2024-03-11T23:30:00-05:00" }), NOW);
-    expect(said).toMatch(/^published /);
-    expect(said).toContain("11");
-    expect(said).toContain("2024");
-    expect(said).not.toContain("12 ");
+    const expected = new Intl.DateTimeFormat(undefined, {
+      calendar: "gregory",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date("2024-03-11T00:00:00Z"));
+    expect(said).toBe(`published ${expected}`);
     expect(note(entry({ slug: "b" }), NOW)).toBe("no publication date");
   });
 

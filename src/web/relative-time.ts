@@ -138,10 +138,16 @@ export function calendarDay(iso: string | undefined): { t: number; label: string
      (Not `Date.UTC(y, m, d)`: that reads a year under 100 as 19xx.) */
   const t = Date.parse(`${day}T00:00:00Z`);
   if (Number.isNaN(t) || !new Date(t).toISOString().startsWith(`${day}T`)) return undefined;
-  const label = new Date(t).toLocaleDateString(undefined, {
+  const date = new Date(t);
+  const label = date.toLocaleDateString(undefined, {
+    /* Localise the words, while keeping the ISO calendar the publisher used.
+       The locale may otherwise choose Persian, Buddhist, etc. ISO year zero
+       is 1 BC; without its era it prints identically to year one. */
+    calendar: "gregory",
     day: "numeric",
     month: "short",
     year: "numeric",
+    ...(date.getUTCFullYear() === 0 ? { era: "short" as const } : {}),
     timeZone: "UTC",
   });
   return { t, label };
