@@ -226,6 +226,17 @@
 /* Discard sits apart on the left, away from the two buttons that keep the
    draft: it is the one press here that throws the reader's words away. */
 .annotate-actions button.linky { margin-right: auto; }
+/* **A finger's size on a finger's device.** The three presses that decide what
+   happens to a draft were 25 to 29px tall on an iPad (browser check,
+   2026-10-03): Discard beside Save at that size is a mis-tap that throws words
+   away. `--control-h-lg` is the house touch height (docs/project/controls.md
+   § The numbers); `pointer: coarse` as footnotes.css and citations.css use it. */
+@media (pointer: coarse) {
+  .annotate-actions button {
+    min-height: var(--control-h-lg);
+    min-width: var(--control-h-lg);
+  }
+}
 
 /* **The fourth `.linky`, and it had never been styled.** The class was scoped on
    purpose — `.controls`, `.cmt-dialog`, `.chat-dialog`, the first of those since

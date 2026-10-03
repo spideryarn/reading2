@@ -679,9 +679,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
           <li>
             <strong>Closing the box keeps what you wrote.</strong> If you typed something or picked
-            a colour, the ×, Escape, selecting something else and leaving the page all save it as a
-            comment. Only <strong>Discard</strong> throws it away. A box you did not touch saves
-            nothing.
+            a colour, the ×, Escape and selecting something else save it as a comment. Leaving or
+            reloading the page tries to save it too, but a failed connection can still lose that
+            last-chance save. Only <strong>Discard</strong> deliberately throws it away. A box you
+            did not touch saves nothing.
           </li>
           <li>
             <strong>To bookmark a whole paragraph</strong>, use the bookmark icon in its margin; you

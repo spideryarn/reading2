@@ -167,6 +167,12 @@ function pagehide(): void {
   });
 }
 
+function pageshow(): void {
+  act(() => {
+    window.dispatchEvent(new Event("pageshow"));
+  });
+}
+
 describe("the box ends in Discard, Ask AI and Save", () => {
   it("has no tick-box, and names its three buttons", () => {
     mount();
@@ -388,18 +394,27 @@ describe("leaving the page", () => {
     expect(saved).toHaveLength(1);
   });
 
-  it("uses the same draft id for a Save pressed after the page came back", () => {
-    /* A pagehide can be a bfcache suspend: the page, the box and the words may
-       all still be here afterwards. Save must not be a dead button then — it
-       sends again under the same id, which the server treats as the same
-       comment. */
+  it("settles the saved box when a page comes back from bfcache, before its words can change", () => {
+    /* A pagehide can be a bfcache suspend. The keepalive write has already used
+       this draft id, so leaving the builder live would let changed words be
+       POSTed under that id later — which the server correctly refuses as a
+       collision. On pageshow the exact snapshot is replayed through ordinary
+       create (putting it back in this tab's list) and the box is closed. */
     mount();
     type(WORDS);
     pagehide();
+
+    pageshow();
+    expect(saved).toHaveLength(2);
+    expect(saved[1]).toMatchObject({ body: WORDS, leaving: false, ask: false });
+    expect(saved[1]!.id).toBe(saved[0]!.id);
+    expect(cancelled).toBe(1);
+
+    /* This fixture records `onCancel` rather than unmounting as Reader does.
+       Even here, the settled instance must not accept a changed second Save. */
+    type("changed after returning");
     press("Save");
     expect(saved).toHaveLength(2);
-    expect(saved[1]).toMatchObject({ leaving: false, ask: false });
-    expect(saved[1]!.id).toBe(saved[0]!.id);
     unmount();
     expect(saved).toHaveLength(2);
   });

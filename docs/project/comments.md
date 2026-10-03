@@ -73,7 +73,7 @@ asking the AI, by each of:
 | the ×, and the box's Escape | the box, before it closes |
 | another selection in the prose | the old box unmounting — the box is keyed on its passage, so each one owns one anchor, one draft id and one latch, and the draft is stored against the passage it was written about |
 | leaving the article inside the app | the same unmount |
-| a reload, a closed tab, a link out | a `pagehide` listener, with the keepalive write (`leavingFetch`) that outlives the page |
+| a reload, a closed tab, a link out | a `pagehide` listener starts the best-effort keepalive write (`leavingFetch`); if the page returns from the back/forward cache, `pageshow` replays that frozen snapshot through ordinary `create` so the tab learns about it, then closes the old box |
 
 **An untouched box stores nothing**, by any of them. That is the one place this is narrower than
 "it should auto-save" read literally: storing a bookmark the moment the box opened would leave a
@@ -89,6 +89,10 @@ Two things follow from storing on the way out:
 - **A create made before the comment list has loaded waits for it**, inside `useComments.create`.
   The Save button already waited ([260908c](../postmortems/260908c-an-opening-read-can-erase-a-later-write.md));
   a box that is going away has no button to wait at, so the order is kept one layer down as well.
+- **A create is the first write in that comment's queue.** An edit waits behind it, and a delete
+  made while the create is still held cancels it; once its POST is in flight, the delete waits for
+  the answer and removes the row afterwards. Neither operation can reach the server before the row
+  it names exists.
 
 What this does **not** promise is under [§ Deliberate limits](#deliberate-limits). The plan is
 [261003i](../plans/261003i-the-comment-box-never-loses-a-draft-and-ask-ai-is-a-button.md); the
@@ -1128,17 +1132,16 @@ rather than blanked, and if none survives the key comes off entirely.
   that is what makes it storable against the id spine — and silently doing the first paragraph beats
   appearing to ignore the drag.
 - **A draft whose write fails after the box has closed is lost.** The promise is *no exit silently
-  discards a draft*, not *a draft is never lost*. Every exit hands the draft to `create`; if that
-  request is then refused or the network is down, the optimistic row is removed, the Dock says the
-  save failed, and the words are in neither the box nor Postgres — as they would have been after a
-  pressed Save, before 2026-10-03 as well. Keeping a recoverable failed draft is its own piece of
+  discards a draft*, not *a draft is never lost*. An ordinary exit hands the draft to `create`; if
+  that request is then refused or the network is down, the optimistic row is removed, the Dock says
+  the save failed, and the words are in neither the box nor Postgres — as they would have been after
+  a pressed Save, before 2026-10-03 as well. Keeping a recoverable failed draft is its own piece of
   work, not built (GPT Sol's review of plan 261003i, D6). The `pagehide` write is weaker still: it
   is a keepalive request nobody reads the answer to, and a token that expired seconds earlier
   refuses it.
 - **A crash or a killed browser fires no event**, so a draft open at that moment is gone. `pagehide`
   is the last thing a page reliably hears; nothing is written before it, because an untouched box
-  must store nothing and a keystroke-by-keystroke save would need a create-then-edit ordering the
-  store does not have for a comment that does not exist yet.
+  must store nothing. Keystroke-by-keystroke saving is a different design and is not built.
 - **A finger's selection opens nothing by itself.** There is no mouseup on an iPad, so a touch
   selection gets a "Highlight or comment" button below it, and the press opens this box —
   [touch.md § A finger's selection gets a button](touch.md#a-fingers-selection-gets-a-button).

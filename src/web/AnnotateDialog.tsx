@@ -84,7 +84,8 @@
  * - A draft **with something in it** — words, a colour, or a Referee placement
  *   (`isDirty`) — is stored on every way out but one: the ×, the box's Escape,
  *   another selection, the box unmounting for any reason, and `pagehide`. Stored
- *   exactly as Save would store it, and never asking the AI.
+ *   exactly as Save would store it, and never asking the AI. If `pagehide` put
+ *   the tab in bfcache, `pageshow` reconciles that save and closes the old box.
  * - **Discard** (it was *Cancel*) is that one, and it says so.
  * - **An untouched box stores nothing.** This is the one place the build is
  *   narrower than "it should auto-save" read literally: storing a bookmark the
@@ -305,9 +306,9 @@ export function AnnotateDialog({
    * - `open` — nothing has been sent.
    * - `left` — `pagehide` sent it with the keepalive write. A `pagehide` is not
    *   always the end: the page can come back from the back/forward cache with
-   *   this box still on it. So a *press* is still honoured (it sends again
-   *   under the same id, which the server treats as the same comment), while an
-   *   automatic store is not repeated.
+   *   this box still on it. `pageshow` then replays the frozen snapshot through
+   *   ordinary create and closes it; a later press must not reuse this id with
+   *   changed words, which the server correctly treats as a collision.
    * - `done` — sent by a press or an automatic store, or thrown away by
    *   Discard. Nothing more is ever sent.
    *
@@ -323,8 +324,8 @@ export function AnnotateDialog({
      caller's `onSave` from here. An effect that *depended* on the fields would
      run its cleanup on every keystroke, and its cleanup is "store the draft". */
   const fields: Fields = { body, mark, colour };
-  const latest = useRef({ fields, onSave });
-  latest.current = { fields, onSave };
+  const latest = useRef({ fields, onSave, onCancel });
+  latest.current = { fields, onSave, onCancel };
 
   /* The other box in this app with an article in scope, so transcription gets
      the glossary as its vocabulary — the reader is writing about a passage they
@@ -418,13 +419,30 @@ export function AnnotateDialog({
   /* **And when the page goes rather than the box**: a reload, a closed tab, a
      link out. React runs no cleanup then. `pagehide` is the last event a page
      reliably gets, and the caller is told to use the request that survives it.
+
+     `pagehide` can instead put the page in the back/forward cache. On
+     `pageshow`, replay the exact frozen snapshot through ordinary `create` so
+     this tab learns about the row, then close the builder. Leaving it open
+     would let changed words be sent later under an id the keepalive write has
+     already used; the store correctly answers that as a 409 collision.
+
      A crash or a killed browser fires nothing at all — that limit is named in
      docs/project/comments.md § Deliberate limits. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `flush` reads refs only
   useEffect(() => {
     const leaving = () => flush(true);
+    const returning = () => {
+      if (fate.current !== "left") return;
+      fate.current = "done";
+      send(false, false);
+      latest.current.onCancel();
+    };
     window.addEventListener("pagehide", leaving);
-    return () => window.removeEventListener("pagehide", leaving);
+    window.addEventListener("pageshow", returning);
+    return () => {
+      window.removeEventListener("pagehide", leaving);
+      window.removeEventListener("pageshow", returning);
+    };
   }, []);
 
   /** The × and Escape: keep the draft, then go. */

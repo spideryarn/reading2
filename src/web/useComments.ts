@@ -252,6 +252,33 @@ function createRequest(input: NewCommentInput): RequestInit {
   };
 }
 
+/** The row drawn while a free create is in flight. */
+function optimisticComment(input: NewCommentInput): ClientComment {
+  return {
+    id: input.id,
+    blockId: input.blockId,
+    ...anchorFields(input),
+    createdAt: new Date().toISOString(),
+    ...(input.body ? { body: input.body } : {}),
+    /* The placement goes on the optimistic row too, so the dialog that opens
+       over it is already showing the judgement the referee just made rather
+       than catching up a beat later. */
+    ...markFields(input.mark),
+    ...(input.colour ? { colour: input.colour } : {}),
+    status: "none",
+  };
+}
+
+/** Send a create after its hook has gone, with no React state left to update. */
+async function createAfterLeaving(url: string, input: NewCommentInput): Promise<Comment | null> {
+  try {
+    const r = await fetchOk(url, createRequest(input));
+    return (await readJson<{ comment: Comment }>(r)).comment;
+  } catch {
+    return null;
+  }
+}
+
 /** How an opening read ended, as far as a held `create` cares — `opening`. */
 type OpeningEnd = "live" | "gone";
 
@@ -324,21 +351,42 @@ export function useComments(slug: string): CommentsApi {
    *    the screen disagrees with it until the next reload, which is the shape
    *    docs/reusable/silent-success.md is about.
    *
-   * Only the PATCHes queue here (`edit`, `place`, and `recolour` since
-   * 2026-10-03). `send` streams for 15-25 seconds and
-   * putting an edit behind it would freeze the reader's own note for the length
-   * of a model call; `forget` is a DELETE the tombstone already makes win.
+   * A `create` is the first link when one is still live; then the PATCHes queue
+   * here (`edit`, `place`, and `recolour` since 2026-10-03). `send` streams for
+   * 15-25 seconds and putting an edit behind it would freeze the reader's own
+   * note for the length of a model call; `forget` is a DELETE the tombstone
+   * already makes win.
    * GPT Sol, reviewing the built code, 2026-09-01.
    */
   const patching = useRef(new Map<string, Promise<void>>());
 
+  /**
+   * Creates that have been called but have not settled, including ones still
+   * held behind the opening read.
+   *
+   * `remove` uses this to avoid sending DELETE in front of a POST that has not
+   * made a row yet; the create itself either notices the tombstone before it
+   * sends, or re-deletes after its response. The same create is also the first
+   * link in `patching`, so an edit of its optimistic id cannot PATCH a row that
+   * does not exist yet.
+   */
+  const creating = useRef(new Map<string, Promise<Comment | null>>());
+
   // Switching article throws the tombstones away with the comments they name.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: slug scopes these registries to one article
   useEffect(() => {
     const gone = deleted.current;
     const chains = patching.current;
+    const births = creating.current;
     return () => {
-      gone.clear();
-      chains.clear();
+      /* Replace rather than clear. A create held for the article we are leaving
+         still needs its old tombstones and chain after this cleanup releases
+         its opening gate. The new article must not inherit either collection. */
+      if (deleted.current === gone) deleted.current = new Set<string>();
+      if (patching.current === chains) patching.current = new Map<string, Promise<void>>();
+      if (creating.current === births) {
+        creating.current = new Map<string, Promise<Comment | null>>();
+      }
     };
   }, [slug]);
 
@@ -359,8 +407,11 @@ export function useComments(slug: string): CommentsApi {
    * tests/refused-writes-are-reported.test.tsx waits on.
    */
   const queue = useCallback((id: string, write: () => Promise<void>): Promise<void> => {
-    const next = (patching.current.get(id) ?? Promise.resolve()).then(write, write);
-    patching.current.set(id, next);
+    const tombstones = deleted.current;
+    const chains = patching.current;
+    const run = () => (tombstones.has(id) ? Promise.resolve() : write());
+    const next = (chains.get(id) ?? Promise.resolve()).then(run, run);
+    chains.set(id, next);
     return next;
   }, []);
 
@@ -658,82 +709,93 @@ export function useComments(slug: string): CommentsApi {
    * is not on their next visit.
    */
   const create = useCallback(
-    async (input: NewCommentInput): Promise<Comment | null> => {
+    (input: NewCommentInput): Promise<Comment | null> => {
       const id = input.id;
       const url = `/api/comments/${encodeURIComponent(slug)}`;
-      /* **Behind the opening read, if it is still out** — see `opening`. The
-         `settled` check keeps the ordinary case synchronous: no `await`, so the
-         mark is drawn in the turn the reader let go of the mouse. */
-      const gate = opening.current;
-      const list = gate.settled ?? (await gate.done);
-      if (list === "gone") {
-        /* The hook left this article while the create was held (or, in the gap
-           between a new article's render and its effect, before there was a
-           read to wait behind). Send the words; touch no state — the list on
-           screen, if there is one, is another article's. */
+      const tombstones = deleted.current;
+      const births = creating.current;
+      const chains = patching.current;
+      const task = (async (): Promise<Comment | null> => {
+        /* **Behind the opening read, if it is still out** — see `opening`. The
+           `settled` check keeps the ordinary case synchronous: no `await`, so
+           the mark is drawn in the turn the reader let go of the mouse. */
+        const gate = opening.current;
+        const list = gate.settled ?? (await gate.done);
+        /* Deleted while held: no row existed yet, so the right DELETE is no
+           request at all. `remove` left the tombstone for this check. */
+        if (tombstones.has(id)) return null;
+        if (list === "gone") {
+          /* The hook left this article while the create was held (or, in the gap
+             between a new article's render and its effect, before there was a
+             read to wait behind). Send the words; touch no state — the list on
+             screen, if there is one, is another article's. */
+          return createAfterLeaving(url, input);
+        }
+        const optimistic = optimisticComment(input);
+        /* What was under this id before, if anything, so a failure can put it
+           back rather than delete it. Blindly filtering by id on the way out
+           would remove a *legitimate* comment in the one case that matters — an
+           id collision — which is the failure the rollback exists to prevent.
+           GPT Sol, reviewing the built code. */
+        let displaced: ClientComment | undefined;
+        setComments((prev) => {
+          displaced = prev.find((c) => c.id === id);
+          return prev.some((c) => c.id === id)
+            ? prev.map((c) => (c.id === id ? optimistic : c))
+            : [...prev, optimistic];
+        });
+        setError(null);
         try {
           const r = await fetchOk(url, createRequest(input));
-          return (await readJson<{ comment: Comment }>(r)).comment;
-        } catch {
+          const { comment } = await readJson<{ comment: Comment }>(r);
+          if (tombstones.has(id)) {
+            /* DELETE was deliberately held behind this POST. Now the row is
+               known to exist, make the reader's later action win. */
+            await forget(comment.id);
+            return null;
+          }
+          /* The server may have minted a different id. Drop the row we invented
+             before putting the real one, or `put` appends it and the reader has
+             two marks over one passage. */
+          if (comment.id !== id) setComments((prev) => prev.filter((c) => c.id !== id));
+          put(comment);
+          return comment;
+        } catch (e) {
+          if (tombstones.has(id)) return null;
+          setComments((prev) =>
+            displaced
+              ? prev.map((c) => (c.id === id ? displaced! : c))
+              : prev.filter((c) => c.id !== id),
+          );
+          setError(describeFetchFailure(e as Error));
           return null;
         }
-      }
-      const optimistic: ClientComment = {
-        id,
-        blockId: input.blockId,
-        ...anchorFields(input),
-        createdAt: new Date().toISOString(),
-        ...(input.body ? { body: input.body } : {}),
-        /* The placement goes on the optimistic row too, so the dialog that
-           opens over it is already showing the judgement the referee just
-           made rather than catching up a beat later. */
-        ...markFields(input.mark),
-        ...(input.colour ? { colour: input.colour } : {}),
-        status: "none",
-      };
-      /* What was under this id before, if anything, so a failure can put it
-         back rather than delete it. Blindly filtering by id on the way out
-         would remove a *legitimate* comment in the one case that matters — an
-         id collision — which is the failure the rollback exists to prevent.
-         GPT Sol, reviewing the built code. */
-      let displaced: ClientComment | undefined;
-      setComments((prev) => {
-        displaced = prev.find((c) => c.id === id);
-        return prev.some((c) => c.id === id)
-          ? prev.map((c) => (c.id === id ? optimistic : c))
-          : [...prev, optimistic];
-      });
-      setError(null);
-      try {
-        const r = await fetchOk(url, createRequest(input));
-        const { comment } = await readJson<{ comment: Comment }>(r);
-        /* The server may have minted a different id. Drop the row we invented
-           before putting the real one, or `put` appends it and the reader has
-           two marks over one passage. */
-        if (comment.id !== id) setComments((prev) => prev.filter((c) => c.id !== id));
-        put(comment);
-        return comment;
-      } catch (e) {
-        setComments((prev) =>
-          displaced
-            ? prev.map((c) => (c.id === id ? displaced! : c))
-            : prev.filter((c) => c.id !== id),
-        );
-        setError(describeFetchFailure(e as Error));
-        return null;
-      }
+      })();
+
+      births.set(id, task);
+      /* The create is the first write in this id's PATCH queue. An edit made
+         from an optimistic row waits until POST has made a real row. */
+      chains.set(id, task.then(() => undefined, () => undefined));
+      void task.then(
+        () => {
+          if (births.get(id) === task) births.delete(id);
+        },
+        () => {
+          if (births.get(id) === task) births.delete(id);
+        },
+      );
+      return task;
     },
-    [slug, put],
+    [slug, put, forget],
   );
 
   /**
    * `create`, for a page that is going away — see `CommentsApi.createOnLeave`.
    *
    * No optimistic row, no waiting behind the opening read, and no answer read:
-   * there may be no page left to do any of it on. If the page does come back
-   * (a `pagehide` can be a back/forward-cache suspend) the comment is on the
-   * server and not in this tab's list until the next load — the same state a
-   * second tab is always in.
+   * there may be no page left to do any of it on. If the page comes back from
+   * the back/forward cache, `AnnotateDialog` replays the frozen request through
+   * ordinary `create`, which reconciles this tab's list before closing the box.
    */
   const createOnLeave = useCallback(
     (input: NewCommentInput): void => {
@@ -937,9 +999,13 @@ export function useComments(slug: string): CommentsApi {
     (id: string) => {
       deleted.current.add(id);
       setComments((prev) => prev.filter((c) => c.id !== id));
-      // If a POST is still out, its `.then` re-sends the DELETE once the write
-      // it is racing has definitely landed. Doing it only here would let the
-      // POST write the row back after we deleted it.
+      /* A create still owns this id. It will either see the tombstone before
+         POST and cancel, or see it after the response and DELETE then. Sending
+         DELETE here would race in front of a row that does not exist yet. */
+      if (creating.current.has(id)) return;
+      // An answer POST is not in `creating`: its `done` handler re-sends this
+      // DELETE once the write it is racing has definitely landed. Doing it only
+      // here would let that POST write the row back after we deleted it.
       void forget(id);
     },
     [forget],

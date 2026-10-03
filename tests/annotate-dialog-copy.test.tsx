@@ -15,8 +15,10 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnnotateDialog, annotateKey } from "../src/web/AnnotateDialog.js";
+import { HELP_TOPICS } from "../src/web/help/help-topics.js";
 import { readerCss } from "./helpers/stylesheets.js";
 import type { BlockId } from "../src/types.js";
 
@@ -216,6 +218,14 @@ describe("copying the selected passage", () => {
     expect(saved).toEqual([]);
     expect(cancelled).toEqual([]);
     expect(host.querySelector("aside.annotate-dialog")).not.toBeNull();
+  });
+});
+
+describe("what the help page promises about closing the box", () => {
+  it("says that a page-exit save is best effort, not certain", () => {
+    const copy = renderToStaticMarkup(HELP_TOPICS.comments.body);
+    expect(copy).toContain("Leaving or reloading the page tries to save it too");
+    expect(copy).not.toContain("leaving the page all save it");
   });
 });
 

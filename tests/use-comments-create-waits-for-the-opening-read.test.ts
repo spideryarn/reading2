@@ -262,6 +262,67 @@ describe("a create before the opening read has settled", () => {
     await settle();
     expect(bodies(), "a comment on the last article was drawn on this one").toEqual([]);
   });
+
+  it("puts an edit of that id after the held create, not in front of it", async () => {
+    const get = held();
+    const writes: string[] = [];
+    answer = (_url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") return get.promise;
+      writes.push(method);
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return Promise.resolve(
+        json({
+          comment: {
+            ...NEW,
+            ...body,
+            createdAt: "2026-10-03T19:42:00.000Z",
+            status: "none",
+          },
+        }),
+      );
+    };
+
+    await show("a-piece");
+    act(() => {
+      void latest!.create(NEW);
+      void latest!.edit(NEW.id, "edited after creating");
+    });
+    await settle();
+    expect(writes, "the PATCH overtook the create held behind the GET").toEqual([]);
+
+    get.release(json({ comments: [OLD] }));
+    await settle();
+    expect(writes).toEqual(["POST", "PATCH"]);
+    expect(bodies()).toContain("edited after creating");
+  });
+
+  it("cancels a held create deleted before it has become a row", async () => {
+    const { get, posted } = server();
+    const deleted: string[] = [];
+    const prior = answer;
+    answer = async (url, init) => {
+      if ((init.method ?? "GET").toUpperCase() === "DELETE") {
+        deleted.push(url);
+        return new Response(null, { status: 204 });
+      }
+      return prior(url, init);
+    };
+
+    await show("a-piece");
+    act(() => {
+      void latest!.create(NEW);
+      latest!.remove(NEW.id);
+    });
+    await settle();
+    expect(deleted, "DELETE was sent before the held POST could create a row").toEqual([]);
+
+    get.release(json({ comments: [OLD] }));
+    await settle();
+    expect(posted, "a create the reader already deleted was still sent").toEqual([]);
+    expect(deleted).toEqual([]);
+    expect(bodies()).toEqual([OLD.body]);
+  });
 });
 
 describe("once the read has settled", () => {
@@ -278,6 +339,37 @@ describe("once the read has settled", () => {
        list is in, which is what lets a mark appear on mouse-up. */
     expect(bodies()).toEqual([OLD.body, NEW.body]);
     expect(posted).toHaveLength(1);
+  });
+
+  it("keeps delete ahead of an in-flight create response", async () => {
+    const get = held();
+    const post = held();
+    const writes: string[] = [];
+    answer = (_url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") return get.promise;
+      writes.push(method);
+      if (method === "POST") return post.promise;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    };
+    await show("a-piece");
+    get.release(json({ comments: [] }));
+    await settle();
+
+    act(() => {
+      void latest!.create(NEW);
+    });
+    expect(bodies()).toEqual([NEW.body]);
+    act(() => latest!.remove(NEW.id));
+    expect(bodies()).toEqual([]);
+    expect(writes, "DELETE raced in front of the POST response").toEqual(["POST"]);
+
+    post.release(
+      json({ comment: { ...NEW, createdAt: "2026-10-03T19:42:00.000Z", status: "none" } }),
+    );
+    await settle();
+    expect(writes).toEqual(["POST", "DELETE"]);
+    expect(bodies(), "the late create answer resurrected the deleted row").toEqual([]);
   });
 });
 
