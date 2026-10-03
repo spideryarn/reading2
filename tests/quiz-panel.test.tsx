@@ -480,7 +480,7 @@ describe("a mark stays bound to the answer it was computed from", () => {
     expect(host.textContent).not.toContain("answered");
     /* The mark itself is still there to read, as it is on any other edit. */
     expect(host.textContent).toContain("You have the cost claim");
-    expect(host.querySelector<HTMLButtonElement>("button.gloss-run")?.disabled).toBe(true);
+    expect(off(buttons("Answer")[0])).toBe(true);
   });
 
   it("stops calling the press a retry once the answer has changed", () => {
@@ -528,7 +528,9 @@ describe("the answer box", () => {
   it("will not mark an empty answer", () => {
     paint(owner());
     const [answer] = buttons("Answer");
-    expect(answer?.disabled).toBe(true);
+    expect(off(answer)).toBe(true);
+    press("Answer");
+    expect(marked).toEqual([]);
   });
 
   it("marks what was typed", () => {
@@ -553,8 +555,126 @@ describe("the answer box", () => {
     paint(owner({ stale: true }));
     type("anything");
     const [answer] = buttons("Answer");
-    expect(answer?.disabled).toBe(true);
+    expect(off(answer)).toBe(true);
+    press("Answer");
+    expect(marked).toEqual([]);
     expect(host.textContent).toContain("cannot be marked against them");
+  });
+
+  /* Greg, 2026-10-03 (spya-fzgcqu): an icon and a tooltip, as chat's Send is.
+     The word is the button's name and the card's head, never its face. */
+  it("is an icon: its word is its name, not its text", () => {
+    paint(owner());
+    type("because he says so");
+    const [answer] = buttons("Answer");
+    expect(answer?.textContent?.trim()).toBe("");
+    expect(answer?.querySelector("svg")).not.toBeNull();
+  });
+
+  it("marks on Cmd+Enter and on Ctrl+Enter, and not on a bare Enter", () => {
+    paint(owner());
+    type("because he says so");
+    const box = host.querySelector("textarea");
+    const key = (init: KeyboardEventInit) =>
+      act(() => {
+        box?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, ...init }));
+      });
+    key({});
+    expect(marked).toEqual([]);
+    key({ metaKey: true });
+    key({ ctrlKey: true });
+    expect(marked.map((m) => m.answer)).toEqual(["because he says so", "because he says so"]);
+  });
+
+  /* spya-qnrxuw: *"show the whole answer and don't put my answer in a
+     scrollable box."* jsdom lays nothing out, so the height the browser would
+     report is stubbed; what is tested is that the panel asks for it and uses it. */
+  it("is as tall as what is written in it", () => {
+    Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 240,
+    });
+    try {
+      paint(owner());
+      type("a long answer");
+      expect(host.querySelector("textarea")?.style.height).toBe("240px");
+    } finally {
+      delete (HTMLTextAreaElement.prototype as { scrollHeight?: number }).scrollHeight;
+    }
+  });
+});
+
+/* spya-smev24: *"I was expecting there to be a button at the bottom underneath,
+   sort of for, you know, next question."* There was one, small and grey, below
+   the reference-answer disclosure. So the step row sits under the mark, and
+   once the mark is finished Next is the filled button and Answer the quiet one. */
+describe("Next is the thing to press once the answer is marked", () => {
+  const [q1, q2] = [question(1), question(2)];
+  const TYPED = "because he ties it to cost";
+  const attempt = (status: Attempt["status"], verdict?: "right" | "wrong"): Attempt => ({
+    questionId: q1.id,
+    answer: TYPED,
+    status,
+    reply: "You have the cost claim.",
+    error: null,
+    ...(verdict ? { verdict } : {}),
+  });
+  const filled = (label: string) => buttons(label)[0]?.classList.contains("quiz-go");
+  function marked_(a: Attempt | null) {
+    paint(owner({ quiz: batch([q1, q2]), attempt: null }));
+    type(TYPED);
+    paint(owner({ quiz: batch([q1, q2]), attempt: a }));
+  }
+
+  it("puts the step row above the reference answer", () => {
+    marked_(attempt("done"));
+    const step = host.querySelector(".quiz-step");
+    const reveal = host.querySelector(".quiz-reveal");
+    expect(step && reveal).toBeTruthy();
+    expect(
+      (step as Element).compareDocumentPosition(reveal as Element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("fills Answer, not Next, before there is a mark", () => {
+    marked_(null);
+    expect(filled("Answer")).toBe(true);
+    expect(filled("Next question")).toBe(false);
+  });
+
+  it("does not fill Next while the mark is still arriving", () => {
+    marked_(attempt("marking"));
+    expect(filled("Next question")).toBe(false);
+  });
+
+  /* The same for every verdict, because the verdict is never for showing. */
+  it.each([["right"], ["wrong"], [undefined]] as const)(
+    "fills Next and quiets Answer once the mark is done (verdict: %s)",
+    (verdict) => {
+      marked_(attempt("done", verdict));
+      expect(filled("Next question")).toBe(true);
+      expect(filled("Answer")).toBe(false);
+      /* Quiet, not refused: the same words may still be marked again. */
+      expect(off(buttons("Answer")[0])).toBeFalsy();
+      press("Next question");
+      expect(host.textContent).toContain("Question 2 of 2");
+    },
+  );
+
+  it("hands the fill back to Answer when the box is edited", () => {
+    marked_(attempt("done"));
+    type(`${TYPED}, and to time`);
+    expect(filled("Next question")).toBe(false);
+    expect(filled("Answer")).toBe(true);
+  });
+
+  it("fills nothing on the last question, where there is no next", () => {
+    paint(owner({ quiz: batch([q1]), attempt: null }));
+    type(TYPED);
+    paint(owner({ quiz: batch([q1]), attempt: attempt("done") }));
+    const [next] = buttons("Next question");
+    expect(off(next)).toBe(true);
+    expect(filled("Next question")).toBe(false);
   });
 });
 

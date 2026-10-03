@@ -1,6 +1,8 @@
 # Quiz: Answer as an icon, the whole answer on screen, and Next under the mark
 
-**Status: plan, not built.** Three reports from Greg, 2026-10-03, all filed from Quiz on the Entropy
+**Status: built in one stage; GPT Sol's code review and the browser check follow below.** Evidence: `tests/quiz-panel.test.tsx` § "the answer box" and § "Next is the thing to press once the answer is marked", seen red (11 failing) before the change. Where §§ 1–3 and § After GPT Sol's plan review differ, the later section is what was built.
+
+**Was: plan, not built.** Three reports from Greg, 2026-10-03, all filed from Quiz on the Entropy
 article, all confirmed as an admin's by `scripts/feedback-reporter.ts` (exit 0 on each).
 
 ## What Greg said
@@ -144,3 +146,30 @@ only partly verified, so check each site before converting.
 
 - **Q-quiz-words-left:** two controls in Quiz still carry words — *Show a reference answer* and the
   microphone's *Talk*. Convert them too?
+
+## After GPT Sol's plan review (2026-10-03)
+
+[The review](261003i-quiz-answer-icon-whole-answer-and-next-after-the-mark-review-sol.md), of
+`ff19a98b1`: *build with changes*, four findings, all taken. They replace what §§ 1–3 say where the
+two differ.
+
+- **F1 (P1, reasoned): a height set only when the value changes hides words after a reflow** —
+  type a long answer, then rotate the iPad, and more lines wrap inside a fixed height with the
+  overflow hidden. So the box is re-measured when its **width** changes (a `ResizeObserver`) and
+  when it mounts, as well as on every change to its value. The browser check uses the *same
+  unchanged answer* across widths.
+- **F2 (P2, established): three existing assertions need native `disabled` and one needs an
+  unavailable Next on the last question.** Migrated to accessible names, `aria-disabled` and a
+  refused press. The last question **keeps** its unavailable Next; nothing is removed there. Added:
+  the shortcut submits, and Next's promotion is tested with the box matching the mark for a right,
+  a wrong and an absent verdict — it must be the same in all three, since the verdict is not for
+  showing.
+- **F3 (P2, established): `IconButton` takes no `className`, and its Tailwind utilities outrank
+  quiz.css.** So Next is one permanent local `<button>` that switches class — `IconButton`'s own
+  quiet classes (exported as `ICON_BUTTON_CLASS`) or the primary box — rather than swapping
+  component, which would drop keyboard focus at the moment the mark lands.
+- **F4 (P2, reasoned): refusing to re-mark unchanged words is behaviour nobody asked for.** Dropped.
+  Answer stays pressable after a mark and goes **quiet** (chat-send's outline, no fill) while a
+  finished mark matches the box, so there is one filled button at a time: Answer before the mark,
+  Next after it. No new guard in `submit`, no new copy. And no `<form>`: the fill is a local class,
+  `quiz-go`, beside `chat-send`.
