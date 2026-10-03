@@ -145,7 +145,7 @@ describe("the threshold wiring", () => {
   });
 
   it("lowers the gate before opening a term the bar is hiding, and only then", () => {
-    /* "In the glossary" on a prose hover card is a deliberate request to reveal
+    /* "Open glossary" on a prose hover card is a deliberate request to reveal
        a term, and it used to write `?term=` and nothing else. Once the gate
        hides rather than groups, that opens the band on nothing at all.
 

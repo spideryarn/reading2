@@ -365,20 +365,23 @@ describe("the column shows as many controls as the row has room for", () => {
        asked for *"slightly increase the vertical gaps"* (spya-jc0vm6), and a
        4px gap moves every threshold by a gap per slot after the first. Both
        halves still flip at the same 16px root — 24px = 1.5rem and 4px =
-       0.25rem there — so the `and` form is still exactly `max()`. */
+       0.25rem there — so the `and` form is still exactly `max()`.
+
+       **8px since 2026-10-03** (spya-kwgem6: *"a little bit hard to touch them
+       with a finger on an iPad"*), which is 0.5rem at that same root. */
     for (const [n, px, rem] of [
-      [2, 52, 3.25],
-      [3, 80, 5],
-      [4, 108, 6.75],
+      [2, 56, 3.5],
+      [3, 88, 5.5],
+      [4, 120, 7.5],
     ] as const) {
       expect(css).toContain(
         "@container (min-height: " + px + "px) and (min-height: " + rem + "rem)",
       );
-      expect(px).toBe(n * 24 + (n - 1) * 4);
-      expect(rem).toBe(n * 1.5 + (n - 1) * 0.25);
+      expect(px).toBe(n * 24 + (n - 1) * 8);
+      expect(rem).toBe(n * 1.5 + (n - 1) * 0.5);
     }
     // The gap the thresholds count, with the same two halves as the slot.
-    expect(css).toContain("row-gap: max(0.25rem, 4px)");
+    expect(css).toContain("row-gap: max(0.5rem, 8px)");
   });
 
   it("takes the controls in one order, and it is BlockGutter's render order", () => {
@@ -398,7 +401,7 @@ describe("the column shows as many controls as the row has room for", () => {
        and the "…" share the only cell (gutter.css § One slot and a mark), and
        that is the one place a `grid-area` may appear. Everywhere else the
        source order is still the placement. */
-    const oneSlot = css.indexOf("@container not ((min-height: 52px) and (min-height: 3.25rem))");
+    const oneSlot = css.indexOf("@container not ((min-height: 56px) and (min-height: 3.5rem))");
     const oneSlotEnd = css.indexOf("\n}\n", oneSlot);
     for (const m of css.matchAll(/grid-area:/g)) {
       const p = m.index ?? -1;
@@ -425,7 +428,7 @@ describe("the column shows as many controls as the row has room for", () => {
        So: three controls fit in three slots and draw no dot; four do not. */
     expect(css).toContain('.blk-gutter[data-controls="3"] > .blk-more { display: none; }');
     expect(css).toContain('.blk-gutter[data-controls="4"] > .blk-more { display: inline-flex; }');
-    const four = css.slice(css.indexOf("@container (min-height: 108px)"));
+    const four = css.slice(css.indexOf("@container (min-height: 120px)"));
     expect(four).toContain(".blk-gutter > * { display: inline-flex; }");
     expect(four).toContain('.blk-gutter[data-controls="4"] > .blk-more { display: none; }');
   });
@@ -481,7 +484,7 @@ describe("the column shows as many controls as the row has room for", () => {
        browser pass found the bookmark button vanish with nothing in its place.
        The mark and the "…" now share the cell; the "…" is drawn over it only
        when revealed. */
-    const at = css.indexOf("@container not ((min-height: 52px) and (min-height: 3.25rem))");
+    const at = css.indexOf("@container not ((min-height: 56px) and (min-height: 3.5rem))");
     expect(at, "no one-slot block for a marked gutter").toBeGreaterThan(-1);
     const end = css.indexOf("\n}\n", at);
     const block = css.slice(at, end);

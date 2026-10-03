@@ -82,6 +82,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { AddedTerm, BlockId, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
+import { parseAskedTerm } from "../asked-term.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
@@ -109,6 +110,7 @@ import {
 } from "./threshold.js";
 import type { LookKept, UseGlossary } from "./useGlossary.js";
 import type { StepFailure } from "./useStepJob.js";
+import { putKeyboardAway } from "./useVisualViewport.js";
 import { builtButEmpty, codeOfMessage } from "../messages.js";
 import { MAX_ASKED_TERM } from "../asked-term.js";
 import { JobProgress } from "./JobProgress.js";
@@ -819,7 +821,7 @@ export function gateMax(entries: readonly GlossaryEntry[], gate: number): number
 /**
  * The gate that would put this term on screen, or null if nothing should move.
  *
- * **"In the glossary" on a prose hover card is a deliberate request to reveal a
+ * **"Open glossary" on a prose hover card is a deliberate request to reveal a
  * term**, and it writes `?term=`. Once the bar hides rather than groups, doing
  * only that on a below-bar term opens the band on nothing at all — the panel
  * has been asked to select a row it is not drawing. So `App.tsx` lowers the
@@ -1647,7 +1649,13 @@ function AskATerm({
         className="gloss-ask-row"
         onSubmit={(e) => {
           e.preventDefault();
+          if (asking) return;
           void ask(term);
+          /* A locally refused term still needs correcting. Use the hook's
+             parser before giving up the caret, while ask supplies the refusal. */
+          if (parseAskedTerm(term).ok) {
+            putKeyboardAway(e.currentTarget.querySelector("input"));
+          }
         }}
       >
         {/* `type="search"`, so a phone offers the right keyboard and the browser

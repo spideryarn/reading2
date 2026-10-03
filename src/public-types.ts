@@ -423,6 +423,15 @@ export interface PublicIdeas {
 export interface PublicQuotes {
   quotes: Quote[];
   /**
+   * **When the list was last written — and it crosses, like `discarded`,
+   * because the reader is shown it.** A quote's card says who chose it and
+   * when; a quote stored before `Quote.addedAt` existed (2026-10-03) has no time
+   * of its own, and the honest thing left to say is *on or before* this. It is
+   * an upper bound, never a quote's own time. docs/project/quotes.md § Your
+   * highlights are rows too.
+   */
+  generatedAt: string;
+  /**
    * **What the stage refused to store — and it crosses, where every other
    * pipeline fact in this file does not.**
    *

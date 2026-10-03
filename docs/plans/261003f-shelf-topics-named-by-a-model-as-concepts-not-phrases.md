@@ -78,10 +78,21 @@ move. An article added since the last re-think is in no topic until the next one
 
 ### Stage 0 — Greg's shelf, before anything ships
 
-A read-only script, like `npm run shelf-terms:report`: `--owner <uuid>` prints today's pills beside
-the proposed ones for a real shelf, with the cost, and writes nothing. Greg runs it against
-production (or says a session may). About a cent. **If his pills are not clearly better, stop
-here.**
+**Written 2026-10-03, not yet run on a real shelf**:
+[`evals/shelf-topic-clusters/preview-shelf.ts`](../../evals/shelf-topic-clusters/preview-shelf.ts),
+`npm run shelf-topics:preview`. It takes an owner's id, reads the shelf inside one
+`begin read only` transaction, and prints the shelf's size and today's pills beside the proposed
+ones, with what the one model call cost. It writes nothing, not even the spend ledger. The command
+is in question 1. **If Greg's pills are not clearly better, stop here.**
+
+What has and has not been checked: it typechecks, and its queries ran against the local database for
+an owner that does not exist (no rows, exit 0). This session was refused any read of a real shelf,
+so the half after the queries has run only under GPT Sol's mocked cases in its code review
+([prompt](261003f-shelf-topics-named-by-a-model-code-review-prompt.md),
+[answer](261003f-shelf-topics-named-by-a-model-code-review-sol.md)), which also made it count
+exact copies as one work, skip the call below eight works, apply stored scores exactly as the route
+does, and strip control characters from what it prints. The model call itself is the eval's own
+`induce`.
 
 ### Stage 1 — the model's topics on the shelf, up to 150 works
 
@@ -219,9 +230,26 @@ the worst day for one reader with 1,000 articles is about $1.20, and 3,000 a day
 Everything measured so far is on shelves a model wrote. Your complaint is about your shelf, and this
 session was not allowed to read production.
 
-- **A. Yes (recommended).** I write the read-only script; you run it once with your owner id and the
-  production database URL, as you do `shelf-terms:report`, or tell a session it may. You see today's
-  pills beside the proposed ones. About a cent. If they are not clearly better, we stop.
+- **A. Yes (recommended).** The script is written. Run it once, with the production database URL
+  in the shell as you do for `shelf-terms:report`:
+
+  ```
+  DATABASE_URL=<production> npm run shelf-topics:preview -- --owner <your owner uuid> --archived
+  ```
+
+  On the box the URL is in `.env.prod`, so from `/home/greg/code/spideryarn2` (GPT Sol's code review checked this against the file's form; it has not been run):
+
+  ```
+  DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env.prod | tr -d '"')" \
+    npm run shelf-topics:preview -- --owner <your owner uuid> --archived
+  ```
+
+  Read the `Target:` line first. It prints how many articles the shelf holds, then today's pills
+  beside the proposed ones. Add `--members` to see up to five titles under each proposed topic;
+  drop `--archived` for the active shelf alone. **It needs the owner uuid, the one you give
+  `shelf-terms:report`**: the app's database role cannot read accounts
+  ([admin.md](../project/admin.md)), so an email is refused cleanly with a line saying so. About a cent
+  or less, and it writes nothing. If the proposed pills are not clearly better, we stop.
 - **B. No, build stage 1 and judge it live.** Faster by a step, but the first real look comes after
   the work is done.
 

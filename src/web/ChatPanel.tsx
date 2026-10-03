@@ -103,6 +103,7 @@ import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { useSlow } from "./useSlow.js";
+import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
 
@@ -2153,10 +2154,21 @@ export function Composer({
     if (dictate.readOnly || dictate.dictation.armed) return;
     const question = value.trim();
     if (question === "" || busy) return;
+    const submittedBox = box.current;
+    const handoff = live && live.phase !== "idle" && live.phase !== "failed";
     setValue("");
     onDraft("");
-    if (live && live.phase !== "idle" && live.phase !== "failed") await live.stop();
+    if (handoff) await live.stop();
     onSend(question);
+    /* The question has gone and the answer arrives under the keys: let go of
+       a soft keyboard, and only a soft one (useVisualViewport.ts §
+       `putKeyboardAway`; Greg, spya-gmtt4b). A live handoff can wait long
+       enough for the reader to begin another draft, which still owns the
+       keyboard. Without that await React has not committed the clear yet. */
+    if (
+      submittedBox && box.current === submittedBox && document.activeElement === submittedBox &&
+      (!handoff || submittedBox.value === "")
+    ) putKeyboardAway(submittedBox);
   };
   /** Every state `submit` refuses, so the Send button can say so before a press. */
   const unavailable = busy || dictate.readOnly || dictate.dictation.armed || value.trim() === "";

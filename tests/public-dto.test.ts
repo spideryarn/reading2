@@ -924,6 +924,14 @@ describe("the artefacts a shared link carries", () => {
         reason: "The claim the rest of the piece is spent defending.",
         importance: 0.91,
         striking: 0.88,
+        addedAt: "2026-08-27T09:00:00.000Z",
+      },
+      /* One stored before `addedAt` existed: the field must stay absent on the
+         way out, not arrive as `undefined` or as the list's time. */
+      {
+        id: "spya-quote2",
+        blockId: "spya-k3m9qt",
+        text: "which is the whole trouble.",
       },
     ],
   };
@@ -1316,7 +1324,9 @@ describe("the artefacts a shared link carries", () => {
         "discarded.overlapping",
         "discarded.unfound",
         "discarded.wrongLength",
+        "generatedAt",
         "quotes",
+        "quotes[].addedAt",
         "quotes[].blockId",
         "quotes[].id",
         "quotes[].importance",
@@ -1326,6 +1336,19 @@ describe("the artefacts a shared link carries", () => {
         "quotes[].text",
       ].sort(),
     );
+  });
+
+  /**
+   * **A visitor's card says who chose a quote and when, too** — so the quote's
+   * own time crosses, and so does the list's, which is the only thing an older
+   * quote has to go on (*on or before*). GPT Sol, 261003h Q3.
+   */
+  it("carries each quote's addedAt, and the list's generatedAt for the ones without", () => {
+    expect(built.quotes?.generatedAt).toBe(QUOTES.generatedAt);
+    expect(built.quotes?.quotes[0]?.addedAt).toBe("2026-08-27T09:00:00.000Z");
+    const old = built.quotes?.quotes[1];
+    expect(old?.id).toBe("spya-quote2");
+    expect(old && "addedAt" in old).toBe(false);
   });
 
   it("hands the quote's words across unchanged — they are the article's own", () => {
