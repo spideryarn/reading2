@@ -60,7 +60,12 @@ import { chipFor } from "./chat-commands.js";
 import { splitCitations, splitLinks } from "./citations.js";
 import { CommandChip } from "./CommandChip.js";
 import type { CommandExecutor } from "./command-proposal.js";
-import { splitCommandTokens, tokensOnOwnLine, unfinishedTokenAt } from "../command-token.js";
+import {
+  splitCommandTokens,
+  tokensOnOwnLine,
+  unfinishedTokenAt,
+  unsettledTokenLineAt,
+} from "../command-token.js";
 import type { BlockId } from "../types.js";
 import { hasCredentials, hostOf, isWebUrl } from "../urls.js";
 
@@ -343,9 +348,13 @@ function drawBlock(node: RootContent, ctx: Ctx, flat: boolean, depth = 0): React
     case "list":
       return drawList(node, ctx, depth);
     case "blockquote":
+      /* A quote is evidence the model is repeating, not its own offer. In
+         particular a fetched page may contain an exact token on its own line;
+         leaving the executor in scope would turn quoted hostile text into a
+         button. Links and citations still draw as before. */
       return (
         <blockquote className="fmt-quote">
-          {drawBlocks(node.children, ctx, false, depth + 1)}
+          {drawBlocks(node.children, { ...ctx, commands: undefined }, false, depth + 1)}
         </blockquote>
       );
     case "code":
@@ -554,12 +563,21 @@ function anchor(label: ReactNode, url: string): ReactElement {
  * wrote, whole — an invalid token's id is still not a citation.
  *
  * `end` says this run is the tail of an answer still arriving. A half-arrived
- * token there is left undrawn until it closes (src/command-token.ts §
- * `unfinishedTokenAt`), and only where it could become a button.
+ * token there, or a complete one on the still-open final line, is left undrawn
+ * until a newline or the end of the stream settles what it is
+ * (src/command-token.ts § `unfinishedTokenAt`, `unsettledTokenLineAt`).
  */
 function cited(text: string, ctx: Ctx, edges: Edges, end: boolean): ReactNode {
   const commands = ctx.commands;
-  const cut = end && commands !== undefined ? unfinishedTokenAt(text) : -1;
+  /* The current end of a stream is not an established line edge. Hold a
+     complete token-only final line as well as a half token: a later delta may
+     append prose and prove it was a quotation in the middle of a sentence.
+     A newline settles the line before the stream itself finishes. */
+  const openStreamLine = end && !/[\r\n][ \t]*$/.test(ctx.source);
+  let cut = openStreamLine && commands !== undefined ? unfinishedTokenAt(text) : -1;
+  if (cut === -1 && openStreamLine && commands !== undefined) {
+    cut = unsettledTokenLineAt(text, edges.starts);
+  }
   const runs = splitCommandTokens(cut === -1 ? text : text.slice(0, cut));
   const ownLine = tokensOnOwnLine(runs, edges.starts, edges.ends);
   let token = 0;

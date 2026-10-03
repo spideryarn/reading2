@@ -13,7 +13,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { citableText } from "../src/citable.js";
-import { splitCommandTokens, tokensOnOwnLine, unfinishedTokenAt } from "../src/command-token.js";
+import {
+  splitCommandTokens,
+  tokensOnOwnLine,
+  unfinishedTokenAt,
+  unsettledTokenLineAt,
+} from "../src/command-token.js";
 import { CHAT_PROPOSABLE, chipFor } from "../src/web/chat-commands.js";
 import type { CommandExecutor } from "../src/web/command-proposal.js";
 
@@ -80,6 +85,14 @@ describe("finding tokens in a run of text", () => {
     expect(unfinishedTokenAt("Here: [cmd:tag-add:x]")).toBe(-1);
     expect(unfinishedTokenAt("Here: [see")).toBe(-1);
     expect(unfinishedTokenAt("Here: [cmd:tag add")).toBe(-1);
+  });
+
+  it("names a complete token-only final line whose right edge is still streaming", () => {
+    expect(unsettledTokenLineAt("Here.\n[cmd:tag-add:a]", true)).toBe(6);
+    expect(unsettledTokenLineAt("[cmd:tag-add:a] [cmd:tag-add:b]  ", true)).toBe(0);
+    expect(unsettledTokenLineAt("[cmd:tag-add:a]", false)).toBe(-1);
+    expect(unsettledTokenLineAt("Here: [cmd:tag-add:a]", true)).toBe(-1);
+    expect(unsettledTokenLineAt("[cmd:tag-add:a] after", true)).toBe(-1);
   });
 });
 

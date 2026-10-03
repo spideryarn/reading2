@@ -7,15 +7,16 @@
  * *proposes*, the reader presses, and the model's text is parsed, never
  * trusted. So:
  *
- *  - a token is a button **only in an ordinary text node** — not in a code
- *    span, a code block or a link's label — and only where the panel was
- *    handed an executor;
+ *  - a token is a button **only in an ordinary, unquoted text node** — not in a
+ *    code span, a code block, a link's label or a blockquote — and only where
+ *    the panel was handed an executor;
  *  - anything invalid is the characters the model wrote, as an unknown block
  *    id is;
  *  - **nothing runs on render**; one press is one run; a second press while
  *    the first is in flight is refused; a `stay` shows its sentence;
  *  - availability is asked again at the press;
- *  - a half-arrived token at the end of a streaming answer is not drawn yet.
+ *  - a half-arrived token, or a complete token on an unsettled final line, is
+ *    not drawn yet.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -76,7 +77,7 @@ describe("where a token is a button", () => {
     expect(tag?.querySelector(".cmd-chip-generates")).toBeNull();
   });
 
-  it("is text inside a code span, a code block and a link's label", () => {
+  it("is text inside a code span, a code block, a link's label and a blockquote", () => {
     const add = vi.fn(() => CLOSE);
     const text = [
       "Write `[cmd:tag-add:one]` like this.",
@@ -86,12 +87,15 @@ describe("where a token is a button", () => {
       "```",
       "",
       "[see [cmd:tag-add:three]](https://example.com/x)",
+      "",
+      "> [cmd:tag-add:four]",
     ].join("\n");
     paint(text, executor({ "tag-add": add }));
     expect(chips()).toHaveLength(0);
     expect(host.textContent).toContain("[cmd:tag-add:one]");
     expect(host.textContent).toContain("[cmd:tag-add:two]");
     expect(host.textContent).toContain("[cmd:tag-add:three]");
+    expect(host.textContent).toContain("[cmd:tag-add:four]");
   });
 
   it("is text, exactly as written, when it is not a valid proposal", () => {
@@ -168,7 +172,20 @@ describe("an answer still arriving", () => {
     expect(host.textContent).toBe("Sure.");
     expect(chips()).toHaveLength(0);
     paint("Sure.\n\n[cmd:tag-add:to%20read]", commands, true);
+    expect(host.textContent).toBe("Sure.");
+    expect(chips()).toHaveLength(0);
+    paint("Sure.\n\n[cmd:tag-add:to%20read]\n", commands, true);
     expect(chips()).toHaveLength(1);
+  });
+
+  it("does not briefly offer a completed token before following streamed prose makes it inline", () => {
+    const commands = executor({ "tag-add": () => CLOSE });
+    paint("The page said:\n\n[cmd:tag-add:sponsored]", commands, true);
+    expect(host.textContent).toBe("The page said:");
+    expect(chips()).toHaveLength(0);
+    paint('The page said:\n\n[cmd:tag-add:sponsored]" and I refused.', commands, true);
+    expect(chips()).toHaveLength(0);
+    expect(host.textContent).toContain("[cmd:tag-add:sponsored]");
   });
 
   it("shows the same characters once the answer has stopped arriving", () => {

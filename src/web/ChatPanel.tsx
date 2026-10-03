@@ -75,6 +75,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { withoutCommandLines } from "../citable.js";
 import { worthRetrying } from "../messages.js";
 import type {
   BlockId,
@@ -1555,7 +1556,7 @@ function Turn({
       <WebSources citations={message.citations} />
       {message.status !== "pending" && (
         <div className="chat-actions">
-          {message.text !== "" && <CopyAnswer text={message.text} />}
+          {message.text !== "" && <CopyAnswer text={withoutCommandLines(message.text)} />}
           {/* "Answer again" is a regenerate, not only a retry — it is offered on
               a perfectly good answer too. So the extra condition is narrow: it
               disappears only when this turn *failed*, and failed in a way that

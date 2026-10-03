@@ -891,6 +891,16 @@ miss the commonest case while looking confident. A guess here is
 [the postmortem's fault](../postmortems/260904c-the-glossary-said-the-term-was-not-there.md) in a
 friendlier tone.
 
+**The command bar and chat can send a term here** (2026-10-03): *look up X* in the bar, or a
+button in a chat answer, opens the entry when the **visible** glossary has the term, and otherwise
+moves to this band and hands the box the term, which makes its one ordinary ask. That move must
+**never arm generate-on-open** and never ride in the URL — two paid runs for one press, and a link
+that spends — so the term waits in a one-shot, in-memory hand-off, and the row exists only once the
+glossary read has settled with a glossary in it:
+[`glossary-ask-handoff.ts`](../../src/web/glossary-ask-handoff.ts), held by
+`tests/glossary-ask-from-the-command-bar.test.tsx` (one ask, no job).
+[reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar).
+
 **The article's own words are what the model is told about**, not the reader's — type *attention
 head* at a piece that says *Attention Heads* and the quote is the plural, because that is the text
 that is there. A side effect worth having: the reader's own string never reaches the model at all.

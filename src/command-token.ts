@@ -97,3 +97,21 @@ const UNFINISHED = /\[(?:c(?:m(?:d(?::(?:[a-z-]+(?::[A-Za-z0-9%-]*)?)?)?)?)?)?$/
 export function unfinishedTokenAt(text: string): number {
   return UNFINISHED.exec(text)?.index ?? -1;
 }
+
+/* A final line made only of one or more complete tokens. While an answer is
+   still arriving, its right edge is not a line edge yet: the next delta may
+   turn `[cmd:tag-add:x]` into quoted prose. The renderer holds this suffix
+   until a newline or the end-of-stream settles it. */
+const UNSETTLED_TOKEN_LINE = new RegExp(
+  String.raw`(?:^|\n)[ \t]*(?:${COMMAND_TOKEN_SOURCE}[ \t]*)+$`,
+);
+
+/** Start of a complete token-only final line that has not been settled yet. */
+export function unsettledTokenLineAt(text: string, startsLine: boolean): number {
+  const match = UNSETTLED_TOKEN_LINE.exec(text);
+  if (match === null) return -1;
+  const afterBreak = match[0].startsWith("\n");
+  if (!afterBreak && !startsLine) return -1;
+  const token = match[0].indexOf("[cmd:");
+  return token === -1 ? -1 : match.index + token;
+}

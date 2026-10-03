@@ -83,12 +83,12 @@ export function citableText(answer: string): string {
 }
 
 /**
- * **The text a command token can be found in**: ordinary text nodes, with link
- * labels, code and bare addresses blanked — `citableText` one step earlier,
- * before the tokens themselves are blanked. The renderer finds tokens in
- * exactly this (src/web/Cited.tsx § `cited`); the eval that counts what a
- * model proposed reads it so that it counts what a reader would be shown
- * (evals/chat-commands/run.ts).
+ * **The text a command-token shape can be found in**: ordinary text nodes, with
+ * link labels, code and bare addresses blanked — `citableText` one step earlier,
+ * before the tokens themselves are blanked. The renderer starts from these
+ * nodes, then applies the structural rules this flat string cannot carry (own
+ * line, and not inside a blockquote). The eval uses it to find attempts before
+ * applying those rules (evals/chat-commands/run.ts).
  */
 export function linkFreeProse(answer: string): string {
   const kept = new Array<string>(answer.length).fill(" ");
@@ -117,4 +117,37 @@ export function linkFreeProse(answer: string): string {
      (src/web/Cited.tsx § leaf). No `remark-gfm`, so the parser leaves bare
      addresses in the text nodes for it to find. */
   return withoutWebLinks(kept.join(""));
+}
+
+/**
+ * **An answer without the lines that are only command buttons** — what *Copy
+ * answer* writes to the clipboard (src/web/ChatPanel.tsx § `CopyAnswer`).
+ *
+ * The reader was shown a button there, not `[cmd:…]`, so the copy leaves the
+ * line out, and one of the two blank lines that stood round it. Only a token
+ * the renderer would have lifted out of ordinary prose counts
+ * (`linkFreeProse`, then a line of its own): one in code, quoted mid-sentence
+ * or behind a blockquote's `>` was drawn as text, and is copied as text. An
+ * answer with no such line comes back unchanged, byte for byte.
+ */
+export function withoutCommandLines(answer: string): string {
+  const prose = linkFreeProse(answer);
+  const kept: string[] = [];
+  let dropped = false;
+  let skipBlank = false;
+  let at = 0;
+  for (const line of answer.split("\n")) {
+    const shown = prose.slice(at, at + line.length);
+    at += line.length + 1;
+    const buttons = shown !== withoutCommandTokens(shown) && withoutCommandTokens(line).trim() === "";
+    if (buttons) {
+      dropped = true;
+      skipBlank = kept.length === 0 || kept[kept.length - 1] === "";
+      continue;
+    }
+    if (skipBlank && line.trim() === "") continue;
+    skipBlank = false;
+    kept.push(line);
+  }
+  return dropped ? kept.join("\n").trimEnd() : answer;
 }
