@@ -661,6 +661,18 @@ describe("no answer", () => {
     expect(listed()).toEqual([]);
   });
 
+  it("does not offer to ask again about the sentence it just could not read", async () => {
+    reading();
+    openBar();
+    await ask("what's the weather tomorrow");
+    await answer({ kind: "none" });
+    /* Found in the browser check: the hint sat straight under the refusal. */
+    expect(empty()).toBe("No command matches.");
+    /* A changed sentence is a new question. */
+    type("what's the weather tomorrow in London");
+    expect(empty()).toContain("Press Enter to ask what you meant.");
+  });
+
   it("says the same for a failure, and never the server's sentence", async () => {
     reading();
     openBar();

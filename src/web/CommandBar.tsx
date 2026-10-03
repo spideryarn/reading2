@@ -1452,8 +1452,17 @@ export function CommandBar({
    * **Whether Enter on nothing asks** — somebody is signed in (the route is
    * signed-in only; `experimental.signedIn` is the store's answer, the one
    * fact about the reader the bar is handed) and there is a sentence.
+   *
    */
   const canAsk = experimental.signedIn && draft.trim() !== "";
+  /**
+   * **The offer is not made straight under a refusal.** `COULD_NOT_TELL`
+   * stays up until the box changes, and *Press Enter to ask* beneath it read
+   * as the bar contradicting itself (the browser check, 2026-10-03). Enter
+   * still asks again — a timeout deserves a second try — it is only the
+   * invitation that waits for a changed sentence.
+   */
+  const offerToAsk = canAsk && !(said?.kind === "message" && said.text === COULD_NOT_TELL);
   const index = Math.min(selected, Math.max(0, results.length - 1));
   const active = results[index];
 
@@ -1901,7 +1910,7 @@ export function CommandBar({
              something, only the offer to ask (`ASK_HINT`) — which does
              nothing until they press Enter for it. */
           <p className="cmdbar-empty tw:m-0 tw:px-4 tw:py-4 tw:text-sm tw:text-muted-foreground">
-            {canAsk ? `${NO_MATCH} ${ASK_HINT}` : NO_MATCH}
+            {offerToAsk ? `${NO_MATCH} ${ASK_HINT}` : NO_MATCH}
           </p>
         ) : (
           <>

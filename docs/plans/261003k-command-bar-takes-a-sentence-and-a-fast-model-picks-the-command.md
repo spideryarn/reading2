@@ -365,3 +365,17 @@ commit still contains F8–F9. F11 is the wider inherited risk, reported only.
     into the bar goes to TypeSafe and, for an argument, to OpenAI; `evals/command-pick/README.md`
     still says the argument commands' words are written in `catalogue.ts`.
 
+- 2026-10-03: **Stage 3 landed** — docs, Help (the keyboard topic), the privacy page's model list
+  (the page must stay true of the code: Jev is shown the sentence and our list of commands; Luna
+  the sentence, when the command needs words), the feedback notes, and two queue entries for what
+  is left (qi-7mpz6n48, qi-wjb27jre). **Browser check** (Playwright, system Chrome, 1280, 820 and
+  390 px, `fowler-phrenology`; shots `261003k-shot-*`): all twelve items passed — one post per
+  Enter, none for a query the bar answers itself, *what's changed on this site since yesterday*
+  drew *What's new* first (0.6 s; Jev was 0.62 sure, so it was offered rather than run), *is
+  consciousness mentioned anywhere* drew the Find row (2 s), a tag was written only on the second
+  Enter, a held Enter confirmed nothing, *delete this article* ran nothing. One defect found and
+  fixed red-first: *Press Enter to ask what you meant.* sat straight under *Couldn't tell what you
+  meant.* Left as they are: the suggested rows are the bar's ordinary 36 px rows; a signed-out
+  article page mounts no bar at all, so its branch is held by the unit test alone.
+- **Reported, not fixed** (Sol's F11, wider than this work, queued in qi-7mpz6n48): the chat
+  gateway drops `usage` on a non-2xx answer.
