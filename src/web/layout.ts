@@ -141,7 +141,8 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
  * more.** `proseAloneMaxPx` below is the cap; this is the rem part of it.
  *
  * 49rem is `--reading-measure` (65ch, ≈46rem in the reading face), plus the
- * cell's `--text-pad-r` (1.4), plus the gutter's inset on each side (0.35 × 2)
+ * cell's plain pad (1.4 — `--text-pad-l` since the gutter moved right in
+ * 261003c, `--text-pad-r` before; the sum is the same), plus the gutter's inset on each side (0.35 × 2)
  * — 48.1, rounded up to something round, exactly as the old 50 rounded its own
  * 49.5. The rounding runs upwards on purpose: `.prose` keeps its own clamp, so
  * slack here is a few pixels of margin inside the column rather than a clipped
@@ -186,7 +187,7 @@ export const BLK_SLOT_REM = 1.5;
  * `PROSE_ALONE_MAX_REM * root` would be the whole answer if every term scaled
  * with the root. Two of the gutter's do not: `--blk-slot` is `max(1.5rem, 24px)`,
  * so below a 16px root the gutter stops shrinking and the *rem* width of the
- * cell's left padding goes **up** — 2.2rem at 16, 2.7rem at 12. A single rem
+ * cell's gutter padding (its right since 261003c) goes **up** — 2.2rem at 16, 2.7rem at 12. A single rem
  * constant therefore cannot be right at every root, and the one that was here
  * under-reserved by 1.2px at 12px and by 12.9px at 9px, silently clipping the
  * measure it exists to protect. GPT Sol's stage 1 review, 2026-09-04.

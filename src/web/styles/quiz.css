@@ -311,17 +311,19 @@
    centred 65ch box inside a wider cell whenever a band is open (prose.css §
    `.prose`), so a line drawn against the cell hung 36px left of the text, under
    the gutter's icons — the 260930i browser check. The same `max-width` and
-   `margin-inline: auto`, and the reading face, size **and weight** so that `ch`
-   means the same width here as there — Geist is variable and its weight axis
-   moves the zero's advance, which was the last 2.8px at 1280 (gutter.css says
-   the same of the gutter). The button sets its own type, weight included. */
+   `margin-inline: auto`, and the prose's face, size **and weight** so that `ch`
+   means the same width here as there. The face matters since 2026-10-02: the
+   prose is Source Serif while the UI base is Geist, a much larger difference
+   than the variable weight axis's old last 2.8px at 1280 (gutter.css says the
+   same of the gutter). The button sets its own UI face, size and weight, so
+   this geometry-only family changes no visible question text. */
 td.text .quiz-in-prose {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
   max-width: clamp(45ch, 90vw, var(--reading-measure));
   margin: 0.35rem auto 0.1rem;
-  font-family: var(--font-reading);
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   font-weight: var(--reading-weight);
   user-select: none;

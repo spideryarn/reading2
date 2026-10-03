@@ -342,11 +342,16 @@ describe("the constants a scoped call is made with", () => {
    *
    * `expand/7`, 2026-10-01: the paperwork rule, `paperwork("structure")` from
    * src/paperwork.ts, after it (plan 261001p).
+   *
+   * `expand/8`, 2026-10-03: that rule names the title block and the reference
+   * list, and gains Structure's abstract paragraph (plan 261003c).
    */
-  it("is at expand/7, since the prompt carries the paperwork rule", () => {
-    expect(EXPAND_PROMPT_VERSION).toBe("expand/7");
+  it("is at expand/8, since the prompt carries the paperwork and abstract rules", () => {
+    expect(EXPAND_PROMPT_VERSION).toBe("expand/8");
     expect(EXPAND_SYSTEM).toContain("PAPERWORK IS NOT THE PIECE");
-    expect(EXPAND_SYSTEM).toContain('Send no "question" on it, at any\ndepth');
+    expect(EXPAND_SYSTEM).toContain('Leave "question" empty on it, at any\ndepth');
+    expect(EXPAND_SYSTEM).toContain("The abstract at the START of a paper");
+    expect(EXPAND_SYSTEM).toContain('(leave "question" empty)');
   });
 
   /**
@@ -362,8 +367,8 @@ describe("the constants a scoped call is made with", () => {
    * checkpoint miss: `canonicalExpansionRequest` hashes the whole wire request,
    * `EXPAND_SYSTEM` included, so a changed prompt already misses.
    */
-  it("stamps toc/11+expand/7, both halves named", () => {
-    expect(EXPANSION_PROMPT_STAMP).toBe("toc/11+expand/7");
+  it("stamps toc/12+expand/8, both halves named", () => {
+    expect(EXPANSION_PROMPT_STAMP).toBe("toc/12+expand/8");
   });
 
   /**

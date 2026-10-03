@@ -1,0 +1,457 @@
+diff --git a/docs/project/prompting-guide.md b/docs/project/prompting-guide.md
+index b3bd4aead..efa8ae0f9 100644
+--- a/docs/project/prompting-guide.md
++++ b/docs/project/prompting-guide.md
+@@ -99,11 +99,13 @@ ${PROFILE_RULES}`;
+   [260928c](../plans/260928c-block-refs-shown-to-readers.md).
+ - **Summarising the whole piece? Leave its paperwork out.** `paperwork(kind)` in
+   [`src/paperwork.ts`](../../src/paperwork.ts) is a second shared section, beside `plainWords`: the
+-  authors' list, affiliations, acknowledgements, funding and disclosures are paperwork when they
+-  only record how the piece was produced, and content when the piece uses them. `"summary"` leaves
+-  it out; `"structure"` keeps the node a table of contents must have and labels it. Summary, Tweets
+-  and both structure-step prompts carry it; the evidence is
+-  [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md).
++  title block, the authors' list, affiliations, acknowledgements, funding, disclosures and the
++  reference list are paperwork when they only record how the piece was produced, and content when
++  the piece uses them. `"summary"` leaves it out; `"structure"` keeps the node a table of contents
++  must have and labels it, and labels a node that is only the front abstract the same way.
++  Summary, Tweets and both structure-step prompts carry it; the evidence is
++  [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md) and
++  [261003c](../plans/261003c-summary-and-structure-skip-the-front-matter.md).
+ - **No words for a reader, no rule.** A prompt whose output is a verdict, a URL, ids or a verbatim
+   transcription is listed in `PLAIN_WORDS_EXEMPT` in the same file, with its reason. A transcriber
+   told to prefer common words is a transcriber invited to tidy.
+diff --git a/evals/paperwork/run.ts b/evals/paperwork/run.ts
+index a4f6ca865..8171de1be 100644
+--- a/evals/paperwork/run.ts
++++ b/evals/paperwork/run.ts
+@@ -34,7 +34,26 @@ import { loadEnvLocal } from "../../src/env.js";
+ import { blindCoin } from "../plain-words/run.js";
+ 
+ const REPO = path.join(import.meta.dirname, "..", "..");
+-const OUT = path.join(REPO, "evals", "results", "paperwork");
++/** Results folder. `--set front-matter` keeps 261003c's arms apart from 261001p's. */
++let OUT = path.join(REPO, "evals", "results", "paperwork");
++
++/**
++ * **Each paper's front abstract, as a block range**, read by hand from the local
++ * blocks for docs/plans/261003c-summary-and-structure-skip-the-front-matter.md:
++ * from the abstract's first block to the last block before the body begins, so
++ * a trailing keywords line (entropy-24) or the publisher's "Similar content" box
++ * (s41598) is inside it. scaling-hypothesis's abstract is its one-paragraph
++ * dek; the blockquote after it is body. A paper not listed is not counted.
++ */
++const ABSTRACT: Record<string, [string, string]> = {
++  "analog-cognition-and-consciousness-4-28-26-spya-f03kqf": ["spya-c5z6sr", "spya-d238cn"],
++  "entropy-24-00930-spya-pywwkq": ["spya-xn9j9k", "spya-y66sc5"],
++  "scaling-hypothesis": ["spya-suzdvz", "spya-suzdvz"],
++  "s41598-023-33209-9-spya-s0qydm": ["spya-wrnsf9", "spya-anyy22"],
++};
++
++/** Node titles that name front or back matter. A screen, printed so it can be read. */
++const FRONT_OR_BACK = /\b(abstract|title|byline|keywords?|references?|bibliograph\w*|works cited|backlinks?)\b/i;
+ const SOURCES = ["structure.ts", "simple-summary.ts", "tweets.ts", "paperwork.ts"];
+ 
+ /** Words that mark a line as being about the paperwork rather than the piece. A screen. */
+@@ -65,6 +84,10 @@ interface ArmFile {
+   versions: { toc: string; tweets: string; simple: string };
+   gists: Line[] | { error: string };
+   simple: { brief: string[]; simple: string[]; fuller: string[] } | { error: string };
++  /** Each paragraph's ids, per level; absent in results written before 261003c. */
++  simpleIds?: { brief: string[][]; simple: string[][]; fuller: string[][] };
++  /** Every block id's position in the article, for the abstract screen. */
++  ordinals?: Record<string, number>;
+   tweets: string[] | { error: string };
+ }
+ 
+@@ -150,7 +173,12 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
+                 const run = await simple.generateSimpleSummary({ article: withSlug, profile: null, power: "standard" });
+                 const texts = (level: "brief" | "simple" | "fuller") =>
+                   run.simpleSummary.levels[level].map((p) => p.text);
+-                return { brief: texts("brief"), simple: texts("simple"), fuller: texts("fuller") };
++                const ids = (level: "brief" | "simple" | "fuller") =>
++                  run.simpleSummary.levels[level].map((p) => [...p.ids]);
++                return {
++                  texts: { brief: texts("brief"), simple: texts("simple"), fuller: texts("fuller") },
++                  ids: { brief: ids("brief"), simple: ids("simple"), fuller: ids("fuller") },
++                };
+               }),
+               attempt(async () => {
+                 const run = await tweets.generateTweets({ article: withSlug, profile: null, power: "standard" });
+@@ -180,7 +208,9 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
+             simple: simple.SIMPLE_PROMPT_VERSION,
+           },
+           gists: result.gists,
+-          simple: result.summary,
++          simple: failed(result.summary) ? result.summary : result.summary.texts,
++          ...(failed(result.summary) ? {} : { simpleIds: result.summary.ids }),
++          ordinals: Object.fromEntries(article.blocks.map((b, i) => [b.id, i])),
+           tweets: result.thread,
+         };
+         fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
+@@ -222,7 +252,43 @@ function report(): void {
+       const simpleVersion = r.versions.simple.startsWith("simple-prompt/")
+         ? r.versions.simple
+         : `Simple prompt unknown (legacy result recorded shape ${r.versions.simple})`;
++      const abs = ABSTRACT[r.slug];
++      let inAbstract = "abstract ids: -";
++      if (abs && r.simpleIds && r.ordinals) {
++        const lo = r.ordinals[abs[0]];
++        const hi = r.ordinals[abs[1]];
++        const at = (id: string) => r.ordinals?.[id];
++        const isAbstract = (id: string) => lo !== undefined && hi !== undefined && (at(id) ?? -1) >= lo && (at(id) ?? -1) <= hi;
++        const parts: string[] = [];
++        for (const level of ["brief", "simple", "fuller"] as const) {
++          const all = r.simpleIds[level].flat();
++          const paras = r.simpleIds[level].filter((ids) => ids.some(isAbstract)).length;
++          parts.push(`${level} ${all.filter(isAbstract).length}/${all.length} ids, ${paras}/${r.simpleIds[level].length} paragraphs`);
++        }
++        inAbstract = `abstract ids: ${parts.join("; ")}`;
++      }
++      /* **By position, not by title** (GPT Sol's plan review of 261003c, P2-1):
++         a node that ends inside the abstract and starts at or before it covers
++         only the front matter and the abstract — the nodes the rule labels. A
++         node that runs on into the body is not one, whatever it is called.
++         Titles are printed beside them only for front- and back-matter names. */
++      const frontBack: string[] = [];
++      if (!failed(r.gists)) {
++        const lo = abs && r.ordinals ? r.ordinals[abs[0]] : undefined;
++        const hi = abs && r.ordinals ? r.ordinals[abs[1]] : undefined;
++        for (const g of r.gists) {
++          if (g.depth === 0) continue;
++          const [first, last] = g.range.split("..");
++          const end = last && r.ordinals ? r.ordinals[last] : undefined;
++          const abstractOnly = lo !== undefined && hi !== undefined && end !== undefined && end >= lo && end <= hi;
++          if (!abstractOnly && !FRONT_OR_BACK.test(g.title)) continue;
++          const tag = abstractOnly ? "ABSTRACT-ONLY" : "named";
++          frontBack.push(`${tag} d${g.depth} "${g.title}" [${first}..${last}]${g.question ? " +question" : ""}: ${g.gist ?? "(no gist)"}`);
++        }
++      }
+       console.log(`${r.slug} (${r.versions.toc}, ${r.versions.tweets}, ${simpleVersion}): Brief ${brief}; simple ${failed(r.simple) ? "-" : words(r.simple.simple.join(" "))}, fuller ${failed(r.simple) ? "-" : words(r.simple.fuller.join(" "))}; ${hits.length} paperwork hits`);
++      console.log(`    ${inAbstract}`);
++      for (const f of frontBack) console.log(`    ${f}`);
+       for (const h of hits) console.log(`    ${h}`);
+       for (const f of [r.gists, r.simple, r.tweets]) if (failed(f)) console.log(`    FAILED: ${f.error}`);
+     }
+@@ -297,6 +363,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
+     return at >= 0 ? rest[at + 1] : undefined;
+   };
+   const positional = rest.filter((x, i) => !x.startsWith("--") && !rest[i - 1]?.startsWith("--"));
++  const set = flag("--set");
++  if (set) {
++    if (!/^[a-z0-9-]+$/.test(set)) throw new Error("--set takes a folder name like front-matter");
++    OUT = path.join(REPO, "evals", "results", set);
++  }
+   if (cmd === "generate") {
+     const arm = flag("--arm");
+     if (!arm || positional.length === 0) throw new Error("generate --arm <arm> <slug>...");
+diff --git a/src/paperwork.ts b/src/paperwork.ts
+index 7afe42118..634c8e94d 100644
+--- a/src/paperwork.ts
++++ b/src/paperwork.ts
+@@ -34,26 +34,59 @@ const KINDS: Record<PaperworkKind, string> = {
+ one of the piece's caveats or limits. Name an author only to say who argues
+ something.`,
+   structure: `A range that is only paperwork still gets its node, because every block
+-must be covered. For that node alone, and as the only exception to the gist
+-rules above: its gist is a short plain label of WHAT it is ("The authors and
++must be covered. For that node alone, and as an exception to the gist rules
++above: its gist is a short plain label of WHAT it is ("The authors and
+ where they work.", "Funding and conflict-of-interest statements."), never what
+ it says, with no word floor and no claim. Send no "question" on it, at any
+ depth. Every other gist, the root's included, ignores it.`,
+ };
+ 
++/**
++ * **The abstract is not paperwork, and has its own paragraph, in Structure
++ * only** (Greg, 2026-09-30, spya-abs6bj: *"title or abstract or references or
++ * acknowledgments … maybe they don't need a summary at all, or maybe it's just
++ * very brief"*). He was reading Summary's per-section outline, which is
++ * Structure's tree today. The abstract is the author's summary of the whole
++ * piece, so it is content; what goes is a gist that summarises a summary,
++ * which the root and the parts already say. A whole-piece summary may use what
++ * the abstract claims, so `"summary"` gets nothing here.
++ *
++ * **A genuine abstract always; a front summary or key-points box only by
++ * role** (GPT Sol's plan review, P1-4): an executive summary or a chapter
++ * preview may make claims the body never returns to, and labelling it would
++ * lose them at the coarse zoom. A closing "Summary" section is the body.
++ *
++ * **"Leave it empty", not "send none"**: the whole-document schema requires a
++ * depth-1 `question` (src/structure.ts § `depth1Schema`), and `questionFor`
++ * reads an empty one as no question (GPT Sol's plan review, P1-1). Plan
++ * docs/plans/261003c-summary-and-structure-skip-the-front-matter.md.
++ */
++const STRUCTURE_ABSTRACT = `The abstract at the START of a paper is the author's own summary of all of
++it, and the root and the other parts already say what it says. A node whose
++range is only the abstract, or only the abstract and paperwork, gets the
++paperwork node's treatment above: a short plain label of what it is ("The
++authors' summary of the paper."), no claim, no word floor, and no question
++(leave "question" empty). Other gists may still draw on what it says. A
++summary or key-points box at the start is treated the same way only where the
++body goes on to make each of its claims; where it says something the body does
++not, it is content. A "Summary" or "Conclusions" section after the body has
++begun is content, and the usual rules apply.`;
++
+ export function paperwork(kind: PaperworkKind): string {
+   return `PAPERWORK IS NOT THE PIECE
+ 
+-Around a piece's content there may be paperwork: the list of authors and where
+-they work, contact and correspondence details, acknowledgements and thanks,
+-funding and grants, conflict-of-interest and other disclosures, ethics
+-approval, author contributions, data-availability statements, and the
+-publisher's notices. Where it only records how the piece was produced and
+-published, it is paperwork.
++Around a piece's content there may be paperwork: the title block (the title,
++subtitle, byline, dates, DOI, keywords and the journal's header), the list of
++authors and where they work, contact and correspondence details,
++acknowledgements and thanks, funding and grants, conflict-of-interest and other
++disclosures, ethics approval, author contributions, data-availability
++statements, the publisher's notices, and, at the end, the reference list or
++bibliography and any lists of backlinks or related links. Where it only records
++how the piece was produced, published and sourced, it is paperwork.
+ ${KINDS[kind]}
+ 
+ Judge it by what it does, not by its heading. If the piece uses any of these as
+ evidence, reasoning, method or a limit on its findings — a funder's role that
+ it says may bias the result, an ethics rule that shaped the study, an article
+-ABOUT research funding — it is content, and the usual rules apply.`;
++ABOUT research funding — it is content, and the usual rules apply.${kind === "structure" ? `\n\n${STRUCTURE_ABSTRACT}` : ""}`;
+ }
+diff --git a/src/simple-summary.ts b/src/simple-summary.ts
+index 9978c72e3..f47b25430 100644
+--- a/src/simple-summary.ts
++++ b/src/simple-summary.ts
+@@ -158,8 +158,12 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
+  * from outside the field, whatever the profile claims, with few terms and one
+  * phrase of method; every level opens on the piece's goal or question (Greg,
+  * spya-rpqqxb; plan 261002h).
++ *
++ * `simple-prompt/6` (2026-10-03): the shared paperwork rule names the title
++ * block and the reference list as paperwork (Greg, spya-abs6bj; plan
++ * 261003c). The abstract rule beside it is Structure's alone.
+  */
+-export const SIMPLE_PROMPT_VERSION = "simple-prompt/5";
++export const SIMPLE_PROMPT_VERSION = "simple-prompt/6";
+ 
+ /** The prompt a stored summary was written with; a row from before the field is the first. */
+ export function simplePromptVersion(simple: SimpleSummary): string {
+diff --git a/src/structure-expand.ts b/src/structure-expand.ts
+index b0593266c..f979e572d 100644
+--- a/src/structure-expand.ts
++++ b/src/structure-expand.ts
+@@ -130,8 +130,12 @@ import type { Block } from "./types.js";
+  * `paperwork("structure")` from src/paperwork.ts, after the plain-words core —
+  * a child that is only authors, funding or disclosures is labelled, not
+  * summarised, and asked no question. Plan 261001p.
++ *
++ * **`expand/8`, 2026-10-03**: the shared paperwork rule names the title block
++ * and the reference list, and a child that is only the front abstract is
++ * labelled the same way (Greg, spya-abs6bj). Plan 261003c.
+  */
+-export const EXPAND_PROMPT_VERSION = "expand/7";
++export const EXPAND_PROMPT_VERSION = "expand/8";
+ 
+ /**
+  * **Both prompt versions, as one string** — the wave-1 prompt this outline came
+diff --git a/src/structure-prompt.ts b/src/structure-prompt.ts
+index 34d3d1bfb..32a11c380 100644
+--- a/src/structure-prompt.ts
++++ b/src/structure-prompt.ts
+@@ -110,7 +110,11 @@ import type { Block } from "./types.js";
+    that starts-only shape with an unrolled JSON schema. Existing trees stay as
+    they are; the new stamp affects new articles and explicit regenerations only.
+    docs/plans/261001s-structure-answer-writes-code-to-correct-an-id.md § Stage 2. */
+-export const PROMPT_VERSION = "toc/11";
++/* **`toc/12`, 2026-10-03**: the shared paperwork rule names the title block and
++   the reference list, and a node that is only the front abstract gets the
++   paperwork node's label and no question (Greg, spya-abs6bj). New articles
++   only, as before. docs/plans/261003c-summary-and-structure-skip-the-front-matter.md. */
++export const PROMPT_VERSION = "toc/12";
+ 
+ /**
+  * How hard the model thinks before it starts writing.
+diff --git a/src/tweets.ts b/src/tweets.ts
+index 4b077e02a..532f0eb77 100644
+--- a/src/tweets.ts
++++ b/src/tweets.ts
+@@ -79,8 +79,12 @@ import { paperwork } from "./paperwork.js";
+  *
+  * `tweets/7`, 2026-10-02: the request gained `TWEETS_OUTPUT_SCHEMA`; the
+  * prompt text is unchanged.
++ *
++ * `tweets/8`, 2026-10-03: the shared paperwork rule names the title block and
++ * the reference list as paperwork (Greg, spya-abs6bj;
++ * docs/plans/261003c-summary-and-structure-skip-the-front-matter.md).
+  */
+-export const PROMPT_VERSION = "tweets/7";
++export const PROMPT_VERSION = "tweets/8";
+ 
+ /** The most passages one post may link to. More is a row of chips nobody reads. */
+ export const MAX_POST_BLOCKS = 3;
+diff --git a/tests/structure-step-expand.test.ts b/tests/structure-step-expand.test.ts
+index 4f46084f6..2dea2e0cc 100644
+--- a/tests/structure-step-expand.test.ts
++++ b/tests/structure-step-expand.test.ts
+@@ -342,11 +342,16 @@ describe("the constants a scoped call is made with", () => {
+    *
+    * `expand/7`, 2026-10-01: the paperwork rule, `paperwork("structure")` from
+    * src/paperwork.ts, after it (plan 261001p).
++   *
++   * `expand/8`, 2026-10-03: that rule names the title block and the reference
++   * list, and gains Structure's abstract paragraph (plan 261003c).
+    */
+-  it("is at expand/7, since the prompt carries the paperwork rule", () => {
+-    expect(EXPAND_PROMPT_VERSION).toBe("expand/7");
++  it("is at expand/8, since the prompt carries the paperwork and abstract rules", () => {
++    expect(EXPAND_PROMPT_VERSION).toBe("expand/8");
+     expect(EXPAND_SYSTEM).toContain("PAPERWORK IS NOT THE PIECE");
+     expect(EXPAND_SYSTEM).toContain('Send no "question" on it, at any\ndepth');
++    expect(EXPAND_SYSTEM).toContain("The abstract at the START of a paper");
++    expect(EXPAND_SYSTEM).toContain('(leave "question" empty)');
+   });
+ 
+   /**
+@@ -362,8 +367,8 @@ describe("the constants a scoped call is made with", () => {
+    * checkpoint miss: `canonicalExpansionRequest` hashes the whole wire request,
+    * `EXPAND_SYSTEM` included, so a changed prompt already misses.
+    */
+-  it("stamps toc/11+expand/7, both halves named", () => {
+-    expect(EXPANSION_PROMPT_STAMP).toBe("toc/11+expand/7");
++  it("stamps toc/12+expand/8, both halves named", () => {
++    expect(EXPANSION_PROMPT_STAMP).toBe("toc/12+expand/8");
+   });
+ 
+   /**
+diff --git a/tests/structure-step-prompt-hoist.test.ts b/tests/structure-step-prompt-hoist.test.ts
+index f05245e4c..ca7f57eee 100644
+--- a/tests/structure-step-prompt-hoist.test.ts
++++ b/tests/structure-step-prompt-hoist.test.ts
+@@ -63,7 +63,7 @@ const BLOCKS: Block[] = [
+ 
+ describe("hoisting the structure prompt's three values", () => {
+   it("moved the stamp and the effort without moving either value", () => {
+-    expect(PROMPT_VERSION).toBe("toc/11");
++    expect(PROMPT_VERSION).toBe("toc/12");
+     expect(PRODUCTION_EFFORT).toBe("low");
+   });
+ 
+@@ -122,10 +122,12 @@ describe("hoisting the structure prompt's three values", () => {
+    * moved from `749c4a601f07fea7` on 2026-10-01, when SYSTEM gained the
+    * paperwork rule and the stamp went to `toc/10` (plan 261001p). It moved
+    * from `b6130eea42744aee` for toc/11's starts-only schema (plan 261001s).
++   * It moved from `2aa7d4a737bab61b` for toc/12's title, references and
++   * abstract wording (plan 261003c).
+    */
+-  it("mints one stable key for the toc/11 structure request", () => {
++  it("mints one stable key for the toc/12 structure request", () => {
+     expect(checkpointKey(canonicalWholeDocumentRequest(wholeDocumentRequest(BLOCKS).params, "standard"))).toBe(
+-      "2aa7d4a737bab61b",
++      "79b9112d141e7229",
+     );
+   });
+ });
+diff --git a/tests/structure-whole-document-request-parity.test.ts b/tests/structure-whole-document-request-parity.test.ts
+index 390a03325..0f464eda0 100644
+--- a/tests/structure-whole-document-request-parity.test.ts
++++ b/tests/structure-whole-document-request-parity.test.ts
+@@ -54,6 +54,9 @@
+  * **RE-PINNED 2026-10-01 for `toc/10`**: the paperwork rule,
+  * `paperwork("structure")` from src/paperwork.ts, follows the plain-words core,
+  * held literally for the same reason (Greg, SPIDERYARN-READING2-8M; plan 261001p).
++ * **RE-PINNED 2026-10-03 for `toc/12`**: the paperwork list names the title
++ * block and the reference list, and Structure's abstract paragraph follows it
++ * (Greg, spya-abs6bj; plan 261003c).
+  * docs/plans/260926a-plainer-summaries-and-glossary.md.
+  */
+ 
+@@ -234,15 +237,17 @@ Plainer than the article, never further from it: never less exact, and never bey
+ 
+ PAPERWORK IS NOT THE PIECE
+ 
+-Around a piece's content there may be paperwork: the list of authors and where
+-they work, contact and correspondence details, acknowledgements and thanks,
+-funding and grants, conflict-of-interest and other disclosures, ethics
+-approval, author contributions, data-availability statements, and the
+-publisher's notices. Where it only records how the piece was produced and
+-published, it is paperwork.
++Around a piece's content there may be paperwork: the title block (the title,
++subtitle, byline, dates, DOI, keywords and the journal's header), the list of
++authors and where they work, contact and correspondence details,
++acknowledgements and thanks, funding and grants, conflict-of-interest and other
++disclosures, ethics approval, author contributions, data-availability
++statements, the publisher's notices, and, at the end, the reference list or
++bibliography and any lists of backlinks or related links. Where it only records
++how the piece was produced, published and sourced, it is paperwork.
+ A range that is only paperwork still gets its node, because every block
+-must be covered. For that node alone, and as the only exception to the gist
+-rules above: its gist is a short plain label of WHAT it is ("The authors and
++must be covered. For that node alone, and as an exception to the gist rules
++above: its gist is a short plain label of WHAT it is ("The authors and
+ where they work.", "Funding and conflict-of-interest statements."), never what
+ it says, with no word floor and no claim. Send no "question" on it, at any
+ depth. Every other gist, the root's included, ignores it.
+@@ -250,7 +255,18 @@ depth. Every other gist, the root's included, ignores it.
+ Judge it by what it does, not by its heading. If the piece uses any of these as
+ evidence, reasoning, method or a limit on its findings — a funder's role that
+ it says may bias the result, an ethics rule that shaped the study, an article
+-ABOUT research funding — it is content, and the usual rules apply.`;
++ABOUT research funding — it is content, and the usual rules apply.
++
++The abstract at the START of a paper is the author's own summary of all of
++it, and the root and the other parts already say what it says. A node whose
++range is only the abstract, or only the abstract and paperwork, gets the
++paperwork node's treatment above: a short plain label of what it is ("The
++authors' summary of the paper."), no claim, no word floor, and no question
++(leave "question" empty). Other gists may still draw on what it says. A
++summary or key-points box at the start is treated the same way only where the
++body goes on to make each of its claims; where it says something the body does
++not, it is content. A "Summary" or "Conclusions" section after the body has
++begun is content, and the usual rules apply.`;
+ 
+ const EXPECTED_SYSTEM = EXPECTED_TOC10_SYSTEM
+   .replace(
+diff --git a/tests/tweets.test.ts b/tests/tweets.test.ts
+index a14e41371..45ab8b048 100644
+--- a/tests/tweets.test.ts
++++ b/tests/tweets.test.ts
+@@ -357,12 +357,16 @@ describe("hashBlocks and isStale", () => {
+  */
+ describe("the tweets prompt", () => {
+   it("pins the paperwork and safe-takeaway rules behind the new stamp", () => {
+-    expect(PROMPT_VERSION).toBe("tweets/7");
++    expect(PROMPT_VERSION).toBe("tweets/8");
+     expect(TWEETS_SYSTEM).toContain("PAPERWORK IS NOT THE PIECE");
+     expect(TWEETS_SYSTEM).toContain("any implication it states\nitself");
+     expect(TWEETS_SYSTEM).toContain("If it deliberately reaches no conclusion");
+     /* The shared omission rule must not erase a substantive disclosure. */
+     expect(TWEETS_SYSTEM).toContain("a funder's role that\nit says may bias the result");
++    /* `tweets/8` (plan 261003c): the list names the references, and the
++       abstract paragraph is Structure's alone. */
++    expect(TWEETS_SYSTEM).toContain("the reference list or\nbibliography");
++    expect(TWEETS_SYSTEM).not.toContain("The abstract at the START");
+   });
+ });
+ 
+diff --git a/evals/paperwork/run.ts b/evals/paperwork/run.ts
+index 8171de1be..eee46de2e 100644
+--- a/evals/paperwork/run.ts
++++ b/evals/paperwork/run.ts
+@@ -42,13 +42,14 @@ let OUT = path.join(REPO, "evals", "results", "paperwork");
+  * blocks for docs/plans/261003c-summary-and-structure-skip-the-front-matter.md:
+  * from the abstract's first block to the last block before the body begins, so
+  * a trailing keywords line (entropy-24) or the publisher's "Similar content" box
+- * (s41598) is inside it. scaling-hypothesis's abstract is its one-paragraph
+- * dek; the blockquote after it is body. A paper not listed is not counted.
++ * (s41598) is inside it. scaling-hypothesis is a gwern.net essay: a one-line
++ * description, then the opening blockquote that is the site's abstract, so both
++ * are in it. A paper not listed is not counted.
+  */
+ const ABSTRACT: Record<string, [string, string]> = {
+   "analog-cognition-and-consciousness-4-28-26-spya-f03kqf": ["spya-c5z6sr", "spya-d238cn"],
+   "entropy-24-00930-spya-pywwkq": ["spya-xn9j9k", "spya-y66sc5"],
+-  "scaling-hypothesis": ["spya-suzdvz", "spya-suzdvz"],
++  "scaling-hypothesis": ["spya-suzdvz", "spya-ewxv9q"],
+   "s41598-023-33209-9-spya-s0qydm": ["spya-wrnsf9", "spya-anyy22"],
+ };
+ 

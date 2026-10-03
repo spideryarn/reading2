@@ -580,8 +580,9 @@ function SpineInner({
   const [hereHit, setHereHit] = useState<{ id: string; metrics: Metrics } | null>(
     null,
   );
-  /** The moving viewport band, written to directly rather than re-rendered. */
-  const viewportBand = useRef<HTMLDivElement>(null);
+  /** The track-height wrapper the viewport band rides in, moved directly by
+      `transform` rather than re-rendered (§ scroll position). */
+  const viewportMover = useRef<HTMLDivElement>(null);
   /**
    * The presses begun on the rail whose clicks have not arrived yet, oldest
    * first — see `bandClick`. A queue rather than one slot because clicks may
@@ -668,8 +669,36 @@ function SpineInner({
    * could not have seen this at all: both its parts had `children: []`, which
    * makes `hits` and `l1` the same array.
    *
-   * React does not clobber the imperative `top`: the element's `style` prop
-   * never contains it, so the diff has nothing to say about it.
+   * **The band moves by `transform`, not `top`, and that is a battery fix.**
+   * It was `band.style.top = …%`, and a `top` write is layout + paint + raster
+   * on every frame of every scroll: a Chrome trace on 2026-10-03, iPad
+   * emulation, found it written ~480 times a gesture and the only tracked
+   * invalidation in ~460 of ~550 paints, with the spine's layer repainted ~500
+   * times and the page's ~330. With the transform: 53 paints, the spine's
+   * layer 17, the page's 26, and the main thread's CPU per scrolled pixel
+   * about halved (docs/investigations/261003a-what-a-scroll-frame-costs-in-the-reading-view.md,
+   * from an iPad battery report, spya-m0mcqb). A `translateY` on an element
+   * the browser is asked to give its own layer (spine.css §
+   * `.spine-viewport-track`) is a compositor update and none of those — in
+   * Chromium, measured; elsewhere expected, because `will-change` is a hint a
+   * browser may decline.
+   *
+   * **What moves is a wrapper the track's height, not the band.** A
+   * `translateY(%)` is a percentage of the element's *own* height, so on the
+   * band itself it would be a fraction of the viewport's share of the article
+   * — exact until the band's `min-height: 2px` takes over on a very long piece,
+   * and then hundreds of pixels wrong. On a wrapper that is `inset: 0` over
+   * the track, its own height *is* the track's, so the same fraction `top`
+   * used, times 100%, lands exactly where `top` did. That is also why there is
+   * no ResizeObserver here: the track changes height with no scroll at all —
+   * on a resize, and through the bar flip's 180ms `top` transition on `.spine`
+   * (shell.css) — and a percentage follows it for free, where a pixel
+   * transform would need a measurement and an observer to keep it fresh. The
+   * pixel version was built first and dropped on GPT Sol's review, F6:
+   * docs/plans/261003a-ipad-battery-scroll-repaint-review-sol.md.
+   *
+   * React does not clobber the imperative `transform`: the wrapper's `style`
+   * prop never contains it, so the diff has nothing to say about it.
    *
    * Depends on `metrics` and `viewportH` rather than reading them from refs.
    * Both change rarely (a resize, a font swap), so re-subscribing then is
@@ -689,8 +718,8 @@ function SpineInner({
       raf = 0;
       const sy = window.scrollY;
 
-      const band = viewportBand.current;
-      if (band) band.style.top = `${((sy - docTop) / docHeight) * 100}%`;
+      const mover = viewportMover.current;
+      if (mover) mover.style.transform = `translateY(${((sy - docTop) / docHeight) * 100}%)`;
 
       const pos = sy + viewportH * READING_LINE - docTop;
       const inBand = (b: Band) => pos >= b.top && pos < b.top + b.height;
@@ -1382,12 +1411,15 @@ function SpineInner({
 
         {/* The viewport band: how much of the article is on screen right now,
             and where. This is the "where am I" the whole rail exists for. */}
-        <div
-          ref={viewportBand}
-          className="spine-viewport"
-          /* `top` is deliberately absent — the scroll effect above owns it. */
-          style={{ height: pct(viewportH) }}
-        />
+        {/* Two elements, and the outer one is the one that moves: a
+            track-height wrapper the scroll effect slides by `translateY(%)`,
+            because a per-frame `top` repainted the page and a percentage
+            translate of the band itself would be a percentage of the wrong
+            height (§ scroll position). It has no `style` prop at all, so React
+            never touches the transform; the band sits at its `top: 0`. */}
+        <div ref={viewportMover} className="spine-viewport-track">
+          <div className="spine-viewport" style={{ height: pct(viewportH) }} />
+        </div>
       </div>
     </aside>
   );

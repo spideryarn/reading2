@@ -130,8 +130,12 @@ import type { Block } from "./types.js";
  * `paperwork("structure")` from src/paperwork.ts, after the plain-words core —
  * a child that is only authors, funding or disclosures is labelled, not
  * summarised, and asked no question. Plan 261001p.
+ *
+ * **`expand/8`, 2026-10-03**: the shared paperwork rule names the title block
+ * and the reference list, and a child that is only the front abstract is
+ * labelled the same way (Greg, spya-abs6bj). Plan 261003c.
  */
-export const EXPAND_PROMPT_VERSION = "expand/7";
+export const EXPAND_PROMPT_VERSION = "expand/8";
 
 /**
  * **Both prompt versions, as one string** — the wave-1 prompt this outline came

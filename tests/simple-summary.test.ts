@@ -1265,10 +1265,13 @@ describe("parseCheckVerdicts", () => {
  * mark a summary outdated without making it unreadable, which bumping the shape
  * version would.
  */
-describe("the prompt version (plan 261001p)", () => {
+describe("the prompt version (plans 261001p and 261003c)", () => {
   it("stamps today's prompt beside the unchanged shape version", () => {
     const out = build([para("It asks whether a model can read.", INTRO.id), para("It matters.", WHY.id)]);
     expect(out.version).toBe("simple/2");
+    /* A literal pin, not a value derived from the output under test: otherwise
+       changing both the producer and this imported constant stays green. */
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/6");
     expect(out.promptVersion).toBe(SIMPLE_PROMPT_VERSION);
     expect(simplePromptVersion(out)).toBe(SIMPLE_PROMPT_VERSION);
     /* Pipeline freshness and artefact copies read this generic stamp. If they
@@ -1294,6 +1297,8 @@ describe("the prompt version (plan 261001p)", () => {
     expect(SIMPLE_SYSTEMS.brief).toContain("About 80 words");
     for (const system of Object.values(SIMPLE_SYSTEMS)) {
       expect(system).toContain("PAPERWORK IS NOT THE PIECE");
+      expect(system).toContain("the reference list or\nbibliography");
+      expect(system).not.toContain("The abstract at the START");
       expect(system).toContain("any implication it\n  states itself");
       expect(system).toContain("Never advice or a consequence it does not give");
     }
