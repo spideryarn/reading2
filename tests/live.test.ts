@@ -92,6 +92,9 @@ describe("the tools, in the shape realtime actually takes", () => {
 
 describe("what the model is told", () => {
   const text = liveInstructions({ meta, blocks });
+  /* The prompt is hard-wrapped, so a phrase can straddle a newline; rewrapping
+     a paragraph must not redden a test about what it says. */
+  const flat = text.replace(/\s+/g, " ");
 
   it("contains the whole article, with its ids", () => {
     expect(text).toContain("The rainstorm does not compute.");
@@ -106,6 +109,24 @@ describe("what the model is told", () => {
        end of every claim, which out loud is unusable. */
     expect(text).not.toContain("CITING THE ARTICLE — THE ONE RULE THAT MATTERS");
     expect(text).toContain("NEVER SAY A BLOCK ID OUT LOUD");
+  });
+
+  it("fills the wait before a slow tool, and does not answer noise", () => {
+    /* Three rules that pull against each other, so they are pinned together
+       (docs/plans/261003a § Stage 1). A sentence before a slow tool turns a
+       second of dead air into "let me check"; the unclear-audio rule stops a
+       cough becoming a web search; and neither may loosen the one rule this
+       prompt exists for. Phrases, not paragraphs — the wording will move. */
+    expect(flat).toContain("say one short sentence");
+    expect(flat).toContain("show_passage needs no such sentence");
+    expect(flat).toContain("unintelligible");
+    expect(flat).toContain("Never guess");
+    expect(flat).toContain("never call a tool on");
+    expect(flat).toContain("NEVER SAY A BLOCK ID OUT LOUD");
+  });
+
+  it("does not change language on an accent", () => {
+    expect(flat).toContain("An accent, a filler word or a single foreign term is not");
   });
 
   it("puts the rules before the article", () => {

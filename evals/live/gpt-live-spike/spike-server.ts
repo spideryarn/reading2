@@ -6,7 +6,7 @@
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { loadEnvLocal } from "../src/env.ts";
+import { loadEnvLocal } from "../../../src/env.js";
 
 loadEnvLocal();
 const KEY = process.env.OPENAI_API_KEY;
