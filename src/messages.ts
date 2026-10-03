@@ -4276,14 +4276,14 @@ export const ALWAYS_SHARED = [
 ] as const;
 
 /**
- * **The artefact that crosses but has no mode of its own.**
+ * **The artefacts that cross but have no mode of their own** — this one and
+ * `SHARED_THREAD` below.
  *
- * There were two until 2026-09-29. `SHARED_TWEETS` was here first, and GPT Sol
- * pointed out on 2026-09-02 that the arc was in the same position and quietly
- * missing: `available.arc` was computed, sent, and never read. Then the thread
- * stopped being a page and became a mode, so the sweep over `MODES` lists it
- * through `OWNER_MODE_NOTE.tweets`, and `SHARED_TWEETS` went — two rows for one
- * artefact is what the sweep exists to prevent.
+ * `SHARED_TWEETS` was here first, and GPT Sol pointed out on 2026-09-02 that
+ * the arc was in the same position and quietly missing: `available.arc` was
+ * computed, sent, and never read. From 2026-09-29 to 2026-10-03 the thread was
+ * a mode, and the sweep over `MODES` listed it instead; it is back as a row of
+ * its own now that it is one of Summary's views.
  *
  * The arc is the extra rung Outline draws when there is one, so Outline is
  * shared either way and the arc is a separate row rather than a condition on it.
@@ -4292,6 +4292,24 @@ export const SHARED_ARC = {
   key: "arc",
   label: "The arc",
   detail: "One sentence per part saying where the argument has got to — the top rung of Outline.",
+};
+
+/**
+ * **The thread, which crosses when there is one and has no mode to be swept.**
+ *
+ * It is Summary's Thread view since 2026-10-03, and Summary is `available` to
+ * a visitor whatever is stored (src/web/visitor.ts § `POLICY`), so the sweep's
+ * Summary row cannot say whether a thread goes out. This row can: it is listed
+ * as shared when `available.tweets`, and under *if built* otherwise — exactly
+ * where the Tweets mode's row stood (src/web/shared-inventory.ts).
+ * `key` is the wire key, as the arc's is. The sentence is the one that row
+ * carried, and `SHARED_TWEETS.detail` before it.
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
+ */
+export const SHARED_THREAD = {
+  key: "tweets",
+  label: "The thread",
+  detail: "The article rewritten as a numbered thread, each post linked to where it came from.",
 };
 
 /**
@@ -4373,7 +4391,11 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      (src/public/dto.ts § `provisional`). A flat promise of a gist per section is
      a claim about an article that has finished ingesting, and these rows are
      shown about articles that have not. GPT Sol's review, 2026-09-02. */
-  summary: "The one-line gist written for each section, down the page, where there is one.",
+  /* The plain-words paragraphs since 2026-10-01, when the outline of gists left
+     Summary (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md);
+     this sentence went on describing the gists until 2026-10-03. The thread has
+     a row of its own, `SHARED_THREAD`. */
+  summary: "The piece in plain words, in a few short paragraphs, where they have been written.",
   glossary:
     "The terms the model pulled out of the piece, and what each one means here. Your lookups are " +
     "listed separately and are not part of this.",
@@ -4431,9 +4453,6 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      line are the model's reading (src/skim.ts). */
   skim:
     "A route through this piece's quotes, in the order the model thought best for you, walked a little deeper each time round.",
-  /* `SHARED_TWEETS.detail`'s sentence until 2026-09-29, when the thread became a
-     mode and the sweep over `MODES` started listing it. */
-  tweets: "The article rewritten as a numbered thread, each post linked to where it came from.",
   /* What the column draws is all built elsewhere: the tree's question for each
      part, the arc, and the ideas where they have been made. So the row names
      those, and says they sit beside the text — the one thing this mode adds is
@@ -4849,21 +4868,12 @@ export const REFEREE_TEXT_ALREADY_SENT =
   "confidentiality on its own, whoever writes the review. This mode is meant for public preprints, " +
   "open-review submissions, and drafts shared with you with the author's consent.";
 
-/**
- * **The same fact in one line, for the shut state of the notice.**
- *
- * The notice in Referee mode is collapsed until a referee opens it — Greg,
- * 2026-09-02 — and a collapse that took the fact away with the paragraph would
- * be a dismissal wearing a chevron. So the fact itself is the label on the
- * control: whatever the referee does, this sentence is on screen.
- *
- * It is the first clause of `REFEREE_TEXT_ALREADY_SENT` and nothing else. The
- * long sentence is left exactly as it was reviewed — what is behind the
- * disclosure is *which venues call that a breach, and which manuscripts this
- * mode is for*, which is the part somebody reads once.
- */
-export const REFEREE_TEXT_ALREADY_SENT_SHORT =
-  "This article's text has already been sent to a third-party model provider.";
+/* `REFEREE_TEXT_ALREADY_SENT_SHORT`, the sentence's first clause, was here as
+   the always-visible label of the notice's collapse (2026-09-02 to 2026-10-03).
+   The notice is behind the band's Notices button now and prints in full when
+   opened, so nothing reads it. Whether a one-line fact should stay on screen
+   is [Q-referee-notices-hidden] in
+   docs/plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md. */
 
 /**
  * **The second fact, and it applies to the venues that said yes.**
@@ -4885,29 +4895,28 @@ export const REFEREE_DECLARE_IT =
  * Candidates is the only control in the mode that reaches a **search engine**,
  * which is a different third party from the model provider, at a different time.
  *
- * **It is here, above the chips, rather than on the chip's tooltip**, and that
- * placement is the whole point. Candidates used to sit behind a labelled button
- * whose *visible words* named both parties before either was reached; on
- * 2026-09-06 the chip itself started the run, which moved the disclosure on that
- * button to after the fact. A `ControlTip` is not a replacement —
- * docs/project/referee-mode.md § Four labels changed says it outright, *"a
- * tooltip is not read by anybody in a hurry"*, which is what a referee is. So
- * the sentence moved to the one place that is on screen before any chip has been
- * pressed.
+ * **It is printed where the search is caused: at the top of the Candidates
+ * panel, on screen before the first turn and beside the composer after it.**
+ * From 2026-09-06 to 2026-10-03 the Candidates chip itself started the run, so
+ * this sentence had to be on screen before any chip was pressed and was drawn
+ * above the chips in all four sub-modes — and read *"Opening Candidates may
+ * send…"*. Greg, 2026-10-03 (`spya-vbeyse`), met that as one of *"a whole bunch
+ * of warnings"* over the mode's actions. Candidates went back behind its
+ * button (src/web/activation.ts § REFEREE_TARGET), opening it sends nothing,
+ * and the sentence moved to the panel whose controls it is about. It is also
+ * in the band's Notices box, so the list of where text goes is whole in one
+ * place.
  *
- * **Never behind the collapse, and drawn above it.** The two sentences it sits
- * over fold away into `REFEREE_TEXT_ALREADY_SENT_SHORT`; this one does not,
- * because folding a warning about something that has not happened yet is
- * dismissing it. It is *above* them rather than below because the box is a
- * 40%-height scroller, and underneath them an expanded notice pushes this out of
- * sight while the Candidates chip stays on screen.
+ * Visible text and not a tooltip, for the reason docs/project/referee-mode.md
+ * gives — *"a tooltip is not read by anybody in a hurry"* — and because a touch
+ * device has no hover at all.
  *
- * If Candidates ever goes back behind a button, this line goes with it.
- * docs/plans/260906b-opening-a-mode-starts-it-generating.md § Stage 4.
+ * If the chip ever starts the run again, this goes back above the chips with
+ * it. docs/plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md.
  */
 export const REFEREE_CANDIDATES_REACHES_SEARCH =
-  "Opening Candidates may send terms drawn from this paper to a search engine, which is a " +
-  "different third party from the model provider.";
+  "Candidates may send terms drawn from this paper to a search engine, which is a different " +
+  "third party from the model provider.";
 
 /* ------------------------------------------------------------- feedback -- */
 

@@ -251,18 +251,38 @@ not merely the writing of frames, and gets no `done` at all.
 
 ## On screen
 
-`?remember=quiz`, and the Recall | Tutorial | Quiz toggle at the top of the band —
+`?remember=quiz`, and the Recall | Tutorial | Explore | Quiz toggle at the top of the band —
 [url-state.md](url-state.md) has the parameter and its defined collision with `?thread=`.
 
 **The step row is icons, their words in tooltips** (Greg, 2026-09-30, SPIDERYARN-READING2-71:
 *"let's use icons instead of text labels, you know, perhaps with tooltips"*;
 [icons.md § Navigation](icons.md)): Previous, Next and *Show all N questions* are `ChevronLeft`,
-`ChevronRight` and `List`. **Three things keep their words.** *Answer* is the one real action and
-the mark's note names it; *Show a reference answer*'s indefinite article is the point (§ A reference
-answer is not an answer key); and the Recall | Tutorial | Quiz toggle, because on a touch screen a hover card
+`ChevronRight` and `List`. **Two things keep their words**: *Show a reference answer*, whose
+indefinite article is the point (§ A reference answer is not an answer key); and the
+Recall | Tutorial | Explore | Quiz toggle, because on a touch screen a hover card
 never opens, and "say what you took from it" versus "the article asks" is not something a glyph
 carries on its own (GPT Sol's plan review; Greg's *"maybe remember mode as well"* left it open). **← / → step the questions** as Previous and Next do —
 [keyboard.md § ← / → in Quiz](keyboard.md), which also has the one rule the keys add.
+
+**Answer is chat's send button** since 2026-10-03 — it kept its word until then, as "the one real
+action". Greg (spya-fzgcqu):
+
+> In quiz mode, replace the answer text label with, you know, an icon and a tooltip, just as we do
+> with other places in the chat or whatever.
+
+Its name is still *Answer* (*Try again* after a failed mark) — on its card with the shortcut, and
+as its `aria-label`, so the mark's note that says *"Press Answer"* names a real control. It is
+refused with `aria-disabled`, so the card opens on an empty box.
+
+**One button is filled at a time: Answer until the answer is marked, Next after.** Greg
+(spya-smev24) had read the mark and *"was expecting there to be a button at the bottom underneath,
+sort of for, you know, next question"*; there was one, a 16px grey chevron below *Show a reference
+answer*. So the step row sits directly under the mark, and once a mark is `done` and is about the
+words in the box, Next takes the fill and Answer goes to its outline. Answer stays pressable — the
+same words can be marked again — and an edit to the box hands the fill back. It is read from the
+mark's status, never from the verdict, so right, wrong and unjudged look the same. Plan, both GPT
+Sol reviews and the browser check:
+[261003i](../plans/261003i-quiz-answer-icon-whole-answer-and-next-after-the-mark.md).
 
 - **One question at a time, in path order.** Next goes to the next step, Previous to the one before,
   and "Question *n* of *N*" is the position on the path. *Show all N* lists the question stems —
@@ -278,6 +298,10 @@ carries on its own (GPT Sol's plan review; Greg's *"maybe remember mode as well"
   it true.
 - The answer box is the shared `useDictationField` — [dictation.md](dictation.md) — because an
   answer from memory arrives as speech more readily than as typing.
+- **The answer box is as tall as the answer** (Greg, 2026-10-03, spya-qnrxuw: *"show the whole
+  answer and don't put my answer in a scrollable box"*). Four rows is the floor and there is no
+  roof; the band scrolls, the box never does. It is re-measured when its width changes as well as
+  when its words do, or a rotated iPad hides the last lines.
 - The mark is drawn with `CitedText`, so its block ids are chips that jump the prose.
 - **A question is ticked answered only when its mark reaches `done`.** A stream that stops cleanly
   without finishing looks exactly like one that finished, which is the whole reason `attempt.status`

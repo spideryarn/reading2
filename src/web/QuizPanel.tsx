@@ -81,7 +81,16 @@
  * and leaves the new batch's Answer button enabled and inert.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, List, MessageCircleQuestionMark, RotateCcw, TriangleAlert } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  List,
+  LoaderCircle,
+  MessageCircleQuestionMark,
+  RotateCcw,
+  SendHorizontal,
+  TriangleAlert,
+} from "lucide-react";
 import type { BlockId, Quiz, QuizQuestion, QuizQuestionId, QuizVerdict } from "../types.js";
 import { MAX_QUIZ_ANSWER_CHARS } from "../types.js";
 import { showPremise } from "./quiz-ladder.js";
@@ -97,8 +106,8 @@ import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { Tooltip, TooltipGroup } from "./Tooltip.js";
-import { IconButton } from "./IconButton.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { ICON_BUTTON_CLASS, IconButton } from "./IconButton.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { Button } from "./components/ui/button.js";
 import { keepDictation } from "./dictation-keep.js";
@@ -185,7 +194,7 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
 }
 
 /**
- * **Recall | Tutorial | Quiz**, at the top of the Remember band.
+ * **Recall | Tutorial | Explore | Quiz**, at the top of the Remember band.
  *
  * A control rather than two links, because the two are one choice — and it is
  * rendered by `RememberBand` and handed to whichever panel is showing, so that
@@ -294,7 +303,7 @@ export function QuizPanel({
    * "read nothing" and hide the whole quiz.
    */
   readSoFar?: ReadSoFar | undefined;
-  /** The Recall | Tutorial | Quiz control, built by `RememberBand`. */
+  /** The Recall | Tutorial | Explore | Quiz control, built by `RememberBand`. */
   subMode?: React.ReactNode;
   /** Every block this article has, id to plain text — the "is this real" check
       every citation chip in the band is drawn through. */
@@ -634,6 +643,54 @@ export function QuizPanel({
    */
   const superseded = mine !== null && typed.trim() !== mine.answer;
 
+  /**
+   * **The box is as tall as what is in it** — Greg, 2026-10-03 (spya-qnrxuw):
+   * *"show the whole answer and don't put my answer in a scrollable box."*
+   * Chat's composer's mechanism without its roof: `auto` first, or the box could
+   * only ever grow. `rows` is the floor; the band is what scrolls.
+   *
+   * **Measured again when the width changes, and not only when the words do.**
+   * Rotate an iPad under a long answer and more lines wrap inside a height
+   * nobody re-asked for, with the overflow hidden — the words would be there
+   * and not on screen. GPT Sol's plan review, F1.
+   *
+   * The passed-over line of CSS is `field-sizing: content`: no Firefox, and a
+   * Safari too recent to promise on the iPad this was reported from.
+   */
+  const fitBox = () => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    /* `scrollHeight` stops inside the border and the box is `border-box`. */
+    el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;
+  };
+  const hasQuestion = question !== undefined;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect measures the DOM, and `typed` is what changed it; `hasQuestion` is the box mounting
+  useLayoutEffect(fitBox, [typed, hasQuestion]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `hasQuestion` is the box mounting and unmounting, which is when there is an element to watch
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    /* Width only: the fit itself changes the height, and reacting to that
+       would be a loop. */
+    let width = el.clientWidth;
+    const watch = new ResizeObserver(() => {
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      fitBox();
+    });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [hasQuestion]);
+
+  /**
+   * **A finished mark that is about the words in the box.** From here the next
+   * thing to do is go on, so the fill moves from Answer to Next (spya-smev24).
+   * Read from `status`, never from the verdict: right, wrong and unjudged look
+   * the same, because how the reader did is not for showing.
+   */
+  const settled = mine?.status === "done" && !superseded;
+
   const move = (to: number, byNext: boolean) => {
     /* The attempt on screen belongs to the question that is leaving, and
        `clearAttempt` also aborts a mark still in flight — one live request per
@@ -819,6 +876,15 @@ export function QuizPanel({
     return i >= 0 && included[i] === true;
   };
 
+  const cannotAnswer =
+    !typed.trim() ||
+    tooLong ||
+    marking ||
+    owner.stale ||
+    dictate.readOnly ||
+    dictate.dictation.armed;
+  const answerName = marking ? "Marking…" : mine?.status === "failed" && !superseded ? "Try again" : "Answer";
+
   const submit = () => {
     /* **Not while the microphone is involved, and that is two states.**
        `readOnly` stops typing and nothing else, so this button is still live
@@ -851,7 +917,7 @@ export function QuizPanel({
         <>
           {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
               docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-              stays for the Recall | Tutorial | Quiz control, which is the one thing here
+              stays for the Recall | Tutorial | Explore | Quiz control, which is the one thing here
               the Dock does *not* say. */}
           {subMode}
           {/* Written for your profile, and the Regenerate in its panel — Greg,
@@ -999,38 +1065,45 @@ export function QuizPanel({
                   disabled={marking || owner.stale}
                 />
                 <div className="quiz-actions">
-                  <button
-                    type="button"
-                    className="gloss-run"
-                    /* Disabled on an empty answer, while one is in flight, and on
-                       a stale quiz — all three of which the server would refuse
-                       anyway (400, one-live-request, 409). Disabling is the
-                       courtesy; the route is the rule.
+                  {/* **Chat's send button, and its words on a card** — Greg,
+                      2026-10-03 (spya-fzgcqu): *"replace the answer text label
+                      with, you know, an icon and a tooltip, just as we do with
+                      other places in the chat."* `chat-send` is the box;
+                      `quiz-go` is the fill, which this button has until its
+                      answer is marked and Next has after (quiz.css).
 
-                       And on both microphone states, which nothing else would
-                       refuse: `submit` returns silently there, so a lit button
-                       would be a press that marks nothing and says nothing. */
-                    disabled={
-                      !typed.trim() ||
-                      tooLong ||
-                      marking ||
-                      owner.stale ||
-                      dictate.readOnly ||
-                      dictate.dictation.armed
+                      Refused on an empty answer, while one is in flight, on a
+                      stale quiz and on both microphone states — `submit` says
+                      no to every one of them, and the server to the first
+                      three. **`aria-disabled`, not `disabled`**, so the card
+                      still opens on a button that cannot be pressed, which is
+                      when a reader wonders what it is (tooltips.md). */}
+                  <Tooltip
+                    placement="top"
+                    content={
+                      <ControlTip
+                        head={answerName}
+                        what="Have your answer marked against the article."
+                        how="Cmd+Enter or Ctrl+Enter in the box does the same."
+                      />
                     }
-                    onClick={submit}
                   >
-                    {/* *Try again* only where trying the same thing again is
-                        what the press means. Once the box has been edited the
-                        button is sending a different answer, not retrying a
-                        dropped connection — and the note above it says "Press
-                        Answer". */}
-                    {marking
-                      ? "Marking…"
-                      : mine?.status === "failed" && !superseded
-                        ? "Try again"
-                        : "Answer"}
-                  </button>
+                    <button
+                      type="button"
+                      className={settled ? "chat-send" : "chat-send quiz-go"}
+                      /* *Try again* only where trying the same thing again is
+                         what the press means. Once the box has been edited the
+                         button is sending a different answer, not retrying a
+                         dropped connection — and the note above it says "Press
+                         Answer". */
+                      aria-label={answerName}
+                      aria-busy={marking || undefined}
+                      aria-disabled={cannotAnswer || undefined}
+                      onClick={cannotAnswer ? undefined : submit}
+                    >
+                      {marking ? <LoaderCircle className="cmt-spinner" size={18} /> : <SendHorizontal size={18} />}
+                    </button>
+                  </Tooltip>
                   <Mic dictate={dictate} disabled={marking || owner.stale} />
                   {tooLong && (
                     <span className="gloss-error">
@@ -1050,13 +1123,9 @@ export function QuizPanel({
                   />
                 )}
 
-                <ReferenceAnswer
-                  question={question}
-                  open={showAnswer}
-                  onToggle={() => setShowAnswer((v) => !v)}
-                  onJump={onJump}
-                />
-
+                {/* Under the mark and above the reference answer since
+                    2026-10-03: where the reader looks when they have finished
+                    reading what the mark says. */}
                 <div className="quiz-step">
                   {/* One step back along the path — the question before this
                       one in the array, wherever the reader came from. After a
@@ -1087,9 +1156,30 @@ export function QuizPanel({
                     }
                     placement="top"
                   >
-                    <IconButton label="Next question" titled={false} disabled={!canGoNext} onClick={goNext}>
+                    {/* **One element, two looks.** Quiet like its neighbours until
+                        the answer is marked, then the filled box Answer had:
+                        Greg expected "a button at the bottom underneath" the
+                        mark and the grey chevron did not read as one
+                        (spya-smev24). A plain `<button>` switching class and
+                        not an `IconButton` swapped for something else, so
+                        focus stays put as the mark lands; refused the way
+                        `IconButton` refuses, so its card still opens. */}
+                    <button
+                      type="button"
+                      className={settled && canGoNext ? "chat-send quiz-go" : ICON_BUTTON_CLASS}
+                      aria-label="Next question"
+                      aria-disabled={!canGoNext || undefined}
+                      onClick={
+                        canGoNext
+                          ? goNext
+                          : (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }
+                      }
+                    >
                       <ChevronRight />
-                    </IconButton>
+                    </button>
                   </Tooltip>
                   <Tooltip
                     content={<p>{listing ? "Hide the list" : `Show all ${questionCount(includedAt.length)}`}</p>}
@@ -1105,6 +1195,13 @@ export function QuizPanel({
                     </IconButton>
                   </Tooltip>
                 </div>
+
+                <ReferenceAnswer
+                  question={question}
+                  open={showAnswer}
+                  onToggle={() => setShowAnswer((v) => !v)}
+                  onJump={onJump}
+                />
 
                 {listing && (
                   <>

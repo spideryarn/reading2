@@ -435,6 +435,7 @@ describe("the Candidates box", () => {
           },
           loaded: true,
           loadFailed: false,
+          onReload: () => {},
           blocks: [],
           error: null,
           onAsk: (q: string) => asked.push(q),

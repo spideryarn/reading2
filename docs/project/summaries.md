@@ -3,16 +3,17 @@
 Up: [reading-view-overview.md](reading-view-overview.md)
 
 A **mode** in the band between the spine and the prose: a few short paragraphs in everyday words
-saying what the piece is about, why it matters, and its key ideas, at one of three lengths on a
-slider — **Brief**, **Simple**, **Fuller**. Press `Summary` in the bottom bar. Every paragraph links
-to the passages it rests on.
+saying what the piece is about, why it matters, and its key ideas, at one of two lengths —
+**Brief** or **Fuller** — or the piece as a numbered **Thread**. Press `Summary` in the bottom bar
+and choose with the three-way control at the top. Every paragraph links to the passages it rests
+on. The thread is [tweets.md](tweets.md)'s; this doc is the paragraphs and the control.
 
 **Until 2026-10-01 Summary was also an outline** — one sentence on the article, each part and each
 section, the tree's gists at a Parts | Sections depth. That went because Structure already draws the
 same tree; [§ History](#history-the-outline-2026-08-26-to-2026-10-01) has what it was and where to
 find it.
 
-Code: [`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) (the band and the slider row),
+Code: [`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) (the band and the control row),
 [`SimplePanel.tsx`](../../src/web/SimplePanel.tsx) (the paragraphs and the empty state),
 [`useSimple.ts`](../../src/web/useSimple.ts), and `§ summary mode` in
 [`styles/summary.css`](../../src/web/styles/summary.css); the stage is
@@ -20,7 +21,7 @@ Code: [`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) (the band
 
 ```
  ┌── spine ──┬──── SUMMARY (the mode band) ─────┬────── the article ──────┐
- │           │  ▤ ○────●────○ ▤▤          ⓤ     │                         │
+ │           │  [ Brief | Fuller | Thread ]  ⓤ  │                         │
  │  ▇▇▇▇▇▇▇  │ ──────────────────────────────── │  Being You opens with   │
  │  ▇▇▇▇     │  This book argues that what you  │  a story about waking   │
  │  ▇▇▇      │  experience is your brain's best │  from anaesthesia, and  │
@@ -31,8 +32,41 @@ Code: [`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) (the band
  │  ▇▇▇▇▇    │  [spya-tgnssb] [spya-sge6a2]     │  scrolls the article ┐  │
  │  ▇▇       │                                  │  to that passage.    ▼  │
  └───────────┴──────────────────────────────────┴─────────────────────────┘
-   ▤ / ▤▤ — the short and long ends of the slider; ⓤ — the owner's "written for you" badge
+   ⓤ — the owner's "written for you" badge, in the band's corner
 ```
+
+## Brief | Fuller | Thread (since 2026-10-03)
+
+> I was thinking about putting the tweet thread as a submode of summary, because they kind of serve
+> related purposes. In the summary, if we did that, maybe we get rid of the slider. Not sure. I was
+> thinking that I quite like, of the three versions of the summary length that we have, I quite like
+> the shortest and the longest, so what is that, briefer and fuller. So it could just be briefer,
+> fuller, and tweet thread as three buttons somehow. Not buttons, like group buttons. Not radio
+> buttons exactly, but like, you know, a sense that you can have one of those three. I think I'd
+> like to try that. … keep all of the tweet thread. Functionality and UI, just put it within as a
+> submode within summary.
+>
+> — Greg, 2026-10-03 (spya-thpsnd)
+
+A trial, built so that going back is a client-only revert
+([261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)):
+
+- **One control, three choices, in words.** A joined group of three buttons in the band's one row —
+  a radiogroup, each its own tab stop, with a card on each. It replaced the slider below. It sits in
+  the same place whichever view is showing.
+- **Brief and Fuller arm the plain-words run; Thread arms nothing.** The thread writes when its
+  owner opens it, however they arrived — Greg's 2026-09-12 rule, kept ([tweets.md](tweets.md)). So
+  a press that lands on the thread mints no token, and a last-view restore never opens it.
+- **The Simple level is still written and stored, and not shown.** Nothing in the `simple` step, its
+  prompt, its stored shape or the public payload changed. `?summary=simple` reads as Brief.
+  Whether to stop writing it is a question for Greg.
+- **The band is the wide one while the thread shows**, and the roomy one otherwise
+  ([§ The band is a touch wider](#the-band-is-a-touch-wider-since-2026-10-01)).
+- **A visitor** gets a stored thread off the payload, or a line saying nobody has built one, under
+  the same control.
+
+**What follows describes the plain-words levels as they were built**, slider and all three levels;
+read *Brief and Fuller* for *the three* wherever it is about what the reader is shown.
 
 ## Simple — a plain-words orientation
 
@@ -212,8 +246,9 @@ way.
 >
 > — Greg, 2026-10-01 (SPIDERYARN-READING2-7Q)
 
-Summary's band is the **roomy** shape: the standard band, but capped at 28rem (448px at a 16px root)
-rather than 25rem. It still takes only what the prose leaves above its minimum, so below about 957px
+Summary's band is the **roomy** shape while a length is showing, and the thread's **wide** one
+while the thread is (since 2026-10-03). Roomy is the standard band, but capped at 28rem (448px at a
+16px root) rather than 25rem. It still takes only what the prose leaves above its minimum, so below about 957px
 it is the standard band, and it reaches 448px near 1004px; phones are unchanged. One function picks
 every mode's shape — `bandShapeFor` and `ROOMY_IDEAL_REM` in [`layout.ts`](../../src/web/layout.ts);
 the other shapes are in [narrow-windows.md](narrow-windows.md).
@@ -223,16 +258,21 @@ the other shapes are in [narrow-windows.md](narrow-windows.md).
 | Parameter | Values | History | Why |
 |---|---|---|---|
 | `mode=summary` | | push | A mode is where you are, not a glance — [url-state.md](url-state.md) |
-| `summary` | `brief` (default, absent from the address), `simple`, `fuller` | push | Which level the slider is on |
+| `summary` | `brief` (default, absent from the address), `fuller`, `thread` | push | Which of Summary's three views is showing. `simple` was a value until 2026-10-03 and reads as `brief` |
 
 `?deep=` and `?summary=gists` went with the outline on 2026-10-01; an old link carrying either lands
 on Summary at `brief`, and `deep` is never remembered, so it cannot be restored over a fresh link.
 
 **Summary opens on Brief** — Greg, 2026-10-01 (8N): *"In summary mode, default to the brief summary
-when it opens for the first time."* Simple and Fuller are written into the address; Brief is its
+when it opens for the first time."* Fuller and Thread are written into the address; Brief is its
 absence. That resulting view is remembered with the article, so a later bare visit opens where the
 reader left it. A link that already names article state wins over that memory
 ([261002c](../plans/261002c-summary-opens-on-brief.md)). Until then the default was `simple`.
+**One exception**: a view left on the thread is restored without the mode, so coming back from the
+shelf does not open it and start a thread ([url-state.md](url-state.md)).
+
+The thread's two old addresses, `?mode=tweets` and `/read/<slug>/tweets`, land on
+`?mode=summary&summary=thread` — on a cold load, an in-app link and Back or Forward.
 
 ## What this deliberately does not have
 

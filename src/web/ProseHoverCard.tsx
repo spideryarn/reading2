@@ -75,6 +75,7 @@ import {
   CITE_QUOTE_LABEL,
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
+  showsWhy,
   InSpideryarn,
   readNoteOf,
   registryConflictNote,
@@ -324,7 +325,7 @@ function HoverCard({
    */
   termActions: TermActions | null;
   /**
-   * **The quotes the prose outlines, and what the card's buttons do with one**
+   * **The quotes the prose fills, and what the card's buttons do with one**
    * — `QuoteCard`. `null` where there are none to point at; then `read` never
    * looks for one. A visitor gets it too: the scores and the reason are on the
    * public list already (src/public-types.ts § `PublicQuotes`), and stepping
@@ -456,7 +457,7 @@ function HoverCard({
        BlockLinkCard's — would be two answers to one hover. The xref's card is
        the block preview, and the term keeps its underline and the glossary.
        docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
-    /* **And a quote's outline, since 2026-10-02** — Greg, spya-mtyquy. Pointer
+    /* **And a quote's mark, since 2026-10-02** — Greg, spya-mtyquy. Pointer
        and keyboard-focus of a link only: it is not in `tapSelector`, because a
        quote is the one mark a tap selects its paragraph through
        (TableView.tsx § `NOT_A_BLOCK_SELECTION`), which is how a finger
@@ -1617,14 +1618,14 @@ function ExternalBody({
 }
 
 /**
- * **What the card knows about the quotes**: the list the prose outlines, and
+ * **What the card knows about the quotes**: the list the prose fills, and
  * what pressing does. Built by `Reader` through `quoteCardQuotes`, so the card
- * walks those outlines in document order even when the band is sorted another
+ * walks those marks in document order even when the band is sorted another
  * way.
  * docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 2.
  */
 export interface QuoteCardSource {
-  /** The quotes outlined in the prose, in document order. */
+  /** The quotes filled in the prose, in document order. */
   listed: readonly Quote[];
   /** The same quotes by their mark key (`quoteMarkKey`), which is what `data-hit` holds. */
   byKey: ReadonlyMap<string, Quote>;
@@ -1643,7 +1644,7 @@ export interface QuoteCardSource {
 }
 
 /**
- * **A quote, from the outline the reader is pointing at** — Greg, 2026-09-11
+ * **A quote, from the fill the reader is pointing at** — Greg, 2026-09-11
  * (spya-mtyquy): *"tooltip to show our quantitative scores and perhaps
  * Previous/Next icon-buttons to jump to the next Quote, and a button to open
  * Quotes mode"*.
@@ -1654,7 +1655,7 @@ export interface QuoteCardSource {
  *   rather than the model's judgment.
  * - **Why**, the reason the band keeps behind its ⓘ (Greg, 2026-08-31: *"with
  *   reason as a tooltip"*) — the model's words, so in the model's face.
- * - **‹ ›** step the outlined quotes down the page, whatever order the band is
+ * - **‹ ›** step the filled quotes down the page, whatever order the band is
  *   using. Disabled at either end; the card closes on a step, and the reader
  *   points at the next.
  * - **Who chose it, and when**, last and in the app's face — the line the
@@ -1974,11 +1975,17 @@ function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryar
       )}
 
       <div className="prose-card-part prose-card-part-why">
-        <p className="prose-card-label">{CITE_WHY_LABEL}</p>
-        <p className="prose-card-text">{work.why}</p>
-        {/* The band's line, from the band's function: we have not read the
-            work, so `why` above is the article's claim, not the work's content.
-            CitationsPanel.tsx § what we have and have not read. */}
+        {/* `why` only beside the verdict that was checked against it
+            (CitationsPanel.tsx § showsWhy, plan 261003j). The lookup alone:
+            this card draws no *Dig deeper* answer. */}
+        {showsWhy({ lookup: work.lookup }) && (
+          <>
+            <p className="prose-card-label">{CITE_WHY_LABEL}</p>
+            <p className="prose-card-text">{work.why}</p>
+          </>
+        )}
+        {/* The band's line, from the band's function: what we have read of
+            the work. CitationsPanel.tsx § what we have and have not read. */}
         <p className="prose-card-cite-read">{readNoteOf(work)}</p>
       </div>
       <CiteCardReading work={work} />

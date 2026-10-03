@@ -64,6 +64,21 @@
  *   boundaries; it is recorded too (`ideasInOrNextPm1`) but not headlined.
  * - **Content sections with a stop** — top-level sections with body words.
  * - **Words, % body words** — the stop blocks' words over non-supplement words.
+ *
+ * ## Also used for `skim/8` vs `skim/9` (plan 261003l § Stage 2)
+ *
+ * `skim/9` gave each stop `again`, the deeper passes it is also walked in. So
+ * each run also records, beside the metrics above (which count a stop once, at
+ * its `depth`, and are unchanged): every stop's `again`; `walks`, each pass as
+ * the reader walks it (`depth === d` or `again` includes d) with how many of
+ * its stops are carried; the route's `dropped` counts; and what the gateway
+ * said about the call (`model`, `reasoningTokens`). A run that throws (a
+ * failed route, a truncation) is written to `failures` with its message
+ * rather than only to stderr. `--allow-outdated-ideas` lets an article whose
+ * stored Ideas are from an older Ideas prompt in: both arms are given the same
+ * Ideas, so their age is not a variable; the snapshot names their version.
+ * scripts/eval/skim-again-pairs.ts turns the results into the tables and the
+ * blind pairs.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -84,6 +99,7 @@ const NEW_VERSION = newVersionArg ? newVersionArg.slice("--new-version=".length)
 /* `--new-only`: the NEW arm alone, with no old module to write first — for
    measuring a change against an earlier run's NEW numbers. */
 const NEW_ONLY = args.includes("--new-only");
+const ALLOW_OUTDATED_IDEAS = args.includes("--allow-outdated-ideas");
 const ARMS = NEW_ONLY ? (["new"] as const) : (["old", "new"] as const);
 const slugArgs = args.filter((a) => !a.startsWith("--"));
 const SLUGS = slugArgs.length > 0 ? slugArgs : ["vb-spya-vu3xen", "entropy-24-00930-spya-pywwkq", "source-spya-furjgs"];
@@ -95,6 +111,7 @@ const { blockIndex } = await import("../../src/section-path.js");
 const { isBody } = await import("../../src/block-policy.js");
 const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
 const NEW = await import("../../src/skim.js");
+const { passRoute } = await import("../../src/web/skim-route.js");
 /* The old module, loaded by path so nothing in the repo imports a file that
    exists only for the length of one eval. */
 type RunOut = Promise<{ skim: Skim; offered: number; inputTokens: number; outputTokens: number; elapsedMs: number }>;
@@ -245,8 +262,23 @@ interface RunResult {
   elapsedMs: number;
   inputTokens: number;
   outputTokens: number;
+  /** What validation dropped — `badAgain` is absent or 0 before `skim/9`. */
+  dropped: Skim["dropped"];
+  /**
+   * Each pass as the reader walks it: its own stops (`depth === d`) plus the
+   * earlier stops carried into it (`again` includes d). Before `skim/9` no
+   * stop has `again`, so `carried` is 0 and `length` is the own stops.
+   */
+  walks: { depth: SkimDepth; length: number; own: number; carried: number }[];
+  /** The gateway's record of the call: the model that answered and its thinking tokens (inside `outputTokens`). */
+  model: string | null;
+  reasoningTokens: number | null;
+  /** The effort the module asks for is a private constant; this is only the env override, if any. */
+  effortOverride: string | null;
   stops: {
     depth: SkimDepth;
+    /** The deeper passes this stop is also walked in (`skim/9`); `[]` when none. */
+    again: SkimDepth[];
     quote: string;
     /** The whole quote, and the whole paragraph it sits in — for the blind read. */
     quoteFull: string;
@@ -293,7 +325,7 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
   const stopBlocks = skim.stops.map((s) => {
     const q = byId.get(s.quoteId);
     if (!q) throw new Error(`${slug} ${arm}: stop names unknown quote ${s.quoteId}`);
-    return { blockId: q.blockId, depth: s.depth, quote: q, cue: s.cue ?? null };
+    return { blockId: q.blockId, depth: s.depth, again: s.again ?? [], quote: q, cue: s.cue ?? null };
   });
   const spent = totalSpend(report.calls);
   const isAbs = (blockId: string) => NEW.inAbstract(blockId, idx, article.tree);
@@ -306,6 +338,21 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     slug,
     arm,
     run,
+    dropped: skim.dropped,
+    walks: ([1, 2, 3] as const).map((depth) => {
+      const own = stopBlocks.filter((s) => s.depth === depth).length;
+      const carried = stopBlocks.filter((s) => s.again.includes(depth)).length;
+      /* The reader's own rule (`passRoute`, src/web/skim-route.ts) must give
+         the same walk, or this script is measuring a walk nobody takes. */
+      const drawn = passRoute(skim.stops, depth).length;
+      if (drawn !== own + carried) {
+        throw new Error(`${slug} ${arm}#${run}: pass ${depth} is ${own + carried} stops here and ${drawn} by passRoute`);
+      }
+      return { depth, length: own + carried, own, carried };
+    }),
+    model: report.calls[0]?.model ?? null,
+    reasoningTokens: report.calls[0]?.reasoningTokens ?? null,
+    effortOverride: process.env.SPIDERYARN_PIPELINE_EFFORT ?? null,
     version: skim.version,
     offered: result.offered,
     rows: measure(article, stopBlocks, ideas.ideas),
@@ -318,6 +365,7 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
       const at = idx.get(s.blockId) ?? -1;
       return {
         depth: s.depth,
+        again: s.again,
         quote: s.quote.text.replace(/\s+/g, " ").slice(0, 240),
         quoteFull: s.quote.text.replace(/\s+/g, " "),
         paragraph: (article.blocks[at]?.text ?? "").replace(/\s+/g, " "),
@@ -334,6 +382,7 @@ async function main(): Promise<void> {
   mkdirSync("evals/results", { recursive: true });
   const out = `evals/results/skim-coverage-${stamp}.json`;
   const results: RunResult[] = [];
+  const failures: { slug: string; arm: Arm; run: number; message: string }[] = [];
   const snapshot: Record<string, unknown> = {};
 
   await runAsOwner(environmentOwnerId(), async () => {
@@ -341,7 +390,7 @@ async function main(): Promise<void> {
     for (const slug of SLUGS) {
       const article = await pgArticleReader.loadArticle(slug);
       const ideasFound = await pgArticleReader.loadIdeas(slug);
-      if (ideasFound.stale || ideasFound.outdated) {
+      if (ideasFound.stale || (ideasFound.outdated && !ALLOW_OUTDATED_IDEAS)) {
         throw new Error(`${slug}: stored Ideas are ${ideasFound.stale ? "stale" : "outdated"} — regenerate first (F65)`);
       }
       if (ideasFound.ideas.ideas.length === 0) throw new Error(`${slug}: no stored Ideas`);
@@ -350,6 +399,7 @@ async function main(): Promise<void> {
       inputs.push({ slug, article, quotes: quotesFound.quotes, ideas: ideasFound.ideas });
       snapshot[slug] = {
         ideasVersion: ideasFound.ideas.version,
+        ideasOutdated: ideasFound.outdated,
         quotesVersion: quotesFound.quotes.version,
         quotesStale: quotesFound.stale,
         quotes: quotesFound.quotes.quotes.length,
@@ -369,7 +419,9 @@ async function main(): Promise<void> {
         inputs.flatMap((inp) =>
           ARMS.map((arm) =>
             runOne(inp, arm, run).catch((err: unknown) => {
-              console.error(`${inp.slug} ${arm}#${run}: ${err instanceof Error ? err.message : String(err)}`);
+              const message = err instanceof Error ? err.message : String(err);
+              console.error(`${inp.slug} ${arm}#${run}: ${message}`);
+              failures.push({ slug: inp.slug, arm, run, message });
               return null;
             }),
           ),
@@ -382,9 +434,12 @@ async function main(): Promise<void> {
           .map((w) => `d${w.depth}: ${w.stops} stops, in ${w.ideasIn}/${w.ideasTotal}, beside ${w.ideasInOrBeside}, sec ${w.sectionsWithStop}/${w.contentSections}, ${w.wordsPct.toFixed(1)}%`)
           .join(" | ");
         console.log(`${r.slug} ${r.arm}#${r.run} (${r.version}): ${cells} — $${(r.costNanos / 1e9).toFixed(4)}, ${(r.elapsedMs / 1000).toFixed(1)}s, ${r.inputTokens} in`);
+        console.log(
+          `  walked: ${r.walks.map((w) => `d${w.depth} ${w.length} (${w.carried} carried)`).join(", ")}; badAgain ${r.dropped.badAgain ?? 0}; thinking tokens ${r.reasoningTokens ?? "?"} of ${r.outputTokens} out`,
+        );
         console.log(`  offered ${r.offered}; ${r.abstractQuotes} stored quotes in the abstract; abstract stops at d1/d2/d3: ${r.abstractStops.join("/")}`);
       }
-      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, profile: null, snapshot, results }, null, 2));
+      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, profile: null, snapshot, results, failures }, null, 2));
     }
   });
 

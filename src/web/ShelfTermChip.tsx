@@ -14,6 +14,7 @@ import { chipClass } from "./lib/DataTable.js";
 import type { ShelfTerm } from "./shelf-narrow.js";
 import { topicColourStyle } from "./topic-colour.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
+import { voiceClass, withVoice } from "./voice.js";
 
 /** How many articles a tooltip names. */
 const TIP_ARTICLES = 5;
@@ -26,10 +27,28 @@ export interface TermTipScope {
   scopeWord: string;
   /** The title the card shows, or `undefined` for a slug not on the lists loaded. */
   titleOf: (slug: string) => string | undefined;
+  /**
+   * The label of the topic with this key, among every topic the server chose —
+   * for a finer topic's *"Inside Neuroscience"*. Absent where topics have no
+   * broader topic (the reader's tags).
+   */
+  labelOf?: (key: string) => string | undefined;
 }
 
 /**
- * A topic's members that are in scope, most uses first (the server's order),
+ * **Whether a model wrote this topic's label** (plan 261003f) rather than a
+ * program picking a phrase the articles use: only a model-named topic carries
+ * a `granularity`. Then the label is in the model's face (fonts.md § Whose
+ * voice is it), and nothing says "used N times", because there is no phrase.
+ */
+export const isModelTopic = (term: ShelfTerm) => term.granularity !== undefined;
+
+/** A finer topic: one inside a broader subject, drawn with the `›` marker. */
+export const isFinerTopic = (term: ShelfTerm) => (term.granularity ?? 0) > 0;
+
+/**
+ * A topic's members that are in scope, in the server's order — most uses first
+ * for a phrase topic, newest first for a model-named one —
  * **one per title**, up to `n`.
  *
  * Several physical copies of one article carry one title, and a list naming
@@ -71,6 +90,8 @@ export function TopicDot({ slot, className = "tw:size-2" }: { slot: number; clas
     />
   );
 }
+
+const LABEL = "tw:min-w-0 tw:truncate";
 
 export function TermChip({
   term,
@@ -116,7 +137,17 @@ export function TermChip({
         className={`${chipClass(on)} ${className}`}
       >
         {slot !== null && <TopicDot slot={slot} />}
-        <span className="tw:min-w-0 tw:truncate">{term.label}</span>
+        {/* **A finer topic is marked, not recoloured or shrunk**: a faint `›`
+            in front of its label says "inside something broader" in both
+            themes with the tokens the chip already has, and leaves the height
+            (controls.md), the hue dot and the label's ink alone. The card
+            names the broader topic. Decoration: the label is the name. */}
+        {isFinerTopic(term) && (
+          <span aria-hidden="true" data-topic-finer className="tw:-mr-0.5 tw:opacity-60">
+            ›
+          </span>
+        )}
+        <span className={isModelTopic(term) ? withVoice(LABEL, "ai") : LABEL}>{term.label}</span>
         <span className="tw:tabular-nums tw:opacity-70">{count}</span>
         {on && <X size={11} aria-hidden="true" />}
       </button>
@@ -138,30 +169,42 @@ export function TermTip({
   inScope,
   scopeWord,
   titleOf,
+  labelOf,
 }: {
   term: ShelfTerm;
   shown: number;
 } & TermTipScope) {
   const members = term.articles.filter((a) => inScope.has(a.slug));
+  const broader = term.within === undefined ? undefined : labelOf?.(term.within);
   return (
     <TipNote>
       <span className="tw:block tw:font-medium tw:text-foreground">
         {shown} match this view · {members.length} of {inScope.size} {scopeWord}
       </span>
+      {broader !== undefined && (
+        <span data-topic-inside className="tw:block">
+          Inside <span className={voiceClass("ai")}>{broader}</span>
+        </span>
+      )}
       <span className="tw:mt-1 tw:block">
         {topArticles(term, inScope, TIP_ARTICLES, titleOf).map((a) => (
           <span key={a.slug} className="tw:block">
             {titleOf(a.slug) ?? a.slug}
-            <span className="tw:text-ink-faint">
-              {" "}
-              — used {a.count} {a.count === 1 ? "time" : "times"}
-            </span>
+            {/* A model-named topic's members carry no count: there is no
+                phrase to count, so nothing is said (types.ts § LibraryTermsResponse). */}
+            {a.count !== undefined && (
+              <span className="tw:text-ink-faint">
+                {" "}
+                — used {a.count} {a.count === 1 ? "time" : "times"}
+              </span>
+            )}
           </span>
         ))}
       </span>
       <span className="tw:mt-1 tw:block tw:text-ink-faint">
-        Picked automatically from the words your articles use — nobody wrote this list. Choosing two
-        shows only articles that have both.
+        {isModelTopic(term)
+          ? "Named by a model from your articles’ titles and summaries; the articles above are the newest in it. Choosing two topics shows only articles in both."
+          : "Picked automatically from the words your articles use — nobody wrote this list. Choosing two shows only articles that have both."}
       </span>
     </TipNote>
   );

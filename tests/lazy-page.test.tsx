@@ -38,6 +38,15 @@ vi.mock("../src/web/log-buffer.js", async (importOriginal) => ({
   recordLog,
 }));
 
+/* The other door: whether this copy has outlived a deploy, and the reload that
+   answers it. Stubbed because the subject here is what `LazyPage` does with the
+   answer; the decision itself is tests/stale-shell.test.ts. `false` by default,
+   which is also what the real one says in every test — there is no build stamp
+   off a build — so the cases above the new `describe` are exactly as they were. */
+const reloadIfStale = vi.fn(async () => false);
+const reloadPage = vi.fn();
+vi.mock("../src/web/stale-shell.js", () => ({ reloadIfStale, reloadPage }));
+
 import type { PageLoader } from "../src/web/LazyPage.js";
 
 /* Imported after the mocks are declared, so that the module under test picks
@@ -69,6 +78,8 @@ let quietConsole: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   captureClientFailure.mockClear();
   recordLog.mockClear();
+  reloadIfStale.mockReset().mockResolvedValue(false);
+  reloadPage.mockClear();
   quietConsole = vi.spyOn(console, "error").mockImplementation(() => {});
   host = document.createElement("div");
   document.body.append(host);
@@ -79,6 +90,10 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   quietConsole.mockRestore();
+  if (vi.isFakeTimers()) {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  }
 });
 
 /** A page the loader can hand back, distinguishable from the escape. */
@@ -230,6 +245,108 @@ describe("a route whose code does not arrive", () => {
     await act(async () => {});
     expect(text()).toContain("The real page");
     expect(host.querySelector('[role="status"]')).toBeNull();
+  });
+
+  /**
+   * From Greg's iPad report, 2026-10-03 (spya-u6uba0): the app opened from a
+   * home-screen icon is never reloaded, so it outlives every deploy, and a lazy
+   * page's code has moved by the time an old copy asks for it. The message says
+   * to reload, in the one place with no reload button.
+   * docs/plans/261003m-a-home-screen-app-reloads-itself-when-a-page-s-code-has-moved.md.
+   */
+  describe("when this copy of the app has outlived a deploy", () => {
+    it("reloads instead of showing the escape, and reports nothing", async () => {
+      vi.useFakeTimers();
+      reloadIfStale.mockImplementation(async () => {
+        reloadPage();
+        return true;
+      });
+      const load = vi.fn(async () => {
+        throw new Error(SECRET);
+      });
+      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
+
+      expect(reloadIfStale).toHaveBeenCalledTimes(1);
+      expect(reloadPage, "the stale-shell answer must follow a reload request").toHaveBeenCalledTimes(1);
+      expect(text()).not.toContain("[chunk]");
+      expect(host.querySelector('[role="alert"]')).toBeNull();
+      /* Still waiting: the page is about to be replaced, and a blank or an
+         error in the meantime would be a flash of the thing this avoids. */
+      expect(host.querySelector('[role="status"]')).not.toBeNull();
+      /* Not a fault, so not a report. */
+      expect(captureClientFailure).not.toHaveBeenCalled();
+      expect(recordLog).not.toHaveBeenCalled();
+    });
+
+    it("shows the escape if a requested reload does not replace the document", async () => {
+      vi.useFakeTimers();
+      reloadIfStale.mockImplementation(async () => {
+        reloadPage();
+        return true;
+      });
+      const load = vi.fn(async () => {
+        throw new Error(SECRET);
+      });
+      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
+
+      expect(reloadPage).toHaveBeenCalledTimes(1);
+      expect(host.querySelector('[role="status"]')).not.toBeNull();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+
+      expect(text()).toContain("[chunk]");
+      expect(host.querySelector('[role="status"]')).toBeNull();
+      expect((captureClientFailure.mock.calls[0] as [Error])[0].message).toBe(SECRET);
+    });
+
+    it("shows the escape when the copy is current, having asked", async () => {
+      const load = vi.fn(async () => {
+        throw new Error(SECRET);
+      });
+      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
+
+      expect(reloadIfStale).toHaveBeenCalledTimes(1);
+      expect(text()).toContain("[chunk]");
+      expect(captureClientFailure).toHaveBeenCalledTimes(1);
+      /* The original failure is what is reported, not anything the check did. */
+      expect((captureClientFailure.mock.calls[0] as [Error])[0].message).toBe(SECRET);
+    });
+
+    it("shows the escape, with the page's own failure, when the check itself throws", async () => {
+      reloadIfStale.mockRejectedValue(new Error("the check broke"));
+      const load = vi.fn(async () => {
+        throw new Error(SECRET);
+      });
+      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
+
+      expect(text()).toContain("[chunk]");
+      expect((captureClientFailure.mock.calls[0] as [Error])[0].message).toBe(SECRET);
+    });
+
+    it("does not ask when the page arrived", async () => {
+      const load = vi.fn(async () => ({ default: RealPage }));
+      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
+      expect(text()).toContain("The real page");
+      expect(reloadIfStale).not.toHaveBeenCalled();
+    });
+
+    it("gives the escape a Reload button, for an app with no reload of its own", async () => {
+      const load = vi.fn(async () => {
+        throw new Error(SECRET);
+      });
+      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
+
+      const reload = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Reload");
+      expect(reload, "a home-screen app has no reload button and no address bar").toBeDefined();
+      expect(reloadPage).not.toHaveBeenCalled();
+      await act(async () => {
+        reload?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      expect(reloadPage).toHaveBeenCalledTimes(1);
+      /* And it no longer says "tab": there is none in a home-screen app. */
+      expect(text()).not.toMatch(/\btab\b/);
+    });
   });
 
   it("issues no request at any point", () => {

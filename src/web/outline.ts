@@ -23,11 +23,17 @@ import type { Voice } from "./voice.js";
  * How far down the ladder we got. Each rung adds one thing and every rung is
  * all-or-nothing — a partly-drawn level is a lie about the structure.
  *
- *  1  every part, one line each          — if this will not fit, nothing will
+ *  1  every part
  *  2  + the current part's sections
- *  3  + a sentence on the current section
+ *  3  + a sentence on the current section   — the floor of what is drawn
  *  4  + the arc sentence for the current part
  *  5  + the current section's paragraphs
+ *
+ * **Rungs 1 and 2 are built and never chosen, since 2026-10-03.** OutlinePanel
+ * draws rung 3 at the least and lets the list scroll when it does not fit
+ * (OutlinePanel.tsx § `fit`; Greg, spya-s46j8f; plan 261003k). They stay
+ * because each rung is the one below plus one thing, and the walk reads that
+ * way.
  *
  * The arc comes before the paragraph labels, and that was the other way round
  * until GPT Sol's review of the plan. Its argument: the arc answers the

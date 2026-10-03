@@ -273,15 +273,16 @@ td.text.has-hit[data-hues].block-flash-still {
 
 /* **The same flash on a passage's own words** — Skim's stop is a quote,
    so flash.ts washes its `mark.hit` fragments instead of the cell (plan
-   260928a § 7b). `background-color`, not `box-shadow`: the quote's outline IS
-   its box-shadow (annotations.css § quotes), and the wash must sit inside it
-   rather than replace it.
+   260928a § 7b). `background-color`, not `box-shadow`: the ring a pressed
+   quote wears IS its box-shadow (annotations.css § quote fills), and the wash
+   must sit inside it rather than replace it. Since 2026-10-03 the quote has a
+   fill of its own, which this covers while it flashes and returns to.
 
    **No `100%` keyframe**, on purpose: an omitted end keyframe animates back to
-   the element's own value, which for the current stop is the rung quote's
-   0.18 tint (`mark.hit[data-quote][data-hit-open]`) — so the wash fades into
-   the ring instead of dropping to transparent and snapping back. The still
-   rule is `td.text`-scoped so it outranks that later, equal-weight rule. */
+   the element's own value, which for the current stop is the quote's priority
+   fill (`mark.hit[data-quote]`) — so the wash fades into the fill inside its
+   ring instead of dropping to transparent and snapping back. The still
+   rule is `td.text`-scoped so it outranks the later quote-fill rule. */
 @keyframes passage-flash {
   0%, 35% { background-color: var(--highlight-wash); }
 }
@@ -306,6 +307,17 @@ td.text mark.hit.passage-flash-still { background-color: var(--highlight-wash); 
 }
 td.text mark.cite.passage-flash { animation: cite-flash var(--cite-flash-ms) ease-out; }
 td.text mark.cite.passage-flash-still { background-color: var(--flash-wash-strong); }
+/* **And on words that have no mark at all** — the quotations in a citation
+   chip's sentence of a model's answer, found in the block at the click and
+   painted as Ranges (flash.ts § `paintQuotes`; a reader's report, spya-hzpf9b, plan
+   261003i). A registered highlight rather than a class, so there is no element
+   to animate and `::highlight()` would not take an animation if there were:
+   the tint is steady for `CITE_FLASH_MS` and then gone, which is also what
+   reduced motion gets. The strong wash, for the reason the cited work's words
+   have it — a few words are a small patch. Background only: the token is the
+   orange mixed into `--page`, so the prose's own ink reads on it in both
+   themes, as it does on the still rule above. */
+::highlight(quote-flash) { background-color: var(--flash-wash-strong); }
 
 /* `.block-id` was here, positioning six characters of Courier in an 83px
    gutter. The gutter is icons now and the id has moved into their `title`, so

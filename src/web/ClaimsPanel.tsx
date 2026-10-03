@@ -32,9 +32,10 @@
  * things that can have happened — see `ClaimRow`, which is where the third one
  * is drawn and why.
  *
- * **3. Linkage, never adequacy.** Said in words at the top of the panel
- * (`LINKAGE_NOT_ADEQUACY`), because it is the thing a referee is likeliest to
- * read past. The model asserts that a passage takes the claim up; whether it
+ * **3. Linkage, never adequacy.** Said in words (`LINKAGE_NOT_ADEQUACY`) — at
+ * the top of the panel until 2026-10-03, and behind the band's *How to read
+ * this* button since (plan 261003m) — because it is the thing a referee is
+ * likeliest to read past. The model asserts that a passage takes the claim up; whether it
  * carries it is theirs, and it is the interesting part.
  *
  * **This is the one of the three that is not a property of the code**, and the
@@ -113,7 +114,6 @@ import {
   CLAIMS_AT_CAP,
   claimsOmittedNote,
   DOCUMENT_ORDER_NOTE,
-  LINKAGE_NOT_ADEQUACY,
   MAX_CLAIMS,
   MAX_OTHER_TEXT,
   NO_PASSAGE_FOUND,
@@ -354,10 +354,9 @@ export function ClaimsView({
     cut > 0 ? claimsOmittedNote(cut) : claims.length >= MAX_CLAIMS ? CLAIMS_AT_CAP : null;
   return (
     <div className="clm">
-      {/* **Above the button, not under the results.** Both sentences are about
-          how to read what is below, and a note under a list is a note read after
-          the list has already been read the wrong way. */}
-      <p className="clm-what">{LINKAGE_NOT_ADEQUACY}</p>
+      {/* `LINKAGE_NOT_ADEQUACY` opened the panel here until 2026-10-03; it is
+          behind the band's *How to read this* button now (RefereeMode.tsx
+          § HowToRead). */}
 
       {/* **The one button on this panel that spends money**, and the label says
           neither that nor what it is going to read. The card carries the cost
@@ -389,12 +388,8 @@ export function ClaimsView({
       {api.error && <p className="clm-error">{api.error}</p>}
       {!api.loaded && <p className="gloss-quiet">Loading…</p>}
 
-      {api.loaded && run === null && !api.error && (
-        <p className="gloss-quiet">
-          The claims this paper makes about its own work, each with the passages where the paper
-          takes it up. Every row is a door into the prose.
-        </p>
-      )}
+      {/* The empty state described the sub-mode here until 2026-10-03; the
+          band's lead line above the panel says it now (RefereeMode.tsx). */}
 
       {pending && claims.length === 0 && <p className="gloss-quiet">Reading the paper…</p>}
 

@@ -21,7 +21,7 @@ three rules**, and each rule has something that enforces it:
 1. **Call a model through the gateway**, never with your own client or `fetch`: `streamMessage`
    ([`src/messages-stream.ts`](../../src/messages-stream.ts)) for the pipeline stages,
    `openRouterStream` / `openRouterJson` / the embeddings, images, transcription and decisions
-   (`openRouterDecisions`, quick search's) seams in
+   (`openRouterDecisions`, quick search's and the command bar's pick) seams in
    [`src/ai-call.ts`](../../src/ai-call.ts) for everything else. The gateway is what writes the row;
    `tests/no-undeclared-spend.test.ts` fails on any other way to reach a provider.
 2. **Make the call inside a scope.** A pipeline step runs inside `runStep`
@@ -41,6 +41,17 @@ three rules**, and each rule has something that enforces it:
 
 A **new mode** needs nothing beyond this: its step name *is* its line on the article's cost
 breakdown. [mode.md § Its cost](mode.md#its-cost) says what to check.
+
+**Live conversation is the one feature these rules do not cover.** Its model calls happen on a
+connection from the browser to OpenAI, so no gateway sees them. The browser reports what was spent
+and the server prices it — [live-conversation.md § The meter](live-conversation.md#the-meter). Each
+engine has two kinds of row, told apart by `event_kind`: `response` and `transcription` for
+Realtime; `voice` and `backend` for GPT-Live
+([§ GPT-Live's two bills](live-conversation.md#gpt-lives-two-bills)). All four are
+`cost_source: 'computed'`: our arithmetic on a browser's counts, never a figure a provider settled.
+A `backend` row prices cached input at its own rate; the model's long-context tier is not modelled,
+so a very long article's rows may be understated (`LIVE_BACKEND_PRICES` in
+[`src/pricing.ts`](../../src/pricing.ts)).
 
 ## Where the figures show up
 
@@ -175,5 +186,5 @@ they appear. Run it after a change to the gateway, the ledger or the attribution
 the article attribution removed (exit 1).
 
 Not covered yet: the transcription and images wires, which need an audio file and cost more per
-call, and the decisions wire (quick search, since 2026-10-02), which this check does not call yet —
+call, and the decisions wire (quick search, since 2026-10-02, and the command bar's pick), which this check does not call yet —
 its ledger row is pinned in `tests/ai-call.test.ts` against a stubbed provider, not against a real bill.

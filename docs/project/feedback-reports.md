@@ -39,6 +39,10 @@ It lists every production row that no note's `reports:` header and no queue item
 **That list is what needs doing**, whether or not Sentry has the report.
 Report ids are unique only per owner; if two owners share one, it lists both as ambiguous even when
 that id is covered, because the coverage record cannot say which row it meant.
+**A report an admin marked Ignore on `/admin/feedback` is left out**, and the first line says how
+many were. It needs no note and no queue entry: the mark is the ending. Undo on the card lifts the mark, and the
+report is listed again unless a note or a queue entry already names it ([feedback.md § Ignoring a report](feedback.md#ignoring-a-report-since-2026-10-03)).
+`--show <id>` still prints an ignored report, with `ignored by an admin` and the time on its line.
 Read each one's words with `--show <id>`, or, for an admin's report,
 `feedback-reporter.ts --report-id <id>`, which proves provenance. Then classify it and queue it
 under its report id. **Always put the report id in a queue entry's `--source`**, next to the Sentry

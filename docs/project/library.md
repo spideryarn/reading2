@@ -37,7 +37,7 @@ Postgres on 2026-09-01, and the only store on 2026-09-05 — [§ When this becom
 | `/` | the library — [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 | `/read/<slug>` | the reading view — [web-client.md](web-client.md) |
 | `/read/<slug>/metadata` | everything we know about the article — [260825e-metadata-page.md](../plans/260825e-metadata-page.md) |
-| `/read/<slug>/tweets` | redirects to `?mode=tweets`, the thread as a mode since 2026-09-29 — [260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md); the page it was, [260825g](../plans/260825g-tweet-thread-page.md) |
+| `/read/<slug>/tweets` | redirects to `?mode=summary&summary=thread`: the thread was a mode from 2026-09-29 ([260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)) and is Summary's Thread view since 2026-10-03 ([261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)); the page it was, [260825g](../plans/260825g-tweet-thread-page.md) |
 | `/add/<a whole URL>` | queue that article and watch it — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | `/design` | every token, face and component variant on one page — [design-css-overview.md](design-css-overview.md) |
 
@@ -78,7 +78,7 @@ active. `EnqueueTicket` in [`src/store/jobs.ts`](../../src/store/jobs.ts) has bo
 flight* holds the article row open so each race happens on purpose rather than by luck.
 
 **This said "the two routes" until 2026-08-25.** The last two arrived together, and they are one
-route with two views rather than two routes (three until 2026-09-29, when the tweets page became `?mode=tweets`): same article, same fetch, same bottom bar, so
+route with two views rather than two routes (three until 2026-09-29, when the tweets page became a mode, and since 2026-10-03 Summary's Thread view): same article, same fetch, same bottom bar, so
 `Route` carries a `view` and `ArticlePage` branches on it
 ([`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). The article payload is fetched
 above that branch, so stepping
@@ -562,6 +562,9 @@ Opens are a counter and a timestamp, deliberately **not** an event log. The tool
 6 times, last on Tuesday" and can never say "three times this week". If that second question ever
 matters, the answer is a table of events, not another column.
 
+A rename, a purpose edit, an archive and a Put back each stamp `articles.updated_at` — stored, not
+shown, and the only trace of a Put back, which nulls `archived_at`. An open does not move it.
+
 `POST /api/library/:slug/open` is called by the **client**, from the reading view's mount — not by
 the server from inside `GET /api/article/:slug`. A GET that writes is a GET that a prefetch, a retry
 or a health check inflates without anybody deciding to.
@@ -588,8 +591,8 @@ deferred: [261003d](../plans/261003d-your-own-tags-on-articles-on-the-shelf-and-
   `owner_id` — ownership comes through the article, as for every table under `articles`. Reader
   state, so on `articles` and not on a revision, for § Shelf state's reason.
 - **One write, additive**: `PATCH /api/library/:slug/tags { add?, remove? }` answers the tags after.
-  Two tabs cannot clobber each other the way a replace-the-set PUT would, and the command bar's
-  later "add a tag of X" is `{ add: [X] }` through the same client function
+  Two tabs cannot clobber each other the way a replace-the-set PUT would, and a single add or
+  remove from anywhere is one small request through the same client function
   ([`src/web/article-tags.ts`](../../src/web/article-tags.ts)). The edit locks the article row, so
   the 30-per-article cap holds under a race —
   [`tests/store-tags-pg.test.ts`](../../tests/store-tags-pg.test.ts) has the test that goes red
@@ -603,6 +606,16 @@ deferred: [261003d](../plans/261003d-your-own-tags-on-articles-on-the-shelf-and-
 - **A Tags row above Topics** ([`ShelfTagFilter.tsx`](../../src/web/ShelfTagFilter.tsx)), built on the
   client from the entries' own tags and narrowing by the Topics row's rules — AND across every chip in
   both rows, one count — [shelf-terms.md § Your own tags, in the row above](shelf-terms.md#your-own-tags-in-the-row-above).
+- **A command, and a button chat can offer**, since 2026-10-03: *tag as X*, *add a tag of X*,
+  *untag X* in the command bar give *Add the tag “x”* / *Remove the tag “x”*, showing the tag as
+  `normaliseTag` will store it; a tag it refuses is still a row, whose Enter says why
+  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). The
+  bar edits through a **tags controller on its shelf row** (`ShelfRow.tags`,
+  [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), not through `editArticleTags` directly: on
+  Metadata that controller is the `TagEditor`'s own save, so the editor on screen follows, and the
+  two admit one write at a time ([`Metadata.tsx`](../../src/web/Metadata.tsx) § `saveTags`). Chat's
+  button is the same proposal —
+  [chat-tools.md § Command buttons](chat-tools.md#command-buttons-chat-proposes-the-reader-presses).
 
 ### The tooltip
 
@@ -705,8 +718,8 @@ The answer to the last sentence is one line, and it is the whole design:
 
 **One sort state, two renderers.**
 
-Six chips above the shelf — **Last opened**, **Added**, **Title**, **Length**, **Times opened**,
-**Questions** — plus an **Unread** filter and a **cards / table** toggle. The chips drive both views
+Seven chips above the shelf — **Last opened**, **Added**, **Published**, **Title**, **Length**,
+**Times opened**, **Questions** — plus an **Unread** filter and a **cards / table** toggle. The chips drive both views
 identically, so switching between them keeps your place in the order: there is only one order.
 Clicking the key you are already on reverses it; clicking a key you are not on starts at *that key's*
 natural end, so going from "newest first" to Title gives you A-to-Z rather than Z-to-A;
@@ -718,6 +731,28 @@ they hand back to a real date, because nobody counts in days at that range. The 
 always one hover away in [the details tooltip](#the-tooltip). The clock is re-read once a minute so
 a shelf left open does not quietly go stale — [`relative-time.ts`](../../src/web/relative-time.ts)
 and [`useNow.ts`](../../src/web/useNow.ts).
+
+**Published is the exception: it is a day, not an instant, and it is printed as the date.**
+
+> In the logged in homepage, enable sorting the Shelf by publication date where available. And I
+> guess if it's not available, use your judgment about what's best to do. Keep things simple.
+>
+> — Greg, 2026-10-03 (report `spya-t3es7k`)
+
+It is the publisher's own string (`Meta.publishedAt`), where only the calendar day in the
+publisher's frame means anything, so the order and the printed date both come from its first ten
+characters — [`calendarDay`](../../src/web/relative-time.ts) says what goes wrong otherwise. And
+"published 3 days ago" would be a fact about the reader's week rather than about the piece.
+
+**An article with no publication date sorts last, both ways**, like any missing value
+([§ Three rules a browser cannot check](#three-rules-a-browser-cannot-check)). That group is large:
+a PDF never has a date, and nor does a paper added with only its metadata
+([`paperMeta`](../../src/paper-metadata.ts)). A web page has one only if its publisher states it
+and it was extracted on or after 2026-08-31; that includes a DOI URL that resolves to a web page.
+Falling back to the Added date was passed
+over, because a 1990 paper fetched yesterday would then lead "newest first". Giving papers a year
+is a pipeline change, not a shelf one —
+[261003m](../plans/261003m-shelf-sorts-by-publication-date.md).
 
 The two views are not a real one and a decoration. **The card is a decision aid** — what the piece
 says, how long it will take — and keeps the blurb. **The table is a comparison** — how this article
@@ -759,7 +794,15 @@ is the source of truth for those facts, including values whose columns are hidde
 old `Details` card stays on the cards view; in the table it repeated the row. The title remains the
 one-tap route into the article on touch rather than becoming a reveal-then-commit control.
 
-**The five data columns can be hidden; Article and Actions cannot.** The title is the row's identity
+**Published is a chip always and a column only if asked for.** It starts hidden, and the Columns
+count reads 1 on a table nobody has touched, which is how a reader learns it is there. The table was
+already as wide as the page at 1440px; a sixth data column made it 78px wider and pushed Actions
+out of sight. While it is hidden the row card carries the date, and a table sorted by Published
+keeps its order and its chip. A reader who shows it is remembered under a second key, because a
+list of hidden ids cannot say "shown" and a list saved before the column existed must not read as
+"show it" — [`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts).
+
+**The six data columns can be hidden; Article and Actions cannot.** The title is the row's identity
 and route into the article, while Actions are controls rather than a value a card can preserve.
 [`libraryColumns`](../../src/web/library-columns.tsx) owns that distinction. The **Columns** menu is
 the discoverable keyboard-and-touch route; a header's right-click or long-press menu is the shortcut.
@@ -829,7 +872,7 @@ It is a **single** key, not `opened` then `added`. The compound version orders t
 block at the foot better and lights *two* chips on a shelf nobody has clicked, which reads as a sort
 somebody else left behind.
 
-Two of the six keys are Greg's "actions/interactions performed", and they are the only two we can
+Two of the keys are Greg's "actions/interactions performed", and they are the only two we can
 honestly count: opens and questions are the only reader interactions stored as numbers. Chat threads
 and saved searches are deliberately not counted, for the same reason [the tooltip](#the-tooltip)
 won't say them.

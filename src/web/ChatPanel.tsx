@@ -75,6 +75,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { withoutCommandLines } from "../citable.js";
 import { worthRetrying } from "../messages.js";
 import type {
   BlockId,
@@ -86,6 +87,8 @@ import type {
 } from "../types.js";
 import { isSingleThreadKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
+import { useChatCommands } from "./CommandChip.js";
+import { chipFor } from "./chat-commands.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -233,7 +236,7 @@ interface Props {
    */
   kind: ThreadKind;
   /**
-   * **The Recall | Tutorial | Quiz control**, when this panel is one of
+   * **The Recall | Tutorial | Explore | Quiz control**, when this panel is one of
    * Remember's conversation views. Absent in chat mode.
    *
    * A slot rather than a `subMode` value with a callback, because the control
@@ -357,9 +360,9 @@ export function ChatPanel({
   seed,
 }: Props) {
   useRenderCount("ChatPanel");
-  /* **Remember's layout, for both of its conversations** — Recall and
-     Tutorial are each one thread per article, dictated into a tall box, with
-     no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
+  /* **Remember's layout, for all three of its conversations** — Recall,
+     Tutorial and Explore are each one thread per article, dictated into a tall
+     box, with no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
      is words, decided per kind below. */
   const remember = isSingleThreadKind(kind);
   const open = threads.find((t) => t.id === threadId) ?? null;
@@ -482,7 +485,9 @@ export function ChatPanel({
       label={
         kind === "tutorial"
           ? "A tutorial on this article"
-          : remember
+          : kind === "explore"
+            ? "Explore what you think about this article"
+            : remember
             ? "Remember what you took from this article"
             : "Chat about this article"
       }
@@ -492,7 +497,11 @@ export function ChatPanel({
               is one Remember conversation per article, so the title names
               nothing the reader could mistake it for — and it is their first
               sixty characters, often "Um, so…". Plan 261001m § 4. */}
-          <h2>
+          {/* **Read out, not drawn, beside the sub-mode chips.** Four chips left
+              the word one letter wide in a narrow band (the browser pass on
+              261003l), and the Dock already says which mode this is — the
+              reason Quiz's own row dropped its name on 2026-09-05. */}
+          <h2 className={remember && subMode ? "sr-only" : undefined}>
             {remember ? (
               "Remember"
             ) : open ? (
@@ -1200,6 +1209,8 @@ export function Conversation({
         {empty &&
           (kind === "tutorial" ? (
             <TutorialInvitation />
+          ) : kind === "explore" ? (
+            <ExploreInvitation onAsk={(q) => onSend(q)} />
           ) : kind === "remember" ? (
             <RememberInvitation />
           ) : (
@@ -1330,18 +1341,78 @@ function RememberInvitation() {
  * *"I think it might start with the sort of basic recall question. You know,
  * what do you remember about the article? But it may be that the user says
  * nothing. I haven't read it yet."*
+ *
+ * **It offers, and does not ask them to say so.** Greg, `spya-hw8mhz`,
+ * 2026-10-03: *"I don't think the user should have to say that they haven't
+ * read it … you're letting them know it's okay if they haven't read/finished
+ * it."* The composer's placeholder and `readItFor` in src/converse.ts say the
+ * same thing in the same way.
  */
 function TutorialInvitation() {
   return (
     <div className="chat-suggest">
       <p className="chat-empty-hint">
-        What do you remember about this article? Or say you haven't read it yet — either is a fine
-        place to start.
+        What do you remember about this article? It's fine if you haven't read it yet, or haven't
+        finished — we can start from wherever you are.
       </p>
       <p className="chat-empty-hint">
         We'll take short turns: a little of the piece at a time, with a link to the passage, and then
         a question for you to answer in your own words.
       </p>
+    </div>
+  );
+}
+
+/**
+ * **The ways into Explore the empty state offers**, each sent as the reader's
+ * first message exactly as written — so what they pressed is what they see in
+ * the transcript, and what `EXPLORE_SYSTEM` (src/converse.ts) answers.
+ *
+ * One per thing Greg asked Explore to do (2026-10-03, quoted in
+ * docs/project/remember-mode.md § Explore): start from *"my comments, my
+ * highlights, my chat threads"*; *"apply to interesting cases of my own"*; and
+ * *"situate the article in terms of the wider world"*. Exported for
+ * tests/remember-panel.test.tsx.
+ */
+export const EXPLORE_STARTERS: readonly string[] = [
+  "Start from what I've marked and discussed",
+  "Help me apply this to my own work",
+  "Where does this sit in the wider world?",
+];
+
+/**
+ * **Explore's empty state says what it is for and offers three ways in.**
+ *
+ * Buttons, where Recall's invitation above refuses them — and the difference
+ * is what the button would say. A Recall starter would be the reader's account
+ * of the piece, written by us. These are requests: each asks the model to make
+ * a move and puts no view in the reader's mouth, so Chat's `Suggestions` shape
+ * fits. The reader may also just type or talk; the box below says so.
+ *
+ * The words here are the app's, so they are set in the app's face. Nothing the
+ * reader marked is drawn here — the notes go to the model, not onto this
+ * screen — so there is nothing to set in the reader's
+ * (docs/project/fonts.md).
+ */
+function ExploreInvitation({ onAsk }: { onAsk(question: string): void }) {
+  return (
+    <div className="chat-suggest">
+      <p className="chat-empty-hint">
+        What do you think about this piece? Explore starts from what you've highlighted, noted and
+        talked about here, and helps you take your own ideas further.
+      </p>
+      <p className="chat-empty-hint">
+        It can try the piece on cases of your own, and look up what others have said about it.
+      </p>
+      <ul>
+        {EXPLORE_STARTERS.map((starter) => (
+          <li key={starter}>
+            <button type="button" className="chat-suggest-btn" onClick={() => onAsk(starter)}>
+              {starter}
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -1420,6 +1491,7 @@ function Turn({
    */
   const pencil = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(editing);
+  const commands = useChatCommands() ?? undefined;
   useEffect(() => {
     if (wasEditing.current && !editing) pencil.current?.focus();
     wasEditing.current = editing;
@@ -1555,7 +1627,14 @@ function Turn({
       <WebSources citations={message.citations} />
       {message.status !== "pending" && (
         <div className="chat-actions">
-          {message.text !== "" && <CopyAnswer text={message.text} />}
+          {message.text !== "" && (
+            <CopyAnswer
+              text={withoutCommandLines(
+                message.text,
+                (raw) => commands !== undefined && chipFor(raw, commands, blocks) !== null,
+              )}
+            />
+          )}
           {/* "Answer again" is a regenerate, not only a retry — it is offered on
               a perfectly good answer too. So the extra condition is narrow: it
               disappears only when this turn *failed*, and failed in a way that
@@ -1672,6 +1751,8 @@ function ToolIcon({ name }: { name: string }) {
     case "article_links":
       return <Link2 size={12} aria-hidden />;
     case "article_glossary":
+    /* The reader's own notes: a page of writing, like the glossary's. */
+    case "reader_notes":
       return <FileText size={12} aria-hidden />;
     case "article_citations":
       return <BookMarked size={12} aria-hidden />;
@@ -1942,6 +2023,10 @@ function Answer({
      is the one every block link shares (BlockLinkCard.tsx), which also moves
      from chip to chip without a second wait — what a `TooltipGroup` here used
      to do. */
+  /* The executor a command chip presses through, where the reading view put
+     one round this panel — chat and the chat dialog, never Remember. `null`
+     everywhere else, and a `[cmd:…]` is then plain text. CommandChip.tsx. */
+  const commands = useChatCommands() ?? undefined;
   return (
     <CitedMarkdown
       text={text}
@@ -1958,6 +2043,7 @@ function Answer({
          for plain sentences and has neither. Cited.tsx § links,
          Cited.tsx § CitedMarkdown. */
       links
+      commands={commands}
     />
   );
 }
@@ -2030,7 +2116,7 @@ export function Composer({
      because it outlives this component; this keeps the value because typing
      into it must not repaint the transcript above. */
   const [value, setValue] = useState(draft);
-  /* Recall's and Tutorial's box alike: tall, microphone first. */
+  /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
   const remember = isSingleThreadKind(kind);
   /**
    * **A short band gets a short box.** On a landscape phone the band is about
@@ -2193,8 +2279,10 @@ export function Composer({
           busy
             ? "Waiting for the answer…"
             : kind === "tutorial"
-              ? "What do you remember about it? Or say you haven't read it yet."
-              : remember
+              ? "What do you remember about it? It's fine if you haven't read it yet."
+              : kind === "explore"
+                ? "What do you make of it? Say what's on your mind, or where you'd like to take it."
+                : remember
                 ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
                 : (placeholder ?? "Ask about this article…")
         }

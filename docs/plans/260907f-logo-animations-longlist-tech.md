@@ -494,7 +494,7 @@ word is solid again.
 
 **Why it belongs.** This app already draws quotes in the prose as an *outline* rather than a fill —
 "search hits fill; quotes outline"
-([quotes.md § The stroke](../project/quotes.md#the-stroke-which-is-how-a-quote-says-how-much-it-matters))
+([quotes.md § The stroke](../project/quotes.md#a-highlighter-pen-which-is-how-a-quote-says-how-much-it-matters))
 — so hollow-then-filled is already part of its visual vocabulary, and reusing it here costs the
 reader nothing to read.
 

@@ -4,7 +4,7 @@
  * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. A reader
  * pastes a picture into the Feedback dialog; those bytes are stored in Postgres
  * and forwarded to Sentry as an envelope attachment. This file is what stands
- * between "a caller sent 400 KB" and "400 KB left the machine".
+ * between "a caller sent two megabytes" and "two megabytes left the machine".
  *
  * ## Sniffing the first eight bytes was not validation
  *
@@ -57,7 +57,7 @@
  *
  * ## The bomb, and why the caps are the shape they are
  *
- * 400 KB of deflate can inflate to hundreds of megabytes. The dimension caps
+ * Two megabytes of deflate can inflate to two gigabytes. The dimension caps
  * are what stop that: they bound the raster, the raster bounds
  * `maxOutputLength` on the inflate, and the inflate therefore fails loudly
  * rather than eating the instance. That ordering is the whole defence — a cap
@@ -94,8 +94,11 @@ export type ScreenshotResult =
  *
  * The dialog downscales to 1600 on the long edge, so this is generous. It is
  * not a product preference: it is the bound that makes the inflate below safe,
- * because `MAX_SCREENSHOT_PIXELS × 4 + height` is the most memory one request
- * can ask for.
+ * because `MAX_SCREENSHOT_PIXELS × 8 + height` bounds the inflated raster
+ * (not the request's total memory) — **32 MB, not 16**: `DEPTHS` allows
+ * 16-bit RGBA, which is eight bytes a pixel. This said `× 4` until 2026-10-03
+ * (GPT Sol's review of 261003k).
+ * A browser's canvas only ever writes 8-bit, so a real screenshot is half that.
  */
 export const MAX_SCREENSHOT_EDGE = 4096;
 export const MAX_SCREENSHOT_PIXELS = 4_000_000;
@@ -335,7 +338,21 @@ export function reencodeScreenshot(bytes: Uint8Array, maxBytes: number): Screens
   const rebuilt = Buffer.concat([
     Buffer.from(PNG_SIGNATURE),
     Buffer.from(chunk("IHDR", ihdr)),
-    Buffer.from(chunk("IDAT", deflateSync(pixels, { level: 9 }))),
+    /* **Level 6, not 9, since 2026-10-03** — this is synchronous, in a request
+       path, and until the limit went from 400 KB to 2 MB no raster big enough
+       to show the difference could get in. Measured on this box under load,
+       on the worst raster found (1600 × 1600 RGBA, each channel one of two
+       values at random — few symbols, so level 9 walks very long match
+       chains): level 9 took 46.7 s for 1,328,320 bytes, level 6 took 2.1 s for
+       1,485,932 (12% bigger), level 3 took 0.6 s for 1,941,659 (46% bigger).
+       With four values a channel at 1600 × 1200: 4.5 s / 1,917,115, 1.7 s /
+       1,956,121 (2% bigger), 0.4 s / 2,228,406 (16% bigger). Rasters with
+       photographic noise took about a quarter of a second at every level and
+       came out the same size. So 6 buys nearly all of 9's size for a fraction
+       of its worst case, and 3 gives away size that the limit below then
+       refuses. GPT Sol's plan review of 261003k found it (F1): 15 s at level 9
+       on a 1280 × 1280 picture. */
+    Buffer.from(chunk("IDAT", deflateSync(pixels, { level: 6 }))),
     Buffer.from(chunk("IEND", new Uint8Array(0))),
   ]);
   /* Re-encoding can grow a file — a stream deflated harder than we deflate it

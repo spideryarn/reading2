@@ -1,0 +1,455 @@
+{
+ "judgeModel": "anthropic/claude-sonnet-5",
+ "answers": {
+  "1": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs connection\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs connection"
+   }
+  },
+  "2": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material borderline between notes and said\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material borderline between notes and said"
+   }
+  },
+  "3": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"no\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: world vs article\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "no",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: world vs article"
+   }
+  },
+  "4": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs idea\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs idea"
+   }
+  },
+  "5": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"connection\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"applied_profile_case\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "connection",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "applied_profile_case"
+   }
+  },
+  "6": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material (ties to earlier note without citing it)\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material (ties to earlier note without citing it)"
+   }
+  },
+  "7": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"outside linking for Seth quote relies on Marcus's link\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "outside linking for Seth quote relies on Marcus's link"
+   }
+  },
+  "8": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"applied_profile_case; move world vs idea\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "applied_profile_case; move world vs idea"
+   }
+  },
+  "9": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"connection\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: connection vs idea\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "connection",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: connection vs idea"
+   }
+  },
+  "10": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs case\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs case"
+   }
+  },
+  "11": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs world\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs world"
+   }
+  },
+  "12": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material/move boundary\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material/move boundary"
+   }
+  },
+  "13": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"connection\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: connection vs idea\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "connection",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: connection vs idea"
+   }
+  },
+  "14": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"connection\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: connection vs article\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "connection",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: connection vs article"
+   }
+  },
+  "15": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: article vs idea\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: article vs idea"
+   }
+  },
+  "16": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs article\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs article"
+   }
+  },
+  "17": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs case\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs case"
+   }
+  },
+  "18": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material (notes vs said)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material (notes vs said)"
+   }
+  },
+  "19": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"case vs idea distinction\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "case vs idea distinction"
+   }
+  },
+  "20": {
+   "raw": "{\"own_material\": \"none\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs case; outside: article quote with block id not a world-claim\"}",
+   "labels": {
+    "own_material": "none",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs case; outside: article quote with block id not a world-claim"
+   }
+  },
+  "21": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material"
+   }
+  },
+  "22": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"connection\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material: references earlier conversation about Artifactory vs. this conversation's pip-cache remark\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "connection",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material: references earlier conversation about Artifactory vs. this conversation's pip-cache remark"
+   }
+  },
+  "23": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs article\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs article"
+   }
+  },
+  "24": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"yes\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs article\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "yes",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs article"
+   }
+  },
+  "25": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material vs said\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material vs said"
+   }
+  },
+  "26": {
+   "raw": "{\"own_material\": \"none\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"outside; move\"}",
+   "labels": {
+    "own_material": "none",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "outside; move"
+   }
+  },
+  "27": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs idea\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs idea"
+   }
+  },
+  "28": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs idea; applied_profile_case: indirect link to app decision\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs idea; applied_profile_case: indirect link to app decision"
+   }
+  },
+  "29": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"article\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: article vs case (ends with question tied to reader's own reaction)\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "article",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: article vs case (ends with question tied to reader's own reaction)"
+   }
+  },
+  "30": {
+   "raw": "{\"own_material\": \"none\", \"move\": \"article\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"no\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs article\"}",
+   "labels": {
+    "own_material": "none",
+    "move": "article",
+    "applied_profile_case": "na",
+    "took_up_their_case": "no",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs article"
+   }
+  }
+ }
+}

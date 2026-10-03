@@ -13,11 +13,15 @@ import {
   availableTopics,
   chosenTopics,
   isArchived,
+  isModelNamed,
+  MAX_TOPIC_DEPTH,
   narrowBeforeTopics,
   narrowShelf,
   tagFacets,
   topicCounts,
+  topicDepth,
   topicMembers,
+  withinChosenFirst,
   type ShelfTerm,
 } from "../src/web/shelf-narrow.js";
 
@@ -129,6 +133,108 @@ describe("availableTopics (plan 260929a, report 4Y)", () => {
   it("keeps a chosen topic at zero, so it can be removed", () => {
     const got = availableTopics(ranked, count({ a: 2 }), new Set(["c"]));
     expect(got.map((t) => t.key)).toEqual(["a", "c"]);
+  });
+});
+
+/* Topics a model named as a broad-to-fine tree — plan 261003f. Greg,
+   2026-10-03: "if I pick neuroscience, then it'll hide all of the
+   non-neuroscience-related topic pills. And then I can easily filter down
+   within those at sort of increasing levels of granularity." */
+describe("a three-level tree of model-named topics", () => {
+  /* No `count` on a member: there is no phrase to count. The server's order,
+     broad first. a–c are neuroscience, d–e are AI, and c is both. */
+  const named = (key: string, granularity: number, within: string | undefined, ...slugs: string[]): ShelfTerm => ({
+    key,
+    label: key,
+    articles: slugs.map((slug) => ({ slug })),
+    granularity,
+    ...(within === undefined ? {} : { within }),
+  });
+  const TREE = [
+    named("neuroscience", 0, undefined, "a", "b", "c"),
+    named("ai", 0, undefined, "c", "d", "e"),
+    named("cooking", 0, undefined, "f"),
+    named("vision", 0.5, "neuroscience", "a", "b"),
+    named("learning", 0.5, "ai", "c", "d"),
+    named("retinotopy", 0.75, "vision", "a"),
+  ];
+  const ALL = ["a", "b", "c", "d", "e", "f"];
+  const offered = (selected: string[]) => {
+    const counts = topicCounts(ALL, selected, TREE);
+    return availableTopics(TREE, (k) => counts.get(k) ?? 0, new Set(selected));
+  };
+  const keys = (terms: readonly ShelfTerm[]) => terms.map((t) => t.key);
+
+  it("hiding zeros alone drops the unrelated subject, but leaves an overlapping one ahead of the finer topics", () => {
+    /* What the row did before `withinChosenFirst`: *cooking* goes, but *ai*
+       and *learning* share article c with neuroscience, so *ai* still sits
+       between the chosen pill and the next step down. */
+    expect(keys(offered(["neuroscience"]))).toEqual(["neuroscience", "ai", "vision", "learning", "retinotopy"]);
+  });
+
+  it("moves the topics directly inside the chosen one to just after it", () => {
+    const chosen = new Set(["neuroscience"]);
+    expect(keys(withinChosenFirst(offered(["neuroscience"]), chosen))).toEqual([
+      "neuroscience",
+      "vision",
+      "ai",
+      "learning",
+      "retinotopy",
+    ]);
+  });
+
+  it("goes a level down when the finer topic is chosen too, and the pressed pill does not move", () => {
+    /* A wider tree, so something survives to be ordered: g is neuroscience,
+       memory and ai at once. */
+    const wide = [
+      named("neuroscience", 0, undefined, "a", "b", "g"),
+      named("ai", 0, undefined, "a", "g"),
+      named("vision", 0.5, "neuroscience", "a", "b"),
+      named("memory", 0.5, "neuroscience", "a", "g"),
+      named("retinotopy", 0.75, "vision", "a"),
+    ];
+    const one = new Set(["neuroscience"]);
+    expect(keys(withinChosenFirst(wide, one))).toEqual(["neuroscience", "vision", "memory", "ai", "retinotopy"]);
+    /* Vision stays second; what is inside it joins the group, broad first. */
+    const two = new Set(["neuroscience", "vision"]);
+    expect(keys(withinChosenFirst(wide, two))).toEqual(["neuroscience", "vision", "memory", "retinotopy", "ai"]);
+  });
+
+  it("leaves a finer topic chosen on its own where the server ranked it", () => {
+    const got = withinChosenFirst(TREE, new Set(["vision"]));
+    expect(keys(got)).toEqual(["neuroscience", "ai", "cooking", "vision", "retinotopy", "learning"]);
+  });
+
+  it("never puts a finer topic ahead of the chosen topic it is inside", () => {
+    /* *ai* is ranked second: what is ahead of it stays ahead. */
+    expect(keys(withinChosenFirst(offered(["ai"]), new Set(["ai"])))).toEqual(["neuroscience", "ai", "learning"]);
+  });
+
+  it("is the identity with nothing chosen, and for phrase topics", () => {
+    expect(withinChosenFirst(TREE, new Set())).toEqual(TREE);
+    const phrases = [term("a"), term("b"), term("c")];
+    expect(withinChosenFirst(phrases, new Set(["b"]))).toEqual(phrases);
+  });
+
+  it("reads a topic's depth off the within chain, capped, and 0 for a phrase", () => {
+    const byKey = new Map(TREE.map((t) => [t.key, t]));
+    const depth = (key: string) => topicDepth(byKey.get(key) as ShelfTerm, byKey);
+    expect(["neuroscience", "vision", "retinotopy"].map(depth)).toEqual([0, 1, 2]);
+    expect(topicDepth(term("phrase", "a"), byKey)).toBe(0);
+    /* A finer topic whose parent did not arrive is still not a broad subject. */
+    expect(topicDepth(named("orphan", 0.5, "gone", "a"), byKey)).toBe(1);
+    /* A chain that loops ends at the cap rather than spinning. */
+    const loop = new Map([
+      ["x", named("x", 0.5, "y", "a")],
+      ["y", named("y", 0.5, "x", "a")],
+    ]);
+    expect(topicDepth(loop.get("x") as ShelfTerm, loop)).toBe(MAX_TOPIC_DEPTH);
+  });
+
+  it("says model-named only when a topic carries a granularity", () => {
+    expect(isModelNamed(TREE)).toBe(true);
+    expect(isModelNamed(TERMS)).toBe(false);
+    expect(isModelNamed([])).toBe(false);
   });
 });
 

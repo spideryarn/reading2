@@ -1,0 +1,44 @@
+// READ-ONLY production read. Everything inside BEGIN READ ONLY ... ROLLBACK.
+import { readFileSync, writeFileSync } from "node:fs";
+const WT = "/home/greg/code/spideryarn2/.claude/worktrees/fb-search-quick-2610";
+const pg = (await import(`${WT}/node_modules/pg/lib/index.js`)).default;
+const env = readFileSync("/home/greg/code/spideryarn2/.env.prod", "utf8");
+const url = env.match(/^DATABASE_URL=(.*)$/m)[1].replace(/^"|"$/g, "").trim();
+const ca = readFileSync(`${WT}/certs/supabase-ca.crt`, "utf8");
+const c = new pg.Client({ connectionString: url, ssl: { ca, rejectUnauthorized: true } });
+await c.connect();
+const slug = "entropy-26-00481-with-cover-from-taylor-beck-spya-naz564";
+const out = {};
+try {
+  await c.query("begin read only");
+  const a = await c.query(
+    "select id, owner_id, slug, current_revision_id from spideryarn.articles where slug=$1",
+    [slug],
+  );
+  out.article = a.rows[0];
+  console.log("article rows", a.rowCount, a.rows[0] && { id: a.rows[0].id, rev: a.rows[0].current_revision_id });
+  if (a.rows[0]) {
+    const r = await c.query("select title, byline from spideryarn.article_revisions where id=$1", [
+      a.rows[0].current_revision_id,
+    ]);
+    out.meta = r.rows[0];
+    const b = await c.query(
+      "select block_id as id, ordinal, tag, kind, level, text, words, gistable, role, treatment, note_id from spideryarn.revision_blocks where revision_id=$1 order by ordinal",
+      [a.rows[0].current_revision_id],
+    );
+    out.blocks = b.rows;
+    console.log("blocks", b.rowCount);
+    const s = await c.query(
+      "select id, criterion, status, kind, model, error, hits, source_hash, colour from spideryarn.search_runs where article_id=$1",
+      [a.rows[0].id],
+    );
+    out.searchRuns = s.rows;
+    console.log("search runs", s.rowCount);
+    const ctl = await c.query("select count(*) from spideryarn.search_runs");
+    console.log("control: total search_runs visible", ctl.rows[0].count);
+  }
+} finally {
+  await c.query("rollback");
+  await c.end();
+}
+writeFileSync(`${WT}/data/qeval/entropy.json`, JSON.stringify(out, null, 1));

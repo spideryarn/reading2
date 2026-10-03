@@ -77,10 +77,12 @@
  *   POST   /api/chat/:slug/live-tool  { name, args } → one chat tool, for a live session
  *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret, a session
  *                                            id, the thread as seed items, and the tail
+ *   POST   /api/chat/:slug/:threadId/live-session { sdp, placement?, useProfile? }
+ *                                          → GPT-Live: the SDP answer, a session id, the tail
  *   POST   /api/chat/:slug/:threadId/spoken { question, answer, expectedTailId, … }
  *                                          → { thread }, one exchange appended
  *   POST   /api/live/:sessionId/connected  → the data channel opened
- *   POST   /api/live/:sessionId/usage      { kind, providerEventId, … } → one ledger row
+ *   POST   /api/live/:sessionId/usage      { kind, … } → one ledger row (four kinds, two per engine)
  *   POST   /api/live/:sessionId/close      { reason? } → the conversation ended
  *   PATCH  /api/chat/:slug/:threadId   { title }
  *   DELETE /api/chat/:slug/:threadId
@@ -178,7 +180,7 @@ import {
   loadTweets,
   fetchAllowanceStore,
 } from "./store/index.js";
-import { defaultShelfTopicsDeps, shelfTopics } from "./shelf-topics.js";
+import { defaultShelfTopicSetDeps, shelfTopicSet } from "./shelf-topic-sets.js";
 /* **Pure functions only**, and that is the whole reason this import survived
    step 10 while the writes beside it did not. `withRetry` and `withEdit` take a
    snapshot and return what the result would be, so they can be run as a gate
@@ -308,6 +310,12 @@ import { isSpideryarnId, isUuid } from "./ids.js";
    a session and gets back a short-lived secret for the browser. */
 import {
   acceptRealtimeUsage,
+  createGptLiveSession,
+  GPT_LIVE_BACKEND_MODEL,
+  GPT_LIVE_CREATE_SECONDS,
+  GPT_LIVE_MODEL,
+  GptLiveCreateFailed,
+  gptLiveCreateFailure,
   LIVE_MODEL,
   LIVE_SERVER_TOOLS,
   LIVE_TRANSCRIBER,
@@ -315,11 +323,12 @@ import {
   liveSeedItems,
   liveSession,
   mintLiveToken,
-  parseRealtimeUsage,
+  parseLiveUsage,
   realtimeCloseReason,
   REPORT_WINDOW_MS,
   SHOW_PASSAGE_TOOL,
 } from "./live.js";
+import { gptLiveSession } from "./live-gpt.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
 import { isWebUrl } from "./urls.js";
 /* The fourth thing a link card can say: what the destination says about itself,
@@ -349,11 +358,14 @@ import {
   decodeFeedbackCursor,
   isSearchKind,
   parseFeedbackFrom,
+  parseFeedbackIgnorePatch,
 } from "./types.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
+import { stageFailure } from "./job-failure.js";
 import {
+  LIVE_UPSTREAM,
   NOT_READ_YET,
   NOT_READ_YET_HIGH_POWER,
   placingFailed,
@@ -431,6 +443,7 @@ import {
 import { errorFields, log, since } from "./log.js";
 import { type CitedCandidate, withCitedInSpideryarn } from "./cited-in-spideryarn.js";
 import { authoredSentence, sayToReader } from "./reader-sentence.js";
+import { readerNotesDigest } from "./reader-notes.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
@@ -445,6 +458,7 @@ import {
   NON_TASK_MODELS,
   powerFor,
   type Provider,
+  type Wire,
   STAGE_EFFORT,
   TASK_TIER,
   displayName,
@@ -458,6 +472,8 @@ import {
   tooLongMessage,
   transcribe,
 } from "./transcribe.js";
+import { type PickAnswer, parsePickRequest } from "./command-pick.js";
+import { pickCommand } from "./command-pick-call.js";
 import type {
   Block,
   ChatAnchor,
@@ -493,7 +509,15 @@ import type {
 /* Values, not types: the list a placement off the wire is checked against, and
    the guard that does the checking. Both live in types.ts because the browser
    needs the same union and cannot import src/live.ts. */
-import { isMicPlacement, MIC_PLACEMENTS, HIGHLIGHT_COLOURS, isHighlightColour } from "./types.js";
+import {
+  type GptLiveTicket,
+  HIGHLIGHT_COLOURS,
+  isHighlightColour,
+  isLiveEngine,
+  isMicPlacement,
+  LIVE_ENGINES,
+  MIC_PLACEMENTS,
+} from "./types.js";
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
 import { isThreadKind, MAX_VISIBLE_BLOCKS, THREAD_KINDS } from "./types.js";
@@ -540,9 +564,9 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
 /**
  * The second one, and the same argument as the first.
  *
- * A bug report may carry a screenshot the reader pasted in, which is ~300 KB
- * downscaled and 400 KB at the ceiling the database enforces — four figures past
- * what the other forty routes need. So it is a parameter on `readBody` too, and
+ * A bug report may carry a screenshot the reader pasted in, which is a few
+ * hundred kilobytes for flat UI and two megabytes at the ceiling the database
+ * enforces — far past what the other routes need. So it is a parameter on `readBody` too, and
  * `MAX_BODY_BYTES` stays where it is: widening the shared limit to admit one
  * caller gives away the thing the limit was for.
  *
@@ -2787,6 +2811,65 @@ export function onScreenOf(visible: readonly string[] | undefined, blocks: reado
   return blocks.filter((b) => wanted.has(b.id)).map((b) => b.id);
 }
 
+/**
+ * **The reader's notes digest for an Explore turn**, or `null`.
+ *
+ * Explore starts from what the reader marked and discussed, so it is handed
+ * that without spending a tool round: their comments, highlights and bookmarks
+ * on this article and an index of their other conversations about it, through
+ * the same bounded formatter the `reader_notes` tool uses
+ * (`readerNotesDigest`, src/reader-notes.ts).
+ *
+ * **On every turn, not only the first** (GPT Sol's review of plan 261003l,
+ * PR-1). Only the question is stored and history is rebuilt from the rows, so
+ * a digest sent once would be gone by the second turn, and a retry or an edit
+ * of the opening question would never have had it.
+ *
+ * **The stored thread decides**, never the request: its kind says whether
+ * there is a digest at all, and its id is the conversation left out of the
+ * index. Both stores answer for the signed-in owner only (src/store/pg.ts §
+ * `ownedSlug`), and this is handed a slug, never an owner.
+ *
+ * **A failed load costs the digest, not the turn.** The answer still comes,
+ * the prompt simply has no notes section, and the tool is still offered — and
+ * says so honestly if it fails too. Logged: the slug and counts. Never a
+ * note, a quote or a title.
+ */
+async function exploreNotes(
+  slug: string,
+  thread: Pick<ChatThread, "id" | "kind">,
+  blocks: readonly Block[],
+): Promise<string | null> {
+  if (thread.kind !== "explore") return null;
+  try {
+    const [comments, threads] = await Promise.all([commentStore.load(slug), chatStore.load(slug)]);
+    const digest = readerNotesDigest({ comments, threads, blocks, currentThreadId: thread.id });
+    log("model").info(
+      {
+        slug,
+        notes: digest.notes.total,
+        notesShown: digest.notes.shown,
+        conversations: digest.conversations.total,
+        conversationsShown: digest.conversations.shown,
+        chars: digest.content.length,
+      },
+      "explore: the reader's notes go with the turn",
+    );
+    return digest.content;
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "explore: could not read the reader's notes; answering without them",
+    );
+    return null;
+  }
+}
+
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const {
     threadId,
@@ -2924,9 +3007,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
   const askingRemember = (storedKind ?? wantedKind) === "remember";
-  /* Tutorial is dictated too, so it shares Remember's long cap rather than
-     chat's 4,000 — the same mistake `MAX_REMEMBER_CHARS` exists to avoid. */
-  const longInput = askingRemember || (storedKind ?? wantedKind) === "tutorial";
+  /* Tutorial and Explore are dictated too, so they share Remember's long cap
+     rather than chat's 4,000 — the same mistake `MAX_REMEMBER_CHARS` exists to
+     avoid. */
+  const effectiveKind = storedKind ?? wantedKind;
+  const longInput = askingRemember || effectiveKind === "tutorial" || effectiveKind === "explore";
   /* **Chat only.** Remember's prompt tells the model not to guess how far the
      reader has got, and a screenful is exactly that guess; Candidates sends no
      position at all. The thread's kind decides, as it does for the cap below. */
@@ -3334,6 +3419,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       // The tools need to know which article the reader has open; the prompt
       // does not, and does not get it. src/chat-tools.ts § ToolContext.
       slug,
+      /* From the thread the store wrote, like `kind` below: `reader_notes`
+         leaves the conversation it is called from out of the ones it lists. */
+      threadId: thread.id,
       /* Resolved per turn rather than once per thread, so a reader who edits
          their profile mid-conversation gets the next answer written to the new
          one. The opposite of the job path, which freezes it — and the reason
@@ -3344,6 +3432,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          conclusion held; the reason had rotted. Found by a GPT Sol review,
          2026-08-26.) */
       profile: wantsProfile ? await resolveProfile(slug) : null,
+      /* **What the reader has marked and discussed, on every Explore turn** —
+         send, retry and edit alike, because all three reach this one call. From
+         the stored thread's kind and id, like `kind` below. `null` for every
+         other kind, and for an Explore turn whose notes could not be read. */
+      notes: await exploreNotes(slug, thread, article.blocks),
       /* **From the THREAD the store just wrote, never from the request body.**
          Those two agree only when the request was right, and the request comes
          from a tab that may be several navigations out of date. A retry and an
@@ -3650,7 +3743,7 @@ async function spokenChat(
   threadId: string,
   body: unknown,
 ): Promise<{ thread: ChatThread }> {
-  const { question, answer, passages, tools, interrupted, expectedTailId, kind } = (body ??
+  const { question, answer, passages, tools, interrupted, expectedTailId, kind, engine } = (body ??
     {}) as Record<string, unknown>;
   if (typeof question !== "string" || typeof answer !== "string") {
     throw httpError(400, "Expected { question, answer, expectedTailId }");
@@ -3666,6 +3759,15 @@ async function spokenChat(
      stored thread is `withSpokenTurn`'s 409. `SpokenTurn.kind` in src/chat.ts. */
   if (kind !== undefined && !isSpokenKind(kind)) {
     throw httpError(400, "kind must be chat or remember");
+  }
+  /* **Which engine spoke, and so which model the row is marked with.** The
+     browser names the engine, never the model: the model id is this server's
+     to write, as it always was. Absent means Realtime, which is every call
+     made before the second engine existed. Anything else is refused rather
+     than read as Realtime, because a GPT-Live answer filed under the wrong
+     model is a wrong row nothing would ever flag. */
+  if (engine !== undefined && !isLiveEngine(engine)) {
+    throw httpError(400, `engine must be one of: ${LIVE_ENGINES.join(", ")}`);
   }
   /* An empty question is ordinary — the transcriber fails — and so is an empty
      answer, if the reader hung up mid-breath. Both empty is not a turn, and
@@ -3704,7 +3806,7 @@ async function spokenChat(
       ...(parseSpokenTools(tools) ?? {}),
       ...(interrupted === true ? { interrupted: true } : {}),
       ...(kind !== undefined ? { kind } : {}),
-      model: LIVE_MODEL,
+      model: engine === "gpt-live" ? GPT_LIVE_MODEL : LIVE_MODEL,
     }),
   ).then((t) => t.thread);
 
@@ -3913,6 +4015,11 @@ async function liveChatToken(
        against the wrong rate card for ever. */
     model: minted.model,
     transcriptionModel: LIVE_TRANSCRIBER,
+    /* GPT-Live's three. A Realtime session has no backend, no provider id this
+       server ever learns, and no voice-seconds meter. */
+    backendModel: null,
+    providerSessionId: null,
+    voiceSecondsReported: 0,
     issuedAt: issuedAt.toISOString(),
     /* **The server's own deadline, stored on the row.** Not the token's expiry,
        which admits one connection and is about ten minutes, while a conversation
@@ -3932,6 +4039,176 @@ async function liveChatToken(
     seed: liveSeedItems(thread?.messages ?? []),
     tailId: thread?.messages.at(-1)?.id ?? null,
   };
+}
+
+/**
+ * **One GPT-Live call, created.** `POST /api/chat/:slug/:threadId/live-session`.
+ *
+ * The second engine's counterpart to `liveChatToken` above, and it differs in
+ * the one way the API forces: GPT-Live has no ephemeral client secret, so the
+ * browser cannot open the session itself. It sends its SDP offer here, this
+ * server creates the session with the real key, and the SDP answer goes back.
+ * Audio still never comes through here.
+ *
+ * ## The order is the reverse of the token route's, and the reason is money
+ *
+ * There, the mint is free, so OpenAI is asked first and the row is written
+ * second. Here **the create itself bills fifteen seconds**, so the row is
+ * written first: a billed session with no row would be spend nothing could
+ * ever see. Then, on how the create went:
+ *
+ * - **it worked** — OpenAI's session id, the fifteen seconds and their priced
+ *   `ai_calls` row are written in one transaction, so a call abandoned before
+ *   it connects is still in the ledger, and the browser's first usage report of
+ *   the same cumulative 15 adds nothing;
+ * - A refusal is `create_failed`; a lost response is `create_uncertain`.
+ *   A confirmed but unusable create is charged, then closed `create_unusable`.
+ *   None backfills a connected time.
+ *
+ * ## What the browser gets
+ *
+ * The SDP answer, the two session ids and the tail. Not the instructions, the
+ * tools, the article or the seed: all of that went to OpenAI in the create
+ * request (`gptLiveSession` in src/live-gpt.ts). `tailId` and the seed come
+ * from one read of the thread, for the reason `liveChatToken` gives.
+ */
+async function liveChatSession(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<GptLiveTicket> {
+  const { sdp, placement, useProfile } = (body ?? {}) as Record<string, unknown>;
+  if (typeof sdp !== "string" || sdp.trim() === "") {
+    throw httpError(400, "Expected { sdp }, the browser's SDP offer");
+  }
+  if (sdp.length > MAX_SDP_CHARS) {
+    throw httpError(413, `That SDP offer is longer than ${MAX_SDP_CHARS} characters`);
+  }
+  /* **Checked, then unused.** GPT-Live has no noise-reduction setting for a
+     microphone placement to choose, so there is nothing to map it onto. It is
+     still validated, so the browser can send one body shape to either engine
+     and a wrong value is caught here as it is on the token route. */
+  if (placement !== undefined && !isMicPlacement(placement)) {
+    throw httpError(400, `placement must be one of: ${MIC_PLACEMENTS.join(", ")}`);
+  }
+  if (useProfile !== undefined && typeof useProfile !== "boolean") {
+    throw httpError(400, "useProfile must be true or false");
+  }
+
+  const article = await loadArticle(slug);
+  const thread = (await chatStore.load(slug)).find((t) => t.id === threadId);
+  const owner = currentOwnerId();
+
+  const session = gptLiveSession({
+    meta: article.meta,
+    blocks: article.blocks,
+    tree: article.tree,
+    profile: useProfile === false ? null : await resolveProfile(slug),
+    history: thread?.messages ?? [],
+  });
+
+  /* **Journal first.** If this insert throws, OpenAI is never asked and nothing
+     is billed. */
+  const sessionId = randomUUID();
+  const issuedAt = new Date();
+  await realtimeSessionStore.issue({
+    id: sessionId,
+    ownerId: owner,
+    articleSlug: slug,
+    threadId,
+    /* **What we asked for**, where the token route records what OpenAI
+       created: the create response names no model, and the row has to exist
+       before there is a response at all. `session.started` on the data channel
+       does name it, and it reaches only the browser. */
+    model: GPT_LIVE_MODEL,
+    /* GPT-Live transcribes the reader itself, inside the voice-seconds price. */
+    transcriptionModel: null,
+    backendModel: GPT_LIVE_BACKEND_MODEL,
+    providerSessionId: null,
+    voiceSecondsReported: 0,
+    issuedAt: issuedAt.toISOString(),
+    /* The same server-owned deadline as a Realtime session: the browser's
+       twenty-minute cap, with the tolerance added when a report is checked. */
+    acceptsUntil: new Date(issuedAt.getTime() + REPORT_WINDOW_MS).toISOString(),
+    connectedAt: null,
+    closedAt: null,
+    closeReason: null,
+  });
+
+  let created: Awaited<ReturnType<typeof createGptLiveSession>>;
+  try {
+    created = await createGptLiveSession({ sdp, session });
+  } catch (err) {
+    const outcome = err instanceof GptLiveCreateFailed ? err.outcome : "failed";
+    const providerId = err instanceof GptLiveCreateFailed ? err.providerSessionId : undefined;
+    // A 2xx create bills even if its response has no usable SDP.
+    if (outcome === "created") await recordGptLiveCreateCharge(sessionId, owner, providerId);
+    const reason = outcome === "created" ? "create_unusable" : outcome === "uncertain" ? "create_uncertain" : "create_failed";
+    await realtimeSessionStore
+      .closeUnopened(sessionId, owner, new Date().toISOString(), reason, providerId)
+      .catch(() => {
+        log("model").error({ slug, sessionId, providerSessionId: providerId, reason }, "GPT-Live create outcome could not be journalled");
+      });
+    if (err instanceof GptLiveCreateFailed) {
+      log("model").error(
+        { slug, sessionId, providerStatus: err.upstreamStatus, outcome },
+        "GPT-Live create did not produce a usable ticket",
+      );
+      throw gptLiveCreateFailure(err);
+    }
+    throw err;
+  }
+
+  await recordGptLiveCreateCharge(sessionId, owner, created.providerSessionId);
+
+  return {
+    sdp: created.sdp,
+    sessionId,
+    liveSessionId: created.providerSessionId,
+    tailId: thread?.messages.at(-1)?.id ?? null,
+  };
+}
+
+/**
+ * How long an SDP offer may be. A real one is under two thousand characters
+ * (1,656 in the spike); this is a bound on what a browser can make this server
+ * forward to OpenAI, not a rule a real offer will meet.
+ */
+const MAX_SDP_CHARS = 20_000;
+
+/**
+ * Record the confirmed creation charge atomically. Retry only the transaction,
+ * never the paid create. A lost commit acknowledgement is safe: the locked
+ * high-water mark makes the retry add nothing. If both attempts fail, keep
+ * the provider identity and a reconciliation state, and withhold the ticket.
+ */
+async function recordGptLiveCreateCharge(sessionId: string, owner: string, providerSessionId?: string): Promise<void> {
+  const receivedAt = new Date();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await realtimeSessionStore.advanceVoiceSeconds(sessionId, owner, {
+        seconds: GPT_LIVE_CREATE_SECONDS,
+        ...(providerSessionId === undefined ? {} : { providerSessionId }),
+        rowFor: (locked) => acceptRealtimeUsage({
+          session: locked,
+          usage: { kind: "voice", seconds: GPT_LIVE_CREATE_SECONDS, eventId: "create" },
+          receivedAt,
+        }),
+      });
+      return;
+    } catch {
+      if (attempt === 0) continue;
+      // This separate write retains evidence that the rolled-back transaction lost.
+      await realtimeSessionStore.closeUnopened(
+        sessionId, owner, new Date().toISOString(), "create_accounting_failed", providerSessionId,
+      ).catch(() => undefined);
+      log("model").error(
+        { sessionId, providerSessionId, creationSeconds: GPT_LIVE_CREATE_SECONDS, reason: "create_accounting_failed" },
+        "GPT-Live session was created but its creation charge needs reconciliation",
+      );
+      throw stageFailure(LIVE_UPSTREAM, "GPT-Live was created but its creation charge could not be recorded.");
+    }
+  }
 }
 
 /**
@@ -3998,12 +4275,21 @@ async function liveUsage(sessionId: string, body: unknown): Promise<{ ok: true }
   if (!session) throw httpError(404, "No such live session.");
 
   const receivedAt = new Date();
-  const row = acceptRealtimeUsage({
-    session,
-    usage: parseRealtimeUsage(body),
-    receivedAt,
-  });
-  await costStore.record(row);
+  const usage = parseLiveUsage(body);
+  if (usage.kind === "voice") {
+    /* **GPT-Live's seconds are a running total, so this one is not a plain
+       insert.** The store locks the session row and hands it back; the row is
+       built from the mark as read under that lock, and the mark and the row
+       are written together or not at all. A repeat or an older figure builds
+       no row and writes nothing. `advanceVoiceSeconds` in
+       src/store/realtime-sessions-pg.ts. */
+    await realtimeSessionStore.advanceVoiceSeconds(sessionId, owner, {
+      seconds: usage.seconds,
+      rowFor: (locked) => acceptRealtimeUsage({ session: locked, usage, receivedAt }),
+    });
+  } else {
+    await costStore.record(acceptRealtimeUsage({ session, usage, receivedAt }));
+  }
   /* **A report is also evidence the channel opened**, and the `connected` event
      above is the one thing here that nothing retries. Kept earliest-wins in the
      store, so this weaker inference never overwrites the real moment. */
@@ -4058,6 +4344,12 @@ async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }
  * fetches a URL this server chooses to fetch either way — a reader can already
  * ask a typed conversation to read one — so the defence is the same one, in the
  * same place. docs/project/security.md.
+ *
+ * **`reader_notes` is refused here twice.** It is not in `LIVE_SERVER_TOOLS`,
+ * which is built from the shared `CHAT_TOOLS` and not from `toolsFor`; and the
+ * context below names no `kind`, so `runTool` would call it an unknown tool
+ * even if the first check went. This endpoint has no thread to leave out of
+ * that tool's list — docs/project/chat-tools.md § The reader's notes.
  */
 async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
   const { name, args } = (body ?? {}) as Record<string, unknown>;
@@ -6248,12 +6540,13 @@ function modelsInUse(): { tasks: ModelReport[] } {
     /* A standard article: this page reports the app's configuration, not one
        article's — High-powered AI is per article (plan 260930f). Through
        `powerFor`, so a task on Opus for every article is reported as Opus. */
-    const { id, provider, source } = resolveModel(task, powerFor(task, "standard"));
+    const { id, provider, wire, source } = resolveModel(task, powerFor(task, "standard"));
     return {
       task,
       model: displayName(id),
       id,
       provider,
+      wire,
       source,
       ...(effort ? { effort } : {}),
     };
@@ -6284,6 +6577,8 @@ type ModelReport = {
   /** The exact string sent on the wire. */
   id: string;
   provider: Provider;
+  /** Which API shape the call speaks. Absent on the rows that are not `Task`s. */
+  wire?: Wire;
   /** `"override"` when an environment variable, rather than the code, put that id there. */
   source: "default" | "override";
   effort?: string;
@@ -6558,6 +6853,43 @@ async function transcribeDictation(
         ? await withSpendAttribution({ articleSlug: where.slug }, run)
         : await run();
     return { text: result.text, ms: result.ms };
+  } finally {
+    res.off("close", drop);
+  }
+}
+
+/* --------------------------------------------------------- command pick -- */
+
+/**
+ * **A sentence typed into the command bar, turned into one of its rows.**
+ * `POST /api/command-pick` — plan 261003k; src/command-pick-call.ts makes the
+ * two model calls and src/command-pick.ts owns the body's shape.
+ *
+ * `transcribeDictation`'s three habits, for its reasons: the body is an exact
+ * shape and a key we do not know is refused (with fixed prose — the reason
+ * reaches a log); what the caller sends is parsed rather than trusted; and the
+ * reader's disconnect aborts the model call, on `res` and not `req`.
+ *
+ * **No slug, in the path or the body**: the model reads the sentence and the
+ * bar's rows, never the article, so there is nothing here an article decides —
+ * and so nothing to attribute the spend to.
+ *
+ * **No per-reader rate limit, and that is a decision** (the plan § Stage 2):
+ * dictation and quick search have none either, and what bounds a call is that
+ * it is signed-in only, capped (300 characters, 200 keys), about $0.0002, and
+ * can only answer with a key the caller sent or words from the caller's own
+ * sentence, chosen among options whose words are ours.
+ */
+async function pickCommandForSentence(req: IncomingMessage, res: ServerResponse): Promise<PickAnswer> {
+  const parsed = parsePickRequest(await readBody(req));
+  if (!parsed.ok) throw httpError(400, parsed.reason);
+  const gone = new AbortController();
+  const drop = () => gone.abort();
+  res.on("close", drop);
+  try {
+    const outcome = await pickCommand(parsed.request, gone.signal);
+    if (!outcome.ok) throw httpError(outcome.status, outcome.failure.message);
+    return outcome.answer;
   } finally {
     res.off("close", drop);
   }
@@ -7606,6 +7938,8 @@ type AuthRoute = ExactAuthRoute | PatternAuthRoute;
 const JOBS_PATH = "/api/jobs";
 /* Gift vouchers: GET lists, POST creates (261001m). */
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
+/* One report, by its pair: read with GET, marked ignored with PATCH. */
+const ADMIN_FEEDBACK_REPORT_PATTERN = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/;
 const UPLOAD_PATTERN = /^\/api\/uploads\/([\w-]+)$/;
 const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
 /* Referee mode's criteria: the collection, and one row. `criteria` sits inside
@@ -7878,7 +8212,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   {
     kind: "pattern",
     method: "GET",
-    pattern: /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/,
+    pattern: ADMIN_FEEDBACK_REPORT_PATTERN,
     article: "none",
     handler: async ({ request: { res } }, captures) => {
       const [, owner = "", id = ""] = captures;
@@ -7886,6 +8220,31 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
       res.setHeader("Cache-Control", "private, no-store");
       const report = await adminStore.readFeedbackAcrossOwners(owner, id);
+      if (!report) throw httpError(404, "There is no such report.");
+      send(res, 200, { report });
+    },
+  },
+  /* **Mark a report as ignored, or take the mark back** — the Ignore button on
+     the card, and the only write under `/api/admin/feedback`. Greg, 2026-10-03
+     (`spya-g95x4j`): *"I just saw feedback that I wished I could delete, and
+     there wasn't a way to do it, or at least mark it as to be ignored."* It
+     sets or clears one timestamp; the report itself is never changed.
+     scripts/feedback-unswept.ts leaves a marked report out of the agents'
+     queue. Under `/api/admin/`, so the namespace gate refuses everybody else
+     before this is reached. docs/plans/261003j-…. */
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: ADMIN_FEEDBACK_REPORT_PATTERN,
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [, owner = "", id = ""] = captures;
+      if (!isUuid(owner)) throw httpError(400, "ownerId must be a uuid");
+      if (!isSpideryarnId(id)) throw httpError(400, "id must be a report id");
+      const patch = parseFeedbackIgnorePatch(await readBody(req));
+      if (patch === "malformed") throw httpError(400, "The body must be { ignored: true or false }.");
+      res.setHeader("Cache-Control", "private, no-store");
+      const report = await adminStore.setFeedbackIgnoredAcrossOwners(owner, id, patch.ignored);
       if (!report) throw httpError(404, "There is no such report.");
       send(res, 200, { report });
     },
@@ -8028,18 +8387,24 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res, query } }) => {
       /* `=== "1"`, as `/api/library` does. Here it widens to active + archived. */
       const archived = query.get("archived") === "1";
-      const { response, refresh } = await shelfTopics(archived, defaultShelfTopicsDeps());
+      const { response, refresh } = await shelfTopicSet(archived, defaultShelfTopicSetDeps());
       const terms: LibraryTermsResponse = response;
       /* The reader's own words, derived: never a shared cache's (Sol F10). */
-      res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, terms);
       /* **After the answer, and still inside the handler** — plan 260929c R1.
-         The reader already has the program's list (or the stored pick); the
-         model call runs now and is awaited, so its spend lands in this
-         request's collector against this reader rather than as a late finish,
-         and a Vercel function stays alive until it is done. `refresh` never
-         throws. src/shelf-topics.ts. */
-      if (refresh) await refresh();
+         The reader already has the stored topics (or the phrase pills); the
+         model's work — filing new articles, or a re-think of the whole tree,
+         which can take a couple of minutes — runs now and is awaited, so its
+         spend lands in this request's collector against this reader rather
+         than as a late finish, and a Vercel function stays alive until it is
+         done. `refresh` never throws. The `finally` also spends or releases
+         the already-taken allowance and claim if serialising/sending the
+         answer itself fails. src/shelf-topic-sets.ts, plan 261003f. */
+      try {
+        res.setHeader("Cache-Control", "private, no-store");
+        send(res, 200, terms);
+      } finally {
+        if (refresh) await refresh();
+      }
     },
   },
 
@@ -8143,6 +8508,21 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "handler",
     handler: async ({ request: { req, res } }) => {
       send(res, 200, await transcribeDictation(req, res));
+    },
+  },
+
+  /* **The command bar's sentence** — asked only when the bar's own matching
+     found nothing and the reader pressed Enter. No slug: nothing about it is
+     an article's. src/command-pick-call.ts, plan 261003k. */
+  {
+    kind: "exact",
+    method: "POST",
+    /* `COMMAND_PICK_PATH` (src/command-pick.ts) is what the bar posts to; a
+       literal here because the contract test reads this table as text. */
+    path: "/api/command-pick",
+    article: "none",
+    handler: async ({ request: { req, res } }) => {
+      send(res, 200, await pickCommandForSentence(req, res));
     },
   },
 
@@ -9628,6 +10008,22 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { req, res } }, captures) => {
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       send(res, 200, await liveChatToken(slug, id, await readBody(req)));
+    },
+  },
+
+  /* **GPT-Live's counterpart to the ticket above** — the second engine, built
+     beside Realtime (docs/plans/261003a-…). Under the conversation for the
+     same reason: it seeds the session with the thread. It makes no model call
+     through the gateway, so `first-capture` attributes nothing today; the rows
+     it writes take their article off the session row, like `/usage` below. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/live-session$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, await liveChatSession(slug, id, await readBody(req)));
     },
   },
 

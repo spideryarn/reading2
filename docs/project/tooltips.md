@@ -121,6 +121,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the shelf card's five action buttons — the one row where a card also has to say *why this one does nothing* ([library.md § When a button cannot do its job](library.md#when-a-button-cannot-do-its-job)) |
 | [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
 | [`src/web/BandAbout.tsx`](../../src/web/BandAbout.tsx) | **every band's (i)**, in its top-right corner, put there by `ModeSurface`'s `mode` and `about` since 2026-10-01 (Greg: *"Move this into a tooltip for a (i) icon in the top-right"*, spya-ucu35y). Controlled, so a tap opens it on a phone. Its card opens with the mode's two `MODE_CATALOG` paragraphs — the same words as the Dock's card on that mode — then the mode's counts, caveats and `AboutMade` (who made it, when, how long). What belongs there is [mode.md](mode.md) § Every band has an (i) |
+| [`src/web/modes/referee/RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `HowToRead` | **the same controlled shape on a panel rather than a band**: Referee's *How to read this* button, which holds the sentences that say a list of passages is not a verdict. A tap toggles it, because those sentences must reach a phone ([referee-mode.md](referee-mode.md) § How to read a panel) |
 | [`src/web/BackLink.tsx`](../../src/web/BackLink.tsx) | the icon-only way back (an arrow) or home (a house) at the top of a page, since 2026-09-29 — the card says the destination and opens to the *right*, because a card below covered the heading. Name in `aria-label`, words in a `TipNote` |
 | [`src/web/styles/tooltip.css`](../../src/web/styles/tooltip.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
@@ -153,7 +154,8 @@ tap commits, which is `bandPress`'s rule reached by a different route
 tooltips get there through `Tooltip.tsx`'s `mouseOnly`; this one owns its own listeners, so the whole
 gesture lives in `useHoverCard.ts`.
 
-**A quote's outline joined it on 2026-10-02** (`mark.hit[data-quote]`), as a fourth half of the
+**A quote's mark joined it on 2026-10-02** (`mark.hit[data-quote]`; an outline then, a fill since
+2026-10-03), as a fourth half of the
 same card — scores, reason, ‹ › and *open Quotes* ([quotes.md](quotes.md) § In the spine, on a
 card, and one at a time). Pointer only, and not in `tapSelector`, because a tap on a bare quote
 selects its paragraph. It brought the hook one option, **`openDelay`**: a per-hit rest before a cold
@@ -366,7 +368,7 @@ Three things about it are not true of any other set here.
   why the button is dimmed rather than `aria-disabled`. That widened `state`, which until then had
   meant *this switch is mid-flight or broken*; what the two share is that somebody who opened the
   card because the control looked wrong wants that answered before they are told what it is for.
-- **And the three buttons in the bar that are not modes** — Comments, Tweets and Metadata (Tweets became a mode on 2026-09-29, leaving two; [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)) — took the
+- **And the three buttons in the bar that are not modes** — Comments, Tweets and Metadata (Tweets became a mode on 2026-09-29, leaving two, and Summary's Thread view on 2026-10-03; [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)) — took the
   same two-paragraph card later the same day. Their copy is `NOT_A_MODE` in
   [`Dock.tsx`](../../src/web/Dock.tsx) rather than `MODE_CATALOG`, because a record keyed by `Mode`
   is the wrong home for three things that are not modes and never will be. They are in a

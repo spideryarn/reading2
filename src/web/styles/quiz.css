@@ -1,5 +1,6 @@
 /* quiz.css — the Quiz sub-mode of Remember (QuizPanel.tsx), and the
-   Recall | Tutorial | Quiz switch that sits in the band's head beside the title.
+   Recall | Tutorial | Explore | Quiz switch that sits in the band's head beside
+   the title.
 
    Its structural classes are the glossary band's rather than a second
    vocabulary for the same things, so **it must stay after glossary.css**. */
@@ -17,19 +18,32 @@
    follows the theme without a second palette to keep in step — /design and
    docs/project/design-css-overview.md. */
 
-/* Recall | Tutorial | Quiz, in the band's head beside the title. Two toggle buttons, and
-   the pressed one is filled — a pair where one is always on, so an outline-only
-   treatment would leave a reader guessing which half they are looking at. */
+/* Recall | Tutorial | Explore | Quiz, in the band's head beside the title.
+   Toggle buttons, and the pressed one is filled — a set where one is always
+   on, so an outline-only treatment would leave a reader guessing which part
+   they are looking at.
+
+   **It may shrink, and then its chips wrap** (four since 2026-10-03). The
+   heading beside it is `flex: 1`, whose basis is zero, so the heading gives up
+   its width first and the chips keep theirs on one row for as long as the row
+   has room; only on a phone too narrow for all four does the set go to two
+   rows, each chip whole. `flex: none` was right for two chips and would push
+   a fourth off the edge. docs/project/narrow-windows.md. */
 .remember-submode {
   display: flex;
+  flex-wrap: wrap;
   gap: 1px;
   margin-left: auto;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   border: 1px solid var(--rule);
   border-radius: 4px;
   overflow: hidden;
 }
 .remember-submode-btn {
+  /* Grows to fill a wrapped row, and never breaks inside its own word. */
+  flex: 1 0 auto;
+  white-space: nowrap;
   border: 0;
   background: transparent;
   color: var(--ink-faint);
@@ -117,8 +131,23 @@
      behind it and looked right by accident against the band. */
   background: var(--page);
   color: var(--ink);
-  resize: vertical;
+  /* The height is the words' (QuizPanel.tsx § `fitBox`), so there is nothing
+     to drag and nothing to scroll: the whole answer is on screen and the band
+     is what scrolls. spya-qnrxuw. */
+  resize: none;
+  overflow-y: hidden;
 }
+
+/* The fill, on whichever of Answer and Next is the thing to press: Answer
+   until its answer is marked, Next after. `.chat-send` (mode-band.css) is the
+   box and its "not yet" grey; chat keys its own fill on `[type="submit"]`, and
+   neither of these is in a form. The same tokens and the same hover. */
+.chat-send.quiz-go:not([aria-disabled="true"]) {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.chat-send.quiz-go:not([aria-disabled="true"]):hover { filter: brightness(1.1); }
 
 .quiz-actions {
   display: flex;
@@ -287,11 +316,11 @@
    the chips are punctuation in it. `white-space: normal` undoes `.quiz-reply`'s
    `pre-wrap` for the chip alone — inside a `pre-wrap` box the space between two
    ids in one bracket is preserved twice and the flex gap adds a third. */
-.quiz-reply .cite {
+.quiz-reply .cite-chips {
   white-space: normal;
   vertical-align: baseline;
 }
-.quiz-reply .cite .block-ref { font-size: 0.74rem; }
+.quiz-reply .cite-chips .block-ref { font-size: 0.74rem; }
 
 /* Status-only since plan 260929b: progress, Stop and failures stay pinned even
    though the idle redo button moved to Metadata. */

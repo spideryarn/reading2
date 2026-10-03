@@ -178,6 +178,7 @@ function press(key: string): void {
 
 const QUIZ: SubMode = { mode: "remember", view: "quiz" };
 const ILLUSTRATED: SubMode = { mode: "diagram", view: "illustrated" };
+const THREAD: SubMode = { mode: "summary", view: "thread" };
 
 describe("which sub-mode rows the bar offers", () => {
   it("offers Quiz first when the reader types `quiz`", () => {
@@ -196,6 +197,15 @@ describe("which sub-mode rows the bar offers", () => {
     const first = rows()[0];
     expect(first?.dataset.kind).toBe("submode");
     expect(fullName(first as HTMLElement)).toBe("Remember › Tutorial");
+  });
+
+  it("offers Explore first when the reader types `explore`", () => {
+    reading();
+    openBar();
+    type("explore");
+    const first = rows()[0];
+    expect(first?.dataset.kind).toBe("submode");
+    expect(fullName(first as HTMLElement)).toBe("Remember › Explore");
   });
 
   it("offers Illustrated when the reader types `illus`", () => {
@@ -248,7 +258,8 @@ describe("which sub-mode rows the bar offers", () => {
     expect(names).not.toContain("Diagram › Illustrated");
     expect(names).not.toContain("Diagram › Force");
     /* And not nothing: Summary's levels are for everybody. */
-    expect(names).toContain("Summary › Simple");
+    expect(names).toContain("Summary › Fuller");
+    expect(names).toContain("Summary › Thread");
   });
 
   it("finds a sub-mode by the compound name a reader would say", () => {
@@ -303,6 +314,10 @@ describe("the `generates` marker on a sub-mode row", () => {
     expect(marked("Remember › Quiz")).toBe(true);
     expect(marked("Diagram › Illustrated")).toBe(true);
     expect(marked("Referee › Claims")).toBe(true);
+    /* Thread arms nothing and still says it: its band writes on arrival. */
+    expect(marked("Summary › Thread")).toBe(true);
+    expect(subModeTarget(THREAD)).toBeNull();
+    expect(marked("Summary › Brief")).toBe(true);
     expect(marked("Remember › Recall")).toBe(false);
     expect(marked("Referee › Criteria")).toBe(false);
     expect(marked("Referee › Mirror")).toBe(false);
@@ -353,6 +368,54 @@ describe("Enter on a sub-mode row, on the reading view", () => {
     press("Enter");
     expect(onMode).toHaveBeenCalledWith("summary", { mode: "summary", view: "fuller" });
     expect(pendingActivation("a-piece", "simple")).not.toBeNull();
+  });
+
+  /* **The Tweets mode's words open Summary's Thread** — GPT Sol's F3 on plan
+     261003l. As aliases of the Summary *mode* they would select the mode row,
+     which opens whatever `?summary=` names — Brief by default — and arms
+     `simple`: the wrong view, and a paid run nobody asked for. Offering the
+     Thread row lower down is not enough; Enter takes the first row. Watched
+     red with the aliases moved to `MODE_CATALOG.summary`. */
+  it.each(["tweets", "tweet", "thread", "twitter", "tweet thread"])(
+    "`%s` + Enter opens Summary's Thread, and arms nothing",
+    (typed) => {
+      const onMode = vi.fn();
+      reading({ onMode });
+      openBar();
+      type(typed);
+      expect(fullName(rows()[0] as HTMLElement), `first row for "${typed}"`).toBe("Summary › Thread");
+      press("Enter");
+      expect(onMode).toHaveBeenCalledTimes(1);
+      expect(onMode).toHaveBeenCalledWith("summary", THREAD);
+      /* The thread writes on arrival and claims no token (activation.ts §
+         `activationForSummary`); a `simple` token here would wait for Back. */
+      expect(pendingActivation("a-piece", "simple")).toBeNull();
+      expect(pendingActivation("a-piece", "tweets")).toBeNull();
+    },
+  );
+
+  it("`summary` + Enter still opens the mode's own row, which arms the plain-words job", () => {
+    const onMode = vi.fn();
+    reading({ onMode });
+    openBar();
+    type("summary");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("summary", undefined, false);
+    expect(pendingActivation("a-piece", "simple")).not.toBeNull();
+  });
+
+  it("the Summary mode row arms nothing while the reading view says the thread is showing", () => {
+    /* The view is the `summary` prop — the Reader's parsed state — and not the
+       address, which here still says Brief, as it does for ~50ms after a
+       press on the Thread segment (GPT Sol's F1, P0). */
+    const onMode = vi.fn();
+    reading({ onMode, mode: "summary", summary: "thread" });
+    expect(new URLSearchParams(location.search).get("summary")).toBeNull();
+    openBar();
+    type("summary");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("summary", undefined, false);
+    expect(pendingActivation("a-piece", "simple")).toBeNull();
   });
 
   it("arms nothing for Recall", () => {
@@ -441,6 +504,7 @@ describe("the registry's two answers agree", () => {
     diagram: "sketch",
     referee: "criteria",
     remember: "recall",
+    summary: "brief",
   } as const;
 
   it("a sub-mode row arms exactly the target the band that mounts would claim", () => {
@@ -450,6 +514,18 @@ describe("the registry's two answers agree", () => {
     }
   });
 
+  it("Candidates arms nothing and is not marked as generating", () => {
+    /* Literal, because the agreement test above passes when both answers are
+       wrong together. Candidates reaches a search engine, so it waits for its
+       own button — src/web/activation.ts § REFEREE_TARGET. */
+    const candidates: SubMode = { mode: "referee", view: "candidates" };
+    expect(subModeTarget(candidates)).toBeNull();
+    expect(bandTarget("referee", { ...DEFAULTS, referee: "candidates" })).toBeNull();
+    expect(subModeGenerates(candidates)).toBe(false);
+    /* And Claims still does, so the row above is not passing on an empty table. */
+    expect(subModeTarget({ mode: "referee", view: "claims" })).toBe("claims");
+  });
+
   it("Quiz clears the thread, in the same write", () => {
     expect(subModeParams(QUIZ)).toEqual({ mode: "remember", remember: "quiz", thread: null });
     expect(withSubMode("?mode=chat&thread=spya-k3m9qt&at=spya-aaaaaa", QUIZ)).toBe(
@@ -457,9 +533,10 @@ describe("the registry's two answers agree", () => {
     );
   });
 
-  it("writes Simple out now that Brief is Summary's default (8N)", () => {
-    expect(subModeParams({ mode: "summary", view: "simple" })).toEqual({ mode: "summary", summary: "simple" });
-    expect(withSubMode("?mode=plain", { mode: "summary", view: "simple" })).toBe("?mode=summary&summary=simple");
+  it("writes Fuller and Thread out now that Brief is Summary's default (8N)", () => {
+    expect(subModeParams({ mode: "summary", view: "fuller" })).toEqual({ mode: "summary", summary: "fuller" });
+    expect(withSubMode("?mode=plain", { mode: "summary", view: "fuller" })).toBe("?mode=summary&summary=fuller");
+    expect(withSubMode("?mode=plain&summary=fuller", THREAD)).toBe("?mode=summary&summary=thread");
   });
 
   it("omits parser defaults from both navigation paths", () => {

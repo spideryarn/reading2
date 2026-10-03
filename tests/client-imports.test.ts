@@ -482,6 +482,23 @@ const SHARED = new Set([
      calling this is what makes the counter true.
      See src/citable.ts and docs/plans/chat-markdown.md. */
   "citable.js",
+  /* The shape of a command token in a chat answer (`[cmd:<id>:<argument>]`),
+     and which tokens stand on a line of their own. On the list for
+     `citable.js`'s reason, and imported by it: the renderer lifts a token out
+     of a text node before it looks for citations, and the server's citation
+     counters must blank the same span, or the id in
+     `[cmd:bookmark:spya-k3m9qt]` is counted as a citation nobody was shown.
+     It imports nothing at all. See src/command-token.ts and plan 261003f. */
+  "command-token.js",
+  /* What the command bar asks when a sentence matches no row, and how the
+     answer is read: the request's shape and caps, the two prompts, `readPick`
+     and the run-at-once cut. On the list because the browser builds the
+     request and re-reads the reply with the same functions the server
+     validates with (and the eval asks with), so the three cannot drift. It
+     imports nothing at all; the catalogue of words is the server's
+     (src/command-pick-call.ts) and is not reachable from here. See
+     src/command-pick.ts and plan 261003k. */
+  "command-pick.js",
   /* The `data-spya-*` namespace — the attributes stage 2 leaves on the article
      so stage 3 can read them back. On the list because it imports **nothing at
      all**, deliberately and for this reason: its own header says so, since a

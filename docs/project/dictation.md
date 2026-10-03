@@ -3,10 +3,12 @@
 Up: [reading-view-overview.md](reading-view-overview.md)
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on eight boxes today — both profile boxes, the chat composer, the comment follow-up, the
+box. It is on nine boxes today — both profile boxes, the chat composer, the comment follow-up, the
 annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
-([feedback.md](feedback.md)) and the note under an Illustrated picture
-([illustrated.md](illustrated.md#steering)) — and adding it to a ninth is three lines.
+([feedback.md](feedback.md)), the note under an Illustrated picture
+([illustrated.md](illustrated.md#steering)) and the command bar's box
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)) — and adding
+it to a tenth is three lines.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:
@@ -381,6 +383,21 @@ parent renders it open *or* shut, as `FeedbackButton` does — closing it unmoun
 `useDictation`'s cleanup never runs and the microphone keeps recording behind a shut dialog. One
 effect on the open flag fixes it, calling `dictation.toggle` (not the field wrapper's `toggle`,
 which puts the focus back into a box that is no longer on screen).
+
+**The command bar's box is the one where the guard covers more than a submit**
+([`CommandBar.tsx`](../../src/web/CommandBar.tsx) § `dictationBusy`). Its box is a filter, so Enter
+*and a click on any row* are refused while the microphone is `armed` or the box is `readOnly` — a
+half-heard phrase would otherwise run whichever row it happened to select — and the rows are dimmed
+and `aria-disabled` so the refusal is visible (GPT Sol, 2026-10-03). It is also a stays-mounted box:
+it stops the microphone on close as above, and hands the hook a `keep` only while open. Its strip
+sits *after* the bar's own status line, because the strip is a live region and the bar's sentence
+has to stay the first one. With no article around it the context is `{ kind: "profile" }`, which no
+production mount reaches today. Tests: `tests/command-bar-arguments.test.tsx`.
+
+A dictated sentence is in the box like a typed one, so when it matches no row it takes the typed
+one's path: Enter asks what it meant
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). The same
+guard refuses that Enter while the microphone is busy.
 
 ## The hook does not know which server it is talking to
 

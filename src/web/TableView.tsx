@@ -382,31 +382,29 @@ const NOT_A_BLOCK_SELECTION = [
   /* Following it is the point of tapping it, and selecting the row it is
      leaving would leave the selection behind on a row nobody is on. */
   "a[href]",
-  /* Every `<mark>` the annotator draws **except a quote**: a comment, a chat
+  /* Every `<mark>` the annotator draws **except a quote or bare quick hit**: a comment, a chat
      anchor, a search hit, a glossary term. `mouseup` has already acted on these
      (below), and a glossary term's click never even arrives — useHoverCard
      cancels it at document capture. Naming them means the answer is the same
      either way.
 
-     **A quote is the one mark nothing acts on, and since 2026-09-08 it is on
+     **A quote has no tap action, and since 2026-09-08 it is on
      the page in every mode** — so a blanket `"mark"` would turn up to 32 of an
      article's best sentences into dead zones for the tap that selects a
      paragraph, which is how a finger reaches the gutter and therefore how a
      reader annotates (docs/project/touch.md). The list below says "a quote and
      nothing else": a quote that *also* carries a comment, a chat anchor, a
-     glossary term or a search's wash keeps the exclusion, because there the tap
+     glossary term or a search's outline keeps the exclusion, because there the tap
      does mean something. GPT Sol found this, reviewing
      docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md — the plan
      had recorded "nothing clicks a `mark.hit`" as a reason there was nothing to
      worry about, which was true and was the wrong conclusion.
 
-     A search-only hit stays excluded, which is what it is today; whether that is
-     right is not this change's question.
-
-     **`mark.hit:not([data-quote])` is redundant today** — every hit without a
-     quote tier gets `data-wash` (annotate.ts § `washes`) — and is kept as the
-     one entry that states the rule rather than a consequence of it. If the two
-     ever disagree, exclusion wins: `closest` takes the list as an OR.
+     **A bare quick hit also lets the tap select the paragraph.** Its mark
+     carries `data-hit` for navigation, but paints nothing and has no tap
+     action. Excluding every non-quote hit would turn an invisible whole
+     paragraph into a dead zone. Visible outlines and overlapping interactive
+     marks still own their taps through the concrete selectors below.
 
      **The one case this still gets wrong**: a quote inside a `<mark>` the
      *article itself* wrote. `annotateHtml` nests its own mark inside the
@@ -438,7 +436,6 @@ const NOT_A_BLOCK_SELECTION = [
      on one already means something — it jumps (the `<tbody>` click below). */
   "mark.hit.xref",
   "mark.hit[data-wash]",
-  "mark.hit:not([data-quote])",
   /* The ⤢ on a figure, and every control in the gutter. The gutter's own
      buttons also call `stopPropagation`, and that is exactly what this list
      exists not to depend on. */
@@ -1304,7 +1301,7 @@ function TableViewInner({
              read from the artefact by index and never from the DOM, so a
              `class="xref"` the article wrote itself is an underline that does
              nothing (xref.ts). First, because it wins the words it is on: a
-             term, a citation, a comment or a search's wash under it has
+             term, a citation, a comment or a search's outline round it has
              already stood aside (`onMouseUp` below, ProseHoverCard's
              selectors). An author's link never contains one — `xrefMarks`
              drops those — so the link logic below is not being pre-empted.

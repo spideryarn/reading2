@@ -33,7 +33,7 @@ export const MODE_WHEN: Record<Mode, ReactNode> = {
   glossary: "the piece uses words in a way you do not quite follow",
   search: "you are looking for a passage, by its words or by what it says",
   referee: "you have been asked to peer-review it",
-  summary: "you need to decide whether this is worth reading at all",
+  summary: "you need to decide whether this is worth reading at all, or want it as a thread to share",
   diagram: "you think better from a picture of the argument",
   ideas: "you want to know what the piece takes for granted, and what it adds",
   remember: "you have finished and want to test what you took from it",
@@ -44,7 +44,6 @@ export const MODE_WHEN: Record<Mode, ReactNode> = {
   citations: "you want what the piece leans on, with links",
   faq: "you want the questions a careful reader would ask, and where the piece answers them",
   skim: "you want to go round a paper more than once, a little deeper each time",
-  tweets: "you want the argument as a short numbered run, or something to share",
   marginalia: "you want a few quiet notes beside the text while you read",
 };
 
@@ -111,7 +110,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   chat: {
-    keywords: "ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph",
+    keywords:
+      "ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action",
     whenToUse: (
       <>
         <p>
@@ -164,6 +164,12 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           <kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an
           answer still arriving. <strong>Answer again</strong> gets a fresh answer, and the pencil lets
           you rewrite your question.
+        </p>
+        <p>
+          <strong>Buttons in an answer.</strong> Chat can offer a button when you ask it to bookmark a
+          passage, add or remove a tag, look a term up in the glossary, or show where the article first
+          says something. Nothing happens until you press the button; Chat cannot do any of these
+          itself.
         </p>
         <p>
           <strong>Talking instead of typing.</strong> The microphone turns your speech into text in
@@ -244,9 +250,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           fast model scores every paragraph, and the ones that match are marked whole, with no
           reasons. It searches whenever you pause typing, and what you type keeps one saved search,
           updated as you go rather than a new one each time. Press Enter when you are done; typing
-          again after that, or after a break, starts a new one. Use it for a first look;{" "}
-          <strong>flesh out</strong> on a quick search runs the full meaning search on the same
-          words.
+          again after that, or after a break, starts a new one. Its paragraphs are marked with a
+          bar down the side and a mark in the spine, not a highlight over the words. Use it for a
+          first look; <strong>thorough</strong> on a quick search runs the full meaning search on
+          the same words, in about half a minute, and replaces the quick one.
         </p>
         <p>
           To start a quick search from anywhere in the article, type in the{" "}
@@ -317,7 +324,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     reading: (
       <>
         <p>
-          <strong>Hidden instructions</strong>, at the top, checks the original web page for text a
+          <strong>Hidden instructions</strong>, behind the Notices button, checks the original web page for text a
           person would not see but an AI would read — text the colour of its background, too small to
           read, invisible characters, instructions written to a model. It reports and blocks nothing.
           “Nothing found” is not a clean bill: PDFs and some parts of a page are not checked, and it
@@ -346,22 +353,30 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   summary: {
-    keywords: "summarise short version tldr gist overview plain english simple brief explain level length",
+    keywords:
+      "summarise short version tldr gist overview plain english simple brief fuller explain level length thread tweets twitter x bluesky social share post copy numbered",
     whenToUse: (
-      <p>
-        Before you read, to decide whether a piece is worth your time and roughly where it is going;
-        after, to check you came away with the main points. Not instead of reading: it keeps the gist
-        and drops the reasoning, which is usually the part worth having. Pick <strong>Fuller</strong>{" "}
-        when the piece is close to your field and <strong>Brief</strong> when it is far from it. For
-        the piece’s shape, part by part, open <HelpRef to="mode-structure">Structure</HelpRef>.
-      </p>
+      <>
+        <p>
+          Before you read, to decide whether a piece is worth your time and roughly where it is going;
+          after, to check you came away with the main points. Not instead of reading: it keeps the gist
+          and drops the reasoning, which is usually the part worth having. Pick <strong>Fuller</strong>{" "}
+          when the piece is close to your field and <strong>Brief</strong> when it is far from it. For
+          the piece’s shape, part by part, open <HelpRef to="mode-structure">Structure</HelpRef>.
+        </p>
+        <p>
+          <strong>Thread</strong> is the argument in a dozen numbered posts, or something to share. It
+          was a mode of its own, called Tweets. Unlike the rest it starts writing as soon as you open
+          it, the first time, on your own article. A thread is a compression: treat it as a way in, not
+          a stand-in for the text.
+        </p>
+      </>
     ),
     reading: (
       <>
         <p>
-          The slider has no names on it: the left end is <strong>Brief</strong>, the middle{" "}
-          <strong>Simple</strong>, the right end <strong>Fuller</strong>, which keeps more of the
-          piece’s own terms. Point at the slider to see which is showing.
+          Three buttons at the top choose what you see: <strong>Brief</strong>, <strong>Fuller</strong>,
+          which is a little longer and keeps more of the piece’s own terms, and <strong>Thread</strong>.
         </p>
         <p>
           When a sentence surprises you, follow the code after its paragraph and read what the author
@@ -372,6 +387,24 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           summary is written with it in mind, and a small badge says so. <strong>Write it again</strong>{" "}
           gives you a fresh one.
         </p>
+        <p>In the thread:</p>
+        <ul>
+          <li>
+            Under each post, <strong>From</strong> links to the passages it came from.
+          </li>
+          <li>
+            Each post shows its character count against the limit; a count in red means it is over. What
+            the AI wrote is what you see.
+          </li>
+          <li>
+            <strong>Copy the thread</strong> copies every post, numbered, with the article’s title and link
+            at the top. The copy icon on a post copies just that post.
+          </li>
+          <li>
+            The <strong>(i)</strong> compares the thread’s characters with the article’s words, which tells
+            you how much it had to leave out.
+          </li>
+        </ul>
       </>
     ),
   },
@@ -450,7 +483,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
 
   remember: {
     keywords:
-      "recall memory tutorial guided reading quiz test yourself questions retention learn check understanding explain back study revise",
+      "recall memory tutorial guided reading explore think ideas own view apply wider world quiz test yourself questions retention learn check understanding explain back study revise",
     whenToUse: (
       <>
         <p>
@@ -472,10 +505,22 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Tutorial</strong>: short turns, a little of the piece at a time. Say what you
-            remember, or that you haven’t read it yet, and each reply teaches one small piece,
-            links the passage, and asks you to put it in your own words, give an example or push back.
+            remember; it’s fine if you haven’t read it yet, or haven’t finished. Each reply teaches
+            one small piece, links the passage, and asks you to put it in your own words, explain
+            why the author needs it or connect it to an earlier part. It is about what the author
+            is saying; now and then it asks what you think.
             Now and then it comes back to an earlier point. It takes your profile and your reason for
             reading into account. Typed or dictated; there is no Live conversation here yet.
+          </li>
+          <li>
+            <strong>Explore</strong>: for working out what you think, more than for remembering what
+            the piece says. It is sent what you have highlighted, bookmarked and written on this
+            article, and a list of your other conversations about it, and starts from one of those.
+            Each short reply does one thing: asks a question that opens your idea up, tries it on a
+            case (your own, when your reason for reading gives one), makes a connection, or looks
+            up what others have said and links it. It says which parts come from the article, the
+            web, your notes and its own view. One Explore conversation per article; typed or
+            dictated, with no Live conversation yet.
           </li>
           <li>
             <strong>Quiz</strong>: up to twenty short questions written from the piece, each answered
@@ -508,7 +553,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   quotes: {
-    keywords: "quotations excerpts best lines highlights memorable sentences outline important striking keep",
+    keywords: "quotations excerpts best lines highlights highlighter memorable sentences purple important striking keep",
     whenToUse: (
       <p>
         When you want to carry lines out of the piece in its own words — for notes, a review, or to see
@@ -520,13 +565,14 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
       <>
         <ul>
           <li>
-            <strong>Once made, quotes are outlined in the text in every mode.</strong> A thicker, darker
-            outline means the AI judged the line more important or more striking. Search results are
-            filled with colour and quotes are only outlined, so the two never look alike. A green strip
-            down the left edge of the spine shows where they are in the whole piece.
+            <strong>Once made, quotes are highlighted in the text in every mode</strong>, in purple, like
+            a highlighter pen. A stronger highlight means the AI judged the line more important or more
+            striking. Search results are outlined and quotes are filled in, so the two never look alike,
+            and your own highlights are yellow, green, blue or pink. A purple strip down the left edge of
+            the spine shows where the quotes are in the whole piece.
           </li>
           <li>
-            Rest the pointer on an outlined quote for a moment and a card shows its two scores, why it
+            Rest the pointer on a highlighted quote for a moment and a card shows its two scores, why it
             was chosen, <kbd>‹</kbd> <kbd>›</kbd> to the quote before or after it in the text, and a
             button to open it in Quotes.
           </li>
@@ -648,8 +694,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
       <>
         <p>
           In <strong>Fisheye</strong>, where a column has no room for every row it says how many come
-          earlier or later. <strong>Expanded</strong> follows you only when you move into another
-          section, so if you scroll it by hand it keeps your place until then. Press any row to jump
+          earlier or later. As one list, Fisheye always shows the sections directly under the part
+          you are in and the available summary of the current one; when that will not all fit, the
+          list scrolls. Use <strong>Expanded</strong> to see deeper subsections too. Both scrolling
+          lists follow you only when you move into another section, so if you scroll one by hand it
+          keeps your place until then. Press any row to jump
           there.
         </p>
         <p>
@@ -751,6 +800,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </li>
         <li>Each stop has a short cue above it: what to <em>look for</em> in the passage, never what it found.</li>
         <li>
+          A deeper pass has its own new stops and may keep earlier ones where the new ones lean on
+          them. When a route has any, small dots under each stop’s number show which passes it is in,
+          shallowest first: more than one filled, and you may have read it already.
+        </li>
+        <li>
           Under the current stop, a card gathers what other modes have already found there:{" "}
           <strong>Terms it uses</strong> and <strong>Ideas it bears on</strong>.
         </li>
@@ -758,36 +812,6 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         <li>
           <strong>Reading for:</strong> at the top is what you said you want from this article; the route
           is planned around it. <strong>Edit</strong> changes it.
-        </li>
-      </ul>
-    ),
-  },
-
-  tweets: {
-    keywords: "thread twitter x bluesky social share post copy short numbered",
-    whenToUse: (
-      <p>
-        To get the argument in a dozen steps, or to share the piece. Unlike most modes it starts writing
-        as soon as you open it, the first time, on your own article. A thread is a compression: treat it
-        as a way in, not a stand-in for the text.
-      </p>
-    ),
-    reading: (
-      <ul>
-        <li>
-          Under each post, <strong>From</strong> links to the passages it came from.
-        </li>
-        <li>
-          Each post shows its character count against the limit; a count in red means it is over. What
-          the AI wrote is what you see.
-        </li>
-        <li>
-          <strong>Copy the thread</strong> copies every post, numbered, with the article’s title and link
-          at the top. The copy icon on a post copies just that post.
-        </li>
-        <li>
-          The <strong>(i)</strong> compares the thread’s characters with the article’s words, which tells
-          you how much it had to leave out.
         </li>
       </ul>
     ),

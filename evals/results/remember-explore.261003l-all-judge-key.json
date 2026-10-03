@@ -1,0 +1,962 @@
+[
+ {
+  "n": 1,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 5
+ },
+ {
+  "n": 2,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 5
+ },
+ {
+  "n": 3,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 2
+ },
+ {
+  "n": 4,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 3
+ },
+ {
+  "n": 5,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 3
+ },
+ {
+  "n": 6,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 1
+ },
+ {
+  "n": 7,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 4
+ },
+ {
+  "n": 8,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 5
+ },
+ {
+  "n": 9,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 1
+ },
+ {
+  "n": 10,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 2
+ },
+ {
+  "n": 11,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 4
+ },
+ {
+  "n": 12,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 3
+ },
+ {
+  "n": 13,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 1
+ },
+ {
+  "n": 14,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "nothing",
+  "turn": 5
+ },
+ {
+  "n": 15,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 1
+ },
+ {
+  "n": 16,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "nothing",
+  "turn": 2
+ },
+ {
+  "n": 17,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "reason",
+  "turn": 1
+ },
+ {
+  "n": 18,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 5
+ },
+ {
+  "n": 19,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 4
+ },
+ {
+  "n": 20,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 3
+ },
+ {
+  "n": 21,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 3
+ },
+ {
+  "n": 22,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 2
+ },
+ {
+  "n": 23,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 3
+ },
+ {
+  "n": 24,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "nothing",
+  "turn": 4
+ },
+ {
+  "n": 25,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 3
+ },
+ {
+  "n": 26,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 4
+ },
+ {
+  "n": 27,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "nothing",
+  "turn": 3
+ },
+ {
+  "n": 28,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 2
+ },
+ {
+  "n": 29,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 4
+ },
+ {
+  "n": 30,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 4
+ },
+ {
+  "n": 31,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "notes",
+  "turn": 1
+ },
+ {
+  "n": 32,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "notes",
+  "turn": 3
+ },
+ {
+  "n": 33,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 3
+ },
+ {
+  "n": 34,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "reason",
+  "turn": 5
+ },
+ {
+  "n": 35,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "reason",
+  "turn": 3
+ },
+ {
+  "n": 36,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 3
+ },
+ {
+  "n": 37,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 1
+ },
+ {
+  "n": 38,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 1
+ },
+ {
+  "n": 39,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "reason",
+  "turn": 4
+ },
+ {
+  "n": 40,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "nothing",
+  "turn": 4
+ },
+ {
+  "n": 41,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 5
+ },
+ {
+  "n": 42,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 3
+ },
+ {
+  "n": 43,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 1
+ },
+ {
+  "n": 44,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 5
+ },
+ {
+  "n": 45,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "notes",
+  "turn": 4
+ },
+ {
+  "n": 46,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 1
+ },
+ {
+  "n": 47,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 4
+ },
+ {
+  "n": 48,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 4
+ },
+ {
+  "n": 49,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 1
+ },
+ {
+  "n": 50,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 2
+ },
+ {
+  "n": 51,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 2
+ },
+ {
+  "n": 52,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 4
+ },
+ {
+  "n": 53,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 5
+ },
+ {
+  "n": 54,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 2
+ },
+ {
+  "n": 55,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 2
+ },
+ {
+  "n": 56,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 5
+ },
+ {
+  "n": 57,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "reason",
+  "turn": 1
+ },
+ {
+  "n": 58,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 1
+ },
+ {
+  "n": 59,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 4
+ },
+ {
+  "n": 60,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 1
+ },
+ {
+  "n": 61,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 5
+ },
+ {
+  "n": 62,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 5
+ },
+ {
+  "n": 63,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "notes",
+  "turn": 2
+ },
+ {
+  "n": 64,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 3
+ },
+ {
+  "n": 65,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "notes",
+  "turn": 4
+ },
+ {
+  "n": 66,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 5
+ },
+ {
+  "n": 67,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 1
+ },
+ {
+  "n": 68,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 1
+ },
+ {
+  "n": 69,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "reason",
+  "turn": 2
+ },
+ {
+  "n": 70,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "nothing",
+  "turn": 3
+ },
+ {
+  "n": 71,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 4
+ },
+ {
+  "n": 72,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "notes",
+  "turn": 1
+ },
+ {
+  "n": 73,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "notes",
+  "turn": 3
+ },
+ {
+  "n": 74,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 2
+ },
+ {
+  "n": 75,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 2
+ },
+ {
+  "n": 76,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 3
+ },
+ {
+  "n": 77,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 2
+ },
+ {
+  "n": 78,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 4
+ },
+ {
+  "n": 79,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 2
+ },
+ {
+  "n": 80,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 3
+ },
+ {
+  "n": 81,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 1
+ },
+ {
+  "n": 82,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "nothing",
+  "turn": 1
+ },
+ {
+  "n": 83,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 4
+ },
+ {
+  "n": 84,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "reason",
+  "turn": 4
+ },
+ {
+  "n": 85,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "nothing",
+  "turn": 5
+ },
+ {
+  "n": 86,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "reason",
+  "turn": 2
+ },
+ {
+  "n": 87,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 4
+ },
+ {
+  "n": 88,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 4
+ },
+ {
+  "n": 89,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 5
+ },
+ {
+  "n": 90,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 3
+ },
+ {
+  "n": 91,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 5
+ },
+ {
+  "n": 92,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 3
+ },
+ {
+  "n": 93,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 2
+ },
+ {
+  "n": 94,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 5
+ },
+ {
+  "n": 95,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "nothing",
+  "turn": 2
+ },
+ {
+  "n": 96,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 3
+ },
+ {
+  "n": 97,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 2
+ },
+ {
+  "n": 98,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 2
+ },
+ {
+  "n": 99,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "notes",
+  "turn": 5
+ },
+ {
+  "n": 100,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 2
+ },
+ {
+  "n": 101,
+  "run": "261003l-explore-agents-2",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 4
+ },
+ {
+  "n": 102,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 5
+ },
+ {
+  "n": 103,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "notes",
+  "turn": 2
+ },
+ {
+  "n": 104,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "reason",
+  "turn": 3
+ },
+ {
+  "n": 105,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "notes",
+  "turn": 5
+ },
+ {
+  "n": 106,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 5
+ },
+ {
+  "n": 107,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 2
+ },
+ {
+  "n": 108,
+  "run": "261003l-chat-noema-1",
+  "set": "noema",
+  "arm": "chat",
+  "reader": "nothing",
+  "turn": 1
+ },
+ {
+  "n": 109,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 1
+ },
+ {
+  "n": 110,
+  "run": "261003l-chat-agents-1",
+  "set": "agents",
+  "arm": "chat",
+  "reader": "reason",
+  "turn": 5
+ },
+ {
+  "n": 111,
+  "run": "261003l-explore-noema-rev1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 5
+ },
+ {
+  "n": 112,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 1
+ },
+ {
+  "n": 113,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 1
+ },
+ {
+  "n": 114,
+  "run": "261003l-explore-agents-rev1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 1
+ },
+ {
+  "n": 115,
+  "run": "261003l-explore-agents-1",
+  "set": "agents",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 5
+ },
+ {
+  "n": 116,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 4
+ },
+ {
+  "n": 117,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 4
+ },
+ {
+  "n": 118,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "nothing",
+  "turn": 3
+ },
+ {
+  "n": 119,
+  "run": "261003l-explore-noema-2",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "reason",
+  "turn": 2
+ },
+ {
+  "n": 120,
+  "run": "261003l-explore-noema-1",
+  "set": "noema",
+  "arm": "explore",
+  "reader": "notes",
+  "turn": 3
+ }
+]

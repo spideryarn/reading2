@@ -1,0 +1,143 @@
+[
+ {
+  "id": "spya-dddu2p",
+  "kind": "quick",
+  "criterion": "evolution",
+  "status": "done",
+  "model": "typesafe/jev-1.13-20260917",
+  "hits": [
+   {
+    "blockId": "spya-ajt4fw",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-cmdgsb",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-gtrjqw",
+    "confidence": 70
+   },
+   {
+    "blockId": "spya-nrvjwg",
+    "confidence": 70
+   }
+  ]
+ },
+ {
+  "id": "spya-ck8qxy",
+  "kind": "meaning",
+  "criterion": "Evolution",
+  "status": "done",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": [
+   {
+    "blockId": "spya-ajt4fw",
+    "confidence": 85
+   },
+   {
+    "blockId": "spya-zxcpyb",
+    "confidence": 90
+   },
+   {
+    "blockId": "spya-v4d0ma",
+    "confidence": 80
+   },
+   {
+    "blockId": "spya-zcp9sj",
+    "confidence": 55
+   },
+   {
+    "blockId": "spya-vra8j7",
+    "confidence": 40
+   },
+   {
+    "blockId": "spya-nrvjwg",
+    "confidence": 45
+   }
+  ]
+ },
+ {
+  "id": "spya-t52uy7",
+  "kind": "quick",
+  "criterion": "Evolution",
+  "status": "done",
+  "model": "typesafe/jev-1.13-20260917",
+  "hits": [
+   {
+    "blockId": "spya-ajt4fw",
+    "confidence": 74
+   },
+   {
+    "blockId": "spya-gtrjqw",
+    "confidence": 72
+   },
+   {
+    "blockId": "spya-cmdgsb",
+    "confidence": 72
+   }
+  ]
+ },
+ {
+  "id": "spya-urr6as",
+  "kind": "meaning",
+  "criterion": "Buddhism",
+  "status": "done",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": [
+   {
+    "blockId": "spya-p2wrn0",
+    "confidence": 95
+   }
+  ]
+ },
+ {
+  "id": "spya-aqjahz",
+  "kind": "quick",
+  "criterion": "Buddhism",
+  "status": "done",
+  "model": "typesafe/jev-1.13-20260917",
+  "hits": []
+ },
+ {
+  "id": "spya-zpvfm8",
+  "kind": "quick",
+  "criterion": "across scales",
+  "status": "done",
+  "model": "typesafe/jev-1.13-20260917",
+  "hits": [
+   {
+    "blockId": "spya-sgdjgg",
+    "confidence": 82
+   },
+   {
+    "blockId": "spya-tgqpmx",
+    "confidence": 78
+   },
+   {
+    "blockId": "spya-cmdgsb",
+    "confidence": 74
+   },
+   {
+    "blockId": "spya-vra8j7",
+    "confidence": 73
+   },
+   {
+    "blockId": "spya-estzx7",
+    "confidence": 73
+   },
+   {
+    "blockId": "spya-e3gpxg",
+    "confidence": 73
+   },
+   {
+    "blockId": "spya-bvgkdk",
+    "confidence": 72
+   },
+   {
+    "blockId": "spya-gtrjqw",
+    "confidence": 70
+   }
+  ]
+ }
+]

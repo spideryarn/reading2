@@ -17,7 +17,7 @@
    the private owner read succeeds; state again that reruns have no per-owner spend cap.
 
 2. **P2 — The accepted-job-later-fails lifecycle is described but not tested.**
-   [tests/tweets-press-starts-it.test.tsx:277](../../tests/tweets-press-starts-it.test.tsx)
+   [tests/tweets-press-starts-it.test.tsx:277](../../tests/summary-thread-press.test.tsx)
 
    Concrete failure: a later edit could make a `tweets` job reaching `status: "error"` perturb the
    artefact status or remount the arrival hook, causing a second automatic POST after the first
@@ -35,7 +35,7 @@
    [src/web/auto-run-targets.ts:1](../../src/web/auto-run-targets.ts),
    [tests/command-bar.test.tsx:59](../../tests/command-bar.test.tsx),
    [tests/command-bar.test.tsx:672](../../tests/command-bar.test.tsx), and
-   [tests/tweets-press-starts-it.test.tsx:3](../../tests/tweets-press-starts-it.test.tsx)
+   [tests/tweets-press-starts-it.test.tsx:3](../../tests/summary-thread-press.test.tsx)
 
    Concrete failure: an engineer following these live docblocks can reintroduce
    `armActivationForTweets` or preserve activation-specific test setup because the documented

@@ -288,6 +288,12 @@ function messageRow(
        silent loss as `tools`, which is how that column came to exist. */
     help: message.help ?? false,
     createdAt: new Date(message.createdAt),
+    /* **One rule for every insert: a row that is not `pending` was finished
+       when it was written.** That is the reader's question, and both halves of
+       a spoken exchange, which arrive whole. Only a reply still waiting for its
+       model is null, and `finish` or the sweep stamps it.
+       src/db/schema.ts § `chatMessages.finishedAt`. */
+    finishedAt: message.status === "pending" ? null : new Date(message.createdAt),
     ...(attempt === undefined ? {} : { attemptId: attempt, attemptStartedAt: DB_NOW }),
   };
 }
@@ -466,6 +472,12 @@ const rawPgChatStore: ChatStore = {
           // The attempt is over. Both columns or neither — the CHECK says so.
           attemptId: null,
           attemptStartedAt: null,
+          /* **When the reply stopped being pending**, inside the fenced
+             statement so a superseded attempt stamps nothing. `status` is
+             optional on this patch and nothing here refuses a patch without
+             one, so the time is written only when the patch really ends the
+             reply: a row left `pending` has not finished. */
+          ...(patch.status === undefined || patch.status === "pending" ? {} : { finishedAt: DB_NOW }),
         })
         .where(
           and(
@@ -535,6 +547,8 @@ const rawPgChatStore: ChatStore = {
           // one's late answer landing here.
           attemptId: attempt,
           attemptStartedAt: DB_NOW,
+          // A new attempt has not finished; the last one's time goes with its text.
+          finishedAt: null,
         })
         .where(
           and(
@@ -645,7 +659,9 @@ const rawPgChatStore: ChatStore = {
       await lockArticleRow(tx, articleId);
       await tx
         .update(chatThreads)
-        .set({ title: titleFrom(title) })
+        /* `renamed_at` is where the rename's time goes instead — its own
+           column, so the reader's act is kept and the sort is not disturbed. */
+        .set({ title: titleFrom(title), renamedAt: DB_NOW })
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
     }, READ_COMMITTED);
     logger.info({ slug, threadId }, "chat thread renamed");
@@ -685,7 +701,15 @@ const rawPgChatStore: ChatStore = {
       // The attempt is declared dead, so its fence goes with it — otherwise the
       // row keeps a lease nobody holds and the CHECK's "both or neither" turns
       // into "a buried message still names a live attempt".
-      .set({ status: "error", error: CHAT_SWEPT, attemptId: null, attemptStartedAt: null })
+      // `finished_at` is when the sweep ended the attempt, which is the only
+      // ending it had.
+      .set({
+        status: "error",
+        error: CHAT_SWEPT,
+        attemptId: null,
+        attemptStartedAt: null,
+        finishedAt: DB_NOW,
+      })
       .where(
         and(
           eq(chatMessages.articleId, articleId),

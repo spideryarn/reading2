@@ -110,7 +110,7 @@ await pgReady({
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore } = await import("../src/store/index.js");
+const { chatStore, commentStore } = await import("../src/store/index.js");
 
 
 let article: ScratchArticle | undefined;
@@ -309,6 +309,40 @@ describe("the tool a live session may ask us to run", () => {
 
   it("refuses a body with no name in it", async () => {
     expect((await tool({ args: {} })).status).toBe(400);
+  });
+
+  it("refuses reader_notes by name, with a note of the reader's own waiting to be read", async () => {
+    /* The ninth chat tool is for typed Chat only (`toolsFor` in
+       src/chat-tools.ts), and this endpoint is independently callable: the
+       browser names the tool. A note is stored first so that a route which ran
+       the tool would have something to give away — a refusal with nothing
+       behind it would pass whether or not the tool had run.
+       docs/plans/261003l-…, § Reviews, PR-3 and PR-7. */
+    const block = article?.blocks.find((b) => b.text.length > 20);
+    if (!block) throw new Error("the fixture has no paragraph to put a note on");
+    const SECRET = "LIVE-MUST-NOT-READ-THIS-NOTE";
+    const made = await asTestOwner(() =>
+      commentStore.create(SLUG, {
+        blockId: block.id,
+        quote: block.text.slice(0, 12),
+        start: 0,
+        body: SECRET,
+      }),
+    );
+    try {
+      // The note is really there, under the owner this request runs as.
+      const stored = await asTestOwner(() => commentStore.load(SLUG));
+      expect(stored.map((c) => c.body)).toContain(SECRET);
+
+      for (const args of [{}, { thread: "spya-nope00" }]) {
+        const out = await tool({ name: "reader_notes", args });
+        expect(out.status).toBe(400);
+        expect(JSON.stringify(out.body)).not.toContain(SECRET);
+        expect(JSON.stringify(out.body)).not.toContain("UNTRUSTED");
+      }
+    } finally {
+      await asTestOwner(() => commentStore.remove(SLUG, made.id));
+    }
   });
 });
 

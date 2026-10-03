@@ -1,7 +1,7 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
- * band: Remember's Recall | Tutorial | Quiz, Diagram's five pictures, Referee's four views,
- * Summary's three plain-words levels.
+ * band: Remember's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's four views,
+ * Summary's Brief | Fuller | Thread.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):
  *
@@ -26,9 +26,8 @@
  * docs/plans/261001d-command-bar-lists-sub-modes.md.
  */
 import type { Mode } from "../modes.js";
-import { SIMPLE_LEVELS, type SimpleLevel } from "../types.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
-import type { RememberView, StructureView } from "./params.js";
+import type { RememberView, StructureView, SummaryView } from "./params.js";
 import { REFEREE_VIEWS, type RefereeView } from "./referee-views.js";
 
 /**
@@ -40,7 +39,7 @@ export type SubMode =
   | { readonly mode: "remember"; readonly view: RememberView }
   | { readonly mode: "diagram"; readonly view: DiagramKind }
   | { readonly mode: "referee"; readonly view: RefereeView }
-  | { readonly mode: "summary"; readonly view: SimpleLevel }
+  | { readonly mode: "summary"; readonly view: SummaryView }
   | { readonly mode: "structure"; readonly view: StructureView };
 
 /** The modes that have sub-modes. */
@@ -53,14 +52,22 @@ export type ModeWithSubModes = SubMode["mode"];
  * chips keep their own longer tooltips. `experimental` is whether the chip is
  * behind the experimental-features switch *within* its mode — only Diagram's
  * pictures are; the other three modes put the whole mode behind it or none.
+ *
+ * `aliases` is for a sub-mode a reader knows by another word, and one has them:
+ * Summary's Thread, which was the Tweets mode until 2026-10-03. They are the
+ * row's own and not its parent's, because the parent's catalog aliases find the
+ * *mode* row, which opens whatever view the address already names — typing
+ * `tweets` would open Summary at Brief (GPT Sol, F3 of the 261003l review;
+ * command-match.ts § `commandText`).
  */
 export interface SubModeWords {
   readonly label: string;
   readonly description: string;
   readonly experimental: boolean;
+  readonly aliases?: readonly string[];
 }
 
-/** Remember's three parts. The chip's words, QuizPanel.tsx § `RememberSubModeToggle`. */
+/** Remember's four parts. The chip's words, QuizPanel.tsx § `RememberSubModeToggle`. */
 export const REMEMBER_SUB_MODES: Readonly<Record<RememberView, SubModeWords>> = {
   recall: {
     label: "Recall",
@@ -70,6 +77,11 @@ export const REMEMBER_SUB_MODES: Readonly<Record<RememberView, SubModeWords>> = 
   tutorial: {
     label: "Tutorial",
     description: "Short turns: a little of the piece at a time, then a question for you to answer in your own words",
+    experimental: false,
+  },
+  explore: {
+    label: "Explore",
+    description: "Think it through for yourself: starts from what you have marked and discussed, and looks beyond the piece",
     experimental: false,
   },
   quiz: {
@@ -137,22 +149,32 @@ export const REFEREE_SUB_MODES: Readonly<Record<RefereeView, SubModeWords>> = {
   },
 };
 
-/** Summary's plain-words levels. The slider, SummaryMode.tsx § `SummaryControls`. */
-export const SUMMARY_SUB_MODES: Readonly<Record<SimpleLevel, SubModeWords>> = {
+/**
+ * Summary's three views: two plain-words lengths and the thread. The band's
+ * segmented control, SummaryMode.tsx § `SummaryControls`; the order is the
+ * control's (`SUMMARY_VIEWS`, params.ts). The Simple level left on 2026-10-03
+ * — still written, no longer shown.
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
+ */
+export const SUMMARY_SUB_MODES: Readonly<Record<SummaryView, SubModeWords>> = {
   brief: {
     label: "Brief",
     description: "The piece in plain words, short and very simple",
-    experimental: false,
-  },
-  simple: {
-    label: "Simple",
-    description: "The piece in plain words, a few short paragraphs",
     experimental: false,
   },
   fuller: {
     label: "Fuller",
     description: "The piece in plain words, a little longer and keeping more of its terms",
     experimental: false,
+  },
+  thread: {
+    label: "Thread",
+    description: "The article as a numbered thread of short posts",
+    experimental: false,
+    /* The Tweets mode's own name and its catalog aliases, until 2026-10-03.
+       `tweets` first: it is the word on every old link and in every reader's
+       habit. */
+    aliases: ["tweets", "tweet thread", "twitter", "x", "social"],
   },
 };
 
@@ -197,10 +219,10 @@ export function subModeWords(sub: SubMode): SubModeWords {
 /**
  * **A mode's sub-modes, in the order its chips are drawn.** Empty for a mode
  * without any. The orders are the vocabularies' own (`DIAGRAMS`,
- * `REFEREE_VIEWS`, `SIMPLE_LEVELS`) — Greg's chip order, which DiagramPanel's
- * refusal sentences depend on — and Remember's is the record's, which is the
- * toggle's (`REMEMBER_VIEWS` lives in params.ts, which this pure module may not
- * import as a value).
+ * `REFEREE_VIEWS`) — Greg's chip order, which DiagramPanel's refusal sentences
+ * depend on — and Remember's, Summary's and Structure's are the record's, which
+ * is the toggle's (`REMEMBER_VIEWS` and `SUMMARY_VIEWS` live in params.ts, which
+ * this pure module may not import as a value).
  */
 export function subModesOf(mode: Mode): readonly SubMode[] {
   switch (mode) {
@@ -211,7 +233,7 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
     case "referee":
       return REFEREE_VIEWS.map((view) => ({ mode, view }));
     case "summary":
-      return SIMPLE_LEVELS.map((view) => ({ mode, view }));
+      return (Object.keys(SUMMARY_SUB_MODES) as SummaryView[]).map((view) => ({ mode, view }));
     case "structure":
       return (Object.keys(STRUCTURE_SUB_MODES) as StructureView[]).map((view) => ({ mode, view }));
     default:
@@ -237,7 +259,7 @@ export interface SubModeParams {
   readonly thread?: null;
   readonly diagram?: DiagramKind | null;
   readonly referee?: RefereeView | null;
-  readonly summary?: SimpleLevel | null;
+  readonly summary?: SummaryView | null;
   readonly structure?: StructureView | null;
 }
 
@@ -245,8 +267,8 @@ export function subModeParams(sub: SubMode): SubModeParams {
   switch (sub.mode) {
     case "remember": {
       /* Each view by name: Recall is the default and so absent, Quiz clears
-         `thread` (rule 1), and Tutorial keeps it as Recall does — its band
-         overrules a stale one and writes its own. Mapping "not quiz" to Recall
+         `thread` (rule 1), and Tutorial and Explore keep it as Recall does —
+         each band overrules a stale one and writes its own. Mapping "not quiz" to Recall
          was right with two views and silently wrong with three. */
       const view = sub.view;
       switch (view) {
@@ -254,6 +276,8 @@ export function subModeParams(sub: SubMode): SubModeParams {
           return { mode: "remember", remember: "quiz", thread: null };
         case "tutorial":
           return { mode: "remember", remember: "tutorial" };
+        case "explore":
+          return { mode: "remember", remember: "explore" };
         case "recall":
           return { mode: "remember", remember: null };
         default: {

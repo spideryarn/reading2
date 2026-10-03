@@ -199,9 +199,13 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             as you scroll, and its height shows how much of the article fits on one screen.
           </li>
           <li>
-            <strong>Grey shading from the left edge: where you have spent time reading.</strong> The
-            longer you spent on a stretch, the further across the strip it reaches. Use it to find
-            where you had got to after jumping around. Only whoever added the article sees it, and it
+            <strong>
+              A tinted area from the left edge, with a brighter line at its edge: where you have
+              spent time reading.
+            </strong>{" "}
+            The further across the strip it reaches, the longer you spent there. A quick glance
+            may leave no shading. Use it to find where you had got to after jumping
+            around. Only whoever added the article sees it, and it
             is <HelpRef to="experimental-features">experimental</HelpRef>.
           </li>
           <li>
@@ -343,7 +347,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
 
   keyboard: {
     title: "Keyboard shortcuts",
-    keywords: "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate",
+    keywords:
+      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define tag untag microphone dictate speak sentence ask did you mean natural language",
     body: (
       <>
         <ul>
@@ -353,6 +358,23 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <em>feedback</em> — and press <kbd>Enter</kbd>. Rows marked <strong>generates</strong>{" "}
             start the AI writing something. The <kbd>⌘</kbd> button in the bottom bar opens the same
             thing.
+          </li>
+          <li>
+            The command bar also takes a few whole requests. <em>where does it first mention entropy</em>{" "}
+            jumps to the first place the article says it, and <em>find entropy</em> shows every place.{" "}
+            <em>look up entropy</em> opens a matching term already visible in the glossary, or, once
+            the article has a glossary, offers to look it up and add it.{" "}
+            <em>tag as methods</em> and <em>untag methods</em> change your own tags, and{" "}
+            <em>experimental</em> turns experimental features on or off. Press the microphone in the
+            box to say it instead of typing.
+          </li>
+          <li>
+            If you do not know the name, type or say a whole sentence — <em>what’s changed on this site</em>,{" "}
+            <em>is consciousness mentioned anywhere</em> — and, when nothing matches, press{" "}
+            <kbd>Enter</kbd> to ask what you meant. A fast AI model reads your sentence and the list
+            of commands, never the article. If it is sure and the command only takes you somewhere,
+            you go there; otherwise it shows its best guesses under <strong>Did you mean</strong> and
+            you press <kbd>Enter</kbd> on the one you want. You need to be signed in.
           </li>
           <li>
             <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the
@@ -449,7 +471,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             <strong>Tied to passages.</strong> Quotes are cut out of the article: the model only
             chose them. FAQ writes no answers at all; each question points to the passages that
-            respond to it. Summary, Tweets, Ideas, Remember and Chat link each claim to the
+            respond to it. Summary and its thread, Ideas, Remember and Chat link each claim to the
             paragraphs behind it, so you can check in one click.
           </li>
           <li>
@@ -500,8 +522,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             button to start it, so a link someone sends you never starts work you did not ask for.
           </li>
           <li>
-            <strong>Tweets is the exception</strong>: on your own article it starts writing as soon as
-            you open it, however you got there.
+            <strong>Summary’s Thread is the exception</strong>: on your own article it starts writing as
+            soon as you open it, however you got there.
           </li>
           <li>
             <strong>Chat, Search and the margin’s ?</strong> work when you ask, and answers appear as
@@ -565,7 +587,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             <strong>Sorting.</strong> The chips set the order; press the one you are on to reverse
             it. <strong>Shift-click</strong> a second chip to sort within the first — by Added, then
-            by Length, say.
+            by Length, say. <strong>Published</strong> is the date the publisher gives; an article
+            with none, which includes every PDF, goes last.
           </li>
           <li>
             <strong>Cards or Table.</strong> The same list two ways: cards for deciding what to read
@@ -725,8 +748,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <strong>More modes</strong>: {listOf(EXPERIMENTAL_MODES)}.
           </li>
           <li>
-            <strong>Reading time on the spine</strong>: grey shading where you have spent longer.
-            Only you see it.
+            <strong>Reading time on the spine</strong>: a tinted area that reaches further across
+            where you have spent longer. Only you see it.
           </li>
           <li>
             <strong>Start the whole article again</strong>, on an article’s Metadata page.

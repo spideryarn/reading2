@@ -107,6 +107,43 @@ disagree with the first.
 The same shape is worth reaching for anywhere a boolean is really an event: archived, published,
 confirmed, dismissed.
 
+## Store when it happened
+
+Every table says when its rows happened — the rule and Greg's words for it are in
+[AGENTS.md § Writing code](../../AGENTS.md) ("Store when it happened"). In practice that is a
+`created_at timestamptz default now()` which no store names, so the database stamps every writer,
+including the next one, and an upsert's `do update` cannot move it.
+[`tests/action-tables-have-created-at.test.ts`](../../tests/action-tables-have-created-at.test.ts)
+holds it: a table with no `created_at` fails unless it is listed there with the timestamp column
+that plays that part, or with the reason it needs none.
+
+**Adding one to a table that already has rows is two statements, not the one drizzle generates:**
+
+```sql
+ALTER TABLE … ADD COLUMN "created_at" timestamp with time zone;
+ALTER TABLE … ALTER COLUMN "created_at" SET DEFAULT now();
+```
+
+`ADD COLUMN … DEFAULT now()` writes the migration's own time into every existing row — an invented
+time, indistinguishable afterwards from a real one. Added bare, the old rows stay `null`, which
+means "before we kept this", and the column stays nullable for good. Hand-edit the generated `.sql`
+and leave the snapshot alone (it should say nullable, default `now()`); the same test refuses the
+one-statement form in any migration. Because nothing fails when such a default goes missing — the
+insert succeeds and writes `null` — `npm run db:check` reports a lost default on a nullable column
+too ([`src/db/schema-drift.ts`](../../src/db/schema-drift.ts)). The audit that started this is
+[261003j](../plans/261003j-store-when-it-happened-timestamp-audit.md).
+
+**A later event gets a column of its own, and the store writes it** — `finished_at`, `colour_at`,
+`renamed_at`, `cancel_requested_at`, `articles.updated_at`. These have no default, because no default
+can know the event happened, so each is only as good as the write sites that name it:
+[`tests/event-times.test.ts`](../../tests/event-times.test.ts) holds every one. Three rules they
+share. Name the event rather than reaching for a catch-all `updated_at`: `comments.updated_at` means
+"the words were edited" and `chat_threads.updated_at` is what the panel sorts by, so a recolour or a
+rename moving either would be a bug. Write a `finished_at` inside the attempt-fenced update, so a
+stale attempt that loses its fence stamps nothing. And null it on every path back to `pending`, or
+the last attempt's time sits under the next one's spinner. Null otherwise means "has not happened",
+or "before 2026-10-03".
+
 ## Columns, not JSON — with an exception that has to argue for itself
 
 A field you filter, sort, join or constrain on is a column. JSON is what you reach for when the

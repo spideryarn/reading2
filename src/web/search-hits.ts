@@ -164,9 +164,20 @@ export interface Found {
    */
   readonly whole: boolean;
   /**
+   * **The passage is its whole paragraph by design, so its words wear
+   * nothing**: a quick search's hit, and only that. The paragraph bar and the
+   * spine mark carry it; `baseMarks` hands the flag to the mark (`Mark.bare`).
+   * Absent everywhere else.
+   *
+   * Not `whole`, which means quote placement *failed* on a hit that did name
+   * words — that one keeps its outline. Plan 261003i B4.
+   */
+  readonly bare?: true;
+  /**
    * **`null` at every source but Quotes**, and that is the whole meaning of it:
-   * a passage carrying a stroke is drawn as an outline, and one carrying `null`
-   * is drawn as a search hit's wash.
+   * a passage carrying a `QuoteStroke` is drawn as a quote fill, and one
+   * carrying `null` is drawn as a search outline. The type name is retained from
+   * before the two paintings swapped (plan 261003l).
    *
    * This is the field that lets quotes have their own visual language without a
    * run id of their own — the rail still packs one lane for `QUOTES_RUN`, and
@@ -380,10 +391,11 @@ export interface ActiveRun {
    * because most of the tests that draw a run predate the field; the one
    * production caller, `useSearchMode`, always says.
    *
-   * It matters for one thing: a **quick** hit's quote is its whole paragraph,
+   * It matters for one fact with two consequences: a **quick** hit's quote is its whole paragraph,
    * so its previews are cut from the top of the block rather than grown
    * around a span that is already longer than either budget — see
-   * `resolveOne`'s `preview`. Plan 261002e, review F2.
+   * `resolveOne`'s `preview`. Plan 261002e, review F2. And, since 2026-10-03,
+   * its words are not washed — `Found.bare`.
    */
   kind?: SearchKind;
 }
@@ -541,7 +553,8 @@ function resolveOne(
      * given, so a 6,000-character paragraph came back whole for both the list
      * and the hover card. The highlight keeps the full span; only the two
      * previews are bounded. Not `whole`: that flag means placement *failed*,
-     * and the panel says so.
+     * and the panel says so. It is also what makes the result `bare`: one
+     * fact, "the quote is the paragraph on purpose", read twice.
      */
     preview?: "from-start";
   },
@@ -590,6 +603,7 @@ function resolveOne(
        source meant is exactly what we do not know. */
     at: placeOf(at.scale, i, span.start),
     whole,
+    ...(spec.preview === "from-start" && { bare: true as const }),
     quoteStroke: spec.quoteStroke,
   };
 }
@@ -1321,14 +1335,17 @@ function baseMarks(
       f.valence !== null && f.slot !== null
         ? { slot: f.slot, hue: valenceRgbToken(scale, f.valence), dir: valenceDirection(f.valence) }
         : { slot: f.slot };
-    /* **A quote carries a stroke and no strength; everything else the reverse.**
+    /* **A quote carries `quoteStroke` and no search strength; everything else the reverse.**
+       (`quoteStroke` is how strongly a quote is filled, and `strength` how
+       firmly a search hit's outline is closed, since 2026-10-03; the story
+       below is from when they were an outline and a wash.)
        `strength` is what `annotateHtml` turns into the confidence wash, and it
        takes the *maximum* over every mark covering a run. While a quote was a
        `strength: 1` hit, a quote lying over a 0.4-confidence search hit repainted
        that hit's wash at full — silently overwriting the one channel that says
        how sure the model was, and invisible only because quotes and search were
-       drawn identically. Splitting the two here is what makes "search fills,
-       quotes outline" true rather than merely intended.
+       drawn identically. Splitting the two here lets the quote fill and search
+       outline retain independent strengths where they overlap.
        docs/plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md */
     const quoted = f.quoteStroke !== null;
     list.push({
@@ -1337,7 +1354,10 @@ function baseMarks(
       end: f.end,
       kind: "hit",
       ...painted,
-      ...(quoted
+      /* A quick hit: no stroke and no strength, so nothing on the words. */
+      ...(f.bare
+        ? { bare: true }
+        : quoted
         ? { quoteStroke: f.quoteStroke }
         : {
             strength:

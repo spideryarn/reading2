@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."feedback" ADD COLUMN "ignored_at" timestamp with time zone;

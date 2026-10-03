@@ -60,22 +60,22 @@ describe("ModeSurface's about", () => {
 
   it("opens with the mode's own words from the catalog, then what the mode adds", async () => {
     draw(
-      <ModeSurface label="Tweets" mode="tweets" about={<p>12 posts.</p>}>
+      <ModeSurface label="Tweets" mode="summary" about={<p>12 posts.</p>}>
         body
       </ModeSurface>,
     );
     await act(async () => (host.querySelector(".band-about") as HTMLButtonElement).click());
     const card = document.querySelector(".band-about-card")?.textContent ?? "";
-    expect(card).toContain(`${MODE_CATALOG.tweets.description}.`);
-    expect(card).toContain(MODE_CATALOG.tweets.how);
-    expect(card.indexOf(MODE_CATALOG.tweets.how)).toBeLessThan(card.indexOf("12 posts."));
+    expect(card).toContain(`${MODE_CATALOG.summary.description}.`);
+    expect(card).toContain(MODE_CATALOG.summary.how);
+    expect(card.indexOf(MODE_CATALOG.summary.how)).toBeLessThan(card.indexOf("12 posts."));
   });
 
   /* Plan 261002e: the one card in the corner with something to press, and so
      the one that lets the pointer in. */
   it("ends a mode's card with a link to that mode's section of Help, and lets the pointer in", async () => {
     draw(
-      <ModeSurface label="Tweets" mode="tweets" about={<p>12 posts.</p>}>
+      <ModeSurface label="Tweets" mode="summary" about={<p>12 posts.</p>}>
         body
       </ModeSurface>,
     );
@@ -83,7 +83,7 @@ describe("ModeSurface's about", () => {
     const card = document.querySelector(".band-about-card")!;
     const link = card.querySelector("a")!;
     expect(link.textContent).toBe("More in Help →");
-    expect(link.getAttribute("href")).toBe("/help#mode-tweets");
+    expect(link.getAttribute("href")).toBe("/help#mode-summary");
     expect(card.textContent?.endsWith("More in Help →")).toBe(true);
     expect(document.querySelector(".tooltip-anchor")?.classList.contains("interactive")).toBe(true);
   });
@@ -97,7 +97,7 @@ describe("ModeSurface's about", () => {
 
   it("toggles closed on a mouse click while its interactive card is hover-open", async () => {
     vi.useFakeTimers();
-    draw(<ModeSurface label="Tweets" mode="tweets">body</ModeSurface>);
+    draw(<ModeSurface label="Tweets" mode="summary">body</ModeSurface>);
     const button = host.querySelector(".band-about") as HTMLButtonElement;
     button.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => vi.advanceTimersByTime(500));
@@ -118,7 +118,7 @@ describe("ModeSurface's about", () => {
     vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Chrome");
     vi.stubGlobal("scrollTo", vi.fn());
     const navigate = vi.spyOn(window.history, "pushState").mockImplementation(() => {});
-    draw(<ModeSurface label="Tweets" mode="tweets">body</ModeSurface>);
+    draw(<ModeSurface label="Tweets" mode="summary">body</ModeSurface>);
     const button = host.querySelector(".band-about") as HTMLButtonElement;
     // jsdom has no pointer modality or :focus-visible implementation. A touch
     // focuses a button without making it focus-visible in the browser.
@@ -150,11 +150,11 @@ describe("ModeSurface's about", () => {
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(link.isConnected).toBe(true);
     await act(async () => link.click());
-    expect(navigate).toHaveBeenCalledWith(null, "", "/help#mode-tweets");
+    expect(navigate).toHaveBeenCalledWith(null, "", "/help#mode-summary");
   });
 
   it("has an (i) from the mode alone, when there is nothing to add yet", () => {
-    draw(<ModeSurface label="Tweets" mode="tweets" about={null}>body</ModeSurface>);
+    draw(<ModeSurface label="Tweets" mode="summary" about={null}>body</ModeSurface>);
     expect(host.querySelector("aside > .band-about")).not.toBeNull();
   });
 

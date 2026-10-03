@@ -18,7 +18,7 @@ rather than to the view, and only sparingly and for a stated reason:
 
 What it holds today: the address you last left an article at
 ([§ Reopening an article where you left it](#reopening-an-article-where-you-left-it)), and
-per-browser preferences and dismissals — the referee card (`src/web/referee-card.ts`), hidden shelf
+per-browser preferences and dismissals — hidden shelf
 columns (`src/web/shelf-hidden-columns.ts`), the add page's tick box (`src/web/auto-modes.ts`), the
 install and small-screen hints, the chosen microphone and its placement, the offline cache's
 partition, the `spya-perf` flag and the auth SDK's session (by `grep -rln localStorage src/web`,
@@ -59,7 +59,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
 | `quote` | which quote is selected, absent for a list nobody has picked from — [quotes.md](quotes.md). Mirrors `term` and `idea` above in every respect | **replace** | `?quote=spya-k3m9qt` |
-| `depth` | how deep Skim walks — `1` Gist, `2` More, `3` Most — absent for Gist. **Always written together with `stop`**, in one `useQueryStates` update, so a depth change and the stop it lands on are one entry. A depth the route does not offer draws the deepest offered below it, and a `stop` on the route wins over it: its own pass is drawn, since each pass walks only its own stops ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)) — [skim.md](skim.md) | push | `?depth=2` |
+| `depth` | how deep Skim walks — `1` Gist, `2` More, `3` Most — absent for Gist. **Always written together with `stop`**, in one `useQueryStates` update, so a depth change and the stop it lands on are one entry. A depth the route does not offer draws the deepest offered below it, and a `stop` on the route wins over it: the asked pass is drawn when the stop is walked in it, otherwise the stop's own — the shallowest it is in. A stop is in one pass ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)) unless the route carries it into a deeper one too ([261003l](../plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md)), so on a route with no carried stop the stop's own pass is always the one drawn. A depth change can land on the stop already stood at; it is still one pushed entry — [skim.md](skim.md) | push | `?depth=2` |
 | `stop` | which Skim stop the reader is on — a quote id, so it validates like `quote`. A step along the route (← / →, the band's ‹ ›, the door in the prose) replaces it; a stop on no pass falls back to the asked pass's first stop. A link that carries one scrolls to that stop and flashes it, once, when the band opens | **replace** | `?stop=spya-k3m9qt` |
 | `rank` | how the quote list is ordered, absent for `document` — which is the **default**, on Greg's own instruction, unlike the glossary's `sort` below | push | `?rank=prioritised` |
 | `bar` | the bar the quotes' prioritised order hides under — `max(importance, striking)`, where the glossary's `gate` is a product. **Absent means nobody has touched it**, which the panel reads as `QUOTE_BAR_DEFAULT` ([`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx)) | **replace**, debounced | `?bar=0.55` |
@@ -81,14 +81,14 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `faqbar` | the bar the FAQ's prioritised order hides under — `centrality × (1 − difficulty)`. **Absent means nobody has touched it**, which the panel reads as `FAQ_BAR_DEFAULT` ([`faq-order.ts`](../../src/web/faq-order.ts)) | **replace**, debounced | `?faqbar=0.35` |
 | `event` | which timeline event is selected, absent for a list nobody has picked from — [timeline.md](timeline.md). Mirrors `term`, `idea` and `quote`; the id survives a re-run ([`params.ts`](../../src/web/params.ts) § `eventParam`) | **replace** | `?event=spya-k3m9qt` |
 | `structure` | how Structure is drawn: `fisheye`, opened up around the part you are reading (the default, and absent), or `expanded`, every part and section with its gist in one scrolling list — [structure.md](structure.md). Nothing to generate either way. [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md) | push | `?structure=expanded` |
-| `summary` | which of Summary's three plain-words levels the slider is on: `brief` (the default, and absent — Greg's 8N, [261002c](../plans/261002c-summary-opens-on-brief.md)), `simple` or `fuller` — [summaries.md](summaries.md). Arriving on it never spends; only touching the slider does. `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `brief`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
+| `summary` | which of Summary's three views is showing: `brief` (the default, and absent — Greg's 8N, [261002c](../plans/261002c-summary-opens-on-brief.md)), `fuller` or `thread` — [summaries.md](summaries.md), [tweets.md](tweets.md). `simple` was a value until 2026-10-03 and reads as `brief`. Arriving on a length never spends; an explicit press on Summary's button or command row, or on Brief or Fuller, can. **`thread` is the exception**: its band writes the thread when its owner arrives, so a remembered view on the thread is restored without `mode` (below). `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `brief`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
 | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
 | `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
 | `referee` | which of Referee's four sub-modes is open: `criteria` (the default), `claims`, `mirror` or `candidates` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
 | `crits` | which Referee criteria are painting the prose, as a comma list of ids, `none` for the empty set. **Absent is the empty set**: the article is not marked until the reader asks — [referee-mode.md](referee-mode.md) ([`params.ts`](../../src/web/params.ts) § `critsParam`) | **replace** | `?crits=spya-k3m9qt` |
 | `refscale` | which diverging colour ramp the whole of Referee mode is drawn with: `rg` (the default, omitted) or `br`. A URL param rather than a column, so it applies to criteria already run; [`params.ts`](../../src/web/params.ts) § `refScaleParam` says whether a control writes it yet | **replace** | `?refscale=br` |
-| `remember` | which part of Remember is open: `recall` (the default), `tutorial` or `quiz` — [remember-mode.md](remember-mode.md). Recall and Tutorial each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
+| `remember` | which part of Remember is open: `recall` (the default), `tutorial`, `explore` or `quiz` — [remember-mode.md](remember-mode.md). Recall, Tutorial and Explore each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
 
 **`referee` and `remember` are `diagram`'s shape, deliberately** — *which thing, within this mode* —
 so all three push, and all three land an unrecognised value on the default rather than on an error
@@ -126,7 +126,7 @@ sent to anybody. Now:
 | Param | Meaning | History | Example |
 |---|---|---|---|
 | `q` | what is in the shelf's search box — [library.md § Finding an article](library.md#finding-an-article-and-finding-a-passage-in-one) | **replace**, debounced | `?q=seth` |
-| `by` | which keys the shelf is ordered by, coarsest first: `added`, `opened`, `title`, `length`, `opens`, `questions` | push | `?by=length,title` |
+| `by` | which keys the shelf is ordered by, coarsest first: `added`, `published`, `opened`, `title`, `length`, `opens`, `questions` | push | `?by=length,title` |
 | `dir` | `asc` or `desc`, paired with `by` by position. **May be shorter than `by`, or absent, and the rest fall back to each column's own natural end** — newest first for a date, longest first for a length, A-to-Z for a title | push | `?dir=desc,asc` |
 | `view` | `cards` (the default) or `table` — the same list, painted the other way | push | `?view=table` |
 | `show` | `all` (the default) or `unread`, which is "never opened" | push | `?show=unread` |
@@ -338,7 +338,7 @@ has three stops, so a drag across the whole track writes twice and there is noth
 `?term=` is in the URL for a reason worth stating: **a selected term underlines every one of its
 occurrences in the prose**, so "the article as I am currently looking at it" is not fully described
 without it. Sending someone a link to a term sends them the underlines too. `?find=` and `?run=` are
-there for exactly the same reason, and it is the same reason a fourth time: a search washes the
+there for exactly the same reason, and it is the same reason a fourth time: a search outlines the
 passages that match, so a URL without it shows you a different page from the one you were sent.
 
 **Search mode has four parameters and every other mode has one or two**, which is worth explaining
@@ -356,7 +356,7 @@ default to mean what it used to. Anywhere else, reaching words mode is something
 doing it pushed the parameter. See [search.md § The URL](search.md#the-url).
 
 **A third segment says which of the article's pages**, added the same day:
-`/read/<slug>/metadata` (and `/read/<slug>/tweets` until 2026-09-29, when the thread became the `?mode=tweets` mode and the old address began redirecting to it — [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)). That does not bend the rule — those are still the
+`/read/<slug>/metadata` (and `/read/<slug>/tweets` until 2026-09-29, when the thread became the `?mode=tweets` mode — [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) — and then, on 2026-10-03, Summary's Thread view; both old addresses now land on `?mode=summary&summary=thread`, on a cold load, an in-app link and Back or Forward, with any carried `mode` or `summary` replaced: `liftLegacyTweets` in [`router.ts`](../../src/web/router.ts), [plan](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)). That does not bend the rule — those are still the
 same article, and which page you are on is not something you would want to reset by changing a
 parameter. An unknown third segment is the shelf too. The query string travels between all three, so
 stepping out to the metadata page and back returns you to the paragraph you left; `?panel=` is the
@@ -667,7 +667,10 @@ of those starts something merely by being arrived in — Diagram POSTs `/api/sim
 open a conversation. Their subordinate parameters are still remembered, so pressing Diagram or
 Remember later returns the reader to the picture or the half they had chosen. The list is
 `NEEDS_AN_EXPLICIT_PRESS` in [`last-view.ts`](../../src/web/last-view.ts), with the evidence for
-each beside it. Two of the three were found by a cross-family review after a survey had reported all
+each beside it. **Summary is remembered as no mode too while its view is the thread**
+(`mode=summary` with `summary=thread`, or the older `mode=tweets`): opening the thread with none
+stored writes one, and a restore is the one arrival nobody chose. `summary=thread` itself stays
+remembered, like the others' subordinate parameters — `opensTheThread`, same file. Two of the three were found by a cross-family review after a survey had reported all
 thirteen modes inert — so **check the mode's own hook before adding one back**, and note that a
 `?mode=` a reader *sent* in a link is untouched either way: this is only about what is replayed
 unasked.

@@ -30,7 +30,7 @@
  */
 import type { BlockId } from "../types.js";
 import type { JumpOrigin } from "./jump-history.js";
-import type { ReadLevel } from "./reading-time.js";
+import type { ReadReach } from "./reading-time.js";
 import type { BlockMatch, Found, MatchingSearch } from "./search-hits.js";
 
 /** One block's row, in the rail's document-pixel space. */
@@ -266,11 +266,12 @@ export function jumpOriginMark(
   return row ? { top: row.top, height: row.height } : null;
 }
 
-/** One stretch of the rail read to the same step — `readingRuns`. */
+/** One stretch of the rail read to the same reach — `readingRuns`. */
 export interface ReadingRun {
   top: number;
   height: number;
-  level: Exclude<ReadLevel, 0>;
+  /** Sixteenths of the rail's width, 4 to 16 — reading-time.ts § `readReach`. */
+  reach: ReadReach;
 }
 
 /**
@@ -282,36 +283,91 @@ export interface ReadingRun {
  * >
  * > — Greg, 2026-09-12
  *
- * Neighbouring rows at the same step become one run, which is what keeps this a
- * few dozen elements on a two-thousand-block article rather than one per row.
- * **Neighbouring means adjacent `index`**, not adjacent in the map: a row this
- * page does not have, or one at step 0, ends the run rather than being bridged,
- * so a gap the reader skipped stays a gap. Rows are placed by the same
- * document-pixel ruler as every other mark here.
+ * Neighbouring rows at the same reach become one run, which keeps the path
+ * short on a two-thousand-block article. **Neighbouring means adjacent
+ * `index`**, not adjacent in the map: a row this page does not have, or one
+ * with no reach, ends the run rather than being bridged, so a gap the reader
+ * skipped stays a gap. Rows are placed by the same document-pixel ruler as
+ * every other mark here. Thickness was four widths until 2026-10-03; it is a
+ * reach in sixteenths now, and `readingAreaPaths` draws it.
  */
 export function readingRuns(
   rows: Map<string, Row>,
-  levels: ReadonlyMap<BlockId, ReadLevel>,
+  reach: ReadonlyMap<BlockId, ReadReach>,
 ): ReadingRun[] {
-  const lit: { index: number; top: number; bottom: number; level: Exclude<ReadLevel, 0> }[] = [];
-  for (const [id, level] of levels) {
-    if (level === 0) continue;
+  const lit: { index: number; top: number; bottom: number; reach: ReadReach }[] = [];
+  for (const [id, r] of reach) {
+    if (!(r > 0)) continue;
     const row = rows.get(id);
-    if (row) lit.push({ index: row.index, top: row.top, bottom: row.top + row.height, level });
+    if (row) lit.push({ index: row.index, top: row.top, bottom: row.top + row.height, reach: r });
   }
   lit.sort((a, b) => a.index - b.index);
   const runs: ReadingRun[] = [];
   let prev: (typeof lit)[number] | undefined;
   for (const r of lit) {
     const last = runs[runs.length - 1];
-    if (last && prev && prev.index + 1 === r.index && prev.level === r.level) {
+    if (last && prev && prev.index + 1 === r.index && prev.reach === r.reach) {
       last.height = r.bottom - last.top;
     } else {
-      runs.push({ top: r.top, height: r.bottom - r.top, level: r.level });
+      runs.push({ top: r.top, height: r.bottom - r.top, reach: r.reach });
     }
     prev = r;
   }
   return runs;
+}
+
+/** The two paths of the rail's reading-time chart — `readingAreaPaths`. */
+export interface ReadingAreaPaths {
+  /** The filled area: one closed rectangle per run, from the left edge to its reach. */
+  area: string;
+  /** The line down the area's right-hand side. Never closed, never filled. */
+  edge: string;
+}
+
+/**
+ * How far apart, in document pixels, one run's bottom and the next one's top
+ * may be and still be the same stretch. Row edges are measured, so neighbours
+ * can disagree by a fraction of a pixel; a row the reader skipped is a line of
+ * text tall at least.
+ */
+const SAME_STRETCH_PX = 1;
+
+/** A path coordinate: hundredths of a unit are finer than anything painted. */
+const coord = (v: number): string => String(Math.round(v * 100) / 100);
+
+/**
+ * **The reading-time runs as an area chart turned on its side** — x is reach in
+ * sixteenths (so the viewBox is 16 wide), y is the rail's document pixels.
+ * docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md.
+ *
+ * > I'm almost imagining like a water level but rotated 90 degrees.
+ * >
+ * > — Greg, 2026-10-03 (spya-jhe9mc)
+ *
+ * **The edge is drawn only where something was read.** It runs down each run's
+ * right-hand side and steps sideways where two neighbouring runs differ; across
+ * an unread gap it stops and starts again as a new subpath, and it never
+ * returns to the left edge. So an empty stretch of rail keeps meaning "not
+ * read", and a stretch's top and bottom are not underlined as though they were
+ * amounts. A step outline rather than a curve, which would draw reach between
+ * a read block and an unread one where there is none.
+ *
+ * At full reach the edge is at x = 16, the viewBox's far side: keeping that
+ * stroke inside the rail is spine.css § reading time's job, not this one's.
+ */
+export function readingAreaPaths(runs: readonly ReadingRun[]): ReadingAreaPaths {
+  let area = "";
+  let edge = "";
+  let prevBottom: number | null = null;
+  for (const run of runs) {
+    const bottom = run.top + run.height;
+    const [x, top, end] = [coord(run.reach), coord(run.top), coord(bottom)];
+    area += `M0 ${top}H${x}V${end}H0Z`;
+    const joined = prevBottom !== null && Math.abs(run.top - prevBottom) < SAME_STRETCH_PX;
+    edge += joined ? `H${x}V${end}` : `M${x} ${top}V${end}`;
+    prevBottom = bottom;
+  }
+  return { area, edge };
 }
 
 /* --------------------------------------------------- the quotes, every mode -- */

@@ -1,0 +1,723 @@
+{
+ "notes": {
+  "audioContextState": "running",
+  "sessionHttp": {
+   "status": 201,
+   "sessionId": "live_u0_EUrS6p3oNSKDVSSEcRtQA055m5YPZns6",
+   "raw": {
+    "session": {
+     "id": "live_u0_EUrS6p3oNSKDVSSEcRtQA055m5YPZns6"
+    },
+    "transportType": "webrtc",
+    "topKeys": [
+     "session",
+     "transport"
+    ]
+   },
+   "answerSdpChars": 1680,
+   "offerSdpChars": 1656
+  },
+  "remoteTrack": "audio",
+  "pcState": "connected",
+  "dcOpen": "oai-events",
+  "dcClose": "oai-events"
+ },
+ "events": [
+  {
+   "t": 244,
+   "wall": 1791024018657,
+   "dir": "note",
+   "ev": {
+    "type": "note.audioContextState",
+    "v": "running"
+   }
+  },
+  {
+   "t": 600,
+   "wall": 1791024019013,
+   "dir": "note",
+   "ev": {
+    "type": "note.sessionHttp",
+    "v": {
+     "status": 201,
+     "sessionId": "live_u0_EUrS6p3oNSKDVSSEcRtQA055m5YPZns6",
+     "raw": {
+      "session": {
+       "id": "live_u0_EUrS6p3oNSKDVSSEcRtQA055m5YPZns6"
+      },
+      "transportType": "webrtc",
+      "topKeys": [
+       "session",
+       "transport"
+      ]
+     },
+     "answerSdpChars": 1680,
+     "offerSdpChars": 1656
+    }
+   }
+  },
+  {
+   "t": 603,
+   "wall": 1791024019015,
+   "dir": "note",
+   "ev": {
+    "type": "note.remoteTrack",
+    "v": "audio"
+   }
+  },
+  {
+   "t": 605,
+   "wall": 1791024019017,
+   "dir": "note",
+   "ev": {
+    "type": "note.pcState",
+    "v": "connecting"
+   }
+  },
+  {
+   "t": 1485,
+   "wall": 1791024019898,
+   "dir": "note",
+   "ev": {
+    "type": "note.pcState",
+    "v": "connected"
+   }
+  },
+  {
+   "t": 1754,
+   "wall": 1791024020167,
+   "dir": "note",
+   "ev": {
+    "type": "note.dcOpen",
+    "v": "oai-events"
+   }
+  },
+  {
+   "t": 1889,
+   "wall": 1791024020301,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrS7OcMyF7fiSLv90ee2",
+    "type": "session.started",
+    "session": {
+     "id": "live_u0_EUrS6p3oNSKDVSSEcRtQA055m5YPZns6",
+     "expires_at": 1791031218,
+     "model": "gpt-live-1",
+     "instructions": "You are a voice companion helping someone read an article. Be brief: one or two short spoken sentences. British English.\n# Delegation Policy\nYou know nothing about the article yourself. Whenever the user asks what the article says about anything, delegate to the backend and never guess. While the backend works you may say you are checking.",
+     "audio": {
+      "output": {
+       "voice": "marin"
+      }
+     },
+     "delegation": {
+      "type": "responses",
+      "responses": {
+       "model": "gpt-6-luna",
+       "instructions": "You are the backend for a live voice conversation about an article. To answer any question about what the article says, you MUST call lookup_passage with the topic, then answer in one plain spoken sentence using only what it returned.",
+       "reasoning": {
+        "effort": "low"
+       },
+       "tools": [
+        {
+         "type": "function",
+         "name": "lookup_passage",
+         "description": "Look up what the article says about a topic",
+         "parameters": {
+          "type": "object",
+          "properties": {
+           "topic": {
+            "type": "string"
+           }
+          },
+          "required": [
+           "topic"
+          ],
+          "additionalProperties": false
+         }
+        }
+       ],
+       "tool_choice": "auto"
+      }
+     },
+     "status": "active",
+     "input": [],
+     "client": {
+      "data_channel": {
+       "allowed_client_events": [
+        "response.item.create",
+        "response.create",
+        "session.close"
+       ],
+       "allowed_server_events": [
+        {
+         "type": "session.started"
+        },
+        {
+         "type": "session.output_transcript.delta"
+        },
+        {
+         "type": "session.closed"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.created"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.output_item.done"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.completed"
+        }
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "t": 3394,
+   "wall": 1791024021807,
+   "dir": "out",
+   "ev": {
+    "type": "response.item.create",
+    "item": {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "What does the article say about the lighthouse?"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "t": 3395,
+   "wall": 1791024021807,
+   "dir": "out",
+   "ev": {
+    "type": "response.create"
+   }
+  },
+  {
+   "t": 3586,
+   "wall": 1791024021999,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrSAVQgl8qBAXFKbeUU3",
+    "type": "response.event",
+    "delegation_id": "item_EUrS9cUgCI6kedtwZtw0H",
+    "event": {
+     "type": "response.created",
+     "response": {
+      "id": "resp_0d20ff48d36034a7006ac0db95fa6087d1979ff6e987da0a22",
+      "object": "response",
+      "created_at": 1791024021,
+      "status": "in_progress",
+      "access_programs": null,
+      "background": false,
+      "completed_at": null,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_0d20ff48d36034a7016ac0db9307c887d1931412587cd96fd6",
+      "prompt_cache_key": "live:c07e7616424e26b72a7a797886c2cdf04cafbfd3cf4a5c6b8ba4bc86d1c",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "auto",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": null,
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 0
+    }
+   }
+  },
+  {
+   "t": 4606,
+   "wall": 1791024023019,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrSAUBvDWBPRxNTaJLQ4",
+    "type": "response.event",
+    "delegation_id": "item_EUrS9cUgCI6kedtwZtw0H",
+    "event": {
+     "type": "response.output_item.done",
+     "item": {
+      "id": "fc_0d20ff48d36034a7006ac0db96e0dc87d1bea0785df007f0fa",
+      "type": "function_call",
+      "status": "completed",
+      "arguments": "{\"topic\":\"lighthouse\"}",
+      "call_id": "call_bXbTUQsolutkcXLsc5jTYoya",
+      "name": "lookup_passage"
+     },
+     "output_index": 0,
+     "sequence_number": 10
+    }
+   }
+  },
+  {
+   "t": 4698,
+   "wall": 1791024023110,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrSBi6U7Pg3ra3j0AvU3",
+    "type": "response.event",
+    "delegation_id": "item_EUrS9cUgCI6kedtwZtw0H",
+    "event": {
+     "type": "response.completed",
+     "response": {
+      "id": "resp_0d20ff48d36034a7006ac0db95fa6087d1979ff6e987da0a22",
+      "object": "response",
+      "created_at": 1791024021,
+      "status": "completed",
+      "access_programs": null,
+      "background": false,
+      "completed_at": 1791024022,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_0d20ff48d36034a7016ac0db9307c887d1931412587cd96fd6",
+      "prompt_cache_key": "live:c07e7616424e26b72a7a797886c2cdf04cafbfd3cf4a5c6b8ba4bc86d1c",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+       "input_tokens": 811,
+       "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 0
+       },
+       "output_tokens": 20,
+       "output_tokens_details": {
+        "reasoning_tokens": 0
+       },
+       "total_tokens": 831
+      },
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 11
+    }
+   }
+  },
+  {
+   "t": 4702,
+   "wall": 1791024023115,
+   "dir": "out",
+   "ev": {
+    "type": "response.item.create",
+    "item": {
+     "type": "function_call_output",
+     "call_id": "call_bXbTUQsolutkcXLsc5jTYoya",
+     "output": "The article says the lighthouse was painted teal in 1987."
+    }
+   }
+  },
+  {
+   "t": 4702,
+   "wall": 1791024023115,
+   "dir": "out",
+   "ev": {
+    "type": "response.create"
+   }
+  },
+  {
+   "t": 4884,
+   "wall": 1791024023297,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrSBeFxrpMmtLCJsgDHH",
+    "type": "response.event",
+    "delegation_id": "item_EUrS9cUgCI6kedtwZtw0H",
+    "event": {
+     "type": "response.created",
+     "response": {
+      "id": "resp_0d20ff48d36034a7006ac0db97465c87d1ac869fbbc3905db6",
+      "object": "response",
+      "created_at": 1791024023,
+      "status": "in_progress",
+      "access_programs": null,
+      "background": false,
+      "completed_at": null,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_0d20ff48d36034a7006ac0db95fa6087d1979ff6e987da0a22",
+      "prompt_cache_key": "live:c07e7616424e26b72a7a797886c2cdf04cafbfd3cf4a5c6b8ba4bc86d1c",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "auto",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": null,
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 0
+    }
+   }
+  },
+  {
+   "t": 5823,
+   "wall": 1791024024236,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrSCU0tWVuJXk6ReYQmd",
+    "type": "response.event",
+    "delegation_id": "item_EUrS9cUgCI6kedtwZtw0H",
+    "event": {
+     "type": "response.output_item.done",
+     "item": {
+      "id": "msg_0d20ff48d36034a7006ac0db9821fc87d1bc316de5fe774822",
+      "type": "message",
+      "status": "completed",
+      "content": [
+       {
+        "type": "output_text",
+        "annotations": [],
+        "logprobs": [],
+        "text": "The article says the lighthouse was painted teal in 1987."
+       }
+      ],
+      "phase": "final_answer",
+      "role": "assistant"
+     },
+     "output_index": 0,
+     "sequence_number": 19
+    }
+   }
+  },
+  {
+   "t": 6027,
+   "wall": 1791024024439,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrSC2ZPrUGzTkjxyi2GA",
+    "type": "response.event",
+    "delegation_id": "item_EUrS9cUgCI6kedtwZtw0H",
+    "event": {
+     "type": "response.completed",
+     "response": {
+      "id": "resp_0d20ff48d36034a7006ac0db97465c87d1ac869fbbc3905db6",
+      "object": "response",
+      "created_at": 1791024023,
+      "status": "completed",
+      "access_programs": null,
+      "background": false,
+      "completed_at": 1791024024,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "output": [],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": "resp_0d20ff48d36034a7006ac0db95fa6087d1979ff6e987da0a22",
+      "prompt_cache_key": "live:c07e7616424e26b72a7a797886c2cdf04cafbfd3cf4a5c6b8ba4bc86d1c",
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+       "context": "all_turns",
+       "effort": "low",
+       "mode": "standard",
+       "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+       "format": {
+        "type": "text"
+       },
+       "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+       "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+         "image_tokens": 0,
+         "text_tokens": 0
+        },
+        "total_tokens": 0
+       },
+       "web_search": {
+        "num_requests": 0
+       }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+       "input_tokens": 856,
+       "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 0
+       },
+       "output_tokens": 17,
+       "output_tokens_details": {
+        "reasoning_tokens": 0
+       },
+       "total_tokens": 873
+      },
+      "user": "user-W3ouH3u39JZeLZi5w9Y23EYa",
+      "metadata": {}
+     },
+     "sequence_number": 20
+    }
+   }
+  },
+  {
+   "t": 15085,
+   "wall": 1791024033498,
+   "dir": "out",
+   "ev": {
+    "type": "session.close"
+   }
+  },
+  {
+   "t": 15626,
+   "wall": 1791024034038,
+   "dir": "in",
+   "ev": {
+    "event_id": "event_EUrSMpuCZuf6CyI44JuKx",
+    "type": "session.closed",
+    "reason": "close_requested",
+    "session": {
+     "id": "live_u0_EUrS6p3oNSKDVSSEcRtQA055m5YPZns6",
+     "expires_at": 1791031218,
+     "model": "gpt-live-1",
+     "instructions": "You are a voice companion helping someone read an article. Be brief: one or two short spoken sentences. British English.\n# Delegation Policy\nYou know nothing about the article yourself. Whenever the user asks what the article says about anything, delegate to the backend and never guess. While the backend works you may say you are checking.",
+     "audio": {
+      "output": {
+       "voice": "marin"
+      }
+     },
+     "delegation": {
+      "type": "responses",
+      "responses": {
+       "model": "gpt-6-luna",
+       "instructions": "You are the backend for a live voice conversation about an article. To answer any question about what the article says, you MUST call lookup_passage with the topic, then answer in one plain spoken sentence using only what it returned.",
+       "reasoning": {
+        "effort": "low"
+       },
+       "tools": [
+        {
+         "type": "function",
+         "name": "lookup_passage",
+         "description": "Look up what the article says about a topic",
+         "parameters": {
+          "type": "object",
+          "properties": {
+           "topic": {
+            "type": "string"
+           }
+          },
+          "required": [
+           "topic"
+          ],
+          "additionalProperties": false
+         }
+        }
+       ],
+       "tool_choice": "auto"
+      }
+     },
+     "status": "active",
+     "input": [],
+     "client": {
+      "data_channel": {
+       "allowed_client_events": [
+        "response.item.create",
+        "response.create",
+        "session.close"
+       ],
+       "allowed_server_events": [
+        {
+         "type": "session.started"
+        },
+        {
+         "type": "session.output_transcript.delta"
+        },
+        {
+         "type": "session.closed"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.created"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.output_item.done"
+        },
+        {
+         "type": "response.event",
+         "response_event": "response.completed"
+        }
+       ]
+      }
+     }
+    },
+    "usage": {
+     "seconds": 15
+    }
+   }
+  },
+  {
+   "t": 15788,
+   "wall": 1791024034201,
+   "dir": "note",
+   "ev": {
+    "type": "note.dcClose",
+    "v": "oai-events"
+   }
+  }
+ ]
+}

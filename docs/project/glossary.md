@@ -891,6 +891,16 @@ miss the commonest case while looking confident. A guess here is
 [the postmortem's fault](../postmortems/260904c-the-glossary-said-the-term-was-not-there.md) in a
 friendlier tone.
 
+**The command bar and chat can send a term here** (2026-10-03): *look up X* in the bar, or a
+button in a chat answer, opens the entry when the **visible** glossary has the term, and otherwise
+moves to this band and hands the box the term, which makes its one ordinary ask. That move must
+**never arm generate-on-open** and never ride in the URL — two paid runs for one press, and a link
+that spends — so the term waits in a one-shot, in-memory hand-off, and the row exists only once the
+glossary read has settled with a glossary in it:
+[`glossary-ask-handoff.ts`](../../src/web/glossary-ask-handoff.ts), held by
+`tests/glossary-ask-from-the-command-bar.test.tsx` (one ask, no job).
+[reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar).
+
 **The article's own words are what the model is told about**, not the reader's — type *attention
 head* at a piece that says *Attention Heads* and the quote is the plural, because that is the text
 that is there. A side effect worth having: the reader's own string never reaches the model at all.
@@ -1271,6 +1281,29 @@ hand. [260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md
 
 The [run row](#the-run-row-find-more-or-find-terms-again) is the one button at the top of the
 column. Its forced run appends only when `existingFor` accepts the list; otherwise it rewrites.
+
+### Each entry keeps the time it was added
+
+`GlossaryEntry.addedAt`, since 2026-10-03, and the twin of `Quote.addedAt`
+([quotes.md](quotes.md)). The list's `generatedAt` is re-stamped by every pass, so without a time
+of its own an entry from the first pass could not be told from one the third pass added. Greg,
+2026-10-03: *"Store when it happened."*
+
+- **A pass stamps what it adds, once**, with the same clock read as its `generatedAt`
+  (`buildGlossary`).
+- **The time belongs to the id, not to the name or the prose.** `merge` keeps the incumbent's
+  whichever name wins, and a rewrite that inherits an id inherits its time with it (`idsByTerm`,
+  `InheritedEntry`). A rewrite after the article's text moved inherits nothing, so those entries
+  are new and say so.
+- **Absence is kept, not filled.** An entry stored before the field existed has none and never gets
+  one — not from a merge with a timed entry, not from a rewrite. It was already there, and the
+  list's `generatedAt` is only an upper bound for it.
+
+**It is shown nowhere yet**, and it is in no hash, no freshness check, no dedupe rule and no prompt.
+The public projection does not copy it ([`src/public/dto.ts`](../../src/public/dto.ts)). A term the
+reader added themselves is not in the document, so it has no `addedAt`; its time is its
+`glossary_lookups` row's. [`tests/glossary-added-at.test.ts`](../../tests/glossary-added-at.test.ts);
+plan [261003j](../plans/261003j-store-when-it-happened-timestamp-audit.md) § stage 3.
 
 ### There was a *Start again* beside it, and it went
 

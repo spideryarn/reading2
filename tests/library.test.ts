@@ -92,6 +92,17 @@ describe("describeArticle", () => {
     expect(entry.sections).toBe(0);
   });
 
+  it("carries the publisher's date verbatim, and leaves the key off when there is none", () => {
+    /* The shelf sorts on it (plan 261003m). Verbatim, because the calendar day
+       in the publisher's own frame is the whole content of the field. */
+    const dated = describeArticle({
+      ...base,
+      meta: { ...base.meta, publishedAt: "2024-03-11T23:30:00-05:00" },
+    });
+    expect(dated.publishedAt).toBe("2024-03-11T23:30:00-05:00");
+    expect("publishedAt" in describeArticle(base)).toBe(false);
+  });
+
   it("blurbs with the root gist — the whole piece in one sentence", () => {
     expect(describeArticle(base).gist).toBe("The gist.");
   });

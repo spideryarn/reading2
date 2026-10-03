@@ -216,8 +216,29 @@ Skipping the basics is correct. Announcing that you are skipping them is not.`;
  * `readerPositionLine` has in src/article-prompt.ts, and for the same reason:
  * a suffix that gains a newline is a suffix that changed.
  */
-export function profileSection(rendered: string | null): string {
+export function profileSection(
+  rendered: string | null,
+  /**
+   * `"with-the-reader"` is Explore's (src/converse.ts § EXPLORE_SYSTEM), the
+   * one conversation whose subject is the reader's own thinking: its prompt
+   * tells the model to speak to them and to use their reason for reading, and
+   * a reminder beside the question saying "Do not address the reader"
+   * contradicted it (GPT Sol, round two of plan 261003l, CR-18). Every other
+   * caller gets the bytes it always had.
+   */
+  stance: "about-the-article" | "with-the-reader" = "about-the-article",
+): string {
   if (!rendered) return "";
+  if (stance === "with-the-reader") {
+    return `=== WHO IS READING THIS ===
+
+${rendered}
+
+Let this change what you lead with and how much you explain. It changes nothing
+about what the article says. You are talking with this reader: speak to them,
+and use the reason they gave for reading where it gives them a case of their
+own. Do not recite this back to them.`;
+  }
   return `=== WHO IS READING THIS ===
 
 ${rendered}

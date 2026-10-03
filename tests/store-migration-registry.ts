@@ -1965,6 +1965,30 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "entirely Postgres. Its reach into the condemned modules is the seeder's copy step, as for " +
       "`tests/glossary-hidden-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/reader-notes-owner-isolation.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with chat's `reader_notes` tool (plan 261003l, 2026-10-03). " +
+      "It seeds two articles under two owners with `scratchArticleInPg`, writes comments and one " +
+      "finished conversation on each through the stores, and runs the tool as each owner against " +
+      "the other's slug and thread id — entirely Postgres. Its reach into the condemned modules is " +
+      "the seeder's copy step, as for `tests/glossary-added-term.test.ts`. Read off the graph, not " +
+      "re-witnessed.",
+  },
+  "tests/explore-digest-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with Explore, Remember's fourth sub-mode (plan 261003l stage " +
+      "2, 2026-10-03). It seeds one article with `scratchArticleInPg`, writes a comment and " +
+      "finished conversations through the stores, posts chat turns with `fetch` stubbed to keep " +
+      "the request body and fail, and reads what would have been sent — entirely Postgres. Its " +
+      "reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/reader-notes-owner-isolation.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/reset-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2743,6 +2767,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      went away; what it asserts now is *which database* the ledger lands in,
      and that needs one. */
   "tests/cost-store-under-test.test.ts": "private-postgres",
+  "tests/created-at-on-action-tables.test.ts": "private-postgres",
   "tests/db-error-scrub.test.ts": "private-postgres",
   "tests/db-referee-criteria.test.ts": "private-postgres",
   "tests/db-schema-drift.test.ts": "private-postgres",
@@ -2755,6 +2780,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/draft-sweep-on-step-start.test.ts": "private-postgres",
   "tests/enqueue-drives-what-it-queues.test.ts": "private-postgres",
   "tests/enqueue-owns-the-article.test.ts": "private-postgres",
+  "tests/event-times.test.ts": "private-postgres",
   "tests/quiz-job-carries-the-reading-goal.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",
   "tests/feedback-store.test.ts": "private-postgres",
@@ -2794,6 +2820,15 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      looked-up term, hiding it, the owner's read and the public read, reading
      rows back out of `glossary_lookups`. No model is called. */
   "tests/glossary-added-term.test.ts": "private-postgres",
+  /* Chat's `reader_notes` tool, 261003l. Seeds two articles under two owners,
+     writes comments and a finished conversation on each through the stores, and
+     runs the tool (and Live's tool endpoint) as one owner against the other's
+     slug and thread id. No model is called. */
+  "tests/reader-notes-owner-isolation.test.ts": "private-postgres",
+  /* Explore's notes digest, 261003l stage 2. Seeds one article, a comment and
+     finished conversations of several kinds, and posts chat turns through the
+     route with `fetch` stubbed to keep the request and fail. No model is called. */
+  "tests/explore-digest-route.test.ts": "private-postgres",
   /* Claims and settles guessed web addresses on a bare article, seeds one more
      to read both payloads, and drives the route to its 409. No model is called. */
   "tests/source-guess-pg.test.ts": "private-postgres",
@@ -2801,11 +2836,16 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      articles by hand, fills `revision_phrase_runs` and drives
      `GET /api/library/terms` through the route. No model is called. */
   "tests/shelf-terms-pg.test.ts": "private-postgres",
-  /* The shelf's topics chosen with a model, 260929c stage 2. Seeds one owner
-     and ten articles, drives `GET /api/library/terms` through the route, and
-     reads back `shelf_topic_scores`, `rate_limit_events` and `ai_calls`. The
-     provider is a stubbed `fetch` with a fake key. */
+  /* The shelf's topics named by a model, 261003f (it tested the phrase scores
+     of 260929c stage 2 until then). Seeds one owner and fifteen articles,
+     drives `GET /api/library/terms` through the route, and reads back
+     `shelf_topic_sets`, `rate_limit_events` and `ai_calls`. The provider is a
+     stubbed `fetch` with a fake key. */
   "tests/shelf-topics-route.test.ts": "private-postgres",
+  /* The model's topic set, 261003f. Seeds two owners and a handful of bare
+     articles by hand, and reads and writes `shelf_topic_sets` through the
+     store. No model is called. */
+  "tests/shelf-topic-sets-pg.test.ts": "private-postgres",
   /* Written 2026-09-11 for the last slice of the `AUTH_ROUTES` migration. Seeds
      one article and deletes only its own entry's lookup row; no model is called. */
   "tests/glossary-stream-lifetime.test.ts": "private-postgres",
@@ -3345,10 +3385,17 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
     "00000000-0000-4000-8000-0000000057a1": { kind: "seeded" },
     "00000000-0000-4000-8000-0000000057b2": { kind: "seeded" },
   },
-  /* One reader with ten articles, a profile, a score row and allowance rows —
-     all of which reference `auth.users`. 260929c stage 2. */
+  /* One reader with fifteen articles, a profile, a topic-set row and allowance
+     rows — all of which reference `auth.users`. Its two other readers are
+     minted per run. 260929c stage 2, rewritten for 261003f. */
   "tests/shelf-topics-route.test.ts": {
     "00000000-0000-4000-8000-00000000c7a1": { kind: "seeded" },
+  },
+  /* Two readers: `shelf_topic_sets.owner_id` references `auth.users`, both
+     own articles, and one's claim id is tried in the other's hands. 261003f. */
+  "tests/shelf-topic-sets-pg.test.ts": {
+    "00000000-0000-4000-8000-0000000075a1": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000000075b2": { kind: "seeded" },
   },
   /* Two owners, both written under: `rate_limit_events.owner_id` really does
      reference `auth.users(id)` (drizzle/20260905172650), so a made-up uuid can

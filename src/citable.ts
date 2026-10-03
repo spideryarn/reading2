@@ -48,7 +48,8 @@
  * yields.
  */
 import { fromMarkdown } from "mdast-util-from-markdown";
-import type { Nodes } from "mdast";
+import type { Nodes, Paragraph, RootContent } from "mdast";
+import { splitCommandTokens, tokensOnOwnLine, withoutCommandTokens } from "./command-token.js";
 import { withoutWebLinks } from "./urls.js";
 
 /**
@@ -75,6 +76,21 @@ const MAX_DEPTH = 12;
  * and a caller can still say where in the answer it found something.
  */
 export function citableText(answer: string): string {
+  /* A command token (`[cmd:bookmark:spya-k3m9qt]`, src/command-token.ts) is
+     lifted out of the link-free prose before the renderer looks for citations,
+     so the block id inside is a button's argument and never a chip. */
+  return withoutCommandTokens(linkFreeProse(answer));
+}
+
+/**
+ * **The text a command-token shape can be found in**: ordinary text nodes, with
+ * link labels, code and bare addresses blanked — `citableText` one step earlier,
+ * before the tokens themselves are blanked. The renderer starts from these
+ * nodes, then applies the structural rules this flat string cannot carry (own
+ * line, and not inside a blockquote). The eval uses it to find attempts before
+ * applying those rules (evals/chat-commands/run.ts).
+ */
+export function linkFreeProse(answer: string): string {
   const kept = new Array<string>(answer.length).fill(" ");
   const visit = (node: Nodes, opaque: boolean, depth: number) => {
     /* The same cap the renderer draws to (src/web/Cited.tsx § MAX_DEPTH), for
@@ -101,4 +117,168 @@ export function citableText(answer: string): string {
      (src/web/Cited.tsx § leaf). No `remark-gfm`, so the parser leaves bare
      addresses in the text nodes for it to find. */
   return withoutWebLinks(kept.join(""));
+}
+
+/**
+ * **An answer without the lines that are only command buttons** — what *Copy
+ * answer* writes to the clipboard (src/web/ChatPanel.tsx § `CopyAnswer`).
+ *
+ * The reader was shown a button there, not `[cmd:…]`, so the copy leaves the
+ * line out, and one of the two blank lines that stood round it. The walk below
+ * mirrors Cited.tsx's structural rules: a paragraph's direct text, including
+ * one inside a list, but not a heading, nested mark, code block or blockquote.
+ * `isButton` supplies its final, contextual `chipFor` gate — an invalid token
+ * is text on screen and therefore text on the clipboard too.
+ *
+ * An answer with no button line comes back unchanged, byte for byte. Where a
+ * line is removed, its neighbours keep their own line-ending spelling.
+ */
+export function withoutCommandLines(answer: string, isButton: (raw: string) => boolean): string {
+  const byLine = commandTokensByLine(answer, isButton);
+  if (![...byLine.values()].some((tokens) => tokens.some((token) => token.button))) return answer;
+  const buttonLines = new Set(
+    [...byLine].filter(([, tokens]) => tokens.every((token) => token.button)).map(([line]) => line - 1),
+  );
+  const lines = copyLines(answer);
+  removeMixedButtonTokens(lines, byLine);
+  const removed = linesBesideButtons(lines, buttonLines);
+  let copied = lines.filter((_, i) => !removed.has(i)).map((line) => line.text).join("");
+  if (removedAfterLastKept(lines, removed)) copied = copied.replace(/(?:\r\n|\r|\n)+$/, "");
+  return copied;
+}
+
+interface SeenCommandToken {
+  readonly raw: string;
+  readonly button: boolean;
+}
+
+function commandTokensByLine(
+  answer: string,
+  isButton: (raw: string) => boolean,
+): Map<number, SeenCommandToken[]> {
+  const byLine = new Map<number, SeenCommandToken[]>();
+
+  const paragraph = (node: Paragraph) => {
+    const edge = (i: number): boolean => {
+      const beside = node.children[i];
+      return beside === undefined || beside.type === "break";
+    };
+    for (const [i, child] of node.children.entries()) {
+      if (child.type !== "text") continue;
+      const runs = splitCommandTokens(child.value);
+      const ownLine = tokensOnOwnLine(runs, edge(i - 1), edge(i + 1));
+      let token = 0;
+      let at = 0;
+      for (const run of runs) {
+        if (run.kind === "token") {
+          if (ownLine[token++] === true) {
+            const before = child.value.slice(0, at);
+            const line = (child.position?.start.line ?? 1) + [...before.matchAll(/\r\n|\r|\n/g)].length;
+            const tokens = byLine.get(line) ?? [];
+            tokens.push({ raw: run.raw, button: isButton(run.raw) });
+            byLine.set(line, tokens);
+          }
+          at += run.raw.length;
+        } else {
+          at += run.text.length;
+        }
+      }
+    }
+  };
+
+  const blocks = (nodes: readonly RootContent[], depth = 0) => {
+    if (depth >= MAX_DEPTH) return;
+    for (const node of nodes) {
+      if (node.type === "paragraph") {
+        paragraph(node);
+      } else if (node.type === "list") {
+        for (const item of node.children) {
+          const only = item.children.length === 1 ? item.children[0] : undefined;
+          if (only?.type === "paragraph") paragraph(only);
+          else blocks(item.children, depth + 1);
+        }
+      }
+      /* A blockquote deliberately receives no command executor in Cited.tsx.
+         Heading, code and every source fallback likewise contain no buttons. */
+    }
+  };
+  blocks(fromMarkdown(answer).children);
+  return byLine;
+}
+
+interface CopyLine {
+  text: string;
+  readonly content: string;
+}
+
+function copyLines(answer: string): CopyLine[] {
+  const lines: CopyLine[] = [];
+  for (const match of answer.matchAll(/[^\r\n]*(?:\r\n|\r|\n|$)/g)) {
+    const text = match[0];
+    if (text === "" && match.index === answer.length) break;
+    lines.push({ text, content: text.replace(/(?:\r\n|\r|\n)$/, "") });
+  }
+  return lines;
+}
+
+/* A line may contain several tokens. If some are buttons and some are text,
+   remove only the literal button spans: dropping the line would lose prose,
+   while keeping it would copy syntax the reader never saw. An escaped or
+   entity-encoded token has no literal span to remove. That line is known to
+   contain only tokens and whitespace after its optional list marker, so in
+   that case reconstruct the visible invalid tokens rather than leak the
+   encoded button or guess at source offsets. */
+function removeMixedButtonTokens(lines: CopyLine[], byLine: ReadonlyMap<number, SeenCommandToken[]>): void {
+  for (const [lineNumber, tokens] of byLine) {
+    if (tokens.every((token) => token.button) || tokens.every((token) => !token.button)) continue;
+    const line = lines[lineNumber - 1];
+    if (!line) continue;
+    let cursor = 0;
+    const ranges: { from: number; to: number }[] = [];
+    let foundAll = true;
+    for (const token of tokens) {
+      const from = line.content.indexOf(token.raw, cursor);
+      if (from === -1) {
+        foundAll = false;
+        break;
+      }
+      const to = from + token.raw.length;
+      if (token.button) ranges.push({ from, to });
+      cursor = to;
+    }
+    const ending = line.text.slice(line.content.length);
+    if (!foundAll) {
+      const prefix = /^[ \t]*(?:(?:[-+*]|\d+[.)])[ \t]+)?/.exec(line.content)?.[0] ?? "";
+      line.text = `${prefix}${tokens.filter((token) => !token.button).map((token) => token.raw).join(" ")}${ending}`;
+      continue;
+    }
+    let content = line.content;
+    for (const range of ranges.reverse()) content = content.slice(0, range.from) + content.slice(range.to);
+    line.text = content + ending;
+  }
+}
+
+/* Treat adjacent button lines as one run, then take at most one blank line
+   beside the run. That is the paragraph gap the buttons occupied, not prose. */
+function linesBesideButtons(lines: readonly CopyLine[], buttonLines: ReadonlySet<number>): Set<number> {
+  const removed = new Set(buttonLines);
+  const ordered = [...buttonLines].sort((a, b) => a - b);
+  for (let p = 0; p < ordered.length; ) {
+    const first = ordered[p] ?? 0;
+    let last = first;
+    while (ordered[p + 1] === last + 1) last = ordered[++p] ?? last;
+    const after = lines[last + 1];
+    const before = lines[first - 1];
+    if (after && after.content.trim() === "") removed.add(last + 1);
+    else if (before && before.content.trim() === "") removed.add(first - 1);
+    p++;
+  }
+  return removed;
+}
+
+function removedAfterLastKept(lines: readonly CopyLine[], removed: ReadonlySet<number>): boolean {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!removed.has(i)) return [...removed].some((removedLine) => removedLine > i);
+  }
+  return removed.size > 0;
 }

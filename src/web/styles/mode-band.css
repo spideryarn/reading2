@@ -581,7 +581,7 @@
 }
 
 /* An inline code span, in any panel that draws model prose — it is Cited.tsx's,
-   not chat's, for the same reason `.cite` lost its prefix. Padded but not
+   not chat's, for the same reason `.cite-chips` lost its prefix. Padded but not
    boxed: a border on something a few characters wide inside a sentence reads as
    a button. */
 .fmt-code {
@@ -646,21 +646,27 @@
 
    Not chat's any more: Quiz and Candidates draw the same chips from the same
    component (Cited.tsx), so the class lost its `chat-` prefix rather than
-   growing a second copy under a different one. */
-.cite {
+   growing a second copy under a different one.
+
+   **`cite-chips`, not `cite`.** It was `.cite` until 2026-10-03, and so is a
+   citation's mark in the prose (`mark.cite`, annotations.css). This rule's
+   `inline-flex` reached the mark and sent every cited clause to lines of its
+   own (spya-trg9kz, docs/postmortems/261003e-…). A class a `<mark>` wears
+   belongs to marks: tests/prose-marks-stay-inline-in-chrome.test.ts. */
+.cite-chips {
   display: inline-flex;
   gap: 0.2rem;
   margin: 0 0.1rem;
   vertical-align: baseline;
 }
-.cite .block-ref {
+.cite-chips .block-ref {
   padding: 0 0.28rem;
   border: 1px solid var(--rule-strong);
   border-radius: 0.4rem;
   background: var(--surface-raised);
   font-size: 0.72em;
 }
-.cite .block-ref:hover {
+.cite-chips .block-ref:hover {
   border-color: var(--highlight);
   color: var(--highlight-ink);
 }
@@ -697,6 +703,38 @@
   overflow-wrap: break-word;
 }
 
+/* A command the answer proposed, as a button — the command bar's row, drawn in
+   the transcript (CommandChip.tsx). Ours, so the app's face: the sentence is a
+   fixed one we wrote, and only the quoted argument inside it is the model's
+   (`.voice-ai`, fonts.md). Bordered and filled so it reads as something to
+   press rather than as a citation chip, which goes somewhere; this does
+   something. The marker is the bar's `generates`, in the bar's quiet ink. */
+.cmd-chip-wrap { font-family: var(--font-ui); }
+.cmd-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5em;
+  max-width: 100%;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9em;
+  text-align: left;
+  cursor: pointer;
+}
+.cmd-chip:hover:not(:disabled) {
+  border-color: var(--highlight);
+  color: var(--highlight-ink);
+}
+.cmd-chip:disabled { color: var(--ink-faint); cursor: default; }
+.cmd-chip[aria-busy="true"] { cursor: progress; }
+.cmd-chip-name { min-width: 0; overflow-wrap: anywhere; }
+.cmd-chip-generates { flex-shrink: 0; color: var(--ink-faint); font-size: 0.85em; }
+.cmd-chip-said { margin-left: 0.5em; color: var(--ink-faint); font-size: 0.85em; }
+
 /* ---- what the model did before it answered ----
    A strip ABOVE the answer, not below it. Sources sit below because they are
    where the answer came from and you want them after reading it; this is what
@@ -730,16 +768,30 @@
   opacity: 0.75;
 }
 .chat-tool-label {
+  flex: 0 1 auto;
   min-width: 0;
   /* The label carries the reader's own query, which can be long and can be one
      unbroken string. Without this it pushes the panel wider than the band. */
   overflow-wrap: anywhere;
 }
+/* **The detail gives way first, and wraps.** It was `flex: none` until
+   2026-10-03, written for "3 passages". A spoken answer's pointer row has a
+   detail of block ids, wider than the panel, and a detail that cannot shrink
+   left the label as the only thing that could: "pointed at" was drawn one
+   character per line, because `min-width: 0` with `overflow-wrap: anywhere`
+   lets it go that narrow.
+
+   So the shrink is the detail's. Free space is taken in proportion to
+   shrink × width, and 9999 means the label loses none until the detail is down
+   to its floor. The floor is what keeps a long label from doing to a short
+   detail what the detail did to the label. tests/chat-tool-row-css.test.ts. */
 .chat-tool-detail {
-  flex: none;
+  flex: 0 9999 auto;
+  min-width: 5em;
   margin-left: 0.35rem;
   opacity: 0.7;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 /* Only the row that is actually running. The finished ones above it must stop
    pulsing, or the strip reads as though everything is still in flight. */
@@ -978,6 +1030,20 @@
    colour does — said twice, for the one control in this app worth being
    unambiguous about. */
 .chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--highlight-foreground); }
+/* The voice-engine choice, beside the button and only with Experimental
+   features on (plan 261003a). Small and faint: it is a comparison switch, not a
+   control most readers meet. The touch floor in narrow-window.css out-specifies
+   the size here, as it does every select held under 1rem. */
+.chat-live-engine select {
+  padding: 0.1rem 0.2rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.83rem;
+}
+.chat-live-engine select:disabled { opacity: 0.5; }
 
 /* **The live session's one status line**: a state word in a pill whose colour
    says it too, then the meter, then a sentence. Listening is the only filled

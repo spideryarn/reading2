@@ -181,7 +181,9 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
     ".cnd-person-name",
     ".cnd-affil-name",
   ],
-  summary: [".simple-text"],
+  /* The plain-words paragraphs, and the thread's posts — Summary's Thread view
+     since 2026-10-03, the Tweets mode's before (plan 261003l). */
+  summary: [".simple-text", ".tweets-text"],
   diagram: [".sk-card-title", ".sk-title", ".ill-title", ".ill-prompt"],
   ideas: [".ideas-name", ".ideas-reason"],
   remember: [".chat-turn.model", ".quiz-question"],
@@ -193,13 +195,11 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   citations: [".cite-why", ".cite-does", ".prose-card-cite-does-text"],
   faq: [".faq-question"],
   skim: [".skim-cue", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
-  tweets: [".tweets-text"],
   marginalia: [
     ".marg-question",
     ".marg-idea-name",
     ".marg-arc",
     ".marg-debate-applies",
-    ".marg-cite-why",
     ".marg-open-answer",
   ],
 };

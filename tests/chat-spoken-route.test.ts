@@ -100,7 +100,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
-import { LIVE_MODEL } from "../src/live.js";
+import { GPT_LIVE_MODEL, LIVE_MODEL } from "../src/live.js";
 import type { ChatThread } from "../src/types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -302,6 +302,34 @@ describe("what the route refuses to take the browser's word for", () => {
     expect(thread.messages[1]?.model).toBe(LIVE_MODEL);
   });
 
+  it("marks a GPT-Live answer with that engine's model, from the engine the browser names", async () => {
+    /* The browser names the *engine*; the model id stays this server's to
+       write. Two engines, two marks, so the instruments can tell which one
+       spoke. docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md */
+    const live = threadOf(await post("spya-vgptl1", exchange({ engine: "gpt-live" })));
+    expect(live.messages[1]?.model).toBe(GPT_LIVE_MODEL);
+    expect(GPT_LIVE_MODEL).not.toBe(LIVE_MODEL);
+
+    const realtime = threadOf(await post("spya-vgptl2", exchange({ engine: "realtime" })));
+    expect(realtime.messages[1]?.model).toBe(LIVE_MODEL);
+
+    /* And still not the browser's own word for the model. */
+    const named = threadOf(
+      await post("spya-vgptl3", exchange({ engine: "gpt-live", model: "something-else" })),
+    );
+    expect(named.messages[1]?.model).toBe(GPT_LIVE_MODEL);
+  });
+
+  it("refuses an engine it does not know, and writes nothing", async () => {
+    /* Not read as Realtime: a GPT-Live answer filed under the wrong model is a
+       wrong row nothing would ever flag. */
+    for (const engine of ["gpt-live-1", "GPT-Live", "", 1, null, true]) {
+      const out = await post("spya-vgptl4", exchange({ engine }));
+      expect(out.status, String(engine)).toBe(400);
+    }
+    expect((await threads()).find((t) => t.id === "spya-vgptl4")).toBeUndefined();
+  });
+
   it("refuses a passage pointing at something that is not a block id", async () => {
     const out = await post(
       "spya-vaaaag",
@@ -445,7 +473,7 @@ describe("the kind of conversation it creates", () => {
   });
 
   it("refuses a kind a live session cannot have, and a word that is not a kind", async () => {
-    for (const kind of ["tutorial", "candidates", "review", 7]) {
+    for (const kind of ["tutorial", "explore", "candidates", "review", 7]) {
       const out = await post("spya-vaaacc", exchange({ kind }));
       expect(out.status, String(kind)).toBe(400);
     }
@@ -462,5 +490,24 @@ describe("the kind of conversation it creates", () => {
     const stored = (await threads()).find((t) => t.id === first.id);
     expect(stored?.kind).toBe("remember");
     expect(stored?.messages).toHaveLength(2);
+  });
+
+  it.each([
+    ["explore", "spya-vaaacf"],
+    ["tutorial", "spya-vaaacg"],
+  ] as const)("refuses a spoken append to a stored %s thread when kind is omitted", async (kind, threadId) => {
+    const begun = await asTestOwner(() => chatStore.begin(SLUG, {
+      threadId,
+      question: "what do I think",
+      kind,
+    }));
+    await asTestOwner(() => chatStore.finish(SLUG, begun.thread.id, begun.reply.id, {
+      status: "done",
+      text: "a typed reply",
+    }, { attempt: begun.attempt }));
+    const before = (await threads()).find((t) => t.id === begun.thread.id);
+    const out = await post(begun.thread.id, exchange({ expectedTailId: begun.reply.id }));
+    expect(out.status).toBe(409);
+    expect((await threads()).find((t) => t.id === begun.thread.id)).toEqual(before);
   });
 });

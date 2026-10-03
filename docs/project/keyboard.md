@@ -190,8 +190,9 @@ The seam is one optional argument to `useArrowNav` in [`keynav.ts`](../../src/we
 horizontal handler that `Reader` passes only while Skim is open, and that is the band's own
 `step` — so the keys, the band's ‹ › and the door in the prose are one rule
 ([`skim-route.ts`](../../src/web/skim-route.ts)), and each of them flashes the stop it
-lands on and, on a narrow window, steps the band aside (since 2026-09-28,
-[skim.md](skim.md) § What shipped). It runs **after every guard** on this
+lands on (since 2026-09-28, [skim.md](skim.md) § What shipped). None of them steps a covering band
+aside on a narrow window: they did until 2026-10-03, and now only a row press does (report
+spya-kudr63). It runs **after every guard** on this
 page: no modifiers, not while typing, not when a widget already handled the key, no auto-repeat. The
 route does not wrap, so at the end of a pass → answers that it took nothing and the key goes back
 to the browser, the same concession ↑ / ↓ make at the ends of the article. **← on the first stop
@@ -250,7 +251,7 @@ Quiz's seam: `Reader` hands `useArrowNav` a handler only in that mode, so every 
 and the key goes back to the browser when the handler takes nothing. The rule is `stepQuote`
 (QuotesPanel.tsx), the band's ‹ › rule too: nothing selected goes to the first quote, ← on the
 first goes to the first again (Skim's rule), → on the last takes nothing, no wrap. It steps only
-over quotes the prose actually outlines (`useQuoteMarks`' `steppable`), so a row whose block a
+over quotes the prose actually marks (`useQuoteMarks`' `steppable`), so a row whose block a
 re-extraction took away is skipped rather than selected with nowhere to go (GPT Sol's plan review).
 A step selects the quote (`?quote=`, the ring), jumps to it, scrolls its row into view in the band,
 and on a narrow window steps the band aside. The ‹ › name their key on their cards.
@@ -713,7 +714,7 @@ above. Anything new should look like the ten, not the two.
   *unmounting itself* asks whether focus is still inside it, because React runs cleanup **before**
   detaching and `activeElement` has not fallen to `<body>` yet (`ChatDialog`); one that reacts to a
   flag going false can ask the simpler `activeElement === null || activeElement === document.body`
-  afterwards (`TitleEditor`, `RefereeCard`).
+  afterwards (`TitleEditor`).
 - **Name a destination for when the opener has gone**, because often it has: the gutter's Help button
   closes its own disclosure before opening a chat, so the control that opened the panel is never
   there when the panel closes.

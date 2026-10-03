@@ -196,7 +196,7 @@ describe("quickPassagesStream", () => {
     });
     expect(sent[0]?.body.questions[a.id]).toEqual({
       type: "noul",
-      instructions: `Does passage ${a.id} match what the reader is looking for (query)?`,
+      instructions: `Does passage ${a.id} mention or discuss what the reader is looking for (query)?`,
     });
     expect(Object.keys(sent[0]?.body.questions ?? {})).toEqual([a.id, b.id]);
   });

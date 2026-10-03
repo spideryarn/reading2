@@ -206,6 +206,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "src/pdf-read.ts": "Presence check only; the call goes through openRouterJson.",
   "src/shelf-topics.ts":
     "Presence check only; the call goes through openRouterJson in src/shelf-terms/model-scores.ts.",
+  "src/shelf-topic-sets.ts":
+    "Presence check only; the calls go through openRouterJson in src/shelf-terms/model-topics.ts.",
   "src/embeddings.ts":
     "Presence check, plus a settings URL in a help message. The call goes through openRouterJson.",
 
@@ -237,13 +239,15 @@ const ALLOWED: Readonly<Record<string, string>> = {
      remains a sanctioned provider bypass whose accounting arrives through a
      different seam."* docs/plans/260831g-live-conversation.md. */
   "src/live.ts":
-    "Live conversation mode's session builder and its meter — the one file in src/ allowed to name OpenAI, because OpenRouter has no realtime API to route to. It mints a short-lived browser token and carries no audio; the spend happens on a wire this server never sees, which is why the accounting arrives afterwards as a report the endpoints in src/routes.ts accept, journal and price rather than through a seam.",
+    "Live conversation mode's session builder and its meter — the one file in src/ allowed to name OpenAI, because OpenRouter has no realtime API to route to. It carries no audio. For the Realtime engine it mints a short-lived browser token (free), and the spend happens on a wire this server never sees. For GPT-Live, the second engine (plan 261003a), it makes one request itself: POST /v1/live/sessions, the SDP exchange, which bills fifteen seconds of voice time — the route journals the session before that request and records the fifteen seconds as a priced row after it. Everything after that is again on the browser's wire, including the backend text model (gpt-6-luna), which runs inside OpenAI's session and cannot go through OpenRouter. For both engines the accounting arrives as reports the endpoints in src/routes.ts accept, journal and price rather than through a seam.",
   "scripts/live-spike.ts":
     "The spike's local-only server. Names the credential to warn when it is missing; the call itself goes through src/live.ts.",
   "evals/live/hallucination-on-noise.mts":
     "Measures whether the input transcriber invents words on non-speech — the eval that reproduced Greg's vocabulary-regurgitation bug. Same OpenAI-realtime exception as src/live.ts, and it cannot go through declaredFetch for the same reason: no Declaration for a realtime call can be typed yet. Audio input only, a few cents a run.",
   "evals/live/jargon-recovery.mts":
     "The other half: whether `keywords` is honoured, which cannot be established by reading the session back — it is accepted and not echoed. Speaks a sentence and checks the terms come back spelled right. Same exception, same reason.",
+  "evals/live/gpt-live-spike/spike-server.ts":
+    "Stage 0 of plan 261003a: the throwaway server that proved GPT-Live's tool loop can be relayed by the browser alone. It posts to /v1/live/sessions with the real key, one request per session, and a person runs it by hand; twelve short sessions were bought with it on 2026-10-03. Same exception as the two evals above and for the same reason — a live session is not a request declaredFetch can wrap — and listed in UNMETERED_SPEND beside them, because nothing it spends writes a row.",
   "evals/live/gpt-live-spike.mts":
     "Whether live conversation should move to gpt-live-1 (docs/investigations/261002r-gpt-live-spike.md). Opens realtime sessions through src/live.ts's mint, and gpt-live-1 sessions over its own WebSocket with the API key, and buys text-to-speech for the spoken questions. Same exception as its two siblings: a live session has no response body for declaredFetch to wrap. A full run is about ten dollars.",
   "scripts/spike-live-push-to-talk.ts":

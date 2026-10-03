@@ -42,6 +42,7 @@ const MODEL_CALLS = [
 const PROMPT_FILES_WITHOUT_A_CALL = [
   "src/structure-expand.ts", // EXPAND_SYSTEM; the call is in src/structure-deepen.ts
   "src/live.ts", // the realtime session's instructions; the session is opened by the browser
+  "src/live-gpt.ts", // GPT-Live's two prompts, voice and backend; sent by createGptLiveSession in src/live.ts
   "src/referee-candidates-prompt.ts", // CANDIDATES_SYSTEM; sent by converse
   "scripts/changelog/changelog.ts", // the public changelog's copy prompt, sent through the claude CLI
 ];
