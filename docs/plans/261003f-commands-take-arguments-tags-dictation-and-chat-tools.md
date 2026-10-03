@@ -40,6 +40,36 @@ takes you to the switch; publishing from a keystroke is the "never" row of the a
 
 ## What is left, and what we'll build
 
+**Revised after GPT Sol's plan review** (F1–F9, [261003f-plan-review-sol.md](261003f-plan-review-sol.md)),
+every finding checked against the code and accepted; the ledger is below. The first draft is
+commit 2952175f5. The biggest change (F8): Stage 1 now starts with **a stable, serialisable command
+descriptor and one executor**, so the bar's free-text parse and chat's stored tokens both produce the
+same typed proposal, and chat never re-parses natural language.
+
+### Stage 1, part 0 — the proposal descriptor and its executor (F8)
+
+`src/web/command-proposal.ts`, pure, no React:
+
+```ts
+type CommandProposal =
+  | { id: "jump-first"; words: string }        // navigate
+  | { id: "find"; words: string }              // navigate
+  | { id: "glossary-open"; termId: BlockId }   // navigate
+  | { id: "glossary-ask"; term: string }       // spends: one model call
+  | { id: "tag-add"; tag: string }             // writes, reversibly
+  | { id: "tag-remove"; tag: string }          // writes, reversibly
+  | { id: "bookmark"; blockId: BlockId };      // writes, reversibly
+const RISK: Record<CommandProposal["id"], "navigate" | "writes" | "spends">;
+```
+
+A `parseProposalToken` / `formatProposalToken` pair for the stored chat form — an exact id and an
+encoded argument, never a sentence — and validation per id (tag through `normaliseTag`, block ids
+through the block-id parser). An **executor** interface, `CommandExecutor`, implemented once by the
+owner's Reader from the controllers that already own the state (F3, F4, F6): `jumpTo`, the
+Search navigation, `openTermInGlossary`, a glossary-ask hand-off, a tags controller, the memoised
+bookmarker. Each method returns an `ActionOutcome`. Anything the executor lacks where the reader is
+standing (Metadata has no glossary read and no prose — F1) is absent there, not a dead row.
+
 ### Stage 1 — the bar takes more arguments, toggles Experimental, and listens
 
 All deterministic parses beside `parseFindQuery` (src/web/command-match.ts), each a pure function
@@ -47,31 +77,39 @@ with its own tests. One generalised parse, `parseArgumentQuery(query)`, returns 
 command the query could be (a verb table: verb phrases → command kind), and `parseFindQuery` becomes
 one entry of it. Rows from it are appended after the ranked rows, as the find row is today.
 
-1. **Jump to the first place it says X.** Verbs: `jump to`, `first`, `where does it first say`,
-   `take me to`. Row: *Jump to the first “X”*. Uses `findLiteral(blocks, words)[0]` (search-hits.ts,
-   the same matcher as Search's words mode) and goes to `?at=<blockId>` — the deliberate-jump
-   address `useReadingPosition` already obeys. No match → the row stays and Enter keeps the bar open
+1. **Jump to the first place it says X.** Verbs, explicit only (F7): `jump to first`,
+   `first occurrence of`, `first mention of`, `where does it first say`, `where does it first mention`.
+   Not `take me to` or bare `jump to`, which are how readers name a mode or a page. Row: *Jump to
+   the first “X”*. Uses `findLiteral(blocks, words)[0]` (search-hits.ts, the same matcher as
+   Search's words mode) and runs Reader's `jumpTo(blockId)` — the deliberate jump, which pushes
+   history and feeds the return chip (F3); a test presses Back. No match → the row stays and Enter keeps the bar open
    with *“X” isn't in this article.* (an `ActionOutcome` `stay`), so the reader learns it at once.
    Free, instant. **Best place** (meaning search, limit one) is deferred: it is a model call, so a
    proposed row, and Search › meaning already does it with one more press.
-2. **Look up X in the glossary.** Verbs: `look up`, `define`, `glossary`, `what does … mean`. If X
-   matches a term already in the glossary (case- and space-insensitive against the term and its
-   aliases), the row is *Glossary: “term”* and opens Glossary at that term (`?mode=glossary&term=<id>`,
-   the address `openTermInGlossary` sets). If not, the row is *Look up “X” in this article*,
-   `generates: true`, and Enter opens Glossary and runs the band's existing `ask(X)` (one model
-   call, the same as typing it into *Look up a term…*). The hand-off is in memory, one-shot, consumed
-   by the Glossary band; **never a URL** (a link that spends is a link anyone can make a reader
-   click — 261002c § simpler options). Needs the glossary's term list on `CommandBarArticle`,
-   plumbed from Reader's `useGlossaryRead`; absent (no row of the first kind) while it is loading.
+2. **Look up X in the glossary.** Verbs: `look up`, `define`, `glossary`, `what does … mean`.
+   Matched only against Reader's **visible** `terms` (F2), exact name first, then aliases; an alias
+   two visible entries share gives one row each. A match is *Glossary: “term”* and runs
+   `openTermInGlossary(id)`. No match, **and the glossary read has settled to ready** (F1 — loading
+   or an error is not evidence of absence, and an empty Glossary would generate on open), gives
+   *Look up “X” in this article*, `generates: true`: Enter moves to Glossary **without arming
+   generate-on-open**, through a slug-scoped, nonce-bearing, one-shot hand-off the band consumes
+   and then calls its existing `ask(X)` — one `POST /api/glossary/:slug/ask`, zero job POSTs, both
+   pinned by a test. **Never a URL** (a link that spends is a link anyone can make a reader click).
+   No glossary at all: the ask row is absent and *Glossary* (the mode) is how you make one.
+   On Metadata neither row exists (no glossary read there).
 3. **Tags.** `tag X`, `add tag X`, `add a tag of X (to this paper)`, `tag this X`, `tag as X`;
    `untag X`, `remove tag X`. Row *Add the tag “x”* / *Remove the tag “x”*, showing the tag as
    `normaliseTag` (src/tags.ts) will store it; an invalid tag gives a row whose Enter stays open with
-   the reason. Enter runs `editArticleTags(slug, {add:[x]})` (src/web/article-tags.ts), awaited,
-   failure kept in the bar. Only with `shelfRow` (owner, not a fixture), like Archive. Writes the
+   the reason. Enter runs a **tags controller on `ShelfRow`** (F4), analogous to `archive`:
+   Metadata supplies its existing wrapped save (so its `TagEditor` updates), Reader supplies one
+   over `editArticleTags`. Awaited, failure kept in the bar. Only with `shelfRow` (owner, not a
+   fixture), like Archive. Writes the
    reader's own data reversibly: the bar row *is* the proposal the accepted line asks for.
 4. **Experimental features on/off.** One row whose label follows the state — *Turn experimental
    features on* / *off* — through `useExperimental().set` (already on the Dock). Absent until
-   `loaded`, and while signed out. Greg's "disabled if it's already on" is met by the label moving
+   `loaded`, while signed out, and **while `saving`** (F5) — the store flips optimistically and
+   drops a second `set` while one is in flight, so an inverse row then would do nothing. `set`
+   becomes awaitable so a refused save keeps the bar open with the reason. Greg's "disabled if it's already on" is met by the label moving
    with the state (the rule Archive already follows) rather than a greyed twin row: one row instead
    of two, and nothing to press that does nothing. Typed-only, aliases `experimental`, `labs`.
 5. **Dictation in the bar's box**, by dictation.md § Adding it to a box: `useDictationField`, the
@@ -84,18 +122,23 @@ Chat can already **read** the glossary (`article_glossary`) and **find words**
 (`search_article_words`), and its answers already turn `[spya-…]` into chips that jump to the
 passage. What it cannot do is propose an action. So:
 
-- **A command chip** in chat's prose: a fenced token the model may write, e.g.
-  `[[bookmark spya-k3m9qt]]`, `[[tag free energy]]`, `[[glossary free energy]]`,
-  `[[find free energy]]`, `[[jump free energy]]`. The client parses it with the **same verb table
-  and validation as the bar** (stage 1) and renders it as the bar's own row, drawn the same way —
-  label, `generates` marker — as a button. **Pressing it runs it** through the same dispatcher the
-  bar uses; the model never runs anything. A token that does not parse, names a block the article
-  lacks, or holds an invalid tag renders as plain text, as an unknown block id does now.
-- **Bookmark a passage** is the one new action (chat had it as Greg's example; the bar has no block
-  argument a reader would type). It runs `makeBlockBookmarker(owner.comments.create)`, as Reader's
-  bookmark already does.
-- The chat prompt gets a short section saying the tokens exist and when to offer one (prompting-guide.md
-  rules; one eval-free change, checked by reading two answers).
+- **A command chip** in chat's prose: the stored token of Stage 1's `CommandProposal` — an exact
+  id and an encoded argument (F8), never re-parsed as language. Recognised **only in ordinary
+  Markdown text nodes**, not in code or link labels; an allowlist of ids; and rechecked **at
+  click time** against ownership, availability and block membership. Rendered as the bar's own
+  row, drawn the same way — label, `generates` marker — as a button. **Pressing it runs it**
+  through the same `CommandExecutor`; the model never runs anything. A token that does not parse,
+  names a block the article lacks, or holds an invalid tag renders as plain text, as an unknown
+  block id does now. Spend chips (`glossary-ask`) are allowed: the accepted line permits a truthful
+  proposed button, and the boundary is the code, not the prompt.
+- **Bookmark a passage** is the one new action (Greg's example; the bar has no block argument a
+  reader would type). It runs Reader's **memoised** bookmarker, available only after the opening
+  comments read succeeded (F6), never a factory made in the renderer.
+- The chat prompt gets a short section saying the tokens exist and when to offer one
+  (prompting-guide.md), and **a small recorded eval** (F9): normal requests, requests that want no
+  proposal, malformed arguments, a glossary term present and absent, and an article carrying
+  instructions to propose things. Measured: valid-proposal rate, unsolicited-proposal rate, and
+  whether the prose stays useful. Written up under docs/investigations/.
 
 Why a token in the prose and not a tool call: the proposal must persist with the answer and render
 as a button. A token is stored for free in the answer text and rendered by the code that already
@@ -131,6 +174,20 @@ dictation.md's list of boxes, the Help page, url-state.md if a param changes. A 
   streamed proposal part; see Stage 2.
 - **A row per experimental state, one disabled**: Greg's own phrasing, but two rows for one switch.
 
+## Review ledger
+
+| ID | Sev | Finding | Taken |
+|---|---|---|---|
+| F1 | P0 | An unknown glossary lookup could start two paid runs (generate-on-open plus ask); Metadata has no glossary read | Unarmed hand-off; ask row only once the read is ready; absent on Metadata; one ask POST, zero job POSTs pinned |
+| F2 | P1 | Raw glossary includes hidden entries; aliases can be shared | Visible `terms` only; exact name first; one row per sharing entry |
+| F3 | P1 | `?at=` is the debounced replace, not the deliberate jump | Reader's `jumpTo` through the executor; Back tested |
+| F4 | P1 | Raw `editArticleTags` leaves Metadata's editor stale | A tags controller on `ShelfRow` |
+| F5 | P1 | Experimental row could do nothing during a save | Absent while saving; awaitable `set` |
+| F6 | P1 | A bookmarker made in the renderer loses its retry id | Reader's memoised controller, gated on the comments read |
+| F7 | P1 | `take me to glossary` would become a literal search | Explicit "first" verbs only; a collision matrix test |
+| F8 | P1 | Chat tokens re-parsed as language; no descriptor, dispatcher, gate | `CommandProposal` + executor first; exact-id tokens; text nodes only; click-time recheck |
+| F9 | P2 | "Read two answers" is not evidence for a prompt change | A small recorded eval |
+
 ## Done looks like
 
 - Stage 1: red-first tests for the verb table (each verb, the quotes, the bare-verb nulls, no
@@ -143,4 +200,4 @@ dictation.md's list of boxes, the Help page, url-state.md if a param changes. A 
 
 ## Progress
 
-- 2026-10-03: plan written.
+- 2026-10-03: plan written; Sol's plan review (F1–F9) folded in.
