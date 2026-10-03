@@ -10,7 +10,7 @@
  * See docs/project/comments.md § Anchoring.
  */
 import { describe, expect, it } from "vitest";
-import { readerCss } from "./helpers/stylesheets.js";
+import { readerCss, readerCssNoComments } from "./helpers/stylesheets.js";
 import { SPECIMEN_HTML, SPECIMEN_MARKS, SPECIMEN_OUT } from "../src/web/DesignPage.js";
 import {
   annotateHtml,
@@ -927,6 +927,77 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
     expect(mark?.getAttribute("style")).toBe("--hit-a:0.400;--quote-a:1.00");
     expect(mark?.getAttribute("data-quote")).toBe("2");
     expect(mark?.hasAttribute("data-wash")).toBe(true);
+  });
+
+  /**
+   * **A quick hit paints nothing on its words** — Greg, `spya-m59qg0`,
+   * 2026-10-03: its "quote" is the whole paragraph, so a wash says nothing the
+   * paragraph bar does not. The mark is still there, because scrolling and
+   * flashing find it by `data-hit` (rows.ts § passageMarks). Plan 261003i B4.
+   */
+  describe("a bare hit: the words wear nothing", () => {
+    const bare = { id: "k1", start: 3, end: 30, kind: "hit" as const, slot: 2, strength: 0.9, bare: true };
+
+    it("keeps its data-hit and draws no wash, no stripes and no style", () => {
+      const mark = host(annotateHtml(html, [bare])).querySelector("mark.hit");
+      expect(mark?.getAttribute("data-hit")).toBe("k1");
+      expect(mark?.hasAttribute("data-wash")).toBe(false);
+      expect(mark?.hasAttribute("data-hues")).toBe(false);
+      expect(mark?.hasAttribute("style")).toBe(false);
+    });
+
+    it("adds nothing to a meaning hit it overlaps: that hit's strength and its one stripe", () => {
+      const out = annotateHtml(html, [bare, { id: "h1", start: 3, end: 10, kind: "hit", slot: 5, strength: 0.4 }]);
+      const [both, alone] = host(out).querySelectorAll("mark.hit");
+      expect(both?.getAttribute("data-hit")).toBe("k1 h1");
+      expect(both?.getAttribute("style")).toBe("--hit-a:0.400;--h0:var(--cat-5-rgb)");
+      expect(both?.getAttribute("data-hues")).toBe("1");
+      // …and past the meaning hit's end the words are bare again.
+      expect(alone?.getAttribute("data-hit")).toBe("k1");
+      expect(alone?.hasAttribute("data-wash")).toBe(false);
+    });
+
+    it("leaves a Quote it overlaps an outline and nothing else", () => {
+      const out = annotateHtml(html, [bare, { id: "q1", start: 3, end: 10, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } }]);
+      const mark = host(out).querySelector("mark.hit");
+      expect(mark?.getAttribute("data-quote")).toBe("2");
+      expect(mark?.hasAttribute("data-wash")).toBe(false);
+      expect(mark?.getAttribute("style")).toBe("--quote-a:1.00");
+    });
+
+    it("merges with a comment and a glossary term without washing either", () => {
+      const out = annotateHtml(html, [
+        bare,
+        { id: "c1", start: 3, end: 10 },
+        { id: "t1", start: 3, end: 10, kind: "term" },
+      ]);
+      const mark = host(out).querySelector("mark");
+      expect(mark?.className).toBe("cmt term hit");
+      expect(mark?.getAttribute("data-hit")).toBe("k1");
+      expect(mark?.hasAttribute("data-wash")).toBe(false);
+    });
+
+    it("says which one the reader pressed under its own name, and the stylesheet rings the cell", () => {
+      const mark = host(annotateHtml(html, [{ ...bare, open: true }])).querySelector("mark.hit");
+      expect(mark?.hasAttribute("data-hit-open-bare")).toBe(true);
+      expect(mark?.hasAttribute("data-wash")).toBe(false);
+      // On the cell: a ring on an inline mark as long as a paragraph is one box per line.
+      expect(readerCssNoComments()).toContain("td.text:has(mark.hit[data-hit-open-bare])");
+    });
+
+    it("a pressed quick hit does not ring a meaning hit it overlaps", () => {
+      /* `data-hit-open` is what rings a washed phrase. A quick hit covers its
+         whole paragraph, so if pressing it set that, every meaning quote in the
+         paragraph would look pressed too. */
+      const out = annotateHtml(html, [
+        { ...bare, open: true },
+        { id: "m1", start: 3, end: 10, kind: "hit", strength: 0.9 },
+      ]);
+      const washed = host(out).querySelector("mark.hit[data-wash]");
+      expect(washed).not.toBeNull();
+      expect(washed?.hasAttribute("data-hit-open")).toBe(false);
+      expect(washed?.hasAttribute("data-hit-open-bare")).toBe(true);
+    });
   });
 
   it("caps the outline only at the true ends of a quote that gets split", () => {

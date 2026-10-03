@@ -64,6 +64,7 @@
     "setup": "tsx scripts/setup-local.ts",
     "db:export": "tsx scripts/db-export.ts",
     "shelf-terms:report": "tsx scripts/shelf-terms-report.ts",
+    "shelf-topics:preview": "tsx evals/shelf-topic-clusters/preview-shelf.ts",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:status": "supabase status",

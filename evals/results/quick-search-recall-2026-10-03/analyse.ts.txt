@@ -1,0 +1,81 @@
+/* Offline: sweep floors and cut-off rules over the saved Jev scores (jev-raw.json). No spend.
+   Usage: npx tsx analyse.ts [sets, comma separated; default old,short] [--perq wording rule] [--only w1,w2] */
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { DIR, mean, median, pct } from "./lib.ts";
+import { ALL } from "./queries.ts";
+import { CAP, RULES, select, truth } from "./analyse-lib.ts";
+
+const raw = JSON.parse(readFileSync(`${DIR}/jev-raw.json`, "utf8"));
+const judged: Record<string, Record<string, "y" | "n">> = existsSync(`${DIR}/judged.json`) ? JSON.parse(readFileSync(`${DIR}/judged.json`, "utf8")) : {};
+
+const sets = (process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : "old,short").split(",");
+const oi = process.argv.indexOf("--only");
+const wordings = oi > 0 ? process.argv[oi + 1]!.split(",") : ([...new Set(Object.values(raw).map((r: any) => r.wording))] as string[]);
+const rows: any[] = [];
+for (const w of wordings) {
+  for (const rule of RULES) {
+    const row: any = { wording: w, rule: rule.name };
+    for (const set of sets) {
+      const qs = ALL.filter((q) => q.set === set);
+      const refRecall: number[] = [], litRecall: number[] = [], yRecall: number[] = [], kept: number[] = [], uncapped: number[] = [], zero: number[] = [], prec: number[] = [], spread: number[] = [], junk5: number[] = [];
+      let litMissed = 0, litTotal = 0, unjudged = 0, fp = 0;
+      for (const s of qs) {
+        const e = raw[`${w}|${s.slug}|${s.q}`];
+        if (!e) continue;
+        const { R, L, Y } = truth(s);
+        const ns: number[] = [];
+        const j = judged[`${s.slug}|${s.q}`] ?? {};
+        for (const rep of e.reps) {
+          const sel = select(rep.scores, s.slug, rule);
+          ns.push(sel.ids.length);
+          kept.push(sel.ids.length); uncapped.push(sel.uncapped); zero.push(sel.ids.length === 0 ? 1 : 0);
+          if (R.size) refRecall.push(sel.ids.filter((id) => R.has(id)).length / R.size);
+          if (L.size) { litRecall.push(sel.ids.filter((id) => L.has(id)).length / L.size); litMissed += [...L].filter((id) => !sel.ids.includes(id)).length; litTotal += L.size; }
+          if (Y.size) yRecall.push(sel.ids.filter((id) => Y.has(id)).length / Y.size);
+          /* Precision after the cap. Good = in the yardstick or judged "y". On an absent-topic
+             query everything kept is bad unless judged "y". */
+          let good = 0, n = 0;
+          for (const id of sel.ids) {
+            if (Y.has(id) || j[id] === "y") { good++; n++; }
+            else if (j[id] === "n" || s.set === "negative") { n++; fp++; }
+            else unjudged++;
+          }
+          if (n) prec.push(good / n);
+          junk5.push(sel.ids.slice(0, 5).filter((id) => !Y.has(id) && j[id] !== "y" && (j[id] === "n" || s.set === "negative")).length);
+        }
+        spread.push(Math.max(...ns) - Math.min(...ns));
+      }
+      row[set] = { n: qs.length, refRecall: +mean(refRecall).toFixed(3), literalRecall: +mean(litRecall).toFixed(3), literalMissed: `${litMissed}/${litTotal}`, yardstickRecall: +mean(yRecall).toFixed(3), keptMean: +mean(kept).toFixed(1), keptMax: Math.max(...kept), uncappedMax: Math.max(...uncapped), zeroResultRate: +mean(zero).toFixed(2), precision: +mean(prec).toFixed(2), badKeptPerSearch: +(fp / kept.length).toFixed(2), junkTop5: +mean(junk5).toFixed(2), unjudged, countSpreadMax: Math.max(...spread) };
+    }
+    rows.push(row);
+  }
+}
+for (const set of sets) {
+  console.log(`\n== set: ${set}  (cap ${CAP}; 3 runs each)`);
+  console.log("wording  rule                   refRec litRec lit-missed yRec   kept mean/max/uncapped-max   zero  prec  bad/search junk@5 (unjudged) spread");
+  for (const r of rows) { const x = r[set]; console.log(`${r.wording.padEnd(8)} ${r.rule.padEnd(22)} ${String(x.refRecall).padEnd(6)} ${String(x.literalRecall).padEnd(6)} ${x.literalMissed.padEnd(10)} ${String(x.yardstickRecall).padEnd(6)} ${x.keptMean}/${x.keptMax}/${x.uncappedMax}`.padEnd(88) + ` ${String(x.zeroResultRate).padEnd(5)} ${String(x.precision).padEnd(5)} ${String(x.badKeptPerSearch).padEnd(10)} ${String(x.junkTop5).padEnd(6)} (${x.unjudged})  ${x.countSpreadMax}`); }
+}
+writeFileSync(`${DIR}/summary-${sets.join("-")}.json`, JSON.stringify(rows, null, 1));
+
+console.log("\n== latency (ms) and cost per search, by wording: typical articles | 505-block article");
+const lat: any = {};
+for (const w of wordings) {
+  const typ: number[] = [], long: number[] = [], ctyp: number[] = [], clong: number[] = [];
+  for (const e of Object.values(raw) as any[]) if (e.wording === w) for (const r of e.reps) { (e.slug.startsWith("replication") ? long : typ).push(r.ms); (e.slug.startsWith("replication") ? clong : ctyp).push(r.cost); }
+  lat[w] = { typical: { median: median(typ), p90: pct(typ, 0.9), cost: mean(ctyp), n: typ.length }, long: { median: median(long), p90: pct(long, 0.9), cost: mean(clong), n: long.length } };
+  console.log(`${w.padEnd(8)} typ med ${median(typ)} p90 ${pct(typ, 0.9)} $${mean(ctyp).toFixed(5)} (n=${typ.length}) | long med ${median(long)} p90 ${pct(long, 0.9)} $${mean(clong).toFixed(5)} (n=${long.length})`);
+}
+writeFileSync(`${DIR}/latency-jev.json`, JSON.stringify(lat, null, 1));
+
+const pi = process.argv.indexOf("--perq");
+if (pi > 0) {
+  const w = process.argv[pi + 1]!, rule = RULES.find((r) => r.name === process.argv[pi + 2])!;
+  console.log(`\n== per query: ${w} ${rule.name}`);
+  for (const s of ALL.filter((q) => sets.includes(q.set))) {
+    const e = raw[`${w}|${s.slug}|${s.q}`]; if (!e) continue;
+    const { R, L } = truth(s);
+    const sels = e.reps.map((rep: any) => select(rep.scores, s.slug, rule));
+    console.log(`${s.set.padEnd(8)} ${s.slug.slice(0, 8)} ${s.q.slice(0, 38).padEnd(38)} ref ${R.size} lit ${L.size} | kept ${sels.map((x: any) => x.ids.length).join("/")} (uncapped ${sels.map((x: any) => x.uncapped).join("/")}) | ref found ${sels.map((x: any) => x.ids.filter((id: string) => R.has(id)).length).join("/")} lit found ${sels.map((x: any) => x.ids.filter((id: string) => L.has(id)).length).join("/")} | top ${e.reps.map((r: any) => Math.max(...(Object.values(r.scores) as number[])).toFixed(2)).join("/")}`);
+  }
+}
+process.exit(0);

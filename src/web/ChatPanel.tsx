@@ -103,6 +103,7 @@ import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { useSlow } from "./useSlow.js";
+import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
 
@@ -1329,13 +1330,19 @@ function RememberInvitation() {
  * *"I think it might start with the sort of basic recall question. You know,
  * what do you remember about the article? But it may be that the user says
  * nothing. I haven't read it yet."*
+ *
+ * **It offers, and does not ask them to say so.** Greg, `spya-hw8mhz`,
+ * 2026-10-03: *"I don't think the user should have to say that they haven't
+ * read it … you're letting them know it's okay if they haven't read/finished
+ * it."* The composer's placeholder and `readItFor` in src/converse.ts say the
+ * same thing in the same way.
  */
 function TutorialInvitation() {
   return (
     <div className="chat-suggest">
       <p className="chat-empty-hint">
-        What do you remember about this article? Or say you haven't read it yet — either is a fine
-        place to start.
+        What do you remember about this article? It's fine if you haven't read it yet, or haven't
+        finished — we can start from wherever you are.
       </p>
       <p className="chat-empty-hint">
         We'll take short turns: a little of the piece at a time, with a link to the passage, and then
@@ -2147,10 +2154,21 @@ export function Composer({
     if (dictate.readOnly || dictate.dictation.armed) return;
     const question = value.trim();
     if (question === "" || busy) return;
+    const submittedBox = box.current;
+    const handoff = live && live.phase !== "idle" && live.phase !== "failed";
     setValue("");
     onDraft("");
-    if (live && live.phase !== "idle" && live.phase !== "failed") await live.stop();
+    if (handoff) await live.stop();
     onSend(question);
+    /* The question has gone and the answer arrives under the keys: let go of
+       a soft keyboard, and only a soft one (useVisualViewport.ts §
+       `putKeyboardAway`; Greg, spya-gmtt4b). A live handoff can wait long
+       enough for the reader to begin another draft, which still owns the
+       keyboard. Without that await React has not committed the clear yet. */
+    if (
+      submittedBox && box.current === submittedBox && document.activeElement === submittedBox &&
+      (!handoff || submittedBox.value === "")
+    ) putKeyboardAway(submittedBox);
   };
   /** Every state `submit` refuses, so the Send button can say so before a press. */
   const unavailable = busy || dictate.readOnly || dictate.dictation.armed || value.trim() === "";
@@ -2181,7 +2199,7 @@ export function Composer({
           busy
             ? "Waiting for the answer…"
             : kind === "tutorial"
-              ? "What do you remember about it? Or say you haven't read it yet."
+              ? "What do you remember about it? It's fine if you haven't read it yet."
               : remember
                 ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
                 : (placeholder ?? "Ask about this article…")

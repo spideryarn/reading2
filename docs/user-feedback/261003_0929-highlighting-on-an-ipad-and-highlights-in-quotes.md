@@ -89,5 +89,37 @@ own words, verbatim). What would make
 B right: if you use Quotes to see what *the model* thought mattered and would find your own lines in
 it a distraction.
 
-Nothing for this is built. The Overseer has been asked to put it in its queue as its own item,
-waiting on Greg.
+### Answered and built, 2026-10-03
+
+Greg, relayed by the Overseer (queue item `qi-xafwewcr`):
+
+> A yeah that sounds good. The only hesitation I have is that one might want to highlight the text
+> and add a comment or something. I don't know if there's a way for them to show up in both, or
+> maybe we keep it simple and just say that comments are block level and highlights show up
+> alongside quotes. They should obviously have a different color if it's from me, and they should
+> have a tooltip. Actually, quotes should as well, maybe saying when it was applied and whether it's
+> AI generated or human highlights. Use your judgment. Let's try and avoid making things too complex.
+
+**Shipped on `dev`** (`b8e634928`, `bab13e129`), plan
+[261003h](../plans/261003h-your-highlights-as-rows-in-quotes-and-who-and-when-on-every-row.md):
+
+- **Your highlights are rows in Quotes**, in reading order among the AI's, each with a bar in its
+  own colour and the word *yours*. The threshold bar never hides them, and the count reads
+  `48 quotes + 3 yours`. Under *most important* and *most striking* they come first.
+- **Every row has a tooltip (the ⓘ) saying who and when**: *Chosen by the AI · {date}* or *Your
+  highlight · saved {date}*. The card on a quote in the prose says the same. Quotes found before
+  today have no time of their own, so theirs reads *on or before* the date the list was last
+  updated; quotes found from now on carry their own.
+- **The highlight-plus-comment case: it shows in both, and nothing about comments changed.** Not
+  the "comments are block level" default. A highlight has been a comment with a colour since this
+  morning, so the same thing is already a row in Quotes (because it has a colour) and in the
+  comments drawer and margin (because it has words). Its Quotes row has a small pencil, its tooltip
+  shows the note, and pressing the row opens the comment. Making comments block-only would have
+  been the bigger change: span comments have existed since August and readers have them.
+- Only a highlight counts: a comment on selected words **with a colour**. Give an old comment a
+  colour and it joins Quotes; remove the colour and it leaves.
+
+Left out, by name: stepping (‹ ›) through your highlights as well as the AI's; a visitor on a
+shared link seeing your highlights in Quotes; the time a colour was *changed* (the date shown is
+when the highlight was first saved). Within one paragraph, your highlights are listed before the
+AI's quotes even where the AI's comes first on the page.

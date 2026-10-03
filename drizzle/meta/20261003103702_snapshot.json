@@ -1,5 +1,5 @@
 {
-  "id": "a488c67c-28bb-4294-a9a4-f52fe2284978",
+  "id": "afce08cd-674a-459a-94c2-c5b70da9bbdf",
   "prevId": "64569ab6-f4c0-4729-895c-89c0b1f6f5a7",
   "version": "7",
   "dialect": "postgresql",
@@ -296,12 +296,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "voice_seconds": {
-          "name": "voice_seconds",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -452,11 +446,7 @@
         },
         "ai_calls_realtime_event_kind": {
           "name": "ai_calls_realtime_event_kind",
-          "value": "\"spideryarn\".\"ai_calls\".\"event_kind\" is null or \"spideryarn\".\"ai_calls\".\"event_kind\" in ('response','transcription','voice','backend')"
-        },
-        "ai_calls_voice_seconds_on_voice_rows": {
-          "name": "ai_calls_voice_seconds_on_voice_rows",
-          "value": "((\"spideryarn\".\"ai_calls\".\"event_kind\" is not distinct from 'voice') and \"spideryarn\".\"ai_calls\".\"voice_seconds\" is not null and \"spideryarn\".\"ai_calls\".\"voice_seconds\" > 0) or ((\"spideryarn\".\"ai_calls\".\"event_kind\" is distinct from 'voice') and \"spideryarn\".\"ai_calls\".\"voice_seconds\" is null)"
+          "value": "\"spideryarn\".\"ai_calls\".\"event_kind\" is null or \"spideryarn\".\"ai_calls\".\"event_kind\" in ('response','transcription')"
         },
         "ai_calls_realtime_columns_need_realtime_wire": {
           "name": "ai_calls_realtime_columns_need_realtime_wire",
@@ -720,6 +710,12 @@
         },
         "faq": {
           "name": "faq",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "relations": {
+          "name": "relations",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -4972,25 +4968,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "backend_model": {
-          "name": "backend_model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "provider_session_id": {
-          "name": "provider_session_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "voice_seconds_reported": {
-          "name": "voice_seconds_reported",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "issued_at": {
           "name": "issued_at",
           "type": "timestamp with time zone",
@@ -5083,10 +5060,6 @@
         "realtime_sessions_close_reason_len": {
           "name": "realtime_sessions_close_reason_len",
           "value": "length(\"spideryarn\".\"realtime_sessions\".\"close_reason\") <= 64"
-        },
-        "realtime_sessions_voice_seconds_not_negative": {
-          "name": "realtime_sessions_voice_seconds_not_negative",
-          "value": "\"spideryarn\".\"realtime_sessions\".\"voice_seconds_reported\" >= 0"
         }
       },
       "isRLSEnabled": false
@@ -5781,7 +5754,7 @@
       "checkConstraints": {
         "revision_step_runs_step": {
           "name": "revision_step_runs_step",
-          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')"
+          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','citations','crossrefs','simple')"
         },
         "revision_step_runs_status": {
           "name": "revision_step_runs_status",

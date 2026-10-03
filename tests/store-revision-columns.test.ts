@@ -257,6 +257,9 @@ const READS = [
      `quiz`: it sends `articleWithIds` over the body and the skeleton.
      docs/plans/260916d-faq-mode.md. */
   "faq",
+  /* Added 2026-10-03 with the `relations` stage. `CITED_FINGERPRINT_COLUMNS`,
+     like `faq`, whose fingerprint it uses. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  "relations",
   /* Added 2026-09-30 with the `crossrefs` stage. `CITED_FINGERPRINT_COLUMNS`,
      like `faq`: its article head carries the cited metadata fields.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */

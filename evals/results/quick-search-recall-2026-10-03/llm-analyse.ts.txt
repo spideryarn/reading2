@@ -1,0 +1,69 @@
+/* Offline: the LLM arms measured the way analyse.ts measures Jev, plus the hybrid
+   (Jev's hits unioned with literal substring matches). No spend. */
+import { readFileSync, writeFileSync } from "node:fs";
+import { DIR, mean, median, pct } from "./lib.ts";
+import { ALL } from "./queries.ts";
+import { RULES, select, truth } from "./analyse-lib.ts";
+
+const llm = JSON.parse(readFileSync(`${DIR}/llm-raw.json`, "utf8"));
+const jev = JSON.parse(readFileSync(`${DIR}/jev-raw.json`, "utf8"));
+const judged = JSON.parse(readFileSync(`${DIR}/judged.json`, "utf8"));
+const rule07 = RULES.find((r) => r.name === ">=0.7")!;
+
+type Arm = { name: string; ids: (s: any, rep: number) => string[] | null };
+const arms: Arm[] = [
+  { name: "jev plain >=0.7 (shipped)", ids: (s, i) => select(jev[`plain|${s.slug}|${s.q}`].reps[i].scores, s.slug, rule07).ids },
+  { name: "jev mention >=0.7", ids: (s, i) => select(jev[`mention|${s.slug}|${s.q}`].reps[i].scores, s.slug, rule07).ids },
+  { name: "jev brief >=0.7", ids: (s, i) => select(jev[`brief|${s.slug}|${s.q}`].reps[i].scores, s.slug, rule07).ids },
+  /* Hybrid: literal matches first (they are certain), then Jev's hits, capped at 20. */
+  { name: "hybrid: literal + jev plain", ids: (s, i) => [...new Set([...truth(s).L, ...select(jev[`plain|${s.slug}|${s.q}`].reps[i].scores, s.slug, rule07).ids])].slice(0, 20) },
+  { name: "hybrid: literal + jev mention", ids: (s, i) => [...new Set([...truth(s).L, ...select(jev[`mention|${s.slug}|${s.q}`].reps[i].scores, s.slug, rule07).ids])].slice(0, 20) },
+  ...[...new Set(Object.values(llm).map((e: any) => e.model))].map((m: any) => ({ name: m, ids: (s: any, i: number) => llm[`${m}|${s.slug}|${s.q}`]?.reps[i]?.ids ?? null })),
+];
+
+const out: any[] = [];
+for (const set of ["old", "short", "holdout", "negative"]) {
+  console.log(`\n== set: ${set}`);
+  console.log("arm".padEnd(32) + "refRec litRec lit-missed yRec   kept mean/max  zero  prec  bad/search junk@5 unjudged ids-spread");
+  for (const arm of arms) {
+    const refRecall: number[] = [], litRecall: number[] = [], yRecall: number[] = [], kept: number[] = [], zero: number[] = [], prec: number[] = [], junk5: number[] = [], spread: number[] = [];
+    let litMissed = 0, litTotal = 0, unjudged = 0, fp = 0;
+    for (const s of ALL.filter((q) => q.set === set)) {
+      const { R, L, Y } = truth(s);
+      const j = judged[`${s.slug}|${s.q}`] ?? {};
+      const ns: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        const ids = arm.ids(s, i);
+        if (!ids) continue;
+        ns.push(ids.length); kept.push(ids.length); zero.push(ids.length === 0 ? 1 : 0);
+        if (R.size) refRecall.push(ids.filter((id) => R.has(id)).length / R.size);
+        if (L.size) { litRecall.push(ids.filter((id) => L.has(id)).length / L.size); litMissed += [...L].filter((id) => !ids.includes(id)).length; litTotal += L.size; }
+        if (Y.size) yRecall.push(ids.filter((id) => Y.has(id)).length / Y.size);
+        let good = 0, n = 0;
+        for (const id of ids) { if (Y.has(id) || j[id] === "y") { good++; n++; } else if (j[id] === "n" || set === "negative") { n++; fp++; } else unjudged++; }
+        if (n) prec.push(good / n);
+        junk5.push(ids.slice(0, 5).filter((id) => !Y.has(id) && j[id] !== "y" && (j[id] === "n" || set === "negative")).length);
+      }
+      if (ns.length) spread.push(Math.max(...ns) - Math.min(...ns));
+    }
+    const row = { set, arm: arm.name, refRecall: +mean(refRecall).toFixed(3), literalRecall: +mean(litRecall).toFixed(3), literalMissed: `${litMissed}/${litTotal}`, yardstickRecall: +mean(yRecall).toFixed(3), keptMean: +mean(kept).toFixed(1), keptMax: Math.max(...kept), zeroResultRate: +mean(zero).toFixed(2), precision: +mean(prec).toFixed(2), badKeptPerSearch: +(fp / kept.length).toFixed(2), junkTop5: +mean(junk5).toFixed(2), unjudged, countSpreadMax: Math.max(...spread) };
+    out.push(row);
+    console.log(`${arm.name.padEnd(32)}${String(row.refRecall).padEnd(7)}${String(row.literalRecall).padEnd(7)}${row.literalMissed.padEnd(11)}${String(row.yardstickRecall).padEnd(7)}${(row.keptMean + "/" + row.keptMax).padEnd(15)}${String(row.zeroResultRate).padEnd(6)}${String(row.precision).padEnd(6)}${String(row.badKeptPerSearch).padEnd(11)}${String(row.junkTop5).padEnd(7)}${String(row.unjudged).padEnd(9)}${row.countSpreadMax}`);
+  }
+}
+
+console.log("\n== LLM latency (ms), tokens and cost: ordinary articles | 505-block article");
+const lat: any = {};
+for (const m of new Set(Object.values(llm).map((e: any) => e.model)) as Set<string>) {
+  const g: any = { typ: { first: [], done: [], cost: [], inTok: [], outTok: [], cached: [], fail: 0, n: 0, invalid: 0 }, long: { first: [], done: [], cost: [], inTok: [], outTok: [], cached: [], fail: 0, n: 0, invalid: 0 } };
+  for (const e of Object.values(llm) as any[]) if (e.model === m) for (const r of e.reps) {
+    const x = e.slug.startsWith("replication") ? g.long : g.typ;
+    x.n++; if (!r.ok) x.fail++; x.invalid += r.invalid;
+    if (r.msFirstId !== null) x.first.push(r.msFirstId);
+    x.done.push(r.msDone); x.cost.push(r.cost || r.estCost); x.inTok.push(r.usage?.prompt ?? 0); x.outTok.push(r.usage?.completion ?? 0); x.cached.push(r.usage?.cached ?? 0);
+  }
+  lat[m] = Object.fromEntries(Object.entries(g).map(([k, x]: any) => [k, { n: x.n, failures: x.fail, invalidIds: x.invalid, firstHitMedian: median(x.first), firstHitP90: pct(x.first, 0.9), doneMedian: median(x.done), doneP90: pct(x.done, 0.9), costMean: +mean(x.cost).toFixed(5), inTokMean: Math.round(mean(x.inTok)), outTokMean: Math.round(mean(x.outTok)), cachedShare: +(mean(x.cached) / mean(x.inTok)).toFixed(2) }]));
+  for (const k of ["typ", "long"]) { const x = lat[m][k]; console.log(`${m.padEnd(30)} ${k.padEnd(4)} n=${x.n} fail ${x.failures} invalid-ids ${x.invalidIds} | first valid hit med ${x.firstHitMedian} p90 ${x.firstHitP90} | complete med ${x.doneMedian} p90 ${x.doneP90} | $${x.costMean} | in ${x.inTokMean} (cached ${x.cachedShare}) out ${x.outTokMean}`); }
+}
+writeFileSync(`${DIR}/summary-arms.json`, JSON.stringify({ quality: out, llmLatency: lat }, null, 1));
+process.exit(0);

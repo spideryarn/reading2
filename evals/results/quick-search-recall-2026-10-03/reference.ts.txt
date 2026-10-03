@@ -1,0 +1,34 @@
+/* The yardstick's first half: today's meaning search (findPassages, standard power), once per
+   new short query. SPENDS (Sonnet, about 3-6 cents a query). The old 16 reuse the spike's saved
+   reference-*.json. Writes ref-short.json (ids, confidence; quote and reason kept only for the
+   scratch copy — the committed copy is stripped by save-results.ts). */
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { DIR, WT, loadArticle, spent } from "./lib.ts";
+import { SHORT } from "./queries.ts";
+
+const { findPassages } = await import(`${WT}/src/search.ts`);
+const { withLedger } = await import(`${WT}/src/cli-ledger.ts`);
+const P = `${DIR}/ref-short.json`;
+const ref: Record<string, any> = existsSync(P) ? JSON.parse(readFileSync(P, "utf8")) : {};
+
+await withLedger("eval", async () => {
+  for (const s of SHORT) {
+    const key = `${s.slug}|${s.q}`;
+    if (ref[key]?.hits) continue;
+    const { meta, blocks } = await loadArticle(s.slug);
+    const t0 = performance.now();
+    try {
+      const r = await findPassages({ power: "standard", meta, blocks, criterion: s.q });
+      const u = r.usage ?? {};
+      // Sonnet 5 on OpenRouter: $3/M in, $15/M out, cache write 1.25x, cache read 0.1x. An estimate.
+      const cost = (((u.promptTokens ?? 0) - (u.cacheReadTokens ?? 0) - (u.cacheWriteTokens ?? 0)) * 3 + (u.cacheWriteTokens ?? 0) * 3.75 + (u.cacheReadTokens ?? 0) * 0.3 + (u.completionTokens ?? 0) * 15) / 1e6;
+      spent("sonnet-reference-est", cost);
+      ref[key] = { ms: Math.round(performance.now() - t0), model: r.model, usage: r.usage, estCost: cost, hits: r.hits.map((h: any) => ({ blockId: h.blockId, confidence: h.confidence, quote: h.quote, reasoning: h.reasoning })) };
+    } catch (e) {
+      ref[key] = { ms: Math.round(performance.now() - t0), error: String(e) };
+    }
+    console.log(`ref ${key.slice(0, 50)} — ${ref[key].ms} ms, ${ref[key].hits?.length ?? "ERR " + ref[key].error} hits, ~$${ref[key].estCost?.toFixed(3)}`);
+    writeFileSync(P, JSON.stringify(ref, null, 1));
+  }
+});
+process.exit(0);

@@ -35,6 +35,8 @@ export type PaperworkKind =
   | "structure"
   /** A prompt that picks items out of the piece (questions, quotes, ideas, terms, dates): none from it. */
   | "pick"
+  /** Relations classifies every listed paragraph, including paperwork, without treating its names as claims. */
+  | "relation"
   /** One sentence per part, as Arc writes: about the argument, never the paperwork. */
   | "part";
 
@@ -53,6 +55,10 @@ person, organisation or date you choose must come from the piece's content.
 Someone who appears only in the paperwork — a funder, an institution, a person
 thanked — is not part of the piece; someone the content also names is, for what
 the content says.`,
+  relation: `Every listed paperwork paragraph still gets one relation to the listed
+paragraph before it; "new-thread" or "and-also" will usually be right. Do not
+treat an author, funder, institution or cited work named only there as a claim
+in the piece.`,
   part: `A part that is only paperwork, or opens or closes with it, still gets its one
 sentence by the usual rules: where the ARGUMENT stands as that part opens. At
 the start, that is what is at stake; at the end, what the piece has settled and

@@ -560,6 +560,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/faq/w1"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/relations\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/relations/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/crossrefs\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/crossrefs/w1"],
@@ -2082,6 +2087,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/timeline\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/faq\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/relations\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/crossrefs\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",

@@ -271,10 +271,12 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      already there by the time the article is on screen. */
   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
-  marginalia: {
-    kind: "none",
-    reason: "reads the tree, the arc and any ideas already made; it never starts a job",
-  },
+  /* Everything else the column shows is read and never made; the relation
+     words are its own, with no band to make them in, so the press that turns
+     the column on asks for them (src/web/useRelations.ts). The press that
+     turns it off arms nothing: Dock.tsx § `useActivateMode`.
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  marginalia: { kind: "fixed", target: "relations" },
   /* Nothing exists to fill until the reader has typed. */
   search: { kind: "none", reason: "stores nothing until the reader types a query" },
   chat: { kind: "none", reason: "stores nothing until the reader asks something" },

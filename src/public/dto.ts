@@ -392,7 +392,14 @@ function publicGlossary(glossary: Glossary): PublicGlossary {
  * reason this whole file exists: a projection that spreads is a projection that
  * publishes whatever the artefact gains next. What is deliberately left behind
  * is every pipeline fact around the list — `sourceHash`, `version`,
- * `generator`, `profileHash`, `generatedAt`, `elapsedMs`.
+ * `generator`, `profileHash`, `elapsedMs`.
+ *
+ * **`generatedAt` and each quote's `addedAt` cross, since 2026-10-03**, for the
+ * reason `discarded` does: the reader is shown them. Every quote's card ends
+ * *Chosen by the AI · {date}*, a visitor has that card too, and a quote stored
+ * before `addedAt` existed can only say *on or before* the list's time — so
+ * dropping either would make the line true for the owner and missing for
+ * everybody else (GPT Sol, 261003h Q3). src/public-types.ts § `PublicQuotes`.
  *
  * `start` is kept. It is an offset into a block of the article the visitor is
  * already reading, and without it a quote that appears twice in one paragraph
@@ -400,6 +407,7 @@ function publicGlossary(glossary: Glossary): PublicGlossary {
  */
 function publicQuotes(quotes: Quotes): PublicQuotes {
   return {
+    generatedAt: quotes.generatedAt,
     /* Rebuilt field by field like the list itself, rather than passed through:
        a projection that spreads is one that publishes whatever the artefact
        gains next. See the field's note in src/public-types.ts for why this one
@@ -425,6 +433,7 @@ function publicQuotes(quotes: Quotes): PublicQuotes {
         ...opt(quote, "reason"),
         ...opt(quote, "importance"),
         ...opt(quote, "striking"),
+        ...opt(quote, "addedAt"),
       }),
     ),
   };

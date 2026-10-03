@@ -16,12 +16,14 @@
  * origin line from here. docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md.
  */
 
+import type { DrawnRelation } from "./notes.js";
 import type { Voice } from "../voice.js";
 
 export type MargTipKey =
   | "question-article"
   | "question-part"
   | "faq"
+  | "timeline"
   | "debate"
   | "citation"
   | "comment-own"
@@ -45,6 +47,11 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     what: "A question a careful reader might ask, which this passage answers. Press it to see the words that answer it.",
     how: "From FAQ mode. The question was written by AI; the answer is quoted from the article. It sits beside the first passage that answers it.",
   },
+  timeline: {
+    head: "When",
+    what: "Something the article says happened, with the date it gives. Press it to see the words that mention it.",
+    how: "From Timeline mode. The short description was written by AI; the date is read out of the article's own words, never guessed, and a phrase in quotation marks is the article's own. A dated event sits beside the passage that dates it; the article's own relative wording sits beside its first surviving mention.",
+  },
   debate: {
     head: "Debate",
     what: "A page elsewhere on the web that responds to a claim made in this passage, and how it bears on it.",
@@ -64,6 +71,34 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     head: "A note",
     what: "A comment the article's owner left on this passage.",
     how: "Written by the person who shared this article, with the AI's answer under it if they asked for one.",
+  },
+};
+
+/** Where a relation word came from: the same for all of them. */
+const RELATION_ORIGIN =
+  "Written by AI, which read each paragraph against the one before it. Made for Marginalia when you turn it on. Only the turns in the argument are marked; most paragraphs carry on in the same direction and get no word.";
+
+/**
+ * **What each relation word means**, in a card of its own on the word (a
+ * button, so a keyboard or a finger can ask). The word is the answer; this is
+ * the sentence. `Record` over the drawn set, so drawing a new word without
+ * saying what it means is a type error.
+ */
+export const RELATION_TIPS: Record<DrawnRelation, MargTip> = {
+  therefore: {
+    head: "So",
+    what: "This paragraph draws its conclusion from the one before it.",
+    how: RELATION_ORIGIN,
+  },
+  but: {
+    head: "But",
+    what: "This paragraph pushes back on what you just read.",
+    how: RELATION_ORIGIN,
+  },
+  contrast: {
+    head: "Versus",
+    what: "This paragraph sets something against what came before, without denying it.",
+    how: RELATION_ORIGIN,
   },
 };
 

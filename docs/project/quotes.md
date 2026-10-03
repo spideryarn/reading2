@@ -403,7 +403,7 @@ Greg, in two feedback reports:
 - **A card on a quote in the prose**, in `ProseHoverCard` beside the term, citation and link halves:
   both raw scores, drawn and printed (this card is where the rows' numbers live — never the `max`
   composite); the reason, in the model's face; ‹ › to the quote before or after it **down the
-  page**; and *open in Quotes*, which selects it and opens the band on its row. **Pointer only.** A
+  page**; and *open Quotes*, which selects it and opens the band on its row. **Pointer only.** A
   tap on a bare quote still selects its paragraph (TableView's `NOT_A_BLOCK_SELECTION`, the reason
   above), and a quote is not a tab stop — a quote that is also a term, a citation or inside a link
   gets the card through those, as before. **It waits 900ms rather than 320ms** before opening on a
@@ -594,6 +594,123 @@ uncontrolled hover tooltip does not exist on a device with no pointer, and a tri
 the row's own button is invalid HTML. So the tooltip is *controlled* — hover and focus open it
 transiently, a tap or click pins it — and the row stays one big target. `Tooltip.tsx` and never a
 `title=` attribute, which does not open on keyboard focus ([tooltips.md](tooltips.md)).
+
+**On every row since 2026-10-03**, where it used to be drawn only when the model gave a reason: the
+card now ends with who chose the line and when, which every row has
+([§ Who and when](#who-and-when)).
+
+## Your highlights are rows too
+
+Since 2026-10-03 a reader's own highlights are rows in this band, among the model's quotes, and
+every row says who put it there and when. Greg, asked whether a highlight belongs in Quotes
+(spya-ma5h9b):
+
+> A yeah that sounds good. The only hesitation I have is that one might want to highlight the text
+> and add a comment or something. I don't know if there's a way for them to show up in both, or
+> maybe we keep it simple and just say that comments are block level and highlights show up
+> alongside quotes. They should obviously have a different color if it's from me, and they should
+> have a tooltip. Actually, quotes should as well, maybe saying when it was applied and whether it's
+> AI generated or human highlights. Use your judgment. Let's try and avoid making things too complex.
+>
+> — Greg, 2026-10-03
+
+Plan and review: [261003h](../plans/261003h-your-highlights-as-rows-in-quotes-and-who-and-when-on-every-row.md).
+
+**A highlight with a note shows up in both places, and nothing was built to make it so.** A
+highlight *is* a comment with a colour ([261003e](../plans/261003e-span-highlights-with-a-colour.md)),
+so the same row is listed in the comments drawer because it is a comment, shown in the margin when it
+has words, and listed here because it has a colour. The row here carries a small pencil when the
+comment has a `body`, its card shows the note, and pressing it opens the comment. Greg's simpler
+fallback, comments on whole blocks only, was passed over because it is the bigger change: comments
+on a selection have existed since 2026-08-28 and readers have them.
+
+**What counts: a comment on a selection, with a colour, that is not a Referee placement**
+(`isReaderRow` in [`quote-band-rows.ts`](../../src/web/quote-band-rows.ts)). An uncoloured comment
+or a bookmark never said the words were worth keeping; colouring it from its box makes it a row. A
+comment with a `criterionId` is a judgment on a criterion
+([comments.md § The referee's own placement](comments.md#the-referees-own-placement)).
+
+**The row.** A bar down its left edge in the highlight's own colour at full strength
+(`--hl-*-solid` in `tokens.css`, with light twins), the word *yours* for anyone who cannot tell four
+colours apart, and the comment's stored `quote` in the same `<blockquote>` a quote gets, because
+they are the article's characters. No scores and no "why".
+
+### Interleaved by block, and never by `start`
+
+In *in order* and *prioritised* the two kinds are one list in reading order. **The order is decided
+by block only; inside one block the reader's rows come first**, in their own `start` order, then the
+model's in theirs. That is sometimes the wrong order within a single paragraph, and it is deliberate:
+`Quote.start` is an offset into `block.text` and `Comment.start` an offset into the block's rendered
+text ([comments.md § The offset space](comments.md#offset-space)), so comparing them would be right
+on most paragraphs and silently wrong wherever there is markup or maths. A highlight whose block a
+re-extraction took away is listed last.
+
+In *most important* and *most striking* the reader's rows come first as one group, in reading order,
+then the model's as ranked. They have no score, and "unscored last" would bury the lines the reader
+chose.
+
+**The bar never hides a reader's row and never counts one.** `5 of 14` is still the model's list;
+the reader's are said beside it, `5 of 14 + 3 yours`, and the band's (i) says `14 quotes + 3 yours`.
+
+### What stays the model's only
+
+`QuoteBandRow[]` is built at render, for the panel's markup and nothing else (`bandRows`, from
+`shownAiQuotes`). `rankQuotes`, `visibleQuotes`, `markedQuotes`, `effectiveRank`, `barStops`,
+`barNote`, `barToReveal`, `steppable` and the ‹ › stepper, `?quote=`, `data-quote-row`, the card on a
+quote in the prose, the spine's strip, Skim, and the stored and public `Quotes.quotes` are all still
+`Quote[]`. A highlight has no quote id and its own selection state, `?note=`; letting it into any of
+those would put two id spaces behind one parameter.
+
+So **pressing a reader's row is the drawer's jump** (`jumpToComment`): go to the passage and open the
+comment's box. The panel clears `?quote=` in the same tick, or the quote selected before would stay
+lit under the dialog and come back on Escape.
+
+**Owner only.** The rows are a prop on the owner arm of `QuotesAccess` and `never` on the visitor's,
+and `Reader` builds them from the owner capability's comments, not from its merged `comments`, which
+on a shared link is the sharer's public list. They are drawn as soon as there are any, including
+before there is a quote list; the status and the offer to choose the quotes stay under them.
+
+### Who and when
+
+Every row has the ⓘ, and its card ends with one line in the app's own face
+([fonts.md](fonts.md)): the model's reason, in the model's face, or the reader's note, in the
+reader's, sits above it.
+
+| row | the line |
+|---|---|
+| a quote with `addedAt` | *Chosen by the AI · 2 Oct 2026, 09:10* |
+| a quote stored before 2026-10-03 | *Chosen by the AI · on or before {the list's `generatedAt`}* |
+| a highlight | *Your highlight · saved 3 Oct 2026, 14:02* |
+
+The card on a quote in the prose ends with the same line.
+
+**`Quote.addedAt` is the quote's own time**, set in `buildQuotes` from the one timestamp the run also
+writes as the list's `generatedAt`. Greg, the same day: *"Store when it happened."* The list's
+`generatedAt` could not do the job, because every Find more overwrites it. A quote keeps its
+`addedAt` across an append, and across a replace that hands it its old id (`InheritedQuote`).
+
+**An older quote has no `addedAt` and is never given one.** The list's `generatedAt` is an upper
+bound on when it was chosen, not the time, so the line says *on or before*; writing the bound into
+the field would turn it into a claim. A replace that inherits an id inherits the absence too. The
+field is in the `quotes` jsonb, so there was no migration, and it enters no hash, no freshness test
+and no dedupe.
+
+**The public projection carries both**, `addedAt` on each quote and `generatedAt` on `PublicQuotes`,
+because a visitor's card draws the same line.
+
+**A highlight's date is when the comment was saved** (`createdAt`), and the line says *saved*. A
+comment coloured a week after it was written keeps its first date; when the colour went on is not
+stored.
+
+### Deferred
+
+- Stepping (‹ ›, ← →) through highlights as well as quotes: one selection model for two id spaces.
+- Highlights in the spine's quote strip.
+- A visitor seeing the sharer's highlights here, and what that row would be called.
+- A time for a recolour.
+- Filtering the band to "only mine", or by colour.
+- A shared rendered-text position for quotes, which is what an exact interleave inside one block
+  would need.
 
 ## The stage
 

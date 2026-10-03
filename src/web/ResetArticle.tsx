@@ -71,6 +71,7 @@ export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
   timeline: "Timeline",
   quiz: "Quiz",
   faq: "FAQ",
+  relations: "Relation words",
   sketch: "Sketch",
   illustrated: "Illustrated",
   debate: "Debate",

@@ -19,6 +19,7 @@ import { buildNoteIndex } from "../src/web/notes-view.js";
 import { quoteStroke } from "../src/web/QuotesPanel.js";
 import { hitMarks, quoteMarkKey, resolveQuotes } from "../src/web/search-hits.js";
 import { HOVER_DELAY } from "../src/web/useHoverCard.js";
+import { exactly } from "../src/web/relative-time.js";
 import type { Block, BlockId, Quote } from "../src/types.js";
 
 class FakeResizeObserver {
@@ -50,9 +51,13 @@ const QUOTES: Quote[] = [
     importance: 0.9,
     striking: 0.4,
     reason: "The thesis the rest of the piece argues for.",
+    addedAt: "2026-09-28T09:10:00.000Z",
   } as Quote,
   { id: "spya-qa0002", blockId: THREE, text: "Forgetting is a failure of access" } as Quote,
 ];
+
+/** The list's own time: an upper bound on the second quote, which has none of its own. */
+const LIST_WRITTEN = "2026-09-29T14:02:00.000Z";
 
 const went: string[] = [];
 const opened: string[] = [];
@@ -62,6 +67,7 @@ function source(inQuotesMode = false): QuoteCardSource {
     listed: QUOTES,
     byKey: new Map(QUOTES.map((q) => [quoteMarkKey(q.id, q.blockId), q])),
     inQuotesMode,
+    generatedAt: LIST_WRITTEN,
     onGo: (q) => went.push(q.id),
     onOpenInQuotes: (q) => opened.push(q.id),
   };
@@ -160,7 +166,7 @@ const button = (label: string) =>
   document.querySelector<HTMLButtonElement>(`.prose-card button[aria-label="${label}"]`);
 const openInQuotes = () =>
   [...document.querySelectorAll<HTMLButtonElement>(".prose-card button")].find((b) =>
-    (b.textContent ?? "").includes("open in Quotes"),
+    (b.textContent ?? "").includes("open Quotes"),
   );
 
 describe("resting on a quote", () => {
@@ -183,6 +189,26 @@ describe("resting on a quote", () => {
     paint();
     rest(quoteMark(1), QUOTE_OPEN_MS + 10);
     expect(card()?.textContent ?? "").toContain("Not scored.");
+  });
+
+  /* Greg, 2026-10-03 (spya-ma5h9b): *"quotes should as well, maybe saying when
+     it was applied and whether it's AI generated or human highlights."* The
+     same line the band's ⓘ ends with; a visitor's card draws it too, from the
+     public list's `generatedAt`. Plan 261003h. */
+  it("ends with who chose it and when", () => {
+    paint();
+    rest(quoteMark(0), QUOTE_OPEN_MS + 10);
+    expect(card()?.querySelector(".prose-card-quote-prov")?.textContent).toBe(
+      `Chosen by the AI · ${exactly(QUOTES[0]!.addedAt)}`,
+    );
+  });
+
+  it("says on or before the list's time for a quote stored without its own", () => {
+    paint();
+    rest(quoteMark(1), QUOTE_OPEN_MS + 10);
+    expect(card()?.querySelector(".prose-card-quote-prov")?.textContent).toBe(
+      `Chosen by the AI · on or before ${exactly(LIST_WRITTEN)}`,
+    );
   });
 
   it("waits longer than a word does before opening, because a reader rests in a passage", () => {

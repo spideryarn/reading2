@@ -1184,6 +1184,7 @@ describe("a signed-out browser on a shared document", () => {
     served = {
       ...ARTICLE,
       quotes: {
+        generatedAt: "2026-09-08T00:00:00.000Z",
         quotes: [
           {
             id: "spya-qte001",
@@ -1225,6 +1226,7 @@ describe("a signed-out browser on a shared document", () => {
     served = {
       ...ARTICLE,
       quotes: {
+        generatedAt: "2026-09-08T00:00:00.000Z",
         quotes: [
           { id: "spya-qte001", blockId: "spya-bbbbbb", text: "The first paragraph", importance: 0.9 },
           { id: "spya-qte002", blockId: "spya-cccccc", text: "an argument made elsewhere", importance: 0.8 },

@@ -16,7 +16,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CitedWork, FaqQuestion } from "../src/types.js";
+import type { CitedWork, FaqQuestion, TimelineEvent } from "../src/types.js";
 import { BlockLinkProvider } from "../src/web/BlockLinkCard.js";
 import { MarginNotesSlot } from "../src/web/marginalia/MarginaliaColumn.js";
 import type { MarginClaim, MarginComment, MarginaliaNote } from "../src/web/marginalia/notes.js";
@@ -172,6 +172,26 @@ describe("whose words a shut line is (fonts.md)", () => {
   it("an FAQ question is the AI's, and the passage it quotes the author's", () => {
     paint([{ kind: "faq", items: [{ question, quote: "the words", morePassages: 0 }] }]);
     expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-ai")).toBe(true);
+  });
+
+  it("a Timeline label is the AI's; a date in the article's own words is the author's, a computed one ours", () => {
+    const event = (dating: TimelineEvent["dating"]) =>
+      ({ id: "e", label: "The launch", dating, order: 1, modality: "happened", occurrences: [] }) as TimelineEvent;
+    paint([{ kind: "timeline", items: [{ event: event({ kind: "words", phrase: "a month later" }), quote: "q" }] }]);
+    expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-ai")).toBe(true);
+    expect(host.querySelector(".marg-stamp")?.classList.contains("voice-author")).toBe(true);
+    const when = { earliest: "2026-05-12", latest: "2026-05-12", phrase: "12 May" };
+    paint([{ kind: "timeline", items: [{ event: event({ kind: "dated", when } as TimelineEvent["dating"]), quote: "q" }] }]);
+    expect(host.querySelector(".marg-stamp")?.textContent).toBe("12 May 2026");
+    expect(host.querySelector(".marg-stamp")?.classList.contains("voice-ui")).toBe(true);
+  });
+
+  it("a relation word is a button a keyboard can reach, in the AI's face, and says what it means", () => {
+    paint([{ kind: "relation", relation: "contrast" }]);
+    const word = host.querySelector<HTMLButtonElement>("button.marg-relation");
+    expect(word?.textContent).toBe("vs");
+    expect(word?.classList.contains("voice-ai")).toBe(true);
+    expect(word?.getAttribute("aria-label")).toContain("sets something against what came before");
   });
 
   it("a comment is the reader's", () => {

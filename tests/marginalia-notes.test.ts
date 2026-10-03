@@ -5,10 +5,11 @@
  */
 import { describe, expect, it } from "vitest";
 import { blockIndex } from "../src/section-path.js";
-import type { Arc, Block, CitedWork, FaqQuestion, Idea, Tree, TreeNode } from "../src/types.js";
+import type { Arc, Block, CitedWork, FaqQuestion, Idea, TimelineEvent, Tree, TreeNode } from "../src/types.js";
 import {
   type MarginClaim,
   type MarginComment,
+  DRAWN_RELATIONS,
   marginaliaNotes,
   arcAt,
   headPath,
@@ -393,5 +394,123 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
       }).get("spya-aaaaa2") ?? []
     ).map((n) => n.kind);
     expect(kinds).toEqual(["question", "idea", "faq", "debate", "citation", "comment"]);
+  });
+});
+
+/* Timeline events in the margin — plan 261003f stage 1. Only events the piece
+   dates (`dated` or its own `words`), beside the earliest occurrence whose
+   quoted words are still in their block. */
+function event(
+  id: string,
+  dating: TimelineEvent["dating"],
+  occurrences: { blockId: string; quote: string }[],
+): TimelineEvent {
+  return {
+    id,
+    label: `Event ${id}`,
+    dating,
+    order: 1,
+    modality: "happened",
+    occurrences: occurrences.map((o) => ({ ...o, start: 0 })),
+  } as TimelineEvent;
+}
+/* Dated from words the named block of `quoted` holds. */
+const datedAt = (blockId: string, phrase: string) =>
+  ({
+    kind: "dated",
+    when: { earliest: "2026-05-12", latest: "2026-05-12", phrase, at: { blockId, start: 0, end: phrase.length } },
+  }) as unknown as TimelineEvent["dating"];
+
+describe("marginaliaNotes, Timeline events (plan 261003f)", () => {
+  it("puts a dated event beside the passage its date was read from, not an earlier undated mention", () => {
+    const e = event("e1", datedAt("spya-aaaaa5", "topic 4"), [
+      { blockId: "spya-aaaaa3", quote: say(2) },
+      { blockId: "spya-aaaaa5", quote: say(4) },
+    ]);
+    const notes = marginaliaNotes(null, quoted, null, { timeline: [e] });
+    expect([...notes.keys()]).toEqual(["spya-aaaaa5"]);
+    expect(notes.get("spya-aaaaa5")).toEqual([{ kind: "timeline", items: [{ event: e, quote: say(4) }] }]);
+  });
+
+  it("draws nothing for a date whose words are no longer in their block", () => {
+    const e = event("e5", datedAt("spya-aaaaa5", "12 May"), [{ blockId: "spya-aaaaa5", quote: say(4) }]);
+    expect(marginaliaNotes(null, quoted, null, { timeline: [e] }).size).toBe(0);
+    const gone = event("e7", datedAt("spya-zzzzzz", "topic 4"), [{ blockId: "spya-aaaaa5", quote: say(4) }]);
+    expect(marginaliaNotes(null, quoted, null, { timeline: [gone] }).size).toBe(0);
+  });
+
+  it("draws nothing when the date remains but the event's quoted words no longer do", () => {
+    const e = event("e8", datedAt("spya-aaaaa5", "topic 4"), [
+      { blockId: "spya-aaaaa5", quote: "Acme launched on topic 4" },
+    ]);
+    expect(marginaliaNotes(null, quoted, null, { timeline: [e] }).size).toBe(0);
+  });
+
+  it("puts the article's own phrase beside the earliest mention whose block says it; untimed and rejected stay in the band", () => {
+    const words = event("e2", { kind: "words", phrase: "topic 3" }, [
+      { blockId: "spya-aaaaa2", quote: say(1) },
+      { blockId: "spya-aaaaa4", quote: say(3) },
+    ]);
+    const untimed = event("e3", { kind: "untimed" }, [{ blockId: "spya-aaaaa4", quote: say(3) }]);
+    const rejected = event(
+      "e4",
+      { kind: "rejected", reason: "noYearFrame", phrase: null } as TimelineEvent["dating"],
+      [{ blockId: "spya-aaaaa4", quote: say(3) }],
+    );
+    const notes = marginaliaNotes(null, quoted, null, { timeline: [words, untimed, rejected] });
+    expect([...notes.keys()]).toEqual(["spya-aaaaa4"]);
+    const here = notes.get("spya-aaaaa4") ?? [];
+    expect(here[0]?.kind === "timeline" && here[0].items.map((i) => i.event.id)).toEqual(["e2"]);
+  });
+
+  it("puts the Timeline line after FAQ and before Debate on one block", () => {
+    const kinds = (
+      marginaliaNotes(null, quoted, null, {
+        claims: [claim("https://c.example", "spya-aaaaa2", say(1))],
+        timeline: [event("e6", datedAt("spya-aaaaa2", "topic 1"), [{ blockId: "spya-aaaaa2", quote: say(1) }])],
+        faq: [faqQ("f", [{ blockId: "spya-aaaaa2", quote: say(1) }])],
+      }).get("spya-aaaaa2") ?? []
+    ).map((n) => n.kind);
+    expect(kinds).toEqual(["faq", "timeline", "debate"]);
+  });
+});
+
+/* Relation words — plan 261003f stage 2. Only the turns are drawn, first in
+   the block's note. */
+describe("marginaliaNotes, relation words (plan 261003f)", () => {
+  it("draws only the turns: so, but and vs; the other seven are stored and not drawn", () => {
+    const notes = marginaliaNotes(null, quoted, null, {
+      relations: {
+        "spya-aaaaa2": "therefore",
+        "spya-aaaaa3": "but",
+        "spya-aaaaa4": "contrast",
+        "spya-aaaaa5": "and-also",
+        "spya-aaaaa6": "because",
+      },
+    });
+    expect([...notes.entries()]).toEqual([
+      ["spya-aaaaa2", [{ kind: "relation", relation: "therefore" }]],
+      ["spya-aaaaa3", [{ kind: "relation", relation: "but" }]],
+      ["spya-aaaaa4", [{ kind: "relation", relation: "contrast" }]],
+    ]);
+    expect(Object.keys(DRAWN_RELATIONS).sort()).toEqual(["but", "contrast", "therefore"]);
+  });
+
+  it("skips a paragraph this article no longer has", () => {
+    expect(marginaliaNotes(null, quoted, null, { relations: { "spya-zzzzzz": "but" } }).size).toBe(0);
+  });
+
+  it("puts the word first, above the part's question and everything else", () => {
+    const tree2 = {
+      ...tree,
+      nodes: { ...tree.nodes, a: { ...(tree.nodes.a as TreeNode), range: ["spya-aaaaa2", "spya-aaaaa3"] } },
+    } as Tree;
+    const kinds = (
+      marginaliaNotes(tree2, quoted, null, {
+        faq: [faqQ("f", [{ blockId: "spya-aaaaa2", quote: say(1) }])],
+        relations: { "spya-aaaaa2": "but" },
+      }).get("spya-aaaaa2") ?? []
+    ).map((n) => n.kind);
+    expect(kinds).toEqual(["relation", "question", "faq"]);
   });
 });

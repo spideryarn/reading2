@@ -1072,6 +1072,21 @@ export interface Quote {
   importance?: number;
   /** 0–1: how memorable, quotable, well-put it is. The model's judgment. */
   striking?: number;
+  /**
+   * When the run that chose this quote finished, ISO — **its own time, not the
+   * list's.** `Quotes.generatedAt` is overwritten by every *Find more*, so
+   * without this a line appended on Tuesday to Monday's list could not say
+   * Monday. Greg, 2026-10-03: *"Store when it happened."*
+   *
+   * **Absent on every quote stored before 2026-10-03, and never backfilled.**
+   * For those the list's `generatedAt` is an upper bound, not their time, and
+   * the tooltip says *on or before*; writing the bound into the field would
+   * turn it into a claim. Kept across an append and across a replace that
+   * inherits the id (src/quotes.ts § `InheritedQuote`).
+   *
+   * Display only. It enters no hash, no freshness comparison and no dedupe.
+   */
+  addedAt?: string;
 }
 
 /**
@@ -3149,6 +3164,11 @@ export type StepName =
      `articleWithIds` over the body at `high` effort, so it joins the
      `ideas`/`timeline`/`quiz` cached article prefix. */
   | "faq"
+  /* How each paragraph bears on the one before it, one word of ten —
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+     Read only by Marginalia, and by the owner only. The same bytes as `faq`
+     at `low` effort, so in no cached prefix group. */
+  | "relations"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
      Nothing reads what it writes except the one below. The same bytes as
      `ideas` but at `low` effort since 2026-10-01, so in no cached prefix group
@@ -4943,6 +4963,68 @@ export interface FaqResponse {
 
 /** As `QuizFound`: the same type, because there is no `profileChanged` to omit. */
 export type FaqFound = FaqResponse;
+
+/* -------------------------------------------------------------- relations --
+   How each paragraph bears on the one before it — the `relations` column on
+   `article_revisions`, read by Marginalia (docs/project/marginalia.md) and
+   written by the `relations` step (src/relations.ts).
+   docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+
+/**
+ * **The closed list the model picks one of**, per paragraph. All ten are
+ * stored; which are drawn is the margin's decision (`DRAWN_RELATIONS`), so
+ * drawing more of them later costs no model call.
+ */
+export const RELATIONS = [
+  "therefore",
+  "but",
+  "because",
+  "for-example",
+  "contrast",
+  "zoom-in",
+  "zoom-out",
+  "new-thread",
+  "restates",
+  "and-also",
+] as const;
+export type Relation = (typeof RELATIONS)[number];
+
+/** What validation threw away or found absent. Counts only. */
+export interface RelationsDropped {
+  /** An id that is not one of the paragraphs the model was asked about. */
+  unknown: number;
+  /** A second answer for a paragraph already answered; the first wins. */
+  repeated: number;
+  /** A word outside `RELATIONS`. */
+  offList: number;
+  /** A listed paragraph the model did not answer. */
+  missing: number;
+}
+
+export interface Relations {
+  version: string;
+  generator: string;
+  slug: string;
+  /** Fingerprint of the rendered article prefix and ordered eligible paragraph pairs. */
+  sourceHash: string;
+  /**
+   * One entry per paragraph the model answered: how it bears on the paragraph
+   * before it. The first body paragraph has none, because nothing precedes it.
+   */
+  relations: Record<BlockId, Relation>;
+  dropped: RelationsDropped;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/** `GET /api/relations/:slug`. Two staleness facts: no profile is in this stamp. */
+export interface RelationsResponse {
+  relations: Relations;
+  /** The rendered body/head or eligible paragraph list moved underneath this. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+}
 
 /* ----------------------------------------------------------------- simple --
    A plain-words orientation to the piece — the `simple_summary` column on

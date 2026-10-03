@@ -1,0 +1,390 @@
+diff --git a/src/web/library-hits.ts b/src/web/library-hits.ts
+index 03cea5b13..691a0d3b2 100644
+--- a/src/web/library-hits.ts
++++ b/src/web/library-hits.ts
+@@ -11,16 +11,17 @@
+  * code that imports `node:fs`, and the two must be read together.
+  *
+  * **`libraryHitHref` is here so it can be tested at all.** It was three lines
+- * inside a React component, in a repo with no React test runner and a `node`
+- * test environment — so the one rule that matters about it, *which parameters a
+- * link has to carry*, could not be pinned by anything. It then lost one, and
++ * inside a React component, where the one rule that matters about it, *which
++ * parameters a link has to carry*, was pinned by nothing. It then lost one, and
+  * the symptom was a link where every present parameter was correct and the page
+- * highlighted nothing. Adding a component test runner to catch that would have
+- * been framework churn (AGENTS.md); making the rule a pure function was not.
++ * highlighted nothing. As a pure function its test can hand the link's term to
++ * the reading view's real matcher, which is the check that counts
++ * (tests/library-hits.test.ts § the round trip).
+  *
+  * See docs/project/library.md and docs/plans/260826k-library-shelf-actions-and-search.md.
+  */
+ import { readHref } from "./router.js";
++import { MIN_FIND_CHARS } from "./search-hits.js";
+ import type { LibraryHit } from "../types.js";
+ 
+ /**
+@@ -29,8 +30,9 @@ import type { LibraryHit } from "../types.js";
+  * The browser twin of `fold` in src/library-search.ts, and it must stay its
+  * twin — a reader who finds "Gödel" by typing "godel" in the passage results
+  * and *not* in the card filter would reasonably conclude the box is broken.
+- * Kept as two small functions rather than one shared module because this one
+- * runs in the browser and that one imports node:fs.
++ * Kept as two functions rather than one shared module because this one runs in
++ * the browser and that one imports node:fs; tests/library-hits.test.ts § the
++ * two folds are twins runs both over one list of strings.
+  */
+ export function fold(s: string): string {
+   return foldWithMap(s).folded;
+@@ -47,41 +49,79 @@ export function fold(s: string): string {
+  * character per ligature earlier in the paragraph, with no error and nothing to
+  * grep for — every ASCII test passes and one article looks subtly wrong.
+  *
+- * src/library-search.ts carries the same warning for the same reason.
++ * `starts[i]` and `ends[i]` are the source span of **UTF-16 unit** `i` of
++ * `folded` — units, because that is what `indexOf` counts. So the source text
++ * under a folded match at `i` of length `n` is
++ * `s.slice(starts[i], ends[i + n - 1])`.
++ *
++ * ## One cluster at a time
++ *
++ * The text is walked in clusters: a character and the combining marks that
++ * follow it. Every folded unit a cluster produces gets the **whole** cluster's
++ * span, both ends. Three earlier versions each recorded less than that, and
++ * each drifted silently:
++ *
++ * - only the start, so matching `af` inside `aﬁ` ended *before* the ligature
++ *   (cross-family review, 2026-08-26);
++ * - one entry per folded code *point*, so an emoji earlier in the paragraph put
++ *   every later offset out by one — `cafe` in `😀 café` came back as `afé`;
++ * - the next start read from the last entry *pushed*, so a combining mark, which
++ *   folds to nothing and pushes none, lost its width — `cafe` in a decomposed
++ *   `á café` came back as ` caf`. (Both GPT Sol, 2026-10-03.)
++ *
++ * A cluster is also the unit NFKD works in — it never reorders marks across a
++ * base character — so normalising cluster by cluster gives the same string as
++ * normalising the whole text, which is what the server's twin does. A code
++ * point at a time did not: pointed Hebrew came out in a different order.
+  */
+ export function foldWithMap(s: string): { folded: string; starts: number[]; ends: number[] } {
+   let folded = "";
++  let cased = "";
+   const starts: number[] = [];
+   const ends: number[] = [];
+-  /* Iterated by code POINT, not by code unit, so an emoji or any astral
+-     character is folded once rather than as two broken halves. */
+-  for (const ch of s) {
+-    const from = starts.length === 0 ? 0 : (ends[ends.length - 1] as number);
+-    const to = from + ch.length;
+-    for (const out of foldChar(ch)) {
+-      folded += out;
+-      /* **Every folded character gets the WHOLE source character's span**, and
+-         both ends of it. An earlier version stored only the start, so matching
+-         `af` inside `aﬁ` produced an end offset *before* the ligature and the
+-         snippet cut it off — the exact silent drift this function exists to
+-         prevent, reintroduced by recording half the answer. Caught by a
+-         cross-family review, 2026-08-26. */
++  for (const m of s.matchAll(CLUSTER)) {
++    const from = m.index;
++    const to = from + m[0].length;
++    const pre = unlowered(m[0]);
++    const out = pre.toLowerCase();
++    cased += pre;
++    folded += out;
++    for (let n = 0; n < out.length; n++) {
+       starts.push(from);
+       ends.push(to);
+     }
+   }
+-  return { folded, starts, ends };
++  /* Lowercased once more, over the whole string, as the server does: a
++     word-final `Σ` becomes `ς` only when `toLowerCase` can see that it is
++     final. After NFKD and mark stripping no lowercase mapping changes a
++     string's length (`İ` is already `I`), so the map above still fits — and if
++     that ever stops being true the clusters' own lowercasing is kept, because a
++     fold that disagrees about one sigma is a smaller fault than a map that does
++     not fit its string. */
++  const whole = cased.toLowerCase();
++  return { folded: whole.length === folded.length ? whole : folded, starts, ends };
+ }
+ 
+-/** One character, folded. May come back empty (a combining mark) or longer (a ligature). */
+-function foldChar(ch: string): string {
+-  return ch
++/**
++ * A character and the combining marks on it; or marks with nothing under them.
++ *
++ * `ﾞ` and `ﾟ` (U+FF9E, U+FF9F — halfwidth katakana's voicing marks) are letters
++ * by category and combining marks once NFKD has run, and they are the only two
++ * characters of which that is true: every code point was tried, 2026-10-03.
++ */
++const CLUSTER = /[^\p{M}ﾞﾟ][\p{M}ﾞﾟ]*|[\p{M}ﾞﾟ]+/gu;
++
++/**
++ * One cluster, folded in everything but case. May come back empty (a bare
++ * combining mark) or longer (a ligature).
++ */
++function unlowered(cluster: string): string {
++  return cluster
+     .normalize("NFKD")
+     .replace(/[̀-ͯ]/g, "")
+     .replace(/[‘’‛]/g, "'")
+     .replace(/[“”„]/g, '"')
+-    .replace(/[–—]/g, "-")
+-    .toLowerCase();
++    .replace(/[–—]/g, "-");
+ }
+ 
+ /**
+@@ -94,7 +134,7 @@ function foldChar(ch: string): string {
+  * the other two.
+  */
+ export function queryTerms(query: string): string[] {
+-  return fold(query.replace(/["\u201c\u201d]/g, " "))
++  return fold(query.replace(/["“”]/g, " "))
+     .split(/\s+/)
+     .filter((t) => t.length >= 2 && t !== "or" && !t.startsWith("-"));
+ }
+@@ -112,8 +152,11 @@ export function queryTerms(query: string): string[] {
+  * - `find` — the words themselves. **One term, not the query**: in-article
+  *   search matches this as a single literal substring (`findLiteral` in
+  *   search-hits.ts), so a two-word query, an `OR`, or a quoted phrase matched
+- *   nothing at all. The term chosen is one that actually occurs in this hit, so
+- *   the highlight is always something the reader can see.
++ *   nothing at all. And **in the hit's own spelling, not the folded one**:
++ *   find-on-page folds case and nothing else, on purpose, so `cafe` finds
++ *   nothing in an article that says `café` — nor `don't` in one that says
++ *   `don’t`, which is most English prose. Until 2026-10-03 this sent the folded
++ *   term, and its test pinned `find=cafe`. See `ownSpelling`.
+  * - `match=words` — said out loud because the default became `meaning`, and a
+  *   meaning-mode panel has nothing to do with a literal `find`.
+  *
+@@ -122,8 +165,47 @@ export function queryTerms(query: string): string[] {
+  * search panel is not.
+  */
+ export function libraryHitHref(hit: LibraryHit, query: string): string {
+-  const term = queryTerms(query).find((t) => fold(hit.text).includes(t));
+   const at = `${readHref(hit.slug)}?at=${encodeURIComponent(hit.blockId)}`;
+-  if (!term) return at;
++  const term = ownSpelling(hit.text, queryTerms(query));
++  if (term === null) return at;
+   return `${at}&mode=search&find=${encodeURIComponent(term)}&match=words`;
+ }
++
++/**
++ * The first of `terms` that occurs in `text`, **as `text` spells it** — or
++ * `null` when none does, or none can be searched for.
++ *
++ * The spelling can be wider than the term: `eff` lands inside `eﬃcient`'s
++ * ligature and comes back as `eﬃ`, the whole character. It can also be
++ * *shorter*: `ffi` is three letters typed and one in the article, and
++ * find-on-page reads a one-character `find` as "not searching yet"
++ * (`MIN_FIND_CHARS`). That one is widened by a character — to the right, else
++ * to the left — and passed over for the next term if neither side has one.
++ *
++ * **A known limit:** `text` is the block's text and find-on-page searches the
++ * rendered html. For one word those agree unless rendering changes the letters
++ * — a hit on `alpha` inside `\(\alpha\)` leads to a paragraph that shows `α`,
++ * and nothing is highlighted. The shelf has only the text, so it cannot tell.
++ */
++function ownSpelling(text: string, terms: readonly string[]): string | null {
++  const { folded, starts, ends } = foldWithMap(text);
++  for (const term of terms) {
++    const i = folded.indexOf(term);
++    if (i === -1) continue;
++    const start = starts[i];
++    const end = ends[i + term.length - 1];
++    if (start === undefined || end === undefined) continue;
++    const own = text.slice(start, end);
++    if (searchable(own)) return own;
++    const after = text.slice(end).match(/^./su)?.[0] ?? "";
++    const before = text.slice(0, start).match(/.$/su)?.[0] ?? "";
++    const widened = [own + after, before + own].find(searchable);
++    if (widened !== undefined) return widened;
++  }
++  return null;
++}
++
++/** Whether find-on-page would search for this — the test at the top of `findLiteral`. */
++function searchable(find: string): boolean {
++  return find.trim().length >= MIN_FIND_CHARS;
++}
+diff --git a/src/web/search-hits.ts b/src/web/search-hits.ts
+index 6eac0e4e3..2b9d799b3 100644
+--- a/src/web/search-hits.ts
++++ b/src/web/search-hits.ts
+@@ -242,7 +242,7 @@ function placeOf(scale: Ruler, index: number, start: number): number {
+  * every later offset out by one — the wash starts a letter late, the snippet
+  * starts a letter late, and the "42% in" is shifted. Nothing throws.
+  *
+- * The same trap is written down in src/library-search.ts § `foldWithMap`, which
++ * The same trap is written down in src/web/library-hits.ts § `foldWithMap`, which
+  * is what makes this one worth being annoyed about: it was a known hazard in
+  * this repo, in a function doing the same job, and this one did not check.
+  * Raised by a GPT Sol review, 2026-08-26.
+diff --git a/tests/library-hits.test.ts b/tests/library-hits.test.ts
+index f0e4b8e0c..eb9fe071d 100644
+--- a/tests/library-hits.test.ts
++++ b/tests/library-hits.test.ts
+@@ -1,3 +1,4 @@
++// @vitest-environment jsdom
+ /**
+  * The address of a library hit, and the folding behind it — src/web/library-hits.ts.
+  *
+@@ -17,10 +18,18 @@
+  * this is the guard that makes the move worth it.
+  *
+  * See docs/plans/260826k-library-shelf-actions-and-search.md.
++ *
++ * jsdom, since 2026-10-03: the round trip below runs the link's `find` through
++ * the reading view's real `findLiteral`, which renders html. The first version
++ * of this file checked the link against its own idea of the destination, and
++ * pinned `find=cafe` — a term the destination cannot match
++ * (docs/plans/261003h-shelf-link-sends-the-hits-own-spelling-and-foldwithmap-offsets.md).
+  */
+ import { describe, expect, it } from "vitest";
++import { fold as serverFold } from "../src/library-search.js";
+ import { fold, foldWithMap, libraryHitHref, queryTerms } from "../src/web/library-hits.js";
+-import type { LibraryHit } from "../src/types.js";
++import { findLiteral } from "../src/web/search-hits.js";
++import type { Block, LibraryHit } from "../src/types.js";
+ 
+ const hit = (text: string, over: Partial<LibraryHit> = {}): LibraryHit => ({
+   slug: "an-article",
+@@ -84,8 +93,65 @@ describe("where a library hit leads", () => {
+   });
+ 
+   it("percent-encodes what it puts in the query string", () => {
+-    const p = params(libraryHitHref(hit("a café in paris"), "café"));
+-    expect(p.get("find")).toBe("cafe");
++    const href = libraryHitHref(hit("a café in paris"), "café");
++    expect(href).toContain("find=caf%C3%A9");
++    expect(params(href).get("find")).toBe("café");
++  });
++
++  it("sends the HIT'S OWN spelling, not the folded one", () => {
++    // Find-on-page folds case only, so `cafe` finds nothing in "café".
++    expect(params(libraryHitHref(hit("a café in paris"), "cafe")).get("find")).toBe("café");
++    expect(params(libraryHitHref(hit("they don’t say"), "don't")).get("find")).toBe("don’t");
++    expect(params(libraryHitHref(hit("an eﬃcient market"), "efficient")).get("find")).toBe("eﬃcient");
++  });
++
++  it("widens a one-character spelling, which find-on-page would refuse", () => {
++    /* `ffi` is three characters typed and one in the article. A `find` of one
++       character is "not searching yet" to `findLiteral`. */
++    expect(params(libraryHitHref(hit("an eﬃcient market"), "ffi")).get("find")).toBe("ﬃc");
++    // Nothing to the right: widen left instead.
++    expect(params(libraryHitHref(hit("a baﬃ"), "ffi")).get("find")).toBe("aﬃ");
++    // Nothing either side: the paragraph alone, as for no term at all.
++    expect(params(libraryHitHref(hit("ﬃ"), "ffi")).get("find")).toBeNull();
++    // A space to the right is no help — `find` is trimmed — so left it is.
++    expect(params(libraryHitHref(hit("aﬃ b"), "ffi")).get("find")).toBe("aﬃ");
++    // And a term that cannot be widened gives way to the next one.
++    expect(params(libraryHitHref(hit("ﬃ and plain"), "ffi plain")).get("find")).toBe("plain");
++  });
++});
++
++/** A paragraph as the reading view holds it. */
++const block = (text: string): Block => ({
++  id: "spya-k3m9qt",
++  tag: "p",
++  kind: "text",
++  text,
++  words: text.split(/\s+/).length,
++  html: `<p>${text}</p>`,
++  gistable: true,
++});
++
++describe("the round trip: the link's term, through the reading view's own matcher", () => {
++  /* **The test the first version of this file should have had.** Producer and
++     destination composed, rather than the producer checked against a value
++     somebody typed. Each row is [what the article says, what the reader typed]. */
++  const ROWS: [string, string, string][] = [
++    ["a control, so this test is known to be able to pass", "a plain paragraph", "plain"],
++    ["an accent", "a café in paris", "cafe"],
++    ["an accent, typed with it", "a café in paris", "café"],
++    ["an umlaut", "what Gödel proved", "godel"],
++    ["a curly apostrophe", "they don’t say", "don't"],
++    ["a ligature", "an eﬃcient market", "efficient"],
++    ["a ligature and nothing else", "an eﬃcient market", "ffi"],
++    ["an emoji before the word", "😀 café", "cafe"],
++    ["a decomposed accent before the word", "a\u0301 café", "cafe"],
++    ["a decomposed accent on the word", "a cafe\u0301 here", "cafe"],
++    ["a dotted capital I before the word", "İ café", "cafe"],
++  ];
++  it.each(ROWS)("%s", (_name, text, query) => {
++    const find = params(libraryHitHref(hit(text), query)).get("find");
++    expect(find).not.toBeNull();
++    expect(findLiteral([block(text)], find)).not.toHaveLength(0);
+   });
+ });
+ 
+@@ -116,6 +182,67 @@ describe("folding", () => {
+     // The emoji occupies two UTF-16 units; its span must cover both.
+     expect((ends[1] as number) - (starts[1] as number)).toBe(2);
+   });
++
++  /** The source text under a folded match — what every caller does with the map. */
++  const under = (text: string, term: string): string => {
++    const { folded, starts, ends } = foldWithMap(text);
++    const i = folded.indexOf(term);
++    return text.slice(starts[i] as number, ends[i + term.length - 1] as number);
++  };
++
++  it("has one map entry per UTF-16 unit of the folded text", () => {
++    /* Callers index the map with `indexOf`, which counts UTF-16 units. One
++       entry per code POINT put every offset after an emoji out by one. */
++    for (const s of ["😀 café", "a😀b😀c", "a\u0301 café", "𐐀𐐁 x", "eﬃcient ½ İ"]) {
++      const { folded, starts, ends } = foldWithMap(s);
++      expect(starts).toHaveLength(folded.length);
++      expect(ends).toHaveLength(folded.length);
++    }
++    expect(under("😀 café", "cafe")).toBe("café");
++  });
++
++  it("does not lose the width of a character that folds to nothing", () => {
++    // A combining mark folds to "", and the next offset was read from the last
++    // entry PUSHED — so everything after it slid one to the left.
++    expect(under("a\u0301 café", "cafe")).toBe("café");
++    expect(under("\u0301café", "cafe")).toBe("café");
++  });
++
++  it("keeps a letter's combining marks inside its span", () => {
++    expect(under("a cafe\u0301 here", "cafe")).toBe("cafe\u0301");
++  });
++});
++
++describe("the two folds are twins", () => {
++  /* src/web/library-hits.ts and src/library-search.ts each say they must stay
++     twins, and until 2026-10-03 nothing imported both. They had already parted:
++     this one lowercased a character at a time, so a word-final Σ came out σ
++     here and ς there, and it normalised a code point at a time, so pointed
++     Hebrew typed in the usual order came out in a different order. */
++  const STRINGS = [
++    "plain ASCII, Mixed Case",
++    "Gödel café naïve",
++    "decomposed cafe\u0301",
++    "don’t “quote” ‘single’ „low“ ‛rev",
++    "a—b – c",
++    "eﬃcient ﬁsh ½ ²",
++    "İstanbul and ı",
++    "ΟΔΟΣ ΟΔΟΣ. ΣΟΦΟΣ",
++    "\u05D1\u05BC\u05B7\u05D9\u05B4\u05EA",
++    "😀 emoji 𐐀𐐁 deseret",
++    "\u0301leading mark",
++    "한국어 ｆｕｌｌｗｉｄｔｈ",
++    // Halfwidth katakana: U+FF9E is a letter that NFKD turns into a combining mark.
++    "\uff76\uff9e\u0301\u05bc\uff9e",
++    "A\u05b0\uff9e and \uff8a\uff9f\u05b0\uff9f",
++    "",
++  ];
++  it.each(STRINGS)("fold(%j) is the server's", (s) => {
++    expect(fold(s)).toBe(serverFold(s));
++  });
++  it.each(STRINGS)("foldWithMap(%j).folded is fold's", (s) => {
++    expect(foldWithMap(s).folded).toBe(fold(s));
++  });
+ });
+ 
+ describe("query terms", () => {

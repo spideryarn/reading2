@@ -108,8 +108,13 @@ export interface SearchApi {
   /**
    * Run a new search of this kind — `quick` or `meaning`. Returns the id it
    * minted, so `?runs=` can name it.
+   *
+   * `colour` pins the new row to a palette slot from its first paint — what
+   * *thorough* uses to hand a quick row's colour to the meaning row that
+   * replaces it (plan 261003i B2). It is this tab's choice like any other
+   * (`chosen`), and it is stored once `begin` has said which row to write.
    */
-  ask(criterion: string, kind: SearchKind): string;
+  ask(criterion: string, kind: SearchKind, colour?: number): string;
   /** The same criterion again, and the same kind — for a run whose model call failed. */
   retry(id: string): void;
   /**
@@ -136,7 +141,7 @@ export interface SearchApi {
    *
    * Keyed on kind as well as words, because a quick search and a meaning
    * search for the same words are two different questions. The box can ask
-   * meaning while quick is still out; *flesh out* appears once quick finishes
+   * meaning while quick is still out; *thorough* appears once quick finishes
    * (plan 261002e, review F5).
    */
   isRunning(criterion: string, kind: SearchKind): boolean;
@@ -282,6 +287,15 @@ export function useSearch(
   const chosen = useRef(new Map<string, number | null>());
 
   /**
+   * New rows whose inherited colour still needs its first `begin` to exist
+   * on the server. `chosen` is a lasting display override, not a pending
+   * write: replaying it on every revision or retry would overwrite a newer
+   * colour chosen in another tab without any colour press in this one.
+   * Kept through failures before `begin`, so an explicit retry still pins it.
+   */
+  const pendingColours = useRef(new Set<string>());
+
+  /**
    * The last PATCH in flight for each run, so a second one waits for it.
    *
    * Two presses in quick succession are two independent requests, and nothing
@@ -307,6 +321,7 @@ export function useSearch(
     currentArticle.current = articleToken;
     const gone = deleted.current;
     const picks = chosen.current;
+    const colours = pendingColours.current;
     const chains = patching.current;
     const flying = inFlight.current;
     const queues = lanes.current;
@@ -315,6 +330,7 @@ export function useSearch(
       gone.clear();
       queues.clear();
       picks.clear();
+      colours.clear();
       chains.clear();
       if (flying.size > 0) {
         flying.clear();
@@ -641,7 +657,18 @@ export function useSearch(
                  moment, which is the true thing to do rather than a side
                  effect worth avoiding. */
               if (begun.sourceHash !== undefined) setFingerprint({ hash: begun.sourceHash });
+              const pinColour = pendingColours.current.delete(liveId);
               if (begun.id !== liveId) follow(begun.id);
+              else if (
+                !gone &&
+                pinColour &&
+                chosen.current.has(liveId) &&
+                (chosen.current.get(liveId) ?? null) !== (begun.colour ?? null)
+              ) {
+                /* The inherited colour of a newly asked row, once only.
+                   `follow` handles a renamed row, one line up. */
+                recolour(liveId, chosen.current.get(liveId) ?? null);
+              }
               me.begun = true;
               if (!gone) {
                 if (fresh) put(begun);
@@ -759,8 +786,13 @@ export function useSearch(
   reviseRef.current = revise;
 
   const ask = useCallback(
-    (criterion: string, kind: SearchKind) => {
+    (criterion: string, kind: SearchKind, colour?: number) => {
       const id = mintId();
+      // Before `send`, so the pending row is painted in it — `put` reads `chosen`.
+      if (colour !== undefined) {
+        chosen.current.set(id, colour);
+        pendingColours.current.add(id);
+      }
       send(id, criterion.trim(), kind, new Date().toISOString());
       return id;
     },
@@ -789,6 +821,7 @@ export function useSearch(
   const remove = useCallback(
     (id: string) => {
       deleted.current.add(id);
+      pendingColours.current.delete(id);
       setRuns((prev) => prev.filter((r) => r.id !== id));
       // Deleting it frees the question at once, as it always has: asking it
       // again is a new search the reader chose, not an impatient press.

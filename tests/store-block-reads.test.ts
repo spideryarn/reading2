@@ -26,7 +26,12 @@
 import { describe, expect, it } from "vitest";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
-import { blockHashQuery, blocksQuery, sourceHashQuery } from "../src/store/pg.js";
+import {
+  blockHashQuery,
+  blocksQuery,
+  relationsFingerprintQuery,
+  sourceHashQuery,
+} from "../src/store/pg.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { sanitizeStoredBlocks } from "../src/sanitize.js";
 import type { Block } from "../src/types.js";
@@ -36,6 +41,10 @@ const renderSql = blocksQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
 const sourceQuery = sourceHashQuery(new QueryBuilder() as never, "art-1").toSQL();
 const sourceSql = sourceQuery.sql;
 const sourceParams = sourceQuery.params;
+const relationsSql = relationsFingerprintQuery(
+  new QueryBuilder() as never,
+  "rev-1",
+).toSQL().sql;
 
 describe("the fingerprint read", () => {
   it("asks for the four columns the hash is made of", () => {
@@ -67,6 +76,22 @@ describe("the fingerprint read", () => {
        `hashBlocks` joins them in the order it is given — so a reordering
        silently changes the hash and every artefact reports itself stale. */
     expect(sql).toMatch(/order by "spideryarn"\."revision_blocks"\."ordinal" asc/i);
+  });
+});
+
+describe("the relations fingerprint read", () => {
+  it("asks for the eligibility fields as well as the rendered paragraph fields", () => {
+    expect(relationsSql).toContain('"block_id"');
+    expect(relationsSql).toContain('"text"');
+    expect(relationsSql).toContain('"kind"');
+    expect(relationsSql).toContain('"words"');
+    expect(relationsSql).toContain('"treatment"');
+  });
+
+  it("does not fetch HTML or the search vector, and preserves reading order", () => {
+    expect(relationsSql).not.toContain('"html"');
+    expect(relationsSql).not.toContain('"fts"');
+    expect(relationsSql).toMatch(/order by "spideryarn"\."revision_blocks"\."ordinal" asc/i);
   });
 });
 

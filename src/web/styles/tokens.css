@@ -121,6 +121,16 @@
   --hl-blue: color-mix(in oklab, oklch(0.72 0.14 270) 32%, var(--page));
   --hl-pink: color-mix(in oklab, oklch(0.76 0.16 350) 30%, var(--page));
 
+  /* **The same four at full strength**, for a thin edge rather than a wash —
+     the bar down a reader's own row in the Quotes band (styles/quotes.css §
+     the reader's own highlights; plan 261003h). The wash is mixed mostly into
+     the page so prose stays legible on it, which makes it too pale to carry a
+     3px line; these are the washes' own bases, unmixed. Light twins below. */
+  --hl-yellow-solid: oklch(0.88 0.16 100);
+  --hl-green-solid: oklch(0.80 0.15 150);
+  --hl-blue-solid: oklch(0.72 0.14 270);
+  --hl-pink-solid: oklch(0.76 0.16 350);
+
   /* Left-edge tints that distinguish the granularity columns at a glance.
      One hue family, so the columns read as one system rather than as a rainbow —
      but the ramp runs down BOTH lightness and chroma, coarse to fine. The
@@ -437,6 +447,14 @@
   --hl-green: color-mix(in oklab, oklch(0.80 0.15 150) 36%, var(--page));
   --hl-blue: color-mix(in oklab, oklch(0.72 0.14 270) 30%, var(--page));
   --hl-pink: color-mix(in oklab, oklch(0.76 0.16 350) 32%, var(--page));
+
+  /* The solids, darker: a 3px edge is a non-text mark and wants 3:1 against
+     the page, and the dark theme's pale bases — the yellow above all — come
+     nowhere near that on near-white. Same hues, lower lightness. */
+  --hl-yellow-solid: oklch(0.64 0.14 95);
+  --hl-green-solid: oklch(0.60 0.15 150);
+  --hl-blue-solid: oklch(0.56 0.16 270);
+  --hl-pink-solid: oklch(0.60 0.18 350);
 
   /* The depth ramp runs coarse to fine in lightness *away from the page*, so on
      a light page it runs dark to light: the coarsest column is the most

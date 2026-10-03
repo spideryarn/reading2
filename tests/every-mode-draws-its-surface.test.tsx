@@ -166,7 +166,7 @@ if (!(globalThis as { CSS?: unknown }).CSS) {
 const SLUG = "a-piece";
 const PARAGRAPH =
   "The instrument was built before anybody could say what it would measure, and the theory followed it.";
-const SECOND = "A later chapter revisits the same episode from the other side.";
+const SECOND = "A later chapter revisits the same episode from the other side again.";
 
 /**
  * **The child node's gist.** Deliberately different from every string in
@@ -768,6 +768,7 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   debate: true,
   citations: true,
   faq: true,
+  relations: true,
   skim: true,
   sketch: true,
   illustrated: true,
@@ -805,6 +806,15 @@ function artefact(url: string): Response | null {
     return has ? json({ citations: CITATIONS, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/faq/"))
     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
+  /* Marginalia's relation words. */
+  if (url.startsWith("/api/relations/"))
+    return has
+      ? json({
+          relations: { relations: { "spya-cccccc": "but" } },
+          stale: false,
+          outdated: false,
+        })
+      : GONE();
   if (url.startsWith("/api/tweets/"))
     return has ? json({ thread: stamped(THREAD), stale: false, profileChanged: false }) : GONE();
   if (url.startsWith("/api/skim/"))
@@ -1193,9 +1203,11 @@ const SPENDS: Record<Mode, Spend> = {
      press armed nothing and the band waited on "Write it"; Greg asked that
      opening it start the run (7T, docs/plans/261002a-summary-generates-on-open.md). */
   summary: { kind: "posts", steps: ["simple"] },
-  /* The tree's questions, the arc and the ideas already made — read, never
-     generated. A press that started the Ideas job here would be the bug. */
-  marginalia: { kind: "none", why: "draws what the article already has; it never starts a job" },
+  /* The tree's questions, the arc and other modes' lists are read, never
+     generated: a press that started the Ideas job here would be the bug. Its
+     own relation words are the one thing the press that turns it on asks for
+     (docs/plans/261003f-marginalia-relation-words-and-timeline-events.md). */
+  marginalia: { kind: "posts", steps: ["relations"] },
   /* The five artefact modes, each arming its own name. */
   glossary: { kind: "posts", steps: ["glossary"] },
   ideas: { kind: "posts", steps: ["ideas"] },
@@ -1428,16 +1440,16 @@ const DRAWS: Record<Mode, Draws> = {
     control: { where: ".prose", says: PARAGRAPH },
   },
   /* **No band: a column right of the prose** — `?margin=1` since 2026-10-01, a
-     switch beside the band rather than a mode (261001i). The control is the owner's stored
-     idea, drawn as a stamp beside the block it occurs in — which proves the
-     read of the ideas happened, reached the notes and was put in a cell. jsdom
-     lays nothing out but `innerWidth` is 1024, so `fitMargin` gives the column
-     room and the notes are drawn. */
+     switch beside the band rather than a mode (261001i). The control is its own
+     stored relation word, drawn beside the paragraph it names — proving the new
+     owner-only read reached `RelationWord`, not merely that an older note kind
+     still draws. jsdom lays nothing out but `innerWidth` is 1024, so
+     `fitMargin` gives the column room and the notes are drawn. */
   marginalia: {
     kind: "none",
     why: "its notes sit beside the prose, in the table's own cells",
     query: "?margin=1",
-    control: { where: ".marg-note", says: IDEA_NAME },
+    control: { where: ".marg-relation", says: "but" },
   },
   /* The child node's title, from the tree in the payload — the one row this
      fixture's structure can produce. Deliberately **not** a gist: gists were in

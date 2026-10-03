@@ -84,6 +84,7 @@ import type {
   Citation,
   Debate,
   Faq,
+  Relations,
   Crossrefs,
   SimpleSummary,
   Skim,
@@ -938,6 +939,16 @@ export const articleRevisions = spideryarn.table(
      * `revision_blocks`, on the argument its neighbours make.
      */
     faq: jsonb("faq").$type<Faq>(),
+
+    /**
+     * How each paragraph bears on the one before it — `Relations`,
+     * src/types.ts, written by the `relations` step.
+     * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+     *
+     * The WHOLE artefact, like its neighbours; `sourceHash` is FAQ's
+     * fingerprint. **Owner only**: it is in no public projection.
+     */
+    relations: jsonb("relations").$type<Relations>(),
 
     /**
      * Links between the article's own blocks — `Crossrefs`, src/types.ts,
@@ -1811,6 +1822,18 @@ export const refereeClaims = spideryarn.table(
      * same reason: not knowing is not the same as knowing it is fine.
      */
     sourceHash: text("source_hash"),
+    /**
+     * **Which run is in flight, so an older run's answer cannot land on a newer
+     * one.** `begin` writes a fresh token, `finish` must present it and clears
+     * it, and the sweep clears it. Two tabs running Claims at once used to have
+     * the slower answer overwrite the faster — sweep 5, X4,
+     * docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md.
+     *
+     * One column where `referee_criteria` has two: `created_at` above is already
+     * this table's sweep clock, so there is no `attempt_started_at` and no
+     * both-or-neither check. `text`, like `search_runs` and `referee_criteria`.
+     */
+    attemptId: text("attempt_id"),
   },
   (t) => [
     check("referee_claims_status", sql`${t.status} in ('pending','done','error')`),
@@ -2695,7 +2718,7 @@ export const revisionStepRuns = spideryarn.table(
          the truth. `tests/db-step-constraint.test.ts` compares the last
          `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
          directions, which is what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','citations','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
