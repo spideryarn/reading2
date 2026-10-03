@@ -96,8 +96,14 @@ export type { CitedWork, CitationDrops, CitationPlace, Citations, CitationScoreD
 /* `citations/4`, 2026-09-30: a PDF's reference list is read from its text layer and sent after the article, with an `entry` field per work, and `authors` asked for as surnames (plan 260930i, SPIDERYARN-READING2-6K).
  *
  * `citations/5`, 2026-10-02: the request gained `CITATIONS_OUTPUT_SCHEMA`;
- * the prompt text is unchanged. */
-export const PROMPT_VERSION = "citations/5";
+ * the prompt text is unchanged.
+ *
+ * `citations/6`, 2026-10-03: `influence` is a number only when the model is
+ * confident it knows the work, and null otherwise; the schema makes it
+ * required and nullable. Greg: *"Maybe if the model is confident (e.g. because
+ * it's well-known), but if in doubt default to Unknown."*
+ * docs/plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md. */
+export const PROMPT_VERSION = "citations/6";
 
 /** Mentions kept per work. The first-cited jump needs one; three is room for the shorthand and the note. */
 export const MAX_MENTIONS = 3;
@@ -192,7 +198,7 @@ export function emptyDrops(): CitationDrops {
 }
 
 export function noScoreDrops(): CitationScoreDrops {
-  return { relevanceAbsent: 0, relevanceRejected: 0, influenceAbsent: 0, influenceRejected: 0 };
+  return { relevanceAbsent: 0, relevanceRejected: 0, influenceAbsent: 0, influenceRejected: 0, influenceUnknown: 0 };
 }
 
 /* ---------------------------------------------------------- reading raw -- */
@@ -222,6 +228,21 @@ function scoreCounting(
   const kept = score(value);
   if (kept === undefined) scores[rejected]++;
   return kept;
+}
+
+/**
+ * **`null` is the model saying it does not know the work**, which the prompt
+ * asks for whenever it is in doubt (plan 261003m). It becomes an absent
+ * `influence`, the shape an unscored row already has, and is counted on its
+ * own: an honest unknown is not a rejected score. Only influence has this
+ * reading; a null relevance is still rejected.
+ */
+function influenceCounting(value: unknown, scores: CitationScoreDrops): number | undefined {
+  if (value === null) {
+    scores.influenceUnknown++;
+    return undefined;
+  }
+  return scoreCounting(value, scores, "influenceAbsent", "influenceRejected");
 }
 
 /** Shorten to `cap` characters at a word boundary, and say so. */
@@ -667,7 +688,7 @@ function readDraft(
   const authors = fields.authors ?? "";
   const year = fields.year ?? "";
   const relevance = scoreCounting(w.relevance, scores, "relevanceAbsent", "relevanceRejected");
-  const influence = scoreCounting(w.influence, scores, "influenceAbsent", "influenceRejected");
+  const influence = influenceCounting(w.influence, scores);
   return withIdentifierEntry({
     foldKey,
     title: clip(fields.title, TITLE_CAP, drops),
@@ -1763,11 +1784,14 @@ against. Not a summary of the work. Do not begin "The article", "The author" or
 "relevance" 0-1 — how much THIS piece's argument leans on the work. 1: the piece
 is built on it. 0.5: it carries one step of the argument. 0.1: a passing mention
 or further reading.
-"influence" 0-1 — how influential the work is in its own field, from what you
-know. 1: a landmark nearly everyone in the field knows. 0.5: well known to
-specialists. 0.1: obscure, or you do not know it. When you do not know the work,
-say so with a low number rather than guessing high.
-Both scores are required on every row.
+"influence" — a number 0-1, or null. How influential the work is in its own
+field, from what you know. Give a number ONLY when you actually know this work
+and are confident of its standing, for example because it is well known. 1: a
+landmark nearly everyone in the field knows. 0.5: well known to specialists.
+0.1: a work you know, and know to be minor. A low number never means "I do not
+know this work": that is null. If you are in doubt, write null.
+Every row has both: "relevance" is always a number, and "influence" is a number
+or null.
 
 HOW MANY
 
@@ -1788,7 +1812,7 @@ JSON only, no prose, no code fence:
     "year": "...",
     "why": "...",
     "relevance": 0.0,
-    "influence": 0.0,
+    "influence": null,
     "reference": {"block": "spya-k3m9qt", "quote": "..."},
     "mentions": [{"block": "spya-a1b2c3", "quote": "..."}],
     "entry": 8
@@ -1856,7 +1880,11 @@ export const CITATIONS_OUTPUT_SCHEMA = {
           year: citationStringSchema,
           why: citationStringSchema,
           relevance: { type: "number" },
-          influence: { type: "number" },
+          /* Required and nullable: null is "I do not know this work" (plan
+             261003m). The house shape for a required-nullable field
+             (src/timeline.ts, src/paper-metadata.ts), which both providers'
+             strict subsets accept. */
+          influence: { type: ["number", "null"] },
           reference: citationPlaceSchema,
           mentions: { type: "array", items: citationPlaceSchema },
           entry: { type: "integer" },

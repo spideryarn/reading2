@@ -46,6 +46,7 @@ const {
   scoresOf,
   sourceOf,
   verdictText,
+  visibleWorks,
 } = await import("../src/web/CitationsPanel.js");
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`. docs/project/block-ids.md. */
@@ -67,12 +68,16 @@ function work(over: Partial<CitedWork> & Pick<CitedWork, "id" | "title">): Cited
 }
 
 /* In first-cited order, as the artefact stores them. Priorities:
-   central 0.80, famous 0.50 — (2·0.3 + 0.9)/3 — passing 0.20, unscored none. */
+   central 0.80, famous 0.50 — (2·0.3 + 0.9)/3 — passing 0.20, and unknown 0.60:
+   its influence is unknown, so it is judged on its relevance alone (plan
+   261003m). BARE has no relevance either, and is the one row with no priority;
+   it is outside WORKS so the drawn list keeps its four rows. */
 const CENTRAL = work({ id: "spya-a2b3c4", title: "Central", relevance: 0.8, influence: 0.8 });
 const FAMOUS = work({ id: "spya-d5e6f7", title: "Famous", relevance: 0.3, influence: 0.9 });
 const PASSING = work({ id: "spya-g8h9j2", title: "Passing", relevance: 0.2, influence: 0.2 });
-const UNSCORED = work({ id: "spya-k2m3n4", title: "Unscored", relevance: 0.6 });
-const WORKS = [CENTRAL, FAMOUS, PASSING, UNSCORED];
+const UNKNOWN = work({ id: "spya-k2m3n4", title: "Unknown", relevance: 0.6 });
+const BARE = work({ id: "spya-b2r3e5", title: "Bare" });
+const WORKS = [CENTRAL, FAMOUS, PASSING, UNKNOWN];
 
 const RUNNING: Job = {
   id: "job-citations",
@@ -87,16 +92,39 @@ const RUNNING: Job = {
 const titles = (ws: CitedWork[]) => ws.map((w) => w.title);
 
 describe("the prioritised score", () => {
-  it("is two parts relevance to one part influence, and needs both", () => {
+  it("is two parts relevance to one part influence", () => {
     expect(priorityOf(CENTRAL)).toBeCloseTo(0.8);
     expect(priorityOf(FAMOUS)).toBeCloseTo(0.5);
-    expect(priorityOf(UNSCORED)).toBeUndefined();
   });
 
-  it("hides what is under the bar, keeps first-cited order, and never hides an unscored work", () => {
-    expect(titles(orderWorks(WORKS, "prioritised", 0.4))).toEqual(["Central", "Famous", "Unscored"]);
-    expect(titles(orderWorks(WORKS, "prioritised", 1))).toEqual(["Unscored"]);
-    expect(titles(orderWorks(WORKS, "prioritised", 0))).toEqual(titles(WORKS));
+  it("is the relevance alone when the influence is unknown, and nothing without a relevance", () => {
+    expect(priorityOf(UNKNOWN)).toBe(0.6);
+    expect(priorityOf(work({ id: "spya-z3r4s5", title: "Zero", relevance: 0 })), "zero is a score").toBe(0);
+    expect(priorityOf(BARE)).toBeUndefined();
+    /* An influence with no relevance is still unscored: the bar is mostly relevance. */
+    expect(priorityOf(work({ id: "spya-f3m4s5", title: "Fame only", influence: 0.9 }))).toBeUndefined();
+  });
+
+  it("hides what is under the bar, keeps first-cited order, and never hides a work with no relevance", () => {
+    const list = [...WORKS, BARE];
+    expect(titles(orderWorks(list, "prioritised", 0.4))).toEqual(["Central", "Famous", "Unknown", "Bare"]);
+    expect(titles(orderWorks(list, "prioritised", 1))).toEqual(["Bare"]);
+    expect(titles(orderWorks(list, "prioritised", 0))).toEqual(titles(list));
+  });
+
+  it("thresholds an unknown-influence work on its relevance: 0.2 is hidden at 0.25, and 0.3 shows", () => {
+    const low = work({ id: "spya-u3k4n5", title: "Unknown low", relevance: 0.2 });
+    const high = work({ id: "spya-u3k4n6", title: "Unknown high", relevance: 0.3 });
+    /* Sol's F8, pinned as the intended direction: at relevance 0.3 a work known
+       to be minor scores (0.6 + 0.1) / 3 = 0.23 and goes; the unknown one stays. */
+    const minor = work({ id: "spya-m3n4r5", title: "Known minor", relevance: 0.3, influence: 0.1 });
+    const out = visibleWorks([low, high, minor], CITATION_BAR_DEFAULT);
+    expect(titles(out.visible)).toEqual(["Unknown high"]);
+    expect(out.hiddenCount).toBe(2);
+    expect(out.unscoredCount, "an unknown influence with a relevance IS scored by the bar").toBe(0);
+    expect(visibleWorks([low, BARE], 1).unscoredCount).toBe(1);
+    /* A list of unknowns can be prioritised at all, which it could not before. */
+    expect(canPrioritise([low, high])).toBe(true);
   });
 
   it("is inclusive at the bar", () => {
@@ -114,8 +142,33 @@ describe("the prioritised score", () => {
 
 describe("the score orders", () => {
   it("sort descending, with a work missing that score last", () => {
-    expect(titles(orderWorks(WORKS, "relevance"))).toEqual(["Central", "Unscored", "Famous", "Passing"]);
-    expect(titles(orderWorks(WORKS, "influence"))).toEqual(["Famous", "Central", "Passing", "Unscored"]);
+    expect(titles(orderWorks([...WORKS, BARE], "relevance"))).toEqual(["Central", "Unknown", "Famous", "Passing", "Bare"]);
+    expect(titles(orderWorks(WORKS, "influence"))).toEqual(["Famous", "Central", "Passing", "Unknown"]);
+  });
+
+  it("influence: known first, then the unknown by relevance, no relevance last, first cited on a tie", () => {
+    const u = (id: string, title: string, relevance?: number) =>
+      work({ id, title, ...(relevance === undefined ? {} : { relevance }) });
+    const list = [
+      u("spya-u4a5b6", "Unknown 0.2", 0.2),
+      BARE,
+      PASSING,
+      u("spya-u4a5b7", "Unknown 0.7 first", 0.7),
+      u("spya-u4a5b8", "Unknown 0.9", 0.9),
+      FAMOUS,
+      u("spya-u4a5b9", "Unknown 0.7 second", 0.7),
+    ];
+    expect(titles(orderWorks(list, "influence"))).toEqual([
+      "Famous",
+      "Passing",
+      "Unknown 0.9",
+      "Unknown 0.7 first",
+      "Unknown 0.7 second",
+      "Unknown 0.2",
+      "Bare",
+    ]);
+    /* A known influence of 0.2 still comes before an unknown at relevance 0.9:
+       the tail is ordered among itself, never mixed into the known. */
   });
 
   it("break ties in first-cited order", () => {
@@ -232,7 +285,7 @@ describe("a row's numbers and its source", () => {
       ["relevance", 0.3],
       ["influence", 0.9],
     ]);
-    expect(scoresOf(UNSCORED).map((s) => s.key)).toEqual(["relevance"]);
+    expect(scoresOf(UNKNOWN).map((s) => s.key)).toEqual(["relevance"]);
     expect(scoresOf(work({ id: "spya-z2a3b4", title: "None" }))).toEqual([]);
   });
 
@@ -604,7 +657,43 @@ describe("CitationsPanel", () => {
     expect(CITATION_BAR_DEFAULT).toBe(0.25);
     expect(host.querySelector(`[data-citation-id="${PASSING.id}"]`)).toBeNull();
     expect(host.textContent).toContain("1 citation is hidden by this threshold.");
-    expect(row(UNSCORED.id).getAttribute("title")).toContain("Not scored");
+    /* A row with a relevance is scored by the bar even when its influence is
+       unknown, so it no longer carries the "not scored" title; a row with no
+       relevance still does. */
+    expect(row(UNKNOWN.id).getAttribute("title")).toBeNull();
+    await draw(owner({ citations: artefact([...WORKS, BARE]) }));
+    expect(row(BARE.id).getAttribute("title")).toContain("Not scored");
+  });
+
+  it("says `influence unknown` in words where a row has a relevance and no influence", async () => {
+    await draw(owner({ citations: artefact([...WORKS, BARE]) }));
+    const unknown = row(UNKNOWN.id).querySelector(".cite-influence-unknown");
+    expect(unknown?.textContent).toBe("influence unknown");
+    /* After the relevance bar, on the quiet line; never a bar at zero. */
+    const meta = row(UNKNOWN.id).querySelector(".cite-meta")!;
+    const bars = meta.querySelector(".score-bars")!;
+    expect(bars.querySelectorAll(".score-bar")).toHaveLength(1);
+    expect(bars.getAttribute("aria-label")).not.toMatch(/influence/);
+    expect(bars.compareDocumentPosition(unknown!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    /* A known influence is a bar and no words; a row with neither score says
+       nothing, as before. */
+    expect(row(FAMOUS.id).querySelector(".cite-influence-unknown")).toBeNull();
+    expect(row(FAMOUS.id).textContent).not.toContain("influence unknown");
+    expect(row(BARE.id).querySelector(".cite-influence-unknown")).toBeNull();
+    expect(row(BARE.id).querySelector(".score-bars")).toBeNull();
+    /* The card says why, and claims nothing that is not built: Dig deeper does
+       not fill influence in until stage 2. */
+    const card = await cardFor(unknown!);
+    const said = `${card.head} ${card.body}`;
+    expect(said).toMatch(/not confident/i);
+    expect(said).toMatch(/no score/i);
+    expect(said).not.toMatch(/dig deeper/i);
+  });
+
+  it("a visitor's row says it too", async () => {
+    const { key: _key, ...shared } = UNKNOWN;
+    await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
+    expect(row(UNKNOWN.id).querySelector(".cite-influence-unknown")?.textContent).toBe("influence unknown");
   });
 
   it("draws the raw scores on a row, and not the number it was barred on", async () => {

@@ -693,7 +693,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             Two small bars: <strong>relevance</strong> to this piece, and <strong>influence</strong> in
-            its field.
+            its field. Influence is the model’s memory of the work, not a citation count, so it gives
+            one only when it is confident it knows the work. Otherwise the row says{" "}
+            <em>influence unknown</em>. That is not a low score: a short influence bar means a work the
+            model knows and thinks minor.
           </li>
           <li>
             <strong>first cited</strong> jumps to where the article first cites it.{" "}
@@ -710,7 +713,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </ul>
         <p>
           Orders: <strong>prioritised</strong> (the default, with a slider), <strong>first cited</strong>,{" "}
-          <strong>relevance</strong> and <strong>influence</strong>.
+          <strong>relevance</strong> and <strong>influence</strong>. The slider hides the works that
+          score lowest on relevance and influence together, relevance counting double; a work whose
+          influence is unknown is judged on its relevance alone. Ordered by influence, the unknown
+          ones come last, the most relevant first.
         </p>
       </>
     ),

@@ -158,10 +158,26 @@ describe("citationRows — the formatter, as arithmetic", () => {
     expect(first).toContain("spya-cit001");
   });
 
-  it("says a missing score is missing rather than printing zero or nothing", () => {
+  it("says a missing influence is unknown, rather than printing zero, nothing, or a failure to score", () => {
     const row = citationRows(list(THREE)).rows[2] ?? "";
-    expect(row).toContain("relevance 0.50");
-    expect(row).toMatch(/influence not scored/);
+    expect(row).toContain("relevance 0.50 · influence unknown");
+    /* `citations/6`: no influence is the model saying it does not know the
+       work, which is an answer. "not scored" read as our failure. */
+    expect(row).not.toMatch(/influence not scored/);
+  });
+
+  it("still says a missing relevance was not scored: only influence can be unknown", () => {
+    const bare = { ...THREE[0]! };
+    delete bare.relevance;
+    const row = citationRows(list([bare])).rows[0] ?? "";
+    expect(row).toContain("relevance not scored · influence 0.95");
+  });
+
+  it("tells the model what unknown means, in our own words outside the fence", () => {
+    const out = citationsOutcome(found(list(THREE)), "");
+    const ours = out.content.slice(0, out.content.indexOf("<<<UNTRUSTED"));
+    expect(ours).toMatch(/influence unknown/);
+    expect(ours).toMatch(/not confident/);
   });
 
   it("names where each link came from, for every linkFrom", () => {

@@ -121,16 +121,8 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom" | "registry"> & {
  */
 export const CITATION_BAR_DEFAULT = 0.25;
 
-/**
- * What the bar thresholds on: two parts relevance to one part influence, **both
- * required** — a work missing either is unscored, and an unscored work survives
- * every position of the bar (src/web/threshold.ts § survivesThreshold).
- *
- * Not the glossary's product (Sol F9): there both dimensions are necessary, and
- * here influence is not — an obscure work the piece is built on is exactly what
- * the list should keep. Weighted to relevance so a famous but passing reference
- * does not ride its fame over the bar.
- */
+/* `priorityOf`, below, is what the bar thresholds on. */
+
 /**
  * **The verified place a row's *first cited* names** — a mention in the
  * `firstCited` block, else the reference when that is where it points (a
@@ -302,9 +294,43 @@ export function quotedCitingWords(quote: string): string {
   return /^…?["“‘']/.test(words) && /["”’']$/.test(words) ? words : `“${words}”`;
 }
 
+/**
+ * **The one place this panel reads a work's influence**: the bar, the two
+ * orders, the row's bars and whether the influence order is offered all go
+ * through it. Today it is the list's own number, or nothing when the model said
+ * it does not know the work (`citations/6`) or left no usable score. Plan
+ * 261003m stage 2 puts a second source behind this one function.
+ */
+function influenceOf(work: ShownWork): number | undefined {
+  return work.influence;
+}
+
+/**
+ * What the bar thresholds on (src/web/threshold.ts § survivesThreshold):
+ *
+ * - **no relevance**: nothing, so the work survives every position of the bar;
+ * - **relevance, influence unknown**: the relevance alone;
+ * - **both**: two parts relevance to one part influence, `(2r + i) / 3`.
+ *
+ * Not the glossary's product (Sol F9): there both dimensions are necessary, and
+ * here influence is not — an obscure work the piece is built on is exactly what
+ * the list should keep. Weighted to relevance so a famous but passing reference
+ * does not ride its fame over the bar.
+ *
+ * **Relevance alone is not neutral, and that is accepted** (plan 261003m, GPT
+ * Sol's F8): returning `r` is the same arithmetic as `(2r + i) / 3` with
+ * `i = r`, so an unknown work is treated as exactly as influential as it is
+ * relevant. At relevance 0.30 it clears the default 0.25 bar, while a work known
+ * to be minor (influence 0.10) scores 0.23 and does not. Not knowing a work is
+ * not evidence against it. Before `citations/6` a work missing its influence
+ * was unscored and always shown; with unknown now common, that would stop the
+ * bar hiding anything.
+ */
 export function priorityOf(work: ShownWork): number | undefined {
-  if (work.relevance === undefined || work.influence === undefined) return undefined;
-  return (2 * work.relevance + work.influence) / 3;
+  if (work.relevance === undefined) return undefined;
+  const influence = influenceOf(work);
+  if (influence === undefined) return work.relevance;
+  return (2 * work.relevance + influence) / 3;
 }
 
 /** The bar applied once: the works to draw, and how many went. threshold.ts. */
@@ -357,12 +383,24 @@ export function publicationYear(work: Pick<ShownWork, "authors" | "year" | "regi
   return year === undefined ? null : Number(year);
 }
 
+/** A sort comparison: higher first, a missing score after every present one, 0 on a tie. */
+function descending(a: number | undefined, b: number | undefined): number {
+  if (a === undefined && b === undefined) return 0;
+  if (a === undefined) return 1;
+  if (b === undefined) return -1;
+  return b - a;
+}
+
 /**
  * The list in one flat order. `document` is the artefact's own first-cited
  * order; `prioritised` is that order with what is below the bar taken out; the
- * two score orders are descending, unscored last, and first-cited order breaks
- * ties so equal scores do not shuffle. `date` is oldest first, undated last, as
- * Debate's date order is (debate-order.ts), with the same tie-break.
+ * two score orders are descending, a work without that score last, and
+ * first-cited order breaks ties so equal scores do not shuffle. **In the
+ * influence order the unknown tail is itself ordered, by relevance descending**
+ * (no relevance last): with unknown common since `citations/6`, a tail in
+ * first-cited order would be most of the list in no order at all. `date` is
+ * oldest first, undated last, as Debate's date order is (debate-order.ts), with
+ * the same tie-break.
  */
 export function orderWorks<W extends ShownWork>(
   works: readonly W[],
@@ -375,20 +413,22 @@ export function orderWorks<W extends ShownWork>(
     case "prioritised":
       return visibleWorks(works, bar).visible;
     case "relevance":
-    case "influence": {
-      const score = (w: W) => (order === "relevance" ? w.relevance : w.influence);
       return works
         .map((work, index) => ({ work, index }))
-        .sort((a, b) => {
-          const sa = score(a.work);
-          const sb = score(b.work);
-          if (sa === undefined && sb === undefined) return a.index - b.index;
-          if (sa === undefined) return 1;
-          if (sb === undefined) return -1;
-          return sb - sa || a.index - b.index;
-        })
+        .sort((a, b) => descending(a.work.relevance, b.work.relevance) || a.index - b.index)
         .map(({ work }) => work);
-    }
+    case "influence":
+      return works
+        .map((work, index) => ({ work, index, influence: influenceOf(work) }))
+        .sort(
+          (a, b) =>
+            descending(a.influence, b.influence) ||
+            /* Reached only by two knowns that tie, where relevance is not
+               asked, or by two unknowns, where it orders the tail. */
+            (a.influence === undefined ? descending(a.work.relevance, b.work.relevance) : 0) ||
+            a.index - b.index,
+        )
+        .map(({ work }) => work);
     case "date":
       return works
         .map((work, index) => ({ work, index, year: publicationYear(work) }))
@@ -423,10 +463,20 @@ export function scoresOf(work: ShownWork): { key: string; label: string; value: 
   if (work.relevance !== undefined) {
     out.push({ key: "relevance", label: "relevance to this piece", value: work.relevance });
   }
-  if (work.influence !== undefined) {
-    out.push({ key: "influence", label: "influence in its field (the model's memory)", value: work.influence });
+  const influence = influenceOf(work);
+  if (influence !== undefined) {
+    out.push({ key: "influence", label: "influence in its field (the model's memory)", value: influence });
   }
   return out;
+}
+
+/**
+ * **Does the row say *influence unknown*?** When it has a relevance and no
+ * influence. A row with neither score says nothing, as before: that is an
+ * answer that lost both, not the model saying it does not know the work.
+ */
+export function influenceIsUnknown(work: ShownWork): boolean {
+  return work.relevance !== undefined && influenceOf(work) === undefined;
 }
 
 /* ------------------------------------------------------------- the source -- */
@@ -485,7 +535,17 @@ export const CAPPED_NOTE = `This piece cites more than ${MAX_CITATIONS} works; t
 
 /** Under every non-empty list: the weaker of the two scores, said plainly. */
 export const INFLUENCE_NOTE =
-  "Influence is the model's own memory of how much a work mattered in its field, not a citation count.";
+  "Influence is the model's own memory of how much a work mattered in its field, not a citation count. Where the model was not confident it knows a work, the row says “influence unknown” and the threshold goes by its relevance alone.";
+
+/** The words on a row with no influence, in place of a bar. Never a bar at zero. */
+export const INFLUENCE_UNKNOWN = "influence unknown";
+
+/**
+ * The card on those words. It says only what is built: *Dig deeper* does not
+ * fill influence in until plan 261003m stage 2, so it is not named here yet.
+ */
+export const INFLUENCE_UNKNOWN_NOTE =
+  "The model was not confident it knows this work, so it gave no score for its influence. That is not a low score: the threshold goes by this row's relevance alone.";
 
 /**
  * **A piece that cites nothing is a real answer**, not an error, and no retry is
@@ -875,12 +935,13 @@ function orderOptions(works: readonly ShownWork[]): { key: CiteOrder; label: str
           },
         ]
       : []),
-    ...(works.some((w) => w.influence !== undefined)
+    ...(works.some((w) => influenceOf(w) !== undefined)
       ? [
           {
             key: "influence" as const,
             label: "influence",
-            title: "The model's memory of how influential each work is in its field — not a citation count",
+            title:
+              "The model's memory of how influential each work is in its field — not a citation count. Works it was not confident it knows come after, by relevance",
           },
         ]
       : []),
@@ -974,7 +1035,7 @@ function BarSlider({
         max={barMax(works, bar)}
         step={GATE_STEP}
         value={bar}
-        title="How high a work has to score to stay on screen: two parts relevance to one part influence. Left shows more works, right fewer."
+        title="How high a work has to score to stay on screen: two parts relevance to one part influence, or relevance alone where the influence is unknown. Left shows more works, right fewer."
         aria-valuetext={`${bar.toFixed(2)}, showing ${count} citations`}
         onChange={(e) => onBar(Number.parseFloat(e.target.value))}
       />
@@ -1060,6 +1121,11 @@ function WorkRow({
       <LookupReading work={work} />
       <p className="cite-meta">
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}
+        {influenceIsUnknown(work) && (
+          <Tooltip content={INFLUENCE_UNKNOWN_NOTE} placement="left" className="score-bars-card">
+            <span className="cite-influence-unknown">{INFLUENCE_UNKNOWN}</span>
+          </Tooltip>
+        )}
         {source === null ? null : source.kind === "address" ? (
           <span className="cite-source">
             {source.host} · {source.how}

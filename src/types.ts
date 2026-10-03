@@ -4234,7 +4234,12 @@ export interface CitedWork {
   why: string;
   /** 0–1: how much THIS piece's argument leans on the work. The model's reading. */
   relevance?: number;
-  /** 0–1: how influential the work is in its field. **The model's memory**, weaker. */
+  /**
+   * 0–1: how influential the work is in its field. **The model's memory**, weaker.
+   * **Absent means unknown**: since `citations/6` the model gives a number only
+   * when it is confident it knows the work, and null otherwise, which is stored
+   * as no field (plan 261003m). A low number means "known, and minor".
+   */
   influence?: number;
   /** The bibliography / reference-list / note entry, if the article has one. */
   reference?: CitationPlace;
@@ -4646,12 +4651,19 @@ export interface CitationDrops {
 /**
  * The 0–1 scores the prompt required and did not get — the twin of
  * `GlossaryScoreDrops` (src/glossary.ts), same absent/rejected split.
+ *
+ * `influenceUnknown` is not a drop: it is the model's own `null`, the answer
+ * the prompt asks for when it is not confident it knows the work (plan
+ * 261003m). Kept apart from `influenceAbsent` (the field left out, which the
+ * schema forbids) and `influenceRejected` (not a number in 0–1), so the log
+ * line can tell an honest "unknown" from a broken answer.
  */
 export interface CitationScoreDrops {
   relevanceAbsent: number;
   relevanceRejected: number;
   influenceAbsent: number;
   influenceRejected: number;
+  influenceUnknown: number;
 }
 
 /**

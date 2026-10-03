@@ -23,6 +23,35 @@ where the link came from, and **first cited**, a jump to the passage
 entry](#which-citation-and-whose-entry) is what the by-line and *first cited* show since
 2026-09-30.
 
+**Influence is a number only when the model is confident it knows the work; otherwise the row says
+*influence unknown*.** Influence is the model's memory of the work, not anything in the article, and
+until `citations/6` the prompt told it to give a low number for a work it did not know, so "I do not
+know this" and "this is obscure" were the same number. Asked whether to keep the score at all
+([261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md)), Greg,
+2026-10-03:
+
+> Q-influence Hmmm, I'm torn. Maybe if the model is confident (e.g. because it's well-known), but if
+> in doubt default to Unknown. And if we do a deeper dive on a Citation, try and populate it then.
+>
+> — Greg, 2026-10-03
+
+So since `citations/6` the prompt asks for a number or `null`, the schema makes the field required
+and nullable ([prompting-guide.md](prompting-guide.md) § What the model writes back), and a low
+number means *known, and minor*. A `null` is stored as no `influence` at all, the shape an unscored
+row already had, and counted on the step's log line as `influenceUnknown`, apart from
+`influenceAbsent` (the field left out) and `influenceRejected` (not a number in 0–1). Two drafts of
+one work fold to the known number. On the row, a work with a relevance and no influence draws the
+relevance bar and then the words *influence unknown*, with a card saying the model was not confident
+it knows the work; never a bar at zero. A row with neither score says nothing, as before, and the
+hover card in the prose draws no scores at all.
+
+**A list made by `citations/5` or earlier keeps its numbers**, low ones for unknown works included,
+until it is made again from the Metadata page (§ [Making it again](#making-it-again)). Nothing re-runs
+by itself. The second half of Greg's answer, *Dig deeper* filling influence in from the web, is
+stage 2 of
+[261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md)
+and is not built yet.
+
 **No by-line that only repeats the title.** When the article gives a work only as an author–year
 label, the label is the title, and `Bartlett (1932)` over `Bartlett · 1932` said it twice
 (SPIDERYARN-READING2-7W). `byLineRepeatsTitle` folds only the known presentation differences —
@@ -198,7 +227,16 @@ that the furniture filter missed ([261001b](../plans/261001b-public-article-visi
 Five, under the glossary's order buttons ([glossary.md](glossary.md)):
 
 - **prioritised**, the default — `(2 × relevance + influence) / 3` against the threshold bar, in
-  first-cited order. A work missing a score survives every position of the bar
+  first-cited order: a score never moves a row, it only hides one. **A work whose influence is
+  unknown is judged on its relevance alone** (`priorityOf`), since 2026-10-03; before that it
+  survived every position of the bar, which was written for a rare unscored row and would stop the
+  bar hiding anything now that unknown is common. That is the same arithmetic as assuming the work
+  is exactly as influential as it is relevant, so it is not neutral: at relevance 0.30 an unknown
+  work clears the default bar, and one known to be minor (influence 0.10) scores 0.23 and does not.
+  Not knowing a work is not evidence against it. Whether the bar should use relevance alone for
+  every row is an open question in
+  [261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md).
+  A work with no relevance still survives every position of the bar
   ([`threshold.ts`](../../src/web/threshold.ts)), and the line under it says how many are hidden. The
   bar starts at **0.25**, lowered from 0.40 on 2026-09-15 so most works come in by default — 92% on
   average on the local runs
@@ -206,7 +244,10 @@ Five, under the glossary's order buttons ([glossary.md](glossary.md)):
   Falls back to first cited
   when no position of the bar would hide anything.
 - **first cited** — the artefact's own order.
-- **relevance**, **influence** — descending, a work missing that score last.
+- **relevance** — descending, a work with no relevance last.
+- **influence** — known influence first, descending; then the works whose influence is unknown, by
+  relevance, descending, with no relevance last. First-cited order breaks ties. Offered only when
+  some work has an influence.
 - **date** — publication year, oldest first, as Debate's date order is; same year in first-cited
   order, undated last. The year is the one the row draws (`workByLine`: the article's, the
   registry's only where the article gives none), read as its first four-digit year, so `2017a` is
@@ -220,7 +261,7 @@ Five, under the glossary's order buttons ([glossary.md](glossary.md)):
 
 Only the two raw scores are drawn on a row, never the combination — the glossary's rule. An **(i)**
 in the band's top-right corner (`BandAbout`, shared by every mode) says `influence` is the model's
-memory, not a citation count, and, **only when the model reported it**, that the list was capped at
+memory, not a citation count, and what *influence unknown* means, and, **only when the model reported it**, that the list was capped at
 80; it also carries the work count and provenance. The two notes were a foot pinned under the list
 until Greg, 2026-09-30 (`spya-nca765`), then briefly lived in the order row; the count was in that
 row too, shown only outside *prioritised*, whose threshold row already says "n of m"
