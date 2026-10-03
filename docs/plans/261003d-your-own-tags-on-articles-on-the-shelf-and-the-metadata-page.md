@@ -200,3 +200,25 @@ plan: **each row has its own Clear** rather than one Clear for both — it is th
 looking at, and it needs nothing shared between two components. The "nothing left" sentence names
 tags when they did it.
 
+**Stage 4 (review, browser, docs) — done.**
+
+- **GPT Sol's code review** ([prompt](261003d-tags-code-review-prompt.md),
+  [answer](261003d-tags-code-review-sol.md), [diff](261003d-tags-code-review.diff)): no P0; two P1
+  state races fixed in place (a restore during a tag edit could recreate the archived overlay; an
+  in-flight Metadata read could overwrite a tag edit), six P2s (lone surrogates, the CHECK → 400
+  translation now real rather than written down, cached rows normalised to `tags: []`, the chips no
+  longer dead patches over the card link, IME Enter, and tests that could not go red — the cap test
+  now watches a real lock wait through `pg_blocking_pids`). Verdict: ship. Its sandbox could not
+  reach Postgres; the Postgres suites were run here afterwards, green.
+- **Browser check** (Sonnet, Playwright, 1280px and 390px; screenshots `261003d-shot-1…6`): five of
+  seven passed outright, no console errors. Two bugs, both fixed and held by
+  `tests/shelf-tags-popover.test.tsx` (the Escape one watched red without its fix):
+  - **Escape closed the whole popover with the suggestion list open** — Radix hears Escape on the
+    document before the editor's React handler can stop it. `onEscapeKeyDown` now asks the focused
+    combobox whether its list is open.
+  - **In the table, the popover closed after every tag added** — a tag edit re-renders the table and
+    its cells remount, taking the popover's `useState` with them. Open is now `useShelf.tagging`, as
+    `renaming` is for the same reason.
+- Docs: library.md § Your own tags, shelf-terms.md § Your own tags, in the row above, url-state.md,
+  export.md and the bundle README, chat-llm-help-commands-vision.md's status.
+

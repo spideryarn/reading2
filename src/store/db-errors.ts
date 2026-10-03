@@ -281,6 +281,15 @@ export function violatesConstraint(err: unknown, constraint: string): boolean {
   );
 }
 
+/** Did a named CHECK constraint refuse the value? See `violatesConstraint`. */
+export function violatesCheckConstraint(err: unknown, constraint: string): boolean {
+  return chainOf(err).some(
+    (link) =>
+      sqlstateOf(link) === "23514" &&
+      (link as { constraint?: unknown }).constraint === constraint,
+  );
+}
+
 /**
  * Whether waiting and asking again could plausibly give a different answer.
  *

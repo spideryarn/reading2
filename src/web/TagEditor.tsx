@@ -161,7 +161,11 @@ export function TagEditor({
     void run({ remove: [tag] }).then(() => input.current?.focus());
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one keyboard protocol, kept together so its precedence is visible
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    /* Enter is how an IME accepts its current composition. Treating that same
+       event as our submit would save a partial CJK tag. */
+    if (e.nativeEvent.isComposing) return;
     if (busy) {
       if (e.key === "Enter" || e.key === ",") e.preventDefault();
       return;
@@ -251,7 +255,7 @@ export function TagEditor({
         />
       </div>
 
-      <ul
+      <div
         id={listId}
         role="listbox"
         aria-label="Suggested tags"
@@ -259,7 +263,8 @@ export function TagEditor({
         className="tw:absolute tw:left-0 tw:right-0 tw:z-[110] tw:mt-1 tw:max-h-64 tw:list-none tw:overflow-auto tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]"
       >
         {options.map((o, i) => (
-          <li
+          // biome-ignore lint/a11y/useFocusableInteractive: focus stays on the combobox and aria-activedescendant identifies this option
+          <div
             key={`${o.kind}:${o.tag}`}
             id={optionId(i)}
             role="option"
@@ -283,9 +288,9 @@ export function TagEditor({
                 <span className="tw:text-xs tw:text-muted-foreground">{o.count}</span>
               </>
             )}
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
 
       {problem && (
         <p role="alert" className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-destructive">

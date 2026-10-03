@@ -35,6 +35,13 @@ describe("normaliseTag", () => {
     expect(tag("a\u0085b")).toMatch(/^refused/); // NEL is not whitespace to JS: a C1 control
     expect(tag("a\u009bb")).toMatch(/^refused/);
   });
+
+  it("refuses lone UTF-16 surrogates instead of letting the database change them", () => {
+    expect(tag("before\ud800after")).toMatch(/^refused/);
+    expect(tag("before\udc00after")).toMatch(/^refused/);
+    /* A real surrogate pair is a valid code point and remains accepted. */
+    expect(tag("🧠")).toBe("🧠");
+  });
 });
 
 describe("compareTags", () => {

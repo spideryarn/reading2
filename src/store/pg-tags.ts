@@ -17,6 +17,7 @@ import { getDb } from "../db/client.js";
 import { articles, articleTags } from "../db/schema.js";
 import { normaliseTag, compareTags, TAGS_PER_ARTICLE, TAGS_PER_EDIT } from "../tags.js";
 import { READ_COMMITTED } from "./isolation.js";
+import { violatesCheckConstraint } from "./db-errors.js";
 import { tagsForArticles } from "./tag-rows.js";
 import { notFound, ownedByReader, ownedSlug, requireSlug } from "./pg.js";
 
@@ -34,6 +35,14 @@ export interface TagUse {
 
 function refuse(message: string): Error {
   return Object.assign(new Error(message), { status: 400 });
+}
+
+/** Keep a future JS/CHECK spelling mismatch a reader refusal, not a 500. */
+export function rethrowTagWriteError(error: unknown): never {
+  if (violatesCheckConstraint(error, "article_tags_spelling")) {
+    throw refuse("That tag does not meet the spelling rules.");
+  }
+  throw error;
 }
 
 /**
@@ -89,10 +98,14 @@ export const pgTagStore = {
           .where(and(eq(articleTags.articleId, article.id), inArray(articleTags.tag, remove)));
       }
       if (add.length > 0) {
-        await tx
-          .insert(articleTags)
-          .values(add.map((tag) => ({ articleId: article.id, tag })))
-          .onConflictDoNothing({ target: [articleTags.articleId, articleTags.tag] });
+        try {
+          await tx
+            .insert(articleTags)
+            .values(add.map((tag) => ({ articleId: article.id, tag })))
+            .onConflictDoNothing({ target: [articleTags.articleId, articleTags.tag] });
+        } catch (error) {
+          rethrowTagWriteError(error);
+        }
       }
       const rows = await tx
         .select({ tag: articleTags.tag })
@@ -131,4 +144,3 @@ export const pgTagStore = {
     return (await tagsForArticles(db, [article.id])).get(article.id) ?? [];
   },
 };
-

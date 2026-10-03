@@ -10,7 +10,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -35,6 +35,18 @@ const status = (p: Promise<unknown>) =>
     () => "ok",
     (err: { status?: number }) => err.status ?? "no status",
   );
+
+/** Wait for a backend to be an actual blocker; elapsed time is never evidence. */
+async function waitUntilBlockedBy(pid: number): Promise<void> {
+  for (let i = 0; i < 200; i++) {
+    const found = await getDb().execute(
+      sql`select count(*)::int as n from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`,
+    );
+    if (Number((found.rows[0] as { n: number | string }).n) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`the tag edit never blocked behind backend ${pid}`);
+}
 
 describe("the reader's own tags", () => {
   beforeAll(async () => {
@@ -124,18 +136,16 @@ describe("the reader's own tags", () => {
     await pgTagStore.edit(SLUG, { add: start });
 
     let edit: Promise<unknown> | undefined;
-    let settled = false;
-    let settledWhileCompetitorOpen = true;
     await getDb().transaction(async (tx) => {
+      const backend = await tx.execute(sql`select pg_backend_pid() as pid`);
+      const pid = Number((backend.rows[0] as { pid: number | string }).pid);
       await tx.insert(articleTags).values({ articleId: ARTICLE_ID, tag: "racer b" });
       edit = status(pgTagStore.edit(SLUG, { add: ["racer a"] }));
-      void edit.then(() => {
-        settled = true;
-      });
-      await new Promise((r) => setTimeout(r, 400));
-      settledWhileCompetitorOpen = settled;
+      /* The old fixed sleep could pass merely because a busy box had not
+         scheduled `edit` yet. Observe the lock wait itself; the timeout above
+         exists only to fail if it never happens. */
+      await waitUntilBlockedBy(pid);
     });
-    expect(settledWhileCompetitorOpen).toBe(false);
     expect(await edit).toBe(400);
     expect(await pgTagStore.tagsFor(SLUG)).toHaveLength(TAGS_PER_ARTICLE);
   });

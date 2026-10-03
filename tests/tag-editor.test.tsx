@@ -102,6 +102,19 @@ async function press(key: string) {
   });
 }
 
+async function pressWhileComposing(key: string) {
+  await act(async () => {
+    box().dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+        cancelable: true,
+        isComposing: true,
+      }),
+    );
+  });
+}
+
 describe("TagEditor", () => {
   it("adds what was typed on Enter, lowercased, and clears the box", async () => {
     const save = vi.fn(async (c: TagChange) => c.add ?? []);
@@ -127,6 +140,15 @@ describe("TagEditor", () => {
     await type("ai");
     await press(",");
     expect(save).toHaveBeenCalledWith({ add: ["ai"] });
+  });
+
+  it("does not submit Enter while an input method is composing text", async () => {
+    const save = vi.fn(async (c: TagChange) => c.add ?? []);
+    paint([], save);
+    await type("仮");
+    await pressWhileComposing("Enter");
+    expect(save).not.toHaveBeenCalled();
+    expect(box().value).toBe("仮");
   });
 
   it("removes the last tag on Backspace in an empty box", async () => {
@@ -158,7 +180,7 @@ describe("TagEditor", () => {
     await type("new one");
     await press("Enter");
     expect(host.querySelector('[role="alert"]')?.textContent).toBeTruthy();
-    expect(host.textContent).toContain("kept");
-    expect(host.textContent).not.toContain("new one×");
+    expect(host.querySelector('[aria-label="Remove the tag kept"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Remove the tag new one"]')).toBeNull();
   });
 });

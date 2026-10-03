@@ -544,7 +544,7 @@ export function Metadata({
     },
     [slug],
   );
-  const { reload, refresh } = useOrderedRead(readProvenance);
+  const { reload, refresh, armRefresh } = useOrderedRead(readProvenance);
   /* Keyed on `reload`, whose identity changes with the slug and with nothing
      else — so "a different article" is said once, in the place `useOrderedRead`
      already has to be right about it, rather than a second time here. */
@@ -917,6 +917,10 @@ export function Metadata({
               label="Your tags on this article"
               save={async (change) => {
                 const tags = await editArticleTags(slug, change);
+                /* A metadata GET already in flight may have read the old tags.
+                   Let it finish, then repair it from the server; with no GET in
+                   flight the PATCH answer already is the freshest answer. */
+                armRefresh();
                 setProvenance((p) => (p && p.slug === slug ? { ...p, tags } : p));
                 return tags;
               }}

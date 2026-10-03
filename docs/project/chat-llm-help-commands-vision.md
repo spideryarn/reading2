@@ -169,7 +169,7 @@ The proposal:
 | What the command does | Examples | Run by the model's choice? |
 |---|---|---|
 | Moves the reader, opens a view, reads | open Glossary, find "X", go to Export | **Yes, at once.** Undone by Back |
-| Writes the reader's own data, reversibly | archive, add a tag (no tags yet), bookmark | **Proposed**: shown as the row it would run; Enter runs it |
+| Writes the reader's own data, reversibly | archive, add a tag, bookmark | **Proposed**: shown as the row it would run; Enter runs it |
 | Spends a model call or the allowance | run again, high-powered AI, a meaning search | **Proposed**, with the `generates` marker the bar already shows |
 | Destroys or publishes | delete, make public | **Never** from a sentence. Only from its own page and its own confirmation |
 
@@ -206,7 +206,12 @@ to hold), and chat's command buttons second, reusing its command list and its pr
 - **Built** (2026-10-02, [261002c](../plans/261002c-commands-do-more-and-an-interface-model-vision.md)):
   the bar's Metadata commands, re-run per mode, sections by name, archive, export, and `find <words>`.
 - **Measured**: Jev choosing a command, once, on a hand-made set (§ Jev first).
-- **Not built**: the interface model, Help search, chat command buttons, tags.
+- **Built** (2026-10-03, [261003d](../plans/261003d-your-own-tags-on-articles-on-the-shelf-and-the-metadata-page.md)):
+  tags themselves — [library.md § Your own tags](library.md#your-own-tags). Not yet a command: "add a
+  tag of X" would call `editArticleTags(slug, { add: [X] })` (src/web/article-tags.ts) after
+  validating X with `normaliseTag` (src/tags.ts), and needs a tags controller on the bar's `ShelfRow`
+  and a proposed row, per the table above.
+- **Not built**: the interface model, Help search, chat command buttons, the tag command.
 
 ## Decided
 

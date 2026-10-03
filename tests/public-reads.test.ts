@@ -28,6 +28,7 @@ import {
   publicSearchesQuery,
   publicSourceGuessQuery,
 } from "../src/store/public-reader.js";
+import { publicLibraryQuery } from "../src/store/public-library.js";
 import { lockedArticleQuery } from "../src/store/pg-visibility.js";
 
 const articleQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "article").toSQL();
@@ -38,8 +39,20 @@ const headSql = headQuery.sql;
 const blocks = publicBlocksQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
 const commentsQuery = publicCommentsQuery(new QueryBuilder() as never, "a-slug").toSQL();
 const searchesQuery = publicSearchesQuery(new QueryBuilder() as never, "a-slug").toSQL();
+const publicListing = publicLibraryQuery(new QueryBuilder() as never, 7).toSQL();
 
 describe("the public revision read", () => {
+  it("never asks for the owner's private tags in an article, head, asset, or listing read", () => {
+    for (const [name, sql] of [
+      ["article", articleQuery.sql],
+      ["head", headQuery.sql],
+      ["asset", assetQuery.sql],
+      ["listing", publicListing.sql],
+    ] as const) {
+      expect(sql, name).not.toContain("article_tags");
+    }
+  });
+
   /**
    * **The predicate, in the statement.** `publicSlug` being right is one thing;
    * the query using it is another, and this is the only place they meet.

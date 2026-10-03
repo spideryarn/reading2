@@ -364,6 +364,24 @@ describe("a write makes our copy wrong, so it throws the copy away", () => {
     await vi.waitFor(() => expect(invalidateCache).toHaveBeenCalledWith("/api/chat/gibbon", "user-1"));
   });
 
+  it("invalidates both shelf and Metadata copies after a successful tag edit", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("{}", { status: 200 })));
+    await apiFetch("/api/library/gibbon/tags", { method: "PATCH", body: "{}" });
+
+    await vi.waitFor(() => {
+      expect(invalidateCache).toHaveBeenCalledWith("/api/library", "user-1");
+      expect(invalidateCache).toHaveBeenCalledWith("/api/metadata/gibbon", "user-1");
+    });
+  });
+
+  it("keeps shelf and Metadata copies when a tag edit failed", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("no", { status: 400 })));
+    await apiFetch("/api/library/gibbon/tags", { method: "PATCH", body: "{}" });
+    await settle();
+
+    expect(invalidateCache).not.toHaveBeenCalled();
+  });
+
   it("does not invalidate when the write failed", async () => {
     vi.stubGlobal("fetch", () => Promise.resolve(new Response("no", { status: 500 })));
     await apiFetch("/api/comments/gibbon", { method: "POST" });

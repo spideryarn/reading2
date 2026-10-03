@@ -40,9 +40,17 @@ export type TagSpelling =
    space before this is asked, so only the invisible ones are left to refuse. */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: refusing them is the point
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+/* JavaScript strings may contain lone UTF-16 surrogates. Node replaces those
+   with U+FFFD while encoding a Postgres parameter, so accepting one would mean
+   the tag we validate is not the tag the database stores. */
+const ILL_FORMED_UTF16 =
+  /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 /** A tag as it would be stored, or why it cannot be one. */
 export function normaliseTag(raw: string): TagSpelling {
+  if (ILL_FORMED_UTF16.test(raw)) {
+    return { ok: false, reason: "A tag needs valid Unicode characters." };
+  }
   const tag = raw.normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim();
   if (tag === "") return { ok: false, reason: "A tag needs at least one character." };
   if ([...tag].length > TAG_MAX_LENGTH) {

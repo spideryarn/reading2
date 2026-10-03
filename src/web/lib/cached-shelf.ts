@@ -167,7 +167,10 @@ export function shelfFromCachedBody(body: unknown): LibraryEntry[] | null {
   const { articles } = body;
   if (!Array.isArray(articles)) return null;
   if (!articles.every(isDrawableEntry)) return null;
-  return articles as LibraryEntry[];
+  /* A saved response from before tags existed is valid, but from this boundary
+     onward a LibraryEntry has today's shape. Normalize once instead of making
+     every shelf consumer remember the historical optionality. */
+  return articles.map((entry) => ({ ...entry, tags: entry.tags ?? [] })) as LibraryEntry[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

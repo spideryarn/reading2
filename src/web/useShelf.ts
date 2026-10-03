@@ -132,6 +132,14 @@ export interface Shelf {
   beginRename: (slug: string) => void;
   cancelRename: () => void;
   /**
+   * Which article's tag popover is open, if any (ShelfTags.tsx) — up here for
+   * `renaming`'s reason: a tag edit re-renders the table, whose cells remount,
+   * and a popover holding its own `useState` closed after every tag added
+   * (found by the browser check of plan 261003d).
+   */
+  tagging: string | null;
+  setTagging: (slug: string | null) => void;
+  /**
    * Say that something a button tried to do did not happen.
    *
    * Exposed so the card's own buttons — copy, re-run — report through the same
@@ -175,6 +183,7 @@ export function useShelf(readerId: string): Shelf {
    */
   const loadingArchived = useRef(false);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [tagging, setTagging] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
    * Slugs with an archive already in flight.
@@ -515,7 +524,12 @@ export function useShelf(readerId: string): Shelf {
       supersedeEarlierReads();
       const swap = (list: LibraryEntry[] | null) =>
         list?.map((a) => (a.slug === slug ? { ...a, tags } : a)) ?? null;
-      const edited = archivedEditsRef.current.get(slug) ?? archived?.find((a) => a.slug === slug);
+      /* `null` is a value here: a restore that completed while this request was
+         out says the article is known not to be archived. Do not fall through
+         from that sentinel to the stale `archived` array captured at launch. */
+      const edited = archivedEditsRef.current.has(slug)
+        ? archivedEditsRef.current.get(slug)
+        : archived?.find((a) => a.slug === slug);
       if (edited) recordArchivedEdit(slug, { ...edited, tags });
       setArticles(swap);
       setArchived(swap);
@@ -620,6 +634,8 @@ export function useShelf(readerId: string): Shelf {
       loadArchived,
       restore,
       renaming,
+      tagging,
+      setTagging,
       beginRename,
       cancelRename,
     }),
@@ -641,6 +657,8 @@ export function useShelf(readerId: string): Shelf {
       loadArchived,
       restore,
       renaming,
+      tagging,
+      setTagging,
       beginRename,
       cancelRename,
     ],

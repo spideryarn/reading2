@@ -619,6 +619,7 @@ one thing that will make the rest of these files make sense.
                            What the Dig deeper action wrote about cited works you asked it to look into,
                            which search results it read, and what it read of each paper.
       reading-time.json    How many seconds you have spent on each block.
+      tags.json            Your own tags on the article.
       ideas.json           Propositions the article takes as given.
       quotes.json          Lines worth keeping.
       timeline.json        When the article says things happened.
@@ -806,6 +807,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/citation-investigations.json":
     "What the Dig deeper action wrote about cited works you asked it to look into, which search results it read, and what it read of each paper itself.",
   "augmentations/reading-time.json": "How many seconds you have spent on each block.",
+  "augmentations/tags.json": "Your own tags on the article.",
   "augmentations/ideas.json": "Propositions the article takes as given.",
   "augmentations/quotes.json": "Lines worth keeping.",
   "augmentations/timeline.json": "When the article says things happened.",
