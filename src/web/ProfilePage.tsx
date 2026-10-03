@@ -60,6 +60,7 @@ import { AccountSection } from "./AccountSection.js";
 import { BillingSection } from "./BillingSection.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { CONTENTS_MARGIN, PageContents } from "./PageContents.js";
+import type { SynonymTable } from "./page-search.js";
 /* The Metadata page's section, shared since 2026-10-03 so the two read as one
    app and fold the same way. This page had a private copy of the heading. */
 import { Section } from "./PageSection.js";
@@ -144,6 +145,14 @@ const WIRE_LABEL: Record<string, string> = {
   chat: "chat",
 };
 
+/* Profile's billing vocabulary. Metadata's archive/hide/shelf and size/count
+   groups would send "archived articles" or "font size" to Recently read, and
+   make "hide experimental features" miss Settings. The remaining words are
+   already the sections' keywords; article actions are not Profile actions. */
+const PROFILE_SYNONYMS: SynonymTable = [
+  ["cost", "price", "spend", "spent", "money", "dollar", "bill", "expense", "charge", "paid", "usage"],
+];
+
 export function ProfilePage() {
   useDocumentTitle(pageTitle({ kind: "profile" }));
 
@@ -213,7 +222,7 @@ export function ProfilePage() {
           step. Hidden below `lg`; `CONTENTS_MARGIN` is the room it needs from
           there until the centred margin holds it.
           docs/plans/261003n-profile-gets-the-contents-list-and-search-box.md. */}
-      <PageContents containerRef={body} label="Sections of this page" />
+      <PageContents containerRef={body} label="Sections of this page" synonyms={PROFILE_SYNONYMS} />
     <main
       ref={body}
       className={`tw:mx-auto ${CONTENTS_MARGIN} tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans`}

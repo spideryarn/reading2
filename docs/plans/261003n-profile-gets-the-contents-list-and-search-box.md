@@ -31,10 +31,12 @@ Nothing else changes: the same search, the same open-scroll-flash, the same brea
 
 ## What it costs, and what is left as it is
 
-- **The search uses Metadata's synonym table** (`page-search.ts` § `METADATA_SYNONYMS`): *price*
-  finds *cost*, and so on. On Profile the groups that matter (cost, price, bill) point at Plan,
-  which is right, and the rest match nothing. A Profile table of its own is a prop away if a wrong
-  match is ever seen. Not built.
+- **The search uses Profile's billing synonym table** (`ProfilePage.tsx` § `PROFILE_SYNONYMS`):
+  *bill* and *usage* find *Plan*. Code review caught wrong matches with the original Metadata
+  default: *archived articles* and *font size* found *Recently read*, while *hide experimental
+  features* found nothing. Metadata's archive/hide/shelf and size/count groups gave those words
+  an article-specific meaning. `PageContents` now accepts a page's own table, keeping Metadata's
+  default for callers that omit it.
 - **Profile keeps the corner wordmark** (Metadata's is in its dock). The wordmark is at the top of
   the left corner and the list starts 6rem down. The browser check looks at whether they touch.
 - Between 1024px and 1152px wide the Profile column sits up to 4rem right of centre, as
@@ -55,3 +57,23 @@ otherwise. A copy of the list written for Profile was never an option; the compo
 - `reader-profile.md` § The page's six sections says the list is there; the feedback note carries
   Greg's answer.
 - A GPT Sol review of the code.
+
+## What landed
+
+Built as planned, in two commits: the mount and the shared `CONTENTS_MARGIN`, then the review's fix.
+
+**GPT Sol's code review, 2026-10-03: ship with changes.** One finding, P2, fixed by the reviewer
+and red first: Metadata's synonym table gave three wrong answers on Profile (quoted above under
+*What it costs*). `PageContents` takes an optional `synonyms` and Profile passes its own. It also
+checked the built CSS still contains the margin rule now that the class is a constant, and made the
+margin test name the class rather than only compare the page with the constant.
+
+**Left as it is:** *which model* lists *About you* above *What's running*, because both carry
+*model* as a keyword. Both are shown; only the order is arguable.
+
+**The browser check** (Sonnet, Playwright; 1440, 1100, 820 and 390 wide) passed every item. At
+1440 the list is at x 24 to 200 and the page's text starts at 353; the wordmark ends 52px above it.
+At 1100, the tightest width, the text starts at 216, a 16px gap. At 820 and 390 the list is not
+drawn and the page is not shifted. Click, search, Enter and Escape behave as on Metadata, whose own
+list is unchanged. No console errors. It ran before the review's synonym fix, which changes no
+layout.

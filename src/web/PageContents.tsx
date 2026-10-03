@@ -53,7 +53,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { scrollToAndFlash } from "./flash.js";
-import { searchSections, type SearchableSection } from "./page-search.js";
+import { searchSections, type SearchableSection, type SynonymTable } from "./page-search.js";
 
 /**
  * The event a section listens for to open itself — sent to the `[data-section]`
@@ -250,11 +250,14 @@ export const CONTENTS_MARGIN =
 export function PageContents({
   containerRef,
   label,
+  synonyms,
 }: {
   /** The element whose `[data-section]` descendants are the contents. */
   containerRef: RefObject<HTMLElement | null>;
-  /** Names the nav for a screen reader — this page has another one in the bar. */
+  /** Names the nav for a screen reader. */
   label: string;
+  /** This page's vocabulary; omitted, the search keeps Metadata's table. */
+  synonyms?: SynonymTable;
 }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [here, setHere] = useState<string | null>(null);
@@ -423,9 +426,9 @@ export function PageContents({
      query is typed joins the results. */
   const matches = useMemo(() => {
     if (query.trim() === "") return null;
-    const ids = searchSections(query, entries);
+    const ids = searchSections(query, entries, synonyms);
     return ids.flatMap((id) => entries.filter((e) => e.id === id));
-  }, [query, entries]);
+  }, [query, entries, synonyms]);
 
   /* Nothing worth navigating. One entry is furniture rather than help, and an
      empty list is the state before the metadata request has landed. */
@@ -456,7 +459,8 @@ export function PageContents({
        search box arrived (plan 261001s), and then every keystroke that
        filtered the list shrank the box and moved the input under the
        reader's cursor. 6rem down, level with the page's first sections; the
-       corner wordmark it once had to clear moved into the dock on 2026-09-06.
+       Metadata's corner wordmark moved into the dock on 2026-09-06;
+       Profile keeps its wordmark above the list.
        The list scrolls inside a column that stops short of the dock, so a
        long page's contents never run under it. Sol, plan review. */
     <nav
