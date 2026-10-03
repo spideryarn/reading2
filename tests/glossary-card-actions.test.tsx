@@ -30,6 +30,7 @@ import { buildNoteIndex } from "../src/web/notes-view.js";
 import { shownEntries } from "../src/web/glossary-shown.js";
 import { DIG_DEEPER_UNQUOTED } from "../src/web/GlossaryPanel.js";
 import type { Block, BlockId, GlossaryEntry } from "../src/types.js";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 
 class FakeResizeObserver {
   observe() {}
@@ -189,6 +190,21 @@ describe("the one visible list", () => {
 });
 
 describe("the card's owner actions", () => {
+  it("keeps the buttons together and wraps only between the link and their group (CSS contract)", () => {
+    /* jsdom cannot measure rows. The DOM assertions below alone stayed green
+       with the entire 261003h stylesheet change removed. Check the loaded
+       stylesheet's grouping contract too; pixel layout still needs a browser. */
+    const css = readerCssNoComments();
+    const foot = /^\.prose-card-term-foot\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "";
+    const group = /^\.prose-card-term-acts\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "";
+    const open = /^\.prose-card-term-acts > \.prose-card-open\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "";
+    expect(foot, "the term foot must wrap between the link and the buttons").toMatch(/flex-wrap:\s*wrap\s*;/);
+    expect(group, "the three buttons must share a flex row").toMatch(/display:\s*inline-flex\s*;/);
+    expect(group).toMatch(/white-space:\s*nowrap\s*;/);
+    expect(group).toMatch(/margin-left:\s*auto\s*;/);
+    expect(open, "the group, rather than its last button, owns the right alignment").toMatch(/margin-left:\s*0\s*;/);
+  });
+
   it("draws Dig deeper and Hide for an owner, and neither for a visitor", () => {
     paint([TERM], actionsWith());
     hover(mark());

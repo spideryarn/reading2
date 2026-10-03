@@ -574,6 +574,9 @@ const Box = forwardRef<
     if (!ready || asking === null) return;
     if (session) session.flush(draft);
     else onAsk(draft, asking);
+    /* Enter and find share the accepted search: let go of a soft keyboard
+       so the hits can be read. A refused search keeps the caret. */
+    putKeyboardAway(box.current);
   };
 
   /**
@@ -644,10 +647,6 @@ const Box = forwardRef<
               e.preventDefault();
               if (ready) {
                 ask();
-                /* The hits arrive in the band under the keys, so a soft
-                   keyboard goes (useVisualViewport.ts § `putKeyboardAway`). At
-                   a desk the caret stays for the next search. */
-                putKeyboardAway(e.currentTarget);
               }
               /* Words mode has nothing to ask — the hits arrived as the reader
                  typed — so Enter dismisses the keyboard instead. On a phone that

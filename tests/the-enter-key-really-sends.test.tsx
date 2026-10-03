@@ -26,6 +26,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ClientComment } from "../src/web/useComments.js";
+import type { LiveApi } from "../src/web/live/useLiveConversation.js";
 
 /* ------------------------------------------------------------- the mocks -- */
 
@@ -146,7 +147,7 @@ function press(el: Element, key: string, init: KeyboardEventInit = {}): Keyboard
 describe("the chat composer", () => {
   const sent: string[] = [];
 
-  function mount(busy: boolean): HTMLTextAreaElement {
+  function mount(busy: boolean, live?: LiveApi): HTMLTextAreaElement {
     sent.length = 0;
     act(() => {
       root.render(
@@ -158,6 +159,7 @@ describe("the chat composer", () => {
           focused: { current: 0 },
           draft: "",
           onDraft: () => {},
+          live,
         }),
       );
     });
@@ -194,6 +196,49 @@ describe("the chat composer", () => {
 
     expect(sent).toEqual(["Why does the hippocampus care?"]);
     expect(document.activeElement).not.toBe(box);
+  });
+
+  function deferredLiveStop(): { live: LiveApi; finish: () => void } {
+    let finish!: () => void;
+    const stopping = new Promise<void>((resolve) => { finish = resolve; });
+    /* No onStartLive is supplied, so the composer reads only phase and stop;
+       no live transport or controls are involved in this handoff test. */
+    const live = { phase: "live", stop: () => stopping } as LiveApi;
+    return { live, finish };
+  }
+
+  it("lets go after an awaited live handoff when the reader has not begun another draft", async () => {
+    softKeyboard(336);
+    const { live, finish } = deferredLiveStop();
+    const box = mount(false, live);
+    box.focus();
+    type(box, "Finish the spoken conversation with this question");
+    press(box, "Enter");
+    expect(sent).toEqual([]);
+    expect(document.activeElement).toBe(box);
+
+    await act(async () => { finish(); });
+
+    expect(sent).toEqual(["Finish the spoken conversation with this question"]);
+    expect(document.activeElement).not.toBe(box);
+  });
+
+  it("keeps the keyboard for a new draft typed while the live handoff was waiting", async () => {
+    softKeyboard(336);
+    const { live, finish } = deferredLiveStop();
+    const box = mount(false, live);
+    box.focus();
+    type(box, "Finish the spoken conversation with this question");
+    press(box, "Enter");
+    expect(sent).toEqual([]);
+    expect(box.value).toBe("");
+    type(box, "And another question I am still typing");
+
+    await act(async () => { finish(); });
+
+    expect(sent).toEqual(["Finish the spoken conversation with this question"]);
+    expect(box.value).toBe("And another question I am still typing");
+    expect(document.activeElement).toBe(box);
   });
 
   it("keeps the caret in the box on a desk, where there is no keyboard to put away", async () => {

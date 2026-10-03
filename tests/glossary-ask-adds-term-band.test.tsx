@@ -171,6 +171,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
 
 async function settle(turns = 8): Promise<void> {
@@ -232,6 +233,28 @@ async function press(el: Element | null | undefined): Promise<void> {
 }
 
 describe("a looked-up term the server added", () => {
+  it("puts the soft keyboard away when a valid lookup starts", async () => {
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("visualViewport", { height: 464, offsetTop: 0, scale: 1 });
+    await mount();
+    const box = input();
+    expect(box).not.toBeNull();
+    box?.focus();
+    await lookUp("attention head", answerOf({ kind: "no-glossary" }));
+    expect(host.querySelector(".gloss-ask-answer")).not.toBeNull();
+    expect(document.activeElement).not.toBe(box);
+  });
+
+  it("keeps the keyboard for a malformed term that was refused locally", async () => {
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("visualViewport", { height: 464, offsetTop: 0, scale: 1 });
+    await mount();
+    input()?.focus();
+    await lookUp("attention\u0001head", null);
+    expect(host.querySelector(".gloss-ask-failed")?.textContent).toContain("control or formatting characters");
+    expect(document.activeElement).toBe(input());
+  });
+
   it("re-reads the list, selects the new row, empties the box and drops the answer", async () => {
     await mount();
     const before = gets;

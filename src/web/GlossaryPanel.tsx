@@ -82,6 +82,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { AddedTerm, BlockId, GlossaryEntry, GlossaryLookup, Job } from "../types.js";
+import { parseAskedTerm } from "../asked-term.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { ScoreBars } from "./ScoreBars.js";
@@ -1648,10 +1649,13 @@ function AskATerm({
         className="gloss-ask-row"
         onSubmit={(e) => {
           e.preventDefault();
+          if (asking) return;
           void ask(term);
-          /* The answer streams in under the box, so a soft keyboard gets out
-             of its way (useVisualViewport.ts § `putKeyboardAway`). */
-          putKeyboardAway(e.currentTarget.querySelector("input"));
+          /* A locally refused term still needs correcting. Use the hook's
+             parser before giving up the caret, while ask supplies the refusal. */
+          if (parseAskedTerm(term).ok) {
+            putKeyboardAway(e.currentTarget.querySelector("input"));
+          }
         }}
       >
         {/* `type="search"`, so a phone offers the right keyboard and the browser
