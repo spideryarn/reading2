@@ -557,6 +557,9 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
       entries: rows.glossaryHiddenEntries.map((row) => rowJson(row)),
     });
   }
+  if (rows.articleTags.length) {
+    at("tags.json", { tags: rows.articleTags.map((row) => rowJson(row)) });
+  }
   return out;
 }
 
@@ -955,6 +958,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "cited works investigated", n: rows.citationInvestigations.length },
     { label: "blocks with reading time", n: rows.readingTime.length },
     { label: "glossary terms you hid", n: rows.glossaryHiddenEntries.length },
+    { label: "your tags", n: rows.articleTags.length },
     { label: "block ids ever minted", n: rows.blockIdentities.length },
   ];
   return all.filter((count) => count.n > 0);

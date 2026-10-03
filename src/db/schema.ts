@@ -450,6 +450,43 @@ export const articleVisibilityChanges = spideryarn.table(
 );
 
 /**
+ * **The reader's own tags on an article** — one row per (article, tag).
+ *
+ * Reader state, so keyed on `articles` and not on a revision: a re-extraction
+ * must not untag anything (the shelf-state block on `articles` says why). No
+ * `owner_id`, because ownership comes through the article (src/owner.ts), and
+ * it cascades with the article because a tag on nothing means nothing.
+ *
+ * **Stored lowercase, so the tag is its own identity** and the primary key is
+ * all the uniqueness there is: no second spelling of one tag to race over.
+ * src/tags.ts § `normaliseTag` is the same rule in TypeScript and runs first;
+ * the CHECK holds it for any writer that skips it. Plan
+ * docs/plans/261003d-your-own-tags-on-articles-on-the-shelf-and-the-metadata-page.md.
+ *
+ * A table rather than a `text[]` on `articles`: a per-element check and "every
+ * tag this reader uses, with counts" are a constraint and a `group by` here,
+ * and an `unnest` with no constraint there.
+ */
+export const articleTags = spideryarn.table(
+  "article_tags",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    tag: text("tag").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.tag] }),
+    /** src/tags.ts § `normaliseTag`: TAG_MAX_LENGTH, trimmed, lowercase, no comma, no control. */
+    check(
+      "article_tags_spelling",
+      sql`char_length(${t.tag}) between 1 and 40 and ${t.tag} = btrim(${t.tag}) and ${t.tag} = lower(${t.tag}) and ${t.tag} !~ '[,[:cntrl:]]' and ${t.tag} !~ '\\s\\s'`,
+    ),
+  ],
+);
+
+/**
  * One extraction of one article. **Immutable in its text** once published.
  *
  * The pipeline builds a *draft* and publishes it in one step, so a reader sees

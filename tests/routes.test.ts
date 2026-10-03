@@ -50,7 +50,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, comments as commentsTable, readerProfiles } from "../src/db/schema.js";
+import { articles, articleTags, comments as commentsTable, readerProfiles } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { captureFailure } from "../src/monitoring.js";
@@ -511,6 +511,48 @@ describe("the shelf routes", () => {
       const r = await call("PATCH", `/api/library/${SHELF}`, body);
       expect(r.status, body).toBe(400);
     }
+  });
+
+  /* The reader's own tags — plan 261003d. The spelling rules and the cap are
+     tests/store-tags-pg.test.ts's; these are the wire: shapes, answers, and
+     that the listing and the vocabulary carry what the PATCH wrote. */
+  describe("tags", () => {
+    beforeEach(async () => {
+      const [row] = await getDb().select({ id: articles.id }).from(articles).where(eq(articles.slug, SHELF));
+      if (row) await getDb().delete(articleTags).where(eq(articleTags.articleId, row.id));
+    });
+
+    it("adds and removes, and answers the tags after", async () => {
+      const added = await call("PATCH", `/api/library/${SHELF}/tags`, { add: ["Reading", "ai"] });
+      expect(added.status).toBe(200);
+      expect(added.body).toEqual({ tags: ["ai", "reading"] });
+      const removed = await call("PATCH", `/api/library/${SHELF}/tags`, { remove: ["AI"] });
+      expect(removed.body).toEqual({ tags: ["reading"] });
+    });
+
+    it("puts them on the shelf card and in the reader's vocabulary", async () => {
+      await call("PATCH", `/api/library/${SHELF}/tags`, { add: ["reading"] });
+      const shelf = await call("GET", "/api/library");
+      const card = (shelf.body.articles as { slug: string; tags?: string[] }[]).find((a) => a.slug === SHELF);
+      expect(card?.tags).toEqual(["reading"]);
+      const vocabulary = await call("GET", "/api/library/tags");
+      expect(vocabulary.status).toBe(200);
+      expect(vocabulary.body.tags).toContainEqual({ tag: "reading", count: 1 });
+    });
+
+    it("refuses a body of the wrong shape, an empty edit, and a bad spelling", async () => {
+      expect((await call("PATCH", `/api/library/${SHELF}/tags`, { add: "ai" })).status).toBe(400);
+      expect((await call("PATCH", `/api/library/${SHELF}/tags`, { add: [42] })).status).toBe(400);
+      expect((await call("PATCH", `/api/library/${SHELF}/tags`, {})).status).toBe(400);
+      expect((await call("PATCH", `/api/library/${SHELF}/tags`, "[1]")).status).toBe(400);
+      const comma = await call("PATCH", `/api/library/${SHELF}/tags`, { add: ["a,b"] });
+      expect(comma.status).toBe(400);
+      expect(comma.body.error).toMatch(/comma/);
+    });
+
+    it("answers 404 for an article that does not exist", async () => {
+      expect((await call("PATCH", `/api/library/${MISSING}/tags`, { add: ["x"] })).status).toBe(404);
+    });
   });
 
   it("refuses a title that is not a string or null", async () => {

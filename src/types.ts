@@ -2070,6 +2070,13 @@ export interface LibraryEntry {
    * missing value reads as `'full'`.
    */
   processing?: "minimal" | "full";
+  /**
+   * **The reader's own tags on this article**, lowercase and sorted
+   * (src/tags.ts). Private: the owner's shelf listing carries them, the public
+   * shelf never does (src/public/dto.ts builds its own rows). Optional only for
+   * a shelf row cached before tags existed; read absent as none. Plan 261003d.
+   */
+  tags?: string[];
   /** A minimal paper's abstract and DOI, as the `metadata` step read them. Absent otherwise. */
   abstract?: string;
   doi?: string;
@@ -2128,6 +2135,16 @@ export interface LibraryResponse {
  * cards and a count of six. The coverage statistics are deliberately not here:
  * they live in `npm run shelf-terms:report`.
  */
+/** `GET /api/library/tags` — every tag the reader uses, sorted, with counts. Plan 261003d. */
+export interface LibraryTagsResponse {
+  tags: { tag: string; count: number }[];
+}
+
+/** `PATCH /api/library/:slug/tags` — the article's tags after the edit, sorted. */
+export interface ArticleTagsResponse {
+  tags: string[];
+}
+
 export interface LibraryTermsResponse {
   /** Best first. Empty below 8 distinct works, or while everything is pending. */
   terms: {
@@ -2624,6 +2641,12 @@ export interface ArticleMetadata {
    * `null` is an answer rather than a gap. Same shape as `purpose`.
    */
   archivedAt: string | null;
+
+  /**
+   * **The reader's own tags on this article**, lowercase and sorted
+   * (src/tags.ts) — the editor near the top of the page. Plan 261003d.
+   */
+  tags: string[];
 
   /**
    * **When High-powered AI was switched on for this article, or `null`** —

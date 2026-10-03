@@ -15,6 +15,8 @@
  *   DELETE /api/library/:slug    destroy it, for good → { destroyed: slug }. 409 while an
  *                                 import is running; no body, and nothing to undo
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
+ *   GET    /api/library/tags     every tag the reader uses → { tags: [{ tag, count }] }
+ *   PATCH  /api/library/:slug/tags   { add?: string[], remove?: string[] } → { tags }
  *   GET    /api/models           which model writes what
  *                                 → { tasks: [{ task, model, id, provider, source, effort? }] }
  *   GET    /api/reader           `?slug=` → { profile, purpose, hasProfile, experimentalSince }
@@ -143,6 +145,7 @@ import {
   refereeCriteriaStore,
   searchStore,
   shelfStore,
+  tagStore,
   readingTimeStore,
   glossaryHiddenStore,
   loadArticle,
@@ -471,6 +474,8 @@ import type {
   SketchResponse,
   LibraryResponse,
   LibraryTermsResponse,
+  LibraryTagsResponse,
+  ArticleTagsResponse,
   RememberStance,
   ThreadKind,
   ThreadResponse,
@@ -5171,6 +5176,29 @@ async function patchShelf(
 }
 
 /**
+ * **A tag edit's body, checked for shape** — `{ add?: string[], remove?: string[] }`.
+ *
+ * Shape only. The spelling, the per-edit limit, a tag named on both sides and
+ * an empty edit are refused by `normaliseChange` (src/store/pg-tags.ts), which
+ * the later command-bar "add a tag" reaches through the same route, so there
+ * is one rule and one place for it. Plan 261003d.
+ */
+function tagChangeOf(body: unknown): { add?: string[]; remove?: string[] } {
+  const patch = objectBody(body);
+  const side = (key: "add" | "remove"): string[] | undefined => {
+    if (!(key in patch)) return undefined;
+    const value = patch[key];
+    if (!Array.isArray(value) || !value.every((t) => typeof t === "string")) {
+      throw httpError(400, `${key} must be a list of strings`);
+    }
+    return value;
+  };
+  const add = side("add");
+  const remove = side("remove");
+  return { ...(add ? { add } : {}), ...(remove ? { remove } : {}) };
+}
+
+/**
  * Turn a POST body into a job request, or explain what was wrong with it.
  *
  * Two shapes, and they are **mutually exclusive**. `{ url }` means "add this
@@ -7541,6 +7569,8 @@ const ONE_THREAD_PATTERN = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/;
 const COMMENTS_PATTERN = /^\/api\/comments\/([\w.%-]+)$/;
 const ONE_COMMENT_PATTERN = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/;
 const SHELF_ENTRY_PATTERN = /^\/api\/library\/([\w.%-]+)$/;
+/* The reader's own tags on one article — plan 261003d. */
+const SHELF_TAGS_PATTERN = /^\/api\/library\/([\w.%-]+)\/tags$/;
 /* Reading time: GET reads the totals, POST adds to them — two rows, one path. */
 const READING_TIME_PATTERN = /^\/api\/reading-time\/([\w.%-]+)$/;
 /* Hiding a glossary entry: PUT hides, DELETE shows it again — two rows, one path. */
@@ -7937,6 +7967,41 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          and a Vercel function stays alive until it is done. `refresh` never
          throws. src/shelf-topics.ts. */
       if (refresh) await refresh();
+    },
+  },
+
+  /* Every tag the reader uses, with counts, for the tag editor's suggestions.
+     Exact, like /api/library/terms above, and GET where the slug pattern below
+     is PATCH and DELETE. Plan 261003d. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/library/tags",
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      const tags: LibraryTagsResponse = { tags: await tagStore.readerTags() };
+      /* The reader's own words: never a shared cache's, as the terms route. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, tags);
+    },
+  },
+
+  /* **Add and remove the reader's tags on one article**; answers the tags
+     after. Additive rather than a PUT of the whole set, so two tabs cannot
+     clobber each other and the command bar's later "add a tag of X" is
+     `{ add: [X] }`. Ownership is `ownedSlug` inside the store: a stranger's
+     slug is a 404. */
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: SHELF_TAGS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const tags: ArticleTagsResponse = {
+        tags: await tagStore.edit(slug, tagChangeOf(await readBody(req))),
+      };
+      send(res, 200, tags);
     },
   },
 

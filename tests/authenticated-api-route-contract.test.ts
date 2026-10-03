@@ -419,6 +419,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/library/terms"],
   },
   {
+    /* The reader's tag vocabulary, 261003d — `terms`' overlap again. */
+    match: { kind: "literal", path: "/api/library/tags" },
+    methods: ["GET"],
+    witnesses: ["/api/library/tags"],
+  },
+  {
     /* **`DELETE` joined `PATCH` on 2026-09-06**, and they are one matcher with
        two arms rather than two matchers: the same `shelfEntry` regex, branching
        on the method. The permanent delete —
@@ -431,6 +437,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/library\\/([\\w.%-]+)\\/open$", flags: "" },
     methods: ["POST"],
     witnesses: ["/api/library/w1/open"],
+  },
+  {
+    /* One article's tags, 261003d. */
+    match: { kind: "regex", source: "^\\/api\\/library\\/([\\w.%-]+)\\/tags$", flags: "" },
+    methods: ["PATCH"],
+    witnesses: ["/api/library/w1/tags"],
   },
   // ----------------------------------------------------- reader and the misc
   {
@@ -866,8 +878,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 84;
-const EXPECTED_GUARD_COUNT = 103;
+const EXPECTED_MATCHER_COUNT = 86;
+const EXPECTED_GUARD_COUNT = 105;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1836,6 +1848,8 @@ const OVERLAP_PROBES = [
   "/api/library/search",
   /* GET is the shelf's topics; PATCH is the shelf entry for a slug `terms`. */
   "/api/library/terms",
+  /* GET is the reader's tags; PATCH is the shelf entry for a slug `tags`. */
+  "/api/library/tags",
   /* POST is the live tool; PATCH and DELETE are the thread whose id happens to
      read `live-tool`. */
   "/api/chat/w1/live-tool",
@@ -2010,6 +2024,9 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/library",
         "GET literal /api/library/search",
         "GET literal /api/library/terms",
+        // the reader's tags, 261003d — beside the PATCH it serves
+        "GET literal /api/library/tags",
+        "PATCH regex /^\\/api\\/library\\/([\\w.%-]+)\\/tags$/",
         "PATCH regex /^\\/api\\/library\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/library\\/([\\w.%-]+)$/",
         "GET literal /api/models",

@@ -60,6 +60,7 @@ describe("describeArticle", () => {
     comments: 0,
     addedAt: "2026-08-25T00:00:00.000Z",
     sourceReusable: true,
+    tags: [],
   };
 
   /** The same tree with one rung of the blurb's fallback removed. */

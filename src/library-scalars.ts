@@ -242,6 +242,11 @@ export function describeArticle(input: {
   sourceReusable: boolean;
   /** `articles.processing`. Absent is `'full'`, which every caller but the shelf's own read is. */
   processing?: "minimal" | "full";
+  /**
+   * The reader's own tags, sorted (src/tags.ts). Required at this seam, like
+   * `sourceReusable`, so a new caller cannot quietly ship a shelf with none.
+   */
+  tags: readonly string[];
 }): LibraryEntry {
   const { slug, meta, scalars } = input;
   const shelf = input.shelf ?? { opens: 0 };
@@ -288,6 +293,9 @@ export function describeArticle(input: {
     /* Always sent, so a card never has to guess; the two only a minimal paper
        has ride with it. Plan 261001m. */
     processing: input.processing ?? "full",
+    /* Always sent, even empty: the shelf's Tags row and the card read it, and
+       only a row cached before tags existed may lack it (src/types.ts). */
+    tags: [...input.tags],
     ...(meta.abstract ? { abstract: meta.abstract } : {}),
     ...(meta.doi ? { doi: meta.doi } : {}),
   };

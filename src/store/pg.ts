@@ -213,6 +213,7 @@ import { guardDbStore } from "./db-errors.js";
 import { postgresBlobStore } from "./blobs.js";
 import { readRawDocument } from "./raw-document.js";
 import { pgReaderStore } from "./pg-reader.js";
+import { tagsForArticles } from "./tag-rows.js";
 
 /** A 404 shaped exactly like the filesystem store's, so routes.ts could not tell them apart. */
 export function notFound(slug: string): Error {
@@ -2773,6 +2774,8 @@ const rawPgArticleReader: ArticleReader = {
        — which was not a count at all: it selected every comment row's id and
        took `rs.length`. */
     const counts = await commentCounts(db, rows.map((row) => row.article.id));
+    /* The reader's own tags, in one query for the page too (plan 261003d). */
+    const tagsById = await tagsForArticles(db, rows.map((row) => row.article.id));
 
     /* The five numbers per row, off the columns — and one query and one log
        line for however many rows turn out not to have them.
@@ -2853,6 +2856,7 @@ const rawPgArticleReader: ArticleReader = {
              readable and its completed run row is carried with it. */
           sourceReusable: row.revision.hasRawSource && row.fetchDone,
           processing: minimal ? "minimal" : "full",
+          tags: tagsById.get(row.article.id) ?? [],
         }),
       );
     }
@@ -3367,6 +3371,8 @@ const rawPgArticleReader: ArticleReader = {
       /* Off the same `shelfFrom` as `purpose`, so the two stores answer this
          from the same derivation rather than from two readings of one column. */
       archivedAt: shelfFrom(found.article).archivedAt ?? null,
+      /* The reader's own tags, for the editor near the top — plan 261003d. */
+      tags: (await tagsForArticles(db, [found.article.id])).get(found.article.id) ?? [],
       /* Off the same `articles` row — plan 260930f. */
       highPowerSince: found.article.highPowerSince?.toISOString() ?? null,
       /* **The run's own verdict, from the run's own inputs** — plan 261001i § 3.

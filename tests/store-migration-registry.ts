@@ -3136,6 +3136,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/store-shelf-reads.test.ts": "private-postgres",
   "tests/store-slug-guard.test.ts": "private-postgres",
   "tests/store-step-fence.test.ts": "private-postgres",
+  "tests/store-tags-pg.test.ts": "private-postgres",
   "tests/store-transaction-isolation.test.ts": "private-postgres",
   /* Added 2026-09-29 with `tweets/5` (plan 260929f): `loadTweets` must select
      the final URL and judge a thread the way it was written. Its own

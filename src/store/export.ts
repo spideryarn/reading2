@@ -887,6 +887,11 @@ export async function exportArticle(
     });
   }
 
+  /* The reader's own tags — plan 261003d. */
+  if (rows.articleTags.length) {
+    await put("article_tags", "tags.json", { tags: rows.articleTags.map((row) => row.tag) });
+  }
+
   logger.info({ slug, files: written.length, tables: wroteFrom.size }, "article exported");
   return { slug, files: written, tables: [...wroteFrom] };
 }
