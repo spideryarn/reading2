@@ -46,13 +46,15 @@ measured and cannot be from here.
 
 ### Stage 1 — the spine moves its band with `transform`, and the rail is its own layer
 
-1. **The viewport band moves by `transform: translateY(<px>)`, not `top`.** `top` stays 0. The px is
-   the same fraction as today, `(scrollY − docTop) / docHeight`, times the track's height. The track
-   height is read from a `ResizeObserver` on `.spine-track` into a local, and the observer's callback
-   also re-applies — because the rail's height changes without a scroll: on resize, and when the bar
-   flip animates `.spine`'s `top` (`shell.css` § the `top 0.18s` transition), after which a
-   percentage `top` re-followed for free and a pixel transform would not.
-2. **`.spine-viewport { will-change: transform }`** so the band has its own layer and a move is a
+1. **The viewport band moves by `transform`, not `top`** — *revised after Sol's F6*. The band sits
+   in a wrapper that is the track's full height (`inset: 0`, `pointer-events: none`), and the
+   wrapper moves by `translateY((scrollY − docTop) / docHeight × 100%)` — a percentage of its *own*
+   height, which is the track's, so it lands exactly where `top` did. The band inside keeps its
+   percentage height, borders and 2 px minimum. No observer: the rail's height changes without a
+   scroll (on resize, and while the bar flip animates `.spine`'s `top`), and a percentage of the
+   wrapper follows it for free. (The first draft read the track height from a `ResizeObserver`
+   and translated in pixels; correct, but one lifecycle more.)
+2. **`will-change: transform` on the moving wrapper** so the band has its own layer and a move is a
    compositor update, not a paint. **`.spine { … }` gets its own compositing layer too**
    (`will-change: transform` on a fixed element is the standard way; it is already fixed, so it
    creates no new containing block for its fixed-position descendants — check none exist), so the
@@ -113,6 +115,21 @@ pixels from where the reader is. Wrong position is worse than slow position.
 - GPT Sol on this plan, and on the code.
 - The investigation doc, performance.md's dated section, the feedback note, and a queue entry for
   each deferred item before the note says *shipped*.
+
+## Plan review, GPT Sol, 2026-10-03
+
+[261003a-ipad-battery-scroll-repaint-review-sol.md](261003a-ipad-battery-scroll-repaint-review-sol.md)
+(prompt beside it). *Proceed with changes*; no P0 or P1.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F1 | P2: Paint's `layerId` is hard-coded to 0 in this Chrome and its `clip` is a cull rect, so "repaints the whole root layer" and "eleven viewports painted" overclaim | Taken. Worded as document-level paint lifecycle work associated with the spine; cull rects labelled as such; the harness asks LayerTree for layer identities |
+| F2 | P2: the analysis window was wider than the gesture, and touch pacing stretched under load | Taken. Harness clips to explicit marks and reports CPU per 1000 px; baseline re-measured (`before-v2/`) |
+| F3 | P2: "inline style writes only" was not exclusive | Taken: exclusive classes, mixed reported. Sol's own reclassification found 462–464 exclusive, which narrows the attribution to `.spine-viewport` rather than weakening it |
+| F4 | P2: `will-change: transform` *does* make a containing block for fixed descendants | Taken. Nothing fixed lives in `.spine` (the tooltip portals to `body`; `.spine` already stacks at `z-index: 45`), but only the moving element is promoted unless the after-trace shows `.spine` itself needs it. Compositing is a hint a browser may decline |
+| F5 | P2: replacing `top` with `transform` in the old test checks only that a string changed | Taken: exact translation with a nonzero `docTop`, preserved across a boundary render, no inline `top`, cleanup |
+| F6 | P2: an observer-free transform was missed — translate a *track-height wrapper* by `(scrollY − docTop)/docHeight × 100%` of its own height, the band inside it unchanged | **Taken; replaces the ResizeObserver design.** One element instead of an observer lifecycle, and it follows a resize and the bar-flip transition for free |
+| F7 | P3: `display: none` does not unmount the spine, so its React work stays in the diagnostic | Taken: the diagnostic removes the rendering cost and keeps the script, so it is an upper bound for a rendering fix |
 
 ## Log
 

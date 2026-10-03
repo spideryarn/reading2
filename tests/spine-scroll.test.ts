@@ -116,6 +116,14 @@ class FakeResizeObserver {
   disconnect(): void {}
 }
 
+/**
+ * Where the article starts on the page, in px. Zero for every case but the one
+ * that pins the band's exact translation — a `docTop` of zero would let a
+ * formula that forgot to subtract it pass, and the other cases' scroll
+ * positions are written against a zero.
+ */
+let docOffset = 0;
+
 beforeEach(() => {
   /* Without this React does not treat `act` as authoritative and its updates
      are not flushed — the component mounts, its layout effect runs, and the
@@ -134,6 +142,7 @@ beforeEach(() => {
     id: number,
   ) => clearTimeout(id);
   renders.clear();
+  docOffset = 0;
   document.body.innerHTML = "";
 
   const table = document.createElement("table");
@@ -156,7 +165,7 @@ beforeEach(() => {
       const block = this.getAttribute("data-block");
       if (!block) return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
       const i = Number(block.slice(1));
-      const top = i * ROW_H - window.scrollY;
+      const top = docOffset + i * ROW_H - window.scrollY;
       return { top, bottom: top + ROW_H, left: 0, right: 0, width: 0, height: ROW_H };
     },
   });
@@ -214,13 +223,18 @@ async function mount(): Promise<HTMLElement> {
   return band as HTMLElement;
 }
 
+/** The wrapper the viewport band rides in — the element that actually moves. */
+const mover = () => host.querySelector<HTMLElement>(".spine-viewport-track");
+
 describe("the spine during a scroll", () => {
   it("moves the viewport band without re-rendering", async () => {
-    const band = await mount();
+    await mount();
+    const m = mover();
+    expect(m, "the band rides in a track-height wrapper").not.toBeNull();
 
     const settled = renders.get("Spine") ?? 0;
     expect(settled).toBeGreaterThan(0);
-    const before = band.style.top;
+    const before = m?.style.transform;
 
     /* Four frames of scrolling, all inside the first *section* — rows 0–4, so
        0–500px, and the reading line is `scrollY + 175`. Staying inside one
@@ -228,11 +242,76 @@ describe("the spine during a scroll", () => {
        costs, which is the thing this fixture could not see until it had any. */
     for (const y of [50, 100, 150, 200]) await scrollTo(y);
 
-    expect(band.style.top, "the band must actually move").not.toBe(before);
+    expect(m?.style.transform, "the band must actually move").not.toBe(before);
     expect(
       renders.get("Spine"),
       "scrolling within one section must not re-render the rail",
     ).toBe(settled);
+  });
+
+  it("slides a track-height wrapper by `translateY(%)`, and never writes `top`", async () => {
+    /**
+     * **`transform`, not `top`, and it is a battery fix rather than a style
+     * preference.** A per-frame `top` write is layout + paint + raster — in a
+     * Chrome trace of the whole root layer — on every frame of every scroll; a
+     * `transform` on its own layer is none of those.
+     * docs/investigations/261003a-what-a-scroll-frame-costs-in-the-reading-view.md
+     * has the trace, docs/plans/261003a-ipad-battery-scroll-repaint.md the fix.
+     *
+     * The translate is a percentage of the *wrapper's* height, which is the
+     * track's (`inset: 0`), so it is the same fraction the band's `top` used to
+     * be — exactly, with a `docTop` that is not zero so a formula that forgot
+     * to subtract it cannot pass. jsdom does no layout, so what this can pin is
+     * the number and where it is written; the band landing on the right pixels
+     * in a real browser, including through the bar flip, is the browser
+     * check's.
+     */
+    docOffset = 300; // the article starts 300px down; docHeight stays 2000
+    await mount();
+    const m = mover();
+    const band = host.querySelector<HTMLElement>(".spine-viewport");
+    expect(m, "the band rides in a track-height wrapper").not.toBeNull();
+    expect(band?.parentElement, "…and the band is inside it").toBe(m);
+
+    // Initial placement, before any scroll: (0 − 300) / 2000 = −15%.
+    expect(m?.style.transform).toBe("translateY(-15%)");
+
+    // (800 − 300) / 2000 = 25%. The reading line is 800 + 175 − 300 = 675,
+    // which crosses from no section into a2 (500–1000): a boundary render.
+    const settled = renders.get("Spine") ?? 0;
+    await scrollTo(800);
+    expect(renders.get("Spine"), "this scroll crosses a section boundary").toBeGreaterThan(settled);
+    expect(m?.style.transform, "the boundary's re-render must not clobber it").toBe(
+      "translateY(25%)",
+    );
+
+    // (1100 − 300) / 2000 = 40%, still inside a2: no render, just the move.
+    await scrollTo(1100);
+    expect(m?.style.transform).toBe("translateY(40%)");
+
+    for (const el of [m, band]) {
+      expect(el?.style.top, "an inline `top` would repaint on every frame").toBe("");
+    }
+    expect(band?.style.transform, "the band itself stays put inside the wrapper").toBe("");
+  });
+
+  it("lets go of every scroll listener it took when it unmounts", async () => {
+    const added = vi.spyOn(window, "addEventListener");
+    const removed = vi.spyOn(window, "removeEventListener");
+    try {
+      await mount();
+      const taken = added.mock.calls.filter(([type]) => type === "scroll").map(([, fn]) => fn);
+      expect(taken.length, "the rail listens to scroll").toBeGreaterThan(0);
+
+      act(() => root.unmount());
+      const given = new Set(
+        removed.mock.calls.filter(([type]) => type === "scroll").map(([, fn]) => fn),
+      );
+      for (const fn of taken) expect(given.has(fn), "a scroll listener outlived the rail").toBe(true);
+    } finally {
+      added.mockRestore();
+      removed.mockRestore();
+    }
   });
 
   it("renders once per section crossed, which is what `you are here` costs", async () => {
