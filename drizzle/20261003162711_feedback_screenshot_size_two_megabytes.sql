@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."feedback" DROP CONSTRAINT "feedback_screenshot_size";--> statement-breakpoint
+ALTER TABLE "spideryarn"."feedback" ADD CONSTRAINT "feedback_screenshot_size" CHECK ("spideryarn"."feedback"."screenshot" is null or octet_length("spideryarn"."feedback"."screenshot") <= 2000000);

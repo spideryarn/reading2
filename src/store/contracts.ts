@@ -839,6 +839,92 @@ export interface ShelfTermsStore {
   failScores(scope: TopicScope, claimId: string): Promise<void>;
   /** Give the claim back without counting a failure, and wait `retryAfterMs` before the next — the fuse's answer. */
   releaseScores(scope: TopicScope, claimId: string, retryAfterMs: number): Promise<void>;
+
+  /* ---- the model's topic set, one row per owner — src/shelf-topic-sets.ts ---- */
+
+  /**
+   * **Every article on the ambient reader's shelf, active and archived**, as
+   * the topic model sees it, newest first. One query and no fill: `textHash`
+   * is the stored phrase run's, or null when the article has none yet.
+   */
+  topicShelf(): Promise<TopicShelfArticle[]>;
+  /** The ambient reader's stored topic set, or `null` if there is no row. */
+  readTopicSet(): Promise<StoredTopicSet | null>;
+  /**
+   * **Take the work, or learn somebody else has it.** One statement: the claim
+   * lands only when no live claim exists and `retry_after` has passed. Creates
+   * the row if there is none. Returns the claim id to fence the write with, or
+   * `null`.
+   */
+  claimTopicSet(leaseMs: number): Promise<string | null>;
+  /**
+   * Store a whole re-think, **only if `claimId` is still the row's claim**:
+   * replaces the topics and every membership, stamps `rethought_at`, clears
+   * the claim and the backoff. `false` when the fence refused.
+   */
+  writeTopicSet(claimId: string, result: TopicSetResult): Promise<boolean>;
+  /**
+   * Add memberships for newly filed articles to the stored set, **only if
+   * `claimId` is still the row's claim**: merges `members` over the stored
+   * map (an article filed twice takes the newer answer), stamps `filed_at`,
+   * clears the claim and the backoff. `false` when the fence refused.
+   */
+  fileIntoTopicSet(claimId: string, members: Record<string, string[]>): Promise<boolean>;
+  /** A failed re-think or filing: clears the claim, counts the failure, and pushes `retry_after` out by the backoff. */
+  failTopicSet(claimId: string): Promise<void>;
+  /** Give the claim back without counting a failure, and wait `retryAfterMs` before the next. */
+  releaseTopicSet(claimId: string, retryAfterMs: number): Promise<void>;
+}
+
+/** One shelf article as the topic model's path sees it. */
+export interface TopicShelfArticle {
+  /** `articles.id` — what a stored membership is keyed by. */
+  articleId: string;
+  slug: string;
+  archived: boolean;
+  /** The reader's rename if they made one, else the revision's title, else the slug. */
+  title: string;
+  /** `article_revisions.root_gist`, else its `abstract`, else null. */
+  gist: string | null;
+  /** The stored phrase run's `text_hash` (exact copies share one), or null when there is no run yet. */
+  textHash: string | null;
+}
+
+/** One topic of a stored set — `TopicNode` in src/shelf-terms/model-topics.ts, which owns the shape. */
+export interface StoredTopic {
+  id: string;
+  key: string;
+  label: string;
+  parent: string | null;
+  depth: number;
+}
+
+/** A whole re-think, as stored. */
+export interface TopicSetResult {
+  model: string;
+  promptVersion: number;
+  /**
+   * sha256 of the reader's normalised profile as the re-think was shown it, or
+   * `""` when they had none. The profile is model input, so an edit is a reason
+   * to re-think (GPT Sol, v1 review, finding 7).
+   */
+  profileHash: string;
+  topics: StoredTopic[];
+  /** article id → topic ids. An article the model placed nowhere has an empty list: it was seen. */
+  members: Record<string, string[]>;
+  /** How many distinct works the re-think read. */
+  works: number;
+  /** How many of them it placed in no topic. */
+  unplaced: number;
+}
+
+export interface StoredTopicSet {
+  /** Null until a re-think has succeeded once. */
+  result: (TopicSetResult & { rethoughtAt: Date; filedAt: Date | null }) | null;
+  /** Work somebody has taken. */
+  claim: { until: Date } | null;
+  failures: number;
+  retryAfter: Date | null;
 }
 
 /** `active` is the shelf proper; `all` is active + archived (`?archived=1`). */

@@ -438,6 +438,13 @@ and `LAST_UPDATED` moved. The scores it returns are stored against the reader
 (`shelf_topic_scores`), deleted with the account, and never logged; nor are the titles, gists or
 profile it was sent. It runs only for the shelf's owner — the public shelf gets no topics at all.
 
+**Changed 2026-10-03**, with [shelf-terms.md § Topics a model names](shelf-terms.md#topics-a-model-names-broad-to-fine):
+the same model now names the topics itself and sorts the articles into them, rather than scoring
+phrases. It is shown the same titles, gists and profile, **and a paper's abstract when the paper
+has no gist yet**, which is new; it is no longer shown candidate phrases. What it returns (the
+topic names, and which article is in which) is stored against the reader in `shelf_topic_sets`,
+deleted with the account, and never logged. The page's sentence and `LAST_UPDATED` moved.
+
 ## Quick search
 
 **Added 2026-10-02**, with [search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second):

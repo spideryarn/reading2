@@ -192,7 +192,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -210,8 +209,6 @@ import {
   BookA,
   Lightbulb,
   BookOpen,
-  ChevronDown,
-  ChevronRight,
   Clock,
   Database,
   Download,
@@ -293,8 +290,10 @@ import { useSession } from "./useSession.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
-import { flushSync } from "react-dom";
-import { PageContents, SECTION_REVEAL, useRevealOnArrival } from "./PageContents.js";
+import { PageContents, useRevealOnArrival } from "./PageContents.js";
+/* The section every card on this page sits in. It lived in this file until
+   2026-10-03, when `/profile` needed the same folding (plan 261003k). */
+import { Section, sectionId } from "./PageSection.js";
 import { Button } from "@/components/ui/button";
 import { HighPowerSwitch } from "./HighPowerSwitch.js";
 import { JobProgress } from "./JobProgress.js";
@@ -1476,7 +1475,7 @@ function SharingSection({
  * **Shut by default, and still mounted.** `keepMounted` hides the rows rather
  * than unmounting them, so every row's `useStepJob` subscription lives for the whole
  * visit, and a run that finishes while the section is shut still refreshes the
- * page — see `Section`'s `keepMounted` for what unmounting lost.
+ * page — see `Section`'s `keepMounted` (PageSection.tsx) for what unmounting lost.
  *
  * The cost, said out loud: one subscription per row to one shared engine
  * (`useJobs` is a `useSyncExternalStore` over `jobEngine`), so these are store
@@ -3405,193 +3404,13 @@ function found(recall: number): number {
 }
 
 /**
- * A section's heading turned into an element id, for the contents list to aim at.
- *
- * Deriving it rather than passing one in: an `id` prop is a second name for the
- * section that nothing checks against the first, and the failure is a contents
- * entry that scrolls nowhere. The labels here are short English phrases, so
- * lower-casing and hyphenating is enough — `"Access & sharing"` becomes
- * `"access-sharing"`, and there is no pair of labels on this page that collide
- * under it.
- */
-function sectionId(label: string): string {
-  return `sec-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
-}
-
-/**
  * **The element a `?section=` value names** — the value is the id `sectionId`
- * makes, without its prefix, so the address reads `section=ai-processing`
+ * (PageSection.tsx) makes, without its prefix, so the address reads `section=ai-processing`
  * rather than `section=sec-ai-processing`. tests/metadata-section-param.test.tsx
  * checks every accepted value against this page's real sections.
  */
 function sectionIdFor(section: MetadataSection): string {
   return `sec-${section}`;
-}
-
-export function Section({
-  label,
-  aside,
-  keywords,
-  collapsible,
-  keepMounted,
-  children,
-}: {
-  label: string;
-  /** One line answering the section's question, on the heading row. */
-  aside?: ReactNode;
-  /**
-   * **Words a reader might search for that the section does not print** — the
-   * search box above the contents list reads them (`data-keywords`,
-   * page-search.ts). Mostly for the sections that unmount their body when
-   * shut, whose words are otherwise not on the page to find. The synonyms
-   * the whole page shares live in page-search.ts § METADATA_SYNONYMS; these
-   * are this section's own. Plan 261001s.
-   *
-   * **Required, and generous**: the words a reader *types* — *regenerate*,
-   * *get rid of*, *who can see it* — not the words the section prints. A new
-   * section, or a new control in one, comes with its words, and a case in
-   * tests/metadata-contents-reveal.test.tsx § the words a reader brings.
-   * Greg, `spya-nkjpte`, 2026-10-02 — docs/project/web-client.md, the
-   * Metadata.tsx row. Plan 261002c.
-   */
-  keywords: string;
-  collapsible?: boolean;
-  /**
-   * **Shut hides the children rather than unmounting them.** For *AI
-   * processing*, whose rows each hold a `useStepJob` subscription: unmounted,
-   * a run that finished while the section was shut would never call
-   * `onFinished`, and reopening would not replay it — `useJobs` starts a new
-   * subscriber's cursor at the latest completion, and the fallback needs the
-   * row's own `startedId`, which went with it. GPT Sol, plan review of
-   * docs/plans/260929b-one-place-to-re-run-ai-processing.md, P1.
-   */
-  keepMounted?: boolean;
-  children: ReactNode;
-}) {
-  /* Local state, not a URL parameter, and this page's own `at` two hundred
-     lines up is the reason that needs saying: url-state.md puts every bit of
-     view state in the address bar. A shut section is not view state in that
-     sense — it is the same kind of thing as an open drawer, which
-     `carriedSearch` deliberately strips on every navigation because a drawer
-     you left open is not a place you were. Nothing about a shut section is
-     worth linking to, and a `?stages=open` in every shared metadata URL would
-     be noise in the one place this app keeps clean. */
-  /**
-   * **`open` is the reader's toggle; `showing` is what actually renders.**
-   *
-   * This was `useState(!collapsible)`, and that is a bug that had been live
-   * since the section was written, found by tests/metadata-page-order.test.tsx
-   * on 2026-09-03. `useState`'s argument is an *initial* value: it is read on
-   * the first render and never again. But the one caller that passes a varying
-   * `collapsible` computes it from a request that has not answered yet —
-   * `collapsible={!provenanceError}` — so the section mounts collapsible,
-   * latches `open: false`, and then the request fails.
-   *
-   * At that moment `collapsible` goes false, which takes the disclosure button
-   * away (the heading stops being a control), while `open` is still false. The
-   * section was left **shut, with nothing on the page that could open it**, and
-   * what was sealed inside was the error message — the exact outcome the rule
-   * was written to prevent, by a cross-model review on 2026-08-27 which said
-   * "a shut section is exactly where it would have gone". It went there anyway.
-   *
-   * Deriving it fixes the class rather than the instance: a section that is not
-   * collapsible shows its children, whenever it stopped being collapsible and
-   * whatever the reader had toggled beforehand. docs/postmortems/260903d-a-collapsible-section-latched-shut-and-sealed-the-error-in.md
-   */
-  const [open, setOpen] = useState(false);
-  const showing = !collapsible || open;
-  /* **Opened from outside** — the contents list and its search box send
-     `SECTION_REVEAL` to the section they are taking the reader to
-     (PageContents.tsx § reveal; Greg, SPIDERYARN-READING2-7Y: *"expand that
-     section (if needed)"*). An event on this element rather than lifted state,
-     because lifting it would need a list of the page's sections — the second
-     list PageContents exists not to have. Opens, never shuts: a reveal of an
-     open section leaves it open. A section that is not collapsible is already
-     showing, and setting `open` on it changes nothing. */
-  const sectionEl = useRef<HTMLElement>(null);
-  /* Layout, not passive: a MutationObserver can see this section's committed
-     DOM before passive effects run. The arrival hook may dispatch immediately,
-     so its listener must exist in the same commit as the element. */
-  useLayoutEffect(() => {
-    const el = sectionEl.current;
-    if (!el) return;
-    /* `flushSync` so the body is in the DOM when the event returns: the
-       sender scrolls next, and near the foot of the page a shut section may
-       not leave the scroll range to bring its heading up. Sol, plan review. */
-    const reveal = () => flushSync(() => setOpen(true));
-    el.addEventListener(SECTION_REVEAL, reveal);
-    return () => el.removeEventListener(SECTION_REVEAL, reveal);
-  }, []);
-  const head = (
-    <>
-      <span
-        aria-hidden="true"
-        className="tw:inline-block tw:h-3.5 tw:w-[3px] tw:shrink-0 tw:rounded-full tw:bg-highlight/70"
-      />
-      {label}
-    </>
-  );
-  return (
-    /* `data-section` is what the contents list in the margin reads, and `id` is
-       where it scrolls to — PageContents.tsx, which derives its whole list from
-       these rather than from a second array of section names.
-
-       `scroll-mt-24` is 6rem, and "reached" over there is deliberately a
-       little MORE than it — the section a click has just scrolled to must be
-       the section the list then marks, and setting the two equal put that on a
-       knife edge that a browser lost. Since 2026-10-03 it reads this margin off
-       the element (`reachedPx`), so changing the 24 needs no second edit —
-       and neither does a reader whose rem is not 16px. */
-    <section
-      ref={sectionEl}
-      id={sectionId(label)}
-      data-section={label}
-      data-keywords={keywords}
-      className="tw:mt-8 tw:scroll-mt-24"
-    >
-      {/* **Every heading can take focus from a script** (`tabIndex={-1}`: not a
-          Tab stop), for whatever sends the reader here — *Share…* in
-          `TopActions`, which lands on *Access & sharing*, and the contents list
-          and its search box, which land on any section (PageContents.tsx §
-          reveal). The heading rather than the first control inside, because
-          that control changes with the card's state, and a landing that puts
-          an action under Enter is the wrong kind of arrival. GPT Sol, plan
-          reviews, 2026-09-30 and 261001s. It was one section's `landing` prop
-          until the contents list needed the same for all of them. */}
-      <h2
-        tabIndex={-1}
-        className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
-        {collapsible ? (
-          /* The heading itself is the control, so the target is the whole line
-             rather than a 12px chevron. `aria-expanded` on the button and
-             nothing on the section: the button is what opens, and the h2 stays
-             a heading so the page's outline is the same shut or open. */
-          <button
-            type="button"
-            onClick={() => setOpen((was) => !was)}
-            aria-expanded={showing}
-            className="tw:flex tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:p-0 tw:text-inherit tw:uppercase tw:tracking-[0.09em] tw:cursor-pointer tw:hover:text-highlight-text tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
-          >
-            {head}
-            {showing ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          </button>
-        ) : (
-          head
-        )}
-        {/* Shown open or shut, and that is the point of it: shutting the
-            section must not take the answer away, only the detail. */}
-        {aside && (
-          <span
-            data-section-aside=""
-            className="tw:ml-auto tw:min-w-0 tw:truncate tw:normal-case tw:tracking-normal tw:text-ink-faint"
-          >
-            {aside}
-          </span>
-        )}
-      </h2>
-      {keepMounted ? <div hidden={!showing}>{children}</div> : showing && children}
-    </section>
-  );
 }
 
 /**

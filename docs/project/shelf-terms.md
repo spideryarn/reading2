@@ -2,14 +2,20 @@
 
 Parent: [reading-view-overview.md](reading-view-overview.md), beside [library.md](library.md).
 
-A row of **topics** above the shelf — short phrases like *neural networks*, *consciousness*,
-*Indigenous*, each with a count. Choose one and the shelf narrows to the articles that are about it;
-choose a second and it narrows to articles about both. **A program proposes the topics and a model
-judges them**: the program finds the phrases the articles actually use and counts which articles
-each reaches; since 2026-09-29 GPT-6 Luna scores those candidates for this reader, and the program
-chooses from the scores. With no model answer yet, the row is the program's alone — the same shelf
-always gives the same topics, it costs nothing, and it takes milliseconds.
-[§ The model's judgement](#the-models-judgement) is how the two fit.
+A row of **topics** above the shelf, each with a count. Choose one and the shelf narrows to the
+articles in it; choose a second and it narrows to articles in both. **Since 2026-10-03 a model names
+the topics**, as the subjects a reader would file under, broad to fine: *Neuroscience*, and inside it
+*Vision*, and inside that *Retinotopy*. Broad ones come first, and choosing one brings its finer
+topics forward. New articles are sorted in by themselves. **The tree is worked out for shelves of
+up to 150 works**; a larger shelf is the queued next stage.
+[§ Topics a model names](#topics-a-model-names-broad-to-fine) is how.
+
+Before that the topics were phrases the articles literally use, found by a program and, from
+2026-09-29, scored by a model. **That phrase row is still what a reader sees when there is no model
+answer**: no key, a shelf under eight works or over 150 that never had a tree, or the minute before
+a shelf's first topics land. It
+costs nothing and the same shelf always gives the same phrases.
+[§ Two steps](#two-steps-and-only-the-first-is-stored) is how that works.
 
 > Delegate to a new agent that does some simple keyword/clustering on the articles in my shelf so I
 > can easily filter to different kinds of article. It should choose terms that somehow enable me to
@@ -25,7 +31,111 @@ algorithms, the libraries, other tools' interfaces, the dead ends) is
 [260928a-shelf-facet-terms-algorithms-and-ui.md](../research/260928a-shelf-facet-terms-algorithms-and-ui.md).
 This doc is what you need to work on it.
 
+## Topics a model names, broad to fine
+
+> I look at the topics and they don't seem like high-level concepts that I would use to group and
+> organize my articles myself if I was coming up with them. […] there's others like "principles" and
+> "writers" that seem a bit generic/arbitrary.
+>
+> — Greg, 2026-09-30
+
+> if I'm a neuroscience expert and I have a thousand neuroscience papers, and then a few others that
+> are on a mix of topics like Buddhism and carpentry, for example, then, you know, I want
+> neuroscience, Buddhism and carpentry as high-level categories, but then I also want a whole bunch,
+> a crap load of fine-grained topic pills, you know, within those. […] the key thing is new papers
+> and articles need to be included automatically. That shouldn't be something that the user has to
+> do.
+>
+> — Greg, 2026-10-03
+
+A phrase pill has to be a word the articles use, and no article about predictive coding says
+"neuroscience", so the umbrella was never on offer. Now GPT-6 Luna reads each work's **title and
+one-sentence summary** (the abstract, for a paper with no summary yet) and the reader's profile,
+never the text, and writes the labels. The reasoning, Greg's full words, the eval and the cost are
+in plan [261003f](../plans/261003f-shelf-topics-named-by-a-model-as-concepts-not-phrases.md).
+
+**Two jobs.**
+
+- **A re-think** builds the whole tree. One call asks for the shelf's broad subjects: the separate
+  fields a librarian would make top-level sections, as many as the shelf really has, where a field
+  most of the shelf belongs to is still one topic. Then every topic with twelve works or more is
+  asked about again by itself for the finer topics inside it, and those again, to three levels. How
+  many at each level follows how many works are there (about √n, between 3 and 20). It is due when
+  there is no tree yet; when the prompt version, the model or the reader's profile changes; when
+  the shelf has grown or shrunk by a quarter (and at least five works) since the last one; or when
+  the works that fit no topic have grown by five and a tenth of the shelf since then.
+  **Only up to 150 works** ([§ below](#the-150-work-cap)).
+- **Filing** puts works that arrived since the last re-think into the existing tree: one small call,
+  shown only the topic names. This is what makes a new article appear under its topics without
+  anybody doing anything, and without paying for a re-think. A work that fits nothing is recorded as
+  seen, and counts towards the next re-think. Until an article is sorted it is missing under a
+  chosen topic, so the row says *Sorting N new articles into topics…* (`sorting` in the response).
+
+**Each pill carries how broad it is, 0 to 1**: 0 for a broad subject, 0.5 inside one, 0.75 inside
+that. It is the level, not the size: *Buddhism* with seven articles is as broad as *Neuroscience*
+with 160. The row arrives broad first, then by how many articles.
+
+**A name already taken.** A finer *Consciousness* inside *Neuroscience* is not made when a broader
+topic is already called *Consciousness*: two pills of one name at different levels cannot be told
+apart, and choosing the two existing pills together already narrows to those articles. When two
+subjects each have a finer topic of one name (*Methods* inside *Neuroscience* and inside *AI*), both
+are kept, the second with its parent's key in front of its own.
+
+### The 150-work cap
+
+A re-think is attempted only on a shelf of up to 150 distinct works (`MAX_WORKS` in
+`src/shelf-topic-sets.ts`). Above it, a level would have to be named from a sample of its works, and
+a subject with a handful of articles among a thousand would not be in the sample, so it would never
+get a name: Greg's *Buddhism and carpentry* case, failing silently. And the dozens of calls it takes
+could outlast the claim and the function. So a larger shelf keeps the tree it has, with new works
+still filed into it, or the phrase row if it never had one. Naming from every chunk of the shelf,
+and a re-think that can stop and resume, are queued; the sample-and-file path exists in
+`model-topics.ts`, is unit-tested, and is not reached by the product.
+
+**How a request runs** (`src/shelf-topic-sets.ts`):
+
+- **One stored tree per reader**, over active and archived articles together (`shelf_topic_sets`):
+  the topics, each article's topics, when it was last re-thought and last filed. Memberships are cut
+  to the articles in view when it is read, so one tree serves the shelf with and without *Include
+  archived*, and a topic with nothing in view is left out.
+- **Exact copies are one work**: the model sees one line per work and every copy gets its topics.
+  The free phrase reader supplies that exact-copy hash first, over active and archived together;
+  no paid naming or filing starts while one is still missing. During that preparation, `pending`
+  can count an archived article even in the active view, because the one stored tree spans both.
+- **The answer goes first.** The route answers from the stored tree (or the phrase row, when there
+  is none yet) with `refreshing: true`, then does whatever is due before its handler returns, so the
+  spend lands against the reader: job `shelf-topics`, [ai-gateway.md](ai-gateway.md). The client
+  asks again every 10 s for up to three minutes, so the result appears without a reload.
+- **One piece of work at a time, decided under the claim.** One statement claims it with a
+  ten-minute lease. What is due was decided from a read made before the claim, so under it the
+  shelf, the row and the profile are read again and the decision made again; the write lands only if
+  the claim is still ours. A failure counts and pushes the next attempt out (2, 8, 32, 128 minutes,
+  then six hours); the stored tree keeps being used. A call for one subject's finer topics is tried
+  twice, and if it fails twice the whole re-think fails: a tree stored with a branch missing would
+  look complete. Then the per-reader allowance, 12 an hour and 40 a day, and a global fuse of 3,000
+  a day.
+- **Arrivals during a re-think are filed in the same handler**, after its write, rather than waiting
+  for the browser to ask again. That drain takes a second claim and re-reads the row and shelf under
+  it, so a request that slipped between the two claims cannot make it file old topic ids into a new
+  tree.
+- **Below eight works a stored tree is not shown**: the row behaves as it always has.
+- **What is due is decided from counts of works, never from a hash of the prompt.** A re-think is
+  shown the previous labels so it keeps the ones that still fit, and a hash over that would make
+  every answer stale the moment it landed.
+- **Cost**, measured 2026-10-03: a re-think was $0.005 for 96 articles and $0.016 for 150 (57 and 104
+  seconds), so $0.00006 to $0.00012 an article; filing is about $0.00005 an article. With the cap a
+  re-think is at most about two cents.
+- **What bounds a hostile title.** It can steer a label or a membership on the shelf of the one
+  reader who saved it, and no further: the call has no tools; the answer is a strict schema; a work
+  or a topic is named only by an id the prompt showed; a label is one line of at most 40 characters
+  with control characters removed and its key is `[a-z0-9 ]` only; it is drawn as text; nothing of
+  the shelf is logged; the row is owner-scoped.
+
+The reader's titles, summaries and profile going to OpenAI via OpenRouter is on [/privacy](privacy.md).
+
 ## Two steps, and only the first is stored
+
+**This is the phrase row: the fallback since 2026-10-03.**
 
 1. **Per article, once: candidate phrases.** The current revision's prose — no footnotes, code,
    tables, or anything under a back-matter heading such as *References* — is cut into 1–3-word
@@ -52,6 +162,10 @@ plan [260930j](../plans/260930j-shelf-topics-loading-spinner.md)). A failed requ
 draws nothing rather than spinning for ever.
 
 ## The model's judgement
+
+**History since 2026-10-03: this scoring call is no longer made.** Scores already stored still shape
+the phrase row a reader sees until their first tree lands. Removing the scoring code and its table is
+queued. What follows describes it as it ran.
 
 > I'm still not that happy with the suggestions that are being generated. They're just not that
 > meaningful/relevant (e.g. "food", "female", "bowl" has little to do with my real topics
@@ -139,6 +253,16 @@ survivors keep their places relative to each other, and each keeps its colour.
 taking twelve and then dropping zeros would leave the row short with live pills waiting beyond it.
 *"All N topics"* counts the pills it would show, not every topic the server chose.
 
+**Then the topics inside a chosen one move up beside it** (`withinChosenFirst`, same file), for
+topics a model named as a broad-to-fine tree. Hiding zeros is not enough for Greg's *"filter down
+within those at sort of increasing levels of granularity"* (2026-10-03): the list arrives broad
+first, so with *Neuroscience* chosen, another broad subject that shares one article with it still
+sits ahead of *Vision*. So the topics **directly** inside a chosen one are gathered just after the
+last chosen pill that is not itself inside a chosen one, broad first; nothing else moves, and a topic
+two levels down waits until its parent is chosen. **A pill never moves when it is pressed**: a pill
+chosen from that group stays in it. With nothing chosen, and for phrase topics, the order is
+untouched. It runs after the zeros go and before the first twelve.
+
 ## Archived
 
 > On the Homepage Shelf, we have a "Show/hide archived" toggle at the very bottom.
@@ -188,6 +312,15 @@ is still read to a screen reader). [261001j](../plans/261001j-five-small-feedbac
   `aria-pressed`, the same tooltip. The toggle between the views stays in one place, so focus stays
   on it. Chosen over cards and two-line rows from screenshots, plan
   [260928d](../plans/260928d-shelf-topics-diversity-coverage-and-detail-view.md) § Stage 2.
+- **A topic a model named** (it carries a `granularity`) differs in four small ways, and a phrase
+  topic in none. Its label is in the model's face ([fonts.md](fonts.md)), on the pill, in the card
+  and in the paper card. A **finer** one (`granularity > 0`) has a faint `›` before its label —
+  a mark rather than a smaller or paler pill, so the height, the hue dot and the label's ink stay as
+  they are in both themes — and its card says *"Inside Neuroscience"*, the label of its `within`.
+  In More detail a finer row's chip is also indented, a step per level (`topicDepth`). Its members
+  have no phrase count, so the card and the row name them in the order sent (newest first) and
+  **nothing says *"used N times"***. And the card on the word **Topics** says a model named them,
+  broad subjects first, new articles sorted in automatically.
 - **Each article link in a row has the paper card** on hover and focus — title, authors and site,
   the gist (or the abstract, for a paper not yet AI-processed), when it was added and last opened,
   its length (or its not-yet-processed status), any archive and sharing state, and up to six topics
@@ -249,8 +382,10 @@ mouse gets from hovering.
 pills) — [url-state.md](url-state.md). A key is the
 lowercased, plural-folded phrase, so it survives a label changing surface form. A key in the URL that
 is not among the topics is **never applied while they load** — so a stale link cannot flash an empty
-shelf — and is **dropped, with `replace`, once an answer arrives with nothing pending**. Not before:
-while articles are still being read, a topic can be absent from one answer and present in the next.
+shelf — and is **dropped, with `replace`, once a settled answer arrives: nothing pending and no
+model refresh under way** (`refreshing`). Not before: while articles are still being read, or the
+model is choosing, a topic can be absent from one answer and present in the next. A refresh that
+never lands does not hold the key for ever: when the ask-again loop gives up, the key is dropped.
 
 ## Your own tags, in the row above
 
@@ -279,7 +414,9 @@ tag edit in flight or an archive still loading cannot eat the reader's filter.
 | choosing topics; `shelfTermMetrics` (coverage, overlap, redundancy — the one definition) | [`src/shelf-terms/choose.ts`](../../src/shelf-terms/choose.ts) |
 | the model's prompt, the input hash, the strict parser, the one call; `SHELF_TOPICS_PROMPT_VERSION` | [`src/shelf-terms/model-scores.ts`](../../src/shelf-terms/model-scores.ts) |
 | stored scores applied, the claim, the refresh after the answer, the allowance | [`src/shelf-topics.ts`](../../src/shelf-topics.ts) |
-| storage, the owner-scoped set, the bounded fill; the `shelf_topic_scores` row and its claim | [`src/store/pg-shelf-terms.ts`](../../src/store/pg-shelf-terms.ts) |
+| the model-named tree: both prompts, the strict parsers, `rethink`, `fileWorks`, `granularityOf`; `TOPIC_SET_PROMPT_VERSION` | [`src/shelf-terms/model-topics.ts`](../../src/shelf-terms/model-topics.ts) |
+| what a request does with the tree: the answer, what is due, the claim, the work after the answer | [`src/shelf-topic-sets.ts`](../../src/shelf-topic-sets.ts) |
+| storage, the owner-scoped set, the bounded fill; the `shelf_topic_sets` row and its claim (and the older `shelf_topic_scores`) | [`src/store/pg-shelf-terms.ts`](../../src/store/pg-shelf-terms.ts) |
 | `GET /api/library/terms` (`?archived=1` for active + archived), `private, no-store` | [`src/routes.ts`](../../src/routes.ts); the shape is `LibraryTermsResponse` in [`src/types.ts`](../../src/types.ts) |
 | the fetch, the ask-again loop, which URL keys apply | [`src/web/useShelfTerms.ts`](../../src/web/useShelfTerms.ts) |
 | the narrowing and the count formula, pure | [`src/web/shelf-narrow.ts`](../../src/web/shelf-narrow.ts) |
@@ -300,15 +437,14 @@ it Greg runs it with his owner uuid and the production `DATABASE_URL` in the she
 
 ## What v1 does not do
 
-**Proposed, not built, waiting on Greg**: letting the model name the topics as concepts (*Buddhism*,
-*Writing*) and file the articles, rather than only score phrases the articles use, which is why
-*principles* and *writers* can be pills. Plan
-[261003f](../plans/261003f-shelf-topics-named-by-a-model-as-concepts-not-phrases.md), with its eval
-in [investigation 261003b](../investigations/261003b-shelf-topics-as-concepts-not-phrases.md).
-
-
-- No embeddings, no clustering library (the colours' clustering is thirty lines of our own); the
-  one model call judges candidates and never writes one.
+- No embeddings, no clustering library (the colours' clustering is thirty lines of our own). The
+  pipeline tried in [investigation 261003b](../investigations/261003b-shelf-topics-as-concepts-not-phrases.md)
+  filed articles worse than the model does.
+- No *Redo topics* button: the tree is re-thought by itself. Queued.
+- **No tree for a shelf over 150 works** that does not already have one, and no re-think of one
+  that does: [§ The 150-work cap](#the-150-work-cap). Queued.
+- The "fits no topic" trigger compares totals, so as many unplaced works deleted as newly unplaced
+  ones leaves it unfired; the size trigger still fires in time.
 - No editing of topics — hide, rename or pin. Zotero-style "hide this automatic tag" is the obvious v2.
 - The generic-word list is hand-written, so weak topics such as *window* and *message* survive.
 - Near-synonyms (*neural nets* / *neural networks*) can both appear, and near-copies of one article
