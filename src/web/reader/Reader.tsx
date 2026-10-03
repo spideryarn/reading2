@@ -145,7 +145,7 @@ import { BandBackChip } from "../BandBackChip.js";
 import { MODE_LABEL } from "../../title-text.js";
 import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
 import { xrefTarget, type XrefResolver } from "../xref.js";
-import { flushPendingFlash, resetFlash, type JumpAim } from "../flash.js";
+import { dropPendingFlash, flushPendingFlash, resetFlash, type JumpAim } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
 import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
 import {
@@ -402,8 +402,9 @@ export function Reader({
   /**
    * **The band has stepped aside from the prose** — on a narrow window, where
    * it lies over the whole article (`band-covers`), after the reader follows a
-   * passage link out of any band (`bandJump` below, since 2026-09-29) or chooses
-   * a Skim stop (since 2026-09-28). The band stays mounted, so everything
+   * passage link out of any band (`bandJump` below, since 2026-09-29) or presses
+   * a Skim row (since 2026-09-28; its ‹ › and depth buttons did too until
+   * 2026-10-03, spya-kudr63). The band stays mounted, so everything
    * in it survives; only its paint goes (narrow-window.css § a band that has
    * stepped aside). `BandBackChip` offers it back, as does Skim's door
    * (SkimPanel.tsx § SkimDoor).
@@ -617,6 +618,23 @@ export function Reader({
   useEffect(() => {
     if (!bandOverProse) flushPendingFlash();
   }, [bandOverProse]);
+  /* **A held flash belongs to the mode that made it.** Since Skim's ‹ › stopped
+     stepping a covering band aside (spya-kudr63, plan 261003l) a flash can sit
+     held for as long as the reader walks the route. Leaving for Plain plays it,
+     above, which is the point. Leaving for *another covering band* must not
+     keep it: the prose can be moved from there by a path that never passes
+     `beginJump` and so never drops it (comment-jump.ts § `stepToComment`, for
+     one), and the next time the prose is exposed the old stop would wash,
+     wherever the reader had got to. Declared after the
+     flush so that a change which also exposes the prose has already played it.
+     Only on a real change of mode, never on mount: a deep link's landing held
+     by a child's own mount effect is this mode's, and has to survive. */
+  const flashMode = useRef(mode);
+  useEffect(() => {
+    if (flashMode.current === mode) return;
+    flashMode.current = mode;
+    if (bandOverProse) dropPendingFlash();
+  }, [mode, bandOverProse]);
   /* A held or live flash belongs to this article. ArticlePage keys the reader
      by slug, so leaving it unmounts here; clear both the pending id and the live
      removal timer rather than retaining a detached prose cell for 1.2s. */

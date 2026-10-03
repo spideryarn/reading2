@@ -49,8 +49,9 @@ v1, for the article's owner only, and behind the experimental switch until later
   lists and walks only its own (below).
 - **In the prose**: the current stop's quote is ringed and barred, brought into view on every
   step (centred since 2026-09-29, below), and followed by a **Next stop ›** door — *More detail ›*
-  at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below. On a narrow window the band steps aside once a stop is
-  chosen, and the door carries the walk.
+  at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below. On a narrow window the band steps aside when a row is
+  pressed, and the door carries the walk; the head's ‹ › and depth buttons keep the band up (since
+  2026-10-03, below).
 - **Keys and address**: ← / → step the stops while the mode is open
   ([keyboard.md](keyboard.md) § ← / → in Skim); `?depth=` pushes and `?stop=`
   replaces ([url-state.md](url-state.md)). The rules for where a step or a depth change lands are
@@ -297,6 +298,17 @@ spya-bjbcxp): *"Remove the FAQ snippets (they don't add much)"*. The question ab
 row, and the passages it opened, were removed, and Skim no longer reads the FAQ at all. The
 terms, ideas and events on the card stay, and so does the cue above the quote, which is a different
 thing: the question to read the passage with.
+
+**On a phone, the head's controls stay in Skim; a row goes to the article** — Greg, 2026-10-03,
+report spya-kudr63, plan
+[261003l](../plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md) § Stage 1.
+Where the band lies over the prose, every step used to step it aside, so ‹ › showed one stop and
+closed the band. Greg: *"in this special case, the left and right buttons of skim mode should stay
+in skim mode ... if it's showing me a quote and I click on the quote, I think I do want to be taken
+to the article."* So ‹ ›, ← → and Gist · More · Most leave the band up — the prose still scrolls to
+the stop underneath, and its flash is held until the prose shows — and only a row press steps aside
+(`SkimMode.tsx` § `moveTo`, `onRow`). It keys on `covers`, the app's one test for "band and prose
+cannot both be seen", not on a device or an orientation.
 
 ### What we tried for v2
 

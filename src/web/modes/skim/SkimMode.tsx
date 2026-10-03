@@ -449,17 +449,31 @@ function useSkimMode({
    * **Every direct movement along the route goes through here** — ‹ ›, ← →,
    * the door, a depth change that moves you (Sol F29): the
    * stop's block scrolled near the top and flashed when the glide settles
-   * (`arrive`), and on a narrow window the band steps aside so the prose it
-   * landed on can be seen. One helper, so the keys cannot do less than the
-   * buttons. A row press is not here: it is a jump, through `onJump`.
+   * (`arrive`). One helper, so the keys cannot do less than the buttons. A row
+   * press is not here: it is a jump, through `onJump`.
+   *
+   * **It does not step the band aside.** Until 2026-10-03 it did, on a window
+   * where the band lies over the prose (`covers`), so on a phone ‹ › showed one
+   * stop and then closed the band on the reader:
+   *
+   * > in this special case, the left and right buttons of skim mode should stay
+   * > in skim mode ... if it's showing me a quote and I click on the quote, I
+   * > think I do want to be taken to the article.
+   * >
+   * > — Greg, 2026-10-03 (spya-kudr63)
+   *
+   * So the rule is one a reader can learn: **a control in the head stays in
+   * Skim; a row goes to the article** (`onRow`, below, the only caller of
+   * `onAway`). The depth buttons are in the head, so they stay too. The prose
+   * still scrolls to the stop underneath, so it is already there when the row
+   * is pressed or the band closed, and the flash waits behind the band until
+   * then (flash.ts § a flash nobody can see is held). It keys on nothing: with
+   * the band beside the prose, or already aside (the door), there was never
+   * anything to step. docs/plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md § Stage 1.
    */
-  const moveTo = useCallback(
-    (block: BlockId, quoteId: string) => {
-      arrive(block, quoteId);
-      if (covers) onAway();
-    },
-    [covers, onAway],
-  );
+  const moveTo = useCallback((block: BlockId, quoteId: string) => {
+    arrive(block, quoteId);
+  }, []);
 
   /**
    * A stop determines its pass, so keep the URL's two coordinates in step when
@@ -665,7 +679,10 @@ function useSkimMode({
     [route, blockOf, index, tree, current, positions, byId],
   );
 
-  /** Choosing a stop in the band: a jump, and on a narrow window the band steps aside. */
+  /**
+   * Choosing a stop in the band: a jump, and on a narrow window the band steps
+   * aside. **The only thing in Skim that does** since 2026-10-03 — `moveTo`.
+   */
   const onRow = useCallback(
     (quoteId: string) => {
       /* **A row press is a jump, not a step**, as a comment chosen from the
@@ -679,7 +696,8 @@ function useSkimMode({
     },
     [blockOf, replaceStop, onJump, covers, onAway],
   );
-  /* ‹ › — the band's own buttons. Stepping aside is `moveTo`'s, so the keys get it too. */
+  /* ‹ › — the band's own buttons. The same `step` the keys and the door call,
+     and none of them steps a covering band aside (spya-kudr63, `moveTo`). */
   const onStep = useCallback(
     (dir: -1 | 1) => {
       step(dir);
@@ -737,7 +755,10 @@ function useSkimMode({
  * docs/postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md.
  */
 function arrive(block: BlockId, quoteId: string): void {
-  /* A landing still held behind a covering band belongs to the step before. */
+  /* A landing still held behind a covering band belongs to the step before.
+     Since the head's controls stopped stepping the band aside (spya-kudr63)
+     this is the ordinary case on a phone, not a rare one: every ‹ › holds its
+     flash, and this is what keeps the one that finally plays the last stop's. */
   dropPendingFlash();
   const passage = quoteMarkKey(quoteId, block);
   /* Centred on the quote, as every jump is since plan 260929a § 3 — the

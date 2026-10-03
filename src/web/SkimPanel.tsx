@@ -862,7 +862,9 @@ function StopCardView({
  * back, and ← on stop 1 goes to its passage (SPIDERYARN-READING2-51 and 4K,
  * plan 260929b). It is there because on an iPad
  * the reader's eyes and thumb are in the prose after reading a stop, and on a
- * narrow window the band has stepped aside altogether (F4).
+ * narrow window the band has stepped aside altogether once a row is pressed
+ * (F4). Only a row does that since 2026-10-03: the head's ‹ › and depth
+ * buttons keep a covering band up (spya-kudr63, SkimMode.tsx § `moveTo`).
  *
  * Drawn by `TableView` after the block's prose, outside `.prose`, on the path
  * `PdfFigureNotes` already uses (TableView.tsx § After the prose) — so it

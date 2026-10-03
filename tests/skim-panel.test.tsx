@@ -1552,31 +1552,52 @@ describe("the band, walked", () => {
     expect(flashed).toEqual([]);
   });
 
-  it("flashes on ‹ › in the band too, and steps aside after on a narrow window (5a)", async () => {
+  /* **A control in the head stays in Skim; a row goes to the article** — Greg's
+     spya-kudr63, plan 261003l. Until then every step called `onAway` (Sol F29),
+     so on a phone ‹ › showed one stop and then closed the band on the reader. */
+  it("flashes on ‹ › in the band too, and stays up on a narrow window (5a, spya-kudr63)", async () => {
     await mount(true);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Next stop"]')!.click());
     await settled();
-    expect(flashed).toEqual([B[0]]);
-    expect(away).toBe(1);
+    /* The prose still goes to the stop underneath, and the list follows. */
+    expect([scrolled, flashed]).toEqual([[B[0]], [B[0]]]);
+    expect([param("stop"), current()]).toEqual([Q[0], Q[0]]);
+    expect(away).toBe(0);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Previous stop"]')!.click());
+    await settled();
+    expect([current(), away]).toEqual([Q[2], 0]);
   });
 
-  it("steps aside on ← → and on a depth change, as on ‹ › (Sol F29)", async () => {
+  it("stays up on ← → and on a depth change, as on ‹ › (spya-kudr63; was Sol F29's step aside)", async () => {
     await mount(true);
     /* The keys reach the band through the published control, not the panel. */
     await act(async () => void control!.step(1));
     await settled();
-    expect([flashed, away]).toEqual([[B[0]], 1]);
+    expect([flashed, away]).toEqual([[B[0]], 0]);
     /* The door, back to the next stop: ← then the door's Next stop. */
     await act(async () => void control!.step(-1));
     await settled();
     await act(async () => control!.advance());
     await settled();
-    expect([flashed, away]).toEqual([[B[0], B[2], B[0]], 3]);
+    expect([flashed, away]).toEqual([[B[0], B[2], B[0]], 0]);
     /* A depth change always moves the reader now: Most's own stop 1. */
     await act(async () => host.querySelectorAll<HTMLButtonElement>(".skim-depth")[2]!.click());
     await settled();
     expect([param("depth"), param("stop")]).toEqual(["3", Q[1]]);
-    expect([flashed.at(-1), away]).toEqual([B[1], 4]);
+    expect([flashed.at(-1), away]).toEqual([B[1], 0]);
+  });
+
+  it("still steps aside for a row pressed after the head's controls were used (spya-kudr63)", async () => {
+    await mount(true);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Next stop"]')!.click());
+    await settled();
+    expect(away).toBe(0);
+    /* The quote itself: a jump to the article, as before. */
+    await act(async () => host.querySelector<HTMLButtonElement>(".skim-row.current .skim-go")!.click());
+    await settled();
+    expect(away).toBe(1);
+    expect(scrolled.at(-1)).toBe(`jump ${B[0]}`);
+    expect(jumpPassages.at(-1)).toBe(`${Q[0]}:${B[0]}:0`);
   });
 
   it("flashes when More detail or a depth button moves the reader (5a)", async () => {
