@@ -235,3 +235,22 @@ React's development build (`jsxDEV`, `createElement`, prop validation), 70ms of 
 How much of the remainder is left is unmeasured. That is the next place to look if a preloaded open
 still feels slow in production. It is a property of the reading view, not of loading, so it is
 outside this report.
+
+### GPT Sol's code review
+
+The review is
+[261003d-preload-recent-shelf-articles-code-review-sol.md](261003d-preload-recent-shelf-articles-code-review-sol.md).
+It found no P0, and it fixed two P1s inside the stage, red first:
+
+- **A preload holds only a complete, parseable body.** `fetch` resolves on headers, so a body that
+  died later used to sit in the slot until the click. The click then showed an error page where an
+  ordinary request would have worked. The slot now reads the body in full, checks that it is JSON,
+  and hands over a rebuilt, unread `Response`.
+- **A fingerprint of the shelf fields that also change the payload**: `revisionId`, title, rename
+  flag, visibility, archived. When the live shelf follows the cached one with the same five slugs
+  but a different fingerprint, those slots are fetched again. This also narrows the staleness
+  window in practice: a pipeline publish that the live shelf has already seen is not served from
+  an older preload.
+
+What it left, as accepted: a change that neither this tab nor the shelf has seen can be up to
+60 seconds old.

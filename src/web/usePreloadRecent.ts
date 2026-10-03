@@ -18,12 +18,27 @@ import type { LibraryEntry } from "../types.js";
 import { PRELOAD_COUNT, preloadArticles } from "./lib/prefetch-article.js";
 
 export function usePreloadRecent(articles: readonly LibraryEntry[] | null): void {
-  /* A string, so a re-render with the same five is not a new effect. */
-  const key = articles === null ? null : recentlyOpened(articles).join("\n");
+  /* A string, so a re-render with the same five and the same payload-bearing
+     shelf fields is not a new effect. `revisionId` alone is insufficient: a
+     rename and visibility/archive changes live on the article row. */
+  const key =
+    articles === null
+      ? null
+      : JSON.stringify(
+          recentlyOpenedEntries(articles).map((article) => [
+            article.slug,
+            shelfVersion(article),
+          ]),
+        );
   useEffect(() => {
     if (key === null || savingData()) return;
-    const slugs = key === "" ? [] : key.split("\n");
-    return whenIdle(() => preloadArticles(slugs));
+    const chosen = JSON.parse(key) as [slug: string, shelfVersion: string][];
+    return whenIdle(() =>
+      preloadArticles(
+        chosen.map(([slug]) => slug),
+        new Map(chosen),
+      ),
+    );
   }, [key]);
 }
 
@@ -33,13 +48,27 @@ export function usePreloadRecent(articles: readonly LibraryEntry[] | null): void
  * archived row is not on the shelf the reader is looking at.
  */
 export function recentlyOpened(articles: readonly LibraryEntry[]): string[] {
+  return recentlyOpenedEntries(articles).map((a) => a.slug);
+}
+
+function recentlyOpenedEntries(articles: readonly LibraryEntry[]): LibraryEntry[] {
   return articles
     .filter((a): a is LibraryEntry & { lastOpenedAt: string } =>
       Boolean(a.lastOpenedAt && !a.archivedAt),
     )
     .sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt))
-    .slice(0, PRELOAD_COUNT)
-    .map((a) => a.slug);
+    .slice(0, PRELOAD_COUNT);
+}
+
+/** Fields visible on the shelf that also change `GET /api/article/<slug>`. */
+function shelfVersion(article: LibraryEntry): string {
+  return JSON.stringify([
+    article.revisionId ?? null,
+    article.title,
+    article.titleOverridden ?? false,
+    article.visibility ?? null,
+    article.archivedAt ?? null,
+  ]);
 }
 
 function savingData(): boolean {

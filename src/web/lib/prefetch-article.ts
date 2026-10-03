@@ -56,16 +56,19 @@ export const REASK_MS = 15_000;
 
 interface Slot {
   issuedAt: number;
+  /** Shelf fields that can change the article payload without changing its slug. */
+  shelfVersion: string;
   /** `writeCount()` when it went out. Any other value at handover: discarded. */
   writes: number;
   controller: AbortController;
-  /** Never rejects. `null` is anything other than a fresh, real 200. */
+  /** Never rejects. `null` is anything other than a fresh, complete, real 200. */
   answer: Promise<Owned | null>;
   /** The signal of the load waiting on it, if any — see `takePreloaded`. */
   claim: AbortSignal | null;
 }
 
 const slots = new Map<string, Slot>();
+const NO_SHELF_VERSIONS: ReadonlyMap<string, string> = new Map();
 
 /** Injected by tests; `Date.now` everywhere else. */
 let now: () => number = Date.now;
@@ -77,16 +80,27 @@ let now: () => number = Date.now;
  * aborted. One that is still young and made under the current write count is
  * kept; anything else is asked for again.
  */
-export function preloadArticles(slugs: readonly string[]): void {
+export function preloadArticles(
+  slugs: readonly string[],
+  shelfVersions: ReadonlyMap<string, string> = NO_SHELF_VERSIONS,
+): void {
   const wanted = new Set(slugs);
   for (const [slug, slot] of slots) {
     if (!wanted.has(slug)) drop(slug, slot);
   }
   for (const slug of wanted) {
     const held = slots.get(slug);
-    if (held && now() - held.issuedAt < REASK_MS && held.writes === writeCount()) continue;
+    const shelfVersion = shelfVersions.get(slug) ?? "";
+    if (
+      held &&
+      held.shelfVersion === shelfVersion &&
+      now() - held.issuedAt < REASK_MS &&
+      held.writes === writeCount()
+    ) {
+      continue;
+    }
     if (held) drop(slug, held);
-    slots.set(slug, issue(slug));
+    slots.set(slug, issue(slug, shelfVersion));
   }
 }
 
@@ -165,19 +179,45 @@ function current(slot: Slot): boolean {
   return now() - slot.issuedAt < LIFE_MS && slot.writes === writeCount();
 }
 
-function issue(slug: string): Slot {
+function issue(slug: string, shelfVersion: string): Slot {
   const controller = new AbortController();
   const answer = apiFetchOwned(`/api/article/${encodeURIComponent(slug)}`, {
     signal: controller.signal,
   }).then(
-    (got) => {
-      if (realOk(got.response)) return got;
-      discard(got.response);
-      return null;
+    async (got) => {
+      if (!realOk(got.response)) {
+        discard(got.response);
+        return null;
+      }
+      try {
+        /* `fetch` resolves when the headers arrive, not when the body has. Hold
+           only a fully downloaded body: otherwise a connection lost after a
+           200 can sit in the slot until the click, then turn that click into an
+           error page where its ordinary, later request could have succeeded.
+           Rebuild the response because reading the original consumes it. */
+        const body = await got.response.arrayBuffer();
+        /* A complete error page with a mistaken 200 is no better than a broken
+           stream. `readJson` would reject it only after the click; check the one
+           property this endpoint promises while a normal retry is still
+           available. The parsed value is deliberately thrown away — the
+           reading view remains the sole owner of interpreting the payload. */
+        JSON.parse(new TextDecoder().decode(body));
+        return {
+          ...got,
+          response: new Response(body, {
+            status: got.response.status,
+            statusText: got.response.statusText,
+            headers: got.response.headers,
+          }),
+        };
+      } catch {
+        discard(got.response);
+        return null;
+      }
     },
     () => null,
   );
-  return { issuedAt: now(), writes: writeCount(), controller, answer, claim: null };
+  return { issuedAt: now(), shelfVersion, writes: writeCount(), controller, answer, claim: null };
 }
 
 function drop(slug: string, slot: Slot): void {

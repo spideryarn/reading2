@@ -209,6 +209,39 @@ describe("what makes a preload unusable", () => {
     expect(access.kind === "owned" && access.article.meta.title).toBe("fresh");
   });
 
+  it("a 200 whose body breaks mid-download: the reading view fetches a complete answer", async () => {
+    articleAnswer = async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('{"meta":'));
+            controller.error(new TypeError("connection lost"));
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    preloadArticles(["a"]);
+    await settle();
+    articleAnswer = async (slug) => ok(slug, "complete");
+    const access = await open("a");
+    expect(articleGets("a")).toBe(2);
+    expect(access.kind === "owned" && access.article.meta.title).toBe("complete");
+  });
+
+  it("a malformed 200: the reading view fetches valid JSON instead of holding the error", async () => {
+    articleAnswer = async () =>
+      new Response("<html>not the API</html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    preloadArticles(["a"]);
+    await settle();
+    articleAnswer = async (slug) => ok(slug, "valid");
+    const access = await open("a");
+    expect(articleGets("a")).toBe(2);
+    expect(access.kind === "owned" && access.article.meta.title).toBe("valid");
+  });
+
   it("the offline copy apiFetch serves when the network is gone, though it says 200", async () => {
     articleAnswer = () => Promise.reject(new TypeError("Failed to fetch"));
     readCache.mockResolvedValue(JSON.parse(articleBody("a", "old copy")));
@@ -308,5 +341,37 @@ describe("the shelf's choice", () => {
     act(() => root.unmount());
     await open("x");
     expect(articleGets("x")).toBe(1);
+  });
+
+  it("refreshes a candidate when the live shelf reports a newer revision", async () => {
+    function Shelf({ articles }: { articles: LibraryEntry[] }) {
+      usePreloadRecent(articles);
+      return null;
+    }
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await act(async () => {
+      root.render(
+        <Shelf
+          articles={[
+            { ...entry("x", "2026-09-29T00:00:00Z"), revisionId: "cached-revision" },
+          ]}
+        />,
+      );
+    });
+    for (let i = 0; i < 50 && articleGets("x") < 1; i++) await new Promise((go) => setTimeout(go, 20));
+    await act(async () => {
+      root.render(
+        <Shelf
+          articles={[
+            { ...entry("x", "2026-09-29T00:00:00Z"), revisionId: "live-revision" },
+          ]}
+        />,
+      );
+    });
+    for (let i = 0; i < 50 && articleGets("x") < 2; i++) await new Promise((go) => setTimeout(go, 20));
+    expect(articleGets("x"), "the new revision kept the cached shelf's slot").toBe(2);
+    act(() => root.unmount());
   });
 });
