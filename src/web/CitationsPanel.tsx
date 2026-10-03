@@ -289,7 +289,7 @@ export function registryConflictNote(source: RegistrySource): string {
 
 /** Said under an entry wherever it is shown — a row's tooltip and the prose card. */
 export const CITE_ENTRY_NOTE =
-  "The entry in the article's own reference list, copied from the article. We have not looked the work up.";
+  "The entry in the article's own reference list, copied from the article, not from the work.";
 
 /**
  * The citing words in quotation marks — unless they already are in them, as a
@@ -506,6 +506,19 @@ export const CITATIONS_NONE = "We found no works this piece cites.";
 
 /** The label on `why`, in the band and the hover card alike. */
 export const CITE_WHY_LABEL = "what the article uses it for";
+
+/* **`why` is drawn only beside something that was checked against it** — Greg,
+   2026-10-03 (spya-zmdb7y, plan 261003j): *"err on the side of saying … nothing
+   about a paper beyond what's available in the bibliography"*. The sentence can
+   only restate the citing paragraph, and on a row nothing has looked up it
+   still reads as what the paper says, label or no label. Once a quick check
+   has a verdict (*supports what the article uses it for*) or *Dig deeper* has
+   an answer, it is the claim under test, and the reader needs it to read
+   either. Each surface asks about what IT draws: the card shows no *Dig
+   deeper* answer, so it passes only the lookup. */
+export function showsWhy(work: Pick<ShownWork, "lookup" | "investigation">): boolean {
+  return assessedOf(work) !== null || work.investigation !== undefined;
+}
 
 /** Every row, until something has read the work: nothing has. */
 export const CITE_NOT_READ = "We have not read this work, only the article that cites it.";
@@ -1028,9 +1041,13 @@ function WorkRow({
       {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
       {by && !byLineFolds(work, by) && <ByLine work={work} by={by} />}
       {line.conflict && <p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
-      <p className="cite-why">
-        <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
-      </p>
+      {/* Also while this row is being dug: the quick check can find nothing and
+          the answer still streams, with no lookup and no kept answer yet. */}
+      {(showsWhy(work) || investigate?.running === work.id || (investigate?.draft ?? null) !== null) && (
+        <p className="cite-why">
+          <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
+        </p>
+      )}
       <p className="cite-read">{readNoteOf(work)}</p>
       <LookupReading work={work} />
       <p className="cite-meta">

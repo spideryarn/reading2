@@ -1,0 +1,20 @@
+slug	works	why words/row	why words total	why novel	title<1	authors<1	year not in article	guard drops authors	guard drops year
+spider-silk-spya-ge30uz	80	8.9	711	0.36	0	0	0	0	0
+antikythera-mechanism-spya-zhxrzm	46	12.5	574	0.40	0	1	0	1	0
+  - the guard would drop authors "Archimedes (attributed by Pappus of Alexandria)" — On Sphere-Making
+  ! On Sphere-Making | Archimedes (attributed by Pappus of Alexandria) |  — title 1.00 authors 0.83 year null
+vb-spya-vu3xen	2	18.0	36	0.73	1	0	0	0	0
+  ! The Acceleration of Addictiveness |  |  — title 0.50 authors 1.00 year null
+openai-huggingface	8	17.5	140	0.42	2	0	0	0	0
+  ! Roon's Twitter reply |  |  — title 0.75 authors 1.00 year null
+  ! Interview with Ryan Greenblatt (Dwarkesh Podcast) |  |  — title 0.83 authors 1.00 year null
+scaling-hypothesis	58	11.8	682	0.49	4	2	2	2	0
+  - the guard would drop authors "Sutton" — The Bitter Lesson
+  - the guard would drop authors "Djolonga et al" — Djolonga et al 2020
+  ! OpenAI Five (OA5) blog/report |  |  — title 0.80 authors 1.00 year null
+  ! The Bitter Lesson | Sutton |  — title 1.00 authors 0.00 year null
+  ! AlphaGo Zero (Mastering the Game of Go without Human Knowledge) |  |  — title 0.90 authors 1.00 year null
+  ! Vahdat & Kautz 2020 (NVAE) | Vahdat & Kautz | 2020 — title 0.75 authors 1.00 year true
+  ! Djolonga et al 2020 | Djolonga et al | 2020 — title 0.75 authors 0.00 year true
+  ! The Quiet Enemy / The Legacy of Hiroshima | Edward Teller | 1962 — title 1.00 authors 1.00 year false
+  ! An Introduction to Wittgenstein's Tractatus | Anscombe | 1963 — title 1.00 authors 1.00 year false

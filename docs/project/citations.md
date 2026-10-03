@@ -16,7 +16,7 @@ The design, the review that reshaped it and the real runs are
 ## A row
 
 The title — a link out, opening a new tab ([links.md](links.md)) — then authors · year as the article
-gives them, more than two authors shortened to *First et al.*, one plain sentence on *what the piece uses it for*, and a quiet line: relevance and influence as two small bars (the numbers in their tooltip, as in the glossary),
+gives them, more than two authors shortened to *First et al.*, and a quiet line: relevance and influence as two small bars (the numbers in their tooltip, as in the glossary),
 where the link came from, and **first cited**, a jump to the passage
 ([`BlockRef`](../../src/web/BlockRef.tsx)). A work the article names only in its bibliography says
 *only in the references* and jumps there. § [Which citation, and whose
@@ -65,8 +65,7 @@ Asked for through the Feedback button on 2026-09-29 (SPIDERYARN-READING2-5G):
 > be really careful to be clear about whether you could get the actual paper, so that we can be sure
 > you're not hallucinating
 
-`why` is written **from the article**, and nothing that makes the list reads the cited work. So the
-row labels `why` *what the article uses it for*, and every row and hover card carries one quiet line
+Nothing that makes the list reads the cited work, so every row and hover card carries one quiet line
 saying what we have read. Usually that is nothing: *We have not read this work, only the article that
 cites it.* After *Look it up* it names what was read, which is only ever a search engine's extract
 of a matching page, and never the work itself. Once *Dig deeper* has read the paper itself
@@ -75,6 +74,46 @@ with the host, the length and the day. `readNoteOf` in
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) is the one source of that line for both
 surfaces, total over `linkFrom` and the lookup's state. The design and its two plan reviews are
 [260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
+
+## Nothing about the work beyond the article's bibliography
+
+Asked for through the Feedback button on 2026-10-03 (`spya-zmdb7y`):
+
+> we don't want to mislead the reader into thinking that that's what the paper actually says when
+> actually there's no new information beyond what's in the text. So instead, I think citations mode
+> should perhaps err on the side of saying, you know, nothing about a paper beyond what's available
+> in the bibliography … better to say less and allow the user to ask for more
+>
+> — Greg, 2026-10-03
+
+The model writes one sentence a work, `why`: *what the article uses it for*. It is written from the
+citing paragraph and can only restate it. Until 2026-10-03 every row, hover card and Marginalia note
+drew it; measured on 194 stored rows that was 2,143 words of paraphrase, about 11 a row
+([the investigation](../investigations/261003d-what-a-citations-row-says-and-where-it-came-from.md)).
+
+**Now `why` is drawn only beside something that was checked against it** (`showsWhy` in
+[`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx)): in the band, once the row has a
+quick-check verdict or a *Dig deeper* answer; on the hover card, once it has the verdict, since the
+card draws no *Dig deeper* answer. There it is the claim under test, still labelled *what the article
+uses it for* — the verdict reads *supports what the article uses it for*, which says nothing without
+it. Marginalia's opened note never draws it, and shows the article's own reference entry instead. A
+visitor has neither a verdict nor an answer, so never sees it.
+
+**Authors and a year the article never gives are dropped**, by code, when the list is made
+(`locateInArticle` in [`src/citations.ts`](../../src/citations.ts)). The prompt asks for both *as the
+article gives them*; one stored row in 194 had an author from the model's memory instead (*The
+Bitter Lesson · Sutton*, in an essay that never names Sutton). Every word of the authors must be a
+word of the article's text or its PDF reference list, and the year's four digits must be in it
+somewhere, or that field goes and the row stays; `authorsUnfound` and `yearUnfound` on the step's
+log line count them. It asks only whether the article says the name at all, not whether it says it
+of this work, which code cannot know. A name the model corrected (the article's *Dojolonga*) goes
+too. A row with a DOI can still get its authors from the registry, marked *from Crossref*. A list
+made before 2026-10-03 keeps what it has until it is made again.
+
+`why` is still written and stored: the quick check, the paper's passages and the *Dig deeper* answer
+are all aimed by it, and chat's `article_citations` tool returns it as *used for*. The plan, with
+what was passed over, is
+[261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md).
 
 ## Which citation, and whose entry
 
@@ -147,7 +186,7 @@ clear upgrade keeps its *Look it up*, find and investigation, while an ambiguous
 them to another work.
 
 **Shown**: the by-line's tooltip holds the authors as given and the entry, labelled as the entry in
-the article's own reference list, which we have not looked up; the prose hover card shows the entry
+the article's own reference list, copied from the article and not from the work; the prose hover card shows the entry
 in full, since a card is what a finger gets. **A visitor gets the entry only when it is its own
 bibliography block's text**, every character of which is already on their page. An entry read from
 a PDF's text layer stays owner-only: it can carry a publisher's one-page "Downloaded by …" stamp
@@ -237,7 +276,7 @@ like one of the article's own hyperlinks. `/design` has three specimens, includi
 
 **Pointing at one opens the work**, in the card the glossary and the links already share
 ([`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx)) — a fourth section, not a second card.
-It draws the title with its link, authors · year, `why`, and *cited in N paragraphs* — or *only in
+It draws the title with its link, authors · year, the entry, and *cited in N paragraphs* — or *only in
 the references* for a bibliography-only work. The provenance
 is the panel's own `sourceOf`, so a `search` row is drawn here as a search exactly as it is there:
 two surfaces disagreeing about whether an address is the work's own would teach a reader something

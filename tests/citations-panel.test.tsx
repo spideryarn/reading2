@@ -1051,9 +1051,41 @@ describe("what a row says we have read", () => {
     const r = row(CENTRAL.id);
     expect(r.querySelector(".cite-read")?.textContent).toBe(CITE_NOT_READ);
     expect(CITE_NOT_READ).toMatch(/not read/i);
-    /* And `why` is labelled as the article's, not the work's. */
-    expect(r.querySelector(".cite-why-label")?.textContent).toContain(CITE_WHY_LABEL);
+    /* And nothing the model wrote about the work: `why` is a paraphrase of
+       the citing paragraph, and on a row nothing has checked it reads as what
+       the paper says (Greg, spya-zmdb7y, plan 261003j). */
+    expect(r.querySelector(".cite-why")).toBeNull();
+    expect(r.textContent).not.toContain(CENTRAL.why);
     expect(CITE_WHY_LABEL).toMatch(/article/);
+  });
+
+  it("shows why, labelled as the article's, once something was checked against it", async () => {
+    /* The verdict says "supports what the article uses it for", and Dig
+       deeper's answer opens "Does it back the claim?": each needs the claim
+       beside it. */
+    const dug = work({ id: "spya-d2g3h4", title: "Dug", relevance: 0.9, influence: 0.9, investigation: INVESTIGATION });
+    await draw(owner({ citations: artefact([LOOKED, dug, CENTRAL]) }));
+    for (const id of [LOOKED.id, dug.id]) {
+      const why = row(id).querySelector(".cite-why");
+      expect(why?.querySelector(".cite-why-label")?.textContent).toContain(CITE_WHY_LABEL);
+      expect(why?.textContent).toContain(LOOKED.why);
+    }
+    expect(row(CENTRAL.id).querySelector(".cite-why")).toBeNull();
+  });
+
+  it("shows why while Dig deeper runs on the row, before any answer is kept", async () => {
+    /* The quick check can find nothing and the answer still streams, opening
+       "Does it back the claim?" with no lookup and no kept answer to hang the
+       claim on (GPT Sol's plan review, P2). Only the row being dug. */
+    await draw(
+      owner({
+        citations: artefact([CENTRAL, FAMOUS]),
+        investigating: CENTRAL.id,
+        investigateDraft: { id: CENTRAL.id, text: "Does it back the claim?" },
+      }),
+    );
+    expect(row(CENTRAL.id).querySelector(".cite-why")?.textContent).toContain(CENTRAL.why);
+    expect(row(FAMOUS.id).querySelector(".cite-why")).toBeNull();
   });
 
   it("says only that a page matching the title was found, never that it is the paper", async () => {

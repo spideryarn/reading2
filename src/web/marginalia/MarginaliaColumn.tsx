@@ -403,10 +403,14 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
       {items.map((work) => {
         const by = byLineOf(work);
         return (
+          /* The article's own words about the work and nothing of ours: the
+             by-line and its reference entry, never the model's `why` (Greg,
+             spya-zmdb7y, plan 261003j). A lone work with neither repeats its
+             title, so the note never opens to nothing. */
           <div key={work.id} className="marg-open-item">
-            {!only && <p className="marg-open-head">{work.title}</p>}
+            {(!only || (!by && !work.entry)) && <p className="marg-open-head">{work.title}</p>}
             {by && <p className="marg-open-by">{by}</p>}
-            <p className="marg-cite-why">{work.why}</p>
+            {work.entry && <p className="marg-cite-entry">{work.entry}</p>}
           </div>
         );
       })}

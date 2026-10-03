@@ -199,7 +199,6 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
     ".marg-idea-name",
     ".marg-arc",
     ".marg-debate-applies",
-    ".marg-cite-why",
     ".marg-open-answer",
   ],
 };

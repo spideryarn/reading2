@@ -108,6 +108,48 @@ function build(
 
 const scored = { relevance: 0.8, influence: 0.5 };
 
+/* ------------------------------------ authors and a year, from the article --
+   Greg, spya-zmdb7y (plan 261003j): a row says nothing about a work beyond
+   what the article gives. The prompt asks for authors and year "as the article
+   gives them"; one stored row in 194 carried an author from the model's memory
+   (*The Bitter Lesson · Sutton*, in an essay that never names Sutton). */
+
+describe("an author or year the article never gives is dropped", () => {
+  const body = block("spya-b00001", "The bitter lesson is the harder and bigger, the better, as Müller's (1963) book said.");
+  const lesson = { title: "The Bitter Lesson", why: "x", ...scored, mentions: [{ block: body.id, quote: "The bitter lesson" }] };
+
+  it("drops an author who is nowhere in the article, and counts it", () => {
+    const { rows, drops } = build([{ ...lesson, authors: "Sutton" }], [body]);
+    expect(rows[0]?.title).toBe("The Bitter Lesson");
+    expect(rows[0]?.authors).toBeUndefined();
+    expect(drops.authorsUnfound).toBe(1);
+  });
+
+  it("drops a year that is nowhere in the article, and counts it", () => {
+    const { rows, drops } = build([{ ...lesson, year: "2019" }], [body]);
+    expect(rows[0]?.year).toBeUndefined();
+    expect(drops.yearUnfound).toBe(1);
+  });
+
+  it("keeps an author and year the article gives, through a possessive, an accent and 'et al.'", () => {
+    const { rows, drops } = build([{ ...lesson, authors: "Müller et al.", year: "1963" }], [body]);
+    expect(rows[0]?.authors).toBe("Müller et al.");
+    expect(rows[0]?.year).toBe("1963");
+    expect(drops.authorsUnfound).toBe(0);
+    expect(drops.yearUnfound).toBe(0);
+  });
+
+  it("keeps a year the article glues to other characters", () => {
+    const glued = block("spya-b00002", "Anscombe 196363ya, An Introduction to the bitter lesson.");
+    const { rows } = build(
+      [{ ...lesson, mentions: [{ block: glued.id, quote: "Anscombe 1963" }], authors: "Anscombe", year: "1963" }],
+      [glued],
+    );
+    expect(rows[0]?.year).toBe("1963");
+    expect(rows[0]?.authors).toBe("Anscombe");
+  });
+});
+
 /* ------------------------------------------------------------------ links */
 
 describe("the link comes from the article, by code", () => {

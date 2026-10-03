@@ -466,6 +466,72 @@ function locateInEntry(
   };
 }
 
+/* The article's words and its text, once per run: `readDraft` is called per work. */
+const ARTICLE_TEXT = new WeakMap<ReadonlyMap<string, Block>, { words: Set<string>; text: string }>();
+
+/**
+ * A PDF's reference list is the article's own text too, though not among its
+ * blocks: a work whose entry number did not check out still took its authors
+ * from there. Words are kept both with an apostrophe closed up, as `keyWords`
+ * reads a name (*O'Brien*), and split at it, so *Tulving's* gives *Tulving*.
+ */
+function articleTextOf(
+  byId: ReadonlyMap<string, Block>,
+  list: NumberedReferenceList | null,
+): { words: Set<string>; text: string } {
+  let known = ARTICLE_TEXT.get(byId);
+  if (!known) {
+    const text = [...[...byId.values()].map((b) => b.text), ...(list ? list.entries.values() : [])].join("\n");
+    const words = new Set(keyWords(text).split(" "));
+    for (const w of keyWords(text.replace(/[‘’'`]/g, " ")).split(" ")) words.add(w);
+    known = { words, text };
+    ARTICLE_TEXT.set(byId, known);
+  }
+  return known;
+}
+
+/**
+ * **Authors and a year the article never gives are dropped** — the same rule
+ * `locateInEntry` holds a PDF entry to, for a work with no entry to check
+ * against. Greg, 2026-10-03 (spya-zmdb7y, plan 261003j): a row says *"nothing
+ * about a paper beyond what's available in the bibliography"*. The prompt asks
+ * for both "as the article gives them" and the model mostly obeys; measured,
+ * one stored row had an author from its memory (*The Bitter Lesson · Sutton*).
+ * A right author from memory looks exactly like a wrong one, so neither is kept.
+ *
+ * **It asks only whether the article says the name at all**, anywhere — not
+ * whether it says it of this work, which code cannot know. So it catches
+ * memory, not a mix-up between two works the article does cite. It also drops
+ * a name the model corrected (the article's *Dojolonga* for Djolonga): the
+ * title still carries what the article wrote.
+ *
+ * The year is looked for as characters, not as a word: an ingested page can
+ * glue text to it (`196363ya`).
+ */
+export function locateInArticle(
+  fields: { title: string; authors?: string; year?: string },
+  byId: ReadonlyMap<string, Block>,
+  list: NumberedReferenceList | null,
+  drops: CitationDrops,
+): { title: string; authors?: string; year?: string } {
+  const article = articleTextOf(byId, list);
+  const names = keyWords((fields.authors ?? "").replace(/\bet al\.?\s*$/i, "").replace(/\band\b/gi, " "))
+    .split(" ")
+    .filter(Boolean);
+  const authorsHere = names.length > 0 && names.every((w) => article.words.has(w));
+  if (fields.authors && !authorsHere) drops.authorsUnfound++;
+  const digits = fields.year?.match(/\d{4}/)?.[0];
+  const yearHere =
+    fields.year !== undefined &&
+    (digits ? article.text.includes(digits) : keyWords(fields.year).split(" ").every((w) => article.words.has(w)));
+  if (fields.year && !yearHere) drops.yearUnfound++;
+  return {
+    title: fields.title,
+    ...(authorsHere && fields.authors ? { authors: fields.authors } : {}),
+    ...(yearHere && fields.year ? { year: fields.year } : {}),
+  };
+}
+
 /** A reference block's text as its `entry`: whitespace collapsed, capped. */
 function entryOfBlock(block: Block | undefined): string | undefined {
   return block === undefined ? undefined : entryOfText(block.text);
@@ -578,7 +644,7 @@ function readDraft(
      entry; capped where the row is written (`buildCitations`). */
   const entry = located === null ? undefined : listed!;
   const identifierEntry = identifierEntryFor(list, entryNumber, entry);
-  const fields = located ?? said;
+  const fields = located ?? locateInArticle(said, byId, list, drops);
   const authors = fields.authors ?? "";
   const year = fields.year ?? "";
   const relevance = scoreCounting(w.relevance, scores, "relevanceAbsent", "relevanceRejected");
