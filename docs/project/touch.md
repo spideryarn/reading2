@@ -96,7 +96,7 @@ The four older ones:
   that moves the width.
 - **A glossary term in the prose**, since 2026-08-27 — the dotted underlines
   ([glossary.md](glossary.md)). First tap opens the hover card, second goes to glossary mode with
-  that term selected, which is what the card's **in the glossary** button does. Before this the
+  that term selected, which is what the card's **Open glossary** button does. Before this the
   underline was a line with nothing behind it on an iPad, because the card was hover-only.
   [260827ak-touch-glossary-card.md](../plans/260827ak-touch-glossary-card.md) has the design and the event sequence,
   which is the whole of the difficulty; the short version is that it is decided at `pointerup`
@@ -564,6 +564,29 @@ browser then refuses for an empty password. **And it moves whatever is in the
 password box** — the first version moved only when it was empty, which meant that
 with a manager's fill, the ordinary case, the key labelled *next* signed in
 instead (GPT Sol, 2026-09-04).
+
+**Once the key has done its thing, the keyboard goes away.** Greg, from an iPad in Remember's
+tutorial, 2026-10-03 (spya-gmtt4b):
+
+> what I end up doing is pressing the carriage return button, and then sometimes I can actually
+> press the sort of keyboard hide button because the keyboard doesn't disappear.
+
+The label was right and the message went, but the box kept focus, so the answer arrived underneath
+the keys. A box whose Enter sends or searches, and whose result the reader now wants to read, calls
+`putKeyboardAway` ([`useVisualViewport.ts`](../../src/web/useVisualViewport.ts)) after the send has
+actually happened: chat's composer, Candidates' box, the comment dialog's follow-up, the glossary's
+look-up and the search panel's box. It blurs **only when a soft keyboard is covering the page**,
+read off the visual viewport, so a desk and an iPad with a hardware keyboard keep the caret for the
+next message. `(any-pointer: coarse)` cannot tell those two iPads apart. Two limits: Android Chrome
+resizes the layout viewport instead, so the helper cannot see its keyboard and does nothing there;
+and a box that wants the next thing typed straight away, the tag editor, keeps its keyboard on
+purpose. A new box whose Enter acts says which of those it is. The first message from the conversation
+list is the one place a second box is involved: the composer that replaces the list's would take
+focus and reopen the keyboard, so the band does not hand it the caret while a soft keyboard is up.
+
+**A multi-line box still has no Done key**, and this does not give it one. Feedback, a comment, a
+quiz answer: Enter is a newline, iOS offers a web page no way to add a key, and the paragraph at
+the end of this section still stands. The button that sends is what ends those.
 
 **A key that promises to send has to refuse while the microphone is on.**
 Labelling Enter *send* on a box with a microphone beside it creates a race the

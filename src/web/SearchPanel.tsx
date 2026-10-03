@@ -116,6 +116,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { useSlow } from "./useSlow.js";
+import { putKeyboardAway } from "./useVisualViewport.js";
 import { isImeComposing } from "./key-chord.js";
 import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
 
@@ -641,7 +642,13 @@ const Box = forwardRef<
                question (keyboard.md § Enter in a text box; Sol's D9). */
             if (e.key === "Enter" && !isImeComposing(e)) {
               e.preventDefault();
-              if (ready) ask();
+              if (ready) {
+                ask();
+                /* The hits arrive in the band under the keys, so a soft
+                   keyboard goes (useVisualViewport.ts § `putKeyboardAway`). At
+                   a desk the caret stays for the next search. */
+                putKeyboardAway(e.currentTarget);
+              }
               /* Words mode has nothing to ask — the hits arrived as the reader
                  typed — so Enter dismisses the keyboard instead. On a phone that
                  is the whole point of the press; on a desktop it hands the arrow

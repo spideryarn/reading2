@@ -97,7 +97,18 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
+
+/**
+ * A soft keyboard covering `covered` px of an 800px layout viewport, as iOS
+ * reports it: the visual viewport shrinks and the layout viewport does not.
+ * `0` is a desk. src/web/useVisualViewport.ts § `putKeyboardAway`.
+ */
+function softKeyboard(covered: number): void {
+  vi.stubGlobal("innerHeight", 800);
+  vi.stubGlobal("visualViewport", { height: 800 - covered, offsetTop: 0, scale: 1 });
+}
 
 /**
  * Type into a controlled box the way a person does.
@@ -166,6 +177,47 @@ describe("the chat composer", () => {
     /* And the newline is prevented, or the question is sent *and* a blank line
        is left in a box the reader thinks is empty. */
     expect(e.defaultPrevented).toBe(true);
+  });
+
+  /* Greg, from an iPad in Remember's tutorial, 2026-10-03 (spya-gmtt4b): *"I
+     end up … pressing the carriage return button, and then sometimes I can
+     actually press the sort of keyboard hide button because the keyboard
+     doesn't disappear."* The message has gone and the answer is arriving under
+     the keys. docs/project/touch.md § What the Enter key promises. */
+  it("lets go of the soft keyboard once the message has gone", async () => {
+    softKeyboard(336);
+    const box = mount(false);
+    box.focus();
+    type(box, "Why does the hippocampus care?");
+    press(box, "Enter");
+    await act(async () => {});
+
+    expect(sent).toEqual(["Why does the hippocampus care?"]);
+    expect(document.activeElement).not.toBe(box);
+  });
+
+  it("keeps the caret in the box on a desk, where there is no keyboard to put away", async () => {
+    softKeyboard(0);
+    const box = mount(false);
+    box.focus();
+    type(box, "Why does the hippocampus care?");
+    press(box, "Enter");
+    await act(async () => {});
+
+    expect(sent).toEqual(["Why does the hippocampus care?"]);
+    expect(document.activeElement).toBe(box);
+  });
+
+  it("keeps the keyboard when the Enter sent nothing", async () => {
+    softKeyboard(336);
+    const box = mount(true);
+    box.focus();
+    type(box, "And why now?");
+    press(box, "Enter");
+    await act(async () => {});
+
+    expect(sent).toEqual([]);
+    expect(document.activeElement).toBe(box);
   });
 
   it("writes a newline on Shift+Enter, and sends nothing", () => {
@@ -357,6 +409,16 @@ describe("the Candidates box", () => {
     type(box, "Leave out the authors' own lab");
     press(box, "Enter");
     expect(asked).toEqual(["Leave out the authors' own lab"]);
+  });
+
+  it("lets go of the soft keyboard once the question has gone", () => {
+    softKeyboard(336);
+    const box = mount();
+    box.focus();
+    type(box, "Leave out the authors' own lab");
+    press(box, "Enter");
+    expect(asked).toEqual(["Leave out the authors' own lab"]);
+    expect(document.activeElement).not.toBe(box);
   });
 
   it("writes a newline on Shift+Enter", () => {

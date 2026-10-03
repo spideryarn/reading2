@@ -103,6 +103,7 @@ import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { useSlow } from "./useSlow.js";
+import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
 
@@ -2151,6 +2152,10 @@ export function Composer({
     onDraft("");
     if (live && live.phase !== "idle" && live.phase !== "failed") await live.stop();
     onSend(question);
+    /* The question has gone and the answer arrives under the keys: let go of
+       a soft keyboard, and only a soft one (useVisualViewport.ts §
+       `putKeyboardAway`; Greg, spya-gmtt4b). */
+    putKeyboardAway(box.current);
   };
   /** Every state `submit` refuses, so the Send button can say so before a press. */
   const unavailable = busy || dictate.readOnly || dictate.dictation.armed || value.trim() === "";

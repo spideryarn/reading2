@@ -30,6 +30,7 @@ import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle }
 import { type QuizRead, useQuiz } from "../../useQuiz.js";
 import type { ReadSoFar } from "../../read-filter.js";
 import { useChat } from "../../useChat.js";
+import { softKeyboardIsUp } from "../../useVisualViewport.js";
 import { useLiveConversation } from "../../live/useLiveConversation.js";
 import { ChatPanel } from "../../ChatPanel.js";
 
@@ -775,7 +776,12 @@ export function ConversationBand({
           ...(onScreen ? { visible: onScreen() } : {}),
         });
         void setThread(id);
-        setFocusNonce((n) => n + 1);
+        /* **Not on a soft keyboard.** The send lets go of the keys there so
+           the answer can be read (useVisualViewport.ts § `putKeyboardAway`),
+           and a raised nonce would have the replacement composer take focus
+           and bring them straight back. Asked before the old box blurs, which
+           is after this returns. GPT Sol, plan review of 261003h. */
+        if (!softKeyboardIsUp()) setFocusNonce((n) => n + 1);
       }}
       /* **Start over is offered only on a settled conversation** — stored,
          named by the server, nothing of this tab's still out for it (`settled`
