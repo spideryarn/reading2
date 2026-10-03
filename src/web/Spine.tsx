@@ -946,8 +946,8 @@ function SpineInner({
   const readPaths = useMemo(() => {
     if (!metrics || reading.size === 0) return null;
     const runs = readingRuns(metrics.rows, reading);
-    return runs.length > 0 ? readingAreaPaths(runs) : null;
-  }, [metrics, reading]);
+    return runs.length > 0 ? readingAreaPaths(runs, docHeight) : null;
+  }, [metrics, reading, docHeight]);
 
   const from = useMemo(
     () => (metrics ? jumpOriginMark(metrics.rows, jumpOrigin) : null),
