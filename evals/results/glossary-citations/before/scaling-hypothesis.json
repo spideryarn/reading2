@@ -1,0 +1,163 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "before",
+  "promptVersion": "glossary/8",
+  "sourceSha256": {
+    "glossary.ts": "c0f77fe893b2d17d662dd423edb92f6a2b640a26fea7dd3558fe76164d467e61",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "scaling hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "strong scaling hypothesis"
+      ],
+      "senseHere": "The idea that intelligence itself, including human-like abilities, will emerge just from making existing simple neural network architectures much bigger and training them on much more data and compute, without needing new clever algorithms."
+    },
+    {
+      "name": "GPT-3",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "OpenAI's 175-billion-parameter language model, over 100 times larger than its predecessor, which surprised researchers by showing 'meta-learning'—following instructions and picking up new tasks from just a few examples—despite being trained only to predict the next word in text."
+    },
+    {
+      "name": "meta-learning",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A model learning how to learn new tasks on the fly from a handful of examples given in its input, rather than only learning one fixed task during training, as GPT-3 unexpectedly displayed."
+    },
+    {
+      "name": "GPT-2",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "The predecessor language model that could already do things like summarize text, but which the article treats as a baseline showing far less flexibility than GPT-3 achieved purely by being made much bigger."
+    },
+    {
+      "name": "Transformer",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A neural network design introduced in 2017 built around 'attention', a mechanism letting the model weigh relationships between all positions in a sequence at once, which became the dominant architecture behind models like GPT."
+    },
+    {
+      "name": "blessings of scale",
+      "kind": "term",
+      "aliases": [
+        "blessing of dimensionality"
+      ],
+      "senseHere": "The author's name for the pattern where, unlike most engineering problems, neural networks get easier to train well and become more stable, general, and capable the bigger the model, data, and compute get, rather than running into added difficulty."
+    },
+    {
+      "name": "Hans Moravec",
+      "kind": "person",
+      "aliases": [
+        "Moravec"
+      ],
+      "background": "A robotics researcher who, decades before deep learning's rise, predicted using projections of computing power that affordable hardware for insect-level AI would arrive around the 2010s and for human-level AI in the 2020s, a forecast the article says has held up."
+    },
+    {
+      "name": "bitter lesson",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The recurring finding in AI research that simply applying more computation and data with simple general methods beats hand-crafted, clever, domain-specific approaches in the long run."
+    },
+    {
+      "name": "AlphaZero",
+      "kind": "work",
+      "aliases": [],
+      "background": "DeepMind's game-playing system that reached superhuman performance in Go, chess, and other games purely through self-play reinforcement learning, without built-in human strategy knowledge, cited here as another case where scaling a simple method produced strong general capability."
+    },
+    {
+      "name": "MuZero",
+      "kind": "work",
+      "aliases": [],
+      "background": "A DeepMind successor to AlphaZero that learns to plan ahead and predict game outcomes without being told the rules of the game in advance, learning an internal model of its environment purely from experience."
+    },
+    {
+      "name": "OpenAI Five",
+      "kind": "work",
+      "aliases": [
+        "OA5"
+      ],
+      "background": "OpenAI's system trained to play the video game Dota 2 at a professional level using large-scale reinforcement learning, notable for remaining stable even with extremely large training batches."
+    },
+    {
+      "name": "Dactyl",
+      "kind": "work",
+      "aliases": [],
+      "background": "An OpenAI robotic hand trained in simulation across millions of randomized physical conditions, which ended up implicitly learning to adapt its control strategy on the fly to whatever real-world hand or object it encountered."
+    },
+    {
+      "name": "DeepMind",
+      "kind": "organization",
+      "aliases": [
+        "DM"
+      ],
+      "background": "A Google-owned AI research lab pursuing artificial general intelligence, contrasted in the article with OpenAI for favoring a more piecemeal, brain-module-by-module research strategy over committing fully to scaling up one simple model."
+    },
+    {
+      "name": "double descent",
+      "kind": "term",
+      "aliases": [],
+      "background": "An observed pattern where a model's test error first falls, then rises as it grows just large enough to start overfitting, and then counterintuitively falls again as it is made even larger still—contradicting the classical expectation that bigger models simply overfit more."
+    },
+    {
+      "name": "lottery ticket hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A finding in deep learning that a large randomly-initialized network contains smaller sub-networks ('winning tickets') which, if isolated early on, can train to match the full network's accuracy, suggesting big models work partly by containing many candidate small solutions."
+    },
+    {
+      "name": "pretraining thesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The claim that if a model keeps lowering its error at predicting the next character of human-written text far enough, it must eventually acquire real understanding and reasoning, since only genuine comprehension can resolve the hardest, rarest prediction cases like tricky logic or commonsense questions."
+    },
+    {
+      "name": "hardware overhang",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A period where computers powerful enough to run advanced AI already exist and are affordable, but nobody has yet applied them to AI research because attention and funding are directed elsewhere."
+    },
+    {
+      "name": "intentional stance",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Treating a system as if it has beliefs, goals, and desires because doing so is a useful shortcut for predicting its behavior, even when the system is really built from non-agentic parts—used by the author to argue that language models can functionally become agents."
+    },
+    {
+      "name": "Daniel Dennett",
+      "kind": "person",
+      "aliases": [
+        "Dennett"
+      ],
+      "background": "A philosopher known for analyzing mental concepts like belief and agency in terms of useful predictive strategies rather than literal inner properties, originator of the 'intentional stance' idea the article draws on."
+    },
+    {
+      "name": "Conway's Game of Life",
+      "kind": "concept",
+      "aliases": [
+        "Game of Life",
+        "GoL"
+      ],
+      "background": "A simple grid-based cellular automaton where cells turn on or off following fixed local rules, famous for generating complex emergent patterns like self-moving 'gliders' from very basic starting rules."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "TM"
+      ],
+      "background": "An abstract mathematical model of computation consisting of rules for reading, writing, and moving along an infinite tape, used as the theoretical minimum definition of what a computer can do."
+    },
+    {
+      "name": "Occam's razor ensemble effect",
+      "kind": "concept",
+      "aliases": [
+        "ensemble averaging"
+      ],
+      "senseHere": "The article's explanation for why bigger models generalize better: a large network internally contains countless smaller sub-models, and averaging over them favors simple solutions, which gradually gives way to genuinely general ones as data and scale increase enough to penalize mere memorization."
+    }
+  ]
+}

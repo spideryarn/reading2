@@ -1,0 +1,149 @@
+{
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "arm": "after-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "ca281278da17c7ad6fd52995ef8c0c21f438e65eb7bb0e296fa9265b4d57e796",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Analog Computation",
+      "kind": "concept",
+      "aliases": [
+        "analog computing",
+        "analog cognition"
+      ],
+      "senseHere": "Solving a problem by letting continuous physical quantities, like overlapping wave patterns, interact directly according to physical laws, rather than stepping through symbolic instructions one at a time. The piece argues overlapping brain waves of different frequencies and phases perform this kind of parallel, energy-efficient computation by summing and interfering to produce new activity patterns."
+    },
+    {
+      "name": "Connectionism",
+      "kind": "concept",
+      "aliases": [
+        "connectionist model",
+        "connectionist framework",
+        "connectionist approach",
+        "connectionist views"
+      ],
+      "senseHere": "The classical idea that the brain computes mainly through feedforward networks of neurons, each tuned to a fixed, specialized feature or concept, with memory and computation stored purely as synaptic connection strengths. The piece treats this as foundational but incomplete, unable to explain neurons that shift function by context."
+    },
+    {
+      "name": "Mixed Selectivity",
+      "kind": "concept",
+      "aliases": [
+        "nonlinear mixed selectivity",
+        "pure selectivity"
+      ],
+      "senseHere": "A single neuron's firing encodes a nonlinear blend of several variables at once, such as an object's identity combined with its position in a sequence, rather than one fixed property. This contrasts with 'pure' selectivity, where a neuron always signals the same thing regardless of context, and is treated as the hallmark of flexible, context-dependent cognition."
+    },
+    {
+      "name": "Ephaptic Coupling",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Neurons influencing each other's electrical activity directly through the extracellular electric field they generate, rather than through synapses or direct contact. The piece treats this as the physical channel by which large-scale brain waves can shape individual neurons' spiking without rewiring connections."
+    },
+    {
+      "name": "Alpha/Beta Rhythms",
+      "kind": "term",
+      "aliases": [
+        "alpha/beta",
+        "alpha-beta oscillations",
+        "beta rhythms"
+      ],
+      "senseHere": "Slower brain-wave oscillations (roughly 10-30 Hz) linked to suppression of local activity, carrying top-down signals about context, goals, and plans over a somewhat larger cortical area, and associated with feedback signal flow. In the theory they act as an inhibitory 'stencil' that controls where gamma-driven spiking is allowed to occur."
+    },
+    {
+      "name": "Gamma Rhythms",
+      "kind": "term",
+      "aliases": [
+        "gamma oscillations",
+        "gamma band",
+        "gamma/spiking"
+      ],
+      "senseHere": "Fast brain-wave oscillations (roughly 30-80 Hz) linked to increased neural excitation and spiking, carrying fine-grained sensory and motor information over small patches of cortex, and associated with feedforward signal flow."
+    },
+    {
+      "name": "Spatial Computing (theory)",
+      "kind": "concept",
+      "aliases": [
+        "Spatial Computing theory",
+        "spatiotemporal computing theory"
+      ],
+      "senseHere": "The proposal that spatially patterned alpha/beta waves act as temporary inhibitory 'stencils' over the cortex, suppressing or permitting gamma-driven spiking at different locations depending on context or goals. Where the stencil falls determines which neurons express which information at any moment, without any need to track specific synapses."
+    },
+    {
+      "name": "Theta Oscillations",
+      "kind": "term",
+      "aliases": [
+        "theta",
+        "theta traveling waves",
+        "theta-gamma coupling"
+      ],
+      "senseHere": "Low-frequency brain waves (roughly 3-8 Hz) proposed to organize activity over larger cortical regions than alpha/beta, coordinating attention and memory by pulling coupled faster beta and gamma rhythms along with them as they travel."
+    },
+    {
+      "name": "Subspace Coding",
+      "kind": "concept",
+      "aliases": [
+        "activity subspace",
+        "orthogonal subspaces",
+        "coding subspace",
+        "activity manifold"
+      ],
+      "senseHere": "Although many neurons could in principle fire independently, in practice population activity is constrained to a much smaller set of coordinated patterns, like a lower-dimensional surface within the full space of possibilities. Different cognitive operations are proposed to use separate, non-overlapping ('orthogonal') regions of this space so they don't interfere with each other."
+    },
+    {
+      "name": "Traveling Waves",
+      "kind": "concept",
+      "aliases": [
+        "traveling wave"
+      ],
+      "senseHere": "Brain oscillations that do not stay fixed in place but sweep continuously across the cortical surface in organized spatial and temporal patterns, modulating the excitability of neurons as they pass. The piece proposes these moving waves actively drag population activity from one coding pattern to another, rather than merely reflecting a static process."
+    },
+    {
+      "name": "Binding Problem",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The puzzle of how activity spread across many separate, distributed neural populations gets combined into one unified conscious experience. The piece proposes that brain waves solve this by dynamically linking those distributed representations together."
+    },
+    {
+      "name": "Global Workspace Theory",
+      "kind": "concept",
+      "aliases": [
+        "GW",
+        "Global Neuronal Workspace Theory",
+        "GNWT"
+      ],
+      "background": "A family of theories holding that conscious experience arises when information is broadcast widely across a distributed network of brain regions, making it globally available to many processes at once, rather than staying confined to one local circuit."
+    },
+    {
+      "name": "Integrated Information Theory",
+      "kind": "concept",
+      "aliases": [
+        "IIT"
+      ],
+      "background": "A theory proposing that consciousness corresponds to a system's capacity to integrate information in a way that cannot be broken into independent parts, often associated with a specific posterior 'hot zone' of cortex."
+    },
+    {
+      "name": "Higher-Order Theories",
+      "kind": "concept",
+      "aliases": [
+        "HOTs"
+      ],
+      "background": "Theories holding that a brain state becomes conscious only when it is itself represented by a further, higher-level brain state, often located in frontal cortex, that monitors or models it."
+    },
+    {
+      "name": "Predictive Coding",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A framework in which the brain continuously generates top-down predictions about incoming sensory input and updates its internal models based on the mismatch (prediction error) between expectation and actual input."
+    },
+    {
+      "name": "Nested Observer Model",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A theory proposing that consciousness arises from a hierarchy of oscillatory processes nested within one another, each level organizing and observing the activity of the level below it."
+    }
+  ]
+}

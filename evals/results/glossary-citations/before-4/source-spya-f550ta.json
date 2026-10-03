@@ -1,0 +1,149 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "before-4",
+  "promptVersion": "glossary/8",
+  "sourceSha256": {
+    "glossary.ts": "c0f77fe893b2d17d662dd423edb92f6a2b640a26fea7dd3558fe76164d467e61",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A rare, short-lived glowing ball seen during or near thunderstorms, usually lasting a few seconds and vanishing with or without a trace. Its cause remains unexplained, and the article treats eyewitness reports as the main evidence since instruments almost never capture it."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "French astronomer and physicist of the early 19th century whose 1837 work on thunder first used the term now translated as ball lightning, giving the phenomenon its name in Western science."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [
+        "Brand"
+      ],
+      "background": "A German senior school official who wrote the 1923 book 'Der Kugelblitz', the only German-language monograph on ball lightning, collecting and reprinting older case reports such as Arago's."
+    },
+    {
+      "name": "Rakov and Uman",
+      "kind": "work",
+      "aliases": [
+        "Rakov and Uman, 2003"
+      ],
+      "background": "Vladimir Rakov and Martin Uman wrote a major reference handbook on lightning physics; its chapter on ball lightning is treated here as the authoritative summary of the field's unresolved state, noting thousands of witness reports but almost no scientific recordings."
+    },
+    {
+      "name": "Vladimir Lvovich Bychkov",
+      "kind": "person",
+      "aliases": [
+        "Bychkov"
+      ],
+      "background": "A Russian physics professor who both reported his own ball lightning sighting and maintains a database of Russian case reports, several of which the author draws on directly through personal communication."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as split into disconnected efforts—separate people collecting sightings, building theories, and running lab experiments—without a shared, coordinated program."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "Austria's network of ground sensors that detects and records the location, timing, and electrical strength of lightning strikes, used in the article to cross-check witness reports of ball lightning against real strikes."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's equivalent lightning-detection network, used similarly to confirm the timing and strength of strokes linked to reported ball lightning sightings."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century Austrian geologist and mineralogist and member of the Imperial Academy of Sciences at Vienna, who gave one of the earliest detailed scientific eyewitness accounts of ball lightning, in 1868."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physics professor famous for the 1922 Stern–Gerlach experiment demonstrating quantum spin, who also submitted a detailed 1927 report of a ball lightning sighting with calculations of its speed."
+    },
+    {
+      "name": "Anatoly Il'ich Nikitin",
+      "kind": "person",
+      "aliases": [
+        "Nikitin"
+      ],
+      "background": "A Russian physics professor at the Russian Academy of Sciences who both reported his own childhood sighting and later led a team that analyzed video recordings of a 2015 Moscow ball lightning event using triangulation from multiple witnesses."
+    },
+    {
+      "name": "Pikes Peak",
+      "kind": "place",
+      "aliases": [],
+      "background": "A 4,302-metre mountain in Colorado's Front Range that hosted a continuously staffed weather observatory in the late 19th century, whose daily logs recorded early ball-lightning-like strike effects."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "An 18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences who was killed in 1753 while experimenting with atmospheric electricity, an accident later mythologized as a ball lightning death despite being an ordinary lightning strike."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A temporary paralysis or numbness in a limb caused by exposure to lightning or a similar electrical discharge, as distinguished by Charcot from longer-lasting nervous shock symptoms."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A pioneering French neurologist at the Salpêtrière Hospital in Paris who taught Sigmund Freud; he studied a patient's ball lightning encounter to distinguish immediate shock paralysis from lasting traumatic nervous symptoms."
+    },
+    {
+      "name": "triggered lightning",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Lightning deliberately set off by launching a small rocket trailing a grounded wire into a storm cloud, letting researchers study strikes under controlled, repeatable conditions rather than waiting for natural ones."
+    },
+    {
+      "name": "Jianyong Cen",
+      "kind": "person",
+      "aliases": [
+        "Cen"
+      ],
+      "background": "A Chinese researcher at Lanzhou College whose 2014 team captured rare video and spectroscopic data of a ball lightning event forming from a lightning strike on soil, providing some of the best physical evidence for a soil-origin theory."
+    },
+    {
+      "name": "Abrahamson and Dinniss soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "soil strike theory"
+      ],
+      "senseHere": "A proposed explanation that ball lightning forms when lightning vaporizes soil minerals, creating a glowing ball of burning particles; the spectral lines Cen's team recorded matched elements this theory predicts."
+    }
+  ]
+}

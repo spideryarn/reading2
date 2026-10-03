@@ -126,7 +126,7 @@
 .spine-part.supplement.active::before { opacity: 0.4; }
 
 /* **Where you have spent time reading** — an area chart on its side: a tinted
-   area from the left edge, further across where longer, with an opaque line
+   area from the left edge, further across where longer, with a translucent line
    down its right-hand edge. Two svgs over the whole track (area, edge), sixteen units wide
    (reading-time.ts § readReach), so a run the reader sat on reaches across and
    one they skimmed is a sliver; one they scrolled past draws nothing.
@@ -136,6 +136,12 @@
    hue on the rail already meant something. It read as a slightly paler tan and
    Greg could not tell what he had read (spya-jhe9mc), so the argument lost:
    docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md.
+
+   **Quiet on purpose.** The area was 0.4 and the edge fully opaque for half a
+   day, and it was the loudest thing on the rail: "it kind of drowns other stuff
+   out" (Greg, spya-bguwsn). It is the background the other marks sit on, so it
+   is fainter than any of them, and the edge is what carries it.
+   docs/plans/261003o-spine-reading-chart-quieter-and-smoothed-into-a-curve.md.
 
    **Half a pixel short of the rail's right side, and `overflow: visible`.** At
    full reach the edge sits on the viewBox's far side, and a 1px stroke centred
@@ -162,12 +168,13 @@
 }
 .spine-read-area {
   fill: var(--read-time);
-  fill-opacity: 0.4;
+  fill-opacity: 0.22;
   stroke: none;
 }
 .spine-read-edge {
   fill: none;
   stroke: var(--read-time);
+  stroke-opacity: 0.8;
   stroke-width: 1px;
   vector-effect: non-scaling-stroke;
 }
@@ -412,4 +419,3 @@
   border-bottom: 1px solid var(--highlight);
   background: color-mix(in oklab, var(--highlight) 12%, transparent);
 }
-

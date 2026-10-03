@@ -14,6 +14,8 @@ import { collectSpend } from "../src/ai-spend.js";
 import { MAX_HITS, type SearchEvent } from "../src/search.js";
 import {
   CHUNK_TOKEN_BUDGET,
+  QUICK_FALLBACK_FLOOR,
+  QUICK_FALLBACK_HITS,
   QUICK_FLOOR,
   chunkBlocks,
   estimateTokens,
@@ -149,10 +151,41 @@ describe("turning probabilities into hits", () => {
     ]);
   });
 
-  it("puts the floor at 0.7, inclusive", () => {
+  it("puts the floor at 0.7, inclusive: a block under it is dropped when another clears it", () => {
     expect(QUICK_FLOOR).toBe(0.7);
-    expect(hitsFrom({ [a.id]: 0.7 }, [a]).hits).toHaveLength(1);
-    expect(hitsFrom({ [a.id]: 0.6999 }, [a]).hits).toHaveLength(0);
+    const { hits, fallback } = hitsFrom({ [a.id]: 0.7, [b.id]: 0.6999 }, [a, b]);
+    expect(hits.map((h) => h.blockId)).toEqual([a.id]);
+    expect(fallback).toBe(false);
+  });
+
+  /* Feedback spya-jp5nxn: "results" on a paper scored its best paragraphs 0.52
+     to 0.57 and the reader saw nothing (investigation 261003f). */
+  it("falls back to the lower floor when nothing clears 0.7, best first", () => {
+    expect(QUICK_FALLBACK_FLOOR).toBe(0.5);
+    const { hits, fallback } = hitsFrom({ [a.id]: 0.5, [b.id]: 0.4999, [c.id]: 0.62 }, [a, b, c]);
+    expect(hits).toEqual([
+      { blockId: c.id, quote: c.text, confidence: 62, reasoning: "", start: 0 },
+      { blockId: a.id, quote: a.text, confidence: 50, reasoning: "", start: 0 },
+    ]);
+    expect(fallback).toBe(true);
+  });
+
+  it("still finds nothing when nothing clears the lower floor either", () => {
+    const { hits, fallback } = hitsFrom({ [a.id]: 0.4999, [b.id]: 0.12 }, [a, b]);
+    expect(hits).toEqual([]);
+    expect(fallback).toBe(false);
+  });
+
+  it("caps a fallback list at QUICK_FALLBACK_HITS and counts what the cap threw away", () => {
+    expect(QUICK_FALLBACK_HITS).toBe(8);
+    const many = Array.from({ length: 10 }, (_, i) => block(`weak passage ${i}`));
+    const { hits, dropped } = hitsFrom(
+      Object.fromEntries(many.map((m, i) => [m.id, 0.55 + i / 100])),
+      many,
+    );
+    expect(hits).toHaveLength(8);
+    expect(dropped.truncated).toBe(2);
+    expect(hits[0]?.blockId).toBe(many[9]?.id);
   });
 
   it("breaks a tie in the article's order, so the list does not shuffle", () => {
@@ -214,6 +247,21 @@ describe("quickPassagesStream", () => {
     expect(done.result.hits.map((h) => h.blockId)).toEqual([b.id]);
     expect(done.result.model).toBe("typesafe/jev-1.13");
     expect(done.result.usage?.promptTokens).toBe(1000);
+  });
+
+  it("yields the fallback's hits when no block reaches the floor", async () => {
+    const a = block("We reach 71% accuracy on the held-out tasks.");
+    const b = block("A thermostat has no interior.");
+    stubJudge(scoring((id) => (id === a.id ? 0.55 : 0.1)));
+    const { result: events } = await collectSpend(() =>
+      drain(quickPassagesStream({ meta, blocks: [a, b], criterion: "results" })),
+    );
+    expect(events.map((e) => e.type)).toEqual(["hit", "done"]);
+    const done = events.at(-1);
+    if (done?.type !== "done") throw new Error("no done");
+    expect(done.result.hits).toEqual([
+      { blockId: a.id, quote: a.text, confidence: 55, reasoning: "", start: 0 },
+    ]);
   });
 
   it("sends the chunks of a long article in parallel and writes one ledger row each", async () => {

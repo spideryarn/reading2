@@ -1,0 +1,85 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "final-4",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "fc011bba35fa885f87fa082f4180775115c28eccecc873503a26e7069c39165a",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A short-lived glowing object people report seeing during thunderstorms, lasting only seconds and vanishing with or without leaving a mark. It appears unpredictably, has never been reliably captured by instruments, and no single scientific explanation accounts for all reported cases."
+    },
+    {
+      "name": "Trained observers",
+      "kind": "concept",
+      "aliases": [
+        "trained professionals"
+      ],
+      "senseHere": "People whose jobs require careful observation and record-keeping—scientists, weather station staff, coastguards, military officers—whose accounts of ball lightning are treated as more reliable than casual eyewitness reports because of their training."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "senseHere": "The French astronomer and physicist whose 1837 work on thunder gave the phenomenon its name, treating it as a distinct unexplained category of atmospheric electricity.",
+      "background": "He was a prominent 19th-century French scientist who also held political office, known for contributions to optics and astronomy as well as his writings on atmospheric electricity."
+    },
+    {
+      "name": "Fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as scattered into disconnected efforts—separate people collecting sightings, building theories, or running lab experiments—without them being coordinated into one unified field of study."
+    },
+    {
+      "name": "Positive and negative lightning strokes",
+      "kind": "concept",
+      "aliases": [
+        "positive stroke",
+        "negative stroke"
+      ],
+      "senseHere": "Lightning flashes are classified by the electrical charge they carry to the ground. Positive strokes, which carry positive charge down, are rarer and typically much more powerful than the more common negative strokes, and the article notes an unusually high share of positive strokes linked to ball lightning sightings."
+    },
+    {
+      "name": "Angular diameter",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "How large an object appears in the sky, measured as an angle rather than an actual size, since the viewer's distance to it is usually unknown.",
+      "background": "This is a standard astronomical measurement: the same angular diameter could mean a small object nearby or a large one far away, so observers often report it instead of guessing true size."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "senseHere": "A scientist whose death while experimenting with atmospheric electricity was later mythologized as a ball lightning killing, even though the original investigation found it was an ordinary lightning accident with an ungrounded conductor.",
+      "background": "He was a Baltic German physicist and member of the St Petersburg Academy of Sciences who died in 1753 during an electrical experiment, a case often retold as a cautionary tale about scientists overreaching, echoed later in the Frankenstein story."
+    },
+    {
+      "name": "Keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A temporary paralysis or loss of sensation in part of the body caused by being near or struck by lightning, without lasting physical injury.",
+      "background": "The term combines the Greek word for thunderbolt with paralysis, and it is still used in medicine today to describe this short-lived nerve effect from lightning strikes."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "senseHere": "A physician who examined a patient's detailed account of being struck by what he concluded was genuine ball lightning, and who distinguished the immediate nerve paralysis it caused from the longer-lasting psychological trauma that followed.",
+      "background": "He was a 19th-century French physician regarded as a founder of modern neurology, based at the Salpêtrière Hospital in Paris, and he taught a young Sigmund Freud."
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3b-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "406c56f8eeec02fba123307afd30a72408ef30ed21ed2c5d7b21783a328481f6",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A short-lived glowing ball seen during thunderstorms that current science cannot fully explain. It appears unpredictably, usually lasts only seconds, and vanishes with or without leaving a mark, unlike ordinary lightning's instant flash.",
+      "background": "Scientists have collected thousands of eyewitness accounts of such glowing spheres since the 1800s but have never agreed on what causes them or captured one with reliable instruments."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [],
+      "background": "A German school official whose 1923 book was the only full-length German study of the phenomenon, later reissued in 2010, and who rediscovered several early case reports."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [],
+      "background": "A 19th-century French astronomer and physicist whose 1837 writings on thunder gave the phenomenon the name still used for it today."
+    },
+    {
+      "name": "Martin A. Uman",
+      "kind": "person",
+      "aliases": [
+        "Uman"
+      ],
+      "background": "A lightning physicist whose research group used rocket-triggered strikes at a Florida test site to study what happens when lightning hits different ground materials."
+    },
+    {
+      "name": "Vladimir Lvovich Bychkov",
+      "kind": "person",
+      "aliases": [
+        "Bychkov"
+      ],
+      "background": "A Russian physics professor who both compiled a database of Russian ball lightning sightings and personally witnessed one himself in California in 2002."
+    },
+    {
+      "name": "COST Action",
+      "kind": "organization",
+      "aliases": [
+        "COST Action P18"
+      ],
+      "background": "A European funding and coordination scheme that lets researchers from different countries jointly plan studies on a shared topic, here one on the physics of lightning."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "A network of ground sensors across Austria that detects and records the time, location, and electrical strength of lightning strikes, used here to match reported ball lightning sightings to real strikes."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "A German network of ground sensors that detects and logs lightning strikes, used in this review to confirm the timing and strength of strikes near reported sightings."
+    },
+    {
+      "name": "cloud-ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud–ground flash",
+        "cloud–cloud stroke"
+      ],
+      "senseHere": "A lightning discharge that travels between a storm cloud and the ground, as opposed to one that stays between clouds. The article uses the split between these two kinds to see which type of strike tends to accompany ball lightning sightings."
+    },
+    {
+      "name": "lightning polarity",
+      "kind": "term",
+      "aliases": [
+        "positive stroke",
+        "negative stroke"
+      ],
+      "senseHere": "Whether a lightning strike carries positive or negative electrical charge down from the cloud, which changes its peak current and is tracked here to see whether one type is linked more often to ball lightning."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century Austrian geologist and mineralogist at the Imperial Academy of Sciences in Vienna who gave a detailed 1868 eyewitness account, complete with a sketch and measured angular size."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "An American paleontologist at Yale University and president of the US National Academy of Sciences, best known for discovering many dinosaur fossils, who reported a shipboard sighting in 1878."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physics professor famous for the 1922 Stern-Gerlach experiment proving that electrons' magnetic spin is quantized, who later calculated the speed of a glowing object he saw in 1927."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A British radio astronomer at Jodrell Bank Observatory, later a professor at the University of Kent, whose widely publicized 1963 sighting aboard an airplane drew major media attention."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "A Baltic German physicist and member of the St Petersburg Academy of Sciences who died in 1753 while experimenting with atmospheric electricity, an accident later mythologized as a ball lightning death."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A 19th-century French physician regarded as the founder of modern neurology, who taught Sigmund Freud and studied the lasting effects of lightning trauma on a patient's nervous system."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A temporary numbness, weakness, or loss of movement in a limb caused directly by a lightning or ball lightning strike, distinct from longer-lasting nerve or psychological damage."
+    },
+    {
+      "name": "triggered lightning",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A method of deliberately causing a lightning strike by launching a small rocket trailing a thin wire into a storm cloud, letting researchers study the strike's effects on chosen materials on the ground."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss soil strike theory"
+      ],
+      "senseHere": "The idea that lightning hitting soil vaporizes minerals in the ground, creating a floating, burning cloud of tiny particles that looks like a glowing ball. The article cites a spectrum matching soil elements as support for this idea in one recorded case."
+    },
+    {
+      "name": "slitless spectroscopy",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A way of photographing light so that a grating spreads it into its component colors across the image, letting researchers identify which chemical elements produced the glow, as was done with a filmed ball lightning event."
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "v3b-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "406c56f8eeec02fba123307afd30a72408ef30ed21ed2c5d7b21783a328481f6",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [
+        "Lemoine"
+      ],
+      "background": "A Google engineer who in 2022 publicly claimed that the company's LaMDA chatbot was conscious and had feelings, and was fired for breaching confidentiality rather than for being wrong."
+    },
+    {
+      "name": "Anthropocentrism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The habit of treating the human case as the definition of a thing rather than as just one example. Seth lists it as one of three psychological biases that make people wrongly assume intelligence must bring consciousness with it."
+    },
+    {
+      "name": "Human exceptionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The tendency to rank humans above all other beings, closer to gods than to animals. Seth names it as a second bias feeding the belief that clever machines must also be conscious."
+    },
+    {
+      "name": "Anthropomorphism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Projecting human qualities like feeling or understanding onto non-human things based on surface resemblance. Seth treats it as the third bias that makes language-producing AI seem to have inner experience."
+    },
+    {
+      "name": "Confabulate",
+      "kind": "term",
+      "aliases": [
+        "confabulation"
+      ],
+      "senseHere": "Making things up without realizing it, a behavior rather than an experience. Seth argues this is the accurate word for what AI systems do when they produce falsehoods, in place of 'hallucinate,' which wrongly implies the machine is having a conscious experience gone wrong."
+    },
+    {
+      "name": "Pareidolia",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Seeing a meaningful pattern, like a face, in something that has none, such as Mother Teresa's image in a cinnamon bun. Seth borrows the word to describe why people are primed to perceive consciousness in AI systems that merely resemble conscious beings on the surface."
+    },
+    {
+      "name": "Computational functionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The assumption that running the right kind of computation or information-processing is enough, by itself, to produce consciousness. Seth argues this is usually taken for granted rather than defended, and that it may be false."
+    },
+    {
+      "name": "Universal Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "Turing machine",
+        "Turing computation"
+      ],
+      "senseHere": "An abstract device that can carry out any step-by-step recipe (algorithm) for turning one string of symbols into another, with only the order of steps mattering, not the time between them. Seth uses it to define what 'computation' strictly means, and argues real computers and brains are only partial, substrate-flexible approximations of it."
+    },
+    {
+      "name": "Turing complete",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Describes a system capable, in principle, of carrying out any algorithm a universal Turing machine could run. Seth notes that simple networks of toy neurons were shown to be Turing complete, which is part of why people assume brains are 'just' computers."
+    },
+    {
+      "name": "Autopoiesis",
+      "kind": "term",
+      "aliases": [
+        "self-production"
+      ],
+      "senseHere": "A living system's constant work of regenerating and maintaining its own material basis and boundaries. Seth uses it to mark what makes even a single neuron unlike any silicon component, and to link bodily life to the roots of experience."
+    },
+    {
+      "name": "Mortal computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A form of computing, proposed by Geoffrey Hinton, where the program is inseparably tied to its specific physical hardware, so that it effectively 'dies' if that hardware is destroyed, unlike ordinary software that can run anywhere. Seth cites it as an example of computation moving closer to biology, away from strict substrate independence."
+    },
+    {
+      "name": "Biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being alive, in the biological sense, is necessary (though maybe not sufficient) for consciousness. Seth builds much of his case toward this position, tying conscious experience to the body's continual self-regulation and metabolism."
+    },
+    {
+      "name": "John Searle",
+      "kind": "person",
+      "aliases": [
+        "Searle"
+      ],
+      "background": "A philosopher known for arguing that mental states cannot be reduced to computation alone and that biological properties of the brain matter for the mind, a position he named biological naturalism."
+    },
+    {
+      "name": "Controlled hallucination",
+      "kind": "concept",
+      "aliases": [
+        "predictive processing"
+      ],
+      "senseHere": "The idea that conscious perception is the brain's best guess about the causes of its sensory signals, constantly checked and corrected by those signals rather than read off them directly. Seth extends this to perception of the body and self, as a bridge connecting prediction to life and feeling."
+    },
+    {
+      "name": "Interoceptive inference",
+      "kind": "term",
+      "aliases": [
+        "interoception"
+      ],
+      "senseHere": "The brain's best-guessing about the body's internal physiological state, such as heart rate or oxygen level, from the inside. Seth uses it to explain why emotions and moods feel the way they do, as part of his case that consciousness is tied to keeping a living body alive."
+    },
+    {
+      "name": "Simulation hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The idea that our entire reality, including our own minds, might itself be a computer simulation run by a future civilization. Seth points out that this argument only works if a sufficiently detailed computer simulation of a mind would itself be conscious, an assumption he thinks is simply taken for granted rather than argued for."
+    },
+    {
+      "name": "Nick Bostrom",
+      "kind": "person",
+      "aliases": [
+        "Bostrom"
+      ],
+      "background": "A philosopher best known for the simulation hypothesis, the argument that we are statistically more likely to be living inside an advanced computer simulation than in original, unsimulated reality."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A classic visual illusion in which two lines of equal length look different because of arrowhead-like markings added to their ends, and the illusion persists even once you know the lines are equal."
+    },
+    {
+      "name": "Garland test",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A test, drawn from the film 'Ex Machina,' of whether a person still feels a machine is conscious even after being told, and shown, that it is just a machine. Seth uses it to distinguish the question of whether a machine really is conscious from the separate question of what makes a human believe it is."
+    },
+    {
+      "name": "Neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A hypothetical exercise of swapping brain parts one by one for functionally identical silicon substitutes, meant to show that consciousness can survive a change of material. Seth argues the premise fails because no silicon part could ever perfectly replicate everything a biological neuron does, such as clearing its own metabolic waste."
+    }
+  ]
+}

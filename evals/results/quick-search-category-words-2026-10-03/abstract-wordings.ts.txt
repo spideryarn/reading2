@@ -1,0 +1,25 @@
+/* Control: the 261003c eval's other wordings, plus two written for this shape,
+   on the 26 category-word queries. Two runs each. SPENDS (Jev, about 10 cents). */
+import { writeFileSync } from "node:fs";
+import { DIR, WORDINGS, jevSearch, pool, totalSpend } from "./lib.ts";
+import { QUERIES, load } from "./abstract-run.ts";
+
+WORDINGS.instance = (id) => `Does passage ${id} mention, discuss, or give an example of what the reader is looking for (query)?`;
+WORDINGS.find = (id) => `Would a search of the article for the query be right to return passage ${id}?`;
+const ARMS = ["plain", "brief", "want", "relates", "instance", "find"];
+
+const out: any[] = [];
+for (const arm of ARMS) {
+  await pool(QUERIES, 4, async (Q) => {
+    const blocks = load(Q.slug);
+    const reps = [];
+    for (let i = 0; i < 2; i++) { const r = await jevSearch(arm, Q.q, blocks); reps.push({ ms: r.ms, scores: r.scores }); }
+    out.push({ arm, ...Q, reps });
+  });
+  const mine = out.filter((o) => o.arm === arm);
+  const stat = (set: string[]) => { const runs = mine.filter((o) => set.includes(o.set)).flatMap((o) => o.reps); const n70 = runs.map((r) => Object.values(r.scores as Record<string, number>).filter((p) => p >= 0.7).length); return `runs ${runs.length}, empty ${n70.filter((n) => n === 0).length}, mean kept ${(n70.reduce((a, b) => a + b, 0) / runs.length).toFixed(1)}, max ${Math.max(...n70)}`; };
+  console.log(`${arm.padEnd(9)} category: ${stat(["greg", "abstract"])} | absent: ${stat(["absent"])}`);
+  writeFileSync(`${DIR}/abstract-wordings-raw.json`, JSON.stringify(out, null, 1));
+}
+console.log(`spend so far $${totalSpend().toFixed(4)}`);
+process.exit(0);

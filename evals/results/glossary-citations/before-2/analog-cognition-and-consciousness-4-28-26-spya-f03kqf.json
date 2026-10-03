@@ -1,0 +1,145 @@
+{
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "arm": "before-2",
+  "promptVersion": "glossary/8",
+  "sourceSha256": {
+    "glossary.ts": "c0f77fe893b2d17d662dd423edb92f6a2b640a26fea7dd3558fe76164d467e61",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Analog computation",
+      "kind": "concept",
+      "aliases": [
+        "analog computing",
+        "Analog Cognition"
+      ],
+      "senseHere": "Computing by letting continuous physical signals, such as overlapping waves, combine and interact directly, with the resulting pattern itself being the answer, rather than working through steps one at a time as in digital computers. The authors argue overlapping brain waves compute this way, with all the interactions happening everywhere at once."
+    },
+    {
+      "name": "Connectionism",
+      "kind": "concept",
+      "aliases": [
+        "connectionist models",
+        "connectionist framework"
+      ],
+      "senseHere": "The classical view that the cortex is built from neurons with fixed, specialized jobs, wired together in a hierarchy where simple features combine into more complex ones. The article argues this picture, while useful for basic sensory processing, cannot explain neurons that change their apparent function depending on context."
+    },
+    {
+      "name": "Mixed Selectivity",
+      "kind": "concept",
+      "aliases": [
+        "nonlinear mixed selectivity",
+        "mixed-selectivity neurons"
+      ],
+      "senseHere": "A single neuron's firing changes meaning depending on context, rather than always signaling one fixed thing. For example, a neuron might respond to an object only when it appeared first in a sequence, and to a different object only when it appeared second."
+    },
+    {
+      "name": "Ephaptic Coupling",
+      "kind": "concept",
+      "aliases": [
+        "ephaptic interactions"
+      ],
+      "senseHere": "Neurons influencing each other's electrical activity directly through the electric fields they generate, without needing a synapse connecting them. This lets a wave of field activity nudge many neighboring neurons toward firing or staying quiet at once, faster than signals passed synapse to synapse."
+    },
+    {
+      "name": "Local field potential",
+      "kind": "term",
+      "aliases": [
+        "LFP",
+        "local field potentials"
+      ],
+      "senseHere": "An electrical signal recorded from inside brain tissue that reflects the combined electrical activity of many nearby neurons at once, rather than any single cell's spikes. It is one way researchers measure the brain waves the article discusses."
+    },
+    {
+      "name": "Spatial Computing theory",
+      "kind": "concept",
+      "aliases": [
+        "Spatial Computing"
+      ],
+      "senseHere": "The authors' proposed model in which slower alpha/beta brain waves form spatial patterns across the cortex that act like stencils, suppressing faster gamma-band spiking in some locations while leaving it free in others. Which locations are suppressed shifts with context or goal, which is how the same neurons end up serving different functions at different times."
+    },
+    {
+      "name": "Gamma rhythm",
+      "kind": "term",
+      "aliases": [
+        "gamma oscillations",
+        "gamma band",
+        "gamma/beta"
+      ],
+      "senseHere": "A fast brain-wave rhythm (roughly 30-80 cycles per second) linked to increased neuron firing and carrying detailed sensory or motor information over small patches of cortex. In the article it is the faster partner that alpha/beta waves push and pull to control where information is expressed."
+    },
+    {
+      "name": "Alpha/beta rhythm",
+      "kind": "term",
+      "aliases": [
+        "alpha/beta oscillations",
+        "beta rhythm",
+        "beta oscillations"
+      ],
+      "senseHere": "A slower brain-wave rhythm (roughly 10-30 cycles per second) that the article treats as carrying top-down signals about context and goals, acting like an inhibitory stencil that suppresses faster gamma activity in particular locations."
+    },
+    {
+      "name": "Subspace coding",
+      "kind": "concept",
+      "aliases": [
+        "activity subspace",
+        "orthogonal subspace",
+        "neural manifold"
+      ],
+      "senseHere": "The idea that although a population of neurons could in principle take on an enormous number of activity patterns, in practice the patterns actually used trace out a much smaller, structured set of possibilities, a 'subspace.' Different tasks or contexts can use separate, non-overlapping subspaces so their signals don't interfere with each other."
+    },
+    {
+      "name": "Traveling waves",
+      "kind": "concept",
+      "aliases": [
+        "traveling wave"
+      ],
+      "senseHere": "Brain-wave patterns that sweep across the surface of the cortex in an organized direction, rather than staying fixed in one spot. The authors propose these moving waves actively push neural activity from one coordinated state into another, for instance when a memory is first formed or a movement is about to begin."
+    },
+    {
+      "name": "Global Neuronal Workspace Theory",
+      "kind": "concept",
+      "aliases": [
+        "GNWT",
+        "Global Workspace",
+        "GW"
+      ],
+      "senseHere": "A rival theory of consciousness holding that information becomes conscious when it is broadcast widely across a distributed brain network, mainly via spiking signals. The article contrasts this with its own view that integration happens through wave-field interactions rather than broadcast alone."
+    },
+    {
+      "name": "Integrated Information Theory",
+      "kind": "concept",
+      "aliases": [
+        "IIT"
+      ],
+      "senseHere": "A theory holding that consciousness arises from a system's capacity for highly organized, self-influencing information integration, often localized to a posterior cortical 'hot zone.' The article agrees organization matters but locates the relevant mechanism in large-scale wave dynamics rather than a specific zone."
+    },
+    {
+      "name": "Higher-Order Theories",
+      "kind": "concept",
+      "aliases": [
+        "HOTs",
+        "Higher-Order Theory"
+      ],
+      "senseHere": "Theories holding that a brain state becomes conscious only when a separate, higher-level brain representation (often in frontal cortex) represents that state as happening. The article's framework echoes this by treating top-down wave patterns as the mechanism that organizes and elevates lower-level activity into consciousness."
+    },
+    {
+      "name": "Predictive coding",
+      "kind": "concept",
+      "aliases": [
+        "predictive coding theories"
+      ],
+      "senseHere": "A theory of brain function in which higher cortical areas constantly generate predictions about incoming sensory information, with top-down signals shaping perception. The article treats its wave-based top-down control as compatible with and implementing this kind of predictive, model-driven processing."
+    },
+    {
+      "name": "Nested observer model",
+      "kind": "concept",
+      "aliases": [
+        "nested observer model of consciousness"
+      ],
+      "senseHere": "A theory proposing that different frequencies or layers of brain oscillations form a nested hierarchy, with each level acting as an 'observer' organizing the level below it to produce degrees of consciousness. The article likens its own view to this, except it treats the very act of top-down wave organization, not a separate observer system, as what generates conscious integration."
+    }
+  ]
+}

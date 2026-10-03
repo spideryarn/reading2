@@ -1,0 +1,286 @@
+{
+ "arxiv-2610-spya-bfrbaj|results": {
+  "verdicts": {
+   "spya-zwruz8": "n",
+   "spya-q7xf2d": "n",
+   "spya-fnwmpt": "y",
+   "spya-jaxsn0": "n",
+   "spya-cwmmvf": "y",
+   "spya-z4h4rv": "y",
+   "spya-r3eb4q": "n",
+   "spya-egznrr": "n",
+   "spya-f2g408": "y",
+   "spya-rmssw4": "y",
+   "spya-dcepy8": "y",
+   "spya-pgpck8": "y",
+   "spya-yeye7k": "y",
+   "spya-mqs6fj": "y",
+   "spya-cgga04": "y",
+   "spya-p399vv": "n",
+   "spya-gk05nx": "n",
+   "spya-x52p57": "n",
+   "spya-y8zhee": "y",
+   "spya-hp848g": "n"
+  },
+  "borderline": [
+   "spya-zwruz8",
+   "spya-jaxsn0",
+   "spya-r3eb4q",
+   "spya-hp848g"
+  ]
+ },
+ "arxiv-2610-spya-bfrbaj|linear algebra": {
+  "verdicts": {
+   "spya-ft0zvv": "y",
+   "spya-y5e8ck": "y",
+   "spya-kc7qcw": "y",
+   "spya-hbx0rq": "y",
+   "spya-dy4aud": "y",
+   "spya-zubvtq": "y",
+   "spya-w8dggn": "n",
+   "spya-xtvpa0": "y",
+   "spya-bkcvuq": "y",
+   "spya-csux0a": "y",
+   "spya-wjs5qx": "n",
+   "spya-dcepy8": "n",
+   "spya-cgga04": "n",
+   "spya-wc22vh": "n",
+   "spya-w94mj8": "n",
+   "spya-uc08b6": "n",
+   "spya-hwk7bz": "n",
+   "spya-esjsrv": "n",
+   "spya-smkcxb": "n"
+  },
+  "borderline": [
+   "spya-w8dggn",
+   "spya-wjs5qx",
+   "spya-cgga04",
+   "spya-w94mj8"
+  ]
+ },
+ "arxiv-2610-spya-bfrbaj|human memory": {
+  "verdicts": {
+   "spya-zwruz8": "n",
+   "spya-z79m3x": "n",
+   "spya-fenz04": "n",
+   "spya-ft0zvv": "n",
+   "spya-q7xf2d": "n",
+   "spya-jaxsn0": "n",
+   "spya-y5e8ck": "n",
+   "spya-kc7qcw": "n",
+   "spya-r3eb4q": "n",
+   "spya-f2g408": "n",
+   "spya-rmssw4": "n",
+   "spya-cgga04": "n",
+   "spya-dtt39z": "n",
+   "spya-p2yuuk": "n",
+   "spya-kvfyeu": "n"
+  },
+  "borderline": []
+ },
+ "constitution|examples": {
+  "verdicts": {
+   "spya-aj4dr2": "n",
+   "spya-tabzzj": "y",
+   "spya-m5228n": "y",
+   "spya-x78cfu": "n",
+   "spya-gnvhk6": "y",
+   "spya-v2n4fx": "y"
+  },
+  "borderline": []
+ },
+ "constitution|definitions": {
+  "verdicts": {
+   "spya-hxz0a3": "n",
+   "spya-ctqg0n": "y",
+   "spya-ujk7d4": "n",
+   "spya-bh2faf": "y",
+   "spya-c5kghx": "y",
+   "spya-p4a4rd": "y",
+   "spya-dqx7dn": "y",
+   "spya-sw3v9u": "n",
+   "spya-vby4sy": "n",
+   "spya-enueab": "y",
+   "spya-nuqt3t": "n",
+   "spya-kgzqvu": "n",
+   "spya-uqedqz": "y",
+   "spya-kgdywh": "n",
+   "spya-ahd063": "y",
+   "spya-mn286g": "n",
+   "spya-n58h2w": "n",
+   "spya-hek4mp": "n",
+   "spya-b54jrm": "n",
+   "spya-d3ytg6": "n"
+  },
+  "borderline": [
+   "spya-ujk7d4",
+   "spya-sw3v9u",
+   "spya-vby4sy"
+  ]
+ },
+ "constitution|philosophy": {
+  "verdicts": {
+   "spya-aj4dr2": "n",
+   "spya-ctqg0n": "n",
+   "spya-tabzzj": "n",
+   "spya-pu5fda": "n",
+   "spya-rgrzer": "n"
+  },
+  "borderline": [
+   "spya-aj4dr2",
+   "spya-ctqg0n"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|criticism": {
+  "verdicts": {
+   "spya-cfbkp2": "n",
+   "spya-gp3g6s": "n",
+   "spya-u6w37a": "n",
+   "spya-d9a0wr": "n",
+   "spya-xm96be": "n",
+   "spya-her4zk": "n",
+   "spya-k6fpme": "n",
+   "spya-t29n67": "y",
+   "spya-cqh2pq": "y",
+   "spya-mcaa4g": "y",
+   "spya-k850tu": "n",
+   "spya-wepmnr": "y",
+   "spya-cv97j7": "y",
+   "spya-va8qxr": "n",
+   "spya-p4vmm0": "y",
+   "spya-ahtr6e": "y",
+   "spya-uwxe4h": "y",
+   "spya-n393ru": "y",
+   "spya-gamzr3": "n",
+   "spya-t54yqa": "n",
+   "spya-hj5y6s": "n",
+   "spya-dp8sem": "n",
+   "spya-hzp9yz": "n",
+   "spya-b59nm2": "n",
+   "spya-vys3vj": "n",
+   "spya-da9tvt": "n",
+   "spya-pbcr03": "y",
+   "spya-jvrmrh": "y",
+   "spya-tb4wr2": "n",
+   "spya-sq7un9": "n",
+   "spya-ymbpwn": "y",
+   "spya-nv6tp0": "y",
+   "spya-c5ve5t": "y",
+   "spya-rn8y3y": "n",
+   "spya-z4bud7": "n",
+   "spya-qu7j89": "y",
+   "spya-yverz7": "n",
+   "spya-vs0vpj": "n",
+   "spya-x63ycg": "n",
+   "spya-p8ky7g": "n",
+   "spya-n0bnf9": "n",
+   "spya-fdefb5": "n",
+   "spya-kqs33c": "n",
+   "spya-mxxutn": "n",
+   "spya-d89xf7": "n",
+   "spya-y4vjdg": "n",
+   "spya-qwvjwn": "n",
+   "spya-vnkr36": "y",
+   "spya-fyrb7m": "n",
+   "spya-gvzuc4": "y"
+  },
+  "borderline": [
+   "spya-k850tu",
+   "spya-t54yqa",
+   "spya-tb4wr2",
+   "spya-yverz7",
+   "spya-y4vjdg",
+   "spya-her4zk"
+  ]
+ },
+ "openai-huggingface|methods": {
+  "verdicts": {
+   "spya-m24kgb": "y",
+   "spya-zfbcb4": "n",
+   "spya-ast6bs": "y",
+   "spya-ckcyzp": "y",
+   "spya-vfq66b": "y",
+   "spya-xvkm3j": "n",
+   "spya-gy8fb4": "n",
+   "spya-d6p0aa": "n",
+   "spya-cc5uhs": "y",
+   "spya-w9ctpd": "n",
+   "spya-asbjy9": "y",
+   "spya-vpd027": "y",
+   "spya-gj5bbr": "n",
+   "spya-acvnjw": "n",
+   "spya-cx56k0": "y",
+   "spya-m45y0k": "y",
+   "spya-dgcfnd": "n",
+   "spya-nayjhs": "y",
+   "spya-peudft": "n",
+   "spya-chdu2z": "n",
+   "spya-tq02vk": "n",
+   "spya-hz50qg": "n",
+   "spya-z83ezv": "n",
+   "spya-rnag5c": "y"
+  },
+  "borderline": [
+   "spya-zfbcb4",
+   "spya-w9ctpd",
+   "spya-gj5bbr",
+   "spya-d6p0aa"
+  ]
+ },
+ "openai-huggingface|results": {
+  "verdicts": {
+   "spya-q62pkz": "n",
+   "spya-gb7ze2": "n",
+   "spya-c2ck7h": "n",
+   "spya-b0wbhk": "n",
+   "spya-g9tjds": "n",
+   "spya-pfkdk4": "n",
+   "spya-ugwnw2": "n",
+   "spya-cbv8uf": "n",
+   "spya-d6p0aa": "y",
+   "spya-z6c3dr": "y",
+   "spya-krknwc": "n",
+   "spya-qvg86h": "n",
+   "spya-sjjbur": "n",
+   "spya-wtguds": "n",
+   "spya-m4gku9": "n",
+   "spya-vqcwj0": "y",
+   "spya-nayjhs": "n",
+   "spya-bgtdqz": "y",
+   "spya-q33vy8": "n",
+   "spya-c2bkgz": "n",
+   "spya-ebtbnm": "n",
+   "spya-khwx0h": "n",
+   "spya-vsujby": "n",
+   "spya-peudft": "n",
+   "spya-hz50qg": "n",
+   "spya-f07bw5": "n",
+   "spya-rnag5c": "n"
+  },
+  "borderline": [
+   "spya-gb7ze2",
+   "spya-m4gku9",
+   "spya-ebtbnm",
+   "spya-vsujby",
+   "spya-wtguds",
+   "spya-cbv8uf"
+  ]
+ },
+ "openai-huggingface|statistics": {
+  "verdicts": {
+   "spya-ms8rup": "y",
+   "spya-cbv8uf": "y",
+   "spya-fkg2ny": "n",
+   "spya-tq02vk": "n"
+  },
+  "borderline": []
+ },
+ "openai-huggingface|government regulation": {
+  "verdicts": {
+   "spya-gb7ze2": "n",
+   "spya-c2bkgz": "n",
+   "spya-rnag5c": "n"
+  },
+  "borderline": []
+ }
+}

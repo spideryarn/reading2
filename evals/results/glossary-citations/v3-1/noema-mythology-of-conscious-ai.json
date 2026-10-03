@@ -1,0 +1,149 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "v3-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [
+        "Lemoine"
+      ],
+      "background": "A Google engineer who in 2022 publicly claimed that the company's LaMDA chatbot was conscious and had feelings, a claim that drew wide media attention before Google dismissed him."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "kind": "person",
+      "aliases": [
+        "Hinton"
+      ],
+      "background": "A pioneering AI researcher often called one of the founders of modern neural networks, who won the Nobel Prize and has argued that some AI systems may already be conscious."
+    },
+    {
+      "name": "David Chalmers",
+      "kind": "person",
+      "aliases": [
+        "Chalmers"
+      ],
+      "background": "A philosopher known for work on the hard problem of consciousness, who has argued that conscious machines may be achievable in the near future and is associated with the neural replacement thought experiment."
+    },
+    {
+      "name": "Anthropocentrism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The habit of judging everything by how closely it resembles humans, treating the human case as the standard rather than as just one possible combination of traits. The essay names this as one of three biases that make people wrongly assume intelligent machines must also be conscious."
+    },
+    {
+      "name": "Human exceptionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The assumption that humans sit at the very top of nature, above other animals and closer to gods, rather than being one kind of creature among many. The essay lists this alongside anthropocentrism and anthropomorphism as a bias pushing people to see consciousness wherever they see humanlike intelligence."
+    },
+    {
+      "name": "Anthropomorphism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Projecting human qualities, like feeling or understanding, onto things that only superficially resemble humans. The essay treats this as a key reason language-using chatbots strike people as conscious while equally complex but non-verbal AI systems do not."
+    },
+    {
+      "name": "Pareidolia",
+      "kind": "term",
+      "aliases": [],
+      "background": "The tendency to see meaningful patterns, such as faces, in random or ambiguous shapes, like a face in toast or in a cinnamon bun. The essay borrows this term from writer Adam Becker to describe how people perceive consciousness in AI systems that merely resemble conscious beings on the surface."
+    },
+    {
+      "name": "Computational functionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The assumption that running the right kind of computation or information processing is enough, by itself, to produce consciousness. The essay argues this is usually taken for granted rather than defended, and may well be false."
+    },
+    {
+      "name": "Universal Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "Turing machine",
+        "Turing computation"
+      ],
+      "background": "An abstract device, defined by Alan Turing, that can carry out any algorithm by following step-by-step rules on a tape of symbols. It underlies the modern idea that software can run on any suitable hardware, separate from the physical material running it."
+    },
+    {
+      "name": "Autopoiesis",
+      "kind": "concept",
+      "aliases": [
+        "self-production"
+      ],
+      "senseHere": "A living system's constant work of rebuilding and maintaining its own physical structure and the conditions for its own survival. The essay treats this self-maintaining activity, down to the level of individual cells, as possibly essential to consciousness in a way no computer program can copy."
+    },
+    {
+      "name": "Generative entrenchment",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A property of brains in which activity at every scale, from whole regions down to individual molecules, is so tightly interwoven that no single part can be swapped out without affecting the rest. The essay uses this to argue a biological neuron cannot be cleanly replaced by a silicon one that does exactly the same job."
+    },
+    {
+      "name": "Mortal computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Geoffrey Hinton's proposed form of computing in which the program is so tied to its specific physical hardware that it effectively dies when that hardware is destroyed, unlike ordinary software that can run on any machine. The essay cites it as an example of computation that is less separable from its material substrate than standard digital computing."
+    },
+    {
+      "name": "Biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view, which the essay associates with John Searle, that being alive is necessary for consciousness, even if not enough on its own. Seth uses it to argue that no non-living computer, however cleverly programmed, could be conscious."
+    },
+    {
+      "name": "Controlled hallucination",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The idea that what we consciously perceive is the brain's best guess about the causes of its sensory signals, constantly checked and corrected against those signals, rather than a direct readout of the world. The essay uses this to link conscious experience to the body's ongoing self-regulation rather than to pure computation."
+    },
+    {
+      "name": "Interoceptive inference",
+      "kind": "term",
+      "aliases": [
+        "interoception"
+      ],
+      "senseHere": "The brain's best-guessing about the body's internal state, such as heart rate or oxygen levels, used both to perceive and to regulate that state. The essay ties this process to feelings like emotion and mood, and through it to the claim that consciousness may depend on being a living, self-regulating body."
+    },
+    {
+      "name": "Simulation hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "background": "An argument, associated with the philosopher Nick Bostrom, that advanced civilizations would likely run vast numbers of detailed simulated universes, making it statistically more likely that we ourselves are inside one such simulation rather than in base reality."
+    },
+    {
+      "name": "Nick Bostrom",
+      "kind": "person",
+      "aliases": [
+        "Bostrom"
+      ],
+      "background": "A philosopher known for arguing, in his simulation hypothesis, that we may statistically be more likely to be living inside an advanced computer simulation than in original physical reality."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A classic visual illusion in which two lines of equal length look different because of arrowhead-like marks added to their ends, an effect that persists even once you know the lines are equal."
+    },
+    {
+      "name": "Garland test",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A test, named after the film \"Ex Machina\"'s director, of whether a person still feels a machine is conscious after being told outright that it is just a machine. The essay distinguishes it from an actual test of machine consciousness: it only measures how persuasive the illusion is, not whether the machine really experiences anything."
+    },
+    {
+      "name": "Neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "neural replacement argument"
+      ],
+      "background": "A thought experiment, most associated with the philosopher David Chalmers, that imagines swapping brain parts one by one for silicon equivalents that behave identically, to argue that consciousness could survive such a substrate change. Seth argues it fails because a biological neuron's finer workings, such as clearing its own waste, cannot actually be duplicated in silicon."
+    }
+  ]
+}
