@@ -1,10 +1,12 @@
-/** The shared voice control. Session feedback lives in LiveStatus, beside the composer. */
-import { useEffect, useRef, useState } from "react";
+/**
+ * The shared voice control: one button, Live / Cancel / Hang up. Session
+ * feedback, and the microphone and noise-reduction settings, live in
+ * LiveStatus, beside the composer (docs/plans/261002j-live-voice-chat-cleanup.md
+ * § 1d).
+ */
 import { LoaderCircle, PhoneOff, Radio, X } from "lucide-react";
 
-import type { MicPlacement } from "../../types.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
-import { rememberPlacement, rememberedPlacement } from "./mic-placement.js";
 import type { LiveApi } from "./useLiveConversation.js";
 
 export function LiveButton({ live, disabled, onStart, labelled, continues }: {
@@ -24,12 +26,6 @@ export function LiveButton({ live, disabled, onStart, labelled, continues }: {
    */
   continues?: boolean | undefined;
 }) {
-  const [chosen, setChosen] = useState<MicPlacement | null>(() => rememberedPlacement());
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
   const connecting = live.phase === "connecting";
   const on = live.phase === "live";
   const closing = live.phase === "closing";
@@ -59,30 +55,6 @@ export function LiveButton({ live, disabled, onStart, labelled, continues }: {
             {on || connecting || closing ? action : labelled ? "Live conversation" : "Live"}
           </span>
         </button>
-      </Tooltip>
-      <Tooltip placement="top" keepSide className="tip-soon" content={
-        <ControlTip head="Microphone setup"
-          what="Auto estimates whether your microphone is close to your mouth or across the room."
-          how="Choose Headphones or Laptop mic to set noise reduction yourself. Changing this during a call saves the turn and reconnects."
-          state={live.placement ? `Using ${live.placement.placement === "headset" ? "headphone" : "laptop"} noise reduction.` : undefined}
-        />
-      }>
-        <label className="chat-live-mic">
-          <span className="sr-only">Microphone setup</span>
-          <select value={chosen ?? "auto"} disabled={connecting || closing}
-            onKeyDown={(e) => e.stopPropagation()}
-            onChange={(e) => {
-              const next = e.target.value === "auto" ? null : e.target.value as MicPlacement;
-              setChosen(next);
-              rememberPlacement(next);
-              if (on) void live.stop().then(() => { if (mounted.current) onStart(); });
-            }}
-          >
-            <option value="auto">Auto</option>
-            <option value="headset">Headphones</option>
-            <option value="laptop">Laptop mic</option>
-          </select>
-        </label>
       </Tooltip>
     </span>
   );

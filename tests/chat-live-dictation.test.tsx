@@ -157,14 +157,13 @@ it.each(["chat", "remember"] as const)("%s Dictate cancels pending Live before c
   expect(connections).toBe(0);
 });
 
-it("Use dictation fallback also cancels pending Live before claiming the microphone", async () => {
+/* "Use dictation" inside the live panel went in 261002j (Greg, spya-f4eq7p:
+   "I don't think we need that"). The composer's own Dictate button above is
+   the one way from Live to dictation, and is what this file pins. */
+it("leaves the composer's Dictate as the only dictation control while Live connects", async () => {
   await act(async () => { root.render(createElement(Harness, { kind: "chat" })); });
   await act(async () => { live.start({ threadId: "spya-k3m9qt" }); });
-  const fallback = [...host.querySelectorAll("button")].find((button) => button.textContent === "Use dictation");
-  expect(fallback).toBeDefined();
-  await act(async () => { fallback?.click(); });
+  const labels = [...host.querySelectorAll("button")].map((b) => b.getAttribute("aria-label") ?? b.textContent);
+  expect(labels.filter((l) => /dictat/i.test(l ?? ""))).toEqual(["Dictate"]);
   await act(async () => { releaseTicket(TICKET); });
-  expect(host.querySelector('button[aria-label="Stop dictating"]')).not.toBeNull();
-  expect(live.phase).toBe("idle");
-  expect(connections).toBe(0);
 });

@@ -969,10 +969,11 @@
    with a phone would be confirming or overturning it, not re-deriving it.
 
    `:not([hidden])` earns its place here for a second reason beyond matching the
-   textarea half. Rules hold a select under 1rem — `.chat-live-mic select`
-   (mode-band.css) and `.place-pick select` (dialogs.css); `.chat-stance select`
-   was a third until Remember's stance picker went on 2026-10-02, and the
-   measurements below were taken on it — and each is (0,1,1). A bare `:root select` is **also**
+   textarea half. A rule holds a select under 1rem — `.place-pick select`
+   (dialogs.css); `.chat-stance select` was another until Remember's stance
+   picker went on 2026-10-02, and the measurements below were taken on it, and
+   `.chat-live-mic select` a third until the noise-reduction picker moved into
+   Live's Advanced disclosure the same day (261002j) — and each is (0,1,1). A bare `:root select` is **also**
    (0,1,1): a tie, settled only by narrow-window.css being imported after both
    files, which is exactly the source-order dependence that made this rule ship
    applying to nothing twice. The attribute selector takes it to (0,2,1) and
@@ -980,7 +981,8 @@
    order, before it was written.
 
    Two more selects are styled `font: inherit` rather than with a size of their
-   own — `.chat-live-device-picker select` (mode-band.css) and
+   own — `.chat-live-device-picker select` (mode-band.css; both of Live's
+   pickers, microphone and noise reduction) and
    `.prof-mic-picker select` (profile.css). Both are (0,1,1) and both lose to
    this too, so the shorthand's font-size component does not survive on a touch
    device. Neither is in the test's competitor search, which looks for an
@@ -1012,9 +1014,9 @@
    arrive as an overlap rather than a wrap.
 
    `checkbox`, `radio` and `range` take no height from `font-size` at all, and a
-   `date` input would cost 4px; there are none. The live-conversation mic picker
-   (`.chat-live-mic select`) was **not** measured — it renders only once a live
-   session is open, which needs a microphone this box does not have.
+   `date` input would cost 4px; there are none. The live conversation's pickers
+   (`.chat-live-device-picker select`) were **not** measured — they render only
+   once a live session is open, which needs a microphone this box does not have.
 
    **The utilities layer is out of reach from here**, whatever the specificity:
    `@layer theme, base, app, utilities` in tailwind.css puts every `tw:` class

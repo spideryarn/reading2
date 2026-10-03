@@ -1217,6 +1217,82 @@ describe("live audio and tool recovery", () => {
     h.unmount();
   });
 
+  it("keeps a visible line with no ledger owner across a retry", async () => {
+    /* The item acknowledgement is what gives a typed live line an exchange.
+       If it never arrives, `drain` has nothing to write — but the words are
+       already on screen and must not vanish when the reader presses Live
+       again. */
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    act(() => h.get().say("A typed turn whose acknowledgement was lost"));
+    const before = h.get().lines[0];
+    expect(before).toMatchObject({ seq: Number.POSITIVE_INFINITY });
+
+    await act(async () => { await h.get().stop(); });
+    expect(h.get().hasUnsavedLines).toBe(true);
+    expect(h.get().lines.map((line) => line.text)).toEqual(["A typed turn whose acknowledgement was lost"]);
+
+    act(() => h.get().start({ threadId: THREAD }));
+    await settle();
+    expect(h.get().lines[0]).toEqual(before);
+    h.unmount();
+  });
+
+  it("meters an enabled clone of the captured track from the moment it opens, while connecting", async () => {
+    /* A disabled track is silence to every consumer, the analyser included,
+       and the original stays disabled until the seeding barrier lifts. So the
+       meter reads a clone: same capture, own `enabled`. 261002j § 1c. */
+    const actualTrack = fakeMic();
+    let clone: { enabled: boolean; stopped: boolean } | null = null;
+    Object.assign(actualTrack, {
+      clone() {
+        const state = { enabled: actualTrack.enabled, stopped: false };
+        clone = state;
+        return {
+          kind: "audio",
+          get readyState() { return state.stopped ? "ended" : "live"; },
+          get enabled() { return state.enabled; },
+          set enabled(v: boolean) { state.enabled = v; },
+          stop() { state.stopped = true; },
+        };
+      },
+    });
+    vi.spyOn(navigator.mediaDevices, "getUserMedia").mockResolvedValue({ getAudioTracks: () => [actualTrack] } as unknown as MediaStream);
+    const measured: unknown[] = [];
+    vi.stubGlobal("requestAnimationFrame", () => 1);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    vi.stubGlobal("MediaStream", class {
+      constructor(private readonly tracks: MediaStreamTrack[]) {}
+      getAudioTracks() { return this.tracks; }
+    });
+    vi.stubGlobal("AudioContext", class {
+      state = "running";
+      close = async () => {};
+      createMediaStreamSource(stream: MediaStream) {
+        measured.push(stream.getAudioTracks()[0]);
+        return { connect() {}, disconnect() {} };
+      }
+      createAnalyser() {
+        return { fftSize: 2048, getFloatTimeDomainData(buffer: Float32Array) { buffer.fill(0.1); }, disconnect() {} };
+      }
+    });
+    const h = mount({ wiring: wiringFor(ticketWith()) });
+    act(() => h.get().start({ threadId: THREAD, microphone: true }));
+    await settle();
+    expect(h.get().phase).toBe("connecting");
+    expect(mic?.enabled, "the conversation must not hear before it is seeded").toBe(false);
+    expect(clone).toMatchObject({ enabled: true, stopped: false });
+    expect(measured, "the meter read the disabled original, which is silence").toHaveLength(1);
+    expect(measured[0]).not.toBe(actualTrack);
+    expect(h.get().measuringInput, "nothing moves while it connects").toBe(true);
+    await act(async () => { channel?.open(); });
+    expect(h.get().phase).toBe("live");
+    expect(measured, "the meter was rebuilt on a second track").toHaveLength(1);
+    h.unmount();
+    expect(clone!.stopped).toBe(true);
+  });
+
+  /* A track with no `clone` (this file's `fakeMic`) takes the fallback: the
+     meter reads the original once it is enabled at the barrier. */
   it("meters the captured track without opening another microphone and closes its audio context", async () => {
     const actualTrack = fakeMic();
     const capture = vi.spyOn(navigator.mediaDevices, "getUserMedia").mockResolvedValue({ getAudioTracks: () => [actualTrack] } as unknown as MediaStream);
@@ -1309,6 +1385,37 @@ describe("live audio and tool recovery", () => {
       channel?.deliver({ type: "conversation.item.input_audio_transcription.completed", item_id: "heard-1", transcript: "The corrected wording." });
     });
     expect(h.get().lines.find((line) => line.id === "heard-1")).toMatchObject({ text: "The corrected wording.", done: true });
+    h.unmount();
+  });
+
+  it("files a late answer's live line under the question it answers, as the ledger does", async () => {
+    /* Rule 1, on screen: U1, R1 starts, the reader talks over it (U2), and
+       only then do R1's words arrive. The thread groups by `exchange`, so R1's
+       line must name U1's — arrival order would put it after U2.
+       docs/plans/261002j-live-voice-chat-cleanup.md § After the plan review. */
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    await act(async () => {
+      channel?.deliver({ type: "conversation.item.added", item: { id: "late-u1", type: "message", role: "user" } });
+      channel?.deliver({ type: "response.created", response: { id: "late-r1" } });
+      channel?.deliver({ type: "input_audio_buffer.speech_started" });
+      channel?.deliver({ type: "conversation.item.added", item: { id: "late-u2", type: "message", role: "user" } });
+      channel?.deliver({ type: "response.output_audio_transcript.delta", response_id: "late-r1", item_id: "late-a1", delta: "R1's words" });
+    });
+    const at = (id: string) => h.get().lines.find((line) => line.id === id);
+    expect(at("late-a1")?.exchange).toBe("late-u1");
+    expect(at("late-u1")).toMatchObject({ exchange: "late-u1", seq: 0 });
+    expect(at("late-u2")).toMatchObject({ exchange: "late-u2", seq: 1 });
+    expect(at("late-a1")?.seq).toBe(0);
+    h.unmount();
+  });
+
+  it("places a typed turn once its acknowledgement reaches the ledger", async () => {
+    const h = await connected({ wiring: wiringFor(ticketWith()) });
+    act(() => h.get().say("A typed question"));
+    const id = h.get().lines[0]!.id;
+    expect(h.get().lines[0]?.seq, "placed before the ledger had heard of it").toBe(Number.POSITIVE_INFINITY);
+    await act(async () => { channel?.deliver({ type: "conversation.item.added", item: { id, type: "message", role: "user" } }); });
+    expect(h.get().lines[0]).toMatchObject({ exchange: id, seq: 0 });
     h.unmount();
   });
 

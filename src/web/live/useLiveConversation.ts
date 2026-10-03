@@ -84,6 +84,7 @@
  */
 
 import { type MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import type { SpokenExchange } from "../useChat.js";
 import type { SpokenLanded } from "../chat/controller.js";
@@ -109,7 +110,29 @@ export interface LiveLine {
   text: string;
   /** Has the final transcript landed, or is this still filling in? */
   done: boolean;
+  /**
+   * **The exchange this line belongs to** — the reader item id of its turn, as
+   * `ExchangeLedger.ownerOf` attributes it. What the thread groups by, so a late
+   * answer shows beside its own question. The line's own id until the ledger has
+   * heard of it.
+   */
+  exchange: string;
+  /**
+   * Where that exchange sits: which session of this hook (a retried session's
+   * kept words come before the new one's), then the ledger's conversation
+   * order. `seq` is `Infinity` until the ledger has placed the line.
+   */
+  session: number;
+  seq: number;
 }
+
+/**
+ * Which step a connecting session is on, so a slow one is visibly *that* step.
+ * In the order they happen: our server's ticket, the microphone (and its
+ * permission prompt), the connection to the voice service, and telling the
+ * session the conversation so far. Null when not connecting.
+ */
+export type LiveStep = "ticket" | "microphone" | "transport" | "seeding";
 
 /** Somewhere in the article the model pointed at, via `show_passage`. */
 export interface LivePointer {
@@ -129,10 +152,12 @@ export interface LiveToolRun {
 
 export interface LiveApi {
   phase: LivePhase;
+  /** While `connecting`, the step it is on. See `LiveStep`. */
+  step: LiveStep | null;
   error: string | null;
   /** Both sides, in the order their turns began. */
   lines: LiveLine[];
-  /** A failed append left words available locally; retrying must retain them. */
+  /** Words could not be confirmed stored (a failed append or no item owner); retrying must retain them. */
   hasUnsavedLines: boolean;
   pointers: LivePointer[];
   tools: LiveToolRun[];
@@ -193,6 +218,12 @@ export interface LiveApi {
    * so a reader who presses this and then chooses to type stays typing.
    */
   reconnect: () => void;
+  /**
+   * A reconnect is waiting for its hang-up to finish. The Live button is
+   * disabled while `closing`, so this is what lets the panel offer to cancel
+   * the restart — `stop` does that. GPT Sol, plan review 261002j.
+   */
+  reconnecting: boolean;
 }
 
 /** How this hook is wired to our own server, and to the thread. */
@@ -359,6 +390,8 @@ function silentTrack(ctx: AudioContext): MediaStreamTrack {
 
 export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveApi {
   const [phase, setPhase] = useState<LivePhase>("idle");
+  const [step, setStep] = useState<LiveStep | null>(null);
+  const [reconnectPending, setReconnectPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lines, setLines] = useState<LiveLine[]>([]);
   const [hasUnsavedLines, setHasUnsavedLines] = useState(false);
@@ -426,9 +459,29 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const lineState = useRef<LiveLine[]>([]);
   const handedOff = useRef(new Set<string>());
   const startedThread = useRef<string>("");
+  /** Which start of this hook the lines being put now belong to. See `LiveLine.session`. */
+  const sessionNo = useRef(0);
   const updateLines = useCallback((change: (previous: LiveLine[]) => LiveLine[]) => {
     lineState.current = change(lineState.current);
     setLines(lineState.current);
+  }, []);
+  /**
+   * **The same, committed now, in one render with whatever the chat controller
+   * has already projected.** For the handoff and its undo only.
+   *
+   * The live copy and the provisional chat rows live in two stores, and React
+   * would otherwise commit them in different renders — the controller's
+   * `useSyncExternalStore` update at sync priority, this state at default — so
+   * there would be a frame with both copies or neither. `flushSync` renders
+   * this change at once, and that render reads the controller's snapshot as it
+   * stands, which already holds the change the caller made first. So the rule
+   * at both call sites is: change the controller, then this.
+   * docs/plans/261002j-live-voice-chat-cleanup.md § 1b.
+   */
+  const flushLines = useCallback((change: (previous: LiveLine[]) => LiveLine[]) => {
+    lineState.current = change(lineState.current);
+    const next = lineState.current;
+    flushSync(() => setLines(next));
   }, []);
 
   const pc = useRef<RTCPeerConnection | null>(null);
@@ -478,6 +531,22 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
 
   /** The reader's microphone track, held so the hang-up can stop it first. */
   const micTrack = useRef<MediaStreamTrack | null>(null);
+  /**
+   * **What the level meter reads: an enabled clone of `micTrack`.**
+   *
+   * The meter has to move from the moment the microphone opens — a reader who
+   * presses Live and sees nothing for ten seconds cannot tell connecting from
+   * broken (Greg, spya-f4eq7p). But `micTrack` is held *disabled* until the
+   * seeding barrier lifts, and a disabled track is silence to every consumer,
+   * the analyser included (W3C Media Capture). A clone is the same capture —
+   * no second `getUserMedia`, no second permission — with its own `enabled`, so
+   * the meter hears the room while the conversation does not, and the barrier
+   * is untouched. Stopped on every teardown: in `stop`, and in `abandon` for an
+   * attempt that went stale. Null where the browser gave no `clone`, and then
+   * the meter falls back to the original once it is enabled.
+   * docs/plans/261002j-live-voice-chat-cleanup.md § After the plan review.
+   */
+  const meterTrack = useRef<MediaStreamTrack | null>(null);
 
   /**
    * **What this conversation cost, on its way to our own ledger.** One per
@@ -580,7 +649,15 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       if (handedOff.current.has(id)) return;
       updateLines((prev) => {
         const i = prev.findIndex((l) => l.id === id);
-        if (i === -1) return [...prev, { id, role, text, done }];
+        if (i === -1) {
+          const owner = ledger.current.ownerOf(id);
+          return [...prev, {
+            id, role, text, done,
+            exchange: owner?.exchange ?? id,
+            session: sessionNo.current,
+            seq: owner?.seq ?? Number.POSITIVE_INFINITY,
+          }];
+        }
         const next = [...prev];
         const was = next[i]!;
         next[i] = { ...was, text: mode === "append" ? was.text + text : text, done };
@@ -589,6 +666,23 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     },
     [updateLines],
   );
+
+  /**
+   * Place any line the ledger has only now heard of — a typed turn whose
+   * acknowledgement just arrived, or a reader line put before its item reached
+   * the ledger. A no-op, and no render, when every line is placed.
+   */
+  const adopt = useCallback(() => {
+    let moved = false;
+    const next = lineState.current.map((line) => {
+      if (line.seq !== Number.POSITIVE_INFINITY || line.session !== sessionNo.current) return line;
+      const owner = ledger.current.ownerOf(line.id);
+      if (!owner) return line;
+      moved = true;
+      return { ...line, exchange: owner.exchange, seq: owner.seq };
+    });
+    if (moved) updateLines(() => next);
+  }, [updateLines]);
 
   const send = useCallback((msg: unknown) => {
     const channel = dc.current;
@@ -714,10 +808,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         if (!thread) return;
         const liveCopy = lineState.current.filter((line) => exchange.itemIds.includes(line.id));
         for (const id of exchange.itemIds) handedOff.current.add(id);
-        updateLines((previous) => previous.filter((line) => !exchange.itemIds.includes(line.id)));
-        // speak synchronously installs provisional chat rows. The live copy
-        // transfers now, before the network wait, and is restored on failure.
-        const landed = await speak({
+        /* **The handoff: the controller's provisional rows go in, then the live
+           copy comes out, in one commit.** `speak` installs the rows
+           synchronously, before any network wait; `flushLines` then renders the
+           removal together with them (see there). Removing first left a frame
+           with neither copy, and React's two priorities could equally give one
+           with both. The live copy is restored the same way on failure. */
+        const landing = speak({
           threadId: thread,
           question: exchange.question,
           answer: exchange.answer,
@@ -735,9 +832,14 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
             : {}),
           ...(exchange.interrupted ? { interrupted: true } : {}),
         });
+        flushLines((previous) => previous.filter((line) => !exchange.itemIds.includes(line.id)));
+        const landed = await landing;
         if (!landed.ok) {
           for (const id of exchange.itemIds) handedOff.current.delete(id);
-          updateLines((previous) => [...liveCopy, ...previous]);
+          /* The controller has already taken its provisional rows out by the
+             time it says so (controller.ts § #repair), so this is the second
+             half of the same rule: controller first, live copy second. */
+          flushLines((previous) => [...liveCopy, ...previous]);
           unsaved.current = true;
           setHasUnsavedLines(true);
           setError(landed.error);
@@ -766,7 +868,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         updateLines((prev) => prev.filter((l) => !exchange.itemIds.includes(l.id)));
       });
     }
-  }, [updateLines]);
+  }, [updateLines, flushLines]);
 
   /**
    * A tool the model asked for.
@@ -985,7 +1087,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          finished exchange.** Not this handler: the transcription of what the
          reader said arrives after the answer to it, so anything keyed on
          arrival order writes an answer with no question. See exchanges.ts. */
-      if (seeding.current.done) commit(ledger.current.push(e));
+      if (seeding.current.done) {
+        commit(ledger.current.push(e));
+        adopt();
+      }
 
       if (type === "conversation.item.input_audio_transcription.delta") {
         // Provisional only. The completed event replaces this text, and the
@@ -1147,7 +1252,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         continueAfterTools();
       }
     },
-    [answerTool, put, commit, meterEvent, failSession, continueAfterTools, accountUserReply],
+    [answerTool, put, adopt, commit, meterEvent, failSession, continueAfterTools, accountUserReply],
   );
 
   /**
@@ -1191,6 +1296,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
        abandons rather than opening a connection behind this teardown. */
     epoch.current += 1;
     setPhase("closing");
+    setStep(null);
     stallSeen.current = null;
     setStall(null);
     if (connectionDeadline.current) clearTimeout(connectionDeadline.current);
@@ -1207,6 +1313,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     setPlaybackBlocked(false);
     setInputTrack(null);
     setInputContext(null);
+    /* The meter's clone goes at once: it is not what the conversation hears,
+       so the settle and the grace below have no use for it, and a clone left
+       running keeps the device's light on after the reader hung up. */
+    meterTrack.current?.stop();
+    meterTrack.current = null;
     const oldContext = context.current;
     context.current = null;
     if (oldContext && oldContext.state !== "closed") void oldContext.close?.().catch(() => {});
@@ -1269,6 +1380,16 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
          being waited on rather than queued behind the wait. */
       commit(ledger.current.drain());
       await writing.current;
+
+      /* A visible line can exist before the ledger knows which exchange owns
+         it — notably a typed live turn whose item acknowledgement never came.
+         `drain` cannot write what it cannot own. Keep such words across a retry
+         and label the uncertainty instead of showing them after hang-up only
+         to erase them when Live is pressed again. */
+      if (lineState.current.some((line) => line.text.trim() !== "")) {
+        unsaved.current = true;
+        setHasUnsavedLines(true);
+      }
 
       dc.current?.close();
       /* Every sender's track, not just the microphone's: the synthetic silent
@@ -1404,9 +1525,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       if (startup.current || closing.current || pc.current || claim.current) return;
       const microphone = opts.microphone ?? true;
       setPhase("connecting");
+      setStep("ticket");
       setError(null);
       setSeen({});
       const preserveWords = startedThread.current === opts.threadId && unsaved.current;
+      /* Kept words keep their old session number, so they stay above the new
+         session's — whose ledger starts counting from zero again. */
+      sessionNo.current += 1;
       updateLines((previous) => preserveWords ? previous.filter((line) => line.text.trim() !== "") : []);
       unsaved.current = preserveWords;
       setHasUnsavedLines(preserveWords);
@@ -1464,6 +1589,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       stallReported.current = new Set();
       placedAs.current = null;
       reconnecting.current = 0;
+      setReconnectPending(false);
       microphoneWanted.current = microphone;
 
       /**
@@ -1504,6 +1630,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       let track: MediaStreamTrack | null = null;
       let channel: RTCDataChannel | null = null;
       let held: MicClaim | null = null;
+      /** This attempt's level-meter clone. See `meterTrack`. */
+      let meterClone: MediaStreamTrack | null = null;
       /** This attempt's meter, so `abandon` can clear it only if it is still ours. */
       let installedMeter: LiveMeter | null = null;
       /**
@@ -1523,6 +1651,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
        */
       const abandon = () => {
         track?.stop();
+        meterClone?.stop();
+        if (meterTrack.current === meterClone) meterTrack.current = null;
         channel?.close();
         conn?.close();
         if (ctx && ctx !== context.current && ctx.state !== "closed") void ctx.close?.().catch(() => {});
@@ -1685,8 +1815,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
             }
             if (micTrack.current) {
               micTrack.current.enabled = true;
-              setInputTrack(micTrack.current);
+              /* Already metering the clone since the microphone opened; only
+                 a browser with no `clone` meters from here. */
+              if (!meterTrack.current) setInputTrack(micTrack.current);
             }
+            setStep(null);
             setPhase("live");
           };
           /**
@@ -1722,6 +1855,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
                those there are, with nothing looking wrong. src/routes.ts §
                `liveConnected`. */
             meter.current?.connected();
+            setStep("seeding");
             seeding.current = {
               expected: ticket.seed.length,
               ids: new Set(),
@@ -1759,6 +1893,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              opens no device, so claiming for it would make an automated check
              evict a reader's live dictation for a device it never touches. */
           let microphoneFallbackNotice: string | null = null;
+          setStep("microphone");
           if (microphone) {
             held = {
               /* Asked to stop by the next claimant.
@@ -1852,6 +1987,14 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              what lets the barrier below simply count them.
              docs/plans/260831l-live-conversation-in-chat.md § 6. */
           if (microphone) {
+            /* The meter's own copy, enabled, cloned before the original is
+               disabled so there is no doubt which state it starts in. */
+            if (typeof track.clone === "function") {
+              meterClone = track.clone();
+              meterClone.enabled = true;
+              meterTrack.current = meterClone;
+              setInputTrack(meterClone);
+            }
             track.enabled = false;
             micTrack.current = track;
             setDeviceLabel(labelled(track));
@@ -1878,6 +2021,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
             });
           }
           conn.addTrack(track);
+          setStep("transport");
 
           /* Three: the SDP exchange, straight to OpenAI with the ephemeral
              token. Our key is not in this browser and never was. */
@@ -2093,10 +2237,12 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     void stop().then(() => {
       if (reconnecting.current !== mine) return;
       reconnecting.current = 0;
+      setReconnectPending(false);
       if (failed.current) return;
       start({ threadId: thread, microphone });
     });
     reconnecting.current = mine;
+    setReconnectPending(true);
   }, [stop, start]);
 
   /**
@@ -2107,13 +2253,19 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const hangUp = useCallback((): Promise<void> => {
     if (reconnecting.current !== 0) {
       reconnecting.current = 0;
+      setReconnectPending(false);
       endedBecause.current = "reader";
     }
     return stop();
   }, [stop]);
 
+  /* The meter reads from the moment the microphone opens (see `meterTrack`),
+     so it is shown while connecting too; the panel says the conversation is
+     not hearing it yet. */
+  const metering = phase === "live" || phase === "connecting";
   return {
     phase,
+    step: phase === "connecting" ? step : null,
     error,
     lines,
     hasUnsavedLines,
@@ -2122,8 +2274,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     hearing,
     speaking,
     inputLevel: inputMeter.level,
-    measuringInput: phase === "live" && inputMeter.measuring,
-    quietInput: phase === "live" && inputMeter.quiet,
+    measuringInput: metering && inputMeter.measuring,
+    quietInput: metering && inputMeter.quiet,
     deviceLabel,
     notice,
     playbackBlocked,
@@ -2138,5 +2290,6 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     say,
     stall,
     reconnect,
+    reconnecting: reconnectPending,
   };
 }

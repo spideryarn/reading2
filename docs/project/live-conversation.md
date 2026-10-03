@@ -28,18 +28,40 @@ read as picking up a call the reader had never made (Greg, 2026-09-12, SPIDERYAR
 difference is in its accessible name and tooltip — "Continue this conversation live" or "Start a
 live conversation" —
 [260912d](../plans/260912d-live-button-label-says-resume-on-a-thread-with-no-live-history.md). Its
-tooltip explains two-way speech. The session shows connecting, listening, thinking/tool work and speaking;
-connecting can be cancelled. Hang up releases the microphone and saves the final exchange before
-the typed path continues. Transcript display starts on; hiding it does not stop transcription or
-saving.
+tooltip explains two-way speech. Connecting can be cancelled. Hang up releases the microphone and
+saves the final exchange before the typed path continues.
 
-The microphone is the same remembered input dictation uses, named from the acquired track. The
-level meter reads that exact track through `useAudioLevel`, never a second capture. **Auto,
-Headphones and Laptop mic describe noise reduction, not which device to open.** The device picker
-answers the other question. A missing saved device falls back with a visible explanation. A quiet
-meter is an observation, not a claim that the reader's microphone is broken.
+> I click the live button, and then nothing seemed to be happening for a minute, and I couldn't tell
+> if it was connecting or if it was listening to me or recording. … it was sort of showing the words
+> streaming in, but in one place, but then they'd show up in the chat in another place. I mean,
+> could those not be the same place …
+>
+> — Greg, 2026-09-29 (`spya-f4eq7p`; [261002j](../plans/261002j-live-voice-chat-cleanup.md))
 
-Failures belong in the Chat panel, with a retry and the option to type or dictate. Browser-blocked
+So since 2026-10-03 **one state pill says what the session is doing** — Connecting, Listening,
+Thinking, Speaking, Saving, Stopped or Error — and while connecting, **which step it is on**
+(ticket, microphone, transport, loading this conversation). **The words appear once, in the
+thread**: `LiveTail` renders the unsaved exchanges after the saved turns, grouped by the ledger's
+exchange rather than by arrival (ordering rule 1 applies to the screen too), and an exchange leaves
+the tail in the same commit as `speak` installs its rows — so there is never zero copies or two. A
+failure is a red Error state with its sentence and **Try again**. Everything else — the microphone
+device, noise reduction, Reconnect — is under a closed **Advanced** disclosure; Reconnect is also
+offered beside a stall notice, where it is the answer, and **Cancel reconnect** stays visible
+during a reconnect's teardown because Live is disabled while closing. There is no dictation or
+"continue typing" button in the panel: the composer's own are beside it.
+
+The microphone is the same remembered input dictation uses, named from the acquired track. **The
+level meter reads an enabled clone of that track** (`track.clone()` — the same capture, no second
+permission), so it moves from the moment the microphone opens, while the original is still held
+disabled behind the seeding barrier (ordering rule 2): a disabled track is silence to every
+consumer, the meter included. The clone is stopped on every teardown. **Auto, Headphones and
+Laptop mic describe noise reduction, not which device to open.** The device picker answers the
+other question. Both live in Advanced, which exists only while a session is on screen, so noise
+reduction is chosen during a call (changing it saves and reconnects) rather than before one. A
+missing saved device falls back with a visible explanation. A quiet meter is an observation, not a
+claim that the reader's microphone is broken.
+
+Failures belong in the Chat panel, with a retry. Browser-blocked
 playback gets an explicit **Enable sound** action. If a write cannot be confirmed, retain its words
 locally when retrying the same conversation, with an honest uncertainty notice. A valid session ticket is not proof that a
 microphone opened, a response event is not proof that sound played, and the preview's transcript is
@@ -69,8 +91,9 @@ empty conversation — SPIDERYARN-READING2-70,
 | [`src/web/live/exchanges.ts`](../../src/web/live/exchanges.ts) | Turns a stream of events into conversation turns. Read its header before touching anything about ordering. |
 | [`src/web/live/wiring.ts`](../../src/web/live/wiring.ts) | The two requests a session makes of our own server *before* it has anything to write, behind one seam. |
 | [`src/web/live/mic-placement.ts`](../../src/web/live/mic-placement.ts) | Where the microphone is, which is what noise reduction wants to know. |
-| [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | Start or continue, cancel, hangup and microphone placement. |
-| [`src/web/live/LiveStatus.tsx`](../../src/web/live/LiveStatus.tsx) | Streaming words, input level and device choice, session state, and recovery actions in the real composer. |
+| [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | The one button: Live, Cancel or Hang up. |
+| [`src/web/live/LiveStatus.tsx`](../../src/web/live/LiveStatus.tsx) | The state pill, connecting steps, input level, notices, errors with Try again, and the Advanced disclosure (device, noise reduction, Reconnect). |
+| [`src/web/live/LiveTail.tsx`](../../src/web/live/LiveTail.tsx), [`tail.ts`](../../src/web/live/tail.ts) | The unsaved words, in the thread after the saved turns, grouped by exchange. |
 | [`src/web/live/stall.ts`](../../src/web/live/stall.ts) | Which stall a live session is in, if any — the pure rules behind the notice and **Reconnect**. |
 | [`src/web/live/tool-responses.ts`](../../src/web/live/tool-responses.ts) | One continuation after a response's tool results settle; a newer spoken turn supersedes the old continuation. |
 | [`src/web/PassageLinks.tsx`](../../src/web/PassageLinks.tsx) | Shared live and saved passage references, using stable block ids. |
@@ -80,6 +103,26 @@ The plans are [live-conversation.md](../plans/260831g-live-conversation.md) — 
 spike — and [260831l-live-conversation-in-chat.md](../plans/260831l-live-conversation-in-chat.md), which is where it
 became a turn in a conversation. GPT Sol refused the first version of the second one; the design
 that shipped is the one it recommended instead.
+
+## Which model, and why not GPT-Live yet
+
+`gpt-realtime-2.1` (`LIVE_MODEL` in [`src/live.ts`](../../src/live.ts)) at **low reasoning
+effort**, with a spoken prompt that asks for one or two sentences, no pleasantries, and thinking
+only when the question needs it — Greg's "instant mode" and "quick back and forth" (2026-09-29).
+
+OpenAI's newer `gpt-live-1` (GA 2026-09-10) is a different architecture rather than a newer model:
+a voice front end that hands thinking and tools to a separate backend model, with a 16k-token cap
+on its own instructions (too small for most articles), no turn ids, and per-minute billing. Measured
+on 2026-10-02 it was about a quarter of the cost per turn and much quicker on follow-ups, but a real
+answer about the article came about two seconds *later*, usually behind "Checking." — and moving to
+it rewrites the three orderings below, the meter and the browser handshake. Not now; the numbers
+and the four conditions that would change the answer are in
+[261002r](../investigations/261002r-gpt-live-spike.md).
+
+The same measurement found where today's wait actually is, and it is not reasoning (low effort was
+no faster than the default): the model calls `show_passage` before its first word (~1.2 s, and
+telling it not to changed nothing), and `semantic_vad` waits up to several seconds after a hesitant
+question. Neither is fixed yet.
 
 ## The audio never touches our server
 
