@@ -128,6 +128,8 @@ describe("the policy", () => {
       [
         "arc", "tweets", "glossary", "quotes", "ideas", "timeline", "quiz", "faq",
         "sketch", "illustrated", "skim", "debate", "citations", "crossrefs", "simple",
+        /* 2026-10-03, a whole column that reads nothing — plan 261003f. */
+        "relations",
       ].sort(),
     );
   });

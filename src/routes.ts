@@ -39,6 +39,7 @@
  *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
  *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
  *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
+ *   GET    /api/relations/:slug  how each paragraph bears on the one before it, and staleness (owner only)
  *   GET    /api/crossrefs/:slug  links from a phrase in one block to the block that backs it, and staleness (owner only)
  *   GET    /api/simple/:slug     a plain-words orientation to the piece, each paragraph's passages, and staleness
  *   GET    /api/skim/:slug a route through the quotes at three depths, whether it still matches them, and the profile
@@ -163,6 +164,7 @@ import {
   loadSketch,
   loadQuiz,
   loadFaq,
+  loadRelations,
   loadCrossrefs,
   loadSimpleSummary,
   loadSkim,
@@ -8798,6 +8800,21 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* **No `withProfileChanged`**: this artefact is not written for a
          profile. `FaqResponse` in src/types.ts has two fields. */
       send(res, 200, await loadFaq(slugPart(captures, 1)));
+    },
+  },
+
+  /* Relation words — docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+     GET only, and no DELETE: the step replaces, so asking again is
+     POST /api/jobs { slug, steps: ["relations"] }. This route never spends.
+     **Owner-authenticated, with no anonymous twin and nothing in the public
+     article payload** (Sol P1-4). 404 when there is none. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/relations\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      send(res, 200, await loadRelations(slugPart(captures, 1)));
     },
   },
 

@@ -1112,6 +1112,8 @@ export type ChatJob = Exclude<
      request-path call on chat/completions and needs a route below. */
   | "quiz"
   | "faq"
+  /* Generation, on the Messages wire like `faq`. src/relations.ts. */
+  | "relations"
   /* Generation, on the Messages wire like `faq`. src/skim.ts. */
   | "skim"
   /* Generation, on the Messages wire like `faq`. src/crossrefs.ts. */

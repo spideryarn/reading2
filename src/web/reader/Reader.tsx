@@ -1525,6 +1525,7 @@ export function Reader({
      owner-only (citations.md § Who sees it) and the margin is not the place to
      reverse that quietly. Comments are the one list both arms already share. */
   const marginaliaFaq = owner ? ownerFeed.faq : (artefacts?.faq?.questions ?? null);
+  const marginaliaTimeline = owner ? ownerFeed.timeline : (artefacts?.timeline?.events ?? null);
   const marginaliaClaims = owner ? ownerFeed.claims : (artefacts?.debate?.claims.rows ?? null);
   const marginaliaCitations =
     owner && owner.citations.status === "ready" && !owner.citations.stale
@@ -1831,6 +1832,9 @@ export function Reader({
     if (!marginRoom) return null;
     const byBlock = marginaliaNotes(article.tree, article.blocks, marginaliaIdeas, {
       faq: marginaliaFaq,
+      timeline: marginaliaTimeline,
+      /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
+      relations: owner ? ownerFeed.relations : null,
       claims: marginaliaClaims,
       citations: marginaliaCitations,
       comments,
@@ -1849,6 +1853,9 @@ export function Reader({
     article.blocks,
     marginaliaIdeas,
     marginaliaFaq,
+    marginaliaTimeline,
+    owner,
+    ownerFeed.relations,
     marginaliaClaims,
     marginaliaCitations,
     comments,

@@ -49,6 +49,9 @@ export const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   timeline: "Timeline",
   quiz: "Quiz",
   faq: "FAQ",
+  /* Not a mode, so no `MODE_LABEL` to borrow: the small words Marginalia draws
+     beside a paragraph (so, but, vs). */
+  relations: "Relation words",
   sketch: "Sketch",
   skim: "Skim",
   debate: "Debate",
@@ -115,6 +118,7 @@ const RERUN_MODE: Partial<Record<MetadataRerunStep, Mode>> = {
  */
 const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> = {
   crossrefs: ["cross references", "crossrefs"],
+  relations: ["relations"],
   simple: ["simple"],
 };
 
