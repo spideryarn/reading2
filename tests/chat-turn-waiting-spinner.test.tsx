@@ -96,6 +96,18 @@ describe("a model turn that has not produced a word yet", () => {
     expect(spinners()).toBe(1);
   });
 
+  it("keeps waiting through leading whitespace chunks until a word arrives", () => {
+    paint({ text: " \n", tools: [done] });
+    expect(waitingLine()?.textContent?.trim()).toBe("thinking…");
+    expect(spinners()).toBe(1);
+    expect(host.querySelector(".chat-cursor")).toBeNull();
+
+    paint({ text: " \nThe piece argues", tools: [done] });
+    expect(waitingLine()).toBeNull();
+    expect(spinners()).toBe(0);
+    expect(host.querySelector(".chat-cursor")).not.toBeNull();
+  });
+
   it("drops the waiting line the moment words arrive", () => {
     paint({ text: "The piece argues", tools: [done] });
     expect(waitingLine()).toBeNull();

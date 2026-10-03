@@ -1564,13 +1564,16 @@ export function Turn({
      that reaches for the web is seconds long. So the test is "is a row
      *running*", not "is there a row".
 
-     Not gated on `useSlow`. The 600ms rule is for a wait that is usually over
-     before it could be seen; a model's first word never is, and the turn is
-     already drawn with nothing in it. docs/project/loading-spinner.md. */
+     Not gated on `useSlow`: the reader has already sent a question, and the
+     turn is drawn empty, so this acknowledges the send immediately.
+     docs/project/loading-spinner.md. */
   const tools = message.tools ?? [];
+  /* A streamed chunk can be only a leading newline. It is not the first word
+     yet, so the waiting line and cursor must agree about visible text. */
+  const hasText = message.text.trim() !== "";
   const waiting =
     message.status === "pending" &&
-    message.text === "" &&
+    !hasText &&
     !recovering &&
     !tools.some((run) => run.status === "running");
   /* The word stays "thinking…" after a tool has finished too. A finished tool
@@ -1584,7 +1587,7 @@ export function Turn({
         <span className="chat-thinking">
           <LoaderCircle className="cmt-spinner" size={16} /> thinking…
         </span>
-      ) : message.text === "" ? /* Stopped before a word arrived, or failed
+      ) : !hasText ? /* Stopped before a word arrived, or failed
           before one did. `Answer` splits on blank lines and would render one
           empty paragraph, which is a stray gap above the line that explains
           it. */ null : (
@@ -1610,7 +1613,7 @@ export function Turn({
           answer finished…
         </span>
       ) : (
-        message.status === "pending" && message.text !== "" && <span className="chat-cursor" />
+        message.status === "pending" && hasText && <span className="chat-cursor" />
       )}
       {message.status === "error" && <p className="chat-failed">{message.error}</p>}
       {message.truncated && (

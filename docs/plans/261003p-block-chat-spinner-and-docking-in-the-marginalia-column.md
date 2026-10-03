@@ -211,3 +211,13 @@ a harness for one already exists.
   [iPad portrait, floating](261003p-shot-9-E-ipad-portrait.png) ·
   [phone, floating](261003p-shot-10-F-phone.png).
 - `/help` says nothing about where the block chat appears; unchanged.
+
+## GPT Sol on the code
+
+[261003p-review-code-gpt-sol.md](261003p-review-code-gpt-sol.md), on `fb30ea5d7` and `ab00dc49b`:
+land after fixes, which it applied. **F6** (P1): a streamed chunk that is only whitespace took the
+spinner away before any visible word; `Turn` now asks one question, "is there visible text", for
+the waiting line, the answer and the cursor, with a test seen red. **F7**, **F8**: two doc
+sentences corrected. **F9** (P2, wider, not fixed): a turn that is recovering while a tool row
+still reads *running* shows the strip's spinner and the reconnecting line's together. It predates
+this work and is left; named here so it is not lost.

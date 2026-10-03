@@ -78,7 +78,7 @@ one would otherwise be missed; it would not be, so it is not
   otherwise sit beside prose that no longer says what it quotes.
 
 **The block chat panel sits here too, while one is open.** When the column is showing and there is
-at least 256px of room right of the prose (a full-width column is enough), the chat panel sits over the lower part of the column
+room for the panel and its inset and gutter (a full-width column is enough), the chat panel sits over the lower part of the column
 instead of over the article, and the notes under it are covered until it closes. With less room it
 floats in the corner as before. [comments.md § Where the chat panel sits](comments.md#chat-dock).
 
