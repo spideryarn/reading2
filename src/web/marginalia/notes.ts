@@ -23,6 +23,7 @@ import type {
   FaqQuestion,
   Idea,
   IdeaProvenance,
+  TimelineEvent,
   Tree,
 } from "../../types.js";
 import type { PublicClaimDebateRow, PublicComment } from "../../public-types.js";
@@ -56,6 +57,9 @@ export type MarginaliaNote =
       kind: "faq";
       items: { question: FaqQuestion; quote: string; morePassages: number }[];
     }
+  /** Events the piece dates in this block, each with the words here that
+      mention it — plan 261003f. */
+  | { kind: "timeline"; items: { event: TimelineEvent; quote: string }[] }
   /** Pages on the web that answer a claim made in this block. */
   | { kind: "debate"; items: MarginClaim[] }
   /** Works first cited in this block. Owner only — the caller's rule. */
@@ -80,6 +84,7 @@ export type MarginEntry =
  */
 export type MarginSources = {
   faq?: readonly FaqQuestion[] | null;
+  timeline?: readonly TimelineEvent[] | null;
   claims?: readonly MarginClaim[] | null;
   citations?: readonly CitedWork[] | null;
   comments?: readonly MarginComment[] | null;
@@ -92,7 +97,7 @@ type GroupedItems = Partial<{
   [K in GroupedKind["kind"]]: Extract<GroupedKind, { kind: K }>["items"];
 }>;
 /** The order the kinds are drawn in below the question and the stamps. */
-const GROUPED_ORDER = ["faq", "debate", "citation", "comment"] as const;
+const GROUPED_ORDER = ["faq", "timeline", "debate", "citation", "comment"] as const;
 
 /** Turn the placement accumulator into the discriminated notes the renderer consumes. */
 function inGroupedOrder(grouped: ReadonlyMap<BlockId, GroupedItems>): Map<BlockId, GroupedKind[]> {
@@ -269,6 +274,34 @@ function groupedNotes(
         quote: passage.quote,
         morePassages: surviving.length - 1,
       });
+    }
+  }
+  /* **Only the events the piece dates** — a date, or its own words for when
+     ("a month later"). An untimed event is a label with nothing to say about
+     time, and a rejected date is our failure rather than the article's; both
+     stay in the band, which says what each means (timeline.md § The four
+     dating states).
+
+     **Beside the passage the date was read from, not the first mention.** An
+     event mentioned undated and later as "By 12 July…" would otherwise put
+     "at or before 12 Jul" beside words that give no date (GPT Sol, P1 on plan
+     261003f). A date's passage is `when.at`; the article's own phrase is found
+     in the earliest mention whose block still says it. Either way the phrase
+     must still be in the block. */
+  for (const event of more.timeline ?? []) {
+    const { dating } = event;
+    if (dating.kind === "dated") {
+      const { blockId, start } = dating.when.at;
+      if (!holds(blockId, dating.when.phrase, start)) continue;
+      const mention = event.occurrences.find((o) => o.blockId === blockId && holds(o.blockId, o.quote, o.start));
+      put(blockId, "timeline", { event, quote: mention?.quote ?? dating.when.phrase });
+    } else if (dating.kind === "words") {
+      const mention = earliest(
+        event.occurrences,
+        (o) => o.blockId,
+        (o) => holds(o.blockId, dating.phrase) && holds(o.blockId, o.quote, o.start),
+      );
+      if (mention) put(mention.blockId, "timeline", { event, quote: mention.quote });
     }
   }
   for (const row of more.claims ?? []) {

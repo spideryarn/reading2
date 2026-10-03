@@ -24,7 +24,7 @@ import {
   useState,
 } from "react";
 import { ChevronRight } from "lucide-react";
-import type { CitedWork, Faq, Ideas } from "../../types.js";
+import type { CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
 import { useDebateRead } from "../useDebate.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
@@ -35,6 +35,8 @@ import { captureClientFailure } from "../monitoring.js";
 import { useRenderCount } from "../perf.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
+import { useTimelineRead } from "../useTimeline.js";
+import { datingWords } from "../TimelinePanel.js";
 import { type HeadStep, type MarginClaim, type MarginEntry, type MarginaliaNote, layoutNotes } from "./notes.js";
 import { MARK_KIND_LABEL } from "../comment-nav.js";
 import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN } from "./tips.js";
@@ -152,6 +154,8 @@ function MarginNotes({
             return <IdeaStamp key={`i${note.ideaId}`} note={note} />;
           case "faq":
             return <FaqNote key="faq" items={note.items} />;
+          case "timeline":
+            return <TimelineNote key="timeline" items={note.items} />;
           case "debate":
             return <DebateNote key="debate" items={note.items} />;
           case "citation":
@@ -181,6 +185,7 @@ function MarginNotes({
 function ShutNote({
   kind,
   stamp,
+  stampVoice,
   tip,
   line,
   lineVoice,
@@ -188,6 +193,9 @@ function ShutNote({
 }: {
   kind: string;
   stamp: string;
+  /** Whose words the stamp is, when it is not ours — a Timeline date in the
+      article's own phrase. */
+  stampVoice?: Voice | undefined;
   /** What this kind of line is and where it came from, on hover — every mark
       explains itself. A key into tips.ts; the delegated card draws it. */
   tip: MargTipKey;
@@ -201,7 +209,7 @@ function ShutNote({
   const panel = useId();
   const label = (
     <span className="marg-shut-label">
-      <span className="marg-stamp">{stamp}</span>{" "}
+      <span className={stampVoice ? withVoice("marg-stamp", stampVoice) : "marg-stamp"}>{stamp}</span>{" "}
       <span className={withVoice("marg-shut-line", lineVoice)}>{line}</span>
     </span>
   );
@@ -254,6 +262,44 @@ function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["i
           {morePassages > 0 && (
             <p className="marg-open-by">+{plural(morePassages, "more passage", "more passages")}</p>
           )}
+        </div>
+      ))}
+    </ShutNote>
+  );
+}
+
+/**
+ * **When the piece says these things happened** — Timeline's dated events,
+ * beside the passage that first mentions them (plan 261003f). The date always
+ * carries its year: the band says a shared year once in its head, and the
+ * margin has no head to say it in. `words` is the article's own phrase, so
+ * the author's face; a computed date is ours, and the label is the model's.
+ */
+function TimelineNote({ items }: { items: Extract<MarginaliaNote, { kind: "timeline" }>["items"] }) {
+  const only = items.length === 1 ? items[0] : undefined;
+  const when = (event: TimelineEvent) => datingWords(event.dating, true).text;
+  const whenVoice = (event: TimelineEvent): Voice => (event.dating.kind === "words" ? "author" : "ui");
+  return (
+    <ShutNote
+      kind="timeline"
+      stamp={only ? when(only.event) : "When"}
+      stampVoice={only ? whenVoice(only.event) : undefined}
+      tip="timeline"
+      line={only ? only.event.label : plural(items.length, "event", "events")}
+      lineVoice={only ? "ai" : "ui"}
+    >
+      {items.map(({ event, quote }) => (
+        <div key={event.id} className="marg-open-item">
+          {!only && (
+            <p className="marg-open-head">
+              <span className={withVoice("marg-stamp", whenVoice(event))}>{when(event)}</span>{" "}
+              <span className={voiceClass("ai")}>{event.label}</span>
+            </p>
+          )}
+          {/* Our words, then the article's. */}
+          <p className="marg-open-quote">
+            Mentioned here: “<span className={voiceClass("author")}>{quote}</span>”
+          </p>
         </div>
       ))}
     </ShutNote>
@@ -564,15 +610,16 @@ function ArcLine({ arc }: { arc: string }) {
 export type MarginFeed = {
   ideas: Ideas["ideas"] | null;
   faq: Faq["questions"] | null;
+  timeline: readonly TimelineEvent[] | null;
   claims: readonly MarginClaim[] | null;
 };
 
-export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, claims: null };
+export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: null, claims: null };
 
 /**
- * **The owner's ideas, FAQ and Debate, read and never made.** A component of
+ * **The owner's ideas, FAQ, Timeline and Debate, read and never made.** A component of
  * its own so the reads happen only while Marginalia is open — the read halves
- * (`useIdeasRead`, `useFaqRead`, `useDebateRead`), never the full hooks, which
+ * (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`), never the full hooks, which
  * arm the automatic run and could spend (Debate is the dearest step in the
  * app). A stale list (the article moved under it) is not drawn: its blocks may
  * not be these. Owner only: a visitor's lists are in their payload. Citations
@@ -587,6 +634,7 @@ export function OwnerMarginFeed({
 }) {
   const ideasRead = useIdeasRead(slug);
   const faqRead = useFaqRead(slug);
+  const timelineRead = useTimelineRead(slug);
   const debateRead = useDebateRead(slug);
   /* **A list made while the margin is open reaches it** — FAQ run in the left
      band appears here without reopening the margin. The band refreshes its own
@@ -594,14 +642,17 @@ export function OwnerMarginFeed({
      reads, quietly, so mounting still costs nothing. Plan 261002d. */
   useStepFinished(slug, "ideas", ideasRead.refresh);
   useStepFinished(slug, "faq", faqRead.refresh);
+  useStepFinished(slug, "timeline", timelineRead.refresh);
   useStepFinished(slug, "debate", debateRead.refresh);
   const ideas = ideasRead.status === "ready" && !ideasRead.stale ? (ideasRead.ideas?.ideas ?? null) : null;
   const faq = faqRead.status === "ready" && !faqRead.stale ? (faqRead.faq?.questions ?? null) : null;
+  const timeline =
+    timelineRead.status === "ready" && !timelineRead.stale ? (timelineRead.timeline?.events ?? null) : null;
   const claims =
     debateRead.status === "ready" && !debateRead.stale ? (debateRead.debate?.claims.rows ?? null) : null;
   useEffect(() => {
-    onFeed({ ideas, faq, claims });
-  }, [ideas, faq, claims, onFeed]);
+    onFeed({ ideas, faq, timeline, claims });
+  }, [ideas, faq, timeline, claims, onFeed]);
   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
   return null;
 }

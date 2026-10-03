@@ -22,6 +22,7 @@ export type MargTipKey =
   | "question-article"
   | "question-part"
   | "faq"
+  | "timeline"
   | "debate"
   | "citation"
   | "comment-own"
@@ -44,6 +45,11 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     head: "FAQ",
     what: "A question a careful reader might ask, which this passage answers. Press it to see the words that answer it.",
     how: "From FAQ mode. The question was written by AI; the answer is quoted from the article. It sits beside the first passage that answers it.",
+  },
+  timeline: {
+    head: "When",
+    what: "Something the article says happened, with the date it gives. Press it to see the words that mention it.",
+    how: "From Timeline mode. The short description was written by AI; the date is read out of the article's own words, never guessed, and a phrase in quotation marks is the article's own. It sits beside the first passage that mentions the event.",
   },
   debate: {
     head: "Debate",

@@ -20,11 +20,11 @@ because the two pads only swapped sides.
 
 **It generates nothing.** Every note comes from something another mode has already stored, and
 opening the column never starts a run. The owner's lists are read through each mode's *read half*
-(`useIdeasRead`, `useFaqRead`, `useDebateRead`), never the full mode hook, because the full hook
+(`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`), never the full mode hook, because the full hook
 can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
 read. A visitor's lists come in their payload.
 
-**So a FAQ, Debate or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
+**So a FAQ, Timeline, Debate or Ideas list made later still reaches the owner's margin, and nothing is run for it.**
 The column keeps no copy of these lists: it reads them every time it opens, and while it is open
 it re-reads them when this tab's job engine announces a completion for them — the same feed each
 band listens to, through
@@ -42,7 +42,7 @@ one would otherwise be missed; it would not be, so it is not
   spya-rczgjb).
 - **Each part's Socratic question**, beside the part's first real paragraph.
 - **An idea stamp** ("assumes", "introduces") where each idea first occurs.
-- **Other modes' items, shut by default**: FAQ questions, Debate's claim rows, Citations and comments
+- **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Debate's claim rows, Citations and comments
   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
   quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
@@ -58,7 +58,8 @@ one would otherwise be missed; it would not be, so it is not
   | Kind | Beside | Rule |
   |---|---|---|
   | FAQ | the question's earliest answering passage that is still there | the quoted words must still be in that block |
-  | Debate | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
+  | Timeline | the passage that dates the event: where its date was read from, or the earliest mention that holds the article's own phrase for when | only events the piece dates. An untimed event or a date we could not read stays in the band. The date always carries its year, because the margin has no head to say it once ([261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md)) |
+| Debate | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
   | Citations | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([citations.md](citations.md)) |
   | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |
   | Questions | the block the chat is anchored to | **owner only** (a visitor's payload has no chats); in the same line as that block's comments |
@@ -107,7 +108,7 @@ default. Adding one is one new kind in `MarginaliaNote`, one loop in `marginalia
 it at its earliest surviving block and checks its quote, one small component in
 `MarginaliaColumn.tsx`, and a read half if the mode hook can start a run.
 [mode.md](mode.md) points here from its checklist. Not here yet, and named so they are not
-forgotten: Quotes, glossary terms, Timeline events, cross-references. The first two already mark
+forgotten: Quotes, glossary terms, cross-references. The first two already mark
 the prose.
 
 The constraint each new kind is weighed against is the one the first plan named: the risk is *"a
