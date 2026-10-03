@@ -3228,7 +3228,7 @@ export const aiCalls = spideryarn.table(
      */
     check(
       "ai_calls_voice_seconds_on_voice_rows",
-      sql`(${t.eventKind} is not distinct from 'voice') = (${t.voiceSeconds} is not null and ${t.voiceSeconds} > 0)`,
+      sql`((${t.eventKind} is not distinct from 'voice') and ${t.voiceSeconds} is not null and ${t.voiceSeconds} > 0) or ((${t.eventKind} is distinct from 'voice') and ${t.voiceSeconds} is null)`,
     ),
     /**
      * **The modality columns belong to the realtime wire and nowhere else.**

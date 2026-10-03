@@ -123,6 +123,8 @@ describe("what the model is told", () => {
     expect(flat).toContain("Never guess");
     expect(flat).toContain("never call a tool on");
     expect(flat).toContain("NEVER SAY A BLOCK ID OUT LOUD");
+    expect(flat).toContain("first sentence after any tool preamble");
+    expect(flat).not.toContain("Answer the question that was asked, in the first sentence.");
   });
 
   it("does not change language on an accent", () => {

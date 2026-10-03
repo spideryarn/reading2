@@ -47,7 +47,6 @@ import {
   REPORT_WINDOW_MS,
 } from "../src/live.js";
 import {
-  LIVE_BACKEND_PRICES,
   priceLiveBackend,
   priceLiveVoice,
   priceRealtimeResponse,
@@ -967,16 +966,20 @@ describe("GPT-Live: one backend response", () => {
     expect(row.reportedInputTokens).toBe(811);
   });
 
-  it("prices cached input as fresh while nobody knows the cached rate — and says so on the row", () => {
-    /* The stand-in, pinned so that filling in the real rate is a deliberate
-       edit here: 1,000 in of which 900 cached costs what 1,000 fresh would. */
+  it("keeps cached responses unpriced when a card has no cached rate, instead of counting an upper bound as cost", () => {
+    const card = {
+      "gpt-6-luna": [{ from: "1970-01-01", price: { input: 0.1, cachedInput: null, output: 0.5 } }],
+    };
+    const tokens = { freshInputTokens: 100, cachedInputTokens: 900, outputTokens: 0 };
+    expect(priceLiveBackend("gpt-6-luna", tokens, DURING, card)).toBeNull();
+    expect(priceLiveBackend("gpt-6-luna", { ...tokens, cachedInputTokens: 0 }, DURING, card)?.totalNanos).toBe(10_000);
+  });
+
+  it("prices the shipped card's cached input at a tenth of fresh", () => {
     const cached = acceptBackend({ ...body, inputTokens: 1000, cachedInputTokens: 900, outputTokens: 0 });
-    const fresh = acceptBackend({ ...body, inputTokens: 1000, cachedInputTokens: 0, outputTokens: 0 });
-    expect(cached.computedCostNanos).toBe(100_000);
-    expect(cached.computedCostNanos).toBe(fresh.computedCostNanos);
-    expect(cached.priceVersion).toBe("gpt-6-luna@1970-01-01+cached-as-fresh");
+    expect(cached.computedCostNanos).toBe(19_000);
     expect(cached.cacheReadTokens).toBe(900);
-    expect(LIVE_BACKEND_PRICES["gpt-6-luna"]?.[0]?.price.cachedInput).toBeNull();
+    expect(cached.priceVersion).toBe("gpt-6-luna@1970-01-01");
   });
 
   it("prices cached input separately once a card has the rate", () => {

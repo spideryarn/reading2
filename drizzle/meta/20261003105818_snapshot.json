@@ -456,7 +456,7 @@
         },
         "ai_calls_voice_seconds_on_voice_rows": {
           "name": "ai_calls_voice_seconds_on_voice_rows",
-          "value": "(\"spideryarn\".\"ai_calls\".\"event_kind\" is not distinct from 'voice') = (\"spideryarn\".\"ai_calls\".\"voice_seconds\" is not null and \"spideryarn\".\"ai_calls\".\"voice_seconds\" > 0)"
+          "value": "((\"spideryarn\".\"ai_calls\".\"event_kind\" is not distinct from 'voice') and \"spideryarn\".\"ai_calls\".\"voice_seconds\" is not null and \"spideryarn\".\"ai_calls\".\"voice_seconds\" > 0) or ((\"spideryarn\".\"ai_calls\".\"event_kind\" is distinct from 'voice') and \"spideryarn\".\"ai_calls\".\"voice_seconds\" is null)"
         },
         "ai_calls_realtime_columns_need_realtime_wire": {
           "name": "ai_calls_realtime_columns_need_realtime_wire",

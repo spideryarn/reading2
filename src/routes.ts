@@ -351,7 +351,9 @@ import {
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
+import { stageFailure } from "./job-failure.js";
 import {
+  LIVE_UPSTREAM,
   NOT_READ_YET,
   NOT_READ_YET_HIGH_POWER,
   placingFailed,
@@ -3943,9 +3945,9 @@ async function liveChatToken(
  *   `ai_calls` row are written in one transaction, so a call abandoned before
  *   it connects is still in the ledger, and the browser's first usage report of
  *   the same cumulative 15 adds nothing;
- * - **it failed** — the row is closed with `create_failed` and no connected
- *   time, so it reads as a session that never opened and not as one that went
- *   silent.
+ * - A refusal is `create_failed`; a lost response is `create_uncertain`.
+ *   A confirmed but unusable create is charged, then closed `create_unusable`.
+ *   None backfills a connected time.
  *
  * ## What the browser gets
  *
@@ -4021,40 +4023,27 @@ async function liveChatSession(
   try {
     created = await createGptLiveSession({ sdp, session });
   } catch (err) {
-    /* Whatever went wrong — a refusal, a dropped connection, a missing key —
-       the row must not be left looking like a session still waiting to
-       connect. Best-effort: if this write fails too, the original failure is
-       still the one the reader needs to hear about. */
+    const outcome = err instanceof GptLiveCreateFailed ? err.outcome : "failed";
+    const providerId = err instanceof GptLiveCreateFailed ? err.providerSessionId : undefined;
+    // A 2xx create bills even if its response has no usable SDP.
+    if (outcome === "created") await recordGptLiveCreateCharge(sessionId, owner, providerId);
+    const reason = outcome === "created" ? "create_unusable" : outcome === "uncertain" ? "create_uncertain" : "create_failed";
     await realtimeSessionStore
-      .closeUnopened(sessionId, owner, new Date().toISOString(), "create_failed")
-      .catch(() => undefined);
+      .closeUnopened(sessionId, owner, new Date().toISOString(), reason, providerId)
+      .catch(() => {
+        log("model").error({ slug, sessionId, providerSessionId: providerId, reason }, "GPT-Live create outcome could not be journalled");
+      });
     if (err instanceof GptLiveCreateFailed) {
       log("model").error(
-        { slug, sessionId, providerStatus: err.upstreamStatus },
-        "OpenAI refused to create a GPT-Live session",
+        { slug, sessionId, providerStatus: err.upstreamStatus, outcome },
+        "GPT-Live create did not produce a usable ticket",
       );
       throw gptLiveCreateFailure(err);
     }
     throw err;
   }
 
-  /* **OpenAI's id, the mark and the priced row, in one transaction.** The
-     report is the same shape the browser sends, through the same function, so
-     the create charge and a later report cannot disagree about what fifteen
-     seconds cost. If this throws the reader is told the call could not start,
-     and the session OpenAI created is left to expire unused — billed fifteen
-     seconds, with a row that says it was issued. */
-  const receivedAt = new Date();
-  await realtimeSessionStore.advanceVoiceSeconds(sessionId, owner, {
-    seconds: GPT_LIVE_CREATE_SECONDS,
-    providerSessionId: created.providerSessionId,
-    rowFor: (locked) =>
-      acceptRealtimeUsage({
-        session: locked,
-        usage: { kind: "voice", seconds: GPT_LIVE_CREATE_SECONDS, eventId: "create" },
-        receivedAt,
-      }),
-  });
+  await recordGptLiveCreateCharge(sessionId, owner, created.providerSessionId);
 
   return {
     sdp: created.sdp,
@@ -4070,6 +4059,41 @@ async function liveChatSession(
  * forward to OpenAI, not a rule a real offer will meet.
  */
 const MAX_SDP_CHARS = 20_000;
+
+/**
+ * Record the confirmed creation charge atomically. Retry only the transaction,
+ * never the paid create. A lost commit acknowledgement is safe: the locked
+ * high-water mark makes the retry add nothing. If both attempts fail, keep
+ * the provider identity and a reconciliation state, and withhold the ticket.
+ */
+async function recordGptLiveCreateCharge(sessionId: string, owner: string, providerSessionId?: string): Promise<void> {
+  const receivedAt = new Date();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await realtimeSessionStore.advanceVoiceSeconds(sessionId, owner, {
+        seconds: GPT_LIVE_CREATE_SECONDS,
+        ...(providerSessionId === undefined ? {} : { providerSessionId }),
+        rowFor: (locked) => acceptRealtimeUsage({
+          session: locked,
+          usage: { kind: "voice", seconds: GPT_LIVE_CREATE_SECONDS, eventId: "create" },
+          receivedAt,
+        }),
+      });
+      return;
+    } catch {
+      if (attempt === 0) continue;
+      // This separate write retains evidence that the rolled-back transaction lost.
+      await realtimeSessionStore.closeUnopened(
+        sessionId, owner, new Date().toISOString(), "create_accounting_failed", providerSessionId,
+      ).catch(() => undefined);
+      log("model").error(
+        { sessionId, providerSessionId, creationSeconds: GPT_LIVE_CREATE_SECONDS, reason: "create_accounting_failed" },
+        "GPT-Live session was created but its creation charge needs reconciliation",
+      );
+      throw stageFailure(LIVE_UPSTREAM, "GPT-Live was created but its creation charge could not be recorded.");
+    }
+  }
+}
 
 /**
  * **The data channel opened** — `POST /api/live/:sessionId/connected`.

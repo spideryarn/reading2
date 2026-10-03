@@ -30,6 +30,7 @@
  * run means these seven cases executed. tests/helpers/pg-ready.ts.
  */
 
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { RealtimeSession, RealtimeSessionStore } from "../src/store/contracts.js";
@@ -434,14 +435,40 @@ describe("the GPT-Live voice meter", () => {
        reached its end must have opened. One whose create OpenAI refused did
        not, and must not join the conversations that happened. */
     await pgRealtimeSessionStore.issue(gptSession(9));
-    await pgRealtimeSessionStore.closeUnopened(vid(9), STRANGER, "2026-09-02T10:00:01.000Z", "create_failed");
+    await pgRealtimeSessionStore.closeUnopened(vid(9), STRANGER, "2026-09-02T10:00:01.000Z", "create_accounting_failed", "live_stranger");
     expect((await pgRealtimeSessionStore.find(vid(9), OWNER))?.closedAt).toBeNull();
+    expect((await pgRealtimeSessionStore.find(vid(9), OWNER))?.providerSessionId).toBeNull();
 
-    await pgRealtimeSessionStore.closeUnopened(vid(9), OWNER, "2026-09-02T10:00:02.000Z", "create_failed");
-    await pgRealtimeSessionStore.closeUnopened(vid(9), OWNER, "2026-09-02T10:00:09.000Z", "later");
+    await pgRealtimeSessionStore.closeUnopened(vid(9), OWNER, "2026-09-02T10:00:02.000Z", "create_accounting_failed", "live_created");
+    await pgRealtimeSessionStore.closeUnopened(vid(9), OWNER, "2026-09-02T10:00:09.000Z", "later", "live_later");
     const found = await pgRealtimeSessionStore.find(vid(9), OWNER);
     expect(found?.closedAt).toBe("2026-09-02T10:00:02.000Z");
-    expect(found?.closeReason).toBe("create_failed");
+    expect(found?.closeReason).toBe("create_accounting_failed");
+    expect(found?.providerSessionId).toBe("live_created");
     expect(found?.connectedAt).toBeNull();
+  });
+
+  it("rejects every nonvoice duration including zero and negative seconds, on the actual table", async () => {
+    const { getDb } = await import("../src/db/client.js");
+    const { aiCalls } = await import("../src/db/schema.js");
+    const { aiCallInsertValues } = await import("../src/store/ai-calls-pg.js");
+    const { acceptRealtimeUsage } = await import("../src/live.js");
+    const s = { ...gptSession(1), id: randomUUID() };
+    await pgRealtimeSessionStore.issue(s);
+    const voice = acceptRealtimeUsage({ session: s, usage: { kind: "voice", seconds: 15, eventId: "constraint" }, receivedAt: AT });
+    if (!voice) throw new Error("expected a voice row");
+    const values = aiCallInsertValues(voice, null);
+    for (const kind of [null, "backend", "response", "transcription"]) {
+      const candidate = {
+        ...values, eventKind: kind,
+        realtimeSessionId: kind === null ? null : s.id,
+        providerEventId: kind === null ? null : randomUUID(),
+      };
+      // A valid control ensures another constraint is not hiding this defect.
+      await getDb().insert(aiCalls).values({ ...candidate, id: randomUUID(), voiceSeconds: null });
+      for (const seconds of [-1, 0, 1]) {
+        await expect(getDb().insert(aiCalls).values({ ...candidate, id: randomUUID(), providerEventId: kind === null ? null : randomUUID(), voiceSeconds: seconds })).rejects.toThrow();
+      }
+    }
   });
 });

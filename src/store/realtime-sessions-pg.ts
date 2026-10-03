@@ -176,15 +176,18 @@ const rawPgRealtimeSessionStore: RealtimeSessionStore = {
       );
   },
 
-  async closeUnopened(id: string, ownerId: string, at: string, reason: string): Promise<void> {
+  async closeUnopened(id: string, ownerId: string, at: string, reason: string, providerSessionId?: string): Promise<void> {
     await getDb()
       .update(realtimeSessions)
       /* **No `connectedAt` backfill, which is the whole difference from
          `close`.** That one infers the channel opened because the session
-         reached its end. This is the session OpenAI refused to create: it has
-         an end and never had a channel, and writing a connected time would put
-         it in the denominator of "conversations that happened". */
-      .set({ closedAt: new Date(at), closeReason: reason })
+         reached its end. This browser never received a usable ticket. OpenAI
+         may have created a session; keep its known id so a failed charge
+         transaction does not erase that evidence. */
+      .set({
+        closedAt: new Date(at), closeReason: reason,
+        ...(providerSessionId === undefined ? {} : { providerSessionId }),
+      })
       .where(
         and(
           eq(realtimeSessions.id, id),

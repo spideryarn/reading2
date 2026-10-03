@@ -694,11 +694,9 @@ export function priceRealtimeTranscription(
  * number of seconds for the session and bills that by the minute, so this is
  * the shape `TRANSCRIPTION_PRICES` has and not the one `REALTIME_PRICES` has.
  *
- * **Where $0.05 comes from:** the plan, which states it (§ The meter,
- * 2026-10-03) without recording the page it was read from. It has not been
- * checked against a bill — there is no OpenAI admin key to check with — so it
- * is `computed` like every other figure in this section, and it wants the same
- * source-and-date note `REALTIME_PRICE_SOURCE` has once somebody re-reads it.
+ * **Where $0.05 comes from:** OpenAI's pricing page, the GPT-Live sessions
+ * table, read 2026-10-03. Not checked against a bill — there is no OpenAI
+ * admin key to check with — so it is `computed` like every other figure here.
  */
 export const LIVE_VOICE_PRICES: Readonly<Record<string, readonly PerMinuteRow[]>> = {
   "gpt-live-1": [{ from: "1970-01-01", usdPerMinute: 0.05 }],
@@ -740,11 +738,9 @@ export function priceLiveVoice(model: string, seconds: number, at: Date): Priced
 /**
  * What the text model behind a GPT-Live voice costs, per million tokens.
  *
- * `cachedInput` is `null` when **nobody has established the cached rate**. A
- * cached token is then priced at the full input rate: the figure is an upper
- * bound, and the cached count stays on the row so it can be repriced. That is
- * the direction this ledger already takes when it has to be wrong — see
- * `priceResponseRow` in src/live.ts: only an understatement is silent.
+ * `cachedInput` is null when nobody has established the cached rate. A response
+ * with cached tokens is then unpriced, with its counts retained for repricing.
+ * An upper bound counted as computed cost would silently inflate spend reports.
  */
 export interface LiveBackendPrice {
   input: number;
@@ -761,22 +757,20 @@ export interface LiveBackendPriceRow {
 /**
  * **The GPT-Live backend's rate card.**
  *
- * `gpt-6-luna` at $0.10 in and $0.50 out is OpenRouter's list price for
- * `openai/gpt-6-luna`, read on 2026-09-29
- * (docs/plans/260929c-shelf-topics-chosen-by-a-model.md § comparison prices;
- * docs/research/260929a-paying-for-model-calls-with-the-reader-s-own-ai-subscription.md).
- * Two caveats, both real:
+ * `gpt-6-luna` at $0.10 in, $0.01 cached in and $0.50 out per million tokens:
+ * OpenAI's own pricing page (developers.openai.com/api/docs/pricing, the
+ * Standard table's short-context columns), read 2026-10-03. The backend runs on
+ * OpenAI directly, inside the Live session, so that page is the one that binds.
  *
- * - The backend runs on **OpenAI directly**, inside the Live session, not
- *   through OpenRouter. OpenRouter passes OpenAI's list price through, so the
- *   two should agree, but this number was not read off OpenAI's own page.
- * - **The cached-input rate is not in this repo anywhere**, so it is `null` and
- *   cached tokens are priced as fresh. Backend prompts are mostly cached after
- *   the first round (the whole article is the prefix), so the figure overstates
- *   until somebody fills this in.
+ * **The long-context tier is not modelled.** The same row lists $0.20 / $0.02 /
+ * $0.75 for long context, and the page as fetched did not say where it starts.
+ * A very long article could cross it, and its rows would then be understated.
+ *
+ * A card whose `cachedInput` is null leaves a response with cached tokens
+ * unpriced, counts retained, so a missing rate is never counted as a cost.
  */
 export const LIVE_BACKEND_PRICES: Readonly<Record<string, readonly LiveBackendPriceRow[]>> = {
-  "gpt-6-luna": [{ from: "1970-01-01", price: { input: 0.1, cachedInput: null, output: 0.5 } }],
+  "gpt-6-luna": [{ from: "1970-01-01", price: { input: 0.1, cachedInput: 0.01, output: 0.5 } }],
 };
 
 /** One backend response's tokens. `freshInputTokens` already excludes the cached ones. */
@@ -807,8 +801,9 @@ export function priceLiveBackend(
   }
   if (!found) return null;
   const p = found.price;
+  if (p.cachedInput === null && tokens.cachedInputTokens > 0) return null;
   const inputUsd = usd(tokens.freshInputTokens, p.input);
-  const cacheReadUsd = usd(tokens.cachedInputTokens, p.cachedInput ?? p.input);
+  const cacheReadUsd = usd(tokens.cachedInputTokens, p.cachedInput ?? 0);
   const outputUsd = usd(tokens.outputTokens, p.output);
   return {
     totalNanos: toNanos(inputUsd + cacheReadUsd + outputUsd),
@@ -816,9 +811,7 @@ export function priceLiveBackend(
     outputNanos: toNanos(outputUsd),
     cacheWriteNanos: 0,
     cacheReadNanos: toNanos(cacheReadUsd),
-    /* The version says when the cached rate was a stand-in, so a row priced
-       that way can be found and repriced once the real rate is known. */
-    priceVersion: `${model}@${found.from}${p.cachedInput === null ? "+cached-as-fresh" : ""}`,
+    priceVersion: `${model}@${found.from}`,
   };
 }
 

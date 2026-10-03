@@ -243,7 +243,7 @@ This is speech, not prose. Everything below follows from that.
 - SHORT. Two or three sentences is a normal answer. If you have been talking for
   more than about fifteen seconds you have stopped answering and started
   lecturing, and the reader cannot skim you.
-- Answer the question that was asked, in the first sentence.
+- Answer the question that was asked, in the first sentence after any tool preamble.
 - One idea per turn. Leave the second one for when they ask.
 - No lists, no headings, no markdown, no URLs read aloud. If something really is
   three things, say "three things" and name them in a sentence.
@@ -678,9 +678,9 @@ export interface GptLiveCreated {
 }
 
 /**
- * **OpenAI would not create the GPT-Live session.** Carries what it answered,
- * so the route can log it and close the journal row — and never the key, which
- * is in a request header and in nothing this reads.
+ * The create could not produce a usable ticket. A refusal, an uncertain
+ * transport outcome and a confirmed but unusable creation are different
+ * billing facts; the route must retain that difference.
  *
  * The fields are `upstream…` on purpose: `handleApi` reads a numeric `status`
  * off an error as the HTTP status to answer with, and OpenAI's 400 is not ours.
@@ -689,11 +689,18 @@ export class GptLiveCreateFailed extends Error {
   readonly upstreamStatus: number;
   /** OpenAI's own sentence, bounded. For the log; it never reaches a reader. */
   readonly upstreamMessage: string;
-  constructor(upstreamStatus: number, upstreamMessage: string) {
-    super(`OpenAI refused to create the GPT-Live session (${upstreamStatus}).`);
+  readonly outcome: "failed" | "uncertain" | "created";
+  readonly providerSessionId: string | undefined;
+  constructor(upstreamStatus: number, upstreamMessage: string, details: {
+    outcome?: "failed" | "uncertain" | "created";
+    providerSessionId?: string;
+  } = {}) {
+    super(`The GPT-Live create did not return a usable session (${upstreamStatus}).`);
     this.name = "GptLiveCreateFailed";
     this.upstreamStatus = upstreamStatus;
     this.upstreamMessage = upstreamMessage;
+    this.outcome = details.outcome ?? (upstreamStatus >= 500 ? "uncertain" : "failed");
+    this.providerSessionId = details.providerSessionId;
   }
 }
 
@@ -706,7 +713,7 @@ export class GptLiveCreateFailed extends Error {
 export function gptLiveCreateFailure(err: GptLiveCreateFailed): Error {
   return stageFailure(
     LIVE_UPSTREAM,
-    `OpenAI refused the GPT-Live session (${err.upstreamStatus}), saying ${JSON.stringify(err.upstreamMessage)} (end of OpenAI's words).`,
+    `The GPT-Live create failed to return a usable session (${err.upstreamStatus}), saying ${JSON.stringify(err.upstreamMessage)} (end of OpenAI's words).`,
   );
 }
 
@@ -741,20 +748,26 @@ export async function createGptLiveSession(
     );
   }
 
-  const res = await fetchImpl("https://api.openai.com/v1/live/sessions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      session: opts.session,
-      transport: { type: "webrtc", sdp: opts.sdp },
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetchImpl("https://api.openai.com/v1/live/sessions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: opts.session,
+        transport: { type: "webrtc", sdp: opts.sdp },
+      }),
+    });
+  } catch {
+    // The request may have reached OpenAI. Retrying it could create two sessions.
+    throw new GptLiveCreateFailed(0, "The create request returned no response.", { outcome: "uncertain" });
+  }
 
   if (!res.ok) {
     /* OpenAI's own sentence when the body is its usual `{ error: { message } }`,
        else the start of whatever came back. An over-long instructions string
        names itself here, which is the refusal most worth being able to read. */
-    const text = (await res.text()).slice(0, 2000);
+    const text = (await res.text().catch(() => "The create response could not be read.")).slice(0, 2000);
     let message = text.slice(0, 400);
     try {
       const parsed = JSON.parse(text) as { error?: { message?: unknown } };
@@ -765,7 +778,14 @@ export async function createGptLiveSession(
     throw new GptLiveCreateFailed(res.status, message);
   }
 
-  const body = (await res.json()) as {
+  let raw: unknown;
+  try {
+    raw = await res.json();
+  } catch {
+    // A confirmed 2xx creation is billable even when its body is unreadable.
+    throw new GptLiveCreateFailed(res.status, "The create response was not readable JSON.", { outcome: "created" });
+  }
+  const body = (raw ?? {}) as {
     session?: { id?: unknown };
     transport?: { sdp?: unknown };
   };
@@ -775,10 +795,10 @@ export async function createGptLiveSession(
      that changed under us would otherwise reach the browser as an SDP answer
      of "undefined" and fail one layer further from the cause. */
   if (typeof providerSessionId !== "string" || providerSessionId === "") {
-    throw new GptLiveCreateFailed(res.status, "The answer had no session id in it.");
+    throw new GptLiveCreateFailed(res.status, "The answer had no session id in it.", { outcome: "created" });
   }
   if (typeof sdp !== "string" || sdp === "") {
-    throw new GptLiveCreateFailed(res.status, "The answer had no SDP in it.");
+    throw new GptLiveCreateFailed(res.status, "The answer had no SDP in it.", { outcome: "created", providerSessionId });
   }
   return { providerSessionId, sdp };
 }

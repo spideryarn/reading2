@@ -204,9 +204,7 @@ own. The server half landed on 2026-10-03; the browser half that posts them is S
   [`src/store/realtime-sessions-pg.ts`](../../src/store/realtime-sessions-pg.ts). The seconds go in
   their own column, `voice_seconds`, not `transcription_seconds`.
 - **`backend` — the text model's tokens**, one row per backend response id. Priced on the model the
-  session row names. **Its cached-input rate is not known**, so cached tokens are priced as fresh:
-  an upper bound, marked `+cached-as-fresh` in `price_version` so the rows can be found and
-  repriced. `LIVE_BACKEND_PRICES` in [`src/pricing.ts`](../../src/pricing.ts) says where each number
+  session row names, cached input at its own rate. `LIVE_BACKEND_PRICES` in [`src/pricing.ts`](../../src/pricing.ts) says where each number
   came from.
 
 **The create call is the server's own, and it bills fifteen seconds.** So

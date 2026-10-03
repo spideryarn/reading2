@@ -1971,12 +1971,13 @@ export interface RealtimeSessionStore {
    */
   close(id: string, ownerId: string, at: string, reason: string | null): Promise<void>;
   /**
-   * **The session never opened** — OpenAI refused to create it. Sets the close
-   * time and reason and nothing else. Not `close`, which also backfills
+   * The browser was never given a usable ticket. Sets the close time and
+   * reason, preserving a known provider id even when accounting failed.
+   * Not `close`, which also backfills
    * `connectedAt` on the reasoning that a session which reached its end must
    * have connected; this one did not. First close wins, as there.
    */
-  closeUnopened(id: string, ownerId: string, at: string, reason: string): Promise<void>;
+  closeUnopened(id: string, ownerId: string, at: string, reason: string, providerSessionId?: string): Promise<void>;
   /**
    * **GPT-Live's voice meter: advance the high-water mark and write the row for
    * the difference, or do neither.**

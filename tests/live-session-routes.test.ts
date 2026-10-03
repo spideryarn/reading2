@@ -808,12 +808,12 @@ describe("a GPT-Live session", () => {
     expect(await ledger(String(row?.id))).toHaveLength(0);
   });
 
-  it("closes the row when OpenAI cannot be reached at all", async () => {
+  it("records an uncertain create when OpenAI's response is lost", async () => {
     liveCreate.throws = true;
     const out = await open("spya-lgaaag");
     expect(out.status).toBeGreaterThanOrEqual(500);
     const row = await rowForThread("spya-lgaaag");
-    expect(row?.closeReason).toBe("create_failed");
+    expect(row?.closeReason).toBe("create_uncertain");
     expect(row?.connectedAt).toBeNull();
     expect(await ledger(String(row?.id))).toHaveLength(0);
   });
