@@ -258,9 +258,10 @@
 }
 
 /* **Where the quotes are, in every mode** — Greg, 2026-09-10 (spya-yd2c47):
-   "use the same colour we use for their outline-border". So `--quote-stroke-rgb`,
-   and the same fade the outline carries (`--quote-a`, set inline from the
-   block's brightest quote), so the strip and the outline are one signal.
+   "use the same colour we use for their outline-border". The outline became a
+   fill on 2026-10-03 (plan 261003l) and the rule holds: `--quote-rgb`, and the
+   same fade the fill carries (`--quote-a`, set inline from the block's
+   brightest quote), so the strip and the mark in the prose are one signal.
    The **left 2px**: the search gutter is the right 10px of a 12px rail, so this
    can never sit under a search lane or be packed into one — spine-marks.ts §
    `quoteRailMarks`. Floor and clamp as every other mark here, for their reason.
@@ -276,7 +277,7 @@
   left: 0;
   width: 2px;
   min-height: 3px;
-  background: rgb(var(--quote-stroke-rgb) / var(--quote-a, 0.95));
+  background: rgb(var(--quote-rgb) / var(--quote-a, 0.95));
 }
 
 /* Invisible hit targets, one per L2, over the top of everything. A 1px tick is

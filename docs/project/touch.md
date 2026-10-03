@@ -521,7 +521,7 @@ in *every* mode ([quotes.md](quotes.md)). A blanket exclusion would therefore ha
 sentences in the piece the only ones a finger could not select — and selecting is how a finger
 reaches the gutter, so they would have been the only ones a reader could not annotate. The exclusion
 is narrowed to "a quote and nothing else": a quote that *also* carries a comment, a chat anchor, a
-term or a search's wash keeps it. Found by GPT Sol reviewing
+term or a search's outline keeps it. Found by GPT Sol reviewing
 [260908i](../plans/260908i-quotes-marked-in-the-prose-in-every-mode.md), whose plan had recorded
 *"nothing clicks a quote mark"* as a reason there was nothing to worry about.
 

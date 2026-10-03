@@ -153,7 +153,8 @@ tap commits, which is `bandPress`'s rule reached by a different route
 tooltips get there through `Tooltip.tsx`'s `mouseOnly`; this one owns its own listeners, so the whole
 gesture lives in `useHoverCard.ts`.
 
-**A quote's outline joined it on 2026-10-02** (`mark.hit[data-quote]`), as a fourth half of the
+**A quote's mark joined it on 2026-10-02** (`mark.hit[data-quote]`; an outline then, a fill since
+2026-10-03), as a fourth half of the
 same card — scores, reason, ‹ › and *open Quotes* ([quotes.md](quotes.md) § In the spine, on a
 card, and one at a time). Pointer only, and not in `tapSelector`, because a tap on a bare quote
 selects its paragraph. It brought the hook one option, **`openDelay`**: a per-hit rest before a cold

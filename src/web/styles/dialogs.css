@@ -562,10 +562,15 @@
 /* ------------------------------------------------------------ chat marks -- */
 /* A conversation started from a selection. A different hue from a comment's
    wash rather than a different alpha, so the two are told apart by kind rather
-   than by strength — the rule search.md sets out for its own wash. */
+   than by strength — the rule search.md sets out for its own mark. */
 
 mark.chat {
   background: none;
+  /* The UA sheet gives every `<mark>` `color: MarkText`, which is black: on
+     the dark page these words were near-invisible on /design (browser check,
+     2026-10-03). `mark.cmt`, `mark.term`, `mark.cite` and `mark.hit` each
+     carry this line for the same reason. */
+  color: inherit;
   border-bottom: 1px solid color-mix(in oklab, var(--chat-mark) 60%, var(--page));
 }
 mark.chat[data-chat-open] {
@@ -585,4 +590,3 @@ mark.chat[data-chat-end]::before {
   margin-left: 0.15em;
   color: var(--chat-mark);
 }
-
