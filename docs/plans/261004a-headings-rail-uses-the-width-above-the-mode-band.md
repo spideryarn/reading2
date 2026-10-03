@@ -156,3 +156,51 @@ noticeable enough to want a slide.
 
 - 2026-10-04: prior-work check clean (no plan, note, commit or session for `spya-ft2cgg`; the
   sibling's work is `ef45231a0`, merged). Measured. Plan written.
+- 2026-10-04: GPT Sol's plan review, *approve with changes*
+  ([review](261004a-headings-rail-uses-the-width-above-the-mode-band-plan-review-sol.md)). All four
+  taken: the stylesheet test asserts all three declarations; a wiring test through the real
+  `Reader` (watched red with `showBar` in place of `showCrumbs`); a `stopped` guard for an observer
+  entry queued before teardown; and the sentinel is drawn on `showCrumbs`, not `showBar`, so a
+  visitor's chip-only bar pays for nothing. Its fourth point changed the browser check, below.
+- 2026-10-04: built (`c795b9e08`). GPT Sol's code review, *approve with changes*: no P0 or P1, two
+  comments that claimed more than was shown, which it fixed
+  ([review](261004a-headings-rail-uses-the-width-above-the-mode-band-code-review-sol.md)).
+
+## What the browser showed afterwards
+
+A Sonnet subagent with Playwright, same article and URL, real wheel scrolling. Shot:
+[261004a-shot-after-1180.png](261004a-shot-after-1180.png).
+
+| window | bar box, stuck | room for crumbs (was) | the 7.2 crumb, which wants 892 |
+|---|---|---|---|
+| 1180 | 12–1180 | 1120 (784) | whole (was cut by 123) |
+| 1366 | 12–1366 | 1306 (858) | whole (was cut by 49) |
+| 1024 | 12–1024 | 964 (676) | whole (was cut by 231) |
+
+- **At the top of the article** the attribute is absent, the bar is where it was (348 / 460 / 300)
+  and its box does not overlap the band's.
+- **The flip**, in 1px wheel steps at 1180: at scrollY 290 the bar's top is 0.6 and its left 348;
+  at 291 its top is 0 and its left 12. The same step both ways. No step had the bar wide while its
+  top was above 0.
+- **A deep link** (`&at=` into 7.2) arrives with the attribute set and the bar wide, with no scroll.
+- **No band** (`?margin=1`): the bar is 12–1180 at the top and scrolled, as before.
+- **A phone**, 390×844: the three-line bar measures exactly as before; with a mode over the prose
+  there is no bar.
+- No console errors from the page.
+
+**One more number changed, because the first after-measurement asked for it.** With 1120px of room
+for a crumb that wanted 892, the crumb was still cut by 6px (4 at 1366, 9 at 1024). The ancestors
+shrank "a hundred times faster", but flex shares the shortfall in proportion to length times that
+factor, so the current section still paid about 1% of it: an ellipsis and two letters. The factor is
+now 100000, the current crumb is whole at all three widths, and the ancestor takes what is left
+(214px at 1180, 58px at 1024, where it reads only "7 Mos…"). Where the current crumb alone is wider
+than the bar (800×600 with a band) it still ends in an ellipsis inside the bar. The narrow rules are
+untouched by this: there the current crumb is out of the flex row.
+
+**Sideways scrolling: not pinned, and it was not before.** GPT Sol's plan review said the planned
+"wide table" check was vacuous, because the page does not scroll sideways (tables scroll inside
+themselves). So the check injected page-level overflow instead. With `scrollX` 200 the bar's left
+edge is at −188; with the old geometry forced back it is at 148. Both moved by exactly 200: the bar
+has not been pinned sideways in either geometry, whether the wide element was put in `.reader` or
+in `body`. `shell.css` § shell says the bars pin to the left; on today's page that is not so, and
+since nothing makes the page scroll sideways nobody can see it. Left alone and written here.

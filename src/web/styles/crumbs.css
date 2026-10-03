@@ -4,9 +4,9 @@
    while you read.
 
    **One line in the 44px bar, and the ancestors give way first.** Each crumb
-   shrinks to an ellipsis rather than wrapping, and the outer ones shrink a
-   hundred times faster than the last, so the section the reader is in keeps
-   its words longest. The whole of every title is in its card. **On a narrow
+   shrinks to an ellipsis rather than wrapping, and the outer ones take all of
+   the shrinking until they have none left to give, so the section the reader
+   is in keeps its words longest. The whole of every title is in its card. **On a narrow
    window it is three lines in a taller bar** — § a narrow window, at the end.
    docs/plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md */
 
@@ -32,7 +32,13 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  flex: 0 100 auto;
+  /* **A hundred thousand, not a hundred.** Shrinking is shared in proportion
+     to each crumb's length times this number, so at 100 the current section
+     still paid about 1% of the shortfall: 6px at 1180 wide, which is an
+     ellipsis and two letters lost from a title that otherwise fitted. At this
+     ratio its share is under a hundredth of a pixel. Measured 2026-10-04,
+     docs/plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md */
+  flex: 0 100000 auto;
 }
 
 .crumbs li:last-child {
