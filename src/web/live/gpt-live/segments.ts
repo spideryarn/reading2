@@ -144,6 +144,8 @@ export interface TranscriptFragment {
 /** Everything the reducer is told. */
 export type SegmentEvent =
   | ({ type: "fragment" } & TranscriptFragment)
+  /** Literal text, placed at the last observed timeline edge, never wall time. */
+  | { type: "typed"; eventId: string; text: string }
   /** A tool finished inside a delegation. Held until that delegation's final. */
   | { type: "tool"; delegationId: string; tool: ExchangeTool }
   /** `show_passage` ran inside a delegation. Held the same way. */
@@ -186,6 +188,8 @@ export interface Closing {
 
 interface Fragment {
   role: Speaker;
+  /** A complete typed message has an explicit boundary after companion speech. */
+  typed: boolean;
   startMs: number;
   /** Where it sits: `startMs`, or the edge of frozen ground if it arrived for a frozen exchange. */
   at: number;
@@ -225,8 +229,7 @@ interface Pinned extends Receipts {
  * transcript that writes one is nearly always marking a sound; the narrow
  * rule is for the rest, because a stored row promises that no word is
  * dropped. What it costs: a sound the provider writes with a capital stays in.
- * And a typed turn (`say` in useGptLive.ts) goes through the same filter, so
- * `[sic]` typed there is taken out too; nothing in the app types into a call.
+ * Typed turns bypass this filter: their brackets are literal reader text.
  *
  * ## Why it holds text back
  *
@@ -321,6 +324,12 @@ export class Segmenter {
     switch (event.type) {
       case "fragment":
         return this.take(event).exchanges;
+      case "typed": {
+        const at = Math.max(this.floor, this.heardTo);
+        return this.add({ role: "reader", eventId: event.eventId, startMs: at, endMs: at, delta: ` ${event.text}` }, true)
+          ? this.settle()
+          : [];
+      }
       case "tool":
         this.holding(event.delegationId).tools.push(event.tool);
         return [];
@@ -408,12 +417,12 @@ export class Segmenter {
   }
 
   /** Record a fragment. False when it adds no words: a repeat, only whitespace, or only a sound. */
-  private add(f: TranscriptFragment): boolean {
+  private add(f: TranscriptFragment, literal = false): boolean {
     if (this.seen.has(f.eventId)) return false;
     this.seen.add(f.eventId);
     /* After the repeat check, never before: the filter keeps state between
        fragments, and a redelivered one must not be fed to it twice. */
-    const delta = this.sounds[f.role].feed(f.delta);
+    const delta = literal ? f.delta : this.sounds[f.role].feed(f.delta);
     if (delta.trim() === "") {
       if (delta !== "") this.space[f.role] = true;
       return false;
@@ -422,6 +431,7 @@ export class Segmenter {
     const end = Math.max(f.endMs, at);
     this.open.push({
       role: f.role,
+      typed: literal,
       startMs: f.startMs,
       at,
       end,
@@ -518,7 +528,10 @@ export class Segmenter {
       const since = ends;
       const paused =
         f.at - since > READER_PAUSE_MS && companions.some((c) => c.at >= since && c.at < f.at);
-      if (!current || paused) {
+      const typedAfterAnswer = f.typed && current !== undefined && companions.some(
+        (c) => c.at >= (current.reader[0]?.at ?? 0) && c.at < f.at,
+      );
+      if (!current || paused || typedAfterAnswer) {
         drafts.push({ reader: [f], companion: [], readerLine: null, companionLine: null });
         ends = f.end;
       } else {

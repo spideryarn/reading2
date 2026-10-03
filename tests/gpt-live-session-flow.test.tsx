@@ -975,6 +975,62 @@ describe("a connection that drops before session.closed", () => {
 });
 
 describe("a typed turn into a live call", () => {
+  it("begins a new typed question after even a short spoken answer", async () => {
+    const { spoken, speak } = recordingSpeak();
+    const h = await live({ wiring: wiringFor(ticketWith()), speak, tailNow: () => TAIL });
+    await deliver(said("reader", 1_000, 2_000, " First question?"), said("companion", 2_100, 2_300, " Yes."));
+    act(() => h.get().say("Second question?"));
+    await deliver(said("companion", 2_500, 3_000, " No."));
+    await hangUp(h);
+    expect(spoken.map((s) => [s.question, s.answer])).toEqual([
+      ["First question?", "Yes."], ["Second question?", "No."],
+    ]);
+    h.unmount();
+  });
+
+  it("does not let delayed filler pay a typed delegation's final answer debt", async () => {
+    const h = await live({ wiring: wiringFor(ticketWith()), tailNow: () => TAIL });
+    await pass(1_200);
+    await deliver(said("companion", 1_000, 1_200, " Hello."));
+    await pass(800);
+    act(() => h.get().say("What does it say about the lighthouse?"));
+    await deliver(delegated("d1", "r1"), created("d1", "r1"));
+    await pass(2_000);
+    await deliver(completed("d1", "r1"));
+    await pass(500);
+    /* Spoken before the final at 4 s, delivered afterwards: it is filler. */
+    await deliver(said("companion", 3_000, 3_200, " One moment."));
+    await pass(GPT_LIVE_NO_REPLY_MS);
+    expect(h.get().stall).toBe("no-reply");
+    h.unmount();
+  });
+
+  it("keeps spaces and literal brackets between typed messages", async () => {
+    const { spoken, speak } = recordingSpeak();
+    const h = await live({ wiring: wiringFor(ticketWith()), speak, tailNow: () => TAIL });
+    act(() => {
+      h.get().say("Explain [sic] here.");
+      h.get().say("And [hum] there.");
+    });
+    await deliver(said("companion", 1_000, 2_000, " Here is the explanation."));
+    await hangUp(h);
+    expect(spoken.map((s) => s.question)).toEqual(["Explain [sic] here. And [hum] there."]);
+    h.unmount();
+  });
+
+  it("keeps a typed question before its answer when the provider timeline freezes", async () => {
+    const { spoken, speak } = recordingSpeak();
+    const h = await live({ wiring: wiringFor(ticketWith()), speak, tailNow: () => TAIL });
+    await pass(26_000);
+    act(() => h.get().say("What does it say about the lighthouse?"));
+    await deliver(said("companion", 1_000, 2_000, " It was painted teal."));
+    await hangUp(h);
+    expect(spoken.map((s) => [s.question, s.answer])).toEqual([
+      ["What does it say about the lighthouse?", "It was painted teal."],
+    ]);
+    h.unmount();
+  });
+
   it("sends the message and a response.create, and stores the text as the question", async () => {
     const { spoken, speak } = recordingSpeak();
     const h = await live({ wiring: wiringFor(ticketWith()), speak, tailNow: () => TAIL });
@@ -989,6 +1045,66 @@ describe("a typed turn into a live call", () => {
     expect(spoken.map((s) => [s.question, s.answer])).toEqual([
       ["What does it say about the lighthouse?", "It was painted teal in 1987."],
     ]);
+    h.unmount();
+  });
+});
+
+describe("leaving while the provider is closing", () => {
+  it("retries usage already in backoff immediately on pagehide with keepalive", async () => {
+    const wiring = wiringFor(ticketWith());
+    const usage = vi.fn(wiring.gptLiveUsage!).mockResolvedValueOnce("retry");
+    const h = await live({ wiring: { ...wiring, gptLiveUsage: usage }, tailNow: () => TAIL });
+    await deliver({ type: "session.usage.updated", usage: { seconds: 15 }, event_id: "ev-tick" });
+    expect(usage).toHaveBeenCalledTimes(1);
+    act(() => window.dispatchEvent(new Event("pagehide")));
+    await pass();
+    expect(usage.mock.calls).toEqual([
+      ["journal-row-1", { kind: "voice", seconds: 15, eventId: "ev-tick" }, false],
+      ["journal-row-1", { kind: "voice", seconds: 15, eventId: "ev-tick" }, true],
+    ]);
+    await deliver({ type: "session.closed", usage: { seconds: 32 }, event_id: "ev-final" });
+    expect(h.get().phase).toBe("idle");
+    h.unmount();
+  });
+
+  it("ends the transcript producer before waiting for a slow final append", async () => {
+    let save!: (landed: SpokenLanded) => void;
+    const speak = vi.fn(() => new Promise<SpokenLanded>((resolve) => { save = resolve; }));
+    const h = await live({ wiring: wiringFor(ticketWith()), speak, tailNow: () => TAIL });
+    await deliver(
+      said("reader", 1_000, 2_000, "Is it still standing?"),
+      said("companion", 2_500, 3_500, " Yes."),
+    );
+    let done = false;
+    act(() => { void h.get().stop().then(() => { done = true; }); });
+    /* The provider never confirms close. Its bounded grace has expired. */
+    await pass(4_000);
+    expect(speak).toHaveBeenCalledTimes(1);
+    expect(mic?.stopped).toBe(true);
+    expect(done).toBe(false);
+    expect(channel?.readyState).toBe("closed");
+    await deliver(said("companion", 4_000, 5_000, " Late words after the close deadline."));
+    await act(async () => { save({ ok: true, threadId: THREAD, tailId: "spya-saved" }); });
+    await pass();
+    expect(done).toBe(true);
+    expect(speak).toHaveBeenCalledTimes(1);
+    expect(h.get().lines).toEqual([]);
+    h.unmount();
+  });
+
+  it("posts final usage delivered after pagehide, once, with keepalive", async () => {
+    const wiring = wiringFor(ticketWith());
+    const usage = vi.fn(wiring.gptLiveUsage!);
+    const h = await live({ wiring: { ...wiring, gptLiveUsage: usage }, tailNow: () => TAIL });
+    await deliver({ type: "session.usage.updated", usage: { seconds: 15 }, event_id: "ev-tick" });
+    act(() => window.dispatchEvent(new Event("pagehide")));
+    await pass();
+    expect(sent).toEqual([{ type: "session.close" }]);
+    await deliver({ type: "session.closed", usage: { seconds: 32 }, event_id: "ev-final" });
+    expect(usage.mock.calls.filter(([, report]) => report.kind === "voice" && report.seconds === 32)).toEqual([
+      ["journal-row-1", { kind: "voice", seconds: 32, eventId: "ev-final" }, true],
+    ]);
+    expect(h.get().phase).toBe("idle");
     h.unmount();
   });
 });

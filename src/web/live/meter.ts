@@ -349,6 +349,7 @@ export class LiveMeter<R = LiveUsageReport> {
   #draining: Promise<void> | null = null;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #finished = false;
+  #keepalive = false;
   #counts = { accepted: 0, refused: 0, dropped: 0, unreportable: 0 };
 
   constructor(opts: {
@@ -392,6 +393,25 @@ export class LiveMeter<R = LiveUsageReport> {
    */
   end(reason: string | null): void {
     this.#push({ kind: "close", reason, tries: 0 });
+  }
+
+  /**
+   * An unload hint while the producer is still draining (GPT-Live's close
+   * grace). Retry queued reports now with keepalive, and keep accepting late
+   * usage. `flush()` remains the terminal operation after the producer stops.
+   */
+  async checkpoint(): Promise<void> {
+    if (this.#finished) return;
+    this.#keepalive = true;
+    const cancelBackoff = () => {
+      if (this.#timer !== null) clearTimeout(this.#timer);
+      this.#timer = null;
+    };
+    cancelBackoff();
+    await this.#draining;
+    /* The in-flight request may have installed a new backoff meanwhile. */
+    cancelBackoff();
+    if (!this.#finished) await this.#drain();
   }
 
   /**
@@ -459,7 +479,7 @@ export class LiveMeter<R = LiveUsageReport> {
     while (!this.#finished && this.#queue.length > 0) {
       const item = this.#queue[0];
       if (!item) break;
-      const outcome = await this.#post(item, false);
+      const outcome = await this.#post(item, this.#keepalive);
       if (outcome === "retry") {
         const delay = this.#delays[item.tries];
         item.tries += 1;

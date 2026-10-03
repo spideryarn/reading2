@@ -72,7 +72,8 @@
  * - `hearing` and `speaking` trail the audio by the transcript delay.
  * - `say(text)` sends a typed turn. A typed message produces no input
  *   transcript on this wire, so the text is also given to the segmenter as a
- *   reader fragment at "now", and is stored as the question like spoken words.
+ *   literal reader text at the last observed timeline edge. Wall time cannot
+ *   place it: the provider's timeline may have stopped meanwhile.
  *   Nothing in the app calls it; it is how a browser check with no microphone
  *   asks a question.
  */
@@ -250,6 +251,8 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
   const releasedResolve = useRef<(() => void) | null>(null);
   const micTrack = useRef<MediaStreamTrack | null>(null);
   const meter = useRef<GptLiveMeter | null>(null);
+  /** Pagehide journals the end immediately, but keeps accounting open through close grace. */
+  const meterEnded = useRef(false);
   const startup = useRef<{ timer: ReturnType<typeof setTimeout>; abort: AbortController } | null>(null);
   const connectionDeadline = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -309,6 +312,8 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
   const companionArrived = useRef(0);
   const fragmentArrived = useRef(0);
   const readerEndMs = useRef<number | null>(null);
+  /** Typed questions have a wall-clock arrival, but no provider speech timestamp. */
+  const typedReaderAt = useRef<number | null>(null);
   const companionStartMs = useRef<number | null>(null);
   const debts = useRef(new Map<string, DelegationDebt>());
   const delegationEndedAt = useRef<number | null>(null);
@@ -420,9 +425,10 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
       }) ??
       gptLiveStallOf({
         now,
-        readerLastAt: readerEndMs.current === null ? null : from + readerEndMs.current,
+        readerLastAt: typedReaderAt.current ?? (readerEndMs.current === null ? null : from + readerEndMs.current),
         readerWords: lastReader ? wordsIn(lastReader.text) : 0,
         companionLastBeganAt: companionStartMs.current === null ? null : from + companionStartMs.current,
+        readerReplyArrivedAt: typedReaderAt.current === null ? null : companionArrived.current,
         delegations: [...debts.current.values()],
         delegationEndedAt: delegationEndedAt.current,
       });
@@ -670,6 +676,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
       if (role === "reader") {
         /* Only the reader's voice resets the idle clock. */
         readerArrived.current = now;
+        typedReaderAt.current = null;
         readerEndMs.current = Math.max(readerEndMs.current ?? 0, endMs);
         tally.current.readerFragments += 1;
         if (!closing.current) setHearing(true);
@@ -767,9 +774,9 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
    *    `HANGUP_GRACE_MS`: the transcript of the last sentence trails its audio.
    * 3. `session.close`, and up to `CLOSE_WAIT_MS` for `session.closed`, which
    *    carries the final seconds billed. Skipped if the provider closed first.
-   * 4. Everything the segmenter still holds becomes exchanges and is written,
-   *    and the writes are awaited. Send awaits this promise for that reason.
-   * 5. Tear down, and tell the journal why it ended.
+   * 4. End the transport, then freeze and write everything still held. Keeping
+   *    a producer alive during slow appends leaves no last snapshot to save.
+   * 5. Await the writes, and tell the journal why it ended.
    */
   const stop = useCallback((): Promise<void> => {
     if (closing.current) return closing.current;
@@ -830,22 +837,9 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
         closedResolve.current = null;
       }
 
-      /* Twice, because a fragment can still arrive while the first writes are
-         in flight, and `closing()` is safe to call again. */
-      for (let pass = 0; pass < 2; pass += 1) {
-        const rest = segmenter.current.closing();
-        const lost = rest.unattached.tools.length + rest.unattached.passages.length;
-        if (lost > 0) {
-          /* Counts only. A tool's label can hold the reader's own search. */
-          console.error(
-            `[gpt-live] ${rest.unattached.tools.length} tool runs and ${rest.unattached.passages.length} passages had no exchange to go on and were not stored`,
-          );
-        }
-        if (pass > 0 && rest.exchanges.length === 0) break;
-        commit(rest.exchanges);
-        await writing.current;
-      }
-
+      /* The close grace is over. Disconnect the producer before the final
+         snapshot, rather than taking a fixed number of snapshots while it
+         can still change during every awaited save. */
       dc.current?.close();
       for (const sender of pc.current?.getSenders() ?? []) {
         sender.track?.stop();
@@ -859,12 +853,22 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
         audio.current = null;
       }
 
+      const rest = segmenter.current.closing();
+      if (rest.unattached.tools.length + rest.unattached.passages.length > 0) {
+        /* Counts only. A tool's label can hold the reader's own search. */
+        console.error(
+          `[gpt-live] ${rest.unattached.tools.length} tool runs and ${rest.unattached.passages.length} passages had no exchange to go on and were not stored`,
+        );
+      }
+      commit(rest.exchanges);
+      await writing.current;
+
       /* Last, and not awaited: see the Realtime hook. Anything still queued
          gets one `keepalive` attempt inside `flush`. */
       const ending = meter.current;
       meter.current = null;
       if (ending) {
-        ending.end(endedBecause.current);
+        if (!meterEnded.current) ending.end(endedBecause.current);
         void ending.flush();
       }
 
@@ -928,6 +932,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     boundThread.current = o.threadId;
     setThreadId(o.threadId);
     meter.current = null;
+    meterEnded.current = false;
     endedBecause.current = "reader";
     zero.current = null;
     latestOffset.current = null;
@@ -936,6 +941,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     companionArrived.current = 0;
     fragmentArrived.current = 0;
     readerEndMs.current = null;
+    typedReaderAt.current = null;
     companionStartMs.current = null;
     debts.current = new Map();
     delegationEndedAt.current = null;
@@ -1208,20 +1214,14 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     const trimmed = text.trim();
     if (trimmed === "" || !ready.current || closing.current) return;
     const now = Date.now();
-    /* Where "now" is on the session's timeline, so the typed words sit before
-       the answer to them. Not fed to `sessionZero`: nothing was spoken. */
-    const at = Math.max(0, now - origin(now));
     typed.current += 1;
     readerArrived.current = now;
-    readerEndMs.current = Math.max(readerEndMs.current ?? 0, at);
+    typedReaderAt.current = now;
     commit(
       segmenter.current.push({
-        type: "fragment",
-        role: "reader",
+        type: "typed",
         eventId: `typed-${typed.current}`,
-        startMs: at,
-        endMs: at,
-        delta: trimmed,
+        text: trimmed,
       }),
     );
     refreshLines();
@@ -1230,7 +1230,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
       item: { type: "message", role: "user", content: [{ type: "input_text", text: trimmed }] },
     });
     send({ type: "response.create" });
-  }, [commit, refreshLines, send, origin]);
+  }, [commit, refreshLines, send]);
 
   /**
    * The caps. Copied from the Realtime hook, with fragments standing in for
@@ -1283,9 +1283,10 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
       if (!(pc.current || dc.current || claim.current || startup.current || context.current)) return;
       endedBecause.current = "pagehide";
       const ending = meter.current;
-      if (ending) {
+      if (ending && !meterEnded.current) {
+        meterEnded.current = true;
+        void ending.checkpoint();
         ending.end("pagehide");
-        void ending.flush();
       }
       void stopRef.current();
     };

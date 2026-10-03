@@ -118,6 +118,38 @@ describe("backend tokens", () => {
 });
 
 describe("the queue carries GPT-Live's reports", () => {
+  it("checkpoints an in-flight retry without rejecting late usage or posting concurrently", async () => {
+    let release!: (outcome: PostOutcome) => void;
+    const posted: { seconds: number; keepalive: boolean }[] = [];
+    const meter = new GptLiveMeter({
+      sessionId: "journal-row-1",
+      transport: {
+        liveConnected: async () => "accepted",
+        liveClose: async () => "accepted",
+        liveUsage: async (_id, report, keepalive) => {
+          if (report.kind !== "voice") throw new Error("expected voice usage");
+          posted.push({ seconds: report.seconds, keepalive });
+          if (posted.length === 1) return new Promise<PostOutcome>((resolve) => { release = resolve; });
+          return "accepted";
+        },
+      },
+    });
+    meter.report({ kind: "voice", seconds: 15, eventId: "tick" });
+    const checkpoint = meter.checkpoint();
+    meter.report({ kind: "voice", seconds: 32, eventId: "final" });
+    expect(posted).toEqual([{ seconds: 15, keepalive: false }]);
+    release("retry");
+    await checkpoint;
+    expect(posted).toEqual([
+      { seconds: 15, keepalive: false },
+      { seconds: 15, keepalive: true },
+      { seconds: 32, keepalive: true },
+    ]);
+    expect(meter.status.pending).toBe(0);
+    meter.end("pagehide");
+    await meter.flush();
+  });
+
   it("posts connected, each report and the close, in order, to the session it was given", async () => {
     const posted: { what: string; sessionId: string; report?: GptLiveUsageReport; reason?: string | null; keepalive: boolean }[] = [];
     const accepted: PostOutcome = "accepted";

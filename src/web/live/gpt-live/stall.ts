@@ -121,6 +121,8 @@ export interface GptLiveStallFacts {
   readerWords: number;
   /** When the companion's latest fragment began, or null if it has not spoken. */
   companionLastBeganAt: number | null;
+  /** Typed input has no speech time. Arrival may pay its reader debt, never a backend final. */
+  readerReplyArrivedAt?: number | null;
   /** Every delegation that has not failed. Paid ones may stay listed; they are ignored. */
   delegations: readonly DelegationDebt[];
   /** When a delegation last ended, final or failed, or null if none has. */
@@ -147,7 +149,8 @@ export function replyOwedSince(f: GptLiveStallFacts): number | null {
     const delegated = f.delegationEndedAt !== null && f.delegationEndedAt > f.readerLastAt;
     const asked = f.readerWords > BACKCHANNEL_WORDS || delegated;
     const since = Math.max(f.readerLastAt, f.delegationEndedAt ?? f.readerLastAt);
-    if (asked && !paid(since)) oldest = oldest === null ? since : Math.min(oldest, since);
+    const readerPaid = paid(since) || (!delegated && f.readerReplyArrivedAt != null && f.readerReplyArrivedAt > since);
+    if (asked && !readerPaid) oldest = oldest === null ? since : Math.min(oldest, since);
   }
   return oldest;
 }
