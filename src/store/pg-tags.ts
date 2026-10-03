@@ -17,6 +17,7 @@ import { getDb } from "../db/client.js";
 import { articles, articleTags } from "../db/schema.js";
 import { normaliseTag, compareTags, TAGS_PER_ARTICLE, TAGS_PER_EDIT } from "../tags.js";
 import { READ_COMMITTED } from "./isolation.js";
+import { guardDbStore } from "./db-errors.js";
 import { violatesCheckConstraint } from "./db-errors.js";
 import { tagsForArticles } from "./tag-rows.js";
 import { notFound, ownedByReader, ownedSlug, requireSlug } from "./pg.js";
@@ -69,7 +70,7 @@ export function normaliseChange(change: TagChange): { add: string[]; remove: str
   return { add, remove };
 }
 
-export const pgTagStore = {
+const rawPgTagStore = {
   /**
    * Add and remove tags on one of the reader's articles; the tags after.
    *
@@ -144,3 +145,6 @@ export const pgTagStore = {
     return (await tagsForArticles(db, [article.id])).get(article.id) ?? [];
   },
 };
+
+/* Guarded at its export, as every Postgres store is (tests/store-guarded.test.ts). */
+export const pgTagStore = guardDbStore("tags", rawPgTagStore);

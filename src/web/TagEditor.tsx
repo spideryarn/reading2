@@ -67,15 +67,12 @@ export function TagEditor({
   tags,
   save,
   autoFocus = false,
-  label = "Tags",
 }: {
   /** The article's tags as the server last answered them. */
   tags: readonly string[];
   /** Write a change; resolves to the tags after, rejects on failure. */
   save: (change: TagChange) => Promise<string[]>;
   autoFocus?: boolean;
-  /** The accessible name of the box. */
-  label?: string;
 }) {
   const [typed, setTyped] = useState("");
   const [open, setOpen] = useState(false);
@@ -227,7 +224,12 @@ export function TagEditor({
           ref={input}
           type="text"
           role="combobox"
-          aria-label={label}
+          /* A fixed name rather than one per article: the popover or the
+             Metadata heading around the box already says whose tags these are,
+             and tests/what-the-enter-key-promises.test.tsx names a box by a
+             literal attribute. `done`: Enter adds the tag and stays. */
+          aria-label="Add a tag"
+          enterKeyHint="done"
           aria-autocomplete="list"
           aria-expanded={shown}
           aria-controls={listId}

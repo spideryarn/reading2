@@ -41,6 +41,7 @@ import { ASSETS_VERSION, assetsInputHash } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
 import {
   articleRevisions,
+  articleTags,
   articles,
   citationFinds,
   citationInvestigations,
@@ -214,6 +215,7 @@ import { postgresBlobStore } from "./blobs.js";
 import { readRawDocument } from "./raw-document.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { tagsForArticles } from "./tag-rows.js";
+import { compareTags } from "../tags.js";
 
 /** A 404 shaped exactly like the filesystem store's, so routes.ts could not tell them apart. */
 export function notFound(slug: string): Error {
@@ -2195,6 +2197,17 @@ export function listArticlesQuery(
           limit 1)
       end`.as("heading_title"),
       /**
+       * **The reader's own tags, in the same statement** (plan 261003d). A
+       * correlated `array(...)` rather than a second query, because
+       * tests/store-shelf-reads.test.ts holds the shelf at two statements
+       * whatever its size, and a third for tags was the first thing the full
+       * suite caught. Sorted again in TypeScript (`compareTags`), so the order
+       * does not depend on the database's collation.
+       */
+      tags: sql<string[]>`array(
+        select ${articleTags.tag} from ${articleTags}
+        where ${articleTags.articleId} = ${articles.id})`.as("tags"),
+      /**
        * The second half of `stepIsDone(fetch)`, beside `hasRawSource` in the
        * revision projection. `hasArtefacts` requires a completed run row as
        * well as a readable raw manifest; a raw-source reference on its own is
@@ -2774,8 +2787,6 @@ const rawPgArticleReader: ArticleReader = {
        — which was not a count at all: it selected every comment row's id and
        took `rs.length`. */
     const counts = await commentCounts(db, rows.map((row) => row.article.id));
-    /* The reader's own tags, in one query for the page too (plan 261003d). */
-    const tagsById = await tagsForArticles(db, rows.map((row) => row.article.id));
 
     /* The five numbers per row, off the columns — and one query and one log
        line for however many rows turn out not to have them.
@@ -2856,7 +2867,7 @@ const rawPgArticleReader: ArticleReader = {
              readable and its completed run row is carried with it. */
           sourceReusable: row.revision.hasRawSource && row.fetchDone,
           processing: minimal ? "minimal" : "full",
-          tags: tagsById.get(row.article.id) ?? [],
+          tags: [...row.tags].sort(compareTags),
         }),
       );
     }

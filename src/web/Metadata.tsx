@@ -914,7 +914,6 @@ export function Metadata({
             </p>
             <TagEditor
               tags={provenance.tags ?? []}
-              label="Your tags on this article"
               save={async (change) => {
                 const tags = await editArticleTags(slug, change);
                 /* A metadata GET already in flight may have read the old tags.

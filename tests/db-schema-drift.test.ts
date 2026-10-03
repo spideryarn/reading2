@@ -219,6 +219,7 @@ describe("declaredTables", () => {
     expect(declared.map((d) => d.table)).toEqual([
       "ai_calls",
       "article_revisions",
+      "article_tags",
       "article_visibility_changes",
       "articles",
       "bibliographic_records",
@@ -341,7 +342,7 @@ describe("against a real database", () => {
          a second copy of the list above and it is deliberate: it is what makes a
          table that reaches the *schema* and not the *database* say so, which is
          the whole of the drift guard. */
-      expect(report.declaredTables).toBe(43);
+      expect(report.declaredTables).toBe(44);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

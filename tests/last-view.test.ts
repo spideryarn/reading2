@@ -276,7 +276,8 @@ describe("the two lists cover every parameter the client writes", () => {
    * `topics` and `archived` joined the first five on 2026-09-28
    * (docs/project/shelf-terms.md). `topicsView` (pills or one row per topic)
    * joined them the same day (plan 260928d § Stage 2), and `public` (Include
-   * public, plan 261002b) on 2026-10-02.
+   * public, plan 261002b) on 2026-10-02, and `tags` (the reader's own tags,
+   * plan 261003d) on 2026-10-03.
    */
   const NOT_AN_ARTICLES = new Set([
     "q",
@@ -288,6 +289,7 @@ describe("the two lists cover every parameter the client writes", () => {
     "archived",
     "public",
     "topicsView",
+    "tags",
   ]);
 
   function clientFiles(dir: string): string[] {

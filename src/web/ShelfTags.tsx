@@ -85,7 +85,6 @@ export function ShelfTags({
               tags={tags}
               save={(change) => shelf.editTags(entry.slug, change)}
               autoFocus
-              label={`Tags on ${entry.title}`}
             />
           </Popover.Content>
         </Popover.Portal>
