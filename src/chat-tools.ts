@@ -8,8 +8,10 @@
  * the same conversation. The loop that does the asking is `converse` in
  * src/converse.ts; everything about what a tool *is* lives here.
  *
- * Read docs/project/chat-tools.md for why these eight and not others. The short
- * version is the filter every one of them had to pass:
+ * Read docs/project/chat-tools.md for why these nine and not others — eight in
+ * `CHAT_TOOLS`, which every conversation and Live share, and `reader_notes`,
+ * which only the thread kinds `toolsFor` names are offered. The short version
+ * is the filter every one of them had to pass:
  *
  * > **Does it send the reader somewhere they could not otherwise get to?**
  *
@@ -43,6 +45,14 @@
  * is the model saying "that page is gone" rather than the reader's whole answer
  * failing. The only things that throw here are bugs.
  *
+ * And one that arrived with the ninth tool:
+ *
+ * **4. Not every tool is for every conversation, and the offer is not the
+ * gate.** `toolsFor(kind)` decides what a request offers; `runTool` asks it
+ * again before running a name, because Live's endpoint takes a name from the
+ * browser and a model can ask for a tool it was never shown. A caller that says
+ * no kind gets the shared eight and nothing else.
+ *
  * ## What may be logged from this file
  *
  * Tool names, slugs, block ids, counts, elapsed times, HTTP statuses, and the
@@ -50,19 +60,41 @@
  * never a full URL — a URL the model chose to read is a fact about what the
  * reader was asking, and the path of one can carry the question in it. Same rule
  * as src/converse.ts, which has the fuller version of the argument.
+ *
+ * `reader_notes` returns the reader's own notes and conversations, so for it
+ * that rule means the slug and counts: not a note, a quote, a title, or which
+ * conversation was read.
  */
 import { Readability } from "@mozilla/readability";
 /* jsdom on first use rather than at module scope — src/jsdom-lazy.ts says why.
    `articleLinks` below stays synchronous. */
 import { jsdom } from "./jsdom-lazy.js";
-import type { Block, Citations, CitationsFound, CitedWork, Meta, ToolRun } from "./types.js";
+import type {
+  Block,
+  ChatThread,
+  Citations,
+  CitationsFound,
+  CitedWork,
+  Comment,
+  Meta,
+  ThreadKind,
+  ToolRun,
+} from "./types.js";
 import type { ModelPower } from "./models.js";
 import { isSearchable } from "./block-policy.js";
 import { FetchFailure, fetchDocument } from "./fetch.js";
 import { findPassages } from "./search.js";
 import { fold, parseQuery } from "./library-search.js";
 import { termPattern } from "./term-match.js";
-import { librarySearch, loadArticle, loadCitations, loadGlossary } from "./store/index.js";
+import {
+  chatStore,
+  commentStore,
+  librarySearch,
+  loadArticle,
+  loadCitations,
+  loadGlossary,
+} from "./store/index.js";
+import { readerNotesDigest, threadTranscript } from "./reader-notes.js";
 import { CitationsListNotFound } from "./store/citations-list-not-found.js";
 import { effectiveInfluence } from "./citation-effective-influence.js";
 import { errorFields, log, since } from "./log.js";
@@ -193,6 +225,18 @@ export interface ToolContext {
   signal?: AbortSignal;
   /** The article's High-powered AI setting — a tool that calls a model asks it (plan 260930f). */
   power: ModelPower;
+  /**
+   * What kind of conversation the turn is in — and so which tools it may run
+   * (`toolsFor`). **Absent means the shared eight only**, which is what Live's
+   * endpoint gets by passing none: it has no thread to name. Fails closed, so a
+   * new caller that forgets this cannot reach a kind-gated tool by accident.
+   */
+  kind?: ThreadKind | undefined;
+  /**
+   * The conversation the turn is in. `reader_notes` leaves it out of what it
+   * lists and refuses to read it back: it is already in front of the model.
+   */
+  threadId?: string | undefined;
 }
 
 /** What `runTool` hands back: two lines for the reader, one payload for the model. */
@@ -413,6 +457,81 @@ export const CHAT_TOOLS: FunctionTool[] = [
 /** The names above, for validating what the model asks for. */
 export const TOOL_NAMES = new Set(CHAT_TOOLS.map((t) => t.function.name));
 
+/**
+ * The ninth tool, and **deliberately not in `CHAT_TOOLS`**.
+ *
+ * `CHAT_TOOLS` is what Live flattens into its session (src/live.ts) and what
+ * Recall, Tutorial and Candidates are offered, and none of them should have
+ * this: Live's tool endpoint has no thread to exclude, Recall and Tutorial are
+ * about the article and are told not to guess at the reader, and Candidates is
+ * Referee machinery. GPT Sol's review of
+ * docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md,
+ * PR-3. docs/project/chat-tools.md § The reader's notes.
+ *
+ * The last sentence of the description is there because of what this returns:
+ * the first thing chat can read that is private to the reader and is not
+ * already in the prompt. It is advice to a model, not a boundary — that
+ * section says what the boundary is and is not.
+ */
+export const READER_NOTES_TOOL: FunctionTool = {
+  type: "function",
+  function: {
+    name: "reader_notes",
+    description:
+      "The reader's own notes on THIS article: their comments, highlights and bookmarks, each " +
+      "with the block it is on, followed by a list of their other conversations about the " +
+      "article. Give a conversation's id as `thread` to read that conversation instead. Use it " +
+      "only when the reader asks what they think, what they marked or wrote, or refers to an " +
+      "earlier conversation. Do NOT use it for a question about the article or the world. What " +
+      "comes back is private to this reader: use it to answer them, and never put any of it in " +
+      "a web search or a URL.",
+    parameters: {
+      type: "object",
+      properties: {
+        thread: {
+          type: "string",
+          description:
+            "Optional. The id of one of their other conversations, exactly as this tool listed " +
+            "it. Omit to see the notes and the list.",
+        },
+      },
+    },
+  },
+};
+
+/* Built once: tools are rendered ahead of system and messages, so they are part
+   of the cached prefix and must be the same bytes on every request of a kind. */
+const CHAT_TOOLS_WITH_NOTES: FunctionTool[] = [...CHAT_TOOLS, READER_NOTES_TOOL];
+
+/**
+ * The tools of ours a conversation of this kind is offered.
+ *
+ * Exhaustive, so a fifth `ThreadKind` is a red compile here rather than a
+ * conversation that quietly gets — or quietly loses — the reader's notes.
+ * Explore gets them because the reader's own thinking is its subject; it is
+ * also sent the digest on every turn (src/routes.ts § `exploreNotes`), so the
+ * tool there is for one conversation in full, or a second look.
+ */
+export function toolsFor(kind: ThreadKind): FunctionTool[] {
+  switch (kind) {
+    case "chat":
+    case "explore":
+      return CHAT_TOOLS_WITH_NOTES;
+    case "remember":
+    case "tutorial":
+    case "candidates":
+      return CHAT_TOOLS;
+    default: {
+      const unknown: never = kind;
+      throw new Error(`unknown thread kind: ${String(unknown)}`);
+    }
+  }
+}
+
+/** The tools a `runTool` caller has: its kind's, or the shared eight when it names none. */
+const toolsOf = (kind: ThreadKind | undefined): FunctionTool[] =>
+  kind === undefined ? CHAT_TOOLS : toolsFor(kind);
+
 /* ------------------------------------------------------------- the fence --
  */
 
@@ -480,6 +599,13 @@ export function describeCall(name: string, args: Record<string, unknown>): strin
       const what = quoted(args.query);
       return what ? `looked through the citations for ${what}` : "read this article's citations";
     }
+    case "reader_notes":
+      /* No id and no title: this row is stored on the message and drawn in the
+         panel, and `ToolRun.label` is one of the things a shared transcript
+         would carry. Which conversation it was is the reader's business. */
+      return typeof args.thread === "string" && args.thread.trim() !== ""
+        ? "read one of your earlier conversations"
+        : "read your notes on this article";
     default:
       return `tried ${name}`;
   }
@@ -1766,6 +1892,123 @@ async function readCitations(args: Record<string, unknown>, ctx: ToolContext): P
   return outcome;
 }
 
+/* ------------------------------------------------------------ reader_notes --
+   The reader's own marks and earlier conversations on this article. The
+   formatting is src/reader-notes.ts, pure; this is only the two loads and what
+   to say when one fails. tests/reader-notes-tool.test.ts, and
+   tests/reader-notes-owner-isolation.test.ts for whose rows they are. */
+
+/**
+ * `reader_notes`, in either shape.
+ *
+ * **Both stores answer for the signed-in owner and nobody else** —
+ * `commentStore.load` and `chatStore.load` resolve the slug through the
+ * article's owner before they read a child row (src/store/pg.ts §
+ * `ownedSlug`), and this is handed a slug, never an owner. So another reader's
+ * slug is a 404 from the store, which lands in the catch below.
+ *
+ * **Any failure says the notes could not be read, never that there are none.**
+ * `readCitations`' rule and its reason: a dropped connection reported as "no
+ * notes" is a confident false statement about the reader. Having none is the
+ * stores returning empty lists, which is not this branch.
+ *
+ * Logged: the slug and counts. Not a note, a quote, a title, or which
+ * conversation was read.
+ */
+async function readReaderNotes(
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<ToolOutcome> {
+  const label = describeCall("reader_notes", args);
+  const wanted = typeof args.thread === "string" ? args.thread.trim() : "";
+
+  let comments: Comment[];
+  let threads: ChatThread[];
+  try {
+    /* One conversation needs no comments, so it does not ask for them. */
+    [comments, threads] = await Promise.all([
+      wanted === "" ? commentStore.load(ctx.slug) : Promise.resolve([]),
+      chatStore.load(ctx.slug),
+    ]);
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        tool: "reader_notes",
+        slug: ctx.slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "chat tool: could not read the reader's notes",
+    );
+    return {
+      label,
+      detail: "could not read them",
+      content:
+        "The reader's notes and conversations could not be read just now. That does not mean there are none. " +
+        "Tell the reader they could not be loaded, and do not guess at what they wrote.",
+    };
+  }
+
+  if (wanted !== "") {
+    const transcript = threadTranscript(threads, wanted, ctx.threadId);
+    log("model").info(
+      {
+        tool: "reader_notes",
+        slug: ctx.slug,
+        found: transcript.found,
+        ...(transcript.found
+          ? { exchanges: transcript.total, shown: transcript.shown, leftOut: transcript.leftOut }
+          : {}),
+      },
+      "chat tool: read one of the reader's conversations",
+    );
+    return {
+      label,
+      detail: transcript.found
+        ? `${transcript.total} exchange${transcript.total === 1 ? "" : "s"}`
+        : "no such conversation",
+      content: transcript.content,
+    };
+  }
+
+  const digest = readerNotesDigest({
+    comments,
+    threads,
+    blocks: ctx.blocks,
+    currentThreadId: ctx.threadId,
+  });
+  log("model").info(
+    {
+      tool: "reader_notes",
+      slug: ctx.slug,
+      notes: digest.notes.total,
+      notesShown: digest.notes.shown,
+      conversations: digest.conversations.total,
+      conversationsShown: digest.conversations.shown,
+    },
+    "chat tool: read the reader's notes",
+  );
+  const { total: notes } = digest.notes;
+  const { total: conversations } = digest.conversations;
+  return {
+    label,
+    detail: `${notes} note${notes === 1 ? "" : "s"}, ${conversations} conversation${conversations === 1 ? "" : "s"}`,
+    content: digest.content,
+  };
+}
+
+/** What a model that asked for a tool it does not have is told: the ones it does. */
+function noSuchTool(name: string, kind: ThreadKind | undefined): ToolOutcome {
+  return {
+    label: `tried ${name}`,
+    detail: "no such tool",
+    content: `There is no tool called "${name}". The tools you have are: ${toolsOf(kind)
+      .map((t) => t.function.name)
+      .join(", ")}.`,
+  };
+}
+
 /**
  * Run one tool and describe what happened.
  *
@@ -1780,6 +2023,12 @@ async function readCitations(args: Record<string, unknown>, ctx: ToolContext): P
  * back as content rather than a throw, because a model that invents a tool name
  * should be told so and allowed to carry on rather than failing a reader's whole
  * turn.
+ *
+ * **A tool this kind of conversation is not offered is an unknown name** (rule
+ * 4 in the header), and gets that same sentence: `reader_notes` asked for in a
+ * Recall thread, or through Live's endpoint, reads nothing and is told there is
+ * no such tool. The check sits on the name's own `case`, so there is no way to
+ * the loader round it.
  */
 export async function runTool(
   name: string,
@@ -1803,11 +2052,11 @@ export async function runTool(
       return readCitations(args, ctx);
     case "read_web_page":
       return readWebPage(args.url, ctx);
+    case "reader_notes":
+      return toolsOf(ctx.kind).includes(READER_NOTES_TOOL)
+        ? readReaderNotes(args, ctx)
+        : noSuchTool(name, ctx.kind);
     default:
-      return {
-        label: `tried ${name}`,
-        detail: "no such tool",
-        content: `There is no tool called "${name}". The tools you have are: ${[...TOOL_NAMES].join(", ")}.`,
-      };
+      return noSuchTool(name, ctx.kind);
   }
 }

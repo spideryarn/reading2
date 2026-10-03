@@ -113,7 +113,8 @@ bottom, the band is now:
    [`SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx), the scan's own rule, so a
    labelled finding counts and a scan that lands late still opens it).
 3. **The panel**, which starts with one line saying what to do in this sub-mode: the first
-   sentence of the chip's own hover card, from the same constant.
+   sentence of the chip's own hover card, from the same constant. In Criteria, Claims and Mirror
+   that line ends in a small button, ***How to read this*** (§ How to read a panel, below).
 
 ***How Referee mode works* is the (i)**, in the corner where every other mode keeps its own
 ([mode.md](mode.md)): the mode's two sentences from `MODE_CATALOG`, then *What the colours mean*.
@@ -131,6 +132,42 @@ which also has the before and after screenshots. Where a later section describes
 collapse, the line above the chips or the chip starting Candidates, it is describing the
 arrangement before this one and the reasoning that arrangement answered.
 [`tests/referee-notices.test.tsx`](../../tests/referee-notices.test.tsx) holds the new one.
+
+### How to read a panel: one press away, since 2026-10-03
+
+Each panel used to open with a sentence or two of visible text saying how to read it. 261003k left
+them and asked Greg whether to thin them ([Q-referee-panel-rules]: leave them, or *"move them into
+each panel's hover cards or the (i)"*). His answer, the same day:
+
+> Q-referee-panel-rules B
+
+So four sentences left the panels, word for word, for a card behind the ***How to read this***
+button at the end of the lead line (`HowToRead` and `REFEREE_HOW_TO_READ` in
+[`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx)):
+
+| Panel | Behind the button |
+|---|---|
+| Criteria | `WHAT_THE_TICK_DOES` and `WHAT_THE_RANK_IS` (*the number is the model's ordering, not a score*) |
+| Claims | `LINKAGE_NOT_ADEQUACY` (*where the paper takes each claim up; whether the passage carries it is yours*) |
+| Mirror | `MIRROR_IS_NOT_GIVEN_THE_PAPER` |
+| Candidates | nothing moved, so no button |
+
+**These sentences are what stop a list of passages reading as a verdict, so the button is one a
+finger can press.** It is the corner (i)'s shape ([tooltips.md](tooltips.md) § Where the code is,
+`BandAbout.tsx`): a controlled card on a real `<button>`, which a tap toggles and hover or keyboard
+focus also opens. It has words beside its icon because the band's corner already holds a bare (i)
+with a different job.
+
+**What this gave up**: none of the four is on screen unasked any more, which reverses what later
+sections of this page argue for each (*"a tooltip is not read by anybody in a hurry"*; the rank
+number's *"visible line above the list"*). Those sections describe the arrangement before this one.
+What still holds from the rank argument is reach: the old card on the numeral could not be opened by
+keyboard or touch, and this button can. Not moved, because each sits beside results already on
+screen: Claims' `DOCUMENT_ORDER_NOTE`, Mirror's `EVIDENCE_NOTE`, Criteria's key, and Candidates'
+`COI_NOT_CHECKED`. Plan:
+[261003m](../plans/261003m-referee-panels-how-to-read-sentences-behind-a-tap-to-open-button.md);
+[`tests/referee-notices.test.tsx`](../../tests/referee-notices.test.tsx) § one press away holds the
+sentences as literals.
 
 ## The job, and the tension it was built to hold
 
@@ -382,7 +419,8 @@ of them are properties of the code and the third is only a prompt rule, and the 
   in Criteria and needed a second review to catch (finding 4); it is built in here rather than
   retrofitted. The same split exists for a whole run: `CLAIMS_UNUSABLE` is a **failed** run with a
   Try again, not an empty one.
-- **Linkage, never adequacy** is asked for in the prompt, said in words at the top of the panel, and
+- **Linkage, never adequacy** is asked for in the prompt, said in words behind the panel's *How to
+  read this* button (at the top of the panel until 2026-10-03), and
   since 2026-09-01 also **backed by a fail-safe in code**. The eval is
   [`evals/referee-claims.ts`](../../evals/referee-claims.ts) — five papers written to pull the model
   over the line, a red-first control that runs one of them again with the refusals cut out of the
@@ -684,7 +722,7 @@ Where the cards are, and the one thing each says that the label cannot:
 | the preset chips | they replace the whole form: text, kind and both poles |
 | *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
 | the colour swatch, and *Automatic* | on a for/against criterion it colours the paragraph bar and the rail and **not** the marks; automatic is a hash of the criterion's id, and there are eight |
-| Candidates' *Build the reviewer brief* button | an AI turn starts, it may take several provider requests, and it **may** run a web search — the only place in the mode that reaches a search engine. Since 2026-09-06 the chip starts it too, so this card is no longer the *first* warning: `REFEREE_CANDIDATES_REACHES_SEARCH` is, above the chips and never behind the collapse |
+| Candidates' *Build the reviewer brief* button | an AI turn starts, it may take several provider requests, and it **may** run a web search — the only place in the mode that reaches a search engine. The chip opens the panel; the button starts the turn, with `REFEREE_CANDIDATES_REACHES_SEARCH` beside it |
 | Claims' tick, and *other text in quotes* | the passages are the model's pick and not a verified linkage; marks are off until asked for; and that list is **not** the claims the model missed |
 | Mirror's coverage row | it has nowhere to send you, which is the whole of what it is saying |
 | Mirror's jump button | the passage is where **you** anchored the comment — Mirror chose the remark and never the passage, and is not given the paper to pick one from |
@@ -757,10 +795,11 @@ cut-off answer and asserts the exact sentence and code each one ends with. Testi
 proved only that it branches: removing `"editable"` from Search's one call site, or adding it to a
 Referee caller, left the whole suite green until 2026-09-02.
 
-**What the cards are not.** They are not where a rule lives. Everything load-bearing is still visible
-text on the panel — `LINKAGE_NOT_ADEQUACY`, `WHAT_THE_TICK_DOES`, `DOCUMENT_ORDER_NOTE`, the
-evidence badge on every Mirror row, `COI_NOT_CHECKED` — and the cards sit on top of those rather than
-in place of them. [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx) pins
+**What the cards are not.** They are not where a rule lives. What is load-bearing beside results is
+still visible text on the panel — `DOCUMENT_ORDER_NOTE`, the evidence badge on every Mirror row,
+`COI_NOT_CHECKED` — and the cards sit on top of those rather than in place of them.
+(`LINKAGE_NOT_ADEQUACY` and `WHAT_THE_TICK_DOES` were on that list until 2026-10-03; they are
+behind *How to read this* now, on Greg's answer — § How to read a panel.) [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx) pins
 that each control has a card, that the card is that control's, that a `title` attribute has not crept
 back, and the changed labels as literals.
 
@@ -793,10 +832,9 @@ that cannot be reached is not an explanation.
   and the Space alike.
 - **The rank numeral's card was hover-only and could not be otherwise.** The numeral is a `<span>`
   inside the jump button, so it takes no focus, and a `tabIndex` there would put a tab stop inside a
-  button. So the fact itself is now a **visible line above the list** — *the number is the model's
-  ordering of its own answers for that criterion, not a score* — printed once a run has returned
-  something, beside `WHAT_THE_TICK_DOES`. **And the card is gone**, 2026-09-02: once the line
-  existed the card said the same thing again to the one group that could already read it.
+  button. Its explanation and `WHAT_THE_TICK_DOES` are behind **How to read this**
+  (§ How to read a panel), a button that takes focus and a tap. The numeral carries no second
+  card: it would repeat the explanation for the one group that could already reach it.
 
 [`tests/referee-criteria-explained.test.tsx`](../../tests/referee-criteria-explained.test.tsx) holds
 both, including the part jsdom cannot demonstrate: it dispatches events to `disabled` elements

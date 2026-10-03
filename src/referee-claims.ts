@@ -312,8 +312,10 @@ export const PASSAGES_UNUSABLE =
   "so there is nothing to show. That is about the answer rather than about the paper.";
 
 /**
- * **What the panel says about what a row is and is not** — printed above the
- * list, always, not folded away behind anything.
+ * **What the panel says about what a row is and is not.** Printed above the
+ * list, always, until 2026-10-03; since then it is behind the panel's *How to
+ * read this* button, on Greg's answer to [Q-referee-panel-rules]
+ * (docs/plans/261003m-referee-panels-how-to-read-sentences-behind-a-tap-to-open-button.md).
  *
  * Rule 3. The model asserts that a passage addresses a claim; whether the
  * results carry the abstract's sentence is the referee's own call, and it is the

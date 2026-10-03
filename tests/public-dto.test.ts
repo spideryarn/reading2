@@ -993,7 +993,9 @@ describe("the artefacts a shared link carries", () => {
    * the route was planned for, and an assertion about a route with a `null`
    * hash would pass a projection that spread the document. One stop carries a
    * `cue` and one does not (routes before `trajectory/5`), so `opt` is
-   * exercised both ways. src/public-types.ts § `PublicSkim`.
+   * exercised both ways — and the same for `again` (`skim/9`, plan 261003l):
+   * the first stop is carried into More and the second is carried nowhere, as
+   * every stop on an older route is. src/public-types.ts § `PublicSkim`.
    */
   const SKIM: Skim = {
     version: "trajectory/7",
@@ -1002,7 +1004,13 @@ describe("the artefacts a shared link carries", () => {
     sourceHash: "abc123",
     profileHash: "profile-of-a-person",
     stops: [
-      { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
+      {
+        quoteId: "spya-quote1",
+        depth: 1,
+        role: null,
+        cue: "Look for what the first example costs the claim.",
+        again: [2],
+      },
       { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
     ],
     visible: [1, 2, 2],
@@ -1777,17 +1785,35 @@ describe("the artefacts a shared link carries", () => {
    */
   it("carries the route's stops and the offered count, and not who it was planned for", () => {
     expect(pathsUnder("skim")).toEqual(
-      ["offered", "stops", "stops[].cue", "stops[].depth", "stops[].quoteId", "stops[].role"].sort(),
+      [
+        "offered",
+        "stops",
+        "stops[].again",
+        "stops[].cue",
+        "stops[].depth",
+        "stops[].quoteId",
+        "stops[].role",
+      ].sort(),
     );
     expect(built.skim).toEqual({
       stops: [
-        { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
+        {
+          quoteId: "spya-quote1",
+          depth: 1,
+          role: null,
+          cue: "Look for what the first example costs the claim.",
+          /* Which passes a stop is walked in is the route itself: without it a
+             visitor would walk a different More from the owner (Sol F4). */
+          again: [2],
+        },
         { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
       ],
       offered: 12,
     });
-    /* The cue-less stop crosses with no `cue` key, not an `undefined` one. */
+    /* The cue-less stop crosses with no `cue` key, not an `undefined` one —
+       and the uncarried one with no `again` key. */
     expect("cue" in (built.skim?.stops[1] ?? {})).toBe(false);
+    expect("again" in (built.skim?.stops[1] ?? {})).toBe(false);
     const json = JSON.stringify(built);
     expect(json).not.toContain("profileHash");
     expect(json).not.toContain("profile-of-a-person");

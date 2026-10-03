@@ -89,12 +89,19 @@ const postingOrder = (): StepName[][] => {
 const { AddPage } = await import("../src/web/AddPage.js");
 
 describe("which steps the box queues", () => {
-  it("is the six main modes that make something, and the cross-references, in STEP_ORDER", () => {
+  it("is every step the main modes make, and the cross-references, in STEP_ORDER", () => {
     /* If this changes, a mode moved in or out of the experimental switch, or
        started or stopped making something. That may be right — then change
        this line, and the price in the plan. `crossrefs` is no mode: it is
-       added by hand (`AUTO_EXTRA_STEPS`), plan 260930f § 3. */
+       added by hand (`AUTO_EXTRA_STEPS`), plan 260930f § 3.
+
+       **The whole list, on purpose.** `tweets` and `simple` are both Summary's
+       since 2026-10-03, when the thread became its third view and its press
+       became delegated — and `modeStep` answers `null` for a delegated mode,
+       so the derivation alone lost both (GPT Sol, F2 of the 261003l review;
+       watched red at five steps). auto-modes.ts § `DELEGATED_MODE_STEPS`. */
     expect(autoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "simple", "skim", "crossrefs"]);
+    expect(modeStep("summary")).toBeNull();
   });
 
   it("puts Skim after Quotes and Ideas, which it reads", () => {
@@ -111,7 +118,9 @@ describe("which steps the box queues", () => {
   });
 
   it("names them to the reader", () => {
-    expect(autoModesDetail()).toContain("Tweets, Glossary, Quotes, Ideas, Summary and Skim");
+    /* Summary once, though two of the steps are its own (its lengths and its
+       thread). It must not vanish with its `fixed` row (F2). */
+    expect(autoModesDetail()).toContain("Summary, Glossary, Quotes, Ideas and Skim are prepared");
     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
   });
 });

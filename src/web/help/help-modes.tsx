@@ -33,7 +33,7 @@ export const MODE_WHEN: Record<Mode, ReactNode> = {
   glossary: "the piece uses words in a way you do not quite follow",
   search: "you are looking for a passage, by its words or by what it says",
   referee: "you have been asked to peer-review it",
-  summary: "you need to decide whether this is worth reading at all",
+  summary: "you need to decide whether this is worth reading at all, or want it as a thread to share",
   diagram: "you think better from a picture of the argument",
   ideas: "you want to know what the piece takes for granted, and what it adds",
   remember: "you have finished and want to test what you took from it",
@@ -44,7 +44,6 @@ export const MODE_WHEN: Record<Mode, ReactNode> = {
   citations: "you want what the piece leans on, with links",
   faq: "you want the questions a careful reader would ask, and where the piece answers them",
   skim: "you want to go round a paper more than once, a little deeper each time",
-  tweets: "you want the argument as a short numbered run, or something to share",
   marginalia: "you want a few quiet notes beside the text while you read",
 };
 
@@ -354,22 +353,30 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   summary: {
-    keywords: "summarise short version tldr gist overview plain english simple brief explain level length",
+    keywords:
+      "summarise short version tldr gist overview plain english simple brief fuller explain level length thread tweets twitter x bluesky social share post copy numbered",
     whenToUse: (
-      <p>
-        Before you read, to decide whether a piece is worth your time and roughly where it is going;
-        after, to check you came away with the main points. Not instead of reading: it keeps the gist
-        and drops the reasoning, which is usually the part worth having. Pick <strong>Fuller</strong>{" "}
-        when the piece is close to your field and <strong>Brief</strong> when it is far from it. For
-        the piece’s shape, part by part, open <HelpRef to="mode-structure">Structure</HelpRef>.
-      </p>
+      <>
+        <p>
+          Before you read, to decide whether a piece is worth your time and roughly where it is going;
+          after, to check you came away with the main points. Not instead of reading: it keeps the gist
+          and drops the reasoning, which is usually the part worth having. Pick <strong>Fuller</strong>{" "}
+          when the piece is close to your field and <strong>Brief</strong> when it is far from it. For
+          the piece’s shape, part by part, open <HelpRef to="mode-structure">Structure</HelpRef>.
+        </p>
+        <p>
+          <strong>Thread</strong> is the argument in a dozen numbered posts, or something to share. It
+          was a mode of its own, called Tweets. Unlike the rest it starts writing as soon as you open
+          it, the first time, on your own article. A thread is a compression: treat it as a way in, not
+          a stand-in for the text.
+        </p>
+      </>
     ),
     reading: (
       <>
         <p>
-          The slider has no names on it: the left end is <strong>Brief</strong>, the middle{" "}
-          <strong>Simple</strong>, the right end <strong>Fuller</strong>, which keeps more of the
-          piece’s own terms. Point at the slider to see which is showing.
+          Three buttons at the top choose what you see: <strong>Brief</strong>, <strong>Fuller</strong>,
+          which is a little longer and keeps more of the piece’s own terms, and <strong>Thread</strong>.
         </p>
         <p>
           When a sentence surprises you, follow the code after its paragraph and read what the author
@@ -380,6 +387,24 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           summary is written with it in mind, and a small badge says so. <strong>Write it again</strong>{" "}
           gives you a fresh one.
         </p>
+        <p>In the thread:</p>
+        <ul>
+          <li>
+            Under each post, <strong>From</strong> links to the passages it came from.
+          </li>
+          <li>
+            Each post shows its character count against the limit; a count in red means it is over. What
+            the AI wrote is what you see.
+          </li>
+          <li>
+            <strong>Copy the thread</strong> copies every post, numbered, with the article’s title and link
+            at the top. The copy icon on a post copies just that post.
+          </li>
+          <li>
+            The <strong>(i)</strong> compares the thread’s characters with the article’s words, which tells
+            you how much it had to leave out.
+          </li>
+        </ul>
       </>
     ),
   },
@@ -458,7 +483,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
 
   remember: {
     keywords:
-      "recall memory tutorial guided reading quiz test yourself questions retention learn check understanding explain back study revise",
+      "recall memory tutorial guided reading explore think ideas own view apply wider world quiz test yourself questions retention learn check understanding explain back study revise",
     whenToUse: (
       <>
         <p>
@@ -486,6 +511,16 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             is saying; now and then it asks what you think.
             Now and then it comes back to an earlier point. It takes your profile and your reason for
             reading into account. Typed or dictated; there is no Live conversation here yet.
+          </li>
+          <li>
+            <strong>Explore</strong>: for working out what you think, more than for remembering what
+            the piece says. It is sent what you have highlighted, bookmarked and written on this
+            article, and a list of your other conversations about it, and starts from one of those.
+            Each short reply does one thing: asks a question that opens your idea up, tries it on a
+            case (your own, when your reason for reading gives one), makes a connection, or looks
+            up what others have said and links it. It says which parts come from the article, the
+            web, your notes and its own view. One Explore conversation per article; typed or
+            dictated, with no Live conversation yet.
           </li>
           <li>
             <strong>Quiz</strong>: up to twenty short questions written from the piece, each answered
@@ -780,6 +815,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </li>
         <li>Each stop has a short cue above it: what to <em>look for</em> in the passage, never what it found.</li>
         <li>
+          A deeper pass has its own new stops and may keep earlier ones where the new ones lean on
+          them. When a route has any, small dots under each stop’s number show which passes it is in,
+          shallowest first: more than one filled, and you may have read it already.
+        </li>
+        <li>
           Under the current stop, a card gathers what other modes have already found there:{" "}
           <strong>Terms it uses</strong> and <strong>Ideas it bears on</strong>.
         </li>
@@ -787,36 +827,6 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         <li>
           <strong>Reading for:</strong> at the top is what you said you want from this article; the route
           is planned around it. <strong>Edit</strong> changes it.
-        </li>
-      </ul>
-    ),
-  },
-
-  tweets: {
-    keywords: "thread twitter x bluesky social share post copy short numbered",
-    whenToUse: (
-      <p>
-        To get the argument in a dozen steps, or to share the piece. Unlike most modes it starts writing
-        as soon as you open it, the first time, on your own article. A thread is a compression: treat it
-        as a way in, not a stand-in for the text.
-      </p>
-    ),
-    reading: (
-      <ul>
-        <li>
-          Under each post, <strong>From</strong> links to the passages it came from.
-        </li>
-        <li>
-          Each post shows its character count against the limit; a count in red means it is over. What
-          the AI wrote is what you see.
-        </li>
-        <li>
-          <strong>Copy the thread</strong> copies every post, numbered, with the article’s title and link
-          at the top. The copy icon on a post copies just that post.
-        </li>
-        <li>
-          The <strong>(i)</strong> compares the thread’s characters with the article’s words, which tells
-          you how much it had to leave out.
         </li>
       </ul>
     ),

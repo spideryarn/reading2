@@ -1,6 +1,6 @@
 {
-  "id": "cdf63b67-fdee-4952-adf2-266b99b06cf3",
-  "prevId": "7c5ff376-d105-413d-9c1a-590d44ed0eaf",
+  "id": "cd2b6425-349c-4699-b7f3-fa2a1e135a96",
+  "prevId": "cad28c42-bc90-4e82-a11e-8e23ba64cecb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2490,6 +2490,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "chat_threads_one_explore": {
+          "name": "chat_threads_one_explore",
+          "columns": [
+            {
+              "expression": "article_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"spideryarn\".\"chat_threads\".\"kind\" = 'explore'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2554,7 +2570,7 @@
         },
         "chat_threads_kind": {
           "name": "chat_threads_kind",
-          "value": "\"spideryarn\".\"chat_threads\".\"kind\" in ('chat','remember','candidates','tutorial')"
+          "value": "\"spideryarn\".\"chat_threads\".\"kind\" in ('chat','remember','candidates','tutorial','explore')"
         }
       },
       "isRLSEnabled": false

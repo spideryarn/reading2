@@ -502,13 +502,14 @@ describe("the three buttons in the bar that are not modes", () => {
   /**
    * The same product decision the modes are under: the command bar marks a
    * generating row with the word `generates` and no number, so a `$` here would
-   * be that decision reversed by accident. Tweets is the one that would attract
-   * a price, being the only one of these that can start a paid run — so it is
-   * kept in this check after becoming a mode, beside the two that are not.
+   * be that decision reversed by accident. Tweets was the one that would
+   * attract a price, being the only one of these that could start a paid run;
+   * it is Summary's Thread view since 2026-10-03, so Summary's button stands
+   * in for it here, beside the two that are not modes.
    */
   it("carry no currency-symbol figure", async () => {
     withDrawer();
-    for (const label of [...NOT_MODES, "Tweets"]) {
+    for (const label of [...NOT_MODES, "Summary"]) {
       const { paras } = await cardFor(barControl(label));
       expect(paras.join(" "), `${label} names a price`).not.toMatch(/[$£€]\s*\d/);
     }

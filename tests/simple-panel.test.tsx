@@ -12,12 +12,13 @@
  *     notice and *outdated* draws nothing; a changed profile offers a rewrite;
  *     a visitor gets the stored paragraphs and no verb, or a line saying none
  *     has been made.
- *  2. **The press.** The real `SummaryControls` slider over the real
- *     `useSimple`, under `<StrictMode>`, counting job requests the way
- *     tests/modes-that-start-themselves.test.tsx does: choosing a level with
- *     nothing stored buys exactly one run; arriving on a level (a pasted link,
- *     a Back step, a restore — all the same setter) buys nothing; and a second
- *     press recovers from a failed read.
+ *  2. **The press.** The real `SummaryControls` — Brief | Fuller | Thread since
+ *     2026-10-03 (plan 261003l), a slider before — over the real `useSimple`,
+ *     under `<StrictMode>`, counting job requests the way
+ *     tests/modes-that-start-themselves.test.tsx does: choosing a length with
+ *     nothing stored buys exactly one run; arriving on one (a pasted link, a
+ *     Back step, a restore — all the same setter) buys nothing; a second press
+ *     recovers from a failed read; and Thread buys nothing here at all.
  *  3. **The band**: the real `SummaryBand` and `VisitorSummaryBand` on an old
  *     outline link, which must land on the default level with no Parts |
  *     Sections anywhere (plan 261001p).
@@ -25,7 +26,8 @@
 import { act, createElement, type ReactElement, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlockId, Job, SimpleLevel, SimpleSummary } from "../src/types.js";
+import type { Article, BlockId, Job, SimpleLevel, SimpleSummary } from "../src/types.js";
+import type { SummaryView } from "../src/web/params.js";
 import type { UseSimple } from "../src/web/useSimple.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -313,7 +315,7 @@ describe("the Simple view", () => {
        "Writing it in plain words" read as a contradiction in the browser check. */
     await draw({ kind: "owner", owner: owner({ status: "none", simple: null, starting: true }) });
     expect(text()).not.toContain(SIMPLE_NONE_OWNER);
-    expect(text()).toContain("All three levels are written together");
+    expect(text()).toContain("Brief and Fuller are written together");
   });
 
   it("offers to write it when there is none, and shows why a run failed", async () => {
@@ -515,127 +517,113 @@ describe("the Simple view", () => {
 
 /* --------------------------------------------------------------- the press -- */
 
-/** The owner's band, reduced: the real slider and, under a level, the real hook. */
+/** The owner's band, reduced: the real control and, under it, the real hook. */
 function SimpleProbe({ slug }: { slug: string }): ReactElement {
   const view = useSimple(slug);
   return createElement("div", { "data-band": "simple" }, view.starting ? "starting" : view.status);
 }
 
 /** The address-bar setter, which is what a pasted link, Back and a restore all reach. */
-let arrive: (next: SimpleLevel) => void = () => {};
+let arrive: (next: SummaryView) => void = () => {};
 
-function Band({ slug, start }: { slug: string; start: SimpleLevel }): ReactElement {
-  const [view, setView] = useState<SimpleLevel>(start);
+function Band({ slug, start }: { slug: string; start: SummaryView }): ReactElement {
+  const [view, setView] = useState<SummaryView>(start);
   arrive = setView;
   return createElement(
     "div",
     null,
     createElement(SummaryControls, { slug, value: view, onChange: setView }),
-    /* One element for every level, so moving between levels keeps the hook
-       mounted — as `OwnerSimple` does in the real band. */
+    /* One element for both lengths, so moving between them keeps the hook
+       mounted — as `OwnerSimple` does in the real band. Left mounted on Thread
+       too, which the real band does not do, **on purpose**: it is what would
+       claim and spend a `simple` token if the Thread segment ever armed one. */
     createElement(SimpleProbe, { slug }),
   );
 }
 
-async function open(start: SimpleLevel): Promise<void> {
+async function open(start: SummaryView): Promise<void> {
   await act(async () => {
     root.render(createElement(StrictMode, null, createElement(Band, { slug: "a-piece", start })));
   });
   await settle();
 }
 
-function slider(): HTMLInputElement {
-  const found = host.querySelector<HTMLInputElement>(".summ-slider input[type=range]");
-  if (!found) throw new Error("no plain-words slider");
-  return found;
+const segments = (): HTMLButtonElement[] => [
+  ...host.querySelectorAll<HTMLButtonElement>('.summ-views [role="radio"]'),
+];
+
+/** The view the control says is chosen. */
+function chosen(): string | null {
+  return segments().find((b) => b.getAttribute("aria-checked") === "true")?.textContent ?? null;
 }
 
-/** A click on the slider where it rests, on Simple — a press on the level showing. */
-async function pressSimple(): Promise<void> {
-  const input = slider();
-  await act(async () => input.click());
-  await settle();
-}
-
-/** A drag or an arrow key to a stop. */
-async function slideTo(stop: number): Promise<void> {
-  const input = slider();
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, String(stop));
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+/** A press on one segment — the one showing, or another. */
+async function pressSegment(label: "Brief" | "Fuller" | "Thread"): Promise<void> {
+  const found = segments().find((b) => b.textContent === label);
+  if (!found) throw new Error(`no ${label} segment`);
+  await act(async () => found.click());
   await settle();
 }
 
 const simpleGets = (): string[] => gets.filter((u) => u.startsWith("/api/simple/"));
 
-describe("choosing a plain-words level", () => {
+describe("choosing a plain-words length", () => {
   it("writes them when nothing is stored, once", async () => {
-    await open("simple");
+    await open("fuller");
     expect(posts, "arriving buys nothing").toEqual([]);
-    await pressSimple();
+    await pressSegment("Fuller");
     expect(simpleGets().length).toBeGreaterThan(0);
     expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
   });
 
   it("writes them once when the reader goes straight to Fuller", async () => {
-    await open("simple");
-    await slideTo(2);
+    await open("brief");
+    await pressSegment("Fuller");
+    expect(chosen()).toBe("Fuller");
     expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
   });
 
-  it("goes to an end, and arms, from the icon at that end", async () => {
-    await open("simple");
-    const ends = [...host.querySelectorAll<HTMLButtonElement>(".summ-slider .summ-slider-end")];
-    expect(ends, "an icon at each end").toHaveLength(2);
-    /* They are real shortcuts, not decoration: a keyboard and a screen reader
-       get the same Brief/Fuller jumps as a pointer. */
-    expect(ends.map((end) => end.getAttribute("aria-label"))).toEqual([
-      "Show Brief summary",
-      "Show Fuller summary",
-    ]);
-    expect(ends.map((end) => end.tabIndex)).toEqual([0, 0]);
-    expect(ends.some((end) => end.hasAttribute("aria-hidden"))).toBe(false);
-    await act(async () => ends[1]?.click());
-    await settle();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Fuller");
-    expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
-    await act(async () => ends[0]?.click());
-    await settle();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+  it("does not write them a second time when pressed again, or moved to the other length", async () => {
+    await open("fuller");
+    await pressSegment("Fuller");
+    await pressSegment("Fuller");
+    await pressSegment("Brief");
+    expect(chosen()).toBe("Brief");
     expect(posts, "one run writes every level").toEqual([{ slug: "a-piece", steps: ["simple"] }]);
-  });
-
-  it("does not write them a second time when pressed again, or moved to another level", async () => {
-    await open("simple");
-    await pressSimple();
-    await pressSimple();
-    await slideTo(0);
-    expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
   });
 
   it("writes nothing when they are already stored", async () => {
     artefactStatus = 200;
-    await open("simple");
-    await pressSimple();
-    await slideTo(2);
+    await open("brief");
+    await pressSegment("Brief");
+    await pressSegment("Fuller");
     expect(simpleGets().length).toBeGreaterThan(0);
     expect(posts).toEqual([]);
   });
 
   it("recovers from a failed read on a second press", async () => {
     artefactFails = true;
-    await open("simple");
-    await pressSimple();
+    await open("brief");
+    await pressSegment("Brief");
     expect(posts, "a failed read is not an answer").toEqual([]);
 
     artefactFails = false;
-    await pressSimple();
+    await pressSegment("Brief");
     expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
+  });
+
+  it("writes nothing for Thread, even with the plain-words hook there to claim a press", async () => {
+    /* The thread writes on arrival, from its own band (useTweets.ts); pressing
+       its segment must arm nothing for the lengths. */
+    await open("brief");
+    await pressSegment("Thread");
+    expect(chosen()).toBe("Thread");
+    expect(simpleGets().length).toBeGreaterThan(0);
+    expect(posts).toEqual([]);
   });
 });
 
-describe("arriving at a level without choosing it", () => {
+describe("arriving at a length without choosing it", () => {
   it("spends nothing on a pasted link or a restore", async () => {
     await open("fuller");
     /* The read settled — so "no POST" is about a panel that knows it is empty. */
@@ -646,7 +634,7 @@ describe("arriving at a level without choosing it", () => {
 
   it("spends nothing on a Back step into it", async () => {
     await open("brief");
-    await act(async () => arrive("simple"));
+    await act(async () => arrive("fuller"));
     await settle();
     expect(simpleGets().length).toBeGreaterThan(0);
     expect(posts).toEqual([]);
@@ -655,26 +643,46 @@ describe("arriving at a level without choosing it", () => {
 
 /* ------------------------------------------------------------ the band -- */
 
+const ARTICLE: Article = {
+  highPowerSince: null,
+  titleOverridden: false,
+  meta: { slug: "a-piece", title: "A piece", url: "https://example.com/piece" },
+  blocks: [],
+  assets: undefined,
+  navLabelStatus: "ready",
+  sourceGuess: undefined,
+  tree: { rootId: "spya-root", nodes: {} } as unknown as Article["tree"],
+};
+
 /**
- * **Summary is the slider and the paragraphs, and nothing else** — Greg,
- * 2026-10-01 (spya-b3ggv4): *"let's just get rid of parts and sections"*.
- * docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md.
+ * **Summary is the control and the paragraphs (or the thread), and nothing
+ * else** — Greg, 2026-10-01 (spya-b3ggv4): *"let's just get rid of parts and
+ * sections"*. docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md.
  *
  * The real bands, under the real address bar, on the address an old link
  * carries: `?summary=gists&deep=2` was the outline at Sections. It must land
- * on the default plain-words level, with no Parts | Sections pair and no
+ * on the default plain-words length, with no Parts | Sections pair and no
  * outline anywhere in the band, for the owner and for a visitor.
  */
-describe("Summary's band, arriving on an old outline link", () => {
+describe("Summary's band, arriving on an old link", () => {
   const OLD_LINK = "/read/a-piece?mode=summary&summary=gists&deep=2";
+
+  const visitorBand = (): ReactElement =>
+    createElement(VisitorSummaryBand, {
+      slug: "a-piece",
+      simple: { levels: artefact().levels },
+      thread: undefined,
+      article: ARTICLE,
+      onJump: () => {},
+    });
 
   async function band(which: "owner" | "visitor"): Promise<void> {
     history.replaceState(null, "", OLD_LINK);
     const { NuqsAdapter } = await import("nuqs/adapters/react");
     const inner =
       which === "owner"
-        ? createElement(SummaryBand, { slug: "a-piece", onJump: () => {} })
-        : createElement(VisitorSummaryBand, { simple: { levels: artefact().levels }, onJump: () => {} });
+        ? createElement(SummaryBand, { slug: "a-piece", article: ARTICLE, onJump: () => {} })
+        : visitorBand();
     await act(async () => {
       root.render(createElement(NuqsAdapter, null, inner));
     });
@@ -692,20 +700,20 @@ describe("Summary's band, arriving on an old outline link", () => {
     expect(host.querySelectorAll(".summ-controls"), "one row of controls").toHaveLength(1);
   }
 
-  it("draws the owner the default plain-words level, not the outline", async () => {
+  it("draws the owner the default plain-words length, not the outline", async () => {
     await band("owner");
     noOutline();
     /* Brief, the default since 8N (plan 261002c). */
-    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+    expect(chosen()).toBe("Brief");
     /* The plain-words body, at its empty state — the GET answered 404. */
     expect(text()).toContain(SIMPLE_NONE_OWNER);
     expect(posts, "arriving on a link spends nothing").toEqual([]);
   });
 
-  it("draws a visitor the stored paragraphs at the default level", async () => {
+  it("draws a visitor the stored paragraphs at the default length", async () => {
     await band("visitor");
     noOutline();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+    expect(chosen()).toBe("Brief");
     expect(text()).toContain(BRIEF_TEXT);
     expect(text()).not.toContain(WHAT);
     expect(gets, "a visitor's band reads nothing").toEqual([]);
@@ -713,41 +721,56 @@ describe("Summary's band, arriving on an old outline link", () => {
 
   /* Greg, 2026-10-01 (8N, spya-zw479b): "In summary mode, default to the
      brief summary when it opens for the first time." No `?summary=` selects
-     that default; explicit Simple and Fuller are remembered in the address. */
-  it("opens on Brief when the address names no level, and Simple only when it says so", async () => {
+     that default; an explicit Fuller is remembered in the address. */
+  it("opens on Brief when the address names no view, and on Fuller only when it says so", async () => {
     const { NuqsAdapter } = await import("nuqs/adapters/react");
-    const inner = createElement(VisitorSummaryBand, { simple: { levels: artefact().levels }, onJump: () => {} });
     history.replaceState(null, "", "/read/a-piece?mode=summary");
     await act(async () => {
-      root.render(createElement(NuqsAdapter, null, inner));
+      root.render(createElement(NuqsAdapter, null, visitorBand()));
     });
     await settle();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+    expect(chosen()).toBe("Brief");
     expect(text()).toContain(BRIEF_TEXT);
     await act(async () => {
       root.unmount();
     });
     root = createRoot(host);
-    history.replaceState(null, "", "/read/a-piece?mode=summary&summary=simple");
+    history.replaceState(null, "", "/read/a-piece?mode=summary&summary=fuller");
     await act(async () => {
-      root.render(createElement(NuqsAdapter, null, inner));
+      root.render(createElement(NuqsAdapter, null, visitorBand()));
     });
     await settle();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Simple");
-    expect(text()).toContain(WHAT);
+    expect(chosen()).toBe("Fuller");
+    expect(text()).toContain(FULLER_TEXT);
     /* Back to Brief, the default: nuqs drops it from the address (plan, Sol P2). */
-    const briefEnd = host.querySelector<HTMLButtonElement>('button[aria-label="Show Brief summary"]');
-    await act(async () => {
-      briefEnd?.click();
-    });
-    await settle();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+    await pressSegment("Brief");
+    for (let i = 0; i < 50 && new URLSearchParams(location.search).has("summary"); i += 1) {
+      await act(async () => {
+        await new Promise((go) => setTimeout(go, 10));
+      });
+    }
+    expect(chosen()).toBe("Brief");
     expect(new URLSearchParams(location.search).has("summary")).toBe(false);
   });
 
-  it("says the slider's three levels without a visible level name beside it", async () => {
+  /* The Simple level was a view until 2026-10-03. It is still written and
+     stored (plan 261003l § 5) and no longer shown, so a link that names it
+     degrades to the default like any unknown value. */
+  it("reads an old ?summary=simple as Brief, and never draws the Simple level", async () => {
+    const { NuqsAdapter } = await import("nuqs/adapters/react");
+    history.replaceState(null, "", "/read/a-piece?mode=summary&summary=simple");
+    await act(async () => {
+      root.render(createElement(NuqsAdapter, null, visitorBand()));
+    });
+    await settle();
+    expect(chosen()).toBe("Brief");
+    expect(text()).toContain(BRIEF_TEXT);
+    expect(text()).not.toContain(WHAT);
+  });
+
+  it("names its three choices in words, in one row", async () => {
     await band("owner");
-    expect(host.querySelector(".summ-slider-name")).toBeNull();
-    expect(host.querySelector(".summ-controls")?.textContent ?? "").not.toMatch(/Brief|Simple|Fuller/);
+    expect(host.querySelector("input[type=range]"), "the slider is gone").toBeNull();
+    expect(host.querySelector(".summ-controls")?.textContent).toBe("BriefFullerThread");
   });
 });

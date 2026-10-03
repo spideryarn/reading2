@@ -1,5 +1,6 @@
 /* quiz.css — the Quiz sub-mode of Remember (QuizPanel.tsx), and the
-   Recall | Tutorial | Quiz switch that sits in the band's head beside the title.
+   Recall | Tutorial | Explore | Quiz switch that sits in the band's head beside
+   the title.
 
    Its structural classes are the glossary band's rather than a second
    vocabulary for the same things, so **it must stay after glossary.css**. */
@@ -17,19 +18,32 @@
    follows the theme without a second palette to keep in step — /design and
    docs/project/design-css-overview.md. */
 
-/* Recall | Tutorial | Quiz, in the band's head beside the title. Two toggle buttons, and
-   the pressed one is filled — a pair where one is always on, so an outline-only
-   treatment would leave a reader guessing which half they are looking at. */
+/* Recall | Tutorial | Explore | Quiz, in the band's head beside the title.
+   Toggle buttons, and the pressed one is filled — a set where one is always
+   on, so an outline-only treatment would leave a reader guessing which part
+   they are looking at.
+
+   **It may shrink, and then its chips wrap** (four since 2026-10-03). The
+   heading beside it is `flex: 1`, whose basis is zero, so the heading gives up
+   its width first and the chips keep theirs on one row for as long as the row
+   has room; only on a phone too narrow for all four does the set go to two
+   rows, each chip whole. `flex: none` was right for two chips and would push
+   a fourth off the edge. docs/project/narrow-windows.md. */
 .remember-submode {
   display: flex;
+  flex-wrap: wrap;
   gap: 1px;
   margin-left: auto;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   border: 1px solid var(--rule);
   border-radius: 4px;
   overflow: hidden;
 }
 .remember-submode-btn {
+  /* Grows to fill a wrapped row, and never breaks inside its own word. */
+  flex: 1 0 auto;
+  white-space: nowrap;
   border: 0;
   background: transparent;
   color: var(--ink-faint);

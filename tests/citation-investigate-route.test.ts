@@ -680,7 +680,7 @@ describe("a press that finds the work's influence on the web", () => {
 });
 
 /* Plan 261003m stage 2: the web influence is stored on the press's own row,
-   through its two CHECKs (drizzle/20261003194854_citation_investigation_influence.sql),
+   through its two CHECKs (drizzle/20261003202922_citation_investigation_influence.sql),
    and read back by `loadCitations`. Its own entry id. */
 describe("the store's CHECKs on the web influence", () => {
   const ENTRY = "spya-nfwnc2";

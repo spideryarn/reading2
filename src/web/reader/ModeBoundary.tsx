@@ -38,8 +38,8 @@
  * ## And the press it retires is the press it would have claimed
  *
  * `bandTarget` (activation.ts) answers from the same tables the presses arm
- * from. It needs the sub-mode for Diagram, Referee and Remember; Summary's one
- * job is unconditional, but its level still belongs in the boundary reset key.
+ * from. It needs the sub-mode for Diagram, Referee, Remember and Summary (whose
+ * thread arms nothing), and each also belongs in the boundary reset key.
  * This component therefore reads those parameters itself. That keeps them off
  * `Reader`'s own render, which the bands that own them each avoided for the
  * same reason (RememberBand, DiagramBand).
@@ -93,7 +93,6 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   citations: BAND,
   faq: BAND,
   skim: BAND,
-  tweets: BAND,
   /* No band, but a column of its own on the right, and that column is inside
      the same boundary at its own call site in Reader.tsx — so a throw in it
      leaves the article readable, as a band's would. */
@@ -129,9 +128,10 @@ export function ModeBoundary({
   /* Only an owner's band is selected by the first three modes. A Diagram visitor
      is pinned to Sketch, and Referee/Remember visitors see `VisitorBand`, so an
      address change there is not a new band and must not retry a broken one.
-     **Summary's is the exception**: a visitor gets the plain-words levels
-     too, off the payload (SummaryMode.tsx § `VisitorSummaryBand`), so moving
-     the slider is a new level for either reader, and retries a broken one.
+     **Summary's is the exception**: a visitor gets the plain-words lengths
+     and the thread too, off the payload (SummaryMode.tsx §
+     `VisitorSummaryBand`), so choosing another view is a new band for either
+     reader, and retries a broken one.
      So is Structure's, whose Fisheye and Expanded are two bands for anyone,
      off the payload. */
   const subMode =

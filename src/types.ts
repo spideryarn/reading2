@@ -1310,8 +1310,10 @@ export interface QuotesResponse {
 /**
  * The pass a stop belongs to. **The model plans the passes as nesting** (depth
  * *d* covering every stop with `depth ≤ d`, which is what `Skim.visible`
- * counts); **the reader walks each pass as only its own stops** — plan 260929e,
- * src/web/skim-route.ts.
+ * counts). **The reader walks a pass as the stops first placed there plus any
+ * earlier stops whose `again` names it** — plan 261003l, `walkedIn` in
+ * src/web/skim-route.ts. Before `skim/9`, there were no carried stops, so each
+ * pass was only its own (plan 260929e).
  */
 export type SkimDepth = 1 | 2 | 3;
 
@@ -1335,6 +1337,18 @@ export interface SkimStop {
    * written before `trajectory/5`.
    */
   cue?: string | null;
+  /**
+   * **The deeper passes this stop is walked in again** — each deeper than
+   * `depth`, ascending, unique, and only a depth some stop is first placed at.
+   * `depth` stays the shallowest pass the stop belongs to; a stop is walked in
+   * pass *d* when `depth === d` or this includes *d* (`walkedIn`,
+   * src/web/skim-route.ts). Greg, 2026-10-03 (spya-ms9d69): *"it's not a
+   * guarantee, but nor is it excluded that something in a coarser level shows
+   * up in a more detailed level."* **Absent** on routes written before
+   * `skim/9`, which walk each pass as only its own stops (plan 260929e).
+   * docs/plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md.
+   */
+  again?: SkimDepth[];
 }
 
 /**
@@ -1368,6 +1382,17 @@ export interface SkimDrops {
    * had no cue; read it as 0.
    */
   badCue?: number;
+  /**
+   * `again` entries dropped: not 2 or 3, not deeper than the stop's own depth,
+   * repeated, or naming a depth no stop is first placed at. The stop is kept.
+   * Optional, as `badCue` is: routes before `skim/9` have none.
+   */
+  badAgain?: number;
+  /**
+   * `again` entries dropped because the pass already carried as many earlier
+   * stops as it may — `maxCarried` in src/skim.ts. The stop is kept.
+   */
+  overCarried?: number;
   /** Stops past a cumulative cap, dropped in route order — never demoted. */
   overCap: number;
 }
@@ -1394,11 +1419,12 @@ export interface Skim {
    * here. src/skim.ts § `routeProfileIsStale`.
    */
   profileHash: string | null;
-  /** **The array order is the route.** Each pass walks its own stops in this order (see `SkimDepth`). */
+  /** **The array order is the route.** Each pass walks its own and carried stops in this order (see `SkimDepth`). */
   stops: SkimStop[];
   /**
    * How many stops there are at depth ≤ 1, ≤ 2 and ≤ 3 — **cumulative**, as the route was planned
-   * and validated. Growing, by construction. Not what the band counts: it counts each pass's own.
+   * and validated. Growing, by construction. Not what the band counts: it counts the own and
+   * carried stops the selected pass actually walks.
    */
   visible: [number, number, number];
   /**
@@ -1999,6 +2025,17 @@ export interface LibraryEntry {
   url?: string;
   /** ISO. `meta.fetchedAt` where stage 2 recorded one, else the mtime of blocks.json. */
   addedAt: string;
+  /**
+   * **When the publisher says it was published** — `Meta.publishedAt`,
+   * verbatim: `YYYY-MM-DD`, or that day with a time and an offset. The shelf
+   * sorts on it and prints it (plan 261003m). Only the calendar day means
+   * anything, so read it with `calendarDay` (src/web/relative-time.ts), never
+   * `Date.parse`.
+   *
+   * Absent for most of a shelf: a PDF never has one, and nor does a web page
+   * that states none or was last extracted before 2026-08-31.
+   */
+  publishedAt?: string;
   /**
    * **The body's words, not every block's** — `LibraryScalars.wordCount`, which
    * is `articleWordCounts(blocks).body` (src/block-policy.ts). Footnotes and
@@ -3712,7 +3749,7 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  * so drizzle/0050_candidates_thread_kind.sql is a drop and a re-add with no data
  * movement between them. docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
  */
-export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial";
+export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial" | "explore";
 
 /**
  * The thread kinds, as a value, and the predicate both ends validate with.
@@ -3727,20 +3764,22 @@ export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial";
  * introduced to prevent. Since both call `isThreadKind`, adding a member is one
  * edit rather than four.
  */
-export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates", "tutorial"];
+export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates", "tutorial", "explore"];
 
 /**
- * **The kinds an article has at most one of** — Remember's Recall and Tutorial,
- * each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
- * and Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md).
+ * **The kinds an article has at most one of** — Remember's Recall, Tutorial and
+ * Explore, each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
+ * Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md,
+ * and Explore since docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md).
  * A partial unique index per kind holds it in the database
- * (`chat_threads_one_remember`, `chat_threads_one_tutorial`); this is the list
- * `targetOf` in src/chat.ts and `ConversationBand` read, so the two ends agree.
+ * (`chat_threads_one_remember`, `chat_threads_one_tutorial`,
+ * `chat_threads_one_explore`); this is the list `targetOf` in src/chat.ts and
+ * `ConversationBand` read, so the two ends agree.
  *
  * Single-thread is ONE property. It does not say what a kind is called, what
  * its empty box says, or whether it offers Live — those are decided per kind.
  */
-export const SINGLE_THREAD_KINDS = ["remember", "tutorial"] as const satisfies readonly ThreadKind[];
+export const SINGLE_THREAD_KINDS = ["remember", "tutorial", "explore"] as const satisfies readonly ThreadKind[];
 export type SingleThreadKind = (typeof SINGLE_THREAD_KINDS)[number];
 
 export function isSingleThreadKind(kind: ThreadKind | undefined): kind is SingleThreadKind {

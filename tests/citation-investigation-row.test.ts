@@ -102,7 +102,7 @@ describe("the paper's columns", () => {
 });
 
 /* Plan 261003m stage 2. The CHECKs that hold the same shape in Postgres are in
-   drizzle/20261003194854_citation_investigation_influence.sql; the route test
+   drizzle/20261003202922_citation_investigation_influence.sql; the route test
    stores through them. */
 describe("the web influence's columns", () => {
   const INFLUENCE: CitationWebInfluence = {

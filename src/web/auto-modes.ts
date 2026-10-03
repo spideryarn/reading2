@@ -26,6 +26,10 @@
  * moved in or out of the switch changes this with no second edit;
  * tests/auto-modes.test.tsx pins today's answer so the change is seen.
  *
+ * **One mode's steps are named here rather than derived**: Summary, whose press
+ * is delegated since 2026-10-03, so `modeStep` cannot answer for it —
+ * `DELEGATED_MODE_STEPS` below.
+ *
  * ## One job per mode
  *
  * One job per mode because a job runs its steps one after another, and the
@@ -41,13 +45,37 @@ import type { StepName } from "../types.js";
 import { modeStep } from "./activation.js";
 import type { UseJobs } from "./useJobs.js";
 
-/** The main modes that make something, each with its step, in `STEP_ORDER`. */
+/**
+ * **The steps of a main mode whose press is delegated**, which `modeStep`
+ * answers `null` for because the step is the press's, not the mode's.
+ *
+ * Summary is the one: a press arms `simple` or nothing, by the view it lands on
+ * (activation.ts § `activationForSummary`), and the mode shows two artefacts —
+ * the plain-words levels and the thread. The box queued both on 2026-10-02,
+ * `simple` as Summary's step and `tweets` as the Tweets mode's, and it queues
+ * both still. Left to the derivation, making Summary delegated and retiring
+ * Tweets would have dropped the pair without a word (GPT Sol, F2 of the 261003l
+ * review) — tests/auto-modes.test.tsx asserts the whole list for that reason.
+ *
+ * Diagram, the other delegated mode, is behind the experimental switch and so
+ * is not a main mode; if it leaves the switch, its row here is a decision to
+ * make then, not a default to inherit.
+ */
+const DELEGATED_MODE_STEPS: Partial<Record<Mode, readonly StepName[]>> = {
+  summary: ["simple", "tweets"],
+};
+
+/**
+ * The main modes that make something, each with its step, in `STEP_ORDER` —
+ * one entry per step, so Summary is here twice.
+ */
 function autoModes(): { mode: Mode; step: StepName }[] {
   const found: { mode: Mode; step: StepName }[] = [];
   for (const mode of MODES) {
     if (MODE_CATALOG[mode].experimental) continue;
     const step = modeStep(mode);
     if (step) found.push({ mode, step });
+    for (const delegated of DELEGATED_MODE_STEPS[mode] ?? []) found.push({ mode, step: delegated });
   }
   return found.sort((a, b) => STEP_ORDER.indexOf(a.step) - STEP_ORDER.indexOf(b.step));
 }
@@ -80,7 +108,8 @@ export const AUTO_MODES_LABEL = "Generate the main modes as soon as it opens";
  * rule `MODE_CATALOG`'s `how` keeps for the bar.
  */
 export function autoModesDetail(): string {
-  const names = autoModes().map(({ mode }) => MODE_LABEL[mode]);
+  /* A mode with two steps (Summary: its lengths and its thread) is named once. */
+  const names = [...new Set(autoModes().map(({ mode }) => MODE_LABEL[mode]))];
   const list =
     names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : (names[0] ?? "");
   return `${list} are prepared in the background, with Skim after Quotes and Ideas, and so are the links from one passage of the article to another. This uses paid model calls.`;

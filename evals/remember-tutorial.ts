@@ -168,13 +168,14 @@ const BANNED_OPENERS = [
   ["perfect", /^perfect\b/i],
 ] as const;
 
-async function loadArticle(dir: string): Promise<{ meta: Meta; blocks: Block[] }> {
+/** Exported for evals/remember-explore.ts, which reuses this file's machinery. */
+export async function loadArticle(dir: string): Promise<{ meta: Meta; blocks: Block[] }> {
   const { blocks } = JSON.parse(await readFile(path.join(dir, "blocks.json"), "utf-8")) as { blocks: Block[] };
   const meta = JSON.parse(await readFile(path.join(dir, "meta.json"), "utf-8")) as Meta;
   return { meta, blocks };
 }
 
-const row = (role: "user" | "assistant", text: string, i: number): ChatMessage => ({
+export const row = (role: "user" | "assistant", text: string, i: number): ChatMessage => ({
   id: `spya-${role === "user" ? "usr" : "ans"}${String(i).padStart(3, "0").replace(/1/g, "z")}`,
   role,
   text,
@@ -214,7 +215,7 @@ async function oneTurn(
   return { text, model, truncated };
 }
 
-const words = (t: string) => t.split(/\s+/).filter(Boolean).length;
+export const words = (t: string) => t.split(/\s+/).filter(Boolean).length;
 const questions = (t: string) => (t.match(/\?/g) ?? []).length;
 const cites = (t: string) => (t.match(/\bspya-[a-z0-9]{6}\b/g) ?? []).length;
 

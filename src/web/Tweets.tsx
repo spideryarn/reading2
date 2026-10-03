@@ -14,9 +14,16 @@
  *
  * So the thread sits in a wide band (`BandShape` `"wide"`, src/web/layout.ts)
  * beside the prose, and each post links to the passages it was drawn from —
- * the one block link, `BlockRef`, which jumps and flashes the paragraph. The
- * old address redirects to `?mode=tweets` (router.ts § `liftLegacyTweets`).
+ * the one block link, `BlockRef`, which jumps and flashes the paragraph.
  * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
+ *
+ * **One of Summary's three views since 2026-10-03**, not a mode: Greg, *"keep
+ * all of the tweet thread. Functionality and UI, just put it within as a
+ * submode within summary"* (spya-thpsnd). So this panel is unchanged but for
+ * the row of controls Summary hands it to draw on top, and its band's (i) now
+ * opens with Summary's words. Both old addresses land on
+ * `?mode=summary&summary=thread` (router.ts § `liftLegacyTweets`).
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
  *
  * The write half is src/tweets.ts, the read half `GET /api/tweets/:slug`, and
  * the argument for the feature existing at all — including the two vision.md
@@ -53,7 +60,7 @@
  *
  * Tailwind utilities, prefixed `tw:` — unprefixed names silently do nothing.
  */
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Check, Copy, PenLine, RotateCw, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Article, BlockId, Job, TweetThread } from "../types.js";
@@ -88,28 +95,47 @@ export function TweetsPanel({
   article,
   slug,
   onJump,
+  controls,
 }: {
   access: TweetsAccess;
   article: Article;
   slug: string;
   onJump(id: BlockId): void;
+  /**
+   * **Summary's Brief | Fuller | Thread row**, drawn as the band's first row —
+   * above *Copy the thread* — in the class Summary's own surface uses
+   * (`.summ-controls`, summary.css), so the control sits in one place whichever
+   * view is showing. The thread is one of Summary's views since 2026-10-03;
+   * SummaryMode.tsx hands this in.
+   */
+  controls?: ReactNode;
 }) {
   useRenderCount("TweetsPanel");
   const owner = access.kind === "owner" ? access.owner : null;
   const thread: PublicTweets | null = owner ? owner.thread : access.kind === "visitor" ? access.thread : null;
   const ready = thread !== null && (owner === null || owner.status === "ready");
+  /* **A head only when there is a thread**: *Copy the thread*, which is not
+     the mode's name (mode.md § the band's chrome). No thread, no row. The
+     counts that were here are in the (i), with who wrote it — spya-ucu35y —
+     and the owner's profile badge is in the corner beside it since 2026-10-02
+     (plan 261002e). */
+  const head = ready && thread ? <ThreadHead thread={thread} article={article} /> : null;
+  const hasControls = controls !== undefined && controls !== null;
 
   return (
     <ModeSurface
-      label="Tweets"
-      mode="tweets"
-      feature="gloss tweets"
-      /* **A head only when there is a thread**: *Copy the thread*, which is
-         not the mode's name (mode.md § the band's chrome). No thread, no row.
-         The counts that were here are in the (i), with who wrote it —
-         spya-ucu35y — and the owner's profile badge is in the corner beside
-         it since 2026-10-02 (plan 261002e). */
-      head={ready && thread ? <ThreadHead thread={thread} article={article} /> : null}
+      /* The band is Summary's: `tweets` left `MODES` on 2026-10-03, so the (i)
+         opens with Summary's own words and then this view's `about`. */
+      label="Summary"
+      mode="summary"
+      /* `summ` because the band is Summary's, as its paragraphs' band is
+         (SummaryMode.tsx § `SummarySurface`); `gloss tweets` are this panel's
+         own styles (glossary.css § tweets). */
+      feature="summ gloss tweets"
+      /* `ModeSurface` draws its `head` first, and the controls have to come
+         before it; so under a control row the head is drawn below, in the
+         same `.band-head`. */
+      head={hasControls ? null : head}
       profile={
         ready && owner?.thread ? (
           <WrittenForYou
@@ -131,6 +157,8 @@ export function TweetsPanel({
       }
       foot={owner?.thread && ready ? <RunRow owner={owner} /> : null}
     >
+      {hasControls && <div className="summ-controls">{controls}</div>}
+      {hasControls && head && <div className="band-head">{head}</div>}
       {owner?.error && (
         <div className="tw:pl-4 tw:pr-[calc(1rem_+_var(--band-about-room))] tw:pt-3">
           <p className="gloss-error tw:m-0" role="alert">

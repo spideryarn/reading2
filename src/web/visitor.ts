@@ -185,9 +185,10 @@ const POLICY: Record<Mode, VisitorPolicy> = {
      (the gists' outline went on 2026-10-01,
      docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md):
      `VisitorSummaryBand` reads them off the payload and, when nobody has made
-     them, says so in its own words beside the slider. An artefact gate here
-     would replace that with the generic visitor boundary and take the slider
-     away. GPT Sol's plan review of 261001p, P2. */
+     them, says so in its own words under the control. An artefact gate here
+     would replace that with the generic visitor boundary and take the control
+     away. GPT Sol's plan review of 261001p, P2. The same holds for the thread,
+     Summary's third view since 2026-10-03. */
   summary: { kind: "available" },
   /* **Marginalia, 2026-10-01** (called Annotations until later that day), the
      same bargain: its column is drawn from the tree (the parts' questions) and
@@ -363,13 +364,12 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
    */
   skim: { kind: "artefact", key: "skim" },
-  /**
-   * **A mode since 2026-09-29**, and a visitor could already read a stored
-   * thread on the page it replaced — so this row keeps what they had. The
-   * visitor gets `VisitorTweetsBand`, which mounts no `useTweets`.
-   * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
-   */
-  tweets: { kind: "artefact", key: "tweets" },
+  /* `tweets` was a row here from 2026-09-29 to 2026-10-03, `artefact` on the
+     `tweets` key. The thread is Summary's Thread view now, and `summary` above
+     is `available`: `VisitorSummaryBand` draws a stored thread through
+     `VisitorTweetsBand`, which mounts no `useTweets`, and says so in a line
+     when there is none.
+     docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
 };
 
 /**

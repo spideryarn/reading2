@@ -624,7 +624,8 @@ export async function exportArticle(
            passed through. */
         /* The stored kind whenever it is one we know — Candidates and Tutorial
            were exported as chats until 2026-10-02, because this was a
-           Remember-or-chat ternary. GPT Sol's plan review of 261002i. */
+           Remember-or-chat ternary. GPT Sol's plan review of 261002i. Explore
+           (2026-10-03) rides through `isThreadKind` with nothing to do here. */
         kind: isThreadKind(thread.kind) ? thread.kind : ("chat" as const),
         messages: messageRows.map((row) =>
           compact({

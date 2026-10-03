@@ -194,7 +194,7 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
 }
 
 /**
- * **Recall | Tutorial | Quiz**, at the top of the Remember band.
+ * **Recall | Tutorial | Explore | Quiz**, at the top of the Remember band.
  *
  * A control rather than two links, because the two are one choice — and it is
  * rendered by `RememberBand` and handed to whichever panel is showing, so that
@@ -303,7 +303,7 @@ export function QuizPanel({
    * "read nothing" and hide the whole quiz.
    */
   readSoFar?: ReadSoFar | undefined;
-  /** The Recall | Tutorial | Quiz control, built by `RememberBand`. */
+  /** The Recall | Tutorial | Explore | Quiz control, built by `RememberBand`. */
   subMode?: React.ReactNode;
   /** Every block this article has, id to plain text — the "is this real" check
       every citation chip in the band is drawn through. */
@@ -917,7 +917,7 @@ export function QuizPanel({
         <>
           {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
               docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-              stays for the Recall | Tutorial | Quiz control, which is the one thing here
+              stays for the Recall | Tutorial | Explore | Quiz control, which is the one thing here
               the Dock does *not* say. */}
           {subMode}
           {/* Written for your profile, and the Regenerate in its panel — Greg,

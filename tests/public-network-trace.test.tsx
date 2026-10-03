@@ -703,6 +703,17 @@ async function open(search = "", path = ""): Promise<void> {
   await settle();
 }
 
+/** Real time, for a rewrite of the address to reach nuqs and the band it selects. */
+async function until(check: () => boolean): Promise<void> {
+  for (let i = 0; i < 100 && !check(); i += 1) {
+    await act(async () => {
+      await new Promise((go) => setTimeout(go, 10));
+    });
+  }
+  expect(check(), "the page never got there").toBe(true);
+  await settle();
+}
+
 const outsidePublic = () => trace.filter((r) => !r.url.startsWith("/api/public/"));
 
 /**
@@ -901,10 +912,6 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      below. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
   faq: { where: VISITOR_BAND, says: "Nobody has built an FAQ for this piece yet" },
   citations: { where: VISITOR_BAND, says: "Nobody has built a list of citations for this piece yet" },
-  /* A page of its own until 2026-09-29, a mode since (plan 260929f). No thread
-     on the payload, so the *nobody built one* sentence in the visitor's band;
-     the drawn thread is "renders the tweet thread the payload carries" below. */
-  tweets: { where: VISITOR_BAND, says: "Nobody has built a tweet thread for this piece yet" },
   /* **Free since 2026-09-04, and it is the only one here that draws a real
      picture for a visitor.** Force is built from the tree in the payload; the
      panel's three fetching hooks are off and the picker is hidden. The string
@@ -1154,9 +1161,9 @@ describe("a signed-out browser on a shared document", () => {
     expect(band, "the Summary band is open").not.toBeNull();
     expect(readable(band as Element)).toContain(PUBLIC_NO_SIMPLE);
     expect(host.textContent).not.toContain("Nobody has built");
-    /* The slider, on the default level — so this cannot pass on a band that
+    /* The control, on the default view — so this cannot pass on a band that
        rendered its surface and nothing else. */
-    expect(band?.querySelector(".summ-slider input[type=range]")?.getAttribute("aria-valuetext")).toBe("Brief");
+    expect(band?.querySelector('.summ-views [role="radio"][aria-checked="true"]')?.textContent).toBe("Brief");
     expect(band?.querySelector(".summ-pill"), "no Parts | Sections").toBeNull();
     expect(outsidePublic()).toEqual([]);
   });
@@ -1326,12 +1333,13 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
-   * **A stored Simple is shown to a visitor, and nothing is spent** — Summary's
-   * plain-words sub-mode (plan 260930i). The paragraphs and their doors come
-   * off the payload; there is no `/api/simple/` read, no job and no run button,
-   * and the trace is the one public GET.
+   * **A stored plain-words summary is shown to a visitor, and nothing is
+   * spent** — Summary's Fuller view (plans 260930i, 261003l). The paragraphs
+   * and their doors come off the payload; there is no `/api/simple/` read, no
+   * job and no run button, and the trace is the one public GET. The Simple
+   * level still crosses in the payload and is no longer drawn.
    */
-  it("draws a stored Simple from the payload, asking nothing", async () => {
+  it("draws a stored plain-words summary from the payload, asking nothing", async () => {
     await remount();
     served = {
       ...ARTICLE,
@@ -1342,22 +1350,22 @@ describe("a signed-out browser on a shared document", () => {
             { text: "Why.", ids: ["spya-cccccc"] },
           ],
           simple: [
-            { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
+            { text: "The middle one, which is stored and not shown.", ids: ["spya-cccccc"] },
             { text: "And it says why that matters to the reader.", ids: ["spya-cccccc"] },
           ],
           fuller: [
-            { text: "The fuller version says what the piece is about.", ids: ["spya-cccccc"] },
+            { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
             { text: "Then why it matters.", ids: ["spya-cccccc"] },
-            { text: "Then its key idea.", ids: ["spya-cccccc"] },
           ],
         },
       },
     };
-    await open("?mode=summary&summary=simple");
+    await open("?mode=summary&summary=fuller");
 
     const band = host.querySelector(".mode-band.summ");
     expect(band, "the Summary band is open").not.toBeNull();
     expect(readable(band as Element)).toContain(PUBLIC_SIMPLE);
+    expect(readable(band as Element)).not.toContain("stored and not shown");
     expect(band?.querySelectorAll(".simple-para a.block-ref[data-block-link]").length).toBe(2);
     /* None of the owner's verbs. */
     expect(host.textContent).not.toContain("Write it");
@@ -1366,8 +1374,8 @@ describe("a signed-out browser on a shared document", () => {
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
 
-  it("tells a visitor no Simple has been made, and asks for none", async () => {
-    await open("?mode=summary&summary=simple");
+  it("tells a visitor no plain-words summary has been made, and asks for none", async () => {
+    await open("?mode=summary&summary=fuller");
     expect(host.textContent).toContain("Nobody has made a plain-words version of this piece yet.");
     expect(host.textContent).not.toContain("Write it");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
@@ -1822,12 +1830,13 @@ describe("a signed-out browser on a shared document", () => {
    * Every request assertion in this file was made at `/read/:slug` with query
    * modes, so `/metadata` and `/tweets` — two of the three addresses a visitor
    * could reach — were untested for requests *and* for copy. GPT Sol,
-   * 2026-08-28. `/tweets` stopped being a page on 2026-09-29 and is lifted to
-   * `?mode=tweets` (router.ts § `liftedTweetsHref`), so what is opened now is
-   * the metadata page, the mode, and the old address a pasted link still
-   * carries — which must land in the same place and ask nothing more.
+   * 2026-08-28. `/tweets` stopped being a page on 2026-09-29 and a mode on
+   * 2026-10-03; both spellings are lifted to Summary's Thread view (router.ts
+   * § `liftedTweetsHref`), so what is opened now is the metadata page and the
+   * two old addresses a pasted link still carries — which must land in the
+   * same place and ask nothing more.
    */
-  it("stays inside the public namespace on the metadata page and in Tweets", async () => {
+  it("stays inside the public namespace on the metadata page and on the thread's old addresses", async () => {
     for (const [search, path] of [
       ["", "/metadata"],
       ["?mode=tweets", ""],
@@ -1839,10 +1848,12 @@ describe("a signed-out browser on a shared document", () => {
       expect(outsidePublic(), where).toEqual([]);
       expect(trace.filter((r) => r.method !== "GET"), where).toEqual([]);
     }
-    /* The old address really became the mode, or its row above asked about a
-       page that no longer exists. */
-    expect(new URLSearchParams(location.search).get("mode")).toBe("tweets");
-    expect(readable(host.querySelector(VISITOR_BAND) as Element)).toContain(
+    /* The old address really became Summary's thread, or its row above asked
+       about a page that no longer exists. */
+    expect(location.pathname).toBe(`/read/${SLUG}`);
+    expect(new URLSearchParams(location.search).get("mode")).toBe("summary");
+    expect(new URLSearchParams(location.search).get("summary")).toBe("thread");
+    expect(readable(host.querySelector(".mode-band.summ") as Element)).toContain(
       "Nobody has built a tweet thread for this piece yet",
     );
   });
@@ -1854,15 +1865,27 @@ describe("a signed-out browser on a shared document", () => {
    * visitor *"There is a tweet thread for this piece"* about an article whose
    * own response said `tweets: false`. The unit test for `tweetsGap` cannot see
    * that, because the constant was in the *caller* — which is why breaking the
-   * call site left `visitor-gaps` entirely green. A page then, the mode since
-   * 2026-09-29; the gap now comes through `POLICY.tweets` like any other mode's.
+   * call site left `visitor-gaps` entirely green. A page then, a mode from
+   * 2026-09-29, and Summary's Thread view since 2026-10-03, where
+   * `VisitorSummaryBand` branches on the payload's own `tweets` key.
    */
+  /* `?mode=tweets` in both cases below, **on purpose**: it is the address a
+     visitor was sent while Tweets was a mode (2026-09-29 to 2026-10-03), and
+     it has to land on Summary's Thread view through the whole app — not on
+     Summary at Brief, where this payload, with no plain-words summary on it,
+     would say nobody has made one (GPT Sol's F4 on plan 261003l). */
   it("does not claim a tweet thread that the wire says is not there", async () => {
     await open("?mode=tweets");
+    await until(() => new URLSearchParams(location.search).get("summary") === "thread");
 
     expect(host.textContent).toContain("Nobody has built a tweet thread for this piece yet");
     expect(host.textContent).not.toContain("There is a tweet thread");
     expect(host.querySelector(".mode-band.tweets")).toBeNull();
+    /* Said inside Summary's own band, under its control — not by the generic
+       visitor boundary, and not as a missing summary. */
+    const band = host.querySelector(".mode-band.summ");
+    expect(band?.querySelector('.summ-views [role="radio"][aria-checked="true"]')?.textContent).toBe("Thread");
+    expect(host.textContent).not.toContain(PUBLIC_NO_SIMPLE);
   });
 
   /**
@@ -1877,11 +1900,15 @@ describe("a signed-out browser on a shared document", () => {
   it("renders the tweet thread the payload carries, and asks nobody for it", async () => {
     served = { ...ARTICLE, tweets: THREAD };
     await open("?mode=tweets");
+    await until(() => host.querySelector(".mode-band.tweets") !== null);
 
+    expect(new URLSearchParams(location.search).getAll("mode")).toEqual(["summary"]);
+    expect(new URLSearchParams(location.search).getAll("summary")).toEqual(["thread"]);
     const band = host.querySelector(".mode-band.tweets");
-    expect(band, "the Tweets band").not.toBeNull();
+    expect(band, "the thread's band").not.toBeNull();
     expect(readable(band as Element)).toContain(PUBLIC_TWEET);
     expect(host.textContent).not.toContain("Nobody has built a tweet thread");
+    expect(host.textContent, "the old link opened Summary at Brief").not.toContain(PUBLIC_NO_SIMPLE);
     /* The owner's foot: the provenance line and the button that spends. */
     expect(host.textContent).not.toContain("Write it again");
     expect(host.textContent).not.toContain("Written by");

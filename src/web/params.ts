@@ -29,7 +29,7 @@
  * `popstate` for everything else. One query string, one listener.
  */
 import { createParser, debounce } from "nuqs";
-import { SIMPLE_LEVELS, type DebateBears, type IdentificationLevel, type SimpleLevel, type SkimDepth } from "../types.js";
+import type { DebateBears, IdentificationLevel, SkimDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
 import { isIdentificationLevel } from "./debate-levels.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
@@ -439,8 +439,11 @@ export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
  * A depth the route does not offer is not refused here — this parser cannot see
  * the route — but `effectiveDepth` (src/web/skim-route.ts) draws the
  * deepest offered pass below it. **A `?stop=` on the route wins over this**
- * (`locate`): each pass walks only its own stops (plan 260929e), so the stop's
- * own pass is drawn whatever the depth says.
+ * (`locate`): the asked pass is drawn only when the stop is walked in it, and
+ * otherwise the stop's own — the shallowest it is in. A stop is in one pass
+ * (plan 260929e) unless the route carries it into a deeper one too (`again`,
+ * plan 261003l), so on a route with no carried stop the depth never matters
+ * once a stop is named.
  */
 export const depthParam = createParser<SkimDepth>({
   parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : null),
@@ -453,8 +456,9 @@ export const depthParam = createParser<SkimDepth>({
  *
  * `replace`: stepping along the route is traversal, and twenty stops must not
  * cost twenty presses of Back — comment-jump.ts's argument for its arrows. A
- * stop on the route draws its own pass; one on no pass (a stale link, a quote
- * chosen again) falls back to the asked pass's first stop, in `locate`.
+ * stop on the route draws the asked pass when it is walked there, else its own
+ * (see `depthParam`); one on no pass (a stale link, a quote chosen again) falls
+ * back to the asked pass's first stop, in `locate`.
  */
 export const stopParam = parseAsBlockId.withOptions({ history: "replace" });
 
@@ -1005,7 +1009,8 @@ export const confParam = createParser<number>({
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /* ---------------------------------------------------------- summary mode --
-   One control: `summary`, which of the three plain-words levels is open.
+   One control: `summary`, which of Summary's three views is open — two
+   plain-words lengths and the thread.
 
    There used to be more. A `len` control chose between three generated lengths
    until 2026-08-31 (docs/plans/260831s-gist-only-summaries.md); a `gists` view
@@ -1146,34 +1151,70 @@ export const diagramHueParam = createParser<ScatterHue>({
   .withOptions({ history: "replace" });
 
 /**
- * Which plain-words level Summary shows — `brief`, `simple` or `fuller`, a few
- * short paragraphs in everyday words at three lengths (`SIMPLE_LEVELS` in
- * src/types.ts, whose names are these URL values;
- * docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
- * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
+ * **Summary's three views**, in the order the band's control draws them: the
+ * piece in plain words at two lengths, and the piece as a numbered thread.
+ * Greg, 2026-10-03 (spya-thpsnd): *"it could just be briefer, fuller, and tweet
+ * thread as three buttons somehow."*
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
+ *
+ * A vocabulary of its own rather than `SIMPLE_LEVELS` (src/types.ts), which
+ * names what the `simple` step **writes** and still has three members: the
+ * Simple level is written and stored and no longer shown, and the thread is a
+ * different step's artefact altogether.
+ */
+export const SUMMARY_VIEWS = ["brief", "fuller", "thread"] as const;
+export type SummaryView = (typeof SUMMARY_VIEWS)[number];
+
+/** The view Summary opens on, named once for the parser and `summaryInSearch`. */
+const DEFAULT_SUMMARY_VIEW: SummaryView = "brief";
+
+const isSummaryView = (v: string | null): v is SummaryView =>
+  v !== null && (SUMMARY_VIEWS as readonly string[]).includes(v);
+
+/**
+ * Which view Summary shows — `brief`, `fuller` or `thread`
+ * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
+ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md,
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md).
  * *Which thing, within this mode*, so the shape of `?remember=` and
  * `?referee=`: in the URL, because it changes the whole band, and pushed,
  * because switching is a deliberate act Back should undo.
  *
  * **`brief` is the default**, and is omitted from the address: Greg,
  * 2026-10-01 (8N, spya-zw479b), *"In summary mode, default to the brief summary
- * when it opens for the first time"* — Simple and Fuller are written out, while
+ * when it opens for the first time"* — Fuller and Thread are written out, while
  * Brief stays absent; `last-view.ts` remembers the resulting view
  * (docs/plans/261002c-summary-opens-on-brief.md).
- * `simple` was the default until then. `gists`, the outline this mode drew
- * until 2026-10-01, is no longer a value, so an old `?summary=gists` reads as
- * `brief` — the same degrade-to-the-default rule as every other parser here.
+ * `simple` was the default until then, and a value until 2026-10-03; `gists`,
+ * the outline this mode drew until 2026-10-01, went before it. An old
+ * `?summary=simple` or `?summary=gists` reads as `brief` — the same
+ * degrade-to-the-default rule as every other parser here.
  *
- * **Writing it never spends.** Only a press on a plain-words control (the
- * slider, an end button or a command-bar row) arms the run; Back, a pasted link
- * and a last-view restore arrive here and buy nothing.
+ * **Writing it never spends on the plain-words side.** Only a press on Brief or
+ * Fuller (the band's control or a command-bar row) arms that run; Back, a
+ * pasted link and a last-view restore arrive here and buy nothing. **`thread`
+ * is the exception, and a deliberate one**: its band writes the thread when its
+ * owner arrives and there is none (useAutoRun.ts § `useAutoRunOnArrival`), so
+ * a restore never opens it (last-view.ts).
  */
-export const summaryParam = createParser<SimpleLevel>({
-  parse: (v) => (SIMPLE_LEVELS.includes(v as SimpleLevel) ? (v as SimpleLevel) : null),
+export const summaryParam = createParser<SummaryView>({
+  parse: (v) => (isSummaryView(v) ? v : null),
   serialize: (v) => v,
 })
-  .withDefault("brief")
+  .withDefault(DEFAULT_SUMMARY_VIEW)
   .withOptions({ history: "push" });
+
+/**
+ * **Which view a carried `?summary=` names**, degraded as `summaryParam`
+ * degrades it — `diagramInSearch`'s twin, for the one caller that has no React
+ * state to read: the bar on the metadata page (Dock.tsx). On the reading view
+ * the bar is handed the parsed state instead, because the address lags a press
+ * (activation.ts § `PressContext`).
+ */
+export function summaryInSearch(search: string): SummaryView {
+  const asked = new URLSearchParams(search).get("summary");
+  return isSummaryView(asked) ? asked : DEFAULT_SUMMARY_VIEW;
+}
 
 /* ---------------------------------------------------------- structure mode --
    docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
@@ -1235,20 +1276,24 @@ export const refereeParam = createParser<RefereeView>({
   .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
-/* ---------------------------------------------- Remember's three sub-modes --
+/* ----------------------------------------------- Remember's four sub-modes --
    docs/plans/260831al-review-quiz-sub-mode.md. */
 
 /** Free recall, or the questions the piece asks you back. */
 /* In the order the chips are drawn: Recall, Tutorial (since 2026-10-02,
    docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md),
-   Quiz. */
-export const REMEMBER_VIEWS = ["recall", "tutorial", "quiz"] as const;
+   Explore (since 2026-10-03,
+   docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md),
+   Quiz. The three conversations sit together and the one that is not a
+   conversation comes last. */
+export const REMEMBER_VIEWS = ["recall", "tutorial", "explore", "quiz"] as const;
 export type RememberView = (typeof REMEMBER_VIEWS)[number];
 
 /**
- * Which part of Remember is open — `recall` (the default, omitted), `tutorial`
- * or `quiz`. Tutorial is a conversation like Recall, with its own one thread,
- * so `?thread=` follows it exactly as it follows Recall; only Quiz clears it.
+ * Which part of Remember is open — `recall` (the default, omitted), `tutorial`,
+ * `explore` or `quiz`. Tutorial and Explore are conversations like Recall, each
+ * with its own one thread, so `?thread=` follows them exactly as it follows
+ * Recall; only Quiz clears it.
  *
  * **This does not break url-state.md's rule the way `?stance=` would have.** A
  * stance changes nothing on screen and is therefore component state; a sub-mode

@@ -3,8 +3,10 @@
  *
  * The rules were first quoted from the plan's § The mode (client)
  * (docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md);
- * since plan 260929e each pass is only its own stops, so a deeper pass never
- * walks the reader through a stop a shallower one already did.
+ * since plan 260929e each pass is the stops first placed at its depth — and,
+ * since plan 261003l (spya-ms9d69), any shallower stop the route carries into it
+ * with `again`. A route with no `again`, which is every route before `skim/9`,
+ * still never walks the reader through a stop a shallower pass already did.
  */
 import { describe, expect, it } from "vitest";
 import type { Block, BlockId, SkimStop } from "../src/types.js";
@@ -19,6 +21,7 @@ import {
   positionOf,
   positionsOf,
   stepStop,
+  walkedIn,
 } from "../src/web/skim-route.js";
 
 /**
@@ -54,7 +57,7 @@ describe("a pass", () => {
     expect([passCount(ROUTE, 1), passCount(ROUTE, 2), passCount(ROUTE, 3)]).toEqual([3, 2, 3]);
   });
 
-  it("never walks a stop twice across the three passes", () => {
+  it("never walks a stop twice across the three passes, on a route with no `again`", () => {
     const walked = ([1, 2, 3] as const).flatMap((d) => ids(passRoute(ROUTE, d)));
     expect(new Set(walked).size).toBe(walked.length);
     expect(walked).toHaveLength(ROUTE.length);
@@ -83,8 +86,106 @@ describe("a pass", () => {
   });
 });
 
+/**
+ * The same route, with two stops carried into deeper passes (plan 261003l,
+ * spya-ms9d69):
+ *
+ *   route  a1+2 b3 c2 d1 e3 f2+3 g1 h3
+ *   Gist   a          d          g      → a d g
+ *   More   a       c        f           → a c f
+ *   Most        b        e  f       h   → b e f h
+ */
+const SHARED: SkimStop[] = ROUTE.map((s) =>
+  s.quoteId === "a" ? { ...s, again: [2] } : s.quoteId === "f" ? { ...s, again: [3] } : s,
+);
+
+describe("a stop carried into a deeper pass (261003l)", () => {
+  it("is walked in its own pass and in each pass `again` names", () => {
+    const a = SHARED[0]!;
+    expect([walkedIn(SHARED, a, 1), walkedIn(SHARED, a, 2), walkedIn(SHARED, a, 3)]).toEqual([true, true, false]);
+    const d = SHARED[3]!;
+    expect([walkedIn(SHARED, d, 1), walkedIn(SHARED, d, 2), walkedIn(SHARED, d, 3)]).toEqual([true, false, false]);
+  });
+
+  it("keeps its one place in the route order in every pass it is in", () => {
+    expect(ids(passRoute(SHARED, 1))).toEqual(["a", "d", "g"]);
+    expect(ids(passRoute(SHARED, 2))).toEqual(["a", "c", "f"]);
+    expect(ids(passRoute(SHARED, 3))).toEqual(["b", "e", "f", "h"]);
+    expect([passCount(SHARED, 1), passCount(SHARED, 2), passCount(SHARED, 3)]).toEqual([3, 3, 4]);
+  });
+
+  it("can be stop 1 of the deeper pass", () => {
+    expect(firstStopOf(SHARED, 2)).toBe("a");
+    expect(firstStopOf(SHARED, 3)).toBe("b");
+  });
+
+  it("does not make a depth offered: only a stop first placed there does (Sol F1)", () => {
+    /* One Gist stop carried into More, and no More stop of its own: More would
+       be the same one stop again, so it is not offered and not walked. */
+    const one: SkimStop[] = [{ ...stop("x", 1), again: [2] }];
+    expect(offeredDepths(one)).toEqual([1]);
+    expect(walkedIn(one, one[0]!, 2)).toBe(false);
+    expect(passRoute(one, 2)).toEqual([]);
+    expect(passCount(one, 2)).toBe(0);
+    expect(firstStopOf(one, 2)).toBeNull();
+    expect(effectiveDepth(one, 2)).toBe(1);
+    expect(doorAfter(one, 1, "x")).toEqual({ kind: "end", deeper: null });
+    /* The same for a skipped depth between two offered ones. */
+    const gap: SkimStop[] = [{ ...stop("x", 1), again: [2, 3] }, stop("y", 3)];
+    expect(offeredDepths(gap)).toEqual([1, 3]);
+    expect(ids(passRoute(gap, 2))).toEqual([]);
+    expect(ids(passRoute(gap, 3))).toEqual(["x", "y"]);
+  });
+
+  it("leaves a route with no `again` walking exactly as before", () => {
+    for (const d of [1, 2, 3] as const) {
+      expect(ids(passRoute(ROUTE, d))).toEqual(ids(ROUTE.filter((s) => s.depth === d)));
+      expect(passCount(ROUTE, d)).toBe(ROUTE.filter((s) => s.depth === d).length);
+    }
+    const empty = ROUTE.map((s) => ({ ...s, again: [] }));
+    expect(ids(passRoute(empty, 2))).toEqual(["c", "f"]);
+  });
+
+  describe("in a link (Sol F5)", () => {
+    it("draws the asked depth when the stop is walked there", () => {
+      const at = locate(SHARED, 2, "a");
+      expect(at.depth).toBe(2);
+      expect(ids(at.route)).toEqual(["a", "c", "f"]);
+      expect(at.current?.quoteId).toBe("a");
+      /* The object the pass holds, so the band can find its position in it. */
+      expect(at.route.indexOf(at.current!)).toBe(0);
+      expect(locate(SHARED, 3, "f").depth).toBe(3);
+    });
+
+    it("draws the stop's own depth when the asked depth does not walk it", () => {
+      const at = locate(SHARED, 3, "a");
+      expect(at.depth).toBe(1);
+      expect(ids(at.route)).toEqual(["a", "d", "g"]);
+      expect(at.current?.quoteId).toBe("a");
+      expect(locate(SHARED, 1, "f").depth).toBe(2);
+    });
+
+    it("draws the stop's own depth when no depth is asked", () => {
+      expect(locate(SHARED, null, "a").depth).toBe(1);
+      expect(locate(SHARED, null, "f").depth).toBe(2);
+    });
+  });
+
+  it("the door at the end of Gist leads to it when it is stop 1 of More", () => {
+    expect(doorAfter(SHARED, 1, "g")).toEqual({ kind: "end", deeper: { depth: 2, first: "a" } });
+    /* Standing on it in More, the door is the next stop of More. */
+    expect(doorAfter(SHARED, 2, "a")).toEqual({ kind: "next", quoteId: "c" });
+    expect(doorAfter(SHARED, 2, "f")).toEqual({ kind: "end", deeper: { depth: 3, first: "b" } });
+    /* A one-stop Gist whose stop is carried and first in More: *More detail ›*
+       lands on the stop the reader is standing at. */
+    const carried: SkimStop[] = [{ ...stop("x", 1), again: [2] }, stop("y", 2)];
+    expect(doorAfter(carried, 1, "x")).toEqual({ kind: "end", deeper: { depth: 2, first: "x" } });
+    expect(doorAfter(carried, 2, "x")).toEqual({ kind: "next", quoteId: "y" });
+  });
+});
+
 describe("where the reader is (Sol F4)", () => {
-  it("a link's stop wins over its depth: the stop's own pass is drawn", () => {
+  it("a link's stop wins over its depth: a pass the stop is not walked in gives way to its own", () => {
     /* ?depth=2&stop=d — d is a Gist stop, as links from before 260929e can say. */
     const at = locate(ROUTE, 2, "d");
     expect(at.depth).toBe(1);
@@ -149,7 +250,7 @@ describe("the door after the current stop", () => {
     expect(doorAfter(ROUTE, 2, "c")).toEqual({ kind: "next", quoteId: "f" });
   });
 
-  it("offers stop 1 of the next deeper pass at the end of a pass — a stop not walked yet", () => {
+  it("offers stop 1 of the next deeper pass at the end of a pass — on a route with no `again`, a stop not walked yet", () => {
     expect(doorAfter(ROUTE, 1, "g")).toEqual({ kind: "end", deeper: { depth: 2, first: "c" } });
     expect(doorAfter(ROUTE, 2, "f")).toEqual({ kind: "end", deeper: { depth: 3, first: "b" } });
   });
