@@ -1335,6 +1335,9 @@ function baseMarks(
         ? { slot: f.slot, hue: valenceRgbToken(scale, f.valence), dir: valenceDirection(f.valence) }
         : { slot: f.slot };
     /* **A quote carries a stroke and no strength; everything else the reverse.**
+       (`quoteStroke` is how strongly a quote is filled, and `strength` how
+       firmly a search hit's outline is closed, since 2026-10-03; the story
+       below is from when they were an outline and a wash.)
        `strength` is what `annotateHtml` turns into the confidence wash, and it
        takes the *maximum* over every mark covering a run. While a quote was a
        `strength: 1` hit, a quote lying over a 0.4-confidence search hit repainted

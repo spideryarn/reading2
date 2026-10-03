@@ -165,17 +165,15 @@ eight hues are in [`colourscales.css`](../../styles/colourscales.css) and the re
 on this page, and the fact that slot 6 sits close enough to the brand orange to be worth knowing
 about.
 
-**And a third half since 2026-09-07, which adds a token rather than a hue.** Quotes are drawn in the
-prose as an *outline* — `--quote-stroke-rgb`, with `--quote-stroke-color` the alias beside it — and
-the width of that outline carries the quote's priority. The reason it is not another wash is that
-every channel a `<mark>` has was already spoken for: the fill says how confident a search is, the
-hue underneath says *which* search found it, and a fourth alpha of the slate would have been a
-second way of saying "somebody marked this". **Search hits fill; quotes outline.** If a future
-change needs a fill for quotes after all, the reason this was chosen has gone. The mechanism, the
-two tiers and what is still open — including the fact that this green is the same family as
-`--cat-2` rather than the unused hue it was first claimed to be — are in
-[quotes.md § The stroke](quotes.md#the-stroke-which-is-how-a-quote-says-how-much-it-matters) and
-[260907c](../plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md).
+**And a third half, which adds a token rather than a hue: quotes.** A quote is a fill, like a
+highlighter pen, in `--quote-rgb` (a purple; `--quote-color` is the alias beside it), and how strong
+the fill is carries the quote's priority. **Quotes fill; search hits outline**, since 2026-10-03,
+when Greg swapped the two (`spya-xrgste`): the search's slate wash described above is gone from the
+resting mark, its confidence is the alpha of the outline's top edge and ends, and the coloured rule
+per search is the outline's bottom edge. `--hit-wash-rgb` is now only the pressed hit's faint wash
+and the quick hit's ring. The mechanism, the two tiers, why purple, and the month it was the other
+way round are in
+[quotes.md § A highlighter pen](quotes.md#a-highlighter-pen-which-is-how-a-quote-says-how-much-it-matters).
 
 One trap worth repeating here because it is invisible: **mix colours in `oklab`, not `oklch`.**
 `--page` is written `oklch(0.145 0 0)`, a hue explicitly specified as 0 rather than missing, so

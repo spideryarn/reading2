@@ -244,13 +244,14 @@ interface MarkBase {
    */
   slot?: number | null;
   /**
-   * How to **outline** these words — how heavily and how brightly: a quote,
-   * and `hit` marks only. One `QuoteStroke` (src/types.ts), never a weight and
-   * a brightness as two fields that could arrive one without the other.
+   * How strongly to **fill** these words: a quote, and `hit` marks only. One
+   * `QuoteStroke` (src/types.ts; the name is from when a quote was an outline,
+   * until 2026-10-03), never a tier and a brightness as two fields that could
+   * arrive one without the other.
    *
    * The counterpart of `strength`, and exclusive with it **by convention rather
    * than by type** — both are optional here, so nothing stops a caller setting
-   * both and getting a mark that is drawn as a stroke *and* washed. The single
+   * both and getting a mark that is drawn as a quote *and* as a search hit. The single
    * place that decides is `search-hits.ts § baseMarks`, whose comment says what
    * went wrong while a quote was both. Said plainly because an earlier draft of
    * this comment claimed the types enforced it; they do not, and a claim like
@@ -537,15 +538,15 @@ function annotate(html: string, marks: readonly Mark[]): string {
       if (hits.length > 0) {
         el.setAttribute("data-hit", hits.map((m) => m.id).join(" "));
         /* **Two kinds of hit share this element, and they are painted
-           differently.** A quote carries a tier and is drawn as an outline; a
-           search hit carries a strength and is drawn as a wash. One run can be
-           covered by both, and then it wears both.
+           differently.** A quote carries a tier and is drawn as a fill; a
+           search hit carries a strength and is drawn as an outline. One run can
+           be covered by both, and then it wears both. (The other way round
+           until 2026-10-03: plan 261003l.)
 
            `data-wash` is what says "something here wants the search painting",
-           and it is the switch the stylesheet hangs the wash, the hue band and
-           its bottom padding off. Before it, those were unconditional on
-           `mark.hit` — so a quote arrived wearing a fill, which is the opposite
-           of what a quote is supposed to look like. */
+           and it is the switch the stylesheet hangs the outline, the hue band
+           and its bottom padding off. The name is from when that painting was
+           a wash; what it means has not changed. */
         /* A bare hit is neither: it is on the element for its `data-hit` and
            its pressed state, and paints nothing — see `Mark.bare`. */
         const washes = hits.filter((m) => m.quoteStroke === undefined && !m.bare);
@@ -701,6 +702,16 @@ function annotate(html: string, marks: readonly Mark[]): string {
         for (const m of quoted) {
           if (m.start === nodeStart + from) el.setAttribute("data-quote-start", "");
           if (m.end === nodeStart + to) el.setAttribute("data-quote-end", "");
+        }
+        /* **And the same for a search hit, since 2026-10-03**, when the two
+           paintings swapped: a search hit is the outline now and a quote the
+           fill (Greg, `spya-xrgste`; plan 261003l). The outline's caps go on
+           the runs carrying these, for the reason given above. A quote still
+           uses its pair: they round the fill's true ends and cap the ring a
+           pressed quote wears. Bare hits paint nothing and get neither. */
+        for (const m of washes) {
+          if (m.start === nodeStart + from) el.setAttribute("data-wash-start", "");
+          if (m.end === nodeStart + to) el.setAttribute("data-wash-end", "");
         }
         /* **The sign, which is what pays for painting a judgement in colour.**
            docs/project/colour-scales.md forbids colour being the only carrier

@@ -85,8 +85,8 @@ empty one:
    ▐92▌ the model's confidence, printed as well as drawn
    ▬▬▭  where in the article the passage falls — on a literal result too
    ▐62▌how sure ▬▭ where   the legend, so neither mark is hover-only
-   ┃    the bar down a matched paragraph, scaled HARDER than the wash
-   ▂    the wash, over the words the model actually quoted (a quick hit has none)
+   ┃    the bar down a matched paragraph
+   ▭    the outline, round the words the model actually quoted (a quick hit has none)
 ```
 
 **Chat can now run both of these matchers as tools** — `search_article_meaning` is `findPassages`,
@@ -263,8 +263,10 @@ So a quick hit is **bare**: `Found.bare`, set from the run's kind, becomes `Mark
 `annotateHtml` leaves a bare mark out of the wash, its strength and the coloured rules. The
 `<mark>` is still drawn with its `data-hit`, because the scroll and the flash find the passage by it,
 and a pressed quick hit gets one outline round its paragraph (on the cell, under its own attribute, `data-hit-open-bare`) and no wash. It is not the `whole` flag: that one means a
-meaning hit's quote could not be placed, and that hit keeps its wash, as a words match does. Whether
-a meaning hit should lose its wash too is [open](#what-is-still-open).
+meaning hit's quote could not be placed, and that hit keeps its mark on the words, as a words match
+does. Greg was asked whether a meaning hit should lose it too and kept it (2026-10-03, *"I didn't
+realize that the thorough search does highlight sentences. If that's the case, I guess that's
+cool."*). That mark is an outline since the same day (§ An outline, since 2026-10-03).
 
 **On the wire** it is the product's one call on OpenRouter's Decisions API, through its own gateway
 seam, `openRouterDecisions` in [`src/ai-call.ts`](../../src/ai-call.ts), as the job `search-quick` —
@@ -514,8 +516,9 @@ Confidence is **printed as well as drawn**, which is the other note we took: *co
 visible, not just used. A binary highlight hides the model's uncertainty, which is the opposite of
 what we want.* A reader cannot tell 40 from 55 by looking at two washes.
 
-There is a floor on the wash — a 0%-confidence hit still draws at 0.35 — because an invisible mark
-is indistinguishable from a bug.
+There is a floor on the strength — a 0%-confidence hit still draws at 0.35 — because an invisible
+mark is indistinguishable from a bug. (The strength was the wash's depth until 2026-10-03; it is now
+how firmly the outline is closed, § An outline, since 2026-10-03.)
 
 ### What the number *means*, which printing it does not say
 
@@ -742,6 +745,30 @@ Four decisions, all Greg's, taken together as one design.
 the prose answers *which of my questions found this*. Eight hues, from
 [colour-scales.md](colour-scales.md) — that page has the palette, the colour-blindness argument and
 the honest ceiling on how many anyone can tell apart.
+
+### An outline, since 2026-10-03
+
+**A search hit is drawn as an outline, and a quote as a fill.** Greg, `spya-xrgste`: *"I think the
+quotes should be like with a highlighter pen, so filled in, and the searches should have an
+outline."* It was the other way round from 2026-09-07, and most of this page was written then, so
+where a paragraph below says *the wash*, read this section first.
+
+- **The band of coloured rules under the words is the outline's bottom edge.** It is unchanged: one
+  rule per search, stacked, full strength.
+- **A 1px top edge on every fragment, and 1px ends on the true ends only**, in the first of the
+  band's colours, or `--hit-rgb` for a literal match. `annotateHtml` writes `data-wash-start` /
+  `data-wash-end` for the ends, because one hit across an `<em>` is three `<mark>` elements and
+  three closed boxes would read as three hits.
+- **Confidence is the alpha of the top edge and the ends**, `0.35 + 0.65 ×` the strength. A hedged
+  hit reads as an underline with a faint box, a sure one as a closed box. The number is still
+  printed on the row, which is where a reader can actually read it.
+- **No fill at rest.** The slate wash (`--hit-wash-rgb`) is now only what a *pressed* hit gets,
+  with its edges in the page's strongest ink.
+- **A quick hit still paints nothing on its words** (§ Thorough replaces the quick row).
+
+The rules are `annotations.css` § `data-wash`; the plan is
+[261003l](../plans/261003l-quotes-filled-like-a-highlighter-pen-and-search-hits-outlined.md); the
+quote half is [quotes.md § A highlighter pen](quotes.md#a-highlighter-pen-which-is-how-a-quote-says-how-much-it-matters).
 
 **Overlap is stacked rules, not blended washes.** Where two searches cover the same words, the words
 get one wash and *two* thin coloured rules under it, stacked. The alternative — each search painting
@@ -1511,9 +1538,9 @@ a hope.
   The eval favours keeping Jev for typical quick searches on speed grounds. A middle tier is
   Greg's call. So is putting
   literal matches of the typed word ahead of Jev's hits, which would take literal misses to zero.
-- **Should a meaning hit lose its wash too?** A quick hit's words are no longer washed
-  (`spya-m59qg0`). A meaning hit's still are, because there the words are a real quote inside the
-  paragraph. Greg has been asked; not decided.
+- **Is a faint top edge enough of a confidence signal?** Since 2026-10-03 a hit is an outline and
+  its confidence is how firmly the box is closed (§ An outline). The alternative is one strength of
+  outline, with confidence only on the row. Greg has been asked; not decided.
 - **A failed thorough search has already cost the quick answer.** Accepted for v1, because it is a
   second to ask again; the alternative is in the plan (261003i, B2).
 - **Quick scores wobble from run to run** — up to 0.17 between identical requests in the spike — so

@@ -566,6 +566,11 @@
 
 mark.chat {
   background: none;
+  /* The UA sheet gives every `<mark>` `color: MarkText`, which is black: on
+     the dark page these words were near-invisible on /design (browser check,
+     2026-10-03). `mark.cmt`, `mark.term`, `mark.cite` and `mark.hit` each
+     carry this line for the same reason. */
+  color: inherit;
   border-bottom: 1px solid color-mix(in oklab, var(--chat-mark) 60%, var(--page));
 }
 mark.chat[data-chat-open] {

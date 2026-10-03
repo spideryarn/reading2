@@ -1023,6 +1023,25 @@ describe("annotateHtml — a quote is drawn as a stroke, not a wash", () => {
     expect(mark?.hasAttribute("data-quote-end")).toBe(true);
   });
 
+  it("caps a search hit's outline only at its true ends, as a quote's fill is rounded", () => {
+    /* Since 2026-10-03 the search hit is the outline (Greg, `spya-xrgste`; plan
+       261003l), so it has the problem the quote had: one hit across an `<em>`
+       is three marks, and three closed boxes read as three hits. */
+    const out = annotateHtml(html, [{ id: "h1", start: 20, end: 50, kind: "hit", strength: 0.5, slot: 0 }]);
+    const marks = [...host(out).querySelectorAll("mark.hit[data-wash]")];
+    expect(marks.length).toBe(3);
+    expect(marks.map((m) => m.hasAttribute("data-wash-start"))).toEqual([true, false, false]);
+    expect(marks.map((m) => m.hasAttribute("data-wash-end"))).toEqual([false, false, true]);
+  });
+
+  it("does not cap a quote as a search hit, nor a bare hit at all", () => {
+    const quote = annotateHtml(html, [{ id: "q1", start: 3, end: 10, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } }]);
+    expect(quote).not.toContain("data-wash-start");
+    const bare = annotateHtml(html, [{ id: "b1", start: 3, end: 10, kind: "hit", bare: true }]);
+    expect(bare).not.toContain("data-wash-start");
+    expect(bare).not.toContain("data-wash-end");
+  });
+
   it("keeps /design's pasted specimens identical to what the annotator produces", () => {
     /* `/design` shows the mark treatments as literal markup rather than calling
        `annotateHtml`, because that route is lazily loaded and the annotator is

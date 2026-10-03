@@ -318,9 +318,12 @@ describe("things the first draft got wrong", () => {
        version-5 one, and these four were missing from the first draft of the
        change that introduced them. GPT Sol found all three. */
     const out = sanitizeHtml(
-      `<p><mark class="hit" data-quote="2" data-quote-start="" data-quote-end="" data-wash="">forged</mark></p>`,
+      `<p><mark class="hit" data-quote="2" data-quote-start="" data-quote-end="" data-wash="" data-wash-start="" data-wash-end="">forged</mark></p>`,
     );
-    for (const attr of ["data-quote", "data-quote-start", "data-quote-end", "data-wash"]) {
+    /* `data-wash-start` / `data-wash-end` since 2026-10-03 (plan 261003l): where
+       a search hit's outline is capped. Nothing names them in the policy; the
+       allow-list (version 8) is what removes them, and this is the check. */
+    for (const attr of ["data-quote", "data-quote-start", "data-quote-end", "data-wash", "data-wash-start", "data-wash-end"]) {
       expect(out, attr).not.toContain(attr);
     }
     expect(out).not.toMatch(/\bhit\b/);

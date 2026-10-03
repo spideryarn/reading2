@@ -1090,8 +1090,10 @@ export interface Quote {
 }
 
 /**
- * How heavily a quote is outlined in the prose — **two levels, and the number of
- * levels is the finding, not an accident.**
+ * How heavily a quote is drawn in the prose — **two levels, and the number of
+ * levels is the finding, not an accident.** (Drawn as a fill since 2026-10-03,
+ * plan 261003l; the widths and the blind test below are from when it was an
+ * outline, and the test has not been re-run on fills.)
  *
  * `1` is the light stroke, `2` the heavy one. The stylesheet owns the widths
  * (1px and 3px, styles/annotations.css § quote strokes); this is an ordinal so
@@ -1111,8 +1113,12 @@ export interface Quote {
 export type QuoteTier = 1 | 2;
 
 /**
- * **How a quote's outline is drawn: its weight and its brightness, as one
- * value.** `tier` is the coarse priority step above; `alpha` (0.70–1.00) is
+ * **How strongly a quote is drawn: its tier and its brightness, as one
+ * value.** Since 2026-10-03 a quote is a fill, like a highlighter pen, and both
+ * numbers set how strong the fill is (plan 261003l, Greg, `spya-xrgste`);
+ * until then it was an outline, they were its weight and its alpha, and that
+ * is where the name `QuoteStroke` comes from. The numbers and what they mean
+ * did not change. `tier` is the coarse priority step above; `alpha` (0.70–1.00) is
  * the fine one on top of it, since 2026-09-11 — Greg, SPIDERYARN-READING2-2W:
  * *"perhaps slightly fade the border based on the priority-score (but even
  * low-priority quotes should still be clearly visible)"*.
