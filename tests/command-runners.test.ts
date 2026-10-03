@@ -19,6 +19,7 @@ import {
   bookmarkRunner,
   glossaryRunners,
   jumpFirstRunner,
+  readingExecutor,
   tagRunners,
 } from "../src/web/command-runners.js";
 import {
@@ -171,5 +172,45 @@ describe("the glossary", () => {
     expect(takeGlossaryAsk("a-piece", held + 1)).toBeNull();
     expect(takeGlossaryAsk("another-piece", held)).toBeNull();
     expect(takeGlossaryAsk("a-piece", held)).toBe("x");
+  });
+});
+
+/**
+ * **The reading view's executor, as one value** — what Reader.tsx hands the
+ * Dock. Absent means not offered: a visitor has a jump and nothing else, and
+ * the bookmark waits for the comments read (F6).
+ */
+describe("the reading view's executor", () => {
+  const terms = [{ id: "spya-adq5wr", name: "Free energy", aliases: [] }];
+  const glossary = (ready: boolean) => ({ ready, terms, openTerm: vi.fn(), openGlossary: vi.fn() });
+
+  it("gives a visitor the jump and nothing that reads, writes or spends", () => {
+    const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn() });
+    expect(Object.keys(executor.runners)).toEqual(["jump-first"]);
+    expect(executor.sources.glossary).toBeUndefined();
+  });
+
+  it("gives the owner the glossary it was handed, and the ask only once the read is ready", () => {
+    const waiting = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), glossary: glossary(false) });
+    expect(Object.keys(waiting.runners).sort()).toEqual(["glossary-open", "jump-first"]);
+    expect(waiting.sources.glossary).toEqual({ ready: false, terms });
+
+    const ready = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), glossary: glossary(true) });
+    expect(Object.keys(ready.runners).sort()).toEqual(["glossary-ask", "glossary-open", "jump-first"]);
+    expect(ready.sources.glossary).toEqual({ ready: true, terms });
+  });
+
+  it("has a bookmark runner only when it is handed the bookmarker", async () => {
+    const bookmark = vi.fn(async () => true);
+    const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), bookmark });
+    expect(await executor.runners.bookmark?.({ id: "bookmark", blockId: "spya-aaabaz" })).toEqual({ kind: "close" });
+    expect(bookmark).toHaveBeenCalledWith("spya-aaabaz");
+  });
+
+  it("jumps through the jump it was handed", async () => {
+    const jump = vi.fn();
+    const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump });
+    await executor.runners["jump-first"]?.({ id: "jump-first", words: "free energy" });
+    expect(jump).toHaveBeenCalledWith("spya-aaabaz");
   });
 });

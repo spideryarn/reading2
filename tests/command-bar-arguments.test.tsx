@@ -452,8 +452,10 @@ describe("dictation in the box", () => {
     type("experimental ");
     expect(input().readOnly).toBe(true);
     press("Enter");
+    rowNamed("Turn experimental features on")?.click();
     await settle();
     expect(set).not.toHaveBeenCalled();
+    expect(dialog().open).toBe(true);
   });
 
   it("stops the microphone when the bar closes", async () => {

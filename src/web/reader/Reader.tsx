@@ -95,6 +95,8 @@ import { Dock } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
 import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import { shownEntries } from "../glossary-shown.js";
+import { editArticleTags } from "../article-tags.js";
+import { readingExecutor, type TagsControl } from "../command-runners.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
   blockHues,
@@ -2106,6 +2108,55 @@ export function Reader({
     };
   }, [createComment, setNote]);
 
+  /**
+   * **What the command bar's argument rows can do on this page** — *Jump to
+   * the first “X”*, *Glossary: “term”*, *Look up “X” in this article* — and,
+   * for chat's chips in Stage 2, the bookmark. Plan 261003f, Stage 1; who gets
+   * which is command-runners.ts § `readingExecutor`.
+   *
+   *  - `jump` is **`jumpTo`**, the deliberate jump that pushes history and
+   *    feeds the return chip (GPT Sol's F3) — not `bandJump`, since the bar is
+   *    not under a band, and never a write to `?at=`.
+   *  - `terms` is the **visible** list (F2), and `ready` is the owner's
+   *    glossary read having settled with a glossary in it (F1): loading, an
+   *    error and no glossary at all each offer no ask.
+   *  - `openGlossary` is the **plain** mode setter, never the Dock's press,
+   *    which arms generate-on-open (F1). The term travels in the one-shot
+   *    hand-off (glossary-ask-handoff.ts), not the address.
+   *  - `bookmark` under the same gate as the prose's own bookmark button (F6).
+   */
+  const isOwner = owner !== null;
+  const glossaryReady = glossaryRead?.status === "ready" && glossaryRead.glossary !== null;
+  const canBookmark = owner !== null && owner.comments.loaded && owner.comments.loadError === null;
+  const executor = useMemo(
+    () =>
+      readingExecutor({
+        slug,
+        blocks: article.blocks,
+        jump: jumpTo,
+        glossary: isOwner
+          ? {
+              ready: glossaryReady,
+              terms,
+              openTerm: openTermInGlossary,
+              openGlossary: () => void setMode("glossary"),
+            }
+          : undefined,
+        bookmark: canBookmark ? bookmarkBlock : undefined,
+      }),
+    [slug, article.blocks, jumpTo, isOwner, glossaryReady, terms, openTermInGlossary, setMode, canBookmark, bookmarkBlock],
+  );
+  /**
+   * **The reader's tags on this article, for the bar** (`ShelfRow.tags`). The
+   * reading view draws no tag editor, so there is nothing on screen to keep in
+   * step and a plain `editArticleTags` is the whole controller; the Metadata
+   * page hands in its editor's own save instead (F4).
+   */
+  const tagsControl = useMemo<TagsControl>(
+    () => ({ edit: (change) => editArticleTags(slug, change) }),
+    [slug],
+  );
+
   const selectProse = useCallback(
     /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes
        a drag it refused from no drag at all, and TableView stops on the first
@@ -3402,8 +3453,11 @@ export function Reader({
         /* The command bar's Archive and Export (CommandBar.tsx §
            `CommandBarArticle.shelfRow`). `archive` arrives only from
            `OwnedArticle`, which exists only for the reader's own article —
-           so its presence is the shelf row's, and a visitor gets neither. */
-        shelfRow={archive === undefined ? undefined : { archive }}
+           so its presence is the shelf row's, and a visitor gets neither —
+           nor the tag rows that come with it (`tagsControl`). */
+        shelfRow={archive === undefined ? undefined : { archive, tags: tagsControl }}
+        /* The bar's argument rows — `executor` above. */
+        executor={executor}
         drawer={
           owner
             ? {

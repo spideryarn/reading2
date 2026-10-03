@@ -11,7 +11,7 @@
  */
 import type { Block, BlockId } from "../types.js";
 import type { ActionOutcome } from "./command-match.js";
-import type { CommandProposal, GlossaryLookupSource, Outcome } from "./command-proposal.js";
+import type { CommandExecutor, CommandProposal, GlossaryLookupSource, Outcome } from "./command-proposal.js";
 import { handOffGlossaryAsk } from "./glossary-ask-handoff.js";
 import { findLiteral, MIN_FIND_CHARS } from "./search-hits.js";
 
@@ -133,5 +133,43 @@ export function glossaryRunners({
       openGlossary();
       return CLOSE;
     },
+  };
+}
+
+/**
+ * **The reading view's executor, built once** — what Reader.tsx hands the Dock
+ * (command-proposal.ts § `CommandExecutor`), from the controllers it already
+ * owns. A function rather than an object literal in Reader so that *what is
+ * offered to whom* is stated, and tested, in one place
+ * (tests/command-runners.test.ts § the reading view's executor):
+ *
+ *  - **the jump is everybody's** — it moves the reader and writes nothing,
+ *    like the `find` row a visitor already has;
+ *  - **the glossary is the owner's**, and absent otherwise: the read whose
+ *    `ready` gates the ask (F1) is an owner-only fetch, and the ask spends;
+ *  - **the bookmark exists only when the page hands one in**, which it does
+ *    once the opening comments read has landed without error (F6).
+ */
+export function readingExecutor({
+  slug,
+  blocks,
+  jump,
+  glossary,
+  bookmark,
+}: {
+  slug: string;
+  blocks: Block[];
+  /** The deliberate jump — `jumpTo` from reader/useReadingPosition.ts (F3). */
+  jump(blockId: BlockId): void;
+  glossary?: (GlossaryLookupSource & { openTerm(termId: BlockId): void; openGlossary(): void }) | undefined;
+  bookmark?: ((blockId: BlockId) => Promise<boolean>) | undefined;
+}): CommandExecutor {
+  return {
+    runners: {
+      "jump-first": jumpFirstRunner(blocks, jump),
+      ...(glossary === undefined ? {} : glossaryRunners({ slug, ...glossary })),
+      ...(bookmark === undefined ? {} : { bookmark: bookmarkRunner(blocks, bookmark) }),
+    },
+    sources: glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } },
   };
 }

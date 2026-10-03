@@ -1563,7 +1563,6 @@ export function CommandBar({
           <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} />
         )}
         </div>
-        <DictationStrip dictation={dictate.dictation} />
 
         {/* **What an action came to, under the box** — `Starting…`, or the
             sentence a refused run came back with. Always in the tree and only
@@ -1580,6 +1579,11 @@ export function CommandBar({
         >
           {said === null ? "" : said.kind === "pending" ? "Starting…" : said.text}
         </p>
+        {/* The microphone's own strip — the timer, the transcript on its way, a
+            refusal. **After the bar's status line, not before it**: the strip
+            carries a live region of its own (DictationStrip.tsx), and the
+            bar's is the one a reader and every test here looks for first. */}
+        <DictationStrip dictation={dictate.dictation} />
 
         {results.length === 0 ? (
           /* Exactly this, and nothing beside it — Greg's answer 3. No search

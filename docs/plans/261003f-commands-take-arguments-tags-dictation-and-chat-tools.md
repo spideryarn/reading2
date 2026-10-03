@@ -201,3 +201,25 @@ dictation.md's list of boxes, the Help page, url-state.md if a param changes. A 
 ## Progress
 
 - 2026-10-03: plan written; Sol's plan review (F1–F9) folded in.
+- 2026-10-03: **Stage 1 landed** (part 0 and items 1–5). `command-proposal.ts` (the descriptor,
+  `RISK`, the token pair, `resolveArgument`, `runProposal`), `command-runners.ts` (one runner per id,
+  and `readingExecutor`, which Reader builds once), `glossary-ask-handoff.ts`, the verb table in
+  `command-match.ts`, the rows and the microphone in `CommandBar.tsx`, an awaitable
+  `useExperimental().set`. Divergences from the plan as written, each forced by the code:
+  - **The executor is `{ runners, sources }`**, one optional runner per id, not an interface of
+    methods: absence is then the "not offered here" the plan asks for. The two **tag** runners come
+    with `ShelfRow.tags` on either page rather than from the executor (F4).
+  - **A bare `glossary X` is not a verb**, and **`define again` is excepted**: the collision matrix
+    refused both (*glossary again* and *define again* are *Run again* phrasings). `look up`,
+    `define`, *what does … mean* and *what is meant by* remain. Added beside the listed tag verbs:
+    `add the tag`, `tag this as`, `remove the tag`.
+  - **The jump is offered to a visitor too** (it writes nothing, like the find row they already
+    have); the glossary rows are the owner's, since the read that gates the ask is owner-only. A
+    phrase shorter than Search looks for says so rather than claiming it is absent.
+  - **F1's test presses the runner and mounts the real band** (under StrictMode), not the whole
+    Reader, which no test here mounts; Reader's half — `jumpTo`, and the plain `setMode` — is held
+    by a source-level wiring check in `tests/command-jump-pushes-history.test.tsx`, labelled as one.
+  - **The dictation strip is drawn after the bar's status line**, not straight under the box: it
+    carries a live region of its own, and before the bar's it took the place every existing test
+    (and a screen reader) looks for the bar's sentence in. With no article the context is
+    `{ kind: "profile" }`.

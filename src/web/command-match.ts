@@ -467,6 +467,8 @@ interface Verb {
   readonly verb: string;
   readonly endings?: readonly string[];
   readonly needsEnding?: true;
+  /** Arguments, lower-case, that make this a phrase the bar already names. */
+  readonly except?: readonly string[];
 }
 
 const TO_THIS = ["to this paper", "to this article", "to this piece", "to this"] as const;
@@ -496,6 +498,9 @@ const FROM_THIS = ["from this paper", "from this article", "from this piece", "f
  *    *Glossary › Run again* a row's own label, so either would have grown a
  *    paid *Look up “again”* row under the one the reader meant. `look up`,
  *    `define` and *what does … mean* ask the same without the clash.
+ *  - **`define again`**, for the same reason one step on: `define` is one of
+ *    Glossary's nicknames (mode-catalog.ts), so *define again* is a *Run
+ *    again* phrasing too. The verb stays and that one argument is excepted.
  */
 const VERBS: readonly Verb[] = [
   { kind: "find", verb: "do they talk about" },
@@ -509,7 +514,7 @@ const VERBS: readonly Verb[] = [
   { kind: "jump-first", verb: "where does it first say" },
   { kind: "jump-first", verb: "where does it first mention" },
   { kind: "glossary", verb: "look up", endings: ["in the glossary"] },
-  { kind: "glossary", verb: "define" },
+  { kind: "glossary", verb: "define", except: ["again"] },
   { kind: "glossary", verb: "what does", endings: ["mean"], needsEnding: true },
   { kind: "glossary", verb: "what is meant by" },
   { kind: "tag-add", verb: "add a tag of", endings: TO_THIS },
@@ -569,6 +574,7 @@ function argumentOf(rest: string, entry: Verb): string | null {
   const ending = entry.endings?.find((e) => lower === e || lower.endsWith(` ${e}`));
   if (ending !== undefined) words = words.slice(0, words.length - ending.length).trim();
   else if (entry.needsEnding) return null;
+  if (entry.except?.includes(words.toLowerCase())) return null;
   words = words
     /* A function rather than the `"$1"` pattern, which
        tests/no-ai-cost-for-readers.test.ts reads — rightly, from where it
