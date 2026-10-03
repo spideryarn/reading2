@@ -4336,6 +4336,24 @@ export const citationInvestigations = spideryarn.table(
      * survived the check.
      */
     paperPassages: jsonb("paper_passages").$type<PaperPassage[]>(),
+    /*
+     * **How influential the work is, as one page of this press's web search
+     * says** — plan 261003m stage 2, `CitationWebInfluence` in src/types.ts,
+     * src/citation-influence.ts. **All null** is a press that found nothing
+     * code could keep, or an answer from before that stage. Columns, not JSON
+     * (sql.md): the number is ordered and thresholded on. When it happened is
+     * this row's own `at`.
+     */
+    /** 0–1 on the list's rubric: the model's number, kept only with a checked quote. */
+    influence: doublePrecision("influence"),
+    /** The page's own words the number rests on, as code found them in its extract. */
+    influenceQuote: text("influence_quote"),
+    /** The search result's address, through `safeUrl`. Copied by code, never the model's. */
+    influenceSourceUrl: text("influence_source_url"),
+    /** The search result's own title. Copied by code; outside the presence CHECK (Sol F5). */
+    influenceSourceTitle: text("influence_source_title"),
+    /** `INFLUENCE_VERSION` when it was written; a stale one is not read (Sol F7). */
+    influenceVersion: text("influence_version"),
     /**
      * **When this row was first written** — the first press of *Investigate* on this work. `at` is re-stamped by
      * a later re-run, which overwrites the row; this keeps the first, because
@@ -4395,6 +4413,18 @@ export const citationInvestigations = spideryarn.table(
       sql`${t.extractsRead} >= 0 and (${t.extractsRead} >= 1 or coalesce(${t.paperState} = 'read', false)) and ${t.longestExtractWords} >= 0 and (${t.searches} is null or ${t.searches} >= 0)`,
     ),
     check("citation_investigations_answer", sql`char_length(${t.answer}) > 0`),
+    /* The number, its quote, its source and its version: all four or none
+       (plan 261003m stage 2). The title follows the address and may be null
+       beside it, but never stands alone. */
+    check(
+      "citation_investigations_influence_whole",
+      sql`(${t.influence} is null) = (${t.influenceQuote} is null) and (${t.influence} is null) = (${t.influenceSourceUrl} is null) and (${t.influence} is null) = (${t.influenceVersion} is null) and (${t.influenceSourceTitle} is null or ${t.influenceSourceUrl} is not null)`,
+    ),
+    /* `NaN` is greater than every number in Postgres, so the upper bound refuses it too. */
+    check(
+      "citation_investigations_influence_range",
+      sql`${t.influence} is null or (${t.influence} >= 0 and ${t.influence} <= 1)`,
+    ),
   ],
 );
 

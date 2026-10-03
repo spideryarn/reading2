@@ -1,0 +1,217 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "after",
+  "run": 2,
+  "promptVersion": "citations/6",
+  "systemPromptSha256": "450899eddefa8efaec99dfd5198c55d2987e3a6a01fd90422e21a7dc2f8f62da",
+  "model": "claude-sonnet-5",
+  "at": "2026-10-03T19:26:10.381Z",
+  "tokens": {
+    "input": 38925,
+    "output": 6894,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "works": [
+    {
+      "title": "Scaling Laws for Transfer (compute-efficiency halving)",
+      "authors": "Hernandez, Brown",
+      "year": "2020",
+      "relevance": 0.6,
+      "influence": 0.4,
+      "why": "Used to estimate how training costs fall over time due to algorithmic and hardware progress."
+    },
+    {
+      "title": "Scaling to Very Very Large Corpora for Natural Language Disambiguation",
+      "authors": "Banko, Brill",
+      "year": "2001",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "Cited as an early demonstration that more data eventually lets simple methods beat fancier ones ('the curves cross')."
+    },
+    {
+      "title": "Large Language Models in Machine Translation",
+      "authors": "Brants et al.",
+      "year": "2007",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "Cited as another case of simple scaled-up models eventually outperforming more complex rivals."
+    },
+    {
+      "title": "Six Challenges for Neural Machine Translation",
+      "authors": "Koehn, Knowles",
+      "year": "2017",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "Cited among the examples of neural methods eventually winning as data scales up."
+    },
+    {
+      "title": "Benchmarking scaling laws from literature-reported numbers",
+      "authors": "Thompson et al.",
+      "year": "2020",
+      "relevance": 0.4,
+      "influence": null,
+      "why": "Criticized as a poorly controlled attempt to infer scaling laws from disparate papers, contrasted with the tightly controlled scaling papers."
+    },
+    {
+      "title": "Scaling Laws for Neural Language Models",
+      "authors": "Kaplan et al.",
+      "year": "2020",
+      "relevance": 1,
+      "influence": 0.9,
+      "why": "Shows the smooth power-law curves relating loss to compute/data/parameters that the article uses to argue scaling keeps paying off."
+    },
+    {
+      "title": "Language Models are Few-Shot Learners (GPT-3 paper)",
+      "authors": "Brown et al.",
+      "year": "2020",
+      "relevance": 1,
+      "influence": 1,
+      "why": "Reports GPT-3's size, training, and scaling results that the whole piece analyzes."
+    },
+    {
+      "title": "Measuring Systematic Generalization/Massive Multitask Language Understanding",
+      "authors": "Hendrycks et al.",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Cited as another scaling curve showing model size versus question-answering performance."
+    },
+    {
+      "title": "Linguistic bias study of language models with scale",
+      "authors": "Warstadt et al.",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Cited as showing linguistic biases emerge more as training data increases."
+    },
+    {
+      "title": "On Robustness and Transferability of Convolutional Neural Networks (BiT robustness study)",
+      "authors": "Dojolonga et al.",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Cited for showing transfer learning keeps improving even as raw classification accuracy plateaus."
+    },
+    {
+      "title": "Very Deep VAEs (deep variational autoencoders)",
+      "authors": "Child",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Cited as evidence that VAEs catch up to GANs/autoregressive models once made very deep."
+    },
+    {
+      "title": "NVAE: A Deep Hierarchical Variational Autoencoder",
+      "authors": "Vahdat, Kautz",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Cited alongside Child 2020 as evidence deep VAEs can match sharper image generators."
+    },
+    {
+      "title": "Soft-Robust Algorithms for Handling Model Misspecification (lottery-ticket/ensemble framing)",
+      "authors": "Orseau et al.",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Cited for the idea that a big model encodes countless small sub-models, one of which solves the problem."
+    },
+    {
+      "title": "The Transition Between Overparametrization and Overfitting (double descent framing)",
+      "authors": "Viering, Loog",
+      "year": "2021",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Cited regarding a possible phase transition where a model abruptly switches to a more abstract solution."
+    },
+    {
+      "title": "A Practical Guide to Sentiment Analysis (envisioned NLP eras figure)",
+      "authors": "Cambria, White",
+      "year": "2014",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Source of the figure depicting hypothetical S-curve eras of NLP progress used to frame the pretraining thesis."
+    },
+    {
+      "title": "Natural Language Processing (Almost) from Scratch",
+      "authors": "Collobert et al.",
+      "year": "2011",
+      "relevance": 0.4,
+      "influence": 0.7,
+      "why": "Quoted on how much of English's entropy beyond simple n-gram models reflects grammar and world knowledge."
+    },
+    {
+      "title": "Prediction and Entropy of Printed English",
+      "authors": "Shannon",
+      "year": "1951",
+      "relevance": 0.3,
+      "influence": 0.9,
+      "why": "Cited for the classic estimate of English's entropy per character from human guessing experiments."
+    },
+    {
+      "title": "The Entropy of English Using PPM-based Models",
+      "authors": "Teahan, Cleary",
+      "year": "1996",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Cited for a lower entropy estimate achieved using variable-length character n-gram models."
+    },
+    {
+      "title": "The Quiet Enemy (The Legacy of Hiroshima)",
+      "authors": "Teller",
+      "year": "1962",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Source of the anecdote about Bohr's skepticism toward the atomic bomb being feasible, used as an analogy for skepticism about scaling."
+    },
+    {
+      "title": "One Billion Word Benchmark for Measuring Progress in Statistical Language Modeling",
+      "authors": "Chelba et al.",
+      "year": "2013",
+      "relevance": 0.3,
+      "influence": 0.5,
+      "why": "Source of the 1 Billion Word benchmark used (and later excluded) in comparing GPT-2/GPT-3 perplexities to humans."
+    },
+    {
+      "title": "The Human Use of Human Beings",
+      "authors": "Wiener",
+      "year": null,
+      "relevance": 0.4,
+      "influence": 0.6,
+      "why": "Quoted on how merely announcing a problem is solvable (as with the atomic bomb) spurs independent rediscovery, analogous to scaling."
+    },
+    {
+      "title": "Deep Learning Scaling is Predictable, Empirically",
+      "authors": "Hestness et al.",
+      "year": "2017",
+      "relevance": 0.4,
+      "influence": 0.5,
+      "why": "Cited as an early scaling paper from a Chinese-linked lab (Baidu) showing scaling predictability."
+    },
+    {
+      "title": "When Will Computer Hardware Match the Human Brain?",
+      "authors": "Moravec",
+      "year": "1998",
+      "relevance": 0.7,
+      "influence": 0.6,
+      "why": "Source of the forecast that affordable compute for human-level AI would arrive in the 2020s, which the article says is being vindicated."
+    },
+    {
+      "title": "An Introduction to Wittgenstein's Tractatus",
+      "authors": "Anscombe",
+      "year": "1963",
+      "relevance": 0.3,
+      "influence": 0.5,
+      "why": "Source of the anecdote about heliocentrism feeling counterintuitive, used to argue a correct but counterintuitive view (agency in GPT-3) can still be right."
+    },
+    {
+      "title": "Story of Your Life",
+      "authors": "Chiang",
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.6,
+      "why": "Cited as a fictional illustration of the variational/teleological way of describing a physical process as if it were goal-seeking."
+    }
+  ]
+}

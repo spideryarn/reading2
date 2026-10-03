@@ -87,7 +87,7 @@ import { formsOf } from "../../term-match.js";
 import { horizontalInset, safeAreaInsets } from "../safe-area.js";
 import type { ArchiveControl } from "../useArchive.js";
 import { Spine } from "../Spine.js";
-import { AnnotateDialog } from "../AnnotateDialog.js";
+import { AnnotateDialog, annotateKey } from "../AnnotateDialog.js";
 import { TouchSelectionChip } from "../TouchSelectionChip.js";
 import { CommentDialog } from "../CommentDialog.js";
 import { Masthead } from "../Masthead.js";
@@ -2249,8 +2249,8 @@ export function Reader({
       /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
          call the reader had not asked for; then it opened an ask box; since
          2026-08-28 it opens a *comment* box, where saving is free and the model
-         is a tick-box. Greg's call — see
-         docs/plans/260828a-comments-and-bookmarks.md. */
+         is opt-in (a tick-box then, the Ask AI button since 2026-10-03). Greg's
+         call — see docs/plans/260828a-comments-and-bookmarks.md. */
       void setNote(null);
       void setThread(null);
       setChatDraft(null);
@@ -3126,6 +3126,11 @@ export function Reader({
       )}
       {owner && annotating && (
         <AnnotateDialog
+          /* **One box per passage, by key.** A new selection unmounts the box
+             that was open, whose cleanup stores its draft against its own
+             passage, and mounts an empty one — AnnotateDialog.tsx §
+             `annotateKey`. Read by tests/annotate-dialog-keeps-a-draft.test.tsx. */
+          key={annotateKey(annotating)}
           anchor={annotating}
           /* **Referee mode only**, and all four of its sub-modes: the criteria
              are fetched inside the section rather than lifted out of the
@@ -3153,15 +3158,11 @@ export function Reader({
              tests/opening-read-gates-writes.test.tsx reads this line. */
           loaded={owner.comments.loaded}
           onCancel={() => setAnnotating(null)}
-          onSave={(id, body, ask, mark, colour) => {
-            const anchor = annotating;
-            setAnnotating(null);
-            /* **The free thing is stored first, and the paid thing waits for
-               it.** If the chat call fails, or the reader closes the panel
-               before sending, their words are already on disk. The reverse
-               order — open the chat, save afterwards — loses the comment for
-               exactly the reader who typed the most into it. */
-            void owner.comments.create({
+          onSave={({ anchor, id, body, ask, mark, colour, leaving }) => {
+            /* **The box's anchor, never `annotating`**: a draft stored because
+               the reader selected something else arrives after that state has
+               moved on to the new passage. */
+            const comment = {
               id,
               blockId: anchor.blockId,
               quote: anchor.quote,
@@ -3172,7 +3173,24 @@ export function Reader({
               mark,
               /* And the highlight colour, for the same reason. */
               ...(colour ? { colour } : {}),
-            }).then((stored) => {
+            };
+            /* The page is going (`pagehide`): the request that survives it, and
+               nothing else — the box stays as it is, because the page may yet
+               come back from the back/forward cache. */
+            if (leaving) {
+              owner.comments.createOnLeave(comment);
+              return;
+            }
+            /* **Close only the box that saved.** For the same reason as the
+               anchor: an unconditional `null` here closed the box the new
+               selection had just opened. */
+            setAnnotating((cur) => (cur && annotateKey(cur) === annotateKey(anchor) ? null : cur));
+            /* **The free thing is stored first, and the paid thing waits for
+               it.** If the chat call fails, or the reader closes the panel
+               before sending, their words are already on disk. The reverse
+               order — open the chat, save afterwards — loses the comment for
+               exactly the reader who typed the most into it. */
+            void owner.comments.create(comment).then((stored) => {
               if (!ask || !stored) return;
               /* The conversation opens on the same words, pre-filled with what
                  they wrote. `sourceComment` travels with it so the *server*

@@ -23,6 +23,50 @@ where the link came from, and **first cited**, a jump to the passage
 entry](#which-citation-and-whose-entry) is what the by-line and *first cited* show since
 2026-09-30.
 
+**New lists ask for influence as a number only when the model is confident it knows the work;
+otherwise the row says *influence unknown*.** Influence is the model's memory of the work, not anything in the article, and
+until `citations/6` the prompt told it to give a low number for a work it did not know, so "I do not
+know this" and "this is obscure" were the same number. Asked whether to keep the score at all
+([261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md)), Greg,
+2026-10-03:
+
+> Q-influence Hmmm, I'm torn. Maybe if the model is confident (e.g. because it's well-known), but if
+> in doubt default to Unknown. And if we do a deeper dive on a Citation, try and populate it then.
+>
+> — Greg, 2026-10-03
+
+So since `citations/6` the prompt asks for a number or `null`, the schema makes the field required
+and nullable ([prompting-guide.md](prompting-guide.md) § What the model writes back), and a low
+number means *known, and minor*. A `null` is stored as no `influence` at all, the shape an unscored
+row already had, and counted on the step's log line as `influenceUnknown`, apart from
+`influenceAbsent` (the field left out) and `influenceRejected` (not a number in 0–1). Two drafts of
+one work fold to the known number. On the row, a work with a relevance and no influence draws the
+relevance bar and then the words *influence unknown*, with a card saying no usable score was saved;
+never a bar at zero. Storage does not distinguish an explicit unknown from a missing or rejected
+score, so the card explains the new prompt's rule without claiming why this particular score is
+absent. It opens on hover, focus or tap. A row with neither score says nothing, as before, and the
+hover card in the prose draws no scores at all.
+
+**A list made by `citations/5` or earlier keeps its numbers**, low ones for unknown works included,
+until it is made again from the Metadata page (§ [Making it again](#making-it-again)). Nothing re-runs
+by itself.
+
+**A bar marked *from the web* is the second half of Greg's answer**: *Dig deeper* looked for the
+work's standing on the pages its web search returned, and kept a number (§ [Dig
+deeper](#dig-deeper-a-closer-look-at-one-work-on-demand), *It looks for the work's influence*). The words open a
+card, on hover, focus or tap, saying it is *an AI estimate from web evidence*, the site, the day,
+and the page's own words. The owner's card on *influence unknown* says Dig deeper looks for it; a
+visitor's does not, because a visitor has no Dig deeper and never sees what it found.
+
+**Every reader of a row's influence goes through one function**, `effectiveInfluence` in
+[`citation-effective-influence.ts`](../../src/citation-effective-influence.ts): the web number when
+the row has a kept, current *Dig deeper* answer whose influence carries the current
+`INFLUENCE_VERSION`, else the list's own, else unknown. The bar, the threshold, the influence order,
+whether that order is offered, and chat's `article_citations` tool all read it. The web number
+replaces the model's memory on that row, higher or lower, because it has a source and the memory
+has none. **The list's own `influence` is never overwritten**, so a visitor's row, which is built
+from the list alone, keeps the list's value.
+
 **No by-line that only repeats the title.** When the article gives a work only as an author–year
 label, the label is the title, and `Bartlett (1932)` over `Bartlett · 1932` said it twice
 (SPIDERYARN-READING2-7W). `byLineRepeatsTitle` folds only the known presentation differences —
@@ -198,7 +242,16 @@ that the furniture filter missed ([261001b](../plans/261001b-public-article-visi
 Five, under the glossary's order buttons ([glossary.md](glossary.md)):
 
 - **prioritised**, the default — `(2 × relevance + influence) / 3` against the threshold bar, in
-  first-cited order. A work missing a score survives every position of the bar
+  first-cited order: a score never moves a row, it only hides one. **A work whose influence is
+  unknown is judged on its relevance alone** (`priorityOf`), since 2026-10-03; before that it
+  survived every position of the bar, which was written for a rare unscored row and would stop the
+  bar hiding anything now that unknown is common. That is the same arithmetic as assuming the work
+  is exactly as influential as it is relevant, so it is not neutral: at relevance 0.30 an unknown
+  work clears the default bar, and one known to be minor (influence 0.10) scores 0.23 and does not.
+  Not knowing a work is not evidence against it. Whether the bar should use relevance alone for
+  every row is an open question in
+  [261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md).
+  A work with no relevance still survives every position of the bar
   ([`threshold.ts`](../../src/web/threshold.ts)), and the line under it says how many are hidden. The
   bar starts at **0.25**, lowered from 0.40 on 2026-09-15 so most works come in by default — 92% on
   average on the local runs
@@ -206,7 +259,18 @@ Five, under the glossary's order buttons ([glossary.md](glossary.md)):
   Falls back to first cited
   when no position of the bar would hide anything.
 - **first cited** — the artefact's own order.
-- **relevance**, **influence** — descending, a work missing that score last.
+- **relevance** — descending, a work with no relevance last. Offered only when some work has a
+  relevance; a saved `?citeby=relevance` falls back to first cited otherwise (GPT Sol's F14: until
+  2026-10-03 it reordered the rows while no button was pressed).
+- **influence** — known influence first, descending; then the works whose influence is unknown, by
+  relevance, descending, with no relevance last. First-cited order breaks ties. Offered only when
+  some work has an influence; a saved `?citeby=influence` falls back to first cited otherwise.
+
+**The influence in every one of these is the effective one** (§ [A row](#a-row)): a number *Dig
+deeper* read from the web counts in the threshold's `(2 × relevance + influence) / 3` and in the
+influence order exactly as the list's own would, and one press can make the influence order
+available on a list that had none.
+
 - **date** — publication year, oldest first, as Debate's date order is; same year in first-cited
   order, undated last. The year is the one the row draws (`workByLine`: the article's, the
   registry's only where the article gives none), read as its first four-digit year, so `2017a` is
@@ -220,7 +284,7 @@ Five, under the glossary's order buttons ([glossary.md](glossary.md)):
 
 Only the two raw scores are drawn on a row, never the combination — the glossary's rule. An **(i)**
 in the band's top-right corner (`BandAbout`, shared by every mode) says `influence` is the model's
-memory, not a citation count, and, **only when the model reported it**, that the list was capped at
+memory, not a citation count, and what *influence unknown* means, and, **only when the model reported it**, that the list was capped at
 80; it also carries the work count and provenance. The two notes were a foot pinned under the list
 until Greg, 2026-09-30 (`spya-nca765`), then briefly lived in the order row; the count was in that
 row too, shown only outside *prioritised*, whose threshold row already says "n of m"
@@ -496,6 +560,56 @@ paraphrase, told which state the paper is in, and still may not quote: the guard
 unchanged, because a quote presented as the paper's could otherwise be the article's words (GPT
 Sol's plan review, P-1).
 
+**It looks for the work's influence, on the pages its own search returned.** Since 2026-10-03 (plan
+[261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md),
+stage 2). After the press's last re-read of the row, and beside the paper read, one small JSON call
+(`citation-influence`, on `DIG_DEEPER_MODEL`, no tools, a strict schema whose three fields are each
+a value or null) is shown the work's title, authors and year and the forced search's pages,
+numbered and fenced as data. It answers a number on the list's own 0–1 rubric, the number of the
+one page it rests on, and the words on that page; or three nulls when no page says, or when the
+only evidence is a bare citation count with nothing to read it by. It is told never to answer from
+memory. Code keeps the number only when all of this holds
+([`citation-influence.ts`](../../src/citation-influence.ts) § `keepInfluence`):
+
+- the page is one of those shown, and its address and title are copied from the search result,
+  never from the model;
+- **the page's title names this work**, by
+  the quick check's title rule (`resultIsTheWork` with no identifier anchor: the title begins with
+  the work's; "Comment on …", "… - Review" and an untitled result are refused);
+- the words are found in that page's own extract by the strict pass (`verifyQuote`: at least six
+  words, at most 400 characters), and what is kept is the extract's slice;
+- the number is finite and within 0–1.
+
+No call is made when no page shown has a title naming the work, since nothing it answered could be
+kept. The wait has its own 20-second deadline and ends before the streamed answer starts. The
+deadline aborts the request, but cannot force a transport ignoring abort to stop; a late result
+is ignored. It is best-effort: a refusal, the deadline, an unreadable answer or
+a failed check stores no influence and never fails the press. The press's log line says
+`influenceKept`, and `influenceWhy` when not.
+
+**What that does not prove.** A page about the work can still carry a figure that belongs to
+something else on it. Code checks the page and the words, not what the words are about. So the row
+calls it *an AI estimate from web evidence* and shows the quoted words, for the reader to judge.
+
+It is stored on the press's own row, in five nullable columns: `influence`, `influence_quote`,
+`influence_source_url`, `influence_source_title` and `influence_version`. Two CHECKs: the number,
+quote, address and version are all null or all present (the title may be null beside them), and the
+number is within 0–1. When it happened is the row's own `at`. `influence_version` is
+`INFLUENCE_VERSION`, the stamp of this call's prompt and checks: bumping it stops every older
+number being read without hiding the answers beside them. **`CITATION_INVESTIGATE_VERSION` is not
+bumped**, because the streamed answer's prompt did not change; an answer kept before this has no
+influence, and *Dig deeper again* looks for one. The streamed answer is not told the number.
+
+**It rarely finds one, measured.** The probe (`evals/citations-influence-dig.ts`, 2026-10-03) ran
+the press's own search and this call on 13 works, most of them well known: **none was filled in**.
+For 10 no page's title named the work, so no call was made; for 3 the work's own page came back
+and said nothing about its standing, because a search for a work returns the work, and an abstract
+does not say how famous it is. So today *Dig deeper* leaves influence as it was nearly every time.
+A source that does say, such as a registry's citation count, is the open question in
+[261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md);
+the numbers are in
+[261003f](../investigations/261003f-citations-influence-unknown-unless-confident-before-and-after.md).
+
 **The prompt forbids quotation marks outright** since 2026-09-30. Allowing them round the article's
 words and the work's title led the model to quote its own phrases, the paper's terms and result
 titles too, and four of five real calls were stopped by the guard; with none allowed, seven of
@@ -523,12 +637,13 @@ press's worst case, now on Opus with the search) stays under a $50-a-day ceiling
 raised it on 2026-10-02, when it bought only about 25 presses a day for everyone. The comment on
 that constant carries the arithmetic and says which figures are estimated and which measured. The
 lease covers every deadline in a press — the forced search, the quick check, the registry and the
-paper's 25 seconds, the passages call, the answer — plus a margin. The answer's own optional Exa tool is pinned and bounded by
+paper's 25 seconds, the passages call, the influence call, the answer — plus a margin. The answer's own optional Exa tool is pinned and bounded by
 `INVESTIGATE_MAX_TOTAL_RESULTS` and `INVESTIGATE_MAX_CHARACTERS`
 ([`citation-investigate.ts`](../../src/citation-investigate.ts)) — separate from the forced
-search's `DIG_MAX_RESULTS`. On the gateway a press can record up to four jobs: `dig-deeper-search`,
+search's `DIG_MAX_RESULTS`. On the gateway a press can record up to five jobs: `dig-deeper-search`,
 `citations-find` when the quick check runs, `citation-paper-passages` when the paper's passages are
-picked, and `citation-investigate` for the streamed answer.
+picked, `citation-influence` when a page of the search is about the work, and
+`citation-investigate` for the streamed answer.
 
 ## Already an article here
 
@@ -585,7 +700,11 @@ Chat — typed, a passage question, and Live — can read the stored list throug
 at the right paper. It reads the list and never makes one: no list is an ordinary answer, a stale one
 shows no rows, and a capped one is counted as *the stored list*, never the article's total. The
 experimental switch governs this mode's screen, not the reader's own derived data, so the tool is not
-behind it. [chat-tools.md](chat-tools.md) has the tool.
+behind it. [chat-tools.md](chat-tools.md) has the tool. Each row's influence is the effective one
+(§ [A row](#a-row)): where *Dig deeper* found one on the web, the row gives that number and says it
+is *an AI estimate from the web, from a page on* that host, and our words outside the fence say
+what that means. The page's words and its address are not in the row. `loadCitations` attaches the
+owner's kept answers, so the tool needed no wider read.
 
 ## Making it again
 
@@ -612,7 +731,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it the
 button on the hover card and the threshold reveal it would need; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* from the hover card, or on every row at once; an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; a real citation count from a registry (*Dig deeper*'s influence is an AI estimate from a web page, not a count; Crossref's `is-referenced-by-count` for a row with a DOI is still deferred, [261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md) § Passed over); searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* from the hover card, or on every row at once; an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 
@@ -622,6 +741,9 @@ the cap; real influence from a citation database; searching every unlinked row a
 mounts) ·
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) ·
 [`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (Dig deeper's row) ·
+[`citation-influence.ts`](../../src/citation-influence.ts) (Dig deeper's influence call and what
+code keeps of it) ·
+[`citation-effective-influence.ts`](../../src/citation-effective-influence.ts) (the one read path) ·
 [`cited-in-spideryarn.ts`](../../src/cited-in-spideryarn.ts) and
 [`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts) (already an article here) ·
 [`CitationsMode.tsx`](../../src/web/modes/citations/CitationsMode.tsx) ·

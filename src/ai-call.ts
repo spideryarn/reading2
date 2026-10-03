@@ -677,6 +677,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **A cited work's influence, from the press's own search results**
+     (src/citation-influence.ts) — the passages call's route for the passages
+     call's reason. `require_parameters` matters here: the answer is read
+     through a strict `response_format`, and an upstream that dropped it would
+     answer in prose. */
+  "citation-influence": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **The one job with no `provider` block, and it used to be the one job whose
      `provider` block mattered most.**
 
@@ -1019,6 +1029,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
     providerDefault:
       "Not measured. About 5,000 words of one paper and one claim, three short quotes out; " +
       "its ceiling is src/citation-paper-passages.ts § PASSAGES_ANSWER_TOKENS.",
+  },
+  "citation-influence": {
+    providerDefault:
+      "Not measured. Up to five search extracts and one work's title, a number and a short quote out; " +
+      "its ceiling is src/citation-influence.ts § INFLUENCE_ANSWER_TOKENS.",
   },
   pdf: {
     providerDefault:

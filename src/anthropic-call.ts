@@ -36,7 +36,13 @@
  * tell a bad key from a rate limit from a size limit apart — the same trade
  * `providerRefused` makes, for the same reason.
  */
-import { AnthropicError, APIError } from "@anthropic-ai/sdk";
+import {
+  AnthropicError,
+  APIConnectionError,
+  APIConnectionTimeoutError,
+  APIError,
+  APIUserAbortError,
+} from "@anthropic-ai/sdk";
 import { stageFailure } from "./job-failure.js";
 import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
 
@@ -56,6 +62,22 @@ import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
  * the upstream body. The diagnostic half of the seam is still only for things
  * safe to log, and that body can echo the article — see the header above.
  */
+/**
+ * Which status-less failure this was, **in our words, chosen by class**.
+ *
+ * Never the SDK's own message: a connection error's can carry a hostname or an
+ * errno, and an error event's is the provider's body. A class is a closed set,
+ * so each string here is one we wrote — which is what `{ authored }` claims.
+ */
+function withoutStatus(err: APIError): string {
+  if (err instanceof APIUserAbortError) return "the request was aborted";
+  if (err instanceof APIConnectionTimeoutError) return "the connection timed out";
+  if (err instanceof APIConnectionError) return "the connection failed";
+  /* What is left is the SDK's `new APIError(undefined, …)` for a `200` whose
+     stream carried an `error` event (core/streaming.js). */
+  return "the response stream carried an error event";
+}
+
 export function anthropicCallFailed(err: unknown): Error {
   if (err instanceof APIError) {
     /* `APIConnectionError`/`APIConnectionTimeoutError`/`APIUserAbortError`
@@ -65,7 +87,17 @@ export function anthropicCallFailed(err: unknown): Error {
        is the closest existing sentence and — for the abort case — moot
        anyway: src/jobs.ts decides "cancelled" from the abort signal, not
        from what this throws. */
-    const status = typeof err.status === "number" ? err.status : 503;
+    if (typeof err.status !== "number") {
+      /* **The reader's sentence is the 5xx one; the diagnostic no longer says a
+         status nobody sent.** Until 2026-10-03 this defaulted the number to 503
+         and wrote "status 503" into the log, which is how a dropped connection
+         in production read as a provider outage and took a log read and an
+         inference to tell apart (plan 261003m). */
+      return stageFailure(providerHttpFailure(503), {
+        authored: `Anthropic SDK request failed with no HTTP status: ${withoutStatus(err)}.`,
+      });
+    }
+    const status = err.status;
     const failure = providerHttpFailure(status);
     /* The diagnostic is the status and nothing else — the one fact about this
        failure that is ours to repeat. `status` also rides on the error itself,
@@ -80,7 +112,7 @@ export function anthropicCallFailed(err: unknown): Error {
     }) as Error & {
       status?: number;
     };
-    if (typeof err.status === "number") out.status = err.status;
+    out.status = status;
     return out;
   }
   if (err instanceof AnthropicError) {

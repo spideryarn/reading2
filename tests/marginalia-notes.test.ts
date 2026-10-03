@@ -335,7 +335,7 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
     ]);
   });
 
-  /* *Save & ask* with an empty box is allowed (AnnotateDialog): no words, no
+  /* *Ask AI* with an empty box is allowed (AnnotateDialog): no words, no
      answer, but a conversation. It is not a bare bookmark. GPT Sol, plan 261002j. */
   it("keeps a wordless comment that asked the AI", () => {
     const comments = [

@@ -1,0 +1,223 @@
+{
+  "slug": "scaling-hypothesis",
+  "run": 1,
+  "influenceVersion": "citation-influence/2",
+  "model": "anthropic/claude-opus-5.5",
+  "at": "2026-10-03T20:31:49.126Z",
+  "kept": 0,
+  "asked": 5,
+  "works": [
+    {
+      "id": "spya-ujg0my",
+      "title": "Language Models are Few-Shot Learners (GPT-3 paper)",
+      "authors": "Brown et al",
+      "year": "2020",
+      "listInfluence": 1,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "gwern.net",
+          "hasTitle": false,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "pdf.stafforini.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "arxiv.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1434
+        },
+        {
+          "host": "gwern.net",
+          "hasTitle": false,
+          "titleNamesWork": false,
+          "extractChars": 211
+        },
+        {
+          "host": "stafforini.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 256
+        }
+      ],
+      "rawAnswer": null,
+      "kept": false,
+      "ms": 4028,
+      "why": "no-page-about-work"
+    },
+    {
+      "id": "spya-bk2pza",
+      "title": "Scaling Laws for Neural Language Models",
+      "authors": "Kaplan et al",
+      "year": "2020",
+      "listInfluence": 0.9,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "gwern.net",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "arxiv.org",
+          "hasTitle": true,
+          "titleNamesWork": true,
+          "extractChars": 1115
+        },
+        {
+          "host": "openai.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 803
+        },
+        {
+          "host": "pdf.stafforini.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1380
+        },
+        {
+          "host": "link.vox.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1499
+        }
+      ],
+      "rawAnswer": {
+        "influence": null,
+        "source": null,
+        "quote": null
+      },
+      "kept": false,
+      "ms": 7794,
+      "why": "said-unknown"
+    },
+    {
+      "id": "spya-mpscd5",
+      "title": "The Bitter Lesson",
+      "authors": "Sutton",
+      "year": null,
+      "listInfluence": 0.9,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "gwern.net",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "gwern.net",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 620
+        },
+        {
+          "host": "gwern.obormot.net",
+          "hasTitle": false,
+          "titleNamesWork": false,
+          "extractChars": 129
+        },
+        {
+          "host": "arxiv.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 166
+        },
+        {
+          "host": "exa.ai",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        }
+      ],
+      "rawAnswer": null,
+      "kept": false,
+      "ms": 4337,
+      "why": "no-page-about-work"
+    },
+    {
+      "id": "spya-ryt2kr",
+      "title": "EfficientNet",
+      "authors": null,
+      "year": null,
+      "listInfluence": 0.6,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "gwern.net",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "gwern.net",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 255
+        },
+        {
+          "host": "codercto.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 255
+        },
+        {
+          "host": "gwern.net",
+          "hasTitle": false,
+          "titleNamesWork": false,
+          "extractChars": 166
+        },
+        {
+          "host": "lesswrong.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 83
+        }
+      ],
+      "rawAnswer": null,
+      "kept": false,
+      "ms": 5070,
+      "why": "no-page-about-work"
+    },
+    {
+      "id": "spya-afbz5n",
+      "title": "Hestness et al 2017",
+      "authors": "Hestness et al",
+      "year": "2017",
+      "listInfluence": 0.5,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "gwern.net",
+          "hasTitle": false,
+          "titleNamesWork": false,
+          "extractChars": 1499
+        },
+        {
+          "host": "link.vox.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "gwern.obormot.net",
+          "hasTitle": false,
+          "titleNamesWork": false,
+          "extractChars": 434
+        }
+      ],
+      "rawAnswer": null,
+      "kept": false,
+      "ms": 5056,
+      "why": "no-page-about-work"
+    }
+  ]
+}

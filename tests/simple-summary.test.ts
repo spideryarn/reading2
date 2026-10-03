@@ -53,6 +53,8 @@ let neverStart = false;
 let failCall: SimpleLevel | null = null;
 /** When every stub call answers. */
 let finalGate: Promise<void> = Promise.resolve();
+/** How many network attempts each logical writer call reports. */
+let meteredAttempts = 1;
 const abortSettled = new Set<SimpleLevel>();
 const sent: { task: string; body: unknown; options: unknown; aborted: () => boolean }[] = [];
 
@@ -103,6 +105,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
           void startGate.then(listener);
         },
         aborted: () => false,
+        attempts: () => meteredAttempts,
         finalMessage: () => {
           if (level === failCall) return Promise.reject(new Error("upstream 502"));
           if (level !== waitForAbort) return finalGate.then(() => message);
@@ -177,6 +180,7 @@ beforeEach(() => {
   neverStart = false;
   failCall = null;
   finalGate = Promise.resolve();
+  meteredAttempts = 1;
   abortSettled.clear();
   sent.length = 0;
 });
@@ -663,6 +667,16 @@ describe("the request", () => {
       Array.from({ length: 3 }, () => ({ type: "json_schema", schema: SIMPLE_SUMMARY_OUTPUT_SCHEMA })),
     );
     expect(out.simpleSummary.levels).toEqual(GOOD);
+  });
+
+  it("counts every network attempt inside the three logical writer calls", async () => {
+    answer = good();
+    meteredAttempts = 2;
+
+    const out = await run();
+
+    expect(sent).toHaveLength(3);
+    expect(out.calls).toBe(6);
   });
 
   it("fails the whole run when one level's call fails, aborts the others, and waits for them to settle", async () => {

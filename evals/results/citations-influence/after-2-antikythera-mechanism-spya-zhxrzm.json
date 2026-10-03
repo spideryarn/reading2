@@ -1,0 +1,609 @@
+{
+  "slug": "antikythera-mechanism-spya-zhxrzm",
+  "arm": "after",
+  "run": 2,
+  "promptVersion": "citations/6",
+  "systemPromptSha256": "450899eddefa8efaec99dfd5198c55d2987e3a6a01fd90422e21a7dc2f8f62da",
+  "model": "claude-sonnet-5",
+  "at": "2026-10-03T19:25:08.505Z",
+  "tokens": {
+    "input": 45198,
+    "output": 20466,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "works": [
+    {
+      "title": "Decoding the ancient Greek astronomical calculator known as the Antikythera Mechanism",
+      "authors": "Freeth, Bitsakis, Moussas, Seiradakis, et al.",
+      "year": "2006",
+      "relevance": 1,
+      "influence": 0.9,
+      "why": "Reports X-ray tomography scans decoding the mechanism's gears and inscriptions."
+    },
+    {
+      "title": "The Cosmos in the Antikythera Mechanism",
+      "authors": "Freeth, Jones",
+      "year": "2012",
+      "relevance": 1,
+      "influence": 0.8,
+      "why": "Proposes a reconstruction adding planetary pointers and a true-sun pointer to the gear system."
+    },
+    {
+      "title": "Calendars with Olympiad display and eclipse prediction on the Antikythera Mechanism",
+      "authors": "Freeth, Jones, Steele, Bitsakis",
+      "year": "2008",
+      "relevance": 1,
+      "influence": 0.8,
+      "why": "Shows the mechanism also tracked the four-year cycle of Panhellenic athletic games."
+    },
+    {
+      "title": "The Calendar on the Antikythera Mechanism and the Corinthian Family of Calendars",
+      "authors": "Iversen",
+      "year": "2017",
+      "relevance": 0.8,
+      "influence": 0.5,
+      "why": "Argues the calendar names match the Epirote calendar, suggesting origin and dating of the device."
+    },
+    {
+      "title": "Gears from the Greeks. The Antikythera Mechanism: A Calendar Computer from ca. 80 B.C.",
+      "authors": "Price",
+      "year": "1974",
+      "relevance": 0.9,
+      "influence": 0.9,
+      "why": "First detailed study and dating analysis of the mechanism from X-ray and gamma-ray imaging."
+    },
+    {
+      "title": "A Portable Cosmos: Revealing the Antikythera Mechanism, Scientific Wonder of the Ancient World",
+      "authors": "Jones",
+      "year": "2017",
+      "relevance": 0.7,
+      "influence": 0.6,
+      "why": "Supports a construction date close to the shipwreck, a generation before it."
+    },
+    {
+      "title": "A Model of the Cosmos in the ancient Greek Antikythera Mechanism",
+      "authors": "Freeth, Higgon, Dacanalis, MacDonald, Georgakopoulou, Wojcik",
+      "year": "2021",
+      "relevance": 0.9,
+      "influence": 0.6,
+      "why": "2021 full reconstruction proposal compatible with all known inscription data on planetary cycles."
+    },
+    {
+      "title": "On the epoch of the Antikythera mechanism and its eclipse predictor",
+      "authors": "Carman, Evans",
+      "year": "2014",
+      "relevance": 0.8,
+      "influence": 0.5,
+      "why": "Argued for a new dating of approximately 200 BC based on the Saros Dial's start-up date."
+    },
+    {
+      "title": "On the Trail of an Ancient Mystery – Solving the Riddles of an Early Astronomical Calculator",
+      "authors": "Markoff",
+      "year": "2014",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "News coverage of the 2014 redating study."
+    },
+    {
+      "title": "Researchers home in on possible \"day zero\" for Antikythera mechanism",
+      "authors": "Ouellette",
+      "year": "2022",
+      "relevance": 0.5,
+      "influence": null,
+      "why": "Reports the 2022 proposal for the mechanism's initial calibration date of 178 BC."
+    },
+    {
+      "title": "The Initial Calibration Date of the Antikythera Mechanism after the Saros spiral mechanical Apokatastasis",
+      "authors": "Voularis, Mouratidis, Vossinakis",
+      "year": "2022",
+      "relevance": 0.5,
+      "influence": 0.2,
+      "why": "Proposes 23 December 178 BC as the mechanism's initial calibration date."
+    },
+    {
+      "title": "In search of lost time",
+      "authors": "Marchant",
+      "year": "2006",
+      "relevance": 0.4,
+      "influence": null,
+      "why": "News feature on the Cardiff team's 2005 imaging study of the fragments."
+    },
+    {
+      "title": "Ancient computer's gears may not have been able to turn",
+      "authors": "Wilkins",
+      "year": "2025",
+      "relevance": 0.5,
+      "influence": null,
+      "why": "2025 study arguing manufacturing error was too great for the mechanism to have worked."
+    },
+    {
+      "title": "Simulation and Analysis of Natural Seawater Chemical Reactions on the Antikythera Mechanism",
+      "authors": "Voulgaris et al.",
+      "year": "2019",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Studied how seawater corrosion deformed the mechanism's bronze after recovery."
+    },
+    {
+      "title": "Albert Rehm zum Gedächtnis",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Obituary/memorial noting Rehm's early identification of the device as an astronomical calculator."
+    },
+    {
+      "title": "Building the Cosmos in the Antikythera Mechanism",
+      "authors": "Freeth",
+      "year": "2013",
+      "relevance": 0.4,
+      "influence": null,
+      "why": "Discusses models ruled out as understanding of the inscriptions improved."
+    },
+    {
+      "title": "Hidden History: Lost Civilizations, Secret Knowledge, and Ancient Mysteries",
+      "authors": "Haughton",
+      "year": "2006",
+      "relevance": 0.2,
+      "influence": null,
+      "why": "General source on the mechanism's history used as background citation."
+    },
+    {
+      "title": "'Like Opening a Pyramid and Finding an Atomic Bomb': Derek de Solla Price and the Antikythera Mechanism",
+      "authors": "Jones",
+      "year": "2018",
+      "relevance": 0.4,
+      "influence": null,
+      "why": "History of Price's role and reception of his Antikythera research."
+    },
+    {
+      "title": "Missing Piece of Antikythera Mechanism Found on Aegean Seabed",
+      "authors": "Bohstrom",
+      "year": "2018",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "News report on a disc found at the wreck site speculated to be part of the mechanism."
+    },
+    {
+      "title": "No, Archaeologists Probably Did Not Find a New Piece of the Antikythera Mechanism",
+      "authors": "Daley",
+      "year": "2018",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Counters claims that the bronze disc found in 2018 was part of the mechanism."
+    },
+    {
+      "title": "Quantum Information Processing: From Theory to Experiment",
+      "authors": "Angelakis",
+      "year": "2005",
+      "relevance": 0.2,
+      "influence": null,
+      "why": "Cited as a source calling the mechanism the first analogue computer."
+    },
+    {
+      "title": "Were there others? The Antikythera Mechanism Research Project",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Discusses whether similar devices existed in antiquity."
+    },
+    {
+      "title": "The Antikythera Mechanism",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": null,
+      "why": "ISAW project page summarizing the mechanism's history and significance."
+    },
+    {
+      "title": "Antikythera Mechanism Research Project",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": null,
+      "why": "Project website cited for background on research findings."
+    },
+    {
+      "title": "Decoding an Ancient Computer",
+      "authors": "Freeth",
+      "year": "2009",
+      "relevance": 0.5,
+      "influence": 0.3,
+      "why": "Popular science summary of the mechanism's decoding and function."
+    },
+    {
+      "title": "Pergamum",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": null,
+      "why": "Background on Pergamon as a possible origin for the mechanism."
+    },
+    {
+      "title": "The Inscriptions of the Antikythera Mechanism 3: The Front Dial and Parapegma Inscriptions",
+      "authors": "Bitsakis, Jones",
+      "year": "2013",
+      "relevance": 0.4,
+      "influence": 0.3,
+      "why": "Detailed reading of front dial parapegma inscriptions."
+    },
+    {
+      "title": "Important New Discoveries from Greece's Ancient Antikythera Shipwreck",
+      "authors": "Kampouris",
+      "year": "2019",
+      "relevance": 0.2,
+      "influence": null,
+      "why": "News report on new finds at the Antikythera wreck site."
+    },
+    {
+      "title": "The new findings from the underwater archaeological research at the Antikythera Shipwreck",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": null,
+      "why": "Report on continued excavation of the wreck site."
+    },
+    {
+      "title": "The Antikythera Mechanism reconsidered",
+      "authors": "Wright",
+      "year": "2007",
+      "relevance": 0.7,
+      "influence": 0.6,
+      "why": "Wright built the first full working model including a proposed planetarium system."
+    },
+    {
+      "title": "Decoding the Heavens",
+      "authors": "Marchant",
+      "year": "2006",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "Book account of the mechanism's research history, including fragment handling anecdote."
+    },
+    {
+      "title": "Antikythera Mechanism, \"PINAX\"",
+      "authors": "Moussas",
+      "year": "2011",
+      "relevance": 0.4,
+      "influence": 0.2,
+      "why": "Proposes fragment D's gear reproduces Jupiter's epicyclic motion."
+    },
+    {
+      "title": "Antikythera Mechanism the oldest computer",
+      "authors": "Moussas",
+      "year": "2018",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Further elaboration of Moussas's Jupiter gear hypothesis for fragment D."
+    },
+    {
+      "title": "Antikythera mechanism: Evidence of a lunar calendar",
+      "authors": "Budiselic et al.",
+      "year": "2020",
+      "relevance": 0.8,
+      "influence": 0.4,
+      "why": "Provided statistical evidence the front calendar ring had 354 holes, suggesting a lunar calendar."
+    },
+    {
+      "title": "An improved calendar ring hole-count for the Antikythera mechanism",
+      "authors": "Woan, Bayley",
+      "year": "2024",
+      "relevance": 0.7,
+      "influence": 0.3,
+      "why": "Independently recalculated the number of holes in the calendar ring, confirming a lunar count."
+    },
+    {
+      "title": "How Many Days in an Egyptian Year? Evidence from the Antikythera Mechanism",
+      "authors": "Malin, Dickens",
+      "year": "2024",
+      "relevance": 0.6,
+      "influence": 0.2,
+      "why": "Statistical estimate of the calendar ring hole count favouring 354 over 365."
+    },
+    {
+      "title": "The Calendars of Ancient Egypt",
+      "authors": "Parker",
+      "year": "1950",
+      "relevance": 0.5,
+      "influence": 0.5,
+      "why": "Proposed the Egyptian civil-based lunar calendar that the mechanism's ring may represent."
+    },
+    {
+      "title": "The Antikythera Mechanism and the early history of the moon phase display",
+      "authors": "Wright",
+      "year": "2006",
+      "relevance": 0.6,
+      "influence": 0.5,
+      "why": "Demonstrated the mechanical means by which the device displayed the Moon's phase."
+    },
+    {
+      "title": "Discovering how Greeks computed in 100 B.C.",
+      "authors": "Wilford",
+      "year": "2008",
+      "relevance": 0.2,
+      "influence": null,
+      "why": "News coverage of the 2008 Games dial and Olympiad cycle findings."
+    },
+    {
+      "title": "Ancient Device Was Used To Predict Olympic Games",
+      "authors": "Connor",
+      "year": "2008",
+      "relevance": 0.2,
+      "influence": null,
+      "why": "News coverage of the Games dial function."
+    },
+    {
+      "title": "Olympic link to early 'computer'",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": null,
+      "why": "BBC news coverage of the Games dial discovery."
+    },
+    {
+      "title": "Does it favour a Heliocentric, or Geocentric Universe?",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Discusses whether the mechanism's computations imply heliocentric or geocentric assumptions."
+    },
+    {
+      "title": "Solar anomaly and planetary displays in the Antikythera Mechanism",
+      "authors": "Evans, Carman, Thorndyke",
+      "year": "2010",
+      "relevance": 0.9,
+      "influence": 0.6,
+      "why": "Proposes a simpler planetary display scheme with offset sun pointer rather than full epicyclic gearing."
+    },
+    {
+      "title": "The Antikythera Mechanism: a new gearing scheme",
+      "authors": "Wright",
+      "year": "2005",
+      "relevance": 0.6,
+      "influence": 0.5,
+      "why": "Basis for the diagram of hypothetical gearing including proposed planet pointers."
+    },
+    {
+      "title": "Using Computation to Decode the First Known Computer",
+      "authors": "Edmunds, Freeth",
+      "year": "2011",
+      "relevance": 0.5,
+      "influence": 0.3,
+      "why": "Explains computational analysis underlying the gear train function table."
+    },
+    {
+      "title": "On the Pin-and-Slot Device of the Antikythera Mechanism, with a New Application to the Superior Planets",
+      "authors": "Carman, Thorndyke, Evans",
+      "year": "2012",
+      "relevance": 0.6,
+      "influence": 0.5,
+      "why": "Proposes epicyclic pin-and-slot gearing for the superior planets' positions."
+    },
+    {
+      "title": "Conclusions from the Functional Reconstruction of the Antikythera Mechanism",
+      "authors": "Voulgaris, Mouratidis, Vossinakis",
+      "year": "2018",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Proposes a reconstructed mechanism and function conclusions."
+    },
+    {
+      "title": "The Antikythera Cosmos (video)",
+      "authors": "Freeth",
+      "year": "2021",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Video explaining the 2021 reconstruction's discovery of synodic cycle periods."
+    },
+    {
+      "title": "The Impact of Triangular-Toothed Gears on the Functionality of the Antikythera Mechanism",
+      "authors": "Szigety, Arenas",
+      "year": "2025",
+      "relevance": 0.5,
+      "influence": null,
+      "why": "2025 study on manufacturing error and triangular gear teeth affecting mechanism accuracy."
+    },
+    {
+      "title": "An Initial Assessment of the Accuracy of the Gear Trains in the Antikythera Mechanism",
+      "authors": "Edmunds",
+      "year": "2011",
+      "relevance": 0.6,
+      "influence": 0.4,
+      "why": "Assesses mechanical accuracy limits from hand-built gear imprecision."
+    },
+    {
+      "title": "De re publica",
+      "authors": "Cicero",
+      "year": "54–51 BC",
+      "relevance": 0.7,
+      "influence": 0.7,
+      "why": "Describes Archimedes' planetarium devices, cited as evidence similar mechanisms existed."
+    },
+    {
+      "title": "Archimedes: Spheres and Planetaria (Introduction)",
+      "authors": "Rorres",
+      "year": null,
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Background on Archimedes' planetarium-building devices mentioned in ancient texts."
+    },
+    {
+      "title": "Ancient Moon 'computer' revisited",
+      "authors": "Fildes",
+      "year": "2006",
+      "relevance": 0.2,
+      "influence": null,
+      "why": "News coverage of the 2006 Cardiff team imaging results."
+    },
+    {
+      "title": "Science and Civilisation in China",
+      "authors": "Needham",
+      "year": "2000",
+      "relevance": 0.2,
+      "influence": 0.5,
+      "why": "Background source on Su Song's mechanical clock tower comparison."
+    },
+    {
+      "title": "Vitruvius' odometer",
+      "authors": "Sleeswyk",
+      "year": "1981",
+      "relevance": 0.4,
+      "influence": null,
+      "why": "Explains how angled gears like those in the mechanism made ancient odometer designs work."
+    },
+    {
+      "title": "De Natura Deorum",
+      "authors": "Cicero",
+      "year": null,
+      "relevance": 0.4,
+      "influence": 0.5,
+      "why": "Mentions Posidonius's device replicating Sun, Moon and planetary motions."
+    },
+    {
+      "title": "Ein Kombinationsschloss aus dem Kerameikos",
+      "authors": "Hoepfner",
+      "year": "1970",
+      "relevance": 0.3,
+      "influence": null,
+      "why": "Describes a complex Roman-era bronze combination lock as another example of ancient mechanical ingenuity."
+    },
+    {
+      "title": "Archaeology: high tech from Ancient Greece",
+      "authors": "Charette",
+      "year": "2006",
+      "relevance": 0.2,
+      "influence": null,
+      "why": "Commentary on the mechanism as evidence of advanced ancient Greek technology."
+    },
+    {
+      "title": "Early mathematical wheelwork: Byzantine calendrical gearing",
+      "authors": "Maddison",
+      "year": "1985",
+      "relevance": 0.4,
+      "influence": 0.3,
+      "why": "Describes a Byzantine geared calendar device as evidence of continuity of the tradition."
+    },
+    {
+      "title": "The Song Dynasty in China",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": null,
+      "why": "Background source on Su Song's astronomical clock tower."
+    },
+    {
+      "title": "Exhibitions",
+      "authors": null,
+      "year": null,
+      "relevance": 0.1,
+      "influence": null,
+      "why": "Lists museum exhibitions of the mechanism and its reconstructions."
+    },
+    {
+      "title": "The Antikythera Shipwreck: the Ship, the Treasures, the Mechanism",
+      "authors": null,
+      "year": null,
+      "relevance": 0.1,
+      "influence": null,
+      "why": "Describes the main museum exhibition on the shipwreck and mechanism."
+    },
+    {
+      "title": "The Museum",
+      "authors": null,
+      "year": null,
+      "relevance": 0.1,
+      "influence": null,
+      "why": "Describes the Archimedes Museum in Olympia displaying a reconstruction."
+    },
+    {
+      "title": "Kotsanas Museum of Ancient Greek Technology",
+      "authors": null,
+      "year": null,
+      "relevance": 0.1,
+      "influence": null,
+      "why": "Describes the museum displaying a reconstruction of the mechanism."
+    },
+    {
+      "title": "Western Australian Museum exhibits full scale replica of Antikythera Mechanism by Greek Australian engineer",
+      "authors": "Giannopoulos",
+      "year": "2023",
+      "relevance": 0.1,
+      "influence": null,
+      "why": "News item on the Western Australian Museum's replica exhibit."
+    },
+    {
+      "title": "Naked Science – Star Clock BC (TV Episode)",
+      "authors": null,
+      "year": "2011",
+      "relevance": 0.1,
+      "influence": null,
+      "why": "Documentary episode about the mechanism."
+    },
+    {
+      "title": "The World's First Computer",
+      "authors": null,
+      "year": null,
+      "relevance": 0.1,
+      "influence": null,
+      "why": "2012 documentary produced by Tony Freeth about the mechanism."
+    },
+    {
+      "title": "BBC Four - The Two-Thousand-Year-Old Computer",
+      "authors": null,
+      "year": null,
+      "relevance": 0.1,
+      "influence": null,
+      "why": "2012 BBC documentary on the mechanism."
+    },
+    {
+      "title": "Ancient Computer",
+      "authors": null,
+      "year": null,
+      "relevance": 0.1,
+      "influence": null,
+      "why": "2013 PBS NOVA episode documenting the mechanism's investigation."
+    },
+    {
+      "title": "Small Mammal, Behind the Scenes: Lego Antikythera Mechanism",
+      "authors": "Pavlus",
+      "year": "2010",
+      "relevance": 0.1,
+      "influence": null,
+      "why": "Describes a functioning Lego reconstruction of the mechanism and its short film."
+    },
+    {
+      "title": "What is the Antikythera mechanism? Google Doodle marks discovery of ancient Greek computer",
+      "authors": "Smith",
+      "year": "2017",
+      "relevance": 0.1,
+      "influence": null,
+      "why": "News coverage of the Google Doodle marking the discovery anniversary."
+    },
+    {
+      "title": "'Indiana Jones And The Dial Of Destiny': Cannes Review",
+      "authors": null,
+      "year": null,
+      "relevance": 0.1,
+      "influence": null,
+      "why": "Review of the film featuring a fictionalized version of the mechanism."
+    },
+    {
+      "title": "Indiana Jones & The Dial of Destiny's Time Travel Explained",
+      "authors": "Barker",
+      "year": "2023",
+      "relevance": 0.1,
+      "influence": null,
+      "why": "Explains the film's plot involving the fictionalized Antikythera device."
+    },
+    {
+      "title": "Nightwish – The Antikythera Mechanism (Orchestral Version) Lyrics",
+      "authors": null,
+      "year": null,
+      "relevance": 0.1,
+      "influence": null,
+      "why": "Lyrics page for the Nightwish song referencing the mechanism."
+    }
+  ]
+}

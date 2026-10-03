@@ -1,0 +1,7 @@
+ALTER TABLE "spideryarn"."citation_investigations" ADD COLUMN "influence" double precision;--> statement-breakpoint
+ALTER TABLE "spideryarn"."citation_investigations" ADD COLUMN "influence_quote" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."citation_investigations" ADD COLUMN "influence_source_url" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."citation_investigations" ADD COLUMN "influence_source_title" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."citation_investigations" ADD COLUMN "influence_version" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."citation_investigations" ADD CONSTRAINT "citation_investigations_influence_whole" CHECK (("spideryarn"."citation_investigations"."influence" is null) = ("spideryarn"."citation_investigations"."influence_quote" is null) and ("spideryarn"."citation_investigations"."influence" is null) = ("spideryarn"."citation_investigations"."influence_source_url" is null) and ("spideryarn"."citation_investigations"."influence" is null) = ("spideryarn"."citation_investigations"."influence_version" is null) and ("spideryarn"."citation_investigations"."influence_source_title" is null or "spideryarn"."citation_investigations"."influence_source_url" is not null));--> statement-breakpoint
+ALTER TABLE "spideryarn"."citation_investigations" ADD CONSTRAINT "citation_investigations_influence_range" CHECK ("spideryarn"."citation_investigations"."influence" is null or ("spideryarn"."citation_investigations"."influence" >= 0 and "spideryarn"."citation_investigations"."influence" <= 1));
