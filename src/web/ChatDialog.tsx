@@ -684,7 +684,9 @@ export function ChatDialog({
   return (
     <aside
       ref={box}
-      className={dockRoom === null ? "chat-dialog" : "chat-dialog docked"}
+      /* The template form, like `.cmt-dialog`'s: tests/linky-is-scoped.test.ts
+         looks for the scoping class at the start of a `className`. */
+      className={`chat-dialog${dockRoom === null ? "" : " docked"}`}
       /* `.cmt-dialog`'s geometry and `.cmt-dialog`'s problem: pinned to the
          bottom of the layout viewport, which on iOS is behind the keyboard —
          and this one has a composer in it, so the keyboard is the normal state.

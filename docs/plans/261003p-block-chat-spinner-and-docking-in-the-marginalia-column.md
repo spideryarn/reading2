@@ -221,3 +221,4 @@ the waiting line, the answer and the cursor, with a test seen red. **F7**, **F8*
 sentences corrected. **F9** (P2, wider, not fixed): a turn that is recovering while a tool row
 still reads *running* shows the strip's spinner and the reconnecting line's together. It predates
 this work and is left; named here so it is not lost.
+- 2026-10-04: merged dev; full suite 1501 files green, six red: five wanted `npm run build` / `build:fleet` (green once built), and `linky-is-scoped` was mine (the dialog class written as a ternary hid the scoping class from the guard; now the template form).
