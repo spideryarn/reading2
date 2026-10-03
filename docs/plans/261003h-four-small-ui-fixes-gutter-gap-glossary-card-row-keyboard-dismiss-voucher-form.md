@@ -188,3 +188,34 @@ build with changes. What it changed:
 The boxes that now call `putKeyboardAway`: chat's composer, Candidates, the comment follow-up, the
 glossary's look-up, the search panel's box. Chat's edit-a-question box unmounts on send, which
 already drops the keyboard.
+
+## What landed, and GPT Sol's code review
+
+The four fixes are four commits. The browser check (Playwright, 1440, 820 and 390 wide) passed the
+three visual ones: 72 gutters, 32px between icon centres, 8px between targets, none below its row,
+and the same number of icons under the old and new thresholds on every row.
+
+![the gutter](261003h-shot-1-gutter-desktop.png)
+![the term card](261003h-shot-t-1440-nolink.png)
+![the term card, with a link](261003h-shot-t-1440-link.png)
+![the voucher form](261003h-shot-3-vouchers-desktop.png)
+
+The [code review](261003h-four-small-ui-fixes-gutter-gap-glossary-card-row-keyboard-dismiss-voucher-form-code-review-sol.md)
+found four things and fixed all four, each with a test that was red first. One round; I read the
+diff and took all of it:
+
+- Search's **find** button sent the search and kept the keyboard; only Enter let go. The blur
+  moved into the shared `ask()`.
+- The glossary look-up blurred on a term it had refused, which still needed correcting.
+- Chat blurred a second draft typed while the first send waited on a live handoff.
+- The card's tests passed with its CSS deleted; there is now a guard on the stylesheet.
+
+It wrote the class up as
+[261003b](../postmortems/261003b-a-submit-side-effect-attached-to-an-event-bypasses-acceptance-and-sibling-paths.md):
+a side effect hung on an event rather than on the accepted action.
+
+**Not checked: a real iPad.** The keyboard fix is tested in jsdom against the numbers iOS reports.
+Nothing here has seen a physical soft keyboard.
+
+**Deferred, and why**: seeing Android Chrome's keyboard (needs a remembered baseline height); a Done
+button for the multi-line boxes (a question for Greg, in the debrief).
