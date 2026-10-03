@@ -803,14 +803,15 @@ describe("the panel", () => {
     expect(calls, "the mark must not press the row").toEqual([]);
     const card = document.querySelector(".where-card");
     expect(card?.textContent).toBe("MethodsResults");
-    expect(card?.querySelector('[aria-current="location"]')?.textContent).toBe("Results");
+    expect(card?.querySelector(".where-node.here")?.textContent).toBe("Results");
+    expect(card?.querySelector("[aria-current]"), "the card marks what it is about, not the reader (261003d F4)").toBeNull();
     const titles = [...(card?.querySelectorAll<HTMLElement>(".where-node") ?? [])];
     expect(
       titles.map((row) => [...row.classList].filter((name) => name.startsWith("voice-"))),
       "the title's face reached the app's ▸ marker",
     ).toEqual([[], []]);
     expect(
-      titles.map((row) => row.querySelector<HTMLElement>("[class^='voice-']")?.className),
+      titles.map((row) => [...(row.querySelector<HTMLElement>(".where-title")?.classList ?? [])].filter((name) => name.startsWith("voice-")).join()),
     ).toEqual(["voice-ai", "voice-ai"]);
   });
 

@@ -234,9 +234,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mountSpine() {
+function mountSpine(outline = OUTLINE) {
   act(() => {
-    root.render(<Spine outline={OUTLINE} layoutKey="test" onJump={() => {}} />);
+    root.render(<Spine outline={outline} layoutKey="test" onJump={() => {}} />);
   });
   act(() => {
     vi.advanceTimersByTime(50);
@@ -339,28 +339,75 @@ describe("the sub-section list", () => {
   });
 });
 
-describe("the crumb", () => {
-  it("names the part and says where in it this section sits", () => {
+/**
+ * **Where the section sits in the article** — the outline that replaced the
+ * crumb (*THE PART · 2 of 5*) and the title line in 2026-10, Greg's
+ * spya-d896sz: *"hovering over the spine to show, okay, this is where I am right
+ * now relative to the wider course hierarchy"*. Plan 261003d.
+ *
+ * Rows are written `title` for context, `*title` on the path, `>title` for the
+ * band, and ` [k of n]` where a trimmed level counts instead of listing.
+ */
+const outlineOf = (card: HTMLElement) =>
+  [...card.querySelectorAll<HTMLElement>(".where-node")].map((li) => {
+    const mark = li.classList.contains("here") ? ">" : li.classList.contains("on-path") ? "*" : "";
+    const of = li.querySelector(".where-of")?.textContent;
+    const indent = li.closest(".where-card") && li.style.paddingLeft !== "0rem" ? "  " : "";
+    return `${indent}${mark}${li.querySelector(".where-title")?.textContent ?? ""}${of ? ` [${of}]` : ""}`;
+  });
+
+describe("where the section sits", () => {
+  it("shows the parts, and this section among its neighbours with its place in the part", () => {
     mountSpine();
-    const crumb = openCard(S2).querySelector(".tip-crumb");
-    expect(crumb?.querySelector(".tip-crumb-name")?.textContent).toBe(
-      "What feeling is for",
+    const card = openCard(S2);
+    expect(outlineOf(card)).toEqual([
+      "*What feeling is for",
+      "  The body as a model",
+      "  >Why colour is a guess [2 of 5]",
+      "  A third, for the count",
+      "Second part",
+      "Third part",
+    ]);
+    expect(
+      card.querySelector(".where-of")?.closest(".where-node")?.classList.contains("with-of"),
+    ).toBe(true);
+  });
+
+  it("puts the gist and the sub-sections straight under the section's own row", () => {
+    mountSpine();
+    const here = openCard(S1).querySelector(".where-node.here");
+    const detail = here?.nextElementSibling;
+    expect(detail?.classList.contains("where-detail")).toBe(true);
+    expect(detail?.querySelector(".tip-gist")?.textContent).toBe("What The body as a model is about.");
+    expect(detail?.querySelectorAll(".tip-kids li").length).toBe(2);
+  });
+
+  it("draws a part standing in for its own children at the top level only", () => {
+    mountSpine();
+    expect(outlineOf(openCard(P2))).toEqual(["What feeling is for", ">Second part", "Third part"]);
+  });
+
+  it("calls an untitled top-level band the same thing on the card and its button", () => {
+    const outline = OUTLINE.map((entry) =>
+      entry.node.id === "p2" ? { ...entry, node: { ...entry.node, title: "" } } : entry,
     );
-    expect(crumb?.querySelector(".tip-crumb-pos")?.textContent).toBe("2 of 5");
+    mountSpine(outline);
+    expect(openCard(P2).querySelector(".where-node.here .where-title")?.textContent).toBe("Untitled section");
+    expect(host.querySelectorAll<HTMLElement>(".spine-hit")[P2]?.getAttribute("aria-label")).toBe("Untitled section");
   });
 
-  it("has no crumb at all on a part standing in for its own children", () => {
-    mountSpine();
-    expect(openCard(P2).querySelectorAll(".tip-crumb")).toHaveLength(0);
-  });
-
-  it("names the part but says no position when it is the only section", () => {
+  it("says no position when the section is its part's only one", () => {
     /* `1 of 1` is not orientation, it is a number that has to be read before it
-       can be discarded. The part's name still earns its line. */
+       can be discarded. */
     mountSpine();
-    const card = openCard(S4);
-    expect(card.querySelector(".tip-crumb-name")?.textContent).toBe("Third part");
-    expect(card.querySelectorAll(".tip-crumb-pos")).toHaveLength(0);
+    expect(outlineOf(openCard(S4))).toEqual(["What feeling is for", "Second part", "*Third part", "  >Its only section"]);
+  });
+
+  it("is not the reader's location, so it does not claim to be", () => {
+    /* The marked row is the band the pointer is on. Only the button's own
+       `aria-current` and the footer's `you are here` speak for the reader. */
+    mountSpine();
+    expect(openCard(S2).querySelectorAll("[aria-current]")).toHaveLength(0);
   });
 });
 
@@ -489,7 +536,7 @@ describe("a section with no title of its own", () => {
   it("falls back to its nav label", () => {
     mountSpine();
     const card = openCard(S5);
-    expect(card.querySelector(".tip-title")?.textContent).toBe(
+    expect(card.querySelector(".where-node.here .where-title")?.textContent).toBe(
       "Lyn McCredden teaches Australian Literature",
     );
   });
@@ -501,7 +548,7 @@ describe("a section with no title of its own", () => {
 
   it("falls back to its position when it has no label either", () => {
     mountSpine();
-    expect(openCard(S6).querySelector(".tip-title")?.textContent).toBe(
+    expect(openCard(S6).querySelector(".where-node.here .where-title")?.textContent).toBe(
       "Section 5 of 5",
     );
   });
@@ -514,6 +561,8 @@ describe("a section with no title of its own", () => {
     const names = [...host.querySelectorAll<HTMLElement>(".spine-hit")].map((h) =>
       h.getAttribute("aria-label"),
     );
+    expect(names[S5]).toBe("What feeling is for › Lyn McCredden teaches Australian Literature");
+    expect(names[S6]).toBe("What feeling is for › Section 5 of 5");
     expect(names[S5]).not.toBe(names[S6]);
     expect(new Set(names).size).toBe(names.length);
   });

@@ -219,12 +219,14 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
         </ul>
         <p>
-          <strong>Point at the spine to read it.</strong> Every section has a card: the part it
-          belongs to and its place in it (“3 of 7”), its title and a one-line gist, what is inside
-          it, how many words it has, how far in it starts, and how many search matches it holds. A{" "}
-          <strong>§</strong> after the title means the heading is the author’s own; a title without
-          one was written by the AI. Once a card is open, move slowly down the spine and the cards
-          follow, so you can read the outline section by section.
+          <strong>Point at the spine to read it.</strong> Every section has a card. It starts with a
+          small outline of the article showing where the section sits: the part it belongs to,
+          the sections on either side, and its place in the part (“3 of 7”) when the part is long.
+          Under the section’s own name are a short gist and what is inside it. Then come how many
+          words it has, how far in it starts, and how many search matches it holds. A heading set in
+          the author’s typeface is the author’s own; one in the AI’s was written by the AI. Once a
+          card is open, move slowly down the spine and the cards follow, so you can read the outline
+          section by section.
         </p>
         <p>
           <strong>Click to go there.</strong> A click lands at the start of that section. On a
