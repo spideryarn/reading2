@@ -469,4 +469,12 @@ describe("rowCardFacts", () => {
     expect(value(ENTRY, "Size", ["length"])).toBe("3,456 words · 4 parts · 11 sections · 97 blocks");
     expect(value(BARE, "Last opened", ["opened"])).toBe("never");
   });
+
+  /** The Published cell prints the whole date, so the card repeats it only when the column is hidden. */
+  it("carries the publication date only when its column is hidden and there is one", () => {
+    const dated = { ...BARE, publishedAt: "2024-03-12" };
+    expect(labels(dated)).not.toContain("Published");
+    expect(value(dated, "Published", ["published"])).toMatch(/12.*2024/);
+    expect(rowCardFacts(BARE, ["published"]).facts.map((f) => f.label)).not.toContain("Published");
+  });
 });

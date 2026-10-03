@@ -328,13 +328,13 @@ async function hideFromMenu(label: string): Promise<void> {
   expect(menu(), "Escape did not close the Columns menu").toBeNull();
 }
 
-const ALL_HEADERS = ["Article", "Added", "Last opened", "Opens", "Comments", "Words", "Actions"];
+const ALL_HEADERS = ["Article", "Added", "Published", "Last opened", "Opens", "Comments", "Words", "Actions"];
 
 /* ------------------------------------------------------- the Columns menu -- */
 
 describe("the Columns menu", () => {
   /**
-   * **Five data columns.** Added belongs in the menu even though its exact date
+   * **Six data columns.** Added belongs in the menu even though its exact date
    * is already in the card; hiding it removes the relative date from the row.
    */
   it("offers every data column and never Article or Actions", () => {
@@ -342,6 +342,7 @@ describe("the Columns menu", () => {
     openColumns();
     expect(checkboxes().map((el) => flat(el.textContent))).toEqual([
       "Added",
+      "Published",
       "Last opened",
       "Times opened",
       "Comments",
@@ -487,7 +488,7 @@ describe("right-clicking a header", () => {
     await wait(20);
     const focused = document.activeElement as HTMLElement | null;
     expect(focused?.tagName).toBe("BUTTON");
-    expect(flat(focused?.closest("th")?.textContent)).toBe("Last opened");
+    expect(flat(focused?.closest("th")?.textContent)).toBe("Published");
   });
 
   it("falls back to the previous header's sort button when nothing after it sorts", async () => {
@@ -606,7 +607,7 @@ describe("the row card", () => {
   });
 
   it("takes the table's real hidden ids and restores every hidden value", async () => {
-    store.set(HIDDEN_COLUMNS_KEY, '["opened","opens","questions","length"]');
+    store.set(HIDDEN_COLUMNS_KEY, '["published","opened","opens","questions","length"]');
     paint([entry({ slug: "hidden-facts", words: 3456, opens: 5, comments: 7 })]);
     expect(headers()).toEqual(["Article", "Added", "Actions"]);
 

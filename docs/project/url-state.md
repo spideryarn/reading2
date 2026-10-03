@@ -126,7 +126,7 @@ sent to anybody. Now:
 | Param | Meaning | History | Example |
 |---|---|---|---|
 | `q` | what is in the shelf's search box — [library.md § Finding an article](library.md#finding-an-article-and-finding-a-passage-in-one) | **replace**, debounced | `?q=seth` |
-| `by` | which keys the shelf is ordered by, coarsest first: `added`, `opened`, `title`, `length`, `opens`, `questions` | push | `?by=length,title` |
+| `by` | which keys the shelf is ordered by, coarsest first: `added`, `published`, `opened`, `title`, `length`, `opens`, `questions` | push | `?by=length,title` |
 | `dir` | `asc` or `desc`, paired with `by` by position. **May be shorter than `by`, or absent, and the rest fall back to each column's own natural end** — newest first for a date, longest first for a length, A-to-Z for a title | push | `?dir=desc,asc` |
 | `view` | `cards` (the default) or `table` — the same list, painted the other way | push | `?view=table` |
 | `show` | `all` (the default) or `unread`, which is "never opened" | push | `?show=unread` |

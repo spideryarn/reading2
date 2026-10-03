@@ -113,6 +113,41 @@ export function exactly(iso: string | undefined): string | undefined {
 }
 
 /**
+ * **A calendar day somebody else stated**, as a number to sort on and the words
+ * to print — `{ t, label: "12 Mar 2024" }` — or `undefined` when the string
+ * does not start with a real day.
+ *
+ * For `LibraryEntry.publishedAt`, the publisher's own ISO string. Unlike every
+ * other date in this file it is **not an instant**: the day in the publisher's
+ * own frame is the whole content (src/db/schema.ts § `publishedAt`). So only
+ * the first ten characters are read, and both halves are built in UTC from
+ * them — `Date.parse` on the whole string would turn 23:30 on the 11th at
+ * UTC-5 into the 12th, order two pieces published on one day by their time of
+ * day, and print a different day to a reader in another zone.
+ *
+ * One function for the number and the words, so the order the shelf is in and
+ * the date a card prints cannot disagree about what counts as a date.
+ */
+export function calendarDay(iso: string | undefined): { t: number; label: string } | undefined {
+  const day = /^(\d{4}-\d{2}-\d{2})(?:$|T)/.exec(iso ?? "")?.[1];
+  if (!day) return undefined;
+  /* The day alone, at UTC midnight — the check src/extract.ts §
+     `publicationDate` makes when it writes the field. `2026-02-31` has the
+     right shape and is not a day, and some engines roll it over into March
+     rather than refusing it, so it has to come back as the day it went in.
+     (Not `Date.UTC(y, m, d)`: that reads a year under 100 as 19xx.) */
+  const t = Date.parse(`${day}T00:00:00Z`);
+  if (Number.isNaN(t) || !new Date(t).toISOString().startsWith(`${day}T`)) return undefined;
+  const label = new Date(t).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return { t, label };
+}
+
+/**
  * `640ms`, `6.1s`, `1m 12s` — a duration in the unit a person would have used.
  *
  * The other half of this file's job: `timeAgo` says *when*, this says *how

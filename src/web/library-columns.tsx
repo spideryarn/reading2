@@ -10,7 +10,7 @@
  * > Make the set of docs on the homepage nicely sortable (e.g. by when added,
  * > when last opened, how many words, how many actions/interactions performed)
  *
- * Two of those six keys are the "actions/interactions", and they are the only
+ * Two of the keys are the "actions/interactions", and they are the only
  * two we can honestly count: opens and questions are the only reader
  * interactions stored as numbers. Chat threads and saved searches are
  * deliberately absent, for the reason the details tooltip already gives — they
@@ -36,7 +36,7 @@ import type { LibraryEntry } from "../types.js";
 import type { SortableColumn } from "./lib/DataTable.js";
 import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
-import { exactly, timeAgo } from "./relative-time.js";
+import { calendarDay, exactly, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
@@ -81,6 +81,10 @@ export const CARD_NOTES: Record<string, CardNote> = {
   opened: (e, now) => {
     const when = timeAgo(e.lastOpenedAt, now);
     return when ? `opened ${when}` : "never opened";
+  },
+  published: (e) => {
+    const day = calendarDay(e.publishedAt);
+    return day ? `published ${day.label}` : "no publication date";
   },
   opens: (e) =>
     e.opens === 0 ? "never opened" : e.opens === 1 ? "opened once" : `opened ${e.opens} times`,
@@ -132,7 +136,7 @@ export const DEFAULT_BY = ["opened"];
  * forgotten here. A cross-family review noticed Added had quietly stopped being
  * first when the chips started following column order, 2026-08-26.
  */
-export const CHIP_ORDER = ["opened", "added", "title", "length", "opens", "questions"];
+export const CHIP_ORDER = ["opened", "added", "published", "title", "length", "opens", "questions"];
 
 /**
  * `now` is passed in rather than read here so that every relative date on one
@@ -188,6 +192,35 @@ export function libraryColumns(
          § Structure's card describes. `Details` stays on the cards view, which
          has no columns to repeat. Plan 260928a, Decision 2. */
       cell: ({ row }) => timeAgo(row.original.addedAt, now) ?? "unknown",
+    },
+    {
+      /* Greg, 2026-10-03 (report spya-t3es7k): "enable sorting the Shelf by
+         publication date where available". The publisher's own day, compared
+         and printed as a day — relative-time.ts § `calendarDay` says why not
+         as an instant. **An article with no date sorts last in both
+         directions**, by the rule every key follows (`sinkLast` in
+         Library.tsx): a PDF never has one, so that group is large, and
+         borrowing its Added date would put a 1990 paper fetched yesterday at
+         the top of "newest first". Plan 261003m. */
+      id: "published",
+      header: "Published",
+      accessorFn: (e) => calendarDay(e.publishedAt)?.t,
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<LibraryEntry>(),
+      meta: {
+        label: "Published",
+        hint: "When the publisher says it was published",
+        ends: ["oldest first", "newest first"],
+      },
+      /* The date itself, not "3 days ago": it is a fact about the piece, not
+         about the reader's week. The dash and its words as on Last opened. */
+      cell: ({ row }) =>
+        calendarDay(row.original.publishedAt)?.label ?? (
+          <span className="tw:opacity-40">
+            <span aria-hidden="true">—</span>
+            <span className="tw:sr-only">no publication date</span>
+          </span>
+        ),
     },
     {
       id: "opened",
@@ -512,6 +545,11 @@ export function rowCardFacts(entry: LibraryEntry, hidden: readonly string[]): Ro
   const opened = exactly(entry.lastOpenedAt);
   if (opened) facts.push({ label: "Last opened", value: opened });
   else if (isHidden("opened")) facts.push({ label: "Last opened", value: "never" });
+
+  /* The cell prints the whole date, so the card repeats it only when the
+     column is hidden — and says nothing where there is none to carry back. */
+  const published = calendarDay(entry.publishedAt);
+  if (published && isHidden("published")) facts.push({ label: "Published", value: published.label });
 
   if (isHidden("opens")) {
     facts.push({

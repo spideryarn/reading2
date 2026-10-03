@@ -718,8 +718,8 @@ The answer to the last sentence is one line, and it is the whole design:
 
 **One sort state, two renderers.**
 
-Six chips above the shelf — **Last opened**, **Added**, **Title**, **Length**, **Times opened**,
-**Questions** — plus an **Unread** filter and a **cards / table** toggle. The chips drive both views
+Seven chips above the shelf — **Last opened**, **Added**, **Published**, **Title**, **Length**,
+**Times opened**, **Questions** — plus an **Unread** filter and a **cards / table** toggle. The chips drive both views
 identically, so switching between them keeps your place in the order: there is only one order.
 Clicking the key you are already on reverses it; clicking a key you are not on starts at *that key's*
 natural end, so going from "newest first" to Title gives you A-to-Z rather than Z-to-A;
@@ -732,9 +732,29 @@ always one hover away in [the details tooltip](#the-tooltip). The clock is re-re
 a shelf left open does not quietly go stale — [`relative-time.ts`](../../src/web/relative-time.ts)
 and [`useNow.ts`](../../src/web/useNow.ts).
 
+**Published is the exception: it is a day, not an instant, and it is printed as the date.**
+
+> In the logged in homepage, enable sorting the Shelf by publication date where available. And I
+> guess if it's not available, use your judgment about what's best to do. Keep things simple.
+>
+> — Greg, 2026-10-03 (report `spya-t3es7k`)
+
+It is the publisher's own string (`Meta.publishedAt`), where only the calendar day in the
+publisher's frame means anything, so the order and the printed date both come from its first ten
+characters — [`calendarDay`](../../src/web/relative-time.ts) says what goes wrong otherwise. And
+"published 3 days ago" would be a fact about the reader's week rather than about the piece.
+
+**An article with no publication date sorts last, both ways**, like any missing value
+([§ Three rules a browser cannot check](#three-rules-a-browser-cannot-check)). That group is large:
+a PDF never has a date, a paper added by DOI has none, and a web page has one only if its publisher
+states it and it was extracted on or after 2026-08-31. Falling back to the Added date was passed
+over, because a 1990 paper fetched yesterday would then lead "newest first". Giving papers a year
+is a pipeline change, not a shelf one —
+[261003m](../plans/261003m-shelf-sorts-by-publication-date.md).
+
 The two views are not a real one and a decoration. **The card is a decision aid** — what the piece
 says, how long it will take — and keeps the blurb. **The table is a comparison** — how this article
-stands against the rest of the shelf — and gives the blurb up for six columns you can run your eye
+stands against the rest of the shelf — and gives the blurb up for seven columns you can run your eye
 down. Neither is a fallback for the other.
 
 **The toggle is a radio group**, not two toggle buttons, and each half carries a card rather than a
@@ -772,7 +792,7 @@ is the source of truth for those facts, including values whose columns are hidde
 old `Details` card stays on the cards view; in the table it repeated the row. The title remains the
 one-tap route into the article on touch rather than becoming a reveal-then-commit control.
 
-**The five data columns can be hidden; Article and Actions cannot.** The title is the row's identity
+**The six data columns can be hidden; Article and Actions cannot.** The title is the row's identity
 and route into the article, while Actions are controls rather than a value a card can preserve.
 [`libraryColumns`](../../src/web/library-columns.tsx) owns that distinction. The **Columns** menu is
 the discoverable keyboard-and-touch route; a header's right-click or long-press menu is the shortcut.
@@ -842,7 +862,7 @@ It is a **single** key, not `opened` then `added`. The compound version orders t
 block at the foot better and lights *two* chips on a shelf nobody has clicked, which reads as a sort
 somebody else left behind.
 
-Two of the six keys are Greg's "actions/interactions performed", and they are the only two we can
+Two of the keys are Greg's "actions/interactions performed", and they are the only two we can
 honestly count: opens and questions are the only reader interactions stored as numbers. Chat threads
 and saved searches are deliberately not counted, for the same reason [the tooltip](#the-tooltip)
 won't say them.

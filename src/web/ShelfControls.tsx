@@ -13,13 +13,13 @@
  * a way of painting one list rather than a list of its own. The cards keep the
  * blurb and say what they are sorted by (ShelfEntry.tsx § the note); the table
  * offers the blurb from a card on each title and lets the reader hide any of
- * its five data columns (plan 260928a). Neither is a fallback for the other.
+ * its six data columns (plan 260928a). Neither is a fallback for the other.
  *
  * The chips themselves are `SortChips` from lib/DataTable.tsx and know nothing
  * about the library — they are built from the table's own columns. What is left
  * here is the shelf's own filtering, column-visibility and view controls.
  *
- * Chips rather than a dropdown, deliberately: six keys fit on a line at this
+ * Chips rather than a dropdown, deliberately: seven keys fit on a line at this
  * width, one click beats two, and the current order is readable without opening
  * anything. Linear's "Display options" popover is the right answer at three
  * times this many dimensions, and is what to reach for if grouping arrives —
