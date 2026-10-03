@@ -82,9 +82,9 @@ export const REMEMBERED = [
   "gate", // glossary threshold
   "rank", // quotes order
   "bar", // quotes threshold
-  "name", // debate's identification threshold
-  "debateby", // debate order
-  "bears", // debate's relevance threshold
+  "debate", // reception or claims — a restore draws what is stored; only a press searches
+  "debateby", // reception's order
+  "bears", // claims' relevance threshold
   "debatethread", // which of debate's threads narrows its list
   "citeby", // citations order
   "citebar", // citations threshold

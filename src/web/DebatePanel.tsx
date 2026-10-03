@@ -28,28 +28,42 @@
  * the quotations were checked against, and **which** of the two empty answers
  * this is.
  *
- * ## One list, in the order the reader picks
+ * ## Two sub-modes, one per search
  *
- * Two separately metered searches run — one for pages replying to this piece,
- * one for the argument around what it claims — and until 2026-09-06 the panel
- * drew them as two headed groups. **That split was our epistemics, not the
- * reader's question.** On Cargo Cult Science it produced two headings, two
- * blurbs, an empty-state paragraph and two foot lines stacked over *zero rows*,
- * followed by the three rows that were the actual product.
+ * Two separately metered searches run — one for pages about this piece, one
+ * for the argument around what it claims. Until 2026-09-06 the panel drew them
+ * as two headed groups stacked in one band, which on Cargo Cult Science put two
+ * headings, two blurbs and two foot lines over *zero rows*. From then until
+ * 2026-10-03 it drew them as **one list**, under up to four controls at once.
+ * Greg, on a paper the open web has not discussed (spya-caue42):
  *
- * Since 2026-09-29 (SPIDERYARN-READING2-5P) the reader picks the order —
- * `?debateby=`, Glossary's sort bar — and the rules live in
- * [`debate-order.ts`](debate-order.ts): *by claim* groups the rows under the
- * claim in the piece each one answers, in article order, with the rows about
- * this piece first; *stance* is one flat list, most critical first;
- * *prioritised* and *date* arrive with stage 2's data. **No order is by
- * identification level**, because the chip on the row already says it.
+ * > I don't quite understand what debate mode is doing. The UI is confusing. …
+ * > it seems to have found some interesting stuff about the RNA and C. elegans
+ * > study … But A, that's very specific. It's one claim. And B, it doesn't tell
+ * > me anything about how the paper has been received more generally.
+ *
+ * So the two searches are two **sub-modes**, `?debate=`, on one segmented
+ * control (`DebateViews`): **Reception**, what others have written about the
+ * piece itself, and **Claims**, what has been written about the claims it
+ * makes. Each control then applies to everything on screen.
+ * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
+ *
+ *  - **Reception** draws the rows that link or quote the piece, then the ones
+ *    that only name it under a heading saying so ([`debate-levels.ts`](debate-levels.ts)
+ *    — a slider hid those until 2026-10-03, and with them the citing papers the
+ *    search was changed to find). `?debateby=` orders within each group. It
+ *    ends with one link out, a Scholar search for who cites the piece.
+ *  - **Claims** is always grouped by claim, in article order, most directly
+ *    bearing first within a claim ([`debate-order.ts`](debate-order.ts)). The
+ *    relevance bar (`?bears=`) is its one control.
  *
  * **A heading is a claim we stand behind**, which is why the only headings are
- * *About this piece* and the article's own words for a claim — located in its
- * block before the row was kept. Grouping by `relation`, or by stance, would
- * put the model's reading of a stranger's page in a heading; so stance is an
- * order and never a grouping, and the model's readings stay inside rows.
+ * the article's own words for a claim — located in its block before the row was
+ * kept — and *Names this piece by its title only*, which is what was checked.
+ * Grouping by `relation`, or by stance, would put the model's reading of a
+ * stranger's page in a heading; so stance is an order and never a grouping,
+ * a claim's heading carries no for/against tally, and the model's readings stay
+ * inside rows.
  * docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md § 1,
  * docs/plans/260929h-debate-mode-clearer-sources-and-orders.md.
  *
@@ -73,8 +87,8 @@
  *     model's. It is the reader's one-action check.
  *
  * `more` holds everything else the ⓘ hover card used to: the full title and
- * quotation, the AI's paragraph, the address, a direct row's witness, what the
- * quotation was checked against, and the way out. A button with
+ * quotation, the AI's paragraph, the address, a direct row's witness, and the
+ * way out. A button with
  * `aria-expanded`, so a tap and a keyboard get what a pointer gets — the card
  * was a portalled dialog a keyboard reader tabbed past (the plan's F12).
  *
@@ -117,19 +131,16 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import {
-  DEBATE_CLAIMS_FOLLOW,
+  DEBATE_BEFORE_SEARCH,
   DEBATE_CLAIMS_NONE,
   DEBATE_EXTRACTS_ONLY,
-  DEBATE_ORDER_BY_CLAIM,
-  DEBATE_ORDER_DATE,
-  DEBATE_ORDER_PRIORITISED,
-  DEBATE_ORDER_STANCE,
   DEBATE_RESPONSES_NONE,
   DEBATE_CLAIMS_NONE_SHARED,
   DEBATE_RESPONSES_NONE_SHARED,
+  DEBATE_TITLE_ONLY,
   DEBATE_UNDATED,
   DEBATE_THREADS_FAILED,
-  DEBATE_UNJUDGED,
+  debateClaimsHandoff,
   debateClaimsUnverified,
   debateResponsesUnverified,
   debateWithheldOnSharedLink,
@@ -152,27 +163,26 @@ import {
   readStoredLean,
 } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
+import { receptionSections } from "./debate-levels.js";
 import {
-  DEBATE_LEVEL_DEFAULT,
-  IDENTIFICATION_STOPS,
-  visibleDirect,
-} from "./debate-levels.js";
-import {
+  type ClaimGroup,
   type DebateGroup,
   type DebateOrder,
   RELEVANCE_DEFAULT,
   RELEVANCE_STOPS,
-  debateOrderOptions,
-  effectiveDebateOrder,
-  orderDebateRows,
+  effectiveReceptionOrder,
+  groupByClaim,
+  orderReceptionRows,
   readAuthors,
   readBears,
   readPublishedYear,
   readRowRegistry,
   readWorkTitle,
+  receptionOrderOptions,
   visibleClaims,
 } from "./debate-order.js";
 import { registryAuthorName } from "../registry-work.js";
+import { scholarUrl } from "../scholar-search.js";
 import {
   inThread,
   KEY_ROLE_LABEL,
@@ -181,14 +191,17 @@ import {
   shownInThread,
   type Thread,
   threadsOf,
+  threadsWithin,
 } from "./debate-threads.js";
 import { readStoredSynthesis } from "../debate-synthesis.js";
+import { DEBATE_VIEWS, type DebateView } from "./params.js";
+import { DEBATE_SUB_MODES } from "./sub-modes.js";
 import { hiddenNote, type ThresholdNoun, type ThresholdResult } from "./threshold.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { OrderGroup } from "./OrderGroup.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { Tooltip } from "./Tooltip.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
 import type {
@@ -224,37 +237,22 @@ const SEARCH_NAME: Record<"direct" | "claims", string> = {
   claims: "The search for answers to what it claims",
 };
 
-/**
- * **What the bar is holding back, in one word** — and it is deliberately not
- * *pages*.
- *
- * Three counts can be on this screen at once (`DebatePanel` § `pages`), and two
- * of them are already page counts: the head's *pages behind the rows on screen*,
- * and the searches' *pages returned*. A third noun for a third fact would be a
- * panel with three numbers all called pages, so this one uses the word the
- * lead sentence already uses for what a direct row **is** — a page that
- * *responds* to this piece — and counts rows rather than pages, which is also
- * what it is hiding.
- *
- * docs/project/copy.md records the app already carrying *"two nouns for the same
- * thing, and nobody has decided which"* on the waiting copy, and calls that
- * half unsettled. This is not the place to add a third.
- */
-const RESPONSE: ThresholdNoun = { one: "response", many: "responses" };
+/** The search behind each sub-mode — the artefact's own key for its group. */
+const SEARCH_OF: Record<DebateView, "direct" | "claims"> = { reception: "direct", claims: "claims" };
 
 /**
  * **What the relevance bar is holding back**: claim rows, called by what they
- * are — answers to what the piece claims — and not *responses*, which is the
- * identification bar's word for rows about the piece itself. Two bars over
- * disjoint rows, so two nouns (the plan's F7).
+ * are — answers to what the piece claims. Not *pages*: the head's count and the
+ * searches' are both page counts already, and a third number called pages for a
+ * third fact is how a panel comes to disagree with itself.
  */
 const ANSWER: ThresholdNoun = { one: "answer to its claims", many: "answers to its claims" };
 
 /**
  * **The relevance bar's words**, and the AI line's: the name of the stop, never
- * a number (`debate-levels.ts`'s argument for `?name=`). On the bar it reads as
- * a rule — *"bears partly · 3 of 5"*, at least partly — and on a row as the
- * judgment.
+ * a number — three named stops of one model judgment, and a number would read
+ * as a measurement. On the bar it reads as a rule — *"bears partly · 3 of 5"*,
+ * at least partly — and on a row as the judgment.
  */
 const BEARS_LABEL: Record<DebateBears, string> = {
   directly: "bears directly",
@@ -269,11 +267,6 @@ const BEARS_LABEL: Record<DebateBears, string> = {
 const NO_DIRECT: readonly DirectRow[] = [];
 /** …and the same for the claim rows, which the order memos key on. */
 const NO_CLAIMS: readonly ClaimRow[] = [];
-
-/** The rows that answer a claim the article makes. */
-function claimOf(row: DebateRow): ClaimRow | null {
-  return "claimQuote" in row ? row : null;
-}
 
 /**
  * The rows that name this article in their own extract — the ones that carry
@@ -309,7 +302,7 @@ function referenceOf(row: DebateRow): string | null {
  * **The target of the lean is the row's own**, which is why the labels do not
  * name it: the article itself on a direct row, the `claimQuote` on a claim row.
  * The row says which — the identification chip on a direct row, and on a claim
- * row its *On "…"* line or, in *by claim*, the heading it sits under. Sol's F19 —
+ * row the claim heading it sits under. Sol's F19 —
  * without a stated target "leans-for" could mean a friendly register, agreement
  * with one claim, or praise for the whole piece.
  *
@@ -364,8 +357,8 @@ export const LEAN_APPEARANCE: Record<
  *
  * **`which` names the search**, because the headings that used to are gone.
  *
- * **It says *kept*, not *shown*, and that changed on 2026-09-06 with the
- * identification bar.** This sentence is arithmetic about the run —
+ * **It says *kept*, not *shown*, and that changed on 2026-09-06 with the first
+ * threshold bar.** This sentence is arithmetic about the run —
  * `reportedRows` against `keptRows`, and the gap accounted for — and the reader
  * now has a control that decides what is *shown*. *"3 are shown"* over a list of
  * two would be the count-disagrees-with-the-list failure
@@ -450,8 +443,8 @@ function countWord(n: number): string {
  *
  * **`rows` is what is on screen, which since 2026-09-06 is not always the whole
  * group.** The sentence ends *"contribute to the rows shown"*, so the direct
- * pass is handed the rows the identification bar left rather than everything the
- * run kept. A reader who raises the bar sees this number fall, and it is still
+ *  search is handed the rows its sub-mode shows rather than everything the
+ * run kept. A reader who raises the relevance bar sees this number fall, and it is still
  * true; leaving it on the unfiltered list would make the words false while the
  * figure looked right.
  */
@@ -522,38 +515,52 @@ function isShared(debate: Debate | PublicDebate): debate is PublicDebate {
 }
 
 /**
- * **A visitor's lead sentence** — `leadNote`'s shape, without the count.
- *
- * The owner's sentence tells *nothing came back* from *nothing could be
- * checked* off `returnedSources`, which does not cross; so a visitor's empty
- * search gets the sentence true of both. **And a group emptied by the public
- * boundary gets no lead at all**: the search *did* keep something there, and
- * saying it kept nothing would be false — the foot line says what was withheld.
- */
-export function sharedLeadNote(debate: PublicDebate): string | null {
-  const noDirect = debate.direct.rows.length === 0 && debate.direct.sourceNotPublishable === 0;
-  const noClaims = debate.claims.rows.length === 0 && debate.claims.sourceNotPublishable === 0;
-  const parts: string[] = [];
-  if (noDirect) parts.push(DEBATE_RESPONSES_NONE_SHARED);
-  if (noClaims) parts.push(DEBATE_CLAIMS_NONE_SHARED);
-  else if (noDirect && debate.claims.rows.length > 0) parts.push(DEBATE_CLAIMS_FOLLOW);
-  return parts.length > 0 ? parts.join(" ") : null;
-}
-
-/**
  * **A visitor's foot line: what the shared link left out, per search** — the
  * boundary's own count (src/public/dto.ts § `publicDebate`), never the
  * artefact's. 260905f § What is counted: a shorter list must say so.
  */
 export function withheldLines(debate: PublicDebate): string[] {
-  const lines: string[] = [];
-  if (debate.direct.sourceNotPublishable > 0) {
-    lines.push(debateWithheldOnSharedLink(SEARCH_NAME.direct, debate.direct.sourceNotPublishable));
-  }
-  if (debate.claims.sourceNotPublishable > 0) {
-    lines.push(debateWithheldOnSharedLink(SEARCH_NAME.claims, debate.claims.sourceNotPublishable));
-  }
-  return lines;
+  return (["direct", "claims"] as const)
+    .map((which) => withheldNote(debate, which))
+    .filter((line): line is string => line !== null);
+}
+
+/** One search's withheld sentence, or nothing when the boundary withheld none. */
+function withheldNote(debate: PublicDebate, which: "direct" | "claims"): string | null {
+  const n = debate[which].sourceNotPublishable;
+  return n > 0 ? debateWithheldOnSharedLink(SEARCH_NAME[which], n) : null;
+}
+
+/**
+ * **What a sub-mode says when its search stored no row for this reader** — or
+ * nothing, when it stored one. Each sub-mode says its own search's sentence and
+ * only its own; the other's is a press away, in its own sub-mode.
+ *
+ * Every distinction the one mixed list made is kept, per sub-mode (GPT Sol's
+ * F1 on plan 261003o), because they are different facts about the world:
+ *
+ *  - **owner, nothing returned** against **owner, pages returned and none
+ *    could be checked** — `emptyGroupNote`, off `returnedSources`;
+ *  - **visitor, the search kept nothing** — one sentence true of both of the
+ *    above, because the count that tells them apart does not cross
+ *    (src/public-types.ts § `PublicDebateGroup`);
+ *  - **visitor, rows withheld at the public boundary** — the search *did*
+ *    keep something, so saying it kept nothing would be false. The sentence is
+ *    the foot's own (`withheldLines`), said here as well because an empty
+ *    screen that explains itself only inside the (i) reads as broken.
+ *
+ * **A list the reader's own bar or thread emptied is not here**, and must not
+ * be: that is a fact about a setting, not about the search, and the bar's note
+ * and the thread's line already say which (`StopBar`, `Threads`). The caller
+ * asks this of the **stored** rows.
+ */
+export function emptyNote(debate: Debate | PublicDebate, which: "direct" | "claims"): string | null {
+  if (debate[which].rows.length > 0) return null;
+  if (!isShared(debate)) return emptyGroupNote(debate[which].counts, which);
+  return (
+    withheldNote(debate, which) ??
+    (which === "direct" ? DEBATE_RESPONSES_NONE_SHARED : DEBATE_CLAIMS_NONE_SHARED)
+  );
 }
 
 /**
@@ -602,52 +609,20 @@ export function headCount(rows: readonly { url: string }[]): string {
 }
 
 /**
- * **What the order on screen is, in a sentence** — one per order, on the line
- * over the list. `messages.ts` § `DEBATE_ORDER_BY_CLAIM` has the argument.
- * A `Record`, so a fifth order cannot arrive without a sentence.
+ * Reception's order bar's words — Glossary's register, short and lower-case. A
+ * `Record`, so a fourth order cannot arrive without them.
+ *
+ * `prioritised` reads *as found*: the word in the address is from when this
+ * order sorted claim rows by the AI's judgment, and Reception's rows carry
+ * none. **The sentence that said what the order was, on a line over the list,
+ * went on 2026-10-03** (plan 261003o, step 8): the pressed button says it, and
+ * these titles say whose reading an order rests on.
  */
-const ORDER_SENTENCE: Record<DebateOrder, string> = {
-  prioritised: DEBATE_ORDER_PRIORITISED,
-  claim: DEBATE_ORDER_BY_CLAIM,
-  date: DEBATE_ORDER_DATE,
-  stance: DEBATE_ORDER_STANCE,
-};
-
-/** The order bar's words — Glossary's register, short and lower-case. */
 const ORDER_OPTION: Record<DebateOrder, { label: string; title: string }> = {
-  prioritised: {
-    label: "prioritised",
-    title:
-      "Rows about this piece first, then the AI's judgment of how directly each bears on its claim — the relevance bar below decides how many",
-  },
-  claim: {
-    label: "by claim",
-    title: "Under the claim in the piece each page answers, in the order the piece makes them",
-  },
-  date: { label: "date", title: "Oldest first, by the year the AI read off each page" },
+  prioritised: { label: "as found", title: "In the order the search found them" },
+  date: { label: "date", title: "Oldest first, by the year the AI read off each page; pages with no year come last" },
   stance: { label: "stance", title: "Most critical first — the AI's reading of each page" },
 };
-
-/**
- * **Where the lead sentence goes, now that it is not always at the top.**
- *
- * The plan (§ Smaller fixes, F10) moves the negative result out of the way of
- * the rows it is not about — but *what* it says and *when* are `leadNote`'s and
- * `sharedLeadNote`'s, unchanged. Only the place moves, and the place follows
- * from the words:
- *
- *  - **`alone`** — no rows on screen, so it is the answer, at the top.
- *  - **`before`** — it ends *"What follows takes up what it argues"*
- *    (`DEBATE_CLAIMS_FOLLOW`), which is a hand-over to the rows below it and is
- *    false anywhere else. In *by claim* it is the body of the *About this
- *    piece* group, which is where a reader looks for replies to the piece.
- *  - **`after`** — anything else is a finding about a search whose rows are not
- *    on screen, said after the list and before the foot lines.
- */
-export function leadPlacement(lead: string, rowsOnScreen: number): "alone" | "before" | "after" {
-  if (rowsOnScreen === 0) return "alone";
-  return lead.endsWith(DEBATE_CLAIMS_FOLLOW) ? "before" : "after";
-}
 
 /**
  * **What one search says when it kept no rows**, and it is two sentences rather
@@ -674,10 +649,10 @@ export function leadPlacement(lead: string, rowsOnScreen: number): "alone" | "be
  * there is no search to be empty. The panel shows the ordinary job-failure state
  * with its retry, which is what `JobProgress` already draws.
  *
- * **A fourth is coming and is deliberately not here either**: every row hidden
- * by the identification threshold, which is Stage P3's `hiddenNote`. That is a
- * fact about the reader's own setting rather than about the search, so it does
- * not belong in a sentence whose subject is what came back.
+ * **A fourth is deliberately not here either**: every row hidden by the
+ * relevance bar, which is `hiddenNote`'s. That is a fact about the reader's own
+ * setting rather than about the search, so it does not belong in a sentence
+ * whose subject is what came back.
  */
 export function emptyGroupNote(counts: DebateCounts, group: "direct" | "claims"): string {
   if (counts.returnedSources === 0) {
@@ -686,34 +661,6 @@ export function emptyGroupNote(counts: DebateCounts, group: "direct" | "claims")
   return group === "direct"
     ? debateResponsesUnverified(counts.returnedSources)
     : debateClaimsUnverified(counts.returnedSources);
-}
-
-/**
- * **The one sentence at the top of the one list** — or nothing, when both
- * searches kept something and there is no negative result to report.
- *
- * Up to two clauses, because there are two searches and either can come back
- * with nothing. The direct one leads, because *"no page responds to this piece
- * by name"* is the finding a reader of a famous article is most likely to be
- * surprised by, and because what follows it is the answer to *"then what am I
- * looking at?"* — `DEBATE_CLAIMS_FOLLOW`, appended only when there is in fact
- * something below to look at.
- *
- * **Both are said when both are empty.** They are two searches and two facts,
- * and dropping the second because the first already sounds negative is how a
- * panel comes to say less than it knows.
- */
-export function leadNote(debate: {
-  direct: { rows: readonly unknown[]; counts: DebateCounts };
-  claims: { rows: readonly unknown[]; counts: DebateCounts };
-}, claimsFollow = debate.claims.rows.length > 0): string | null {
-  const noDirect = debate.direct.rows.length === 0;
-  const noClaims = debate.claims.rows.length === 0;
-  const parts: string[] = [];
-  if (noDirect) parts.push(emptyGroupNote(debate.direct.counts, "direct"));
-  if (noClaims) parts.push(emptyGroupNote(debate.claims.counts, "claims"));
-  else if (noDirect && claimsFollow) parts.push(DEBATE_CLAIMS_FOLLOW);
-  return parts.length > 0 ? parts.join(" ") : null;
 }
 
 /**
@@ -727,34 +674,14 @@ export function leadNote(debate: {
  * **All three are drawn identically.** They are ordered — a link is stronger
  * evidence than a title — but a chip that got redder as the evidence got weaker
  * would be a scale, and a scale over one fact is the composite this feature
- * refused: docs/project/quotes.md, and the plan's § 2. The order lives in the
- * threshold, where the reader sets it themselves.
+ * refused: docs/project/quotes.md, and the plan's § 2. The order shows in the
+ * layout instead: the *names* rows sit under their own heading
+ * (debate-levels.ts).
  */
 const IDENTIFICATION_LABEL: Record<IdentificationLevel, string> = {
   linked: "Links this piece",
   quoted: "Quotes this piece",
   named: "Names this piece",
-};
-
-/**
- * **The same three facts as the words on the bar** — the weakest chip a reader
- * is still willing to see.
- *
- * Lower case and shorter than the chip's, because the chip labels a row and this
- * labels a *setting*: *"quotes it · 2 of 3"* reads as a rule the reader has set,
- * where *"Quotes this piece"* on the slider would read as a description of
- * something on screen. Same verbs in the same order, so the setting and the
- * chips it governs are obviously the same vocabulary.
- *
- * **Words and not digits**, which is the whole shape of this control: Quotes'
- * *"the stops are the data, not a grid"* applies with a vengeance when the data
- * is three named facts rather than a scale. A `1`, `2`, `3` here would be the
- * score this feature refused, drawn as a slider.
- */
-const STOP_LABEL: Record<IdentificationLevel, string> = {
-  linked: "links it",
-  quoted: "quotes it",
-  named: "names it",
 };
 
 /**
@@ -853,44 +780,42 @@ export type DebateAccess =
 interface Props {
   access: DebateAccess;
   /**
-   * Go to the block a claim row's claim is in.
+   * Go to the block a claim's passage is in.
    *
    * **Marks in the prose are deliberately not in v1** — they are the first
    * thing to add, and they want a resolver into `search-hits.ts`'s `Found`
-   * currency. A *jump* is not a mark: a row that quotes the article's own words
-   * and names the block they are in has to offer the reader the way there, or it
-   * is asking them to search for a sentence it is already holding.
+   * currency. A *jump* is not a mark: a heading that quotes the article's own
+   * words and names the block they are in has to offer the reader the way
+   * there, or it is asking them to search for a sentence it is already holding.
    */
   onJump(id: BlockId): void;
   /**
-   * Where the reader has put the identification bar, or `null` for *hasn't
-   * touched it* — `?name=`, resolved here to `DEBATE_LEVEL_DEFAULT`.
-   *
-   * Null rather than a defaulted level, for the reason every sibling threshold
-   * gives (docs/project/url-state.md): the constant lives in one file, and *set
-   * to the default* stays distinguishable from *never set*, which is what the
-   * reset button is drawn from.
+   * Which search's rows the band draws — `?debate=`, whose parser defaults to
+   * `reception`.
    */
-  level: IdentificationLevel | null;
-  onLevel(level: IdentificationLevel | null): void;
+  view: DebateView;
+  onView(view: DebateView): void;
   /**
-   * The order the reader asked for — `?debateby=`, whose parser defaults to
-   * `prioritised`. What is drawn is `effectiveDebateOrder` of it, which can
-   * differ (debate-order.ts).
+   * The order the reader asked for in Reception — `?debateby=`, whose parser
+   * defaults to `prioritised` (*as found*). What is drawn is
+   * `effectiveReceptionOrder` of it, which can differ (debate-order.ts). Claims
+   * ignores it.
    */
   order: DebateOrder;
   onOrder(order: DebateOrder): void;
   /**
-   * **Each block's position in the article**, for *by claim*'s article order.
-   * Not in the artefact — the article's blocks are — so `Reader` builds it
-   * once and hands it to both bands (the plan's F8). A block missing from it
-   * keeps the search's order.
+   * **Each block's position in the article**, for Claims' article order. Not
+   * in the artefact — the article's blocks are — so `Reader` builds it once and
+   * hands it to both bands (260929h's F8). A block missing from it keeps the
+   * search's order.
    */
   blockOrder: ReadonlyMap<BlockId, number>;
   /**
-   * Where the reader has put the relevance bar — `?bears=`, or `null` for
+   * Where the reader has put Claims' relevance bar — `?bears=`, or `null` for
    * *hasn't touched it*, resolved here to `RELEVANCE_DEFAULT` (`loosely`, which
-   * hides nothing). Applies only while *prioritised* is the order drawn.
+   * hides nothing). Null rather than a defaulted level, so the constant lives
+   * in one file and *set to the default* stays distinguishable from *never
+   * set*, which is what the reset button is drawn from.
    */
   relevance: DebateBears | null;
   onRelevance(level: DebateBears | null): void;
@@ -908,13 +833,19 @@ interface Props {
    */
   thread: string | null;
   onThread(thread: string | null): void;
+  /**
+   * The article's own title, for Reception's *Who cites it: search Google
+   * Scholar* — or `null`, and then there is no link: a search for nothing is
+   * not a search. The owner's and a visitor's meta both carry it.
+   */
+  articleTitle: string | null;
 }
 
 export function DebatePanel({
   access,
   onJump,
-  level: chosenLevel,
-  onLevel,
+  view,
+  onView,
   order: requestedOrder,
   onOrder,
   blockOrder,
@@ -923,6 +854,7 @@ export function DebatePanel({
   articleYear,
   thread: threadParam,
   onThread,
+  articleTitle,
 }: Props) {
   useRenderCount("DebatePanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
@@ -930,66 +862,21 @@ export function DebatePanel({
   const debate = access.kind === "owner" ? access.owner.debate : access.debate;
   /* A visitor's debate arrived with the page, so it is ready by construction. */
   const ready = debate !== null && (owner === null || owner.status === "ready");
-  const level = chosenLevel ?? DEBATE_LEVEL_DEFAULT;
-  /**
-   * **The bar, applied once**, and every number on this panel is read out of
-   * this one result: the rows in the list, the *N of M* beside the slider, the
-   * count in the head, and the foot line saying what is held back. That is
-   * `threshold.ts`'s whole argument, and it is why there is no second filter
-   * anywhere below.
-   *
-   * **Only the direct rows go through it.** Claim rows carry no identification
-   * level — they answer something the article argues, whether or not their
-   * author has ever heard of it — so they are not hidden by the bar, not in its
-   * `N of M`, and not in what it says it is holding back.
-   */
   const directRows: readonly DirectRow[] = debate?.direct.rows ?? NO_DIRECT;
   const claimRows: readonly ClaimRow[] = debate?.claims.rows ?? NO_CLAIMS;
-  const barred = useMemo(() => visibleDirect(directRows, level), [directRows, level]);
 
   /**
-   * **Which order is drawn, which are offered, and the list in that order.**
+   * **The threads** — plan 260930j. The owner's stored synthesis read through
+   * `readStoredSynthesis`, never directly: JSONB comes back unchecked. A
+   * visitor's is read the same way, against the rows they were sent — the
+   * public DTO has already re-settled it against exactly those (plan 261001b),
+   * so this second reading agrees with it, and one reader serves both arms.
    *
-   * The identification bar runs first, and both questions are asked of the
-   * direct rows it left plus every claim row. Otherwise the panel can offer an
-   * order whose only distinguishing row is no longer on screen. Relevance runs
-   * later because it belongs to one order; the list itself is both bars' rows.
-   */
-  const order = useMemo(
-    () => effectiveDebateOrder(barred.visible, claimRows, requestedOrder, blockOrder, articleYear),
-    [barred, claimRows, requestedOrder, blockOrder, articleYear],
-  );
-  const orders = useMemo(
-    () => debateOrderOptions(barred.visible, claimRows, blockOrder, articleYear),
-    [barred, claimRows, blockOrder, articleYear],
-  );
-
-  /**
-   * **The relevance bar, applied once — claim rows only, and only in
-   * *prioritised*** (the plan's F6, F7). *Prioritised* is drawn only when some
-   * claim row carries `bears` (`effectiveDebateOrder`), so that is also the
-   * condition for the bar. In every other order the claim rows pass untouched,
-   * as a result with nothing hidden, so everything below reads one shape.
-   */
-  const relevance = chosenRelevance ?? RELEVANCE_DEFAULT;
-  const relevant = order === "prioritised";
-  const barredClaims = useMemo(
-    (): ThresholdResult<ClaimRow> =>
-      relevant
-        ? visibleClaims(claimRows, relevance)
-        : { visible: [...claimRows], hiddenCount: 0, unscoredCount: 0 },
-    [relevant, claimRows, relevance],
-  );
-  /**
-   * **The threads, and the one the address names** — plan 260930j. The owner's
-   * stored synthesis read through `readStoredSynthesis`, never directly: JSONB
-   * comes back unchecked. A visitor's is read the same way, against the rows
-   * they were sent — the public DTO has already re-settled it against exactly
-   * those (plan 261001b), so this second reading agrees with it, and one reader
-   * serves both arms.
-   *
-   * **The third narrowing, after both bars.** Each button's count is its rows
-   * the bars left (`shownInThread`), and the list below is those rows only.
+   * **Each sub-mode is asked separately which of them it offers and which one
+   * the address selects** (`threadsWithin`): a thread with no stored row in a
+   * sub-mode is not offered there and narrows nothing there. Both sub-modes'
+   * lists are worked out whichever is on screen, because each segment of the
+   * control shows the count of its own.
    */
   const synthesis = useMemo(
     () => (debate !== null ? readStoredSynthesis(debate) : null),
@@ -997,49 +884,77 @@ export function DebatePanel({
   );
   const threads = useMemo(() => threadsOf(synthesis), [synthesis]);
   const keyRows = useMemo(() => keyByRow(synthesis), [synthesis]);
-  const thread = selectedThread(threads, threadParam);
-  const barredVisible = useMemo(
-    (): DebateRow[] => [...barred.visible, ...barredClaims.visible],
-    [barred, barredClaims],
-  );
-  const threadDirect = useMemo(() => inThread(barred.visible, thread), [barred, thread]);
-  const threadClaims = useMemo(() => inThread(barredClaims.visible, thread), [barredClaims, thread]);
 
-  /* **The final visible list**, each search's rows through its own bar and
-     then the thread. The head count, the lead's placement and the foot's page
-     counts all read this (the plan's F10) — `sourcesNote` counts the pages
-     behind *the rows shown*, and a thread decides which those are as much as a
-     bar does (GPT Sol's review of 260930j, F6). */
-  const rows = useMemo(
-    (): DebateRow[] => [...threadDirect, ...threadClaims],
-    [threadDirect, threadClaims],
+  /**
+   * **Reception: the rows about this piece, in two groups, every one on
+   * screen.** No bar: the identification slider that stood here hid the
+   * title-only rows by default, and those are the citing papers
+   * (debate-levels.ts).
+   *
+   * Which order is drawn and which are offered are asked of the **stored**
+   * groups, so pressing a thread cannot make the order bar come and go; the
+   * thread then narrows each group, and the order arranges what is left.
+   */
+  const stored = useMemo(() => receptionSections(directRows), [directRows]);
+  const storedSections = useMemo(() => [stored.confirmed, stored.titleOnly], [stored]);
+  const order = useMemo(
+    () => effectiveReceptionOrder(storedSections, requestedOrder, articleYear),
+    [storedSections, requestedOrder, articleYear],
   );
-  const groups = useMemo(
-    () => orderDebateRows(threadDirect, threadClaims, order, blockOrder, articleYear),
-    [threadDirect, threadClaims, order, blockOrder, articleYear],
+  const orders = useMemo(
+    () => receptionOrderOptions(storedSections, articleYear),
+    [storedSections, articleYear],
+  );
+  const receptionThreads = useMemo(() => threadsWithin(threads, directRows), [threads, directRows]);
+  const receptionThread = selectedThread(receptionThreads, threadParam);
+  const receptionShown = useMemo(() => inThread(directRows, receptionThread), [directRows, receptionThread]);
+  const confirmed = useMemo(
+    () => orderReceptionRows(inThread(stored.confirmed, receptionThread), order, articleYear),
+    [stored, receptionThread, order, articleYear],
+  );
+  const titleOnly = useMemo(
+    () => orderReceptionRows(inThread(stored.titleOnly, receptionThread), order, articleYear),
+    [stored, receptionThread, order, articleYear],
   );
 
-  /* The two kinds of sentence that are not rows: what came back with nothing
-     (the lead), and what each search lost (the foot). Both are derived from the
-     stored counts, so both are memoised on the artefact.
+  /**
+   * **Claims: the relevance bar, applied once, then the thread, then the
+   * grouping.** The list, the bar's *N of M*, each claim's count, the segment's
+   * count and the foot's page count are all read out of this one pass —
+   * `threshold.ts`'s whole argument, and why there is no second filter below.
+   *
+   * The bar is **drawn** only when some claim row carries the AI's `bears`
+   * (every search before `debate/3` has none) — and then always, whatever the
+   * rows' levels: two `partly` rows are both hidden by `?bears=directly`, and a
+   * reader who arrives on that link needs the bar to see why the list is empty
+   * and its reset to get out (GPT Sol's F2 on plan 261003o). With no judged row
+   * the pass hides nothing, because an unjudged row always survives.
+   */
+  const relevance = chosenRelevance ?? RELEVANCE_DEFAULT;
+  const judged = useMemo(() => claimRows.some((row) => readBears(row) !== null), [claimRows]);
+  const barredClaims = useMemo(() => visibleClaims(claimRows, relevance), [claimRows, relevance]);
+  const claimThreads = useMemo(() => threadsWithin(threads, claimRows), [threads, claimRows]);
+  const claimThread = selectedThread(claimThreads, threadParam);
+  const claimsShown = useMemo(() => inThread(barredClaims.visible, claimThread), [barredClaims, claimThread]);
+  const claimGroups = useMemo(() => groupByClaim(claimsShown, blockOrder), [claimsShown, blockOrder]);
 
-     **The foot is handed the rows the bars and the thread left**, not the
-     artefact's whole groups: its second sentence counts the pages that
-     *contribute to the rows shown*, and those decide which they are
-     (`sourcesNote`). The lead
-     is handed the artefact untouched, because its subject is what the search
-     came back with — a group emptied by the reader's own threshold is not a
-     search that found nothing, and `hiddenNote` already says which it is. That
-     is also why no order, and no group in *by claim*, ever gets a search-empty
-     sentence of its own: the lead is the only one, and where it goes is
-     `leadPlacement`. */
-  const lead = useMemo(() => {
-    if (debate === null) return null;
-    return isShared(debate)
-      ? sharedLeadNote(debate)
-      : leadNote(debate, barredClaims.visible.length > 0);
-  }, [debate, barredClaims.visible.length]);
-  const placement = lead === null ? null : leadPlacement(lead, rows.length);
+  /* **The rows on screen**: the sub-mode's own, through its bar and its thread.
+     The head count in the (i) reads this. */
+  const rows: readonly DebateRow[] = view === "reception" ? receptionShown : claimsShown;
+
+  /* **What this sub-mode's search came back with, when that was nothing** —
+     asked of the stored rows, so a list the reader's own bar or thread emptied
+     never gets a search-empty sentence (`emptyNote`). And the way on, when
+     Reception has nothing and Claims has something: on a paper nobody has
+     written about, the claims are the whole of what was found. */
+  const empty = debate === null ? null : emptyNote(debate, SEARCH_OF[view]);
+  const handoff = view === "reception" && directRows.length === 0 && claimRows.length > 0;
+
+  /* **Each search's losses**, for the (i) — both searches', whichever sub-mode
+     is open, because provenance is about the run rather than the screen. Each
+     is handed the rows its own sub-mode shows: `sourcesNote` counts the pages
+     that *contribute to the rows shown*, and a bar or a thread decides which
+     those are (GPT Sol's review of 260930j, F6). */
   const foot = useMemo(() => {
     if (debate === null) return [];
     /* A visitor's foot is what the public boundary withheld, and only that:
@@ -1047,10 +962,10 @@ export function DebatePanel({
        (src/public-types.ts § `PublicDebateGroup`). */
     if (isShared(debate)) return withheldLines(debate);
     return footLines({
-      direct: { rows: threadDirect, counts: debate.direct.counts },
-      claims: { rows: threadClaims, counts: debate.claims.counts },
+      direct: { rows: receptionShown, counts: debate.direct.counts },
+      claims: { rows: claimsShown, counts: debate.claims.counts },
     });
-  }, [debate, threadDirect, threadClaims]);
+  }, [debate, receptionShown, claimsShown]);
 
   /**
    * @param again beside a debate that is already there, so the run is forced.
@@ -1075,19 +990,25 @@ export function DebatePanel({
   );
 
   /* **What the band's (i) adds after the mode's own words** — moved there on
-     2026-10-01 (spya-ucu35y, plan 261001m): the head's count, the foot lines
-     that were under the last row, the extracts-only sentence, and when the
-     search ran. The count is **the rows on screen**, so it still moves with
-     the bar; `headCount` says why it is excerpts *and* pages. It and the foot
-     lines are different facts: **what is on screen**, **responses the bar is
-     holding back** (still at the slider), and **pages each search returned**,
-     each naming its own search. A visitor's debate keeps `searchedAt` and
-     nothing else of provenance (src/public-types.ts). */
+     2026-10-01 (spya-ucu35y, plan 261001m): the count, the foot lines that
+     were under the last row, the extracts-only sentence, and when the search
+     ran. Since 2026-10-03 also what each sub-mode is, which docs/project/mode.md
+     keeps off the panel (no description line under a control). The count is
+     **the rows on screen**, so it moves with the sub-mode, the bar and the
+     thread; `headCount` says why it is excerpts *and* pages. It and the foot
+     lines are different facts: **what is on screen**, and **pages each search
+     returned**, each naming its own search. A visitor's debate keeps
+     `searchedAt` and nothing else of provenance (src/public-types.ts). */
   const made = owner?.debate ?? null;
   const about =
     debate && ready ? (
       <>
         <p>{headCount(rows)} on screen.</p>
+        {DEBATE_VIEWS.map((v) => (
+          <p key={v}>
+            {DEBATE_SUB_MODES[v].label}: {DEBATE_SUB_MODES[v].description}.
+          </p>
+        ))}
         {foot.map((line) => (
           <p key={line}>{line}</p>
         ))}
@@ -1101,6 +1022,14 @@ export function DebatePanel({
         />
       </>
     ) : null;
+
+  /* The sub-mode on screen's threads, the one selected there, and the rows its
+     counts are out of: Claims' are the rows its bar left, Reception's every
+     stored row, since nothing there hides one. */
+  const viewThreads = view === "reception" ? receptionThreads : claimThreads;
+  const viewThread = view === "reception" ? receptionThread : claimThread;
+  const beforeThread: readonly DebateRow[] = view === "reception" ? directRows : barredClaims.visible;
+  const scholar = articleTitle?.trim() ? scholarUrl(articleTitle.trim()) : null;
 
   return (
     <ModeSurface
@@ -1155,12 +1084,9 @@ export function DebatePanel({
           {/* The price, before the button rather than after it. Two model
               calls that each go out to the open web is the dearest press in
               this bar, and a reader is entitled to know that at the moment they
-              decide. docs/project/copy.md. */}
-          <p className="gloss-hint">
-            Two searches of the open web — one for replies to this piece, one for the argument
-            around what it claims. It takes half a minute, costs real money, and most pieces turn
-            out to have no reception at all. Searched once and kept.
-          </p>
+              decide — and what the two searches are, in the words the two
+              sub-modes are then called by. docs/project/copy.md. */}
+          <p className="gloss-hint">{DEBATE_BEFORE_SEARCH}</p>
           {run("Search the web")}
         </div>
       )}
@@ -1191,43 +1117,31 @@ export function DebatePanel({
               bugging the user about it."* Re-running is in Metadata. Plan
               260929c. */}
 
-          {/* **The order bar, first**, where Glossary's is: a control on the
-              list. Only when at least two orders would draw different lists
-              (debate-order.ts § `debateOrderOptions`) — one button, or two that
-              give the same list, is a control that visibly does nothing. */}
-          {orders.length > 0 && <OrderBar options={orders} order={order} onOrder={onOrder} />}
-
-          {/* **What the order is, before the list** — a reader looking at a
-              list assumes its order carries a claim, and by the time they
-              reach anything after it they have already read it that way. So it
-              stays out of the (i) (GPT Sol, plan review 261001m, P2). *When it
-              was searched* and *what the quotations were checked against* went
-              into the band's (i) on 2026-10-01 (spya-ucu35y); the second is
-              inside every row's `more` too, at the point of use. */}
-          <p className="dbt-frame">{ORDER_SENTENCE[order]}</p>
-
-          {/* **The bar, above the list and outside the scroller**, where every
-              other threshold in this app sits: it is a control on the list, not
-              provenance to read after it.
-
-              Only when there is something for it to be about. A slider over a
-              group with no rows in it would be a control that cannot change
-              anything, and — worse — a foot line saying *"nothing is hidden by
-              this threshold"* under an empty list, which is true and reads as an
-              explanation of the emptiness. `leadNote` owns that sentence. */}
-          {debate.direct.rows.length > 0 && (
-            <NameBar
-              barred={barred}
-              level={level}
-              moved={chosenLevel !== null}
-              onLevel={onLevel}
+          {/* **Reception | Claims, first**: which search's rows everything
+              below is about. Each segment's count is its own list's — the rows
+              that sub-mode draws, through its bar and its thread — so the
+              number and the list under it cannot disagree. */}
+          <div className="summ-controls dbt-controls">
+            <DebateViews
+              view={view}
+              counts={{ reception: receptionShown.length, claims: claimsShown.length }}
+              onView={onView}
             />
+          </div>
+
+          {/* **Reception's order bar**, where Glossary's is: a control on the
+              list. Only when at least two orders would draw different lists
+              (debate-order.ts § `receptionOrderOptions`) — one button, or two
+              that give the same list, is a control that visibly does nothing.
+              Claims has none: it is always grouped by claim. */}
+          {view === "reception" && orders.length > 0 && (
+            <OrderBar options={orders} order={order} onOrder={onOrder} />
           )}
 
-          {/* The relevance bar under it, over the claim rows, in *prioritised*
-              only — a number that meant nothing in the other orders would be
-              furniture. */}
-          {relevant && (
+          {/* **Claims' relevance bar, above the list and outside the
+              scroller**, where every other threshold in this app sits: it is a
+              control on the list, not provenance to read after it. */}
+          {view === "claims" && judged && (
             <RelevanceBar
               barred={barredClaims}
               level={relevance}
@@ -1237,22 +1151,24 @@ export function DebatePanel({
           )}
 
           <div className="dbt-scroll">
-            {/* **The negative result, said where it is true** (`leadPlacement`).
-                With no rows it is the whole answer — on a famous piece with no
-                reception it has to read as a finding. When it hands over to the
-                rows (*"What follows…"*) it comes before them: in *by claim* as
-                the body of the *About this piece* group, otherwise as a line
-                above the list. Anything else goes after the list. */}
-            <Lead text={lead} placement={placement} order={order} at="top" />
+            {/* **The negative result**, which on a famous piece with no
+                reception has to read as a finding — and, under Reception's,
+                the way to what the other search did find. */}
+            {empty !== null && <p className="gloss-quiet dbt-empty">{empty}</p>}
+            {handoff && (
+              <button type="button" className="dbt-handoff" onClick={() => onView("claims")}>
+                {debateClaimsHandoff(claimRows.length)}
+              </button>
+            )}
 
             {/* **The threads, above the rows and inside the scroller** — they
                 are a reading of the list, so they scroll with it rather than
-                pinning over it like the bars. Plan 260930j. */}
-            {threads.length > 0 && (
+                pinning over it like the bar. Plan 260930j. */}
+            {viewThreads.length > 0 && (
               <Threads
-                threads={threads}
-                selected={thread}
-                visible={barredVisible}
+                threads={viewThreads}
+                selected={viewThread}
+                visible={beforeThread}
                 shown={rows}
                 onThread={onThread}
               />
@@ -1265,11 +1181,26 @@ export function DebatePanel({
                 was asked. */}
             {synthesis?.kind === "failed" && <p className="dbt-thread-failed">{DEBATE_THREADS_FAILED}</p>}
 
-            {rows.length > 0 && (
-              <DebateList groups={groups} order={order} onJump={onJump} keyRows={keyRows} />
+            {view === "reception" ? (
+              <>
+                <ReceptionList confirmed={confirmed} titleOnly={titleOnly} keyRows={keyRows} />
+                {/* **Who cites it.** A paper that cites the piece and says
+                    something about it is reception, and the search looks for
+                    those; a *complete* list of citers needs a citation index
+                    we do not have. So one link out — a search by title, never
+                    a guessed address (plan 261003f's rule for author links) —
+                    and it is there when Reception kept nothing, which is when
+                    it is most use. `noreferrer` like every other link out. */}
+                {scholar !== null && (
+                  <a className="dbt-scholar" href={scholar} target="_blank" rel="noreferrer noopener">
+                    Who cites it: search Google Scholar
+                    <ExternalLink size={11} aria-hidden="true" />
+                  </a>
+                )}
+              </>
+            ) : (
+              <ClaimsList groups={claimGroups} onJump={onJump} keyRows={keyRows} />
             )}
-
-            <Lead text={lead} placement={placement} order={order} at="after" />
 
             {/* Both searches' numbers (`footLines`) and the extracts-only
                 sentence were here, under the last row, until 2026-10-01; they
@@ -1284,30 +1215,112 @@ export function DebatePanel({
 }
 
 /**
- * **Debate's two categorical thresholds, drawn by one component** — the
- * identification bar (`?name=`, rows about this piece) and, since 2026-09-29,
- * the relevance bar (`?bears=`, claim rows, *prioritised* only). They own
- * disjoint rows, so each `N of M` counts only its own (the plan's F7).
+ * **Reception | Claims** — Debate's two sub-modes, a two-way segmented control
+ * built the way Summary's Brief | Fuller | Thread is (SummaryMode.tsx §
+ * `SummaryControls`, and its classes): a radiogroup of buttons, each its own
+ * tab stop, drawn joined so the two read as one choice.
+ *
+ * ```
+ *  [ Reception 2 | Claims 5 ]
+ * ```
+ *
+ * **Each segment carries the count of rows its list draws**, so a reader in
+ * Reception can see there are five sources a press away — Greg read one
+ * claim's two sources as the whole debate because nothing told him there were
+ * others.
+ *
+ * **What each one is goes in its card, never in a sentence under the row**:
+ * docs/project/mode.md bans a description line there (GPT Sol's F8). The words
+ * are sub-modes.ts's, which the command bar's rows share.
+ *
+ * **A press arms nothing**, unlike Summary's: this control exists only once a
+ * debate is stored, and both sub-modes draw that one stored search. Writing
+ * the value already open would push a history entry that goes nowhere.
+ */
+function DebateViews({
+  view,
+  counts,
+  onView,
+}: {
+  view: DebateView;
+  counts: Record<DebateView, number>;
+  onView(view: DebateView): void;
+}) {
+  return (
+    <div className="summ-views dbt-views" role="radiogroup" aria-label="Debate view">
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        {DEBATE_VIEWS.map((v) => (
+          <Tooltip
+            key={v}
+            placement="bottom"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head={DEBATE_SUB_MODES[v].label}
+                what={`${DEBATE_SUB_MODES[v].description}.`}
+                how={VIEW_HOW[v]}
+              />
+            }
+          >
+            {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s, the call SummaryMode.tsx, StructureMode.tsx and RefereeMode.tsx already make */}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={v === view}
+              /* The label and the count are two text nodes with no space
+                 between them, which a screen reader may run together. */
+              aria-label={`${DEBATE_SUB_MODES[v].label}, ${counts[v]} ${counts[v] === 1 ? "source" : "sources"}`}
+              tabIndex={0}
+              className={`summ-view-btn${v === view ? " on" : ""}`}
+              onClick={() => {
+                if (v !== view) onView(v);
+              }}
+            >
+              {DEBATE_SUB_MODES[v].label}
+              <span className="dbt-view-count">{counts[v]}</span>
+            </button>
+          </Tooltip>
+        ))}
+      </TooltipGroup>
+    </div>
+  );
+}
+
+/** The second paragraph of each segment's card: how its rows were got, and what was checked. */
+const VIEW_HOW: Record<DebateView, string> = {
+  reception:
+    "Found by a search of the open web, run once and kept. Each page has to link, quote or name this piece, and each quotation is checked against what the search returned.",
+  claims:
+    "Found by a second search, run once and kept. Each source sits under the claim it answers, in the article's own words, and each quotation is checked against what the search returned.",
+};
+
+/**
+ * **Debate's categorical threshold** — the relevance bar (`?bears=`), over
+ * Claims' rows. Until 2026-10-03 this drew a second one too, the
+ * identification bar over the rows about the piece; debate-levels.ts says why
+ * that became two headed groups instead.
  *
  * Everything here is Quotes' `BarSlider` and the glossary's `GateSlider` with
- * the *stops* changed, and their four properties are kept for the same reasons:
- * the setting is on screen in words, the count is on screen (`2 of 3`, the thing
- * the reader is actually aiming at), every stop is a different rule, and it says
- * how many it is holding back in **every** state including none
- * ([`hiddenNote`](threshold.ts)).
+ * the *stops* changed, and three of their four properties are kept for the
+ * same reasons: the setting is on screen in words, the count is on screen
+ * (`2 of 3`, the thing the reader is actually aiming at), and every stop is a
+ * different rule. **The fourth changed on 2026-10-03**: this one says how many
+ * it is holding back only when it is holding something back
+ * ([`hiddenNote`](threshold.ts)). *"Nothing is hidden by this threshold."* was
+ * one of four standing notes over one list (plan 261003o, step 8).
  *
  * Two things differ from its three siblings, and both follow from the fact
  * underneath being **named rather than measured**:
  *
  *  - **The track is an index into three fixed words**, not into scores this list
- *    contains. So a stop can be inert on a given article — nothing here links
- *    the piece, say, and the last two stops then show the same list — where
+ *    contains. So a stop can be inert on a given article — nothing here bears
+ *    only loosely, say, and the first two stops then show the same list — where
  *    `barStops` guarantees each adjacent pair differs. That is the right trade:
- *    a word in a link means the same thing on every article
- *    (debate-levels.ts § `IDENTIFICATION_STOPS`).
+ *    a word in a link means the same thing on every article.
  *  - **The URL carries the word**, so there is nothing to snap and no
  *    `snapToStop` here. `?bar=0.63` against a track of real scores was a bug
- *    that needed a whole function; `?name=quoted` is a stop or it is nothing.
+ *    that needed a whole function; `?bears=partly` is a stop or it is nothing.
  */
 function StopBar<L extends string>({
   id,
@@ -1326,7 +1339,7 @@ function StopBar<L extends string>({
 }: {
   /** The range input's id, which the `<label>` points at. */
   id: string;
-  /** A class beside `.dbt-bar`, so the two bars can be told apart. */
+  /** A class beside `.dbt-bar`, naming which bar this is. */
   kind: string;
   label: string;
   /**
@@ -1400,57 +1413,21 @@ function StopBar<L extends string>({
         aria-valuetext={`${words[level]}, showing ${count} ${noun.many}`}
         onChange={(e) => onLevel(stops[Number.parseInt(e.target.value, 10)] ?? defaultLevel)}
       />
-      {/* Always, never conditionally: present wherever the slider is, absent
-          wherever it is not. A line that is sometimes missing for a *different*
-          reason teaches the reader nothing — and a bar that has hidden every row
-          looks exactly like a search that found none. */}
-      <p className="dbt-bar-note">{note}</p>
+      {/* **Only when it is hiding something** — and then always, because a bar
+          that has hidden every row looks exactly like a search that found
+          none, and this sentence is what tells the two apart. */}
+      {barred.hiddenCount > 0 && <p className="dbt-bar-note">{note}</p>}
     </div>
   );
 }
 
 /**
- * **How firmly a page has to identify this article to stay on the list** —
- * the threshold Greg asked for on 2026-09-06, over rows about this piece.
- * Claim rows carry no level, are never hidden by this, and are in neither
- * number it prints.
- */
-function NameBar({
-  barred,
-  level,
-  moved,
-  onLevel,
-}: {
-  barred: ThresholdResult<DirectRow>;
-  level: IdentificationLevel;
-  moved: boolean;
-  onLevel(level: IdentificationLevel | null): void;
-}) {
-  return (
-    <StopBar
-      id="dbt-bar"
-      kind="dbt-name"
-      label="identification"
-      barred={barred}
-      level={level}
-      stops={IDENTIFICATION_STOPS}
-      words={STOP_LABEL}
-      defaultLevel={DEBATE_LEVEL_DEFAULT}
-      noun={RESPONSE}
-      title="How firmly a page has to identify this article to stay on the list: it names the title, it quotes the article's own words, or it links to its address. Left shows every page the search kept, right only the ones that link it. Rows answering what the article claims are not affected."
-      moved={moved}
-      onLevel={onLevel}
-    />
-  );
-}
-
-/**
  * **How directly a claim row has to bear on its claim to stay on the list** —
- * the *thresholding* Greg asked for with *prioritised*, over claim rows only.
- * The words are the AI's judgment (`bears`), and the default hides nothing
- * (`RELEVANCE_DEFAULT`, the plan's F5). A row the AI did not judge is never
- * hidden: it is always on the list, under its own line, and is left out of the
- * bar's N of M so it does not look as though it cleared a judgment it lacks.
+ * the *thresholding* Greg asked for on 2026-09-29, over Claims' rows. The
+ * words are the AI's judgment (`bears`), and the default hides nothing
+ * (`RELEVANCE_DEFAULT`, 260929h's F5). A row the AI did not judge is never
+ * hidden: it is always on the list, last under its claim, and is left out of
+ * the bar's N of M so it does not look as though it cleared a judgment it lacks.
  */
 function RelevanceBar({
   barred,
@@ -1474,7 +1451,7 @@ function RelevanceBar({
       words={BEARS_LABEL}
       defaultLevel={RELEVANCE_DEFAULT}
       noun={ANSWER}
-      title="How directly the AI judged a page bears on the claim it answers: loosely, partly or directly. Left shows every answer, right only the ones it judged to bear directly. Rows the AI did not judge are never hidden, and rows about this piece are not affected."
+      title="How directly the AI judged a page bears on the claim it answers: loosely, partly or directly. Left shows every answer, right only the ones it judged to bear directly. Rows the AI did not judge are never hidden."
       judgedOnly
       moved={moved}
       onLevel={onLevel}
@@ -1483,44 +1460,10 @@ function RelevanceBar({
 }
 
 /**
- * **The lead sentence, drawn at one of its two places** — or nothing, when it
- * belongs at the other. `leadPlacement` decides; this only draws. `at="top"`
- * takes *alone* and *before*, and *before* in *by claim* is the body of an
- * *About this piece* group — there is no row about this piece to head, only the
- * finding that there is none.
- */
-function Lead({
-  text,
-  placement,
-  order,
-  at,
-}: {
-  text: string | null;
-  placement: "alone" | "before" | "after" | null;
-  order: DebateOrder;
-  at: "top" | "after";
-}) {
-  if (text === null || placement === null) return null;
-  if (at === "after") {
-    return placement === "after" ? <p className="gloss-quiet dbt-empty dbt-after">{text}</p> : null;
-  }
-  if (placement === "after") return null;
-  if (placement === "before" && order === "claim") {
-    return (
-      <section className="dbt-group">
-        <h3 className="dbt-group-head">About this piece</h3>
-        <p className="gloss-quiet dbt-empty">{text}</p>
-      </section>
-    );
-  }
-  return <p className="gloss-quiet dbt-empty">{text}</p>;
-}
-
-/**
- * **The order buttons** — Glossary's `SortBar`, with its classes: `.dbt` is
- * `.gloss` with a class beside it, so the look comes free and the two bars
- * cannot drift apart. `aria-pressed` on the order actually drawn, which is
- * `effectiveDebateOrder`'s answer rather than the URL's.
+ * **Reception's order buttons** — Glossary's `SortBar`, with its classes:
+ * `.dbt` is `.gloss` with a class beside it, so the look comes free and the two
+ * bars cannot drift apart. `aria-pressed` on the order actually drawn, which is
+ * `effectiveReceptionOrder`'s answer rather than the URL's.
  */
 function OrderBar({
   options,
@@ -1572,7 +1515,7 @@ function Threads({
 }: {
   threads: readonly Thread[];
   selected: Thread | null;
-  /** The rows both bars left, before the thread — what each count is out of. */
+  /** The rows the bar left, before the thread — what each count is out of. */
   visible: readonly { id: string }[];
   /** The rows on screen after the thread. */
   shown: readonly { url: string }[];
@@ -1601,7 +1544,7 @@ function Threads({
               disabled={count === 0 && !on}
               title={
                 count === 0
-                  ? "The bars above are hiding every source on this"
+                  ? "The relevance bar is hiding every source on this"
                   : on
                     ? "Show every source again"
                     : "Show only these sources"
@@ -1625,7 +1568,7 @@ function Threads({
       {selected && (
         <p className="dbt-thread-showing">
           {shown.length === 0
-            ? "The bars above are hiding every source on this thread"
+            ? "The relevance bar is hiding every source on this thread"
             : `Showing ${headCount(shown)} ${selected.kind === "key" ? "picked as key" : `on “${selected.label}”`}`}
           {" · "}
           <button type="button" className="dbt-thread-all" onClick={() => onThread(null)}>
@@ -1637,38 +1580,37 @@ function Threads({
   );
 }
 
-/**
- * **The list, in whichever order is drawn.** *By claim* is one headed section
- * per group — *About this piece*, then each claim in the article's own words
- * with the way to it. The other orders are flat, with at most two quiet lines
- * inside them that say what is **missing** rather than what a page thinks —
- * *not judged for relevance*, *no year found* — and *date*'s marker at the
- * article's own year.
- *
- * A claim row's *On "…"* line is left off under a claim heading, because the
- * heading already says it: the repeated *Answering* blocks were half of what
- * made the old list look like duplicates.
- */
-function DebateList({
-  groups,
-  order,
-  onJump,
+/** The rows of one list, each drawn by `Row`. */
+function Rows({
+  rows,
   keyRows,
 }: {
-  groups: readonly DebateGroup<DirectRow, ClaimRow>[];
-  order: DebateOrder;
-  onJump(id: BlockId): void;
-  /** Each key source's reason, by row id — empty for a visitor or an older debate. */
+  rows: readonly DebateRow[];
+  /** Each key source's reason, by row id — empty for an older debate. */
   keyRows: ReadonlyMap<string, DebateKeySource>;
 }) {
-  const grouped = order === "claim";
-  const list = (rows: readonly DebateRow[]) => (
+  return (
     <ol className="dbt-list">
       {rows.map((row) => (
-        <Row key={row.id} row={row} showClaim={!grouped} onJump={onJump} keySource={keyRows.get(row.id)} />
+        <Row key={row.id} row={row} keySource={keyRows.get(row.id)} />
       ))}
     </ol>
   );
+}
+
+/**
+ * **One of Reception's two groups, in the order drawn.** *As found* and
+ * *stance* are flat. *Date* has at most one quiet line inside it, which says
+ * what is **missing** rather than what a page thinks — *no year found* — and
+ * its marker at the article's own year.
+ */
+function ReceptionGroups({
+  groups,
+  keyRows,
+}: {
+  groups: readonly DebateGroup<DirectRow>[];
+  keyRows: ReadonlyMap<string, DebateKeySource>;
+}) {
   return (
     <>
       {groups.map((group, i) => {
@@ -1677,40 +1619,22 @@ function DebateList({
         const key = `${group.kind}-${i}`;
         switch (group.kind) {
           case "flat":
-            return <div key={key}>{list(group.rows)}</div>;
-          case "piece":
             return (
-              <section key={key} className="dbt-group">
-                <h3 className="dbt-group-head">About this piece</h3>
-                {list(group.rows)}
-              </section>
+              <div key={key}>
+                <Rows rows={group.rows} keyRows={keyRows} />
+              </div>
             );
-          case "claim":
-            return (
-              <section key={key} className="dbt-group">
-                {/* The article's own words, located in the block the id names —
-                    a heading we can stand behind, which a `relation` or a stance
-                    heading would not be. File header § One list. */}
-                <h3 className="dbt-group-head dbt-group-claim">
-                  <span className="dbt-claim-label">On</span>{" "}
-                  <span className="dbt-group-quote">“{group.claimQuote}”</span>{" "}
-                  <BlockRef id={group.blockId} onJump={onJump} />
-                </h3>
-                {list(group.rows)}
-              </section>
-            );
-          case "unjudged":
           case "undated":
             return (
               <section key={key} className="dbt-group">
-                <p className="dbt-gap">{group.kind === "unjudged" ? DEBATE_UNJUDGED : DEBATE_UNDATED}</p>
-                {list(group.rows)}
+                <p className="dbt-gap">{DEBATE_UNDATED}</p>
+                <Rows rows={group.rows} keyRows={keyRows} />
               </section>
             );
           case "marker":
             /* *"This piece, 2022"* and nothing more: the rows under it are that
                year or later, and a same-year row is not *after* it — a year
-               cannot order two things inside itself (the plan's F1). */
+               cannot order two things inside itself (260929h's F1). */
             return (
               <p key={key} className="dbt-marker">
                 This piece, {group.year}
@@ -1722,6 +1646,87 @@ function DebateList({
           }
         }
       })}
+    </>
+  );
+}
+
+/**
+ * **Reception's list: the pages that link or quote this piece, then the ones
+ * that only name it, under a heading that says so.**
+ *
+ * The first group has no heading: it is what the sub-mode is. **The second
+ * always has one**, including when it is the only group — a page that names
+ * the title may be about a different document that shares it (the decoy in
+ * debate-levels.ts), and as the first row of a plain list it would read as
+ * reception. Under its heading it is on screen and flagged; so is the citing
+ * paper and the published reply, which look exactly the same to us.
+ */
+function ReceptionList({
+  confirmed,
+  titleOnly,
+  keyRows,
+}: {
+  confirmed: readonly DebateGroup<DirectRow>[];
+  titleOnly: readonly DebateGroup<DirectRow>[];
+  keyRows: ReadonlyMap<string, DebateKeySource>;
+}) {
+  return (
+    <>
+      <ReceptionGroups groups={confirmed} keyRows={keyRows} />
+      {titleOnly.length > 0 && (
+        <section className="dbt-group dbt-title-only">
+          <h3 className="dbt-group-head">{DEBATE_TITLE_ONLY}</h3>
+          <ReceptionGroups groups={titleOnly} keyRows={keyRows} />
+        </section>
+      )}
+    </>
+  );
+}
+
+/**
+ * **Claims' list: one group per claim, in article order** — Greg's *"a thread
+ * … for each claim, and then papers that have sort of evaluated the claim"*,
+ * from data the search already stored.
+ *
+ * Each is a native `<details>`, **open**: every claim's sources are on screen
+ * on arrival, and a reader checking one claim can fold the others away. Its
+ * summary is the article's own words, located in the block the id names — a
+ * heading we can stand behind, which a `relation` or a stance heading would
+ * not be (file header § Two sub-modes) — then the way to that passage, and how
+ * many rows are under it. **No for/against tally**: it would put the model's
+ * reading of each page into a headline in our voice (GPT Sol's F9).
+ *
+ * The rows carry no *On "…"* line of their own, because the heading says it:
+ * the repeated *Answering* blocks were half of what made the old list look
+ * like duplicates.
+ */
+function ClaimsList({
+  groups,
+  onJump,
+  keyRows,
+}: {
+  groups: readonly ClaimGroup<ClaimRow>[];
+  onJump(id: BlockId): void;
+  keyRows: ReadonlyMap<string, DebateKeySource>;
+}) {
+  return (
+    <>
+      {groups.map((group) => (
+        /* The claim's identity is `(blockId, claimQuote)` — debate-order.ts. */
+        <details key={`${group.blockId} ${group.claimQuote}`} className="dbt-group dbt-claim-group" open>
+          <summary className="dbt-group-head dbt-group-claim">
+            <span className="dbt-group-quote">“{group.claimQuote}”</span>
+            <BlockRef id={group.blockId} onJump={onJump} />
+            <span
+              className="dbt-group-count"
+              title={`${group.rows.length} ${group.rows.length === 1 ? "source" : "sources"} on this claim`}
+            >
+              {group.rows.length}
+            </span>
+          </summary>
+          <Rows rows={group.rows} keyRows={keyRows} />
+        </details>
+      ))}
     </>
   );
 }
@@ -1849,20 +1854,14 @@ export function bylineAuthors(authors: readonly string[]): string {
 
 /**
  * **One source**, in the order the file header gives: what the work is, the
- * AI's reading of it, the claim it answers, the quotation — and `more`.
- *
- * @param showClaim whether to draw a claim row's *On "…"* line; false under a
- *   *by claim* heading, which already says it.
+ * AI's reading of it, the quotation — and `more`. A claim row says nothing of
+ * the claim it answers: it is always under that claim's heading (`ClaimsList`).
  */
 function Row({
   row,
-  showClaim,
-  onJump,
   keySource,
 }: {
   row: DebateRow;
-  showClaim: boolean;
-  onJump(id: BlockId): void;
   /** Set when the AI picked this row as a key source (plan 260930j). */
   keySource: DebateKeySource | undefined;
 }) {
@@ -1877,7 +1876,6 @@ function Row({
      once. */
   const look = LEAN_APPEARANCE[readStoredLean(row)];
   const Icon = look.icon;
-  const claim = claimOf(row);
   const direct = directOf(row);
   const bears = readBears(row);
   const work = rowWork(row);
@@ -1970,7 +1968,7 @@ function Row({
           a reader decides with; the paragraph behind it is in `more`, inside
           the fence. Separate words, not merged: *"qualifies · Could not tell"*
           is an honest pair of answers rather than a contradiction. `bears`
-          leads when the AI gave one — it is what *prioritised* orders by. */}
+          leads when the AI gave one — it is what a claim's rows are ordered by. */}
       <p className="dbt-ai-line">
         <span className="dbt-ai-tag" title="The AI's reading of this page — nothing in what the search returned checks it">
           AI
@@ -1992,17 +1990,6 @@ function Row({
           {look.label}
         </span>
       </p>
-
-      {/* A claim row outside *by claim*: the article's own words for the claim it
-          answers, located in the named block, and the way to it. One line; the
-          heading carries it in *by claim*. */}
-      {claim && showClaim && (
-        <p className="dbt-claim">
-          <span className="dbt-claim-label">On</span>
-          <span className="dbt-claim-text">“{claim.claimQuote}”</span>
-          <BlockRef id={claim.blockId} onJump={onJump} />
-        </p>
-      )}
 
       {/* Characters we located in that page's own extract. A `<blockquote>`
           because that is what it is, and rendered as text: this is a slice of a
@@ -2033,8 +2020,8 @@ function Row({
  * **What `more` opens**: everything the ⓘ card held, in the row rather than
  * over it — every author, and whose reading the title, authors and year are;
  * the AI's paragraph inside its fence; the page's full address; a direct row's
- * witness that this page names *this* article; what the quotation was checked
- * against; and the way out. The full title and quotation are the row's own,
+ * witness that this page names *this* article; and the way out. The full
+ * title and quotation are the row's own,
  * unclamped (`.dbt-item.open` in debate.css), rather than drawn a second time.
  *
  * Rendered closed with `hidden` rather than not at all, so `aria-controls`
@@ -2095,7 +2082,9 @@ function RowDetail({
           the witness has to carry the article's address, its title, or a short
           title with the byline. */}
       {reference && <p className="dbt-ref">It names this article: “{reference}”</p>}
-      <p className="dbt-note">{DEBATE_EXTRACTS_ONLY}</p>
+      {/* What the quotation was checked against was said here, on every row,
+          until 2026-10-03; it is said once, in the band's (i) (plan 261003o,
+          step 8). */}
       <a className="dbt-out" href={row.url} target="_blank" rel="noreferrer noopener">
         Read it on {hostOf(row.url)}
         <ExternalLink size={11} aria-hidden="true" />

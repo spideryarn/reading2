@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **The Debate band, and the seven things about it that can be got wrong
+ * **The Debate band, and the nine things about it that can be got wrong
  * quietly.**
  *
  * This mode's whole design is a set of refusals, and a refusal is invisible on
@@ -32,11 +32,14 @@
  *  6. **The excerpt is a slice of a stranger's page and is rendered as text.**
  *  7. **`searchedAt` is displayed provenance, not staleness**, and the two say
  *     different things on screen.
- *  8. **One list, and every row saying what it is** — added 2026-09-06 with the
- *     change that removed the two group headings. What the headings used to say
- *     per section, the chip now says per row, so the things that can go quiet
- *     are the ordering, the level being the *strongest* signal rather than the
- *     first, and a foot line that no longer names which search it counts.
+ *  8. **Every row saying what it is** — the chip on a row about the piece is
+ *     its *strongest* signal rather than its first, and each foot line names
+ *     which search it counts.
+ *  9. **Two sub-modes, one per search** — since 2026-10-03 (plan 261003o).
+ *     Reception draws no claim row and Claims no reception row; each segment's
+ *     count is its own list; a page that only *names* the piece is on screen
+ *     under a heading that says so, never hidden and never unheaded; and the
+ *     empty states of 1 are kept per sub-mode, for owner and visitor.
  *
  * Each has a positive control beside it, because a test that has never been
  * able to fail is not evidence.
@@ -54,25 +57,22 @@ import type {
   DebateLosses,
   DebateSynthesis,
   DirectDebateRow,
-  IdentificationLevel,
 } from "../src/types.js";
-import { DEBATE_LEVEL_DEFAULT } from "../src/web/debate-levels.js";
 import type { DebateOrder } from "../src/web/debate-order.js";
+import type { DebateView } from "../src/web/params.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 import type { PublicDebate } from "../src/public-types.js";
 import {
-  DEBATE_CLAIMS_FOLLOW,
   DEBATE_CLAIMS_NONE,
+  DEBATE_CLAIMS_NONE_SHARED,
   DEBATE_EXTRACTS_ONLY,
-  DEBATE_ORDER_BY_CLAIM,
-  DEBATE_ORDER_PRIORITISED,
-  DEBATE_ORDER_STANCE,
+  DEBATE_TITLE_ONLY,
   DEBATE_UNDATED,
-  DEBATE_UNJUDGED,
   DEBATE_RESPONSES_NONE,
   DEBATE_RESPONSES_NONE_SHARED,
   debateClaimsUnverified,
   debateResponsesUnverified,
+  debateWithheldOnSharedLink,
 } from "../src/messages.js";
 
 const {
@@ -81,7 +81,6 @@ const {
   headCount,
   identificationEvidence,
   keptNote,
-  leadNote,
   sourcesNote,
 } = await import("../src/web/DebatePanel.js");
 
@@ -187,38 +186,40 @@ let host: HTMLDivElement;
 let root: Root;
 const jumped: BlockId[] = [];
 
-/** Every level the bar was dragged to, in order — `null` is its reset. */
-const levelled: (IdentificationLevel | null)[] = [];
+/** Every sub-mode segment pressed, in order — and the handoff button's press. */
+const viewed: DebateView[] = [];
 /** Every order button pressed, in order. */
 const ordered: DebateOrder[] = [];
 /** Every stop the relevance bar was dragged to — `null` is its reset. */
 const relevanced: (DebateBears | null)[] = [];
 const threaded: (string | null)[] = [];
 
+/** The article's own title, which the panel is handed for the Scholar link. */
+const ARTICLE_TITLE = "Notes on my sourdough starter, week 3";
+
 /**
- * **The bar is wound fully open unless a test is about the bar.**
- *
- * `?name=` defaults to `quoted`, and the fixture row above is `named`-only — so
- * every test in this file that is about *rows* would otherwise be testing the
- * threshold by accident, and would go green again the day somebody broke it in
- * the other direction. `named` is *show everything*, which is what these tests
- * mean when they say "the panel draws two rows". The section that owns the bar
- * passes `null`, which is what a reader who has never touched it sends.
+ * **Reception unless a test says Claims** — `?debate=`'s own default, so a test
+ * that passes nothing is what a reader who has touched nothing sees.
  */
 function paint(
   o: UseDebate,
-  level: IdentificationLevel | null = "named",
+  view: DebateView = "reception",
   order: DebateOrder = "prioritised",
   blockOrder: ReadonlyMap<BlockId, number> = new Map(),
-  extra: { relevance?: DebateBears | null; articleYear?: number | null; thread?: string | null } = {},
+  extra: {
+    relevance?: DebateBears | null;
+    articleYear?: number | null;
+    thread?: string | null;
+    articleTitle?: string | null;
+  } = {},
 ) {
   act(() => {
     root.render(
       createElement(DebatePanel, {
         access: { kind: "owner", owner: o },
         onJump: (id: BlockId) => jumped.push(id),
-        level,
-        onLevel: (next: IdentificationLevel | null) => levelled.push(next),
+        view,
+        onView: (next: DebateView) => viewed.push(next),
         order,
         onOrder: (next: DebateOrder) => ordered.push(next),
         blockOrder,
@@ -227,32 +228,58 @@ function paint(
         articleYear: extra.articleYear ?? null,
         thread: extra.thread ?? null,
         onThread: (next: string | null) => threaded.push(next),
+        articleTitle: "articleTitle" in extra ? (extra.articleTitle ?? null) : ARTICLE_TITLE,
       }),
     );
   });
 }
 
 /** The same panel as a visitor gets it. */
-function paintShared(debate: PublicDebate, order: DebateOrder = "prioritised") {
+function paintShared(
+  debate: PublicDebate,
+  view: DebateView = "reception",
+  order: DebateOrder = "prioritised",
+  extra: { relevance?: DebateBears | null; thread?: string | null } = {},
+) {
   act(() => {
     root.render(
       createElement(DebatePanel, {
         access: { kind: "visitor", debate },
         onJump: (id: BlockId) => jumped.push(id),
-        level: "named",
-        onLevel: () => {},
+        view,
+        onView: (next: DebateView) => viewed.push(next),
         order,
         onOrder: (next: DebateOrder) => ordered.push(next),
         blockOrder: new Map(),
-        relevance: null,
-        onRelevance: () => {},
+        relevance: extra.relevance ?? null,
+        onRelevance: (next: DebateBears | null) => relevanced.push(next),
         articleYear: null,
-        thread: null,
+        thread: extra.thread ?? null,
         onThread: () => {},
+        articleTitle: ARTICLE_TITLE,
       }),
     );
   });
 }
+
+/** A visitor's debate, as the public payload sends it. */
+function shared(over: Partial<PublicDebate> = {}): PublicDebate {
+  return {
+    searchedAt: "2026-09-05T10:00:00.000Z",
+    direct: { rows: [direct()], sourceNotPublishable: 0 },
+    claims: { rows: [claim()], sourceNotPublishable: 0 },
+    ...over,
+  } as unknown as PublicDebate;
+}
+
+/** The two segments of the sub-mode control, as a reader reads them. */
+const segments = () => [...host.querySelectorAll(".dbt-views [role='radio']")].map((b) => b.textContent ?? "");
+/** The titles of the rows on screen, in document order. */
+const rowTitles = () => [...host.querySelectorAll(".dbt-item a.dbt-title")].map((a) => a.textContent ?? "");
+/** The button that hands a reader with no reception over to Claims, or null. */
+const handoff = () =>
+  [...host.querySelectorAll<HTMLButtonElement>("button.dbt-handoff")].find(Boolean) ?? null;
+const EMPTY = { returnedSources: 0, reportedRows: 0, keptRows: 0 } as const;
 
 /** Press a button, the way a mouse does. */
 function press(el: Element | null | undefined) {
@@ -276,7 +303,7 @@ function card(): string {
 
 beforeEach(() => {
   jumped.length = 0;
-  levelled.length = 0;
+  viewed.length = 0;
   ordered.length = 0;
   relevanced.length = 0;
   threaded.length = 0;
@@ -290,15 +317,225 @@ afterEach(() => {
   host.remove();
 });
 
-describe("the three empty states are three different sentences", () => {
+/**
+ * **Two sub-modes, one per search** — plan 261003o. Until 2026-10-03 the panel
+ * drew both searches' rows in one list under four controls, and Greg read one
+ * claim's two sources as the whole of the debate. Reception is the search about
+ * the piece; Claims is the search about what it claims.
+ */
+describe("Reception and Claims, each drawing its own search", () => {
+  it("offers the two as one choice, Reception first and chosen, each with its count", () => {
+    paint(
+      owner({
+        debate: artefact({
+          claims: {
+            rows: [claim(), claim({ id: "spya-c7w2d3", url: "https://third.example/x" })],
+            counts: counts({ reportedRows: 2, keptRows: 2 }),
+          },
+        }),
+      }),
+    );
+    const group = host.querySelector(".dbt-views");
+    expect(group?.getAttribute("role")).toBe("radiogroup");
+    expect(segments()).toEqual(["Reception1", "Claims2"]);
+    const [reception, claims] = [...(group?.querySelectorAll("[role='radio']") ?? [])];
+    expect(reception?.getAttribute("aria-checked")).toBe("true");
+    expect(claims?.getAttribute("aria-checked")).toBe("false");
+    /* mode.md bans a description line under a control: what each one is goes
+       in its card and the band's (i). */
+    expect(card()).toContain("What others have written about this piece itself");
+    expect(card()).toContain("What has been written about the claims it makes");
+  });
+
+  it("hands a press back as the sub-mode's word, and nothing for the one already open", () => {
+    paint(owner());
+    const [reception, claims] = [...host.querySelectorAll(".dbt-views [role='radio']")];
+    press(reception);
+    expect(viewed).toEqual([]);
+    press(claims);
+    expect(viewed).toEqual(["claims"]);
+  });
+
+  it("shows no claim rows in Reception and no reception rows in Claims", () => {
+    paint(owner());
+    expect(rowTitles()).toEqual(["A reply to the piece"]);
+    paint(owner(), "claims");
+    expect(rowTitles()).toEqual(["On starters"]);
+    expect(host.querySelector(".dbt-views [aria-checked='true']")?.textContent).toBe("Claims1");
+  });
+
+  /* Each segment's count is its list — the rows on screen there — whichever of
+     the two is open. A count that disagrees with the list under it is this
+     feature's worst failure (threshold.ts). */
+  it("keeps each segment's count equal to the rows its list draws", () => {
+    const debate = artefact({
+      direct: { rows: [direct(), direct({ id: "spya-d2w4r3", url: "https://second.example/r" })], counts: counts() },
+      claims: {
+        rows: [
+          claim3({ id: "spya-c7w2d2", bears: "loosely" }),
+          claim3({ id: "spya-c7w2d3", bears: "directly" }),
+          claim3({ id: "spya-c7w2d4", bears: "partly" }),
+        ],
+        counts: counts(),
+      },
+    });
+    for (const view of ["reception", "claims"] as const) {
+      paint(owner({ debate }), view, "prioritised", new Map(), { relevance: "partly" });
+      expect(segments(), view).toEqual(["Reception2", "Claims2"]);
+      expect(host.querySelectorAll(".dbt-item"), view).toHaveLength(2);
+    }
+  });
+
+  it("gives a visitor the same two, with the same counts", () => {
+    paintShared(shared());
+    expect(segments()).toEqual(["Reception1", "Claims1"]);
+    expect(rowTitles()).toEqual(["A reply to the piece"]);
+    paintShared(shared(), "claims");
+    expect(rowTitles()).toEqual(["On starters"]);
+  });
+});
+
+/**
+ * **The bug this change fixes**
+ * (docs/postmortems/261003h-debate-default-bar-hides-the-citing-papers-the-search-was-changed-to-find.md).
+ * The identification slider defaulted to *quotes it*, which hid a page that
+ * only *names* the piece — and a citing paper names it and almost never quotes
+ * it. On *Attention is not Explanation* the one reception row kept, the
+ * published reply, was hidden in both runs. The slider is gone; a title-only
+ * row is on screen, under a heading that says what it is.
+ */
+describe("a page that only names this piece", () => {
+  const quoted = (over: Partial<DirectDebateRow> = {}) =>
+    direct({
+      id: "spya-d2w4r7",
+      url: "https://quoting.example/reply",
+      title: "A reply that quotes it",
+      identifies: [
+        { kind: "quoted", quote: "a starter needs cool water", blockId: KNOWN, coverage: 0.04, density: 0.13 },
+      ],
+      ...over,
+    });
+  const titleOnlyHead = () => host.querySelector("section.dbt-title-only > h3")?.textContent;
+
+  it("is on screen when the reader has touched nothing, under the title-only heading", () => {
+    paint(owner());
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(1);
+    expect(text()).toContain("Names this piece");
+    expect(DEBATE_TITLE_ONLY).toBe("Names this piece by its title only");
+    expect(titleOnlyHead()).toBe(DEBATE_TITLE_ONLY);
+    expect(host.querySelectorAll("section.dbt-title-only .dbt-item")).toHaveLength(1);
+    expect(text()).not.toContain("hidden by this threshold");
+  });
+
+  /* The decoy that set the old default (260906b): a page about a different
+     document with the same title, and no stronger row beside it. As the first
+     row of a plain list it reads as reception; under its heading it is flagged. */
+  it("is never drawn above or without that heading, even when it is the only row", () => {
+    paint(owner());
+    const items = [...host.querySelectorAll(".dbt-item")];
+    expect(items).toHaveLength(1);
+    for (const item of items) expect(item.closest("section.dbt-title-only")).not.toBeNull();
+    const scroll = host.querySelector(".dbt-scroll");
+    const head = scroll?.querySelector("section.dbt-title-only > h3");
+    expect(head).not.toBeNull();
+    expect(
+      (head as Element).compareDocumentPosition(items[0] as Element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("follows the rows that link or quote the piece, whatever order the search found them in", () => {
+    paint(
+      owner({
+        debate: artefact({
+          direct: { rows: [direct(), quoted()], counts: counts({ reportedRows: 2, keptRows: 2 }) },
+        }),
+      }),
+    );
+    expect(rowTitles()).toEqual(["A reply that quotes it", "A reply to the piece"]);
+    const [first, second] = [...host.querySelectorAll(".dbt-item")];
+    expect(first?.closest("section.dbt-title-only")).toBeNull();
+    expect(second?.closest("section.dbt-title-only")).not.toBeNull();
+    expect(host.querySelectorAll(".dbt-mark-quoted")).toHaveLength(1);
+    expect(host.querySelectorAll(".dbt-mark-named")).toHaveLength(1);
+  });
+
+  it("draws no title-only heading when every row links or quotes the piece", () => {
+    paint(owner({ debate: artefact({ direct: { rows: [quoted()], counts: counts() } }) }));
+    expect(host.querySelector("section.dbt-title-only")).toBeNull();
+    expect(text()).not.toContain(DEBATE_TITLE_ONLY);
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(1);
+  });
+
+  it("has no identification slider any more, in either sub-mode", () => {
+    for (const view of ["reception", "claims"] as const) {
+      paint(owner(), view);
+      expect(document.getElementById("dbt-bar"), view).toBeNull();
+      expect(host.querySelector(".dbt-name"), view).toBeNull();
+    }
+  });
+
+  /* The class, not the instance (the postmortem's first countermeasure): with
+     nothing touched, no default may hide a stored row, whatever it carries. */
+  it("shows every stored row of each sub-mode when the reader has touched nothing", () => {
+    const debate = artefact({
+      direct: { rows: [direct(), quoted()], counts: counts({ reportedRows: 2, keptRows: 2 }) },
+      claims: {
+        rows: [
+          claim3({ id: "spya-c7w2d2", url: "https://loose.example/x", bears: "loosely" }),
+          claim3({ id: "spya-c7w2d3", url: "https://direct.example/x", bears: "directly" }),
+          claim({ id: "spya-c7w2d4", url: "https://unjudged.example/x" }),
+        ],
+        counts: counts({ reportedRows: 3, keptRows: 3 }),
+      },
+    });
+    paint(owner({ debate }));
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
+    paint(owner({ debate }), "claims");
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(3);
+  });
+
+  it("gives a visitor the same heading, from the `identifies` their rows carry", () => {
+    paintShared(shared({ direct: { rows: [direct(), quoted()], sourceNotPublishable: 0 } } as Partial<PublicDebate>));
+    expect(rowTitles()).toEqual(["A reply that quotes it", "A reply to the piece"]);
+    expect(titleOnlyHead()).toBe(DEBATE_TITLE_ONLY);
+  });
+
+  it("counts every row on screen in the head count, title-only ones included", () => {
+    paint(owner());
+    expect(card()).toContain("1 excerpt on screen.");
+  });
+
+  it("says kept, and counts the pages behind both groups", () => {
+    /* `keptNote` is arithmetic about the run; `sourcesNote` counts the pages
+       behind the rows shown, and a title-only row is shown. */
+    paint(
+      owner({
+        debate: artefact({
+          direct: {
+            rows: [direct(), quoted()],
+            counts: counts({ returnedSources: 5, reportedRows: 3, keptRows: 2 }),
+          },
+        }),
+      }),
+    );
+    const foot = card();
+    expect(foot).toContain("2 were kept");
+    expect(foot).not.toContain("are shown");
+    expect(foot).toContain("returned evidence from 5 pages; 2 contribute to the rows shown");
+  });
+});
+
+describe("the empty states are different sentences, in each sub-mode", () => {
   /* The positive control for the whole section: if two of these ever become one
      string, every assertion below still passes and this one does not. */
-  it("has three distinguishable sentences to say in the first place", () => {
+  it("has distinguishable sentences to say in the first place", () => {
     const all = [
       DEBATE_RESPONSES_NONE,
       debateResponsesUnverified(4),
       DEBATE_CLAIMS_NONE,
       debateClaimsUnverified(4),
+      DEBATE_RESPONSES_NONE_SHARED,
+      DEBATE_CLAIMS_NONE_SHARED,
     ];
     expect(new Set(all).size).toBe(all.length);
     /* Never *"No one has written about it"* — we cannot see the query, so what
@@ -308,19 +545,10 @@ describe("the three empty states are three different sentences", () => {
   });
 
   it("says the search found nothing to look at, when it returned no pages", () => {
-    paint(
-      owner({
-        debate: artefact({
-          direct: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
-        }),
-      }),
-    );
+    paint(owner({ debate: artefact({ direct: { rows: [], counts: counts(EMPTY) } }) }));
     expect(text()).toContain(DEBATE_RESPONSES_NONE);
     expect(text()).not.toContain(debateResponsesUnverified(0));
-    /* And it hands the reader over to the rows that *are* there, rather than
-       leaving a negative sentence sitting over a list with nothing saying what
-       the list is. */
-    expect(text()).toContain(DEBATE_CLAIMS_FOLLOW);
+    expect(host.querySelector(".dbt-item")).toBeNull();
   });
 
   /* The middle row of the plan's table, and the one an implementation collapses
@@ -370,15 +598,20 @@ describe("the three empty states are three different sentences", () => {
 
   /* **A fourth state, and it is not one of the three**: nobody has ever run it.
      That is not a result at all, and saying either search sentence over it
-     would be reporting a search that never happened — the same class of lie the
-     three above are separated to avoid. What it must do instead is name the
-     price before the button, because this is the dearest press in the bar. */
-  it("says nothing about any search when nobody has run one", () => {
+     would be reporting a search that never happened. What it must do instead is
+     name the price before the button, and say what the two searches are. */
+  it("says nothing about any search when nobody has run one, and what the two searches are", () => {
     paint(owner({ status: "none", debate: null }));
     expect(text()).not.toContain(DEBATE_RESPONSES_NONE);
     expect(text()).not.toContain(debateResponsesUnverified(6));
     expect(text()).not.toContain(DEBATE_CLAIMS_NONE);
-    expect(text()).toContain("costs real money");
+    expect(host.querySelector(".gloss-hint")?.textContent).toBe(
+      "Two searches of the open web. Reception: what others have written about this piece. " +
+        "Claims: what has been written about the claims it makes. It takes about a minute and " +
+        "costs real money. Many pieces have no reception at all. Searched once and kept.",
+    );
+    /* No sub-mode control over a search that has not run. */
+    expect(host.querySelector(".dbt-views")).toBeNull();
     expect(
       [...host.querySelectorAll("button")].some((b) =>
         (b.textContent ?? "").includes("Search the web"),
@@ -387,102 +620,163 @@ describe("the three empty states are three different sentences", () => {
     ).toBe(true);
   });
 
-  /* The two groups do not share a sentence: group one being empty is this
-     mode's commonest correct output, and group two being empty is a different
-     fact about a different search. */
-  it("uses the claims group's own sentences, not the direct group's", () => {
-    paint(
-      owner({
-        debate: artefact({
-          claims: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
-        }),
-      }),
-    );
+  /* The two searches do not share a sentence, and since 2026-10-03 they do not
+     share a screen: each sub-mode says its own search's, and only its own. */
+  it("uses the claims search's own sentences in Claims, not the reception search's", () => {
+    const debate = artefact({ claims: { rows: [], counts: counts(EMPTY) } });
+    paint(owner({ debate }), "claims");
     expect(text()).toContain(DEBATE_CLAIMS_NONE);
     expect(text()).not.toContain(DEBATE_RESPONSES_NONE);
-    /* Nothing follows, so nothing may say it does. */
-    expect(text()).not.toContain(DEBATE_CLAIMS_FOLLOW);
+    /* …and Reception, which kept a row, says nothing about the other search. */
+    paint(owner({ debate }));
+    expect(text()).not.toContain(DEBATE_CLAIMS_NONE);
+    expect(host.querySelector(".dbt-empty")).toBeNull();
   });
 
-  /* **Both searches empty is two facts and gets two sentences.** With the two
-     headed groups gone there is one paragraph to say them in, and the way this
-     goes wrong is that the second is dropped because the first already sounds
-     negative — the panel then saying less than it knows. */
-  it("says both when neither search kept anything", () => {
-    const lead =
-      leadNote({
-        direct: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
-        claims: { rows: [], counts: counts({ returnedSources: 5, reportedRows: 2, keptRows: 0 }) },
-      }) ?? "";
-    expect(lead).toContain(DEBATE_RESPONSES_NONE);
-    expect(lead).toContain(debateClaimsUnverified(5));
-    expect(lead).not.toContain(DEBATE_CLAIMS_FOLLOW);
+  it("says each search's own sentence when neither kept anything", () => {
+    const debate = artefact({
+      direct: { rows: [], counts: counts(EMPTY) },
+      claims: { rows: [], counts: counts({ returnedSources: 5, reportedRows: 2, keptRows: 0 }) },
+    });
+    paint(owner({ debate }));
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_RESPONSES_NONE);
+    paint(owner({ debate }), "claims");
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(debateClaimsUnverified(5));
   });
 
   it("says nothing at all when both searches kept something", () => {
-    expect(
-      leadNote({
-        direct: { rows: [{}], counts: counts() },
-        claims: { rows: [{}], counts: counts() },
-      }),
-    ).toBeNull();
-  });
-});
-
-describe("one list, and each row saying what it is", () => {
-  /* The whole of § 1 of the plan: the two-group split was our epistemics, not
-     the reader's question, and on a real article it produced two headings, two
-     blurbs and two foot lines stacked over zero rows. */
-  /* Stance is an order, never a grouping: a heading over "Critical" would be
-     the model's reading of a stranger's page said in our voice. */
-  it("draws stance as one flat list with both kinds of row and no headings", () => {
-    paint(owner(), "named", "stance");
-    const lists = host.querySelectorAll("ol.dbt-list");
-    expect(lists).toHaveLength(1);
-    expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
-    expect(host.querySelectorAll(".dbt-scroll h3")).toHaveLength(0);
+    for (const view of ["reception", "claims"] as const) {
+      paint(owner(), view);
+      expect(host.querySelector(".dbt-empty"), view).toBeNull();
+    }
   });
 
-  /* By claim's only headings are ones we can stand behind: *About this piece*,
-     and the article's own words for each claim. */
-  it("draws by claim as a group about this piece, then one headed by the claim's own words", () => {
-    paint(owner(), "named", "claim");
-    const heads = [...host.querySelectorAll(".dbt-scroll h3")].map((h) => h.textContent ?? "");
-    expect(heads).toEqual(["About this piece", expect.stringContaining("“a starter needs cool water”")]);
-    expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
-    /* The claim is the heading, so the row under it does not repeat it. */
-    expect(host.querySelectorAll(".dbt-item .dbt-claim")).toHaveLength(0);
+  /* **The hand-over**, which replaced *"What follows takes up what it
+     argues"*: with nothing in Reception and something in Claims, the reader is
+     told so and offered the way there. Greg's paper is this case. */
+  it("offers the way to Claims when Reception kept nothing and Claims has rows, and it switches", () => {
+    paint(owner({ debate: artefact({ direct: { rows: [], counts: counts(EMPTY) } }) }));
+    expect(handoff()?.textContent).toBe("See the 1 source on what it claims");
+    press(handoff());
+    expect(viewed).toEqual(["claims"]);
+    /* The retired lead sentence is gone. */
+    expect(text()).not.toContain("What follows takes up what it argues.");
   });
 
-  /* Rows about this piece first, search order within — and *not* sorted by
-     identification level, because the chip already says it. */
-  it("puts rows about this piece first and leaves them in search order", () => {
-    const strong = direct({
-      id: "spya-d2w4r3",
-      url: "https://second.example/reply",
-      title: "A stronger reply",
-      identifies: [{ kind: "linked", url: "https://example.com/the-piece" }],
-    });
+  it("counts the sources in the hand-over", () => {
     paint(
       owner({
         debate: artefact({
-          /* The weaker chip first, so a list sorted by level would reorder it. */
-          direct: { rows: [direct(), strong], counts: counts({ reportedRows: 2, keptRows: 2 }) },
+          direct: { rows: [], counts: counts(EMPTY) },
+          claims: {
+            rows: [claim(), claim({ id: "spya-c7w2d3" }), claim({ id: "spya-c7w2d4" })],
+            counts: counts(),
+          },
         }),
       }),
     );
-    const links = [...host.querySelectorAll<HTMLAnchorElement>("a.dbt-title")].map((a) => a.href);
-    expect(links).toEqual([
-      "https://example.org/a-reply",
-      "https://second.example/reply",
-      "https://another.example.net/on-starters",
-    ]);
+    expect(handoff()?.textContent).toBe("See the 3 sources on what it claims");
   });
 
-  it("labels a direct row by its strongest signal, and a claim row with no chip at all", () => {
+  it("offers no hand-over when Claims has nothing either, or when Reception has a row, or in Claims", () => {
+    const none = { rows: [], counts: counts(EMPTY) };
+    paint(owner({ debate: artefact({ direct: none, claims: none }) }));
+    expect(handoff()).toBeNull();
+    paint(owner());
+    expect(handoff()).toBeNull();
+    paint(owner({ debate: artefact({ direct: none }) }), "claims");
+    expect(handoff()).toBeNull();
+  });
+
+  /* **A visitor's three**, per sub-mode: the search kept nothing (one sentence
+     true of both owner cases, because the count does not cross), rows withheld
+     at the public boundary (the search *did* keep something, so saying it kept
+     nothing would be false), and rows. */
+  it("tells a visitor the search kept nothing, in each sub-mode's own words", () => {
+    const debate = shared({
+      direct: { rows: [], sourceNotPublishable: 0 },
+      claims: { rows: [], sourceNotPublishable: 0 },
+    } as Partial<PublicDebate>);
+    paintShared(debate);
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_RESPONSES_NONE_SHARED);
+    expect(handoff()).toBeNull();
+    paintShared(debate, "claims");
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_CLAIMS_NONE_SHARED);
+  });
+
+  it("tells a visitor rows were withheld, never that the search kept nothing", () => {
+    const debate = shared({
+      direct: { rows: [], sourceNotPublishable: 2 },
+      claims: { rows: [], sourceNotPublishable: 1 },
+    } as Partial<PublicDebate>);
+    paintShared(debate);
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(
+      debateWithheldOnSharedLink("The search for replies to this piece", 2),
+    );
+    expect(text()).not.toContain(DEBATE_RESPONSES_NONE_SHARED);
+    paintShared(debate, "claims");
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(
+      debateWithheldOnSharedLink("The search for answers to what it claims", 1),
+    );
+    expect(text()).not.toContain(DEBATE_CLAIMS_NONE_SHARED);
+  });
+
+  it("offers a visitor the same hand-over", () => {
+    paintShared(shared({ direct: { rows: [], sourceNotPublishable: 0 } } as Partial<PublicDebate>));
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_RESPONSES_NONE_SHARED);
+    expect(handoff()?.textContent).toBe("See the 1 source on what it claims");
+    press(handoff());
+    expect(viewed).toEqual(["claims"]);
+  });
+});
+
+/**
+ * **Who cites it** — plan 261003o, step 2. A complete list of citers needs a
+ * citation index we do not have; until then Reception ends with one outside
+ * link, a *search* by title and never a guessed address (261003f's rule).
+ */
+describe("the Scholar link under Reception", () => {
+  const link = () => host.querySelector<HTMLAnchorElement>("a.dbt-scholar");
+
+  it("searches Google Scholar for the article's title, with no referrer and no opener", () => {
+    paint(owner());
+    expect(link()?.textContent).toContain("Who cites it: search Google Scholar");
+    const url = new URL(link()?.href ?? "");
+    expect(url.origin + url.pathname).toBe("https://scholar.google.com/scholar");
+    expect(url.searchParams.get("q")).toBe(`"${ARTICLE_TITLE}"`);
+    expect(link()?.target).toBe("_blank");
+    expect(link()?.rel.split(" ").sort()).toEqual(["noopener", "noreferrer"]);
+  });
+
+  it("is there when Reception kept nothing, which is when it is most use", () => {
+    paint(owner({ debate: artefact({ direct: { rows: [], counts: counts(EMPTY) } }) }));
+    expect(link()).not.toBeNull();
+  });
+
+  it("is not drawn without a title to search for, or in Claims, or before a search has run", () => {
+    paint(owner(), "reception", "prioritised", new Map(), { articleTitle: null });
+    expect(link()).toBeNull();
+    paint(owner(), "reception", "prioritised", new Map(), { articleTitle: "  " });
+    expect(link()).toBeNull();
+    paint(owner(), "claims");
+    expect(link()).toBeNull();
+    paint(owner({ status: "none", debate: null }));
+    expect(link()).toBeNull();
+  });
+
+  it("is a visitor's too", () => {
+    paintShared(shared());
+    expect(link()?.href).toContain("scholar.google.com");
+  });
+});
+
+describe("each row saying what it is", () => {
+  it("labels a row about this piece by its strongest signal, and a claim row with no chip at all", () => {
     paint(owner());
     const marks = [...host.querySelectorAll(".dbt-mark")].map((m) => m.textContent ?? "");
     expect(marks).toEqual(["Names this piece"]);
+    paint(owner(), "claims");
+    expect(host.querySelectorAll(".dbt-mark")).toHaveLength(0);
     /* The pill said the same thing on every claim row; the claim itself says it now. */
     expect(text()).not.toContain("On what it claims");
   });
@@ -666,6 +960,7 @@ describe("what the model read, and what we located", () => {
           },
         }),
       }),
+      "claims",
     );
     expect(host.querySelector("a.dbt-title")?.textContent).toBe("arxiv.org/pdf/1809.10635");
     expect(host.querySelector(".dbt-site")).toBeNull();
@@ -676,7 +971,8 @@ describe("what the model read, and what we located", () => {
   it("opens every outbound link in a new tab with no referrer and no opener", () => {
     paint(owner());
     const out = [...host.querySelectorAll<HTMLAnchorElement>("a[href^='https://']")];
-    expect(out.length).toBeGreaterThanOrEqual(4);
+    /* The row's title and its *Read it on…*, and the Scholar link under them. */
+    expect(out.length).toBeGreaterThanOrEqual(3);
     for (const a of out) {
       expect(a.target, a.href).toBe("_blank");
       expect(a.rel.split(" ").sort(), a.href).toEqual(["noopener", "noreferrer"]);
@@ -956,405 +1252,7 @@ describe("searchedAt is displayed provenance, not staleness", () => {
   });
 });
 
-/**
- * **The identification bar, on the panel.**
- *
- * The rule itself is tested without a DOM in debate-bar.test.ts; what is here is
- * everything that can only go wrong once it is drawn — and the shape of every
- * one of them is *a number that disagrees with the list under it*, which
- * threshold.ts names as this feature's worst failure.
- *
- * The three counts a reader can see at once are the reason this section is long:
- * the head's **pages behind the rows on screen**, the bar's **responses it is
- * holding back**, and the foot's **pages each search returned**. They are three
- * different facts and they have to stay three different facts.
- */
-describe("the bar over how firmly a page identifies this article", () => {
-  const quoted = (over: Partial<DirectDebateRow> = {}) =>
-    direct({
-      id: "spya-d2w4r7",
-      url: "https://quoting.example/reply",
-      identifies: [
-        {
-          kind: "quoted",
-          quote: "a starter needs cool water",
-          blockId: KNOWN,
-          coverage: 0.04,
-          density: 0.13,
-        },
-      ],
-      ...over,
-    });
 
-  it("hides a page that only names this piece, when nobody has touched it", () => {
-    /* `null` is what a reader who has never touched the bar sends, and the panel
-       resolves it to `quoted` — Greg's *"important that the commentary be about
-       the article being read here"*. The fixture row names the piece and nothing
-       more, which on the decoy article is a page about a different document
-       sharing a title. */
-    paint(owner(), null);
-    expect(DEBATE_LEVEL_DEFAULT).toBe("quoted");
-    expect(host.querySelectorAll(".dbt-item")).toHaveLength(1);
-    expect(text()).not.toContain("Names this piece");
-    /* The positive control: the same row, same everything, one stop to the left. */
-    paint(owner(), "named");
-    expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
-    expect(text()).toContain("Names this piece");
-  });
-
-  it("says how many it is holding back, and calls them responses rather than pages", () => {
-    /* Two page counts are already on this screen — the head's and the searches'
-       — so a third noun for a third fact would be three numbers all called
-       pages. `hiddenNote` counts rows, and a direct row is a page that responds
-       to this piece, which is the word the lead sentence already uses. */
-    paint(owner(), null);
-    expect(text()).toContain("1 response is hidden by this threshold");
-    expect(text()).toContain("Drag the slider left to show it");
-  });
-
-  it("says so even when it is holding nothing back", () => {
-    /* Present wherever the control is, absent wherever it is not. A line that
-       goes missing for a *different* reason teaches the reader nothing. */
-    paint(owner(), "named");
-    expect(host.querySelector(".dbt-bar-note")?.textContent).toBe(
-      "Nothing is hidden by this threshold.",
-    );
-  });
-
-  it("counts only direct rows, however many claim rows are under it", () => {
-    /* The failure this whole section exists for. Claim rows carry no level, are
-       never hidden by the bar, and must be in neither of its numbers — so a
-       `0 of 1` sits over a list of three rows, and that is correct. */
-    paint(
-      owner({
-        debate: artefact({
-          direct: { rows: [direct()], counts: counts({ reportedRows: 1, keptRows: 1 }) },
-          claims: {
-            rows: [
-              claim(),
-              claim({ id: "spya-c7w2d3", url: "https://third.example/x" }),
-              claim({ id: "spya-c7w2d4", url: "https://fourth.example/y" }),
-            ],
-            counts: counts({ returnedSources: 3, reportedRows: 3, keptRows: 3 }),
-          },
-        }),
-      }),
-      null,
-    );
-    expect(host.querySelector(".dbt-bar-value")?.textContent).toBe("quotes it · 0 of 1");
-    expect(text()).toContain("1 response is hidden by this threshold");
-    expect(text()).not.toContain("4 responses");
-    expect(host.querySelectorAll(".dbt-item")).toHaveLength(3);
-    expect(host.querySelectorAll(".dbt-mark")).toHaveLength(0);
-  });
-
-  /* The bar filters rows about this piece in every order, not only the default
-     one: the order arranges and the bar filters, and neither reaches into the
-     other (F7). */
-  it("hides the same rows whatever order the list is in", () => {
-    for (const order of ["claim", "stance"] as const) {
-      paint(owner(), null, order);
-      expect(host.querySelectorAll(".dbt-item"), order).toHaveLength(1);
-      expect(host.querySelector(".dbt-bar-value")?.textContent, order).toBe("quotes it · 0 of 1");
-      expect(text(), order).toContain("1 response is hidden by this threshold");
-    }
-  });
-
-  it("does not offer an order once the identification bar has removed the row that made it different", () => {
-    const rows = [
-      direct({ id: "spya-d2w4r7", lean: "leans-for" }),
-      quoted({ id: "spya-d2w4r8", lean: "leans-against" }),
-    ];
-    paint(
-      owner({
-        debate: artefact({
-          direct: { rows, counts: counts({ reportedRows: 2, keptRows: 2 }) },
-          claims: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
-        }),
-      }),
-      null,
-      "stance",
-    );
-    expect(host.querySelector(".gloss-sort")).toBeNull();
-    expect(text()).toContain(DEBATE_ORDER_BY_CLAIM);
-  });
-
-  /* A group emptied by the bar is not a search that found nothing. In *by
-     claim* the temptation is an *About this piece* heading with an empty-search
-     sentence under it; `hiddenNote` has already said what happened. */
-  it("draws no About-this-piece group, and no empty sentence, when the bar emptied it", () => {
-    paint(owner(), null, "claim");
-    expect([...host.querySelectorAll(".dbt-scroll h3")].map((h) => h.textContent)).not.toContain(
-      "About this piece",
-    );
-    expect(text()).not.toContain(DEBATE_RESPONSES_NONE);
-    expect(text()).not.toContain(DEBATE_CLAIMS_FOLLOW);
-  });
-
-  it("keeps the count beside the slider equal to the direct rows it drew", () => {
-    /* One pass, two readings of it: the `N of M` and the list. The only way they
-       can disagree is if somebody walks the list twice with two copies of the
-       rule. */
-    const rows = [direct(), quoted(), direct({ id: "spya-d2w4r8", url: "https://third.example/z" })];
-    paint(
-      owner({
-        debate: artefact({ direct: { rows, counts: counts({ reportedRows: 3, keptRows: 3 }) } }),
-      }),
-      null,
-    );
-    expect(host.querySelector(".dbt-bar-value")?.textContent).toBe("quotes it · 1 of 3");
-    expect(host.querySelectorAll(".dbt-mark-quoted")).toHaveLength(1);
-    expect(host.querySelectorAll(".dbt-mark-named")).toHaveLength(0);
-    expect(text()).toContain("2 responses are hidden by this threshold");
-  });
-
-  it("moves the head count with the bar, because it counts what is on screen", () => {
-    /* `7 excerpts` over four rows is the same disagreement one line up. */
-    paint(owner({ debate: artefact({ claims: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) } }) }), "named");
-    expect(card()).toContain("1 excerpt on screen.");
-    paint(owner({ debate: artefact({ claims: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) } }) }), null);
-    expect(card()).toContain("0 excerpts on screen.");
-  });
-
-  it("hands the drag back as a word, and one stop left shows the row again", () => {
-    paint(owner(), null);
-    const slider = document.getElementById("dbt-bar") as HTMLInputElement | null;
-    expect(slider, "the bar must be on screen to be dragged").not.toBeNull();
-    expect(slider?.value).toBe("1");
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    act(() => {
-      setter?.call(slider, "0");
-      slider?.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    /* **The word, never the index.** The rank exists only so `applyThreshold`
-       has a number; a number in the URL would be the score this feature
-       refused. */
-    expect(levelled).toEqual(["named"]);
-    paint(owner(), "named");
-    expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
-  });
-
-  it("offers a reset only once the reader has moved it", () => {
-    paint(owner(), null);
-    expect(host.querySelector(".dbt-bar-reset")).toBeNull();
-    paint(owner(), "linked");
-    const reset = host.querySelector<HTMLButtonElement>(".dbt-bar-reset");
-    expect(reset).not.toBeNull();
-    act(() => {
-      reset?.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 }));
-    });
-    /* `null`, not the word `quoted`: *back to untouched* is the state the reset
-       exists to reach, and it is the one that keeps the default in one file. */
-    expect(levelled).toEqual([null]);
-  });
-
-  it("says nothing extra when the bar has hidden every response", () => {
-    /* The fourth empty state, and it is deliberately silent: `hiddenNote` has
-       already said what happened, and the lead sentence's subject is what the
-       *search* came back with. Telling a reader the search found nothing when
-       they hid it themselves would be false. */
-    paint(owner(), null);
-    expect(text()).not.toContain(DEBATE_RESPONSES_NONE);
-    expect(text()).not.toContain(debateResponsesUnverified(2));
-    /* Not *"All 1 response"* — `hiddenNote` drops the "All" at one, because it
-       tells the reader nothing the count does not and is not English. */
-    expect(text()).toContain("1 response is hidden by this threshold");
-    /* The positive control: a group that really is empty still says so. */
-    paint(
-      owner({
-        debate: artefact({
-          direct: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
-        }),
-      }),
-      null,
-    );
-    expect(text()).toContain(DEBATE_RESPONSES_NONE);
-  });
-
-  it("draws no bar at all when the search kept no responses to threshold", () => {
-    /* A control that cannot change anything, over a foot line saying "nothing is
-       hidden by this threshold" under an empty list, would read as an
-       explanation of the emptiness. `leadNote` owns that sentence. */
-    paint(
-      owner({
-        debate: artefact({
-          direct: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
-        }),
-      }),
-      null,
-    );
-    expect(host.querySelector(".dbt-bar")).toBeNull();
-    expect(text()).not.toContain("hidden by this threshold");
-  });
-
-  it("never tells the reader a row is shown when the bar has taken it away", () => {
-    /* `keptNote` is arithmetic about the run and says *kept*, not *shown*, since
-       the bar arrived. The counts here are the artefact's own and do not move
-       with the threshold — the sentence would be a lie in exactly the place this
-       panel has to be trustworthy about numbers. */
-    paint(
-      owner({
-        debate: artefact({
-          direct: { rows: [direct(), quoted()], counts: counts({ reportedRows: 3, keptRows: 2 }) },
-        }),
-      }),
-      null,
-    );
-    const foot = card();
-    expect(foot).toContain("2 were kept");
-    expect(foot).not.toContain("are shown");
-    expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
-  });
-
-  it("counts the pages contributing to the rows shown, not to the rows hidden", () => {
-    /* `sourcesNote` ends *"contribute to the rows shown"*, so the bar decides
-       which those are. Leaving it on the whole group would keep the figure
-       looking right while the words went false. */
-    paint(
-      owner({
-        debate: artefact({
-          direct: {
-            rows: [direct(), quoted()],
-            counts: counts({ returnedSources: 5, reportedRows: 2, keptRows: 2 }),
-          },
-        }),
-      }),
-      null,
-    );
-    expect(card()).toContain("returned evidence from 5 pages; 1 contributes to the rows shown");
-  });
-});
-
-describe("the claim a group-two row answers", () => {
-  /* In every flat order the claim is one line on the row; in *by claim* it is
-     the heading. Either way it is the article's own words and the way to them. */
-  for (const [order, where] of [
-    ["stance", ".dbt-claim"],
-    ["claim", ".dbt-group-claim"],
-  ] as const) {
-    it(`shows the article's own words and offers the way to them (${order})`, () => {
-      paint(owner(), "named", order);
-      expect(host.querySelector(where)?.textContent).toContain("a starter needs cool water");
-      /* `BlockRef` is a real `<a href>` so the browser's own affordances work —
-         status bar, ⌘-click, copy link address — and a plain left click jumps
-         in place. src/web/BlockRef.tsx. */
-      const ref = host.querySelector<HTMLAnchorElement>(`${where} a.block-ref`);
-      expect(ref, "a block reference for the claim's block").not.toBeNull();
-      expect(ref?.textContent).toContain(KNOWN.slice(-6));
-      press(ref);
-      expect(jumped).toEqual([KNOWN]);
-    });
-  }
-
-  it("groups by claim in the order the article makes them, not the order the search found them", () => {
-    const EARLY = "spya-w7t24d" as BlockId;
-    paint(
-      owner({
-        debate: artefact({
-          claims: {
-            rows: [
-              claim({ id: "spya-c7w2d3", claimQuote: "the later claim" }),
-              claim({ id: "spya-c7w2d4", blockId: EARLY, claimQuote: "the earlier claim" }),
-            ],
-            counts: counts({ reportedRows: 2, keptRows: 2 }),
-          },
-        }),
-      }),
-      "named",
-      "claim",
-      new Map([
-        [EARLY, 0],
-        [KNOWN, 5],
-      ]),
-    );
-    const heads = [...host.querySelectorAll(".dbt-group-quote")].map((h) => h.textContent);
-    expect(heads).toEqual(["“the earlier claim”", "“the later claim”"]);
-  });
-});
-
-describe("the order bar", () => {
-  const critical = claim({ id: "spya-c7w2d3", url: "https://critic.example/x", lean: "leans-against" });
-
-  it("offers by claim and stance on a debate from before stage 2, in Glossary's words", () => {
-    paint(owner());
-    const group = host.querySelector("[role='group'][aria-label='Order the sources by']");
-    expect(group).not.toBeNull();
-    const buttons = [...(group?.querySelectorAll("button") ?? [])];
-    expect(buttons.map((b) => b.textContent)).toEqual(["by claim", "stance"]);
-  });
-
-  /* `prioritised` is the default and no stored row carries `bears`, so what is
-     drawn is *by claim* — and the pressed button has to say so. */
-  it("presses the order actually drawn, not the one the URL asked for", () => {
-    paint(owner(), "named", "prioritised");
-    const pressed = [...host.querySelectorAll(".gloss-sort-btn[aria-pressed='true']")];
-    expect(pressed.map((b) => b.textContent)).toEqual(["by claim"]);
-    expect(text()).toContain(DEBATE_ORDER_BY_CLAIM);
-  });
-
-  it("hands a press back as the order's word", () => {
-    paint(owner());
-    press([...host.querySelectorAll(".gloss-sort-btn")].find((b) => b.textContent === "stance"));
-    expect(ordered).toEqual(["stance"]);
-  });
-
-  it("says what the order is, in the line over the list", () => {
-    paint(owner(), "named", "stance");
-    const frame = host.querySelector(".dbt-frame")?.textContent ?? "";
-    expect(frame).toContain(DEBATE_ORDER_STANCE);
-    expect(frame).not.toContain(DEBATE_ORDER_BY_CLAIM);
-  });
-
-  it("puts the critical rows first in stance", () => {
-    paint(
-      owner({
-        debate: artefact({
-          direct: { rows: [direct({ lean: "leans-for" })], counts: counts() },
-          claims: { rows: [claim(), critical], counts: counts({ reportedRows: 2, keptRows: 2 }) },
-        }),
-      }),
-      "named",
-      "stance",
-    );
-    const leans = [...host.querySelectorAll(".dbt-item .dbt-lean")].map((l) => l.textContent);
-    expect(leans).toEqual([
-      LEAN_APPEARANCE["leans-against"].label,
-      LEAN_APPEARANCE.neither.label,
-      LEAN_APPEARANCE["leans-for"].label,
-    ]);
-  });
-
-  /* F14: two buttons that draw the same list teach the reader the control does
-     nothing. One row cannot be ordered. */
-  it("draws no bar when no two orders would draw different lists", () => {
-    paint(
-      owner({
-        debate: artefact({
-          claims: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
-        }),
-      }),
-    );
-    expect(host.querySelector(".gloss-sort")).toBeNull();
-  });
-
-  /* A visitor gets the whole of stage 1: the rows cross, and the orders need
-     nothing that does not. */
-  it("gives a visitor the same bar and the same orders", () => {
-    paintShared(
-      {
-        searchedAt: "2026-09-05T10:00:00.000Z",
-        direct: { rows: [direct()], sourceNotPublishable: 0 },
-        claims: { rows: [claim()], sourceNotPublishable: 0 },
-      } as unknown as PublicDebate,
-      "stance",
-    );
-    expect([...host.querySelectorAll(".gloss-sort-btn")].map((b) => b.textContent)).toEqual([
-      "by claim",
-      "stance",
-    ]);
-    expect(host.querySelector(".gloss-sort-btn[aria-pressed='true']")?.textContent).toBe("stance");
-  });
-});
 
 describe("more, which replaced the ⓘ card", () => {
   it("starts closed, with the detail in the page but hidden", () => {
@@ -1380,7 +1278,10 @@ describe("more, which replaced the ⓘ card", () => {
     expect(inside).toContain("AI interpretation");
     expect(inside).toContain("It says the piece's third section contradicts its second.");
     expect(inside).toContain("https://example.org/a-reply");
-    expect(inside).toContain(DEBATE_EXTRACTS_ONLY);
+    /* The extracts-only sentence was on every row's `more` until 2026-10-03;
+       it is said once, in the band's (i) (plan 261003o, step 8). */
+    expect(inside).not.toContain(DEBATE_EXTRACTS_ONLY);
+    expect(card()).toContain(DEBATE_EXTRACTS_ONLY);
     const out = detail?.querySelector<HTMLAnchorElement>("a.dbt-out");
     expect(out?.textContent).toContain("Read it on example.org");
     expect(out?.href).toBe("https://example.org/a-reply");
@@ -1392,12 +1293,13 @@ describe("more, which replaced the ⓘ card", () => {
   /* A direct row's whole claim is that this page is about this piece; the
      witness is the evidence, and it went where the card went. */
   it("carries the witness on a row about this piece, and none on a claim row", () => {
-    paint(owner(), "named", "claim");
-    const [directItem, claimItem] = [...host.querySelectorAll(".dbt-item")];
-    expect(directItem?.querySelector(".dbt-ref")?.textContent).toBe(
+    paint(owner());
+    expect(host.querySelector(".dbt-item .dbt-ref")?.textContent).toBe(
       "It names this article: “Notes on my sourdough starter, week 3”",
     );
-    expect(claimItem?.querySelector(".dbt-ref")).toBeNull();
+    paint(owner(), "claims");
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(1);
+    expect(host.querySelector(".dbt-item .dbt-ref")).toBeNull();
   });
 
   /* Keyboard parity is what the ⓘ lacked. A native `<button type="button">`
@@ -1431,113 +1333,234 @@ describe("the head count", () => {
       owner({
         debate: artefact({
           claims: {
-            rows: [claim({ url: "https://example.org/a-reply" })],
+            rows: [claim(), claim({ id: "spya-c7w2d3", claimQuote: "another claim" })],
             counts: counts(),
           },
         }),
       }),
+      "claims",
     );
     expect(card()).toContain("2 excerpts from 1 page on screen.");
+    /* The sub-mode on screen, not the whole debate. */
+    paint(owner());
+    expect(card()).toContain("1 excerpt on screen.");
   });
 });
 
-/**
- * **Where the lead sentence goes.** What it says and when are `leadNote`'s,
- * tested above and unchanged; only the place moved (the plan's F10), and the
- * place has to keep every sentence true where it sits.
- */
-describe("the lead sentence, said where it is true", () => {
-  const noDirect = { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) };
-  const noClaims = { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) };
-
-  /* *"What follows takes up what it argues"* is a hand-over, and false under
-     the rows it hands over to. */
-  it("comes before the rows when it hands over to them, as the About-this-piece group in by claim", () => {
-    paint(owner({ debate: artefact({ direct: noDirect }) }), "named", "claim");
-    const first = host.querySelector(".dbt-scroll")?.firstElementChild;
-    expect(first?.querySelector("h3")?.textContent).toBe("About this piece");
-    expect(first?.textContent).toContain(DEBATE_RESPONSES_NONE);
-    expect(first?.textContent).toContain(DEBATE_CLAIMS_FOLLOW);
-  });
-
-  it("comes before the rows in a flat order too", () => {
-    /* Two claims with two leans, so stance draws something by claim does not
-       and is actually the order on screen. */
-    const two = {
-      rows: [
-        claim(),
-        claim({ id: "spya-c7w2d3", url: "https://critic.example/x", claimQuote: "another", lean: "leans-against" }),
-      ],
-      counts: counts({ reportedRows: 2, keptRows: 2 }),
-    };
-    paint(owner({ debate: artefact({ direct: noDirect, claims: two }) }), "named", "stance");
-    expect(host.querySelector(".gloss-sort-btn[aria-pressed='true']")?.textContent).toBe("stance");
-    const scroll = host.querySelector(".dbt-scroll");
-    expect(scroll?.firstElementChild?.textContent).toContain(DEBATE_CLAIMS_FOLLOW);
-    expect(scroll?.querySelector("h3")).toBeNull();
-  });
-
-  /* A finding about a search whose rows are not on screen, so after the list —
-     but still said. */
-  /* The foot lines it used to sit above are in the band's (i) since
-     2026-10-01 (spya-ucu35y), so the scroller ends with it. */
-  it("comes after the rows, last in the scroller, when it hands over to nothing", () => {
+describe("Claims: one group per claim, in the article's own words", () => {
+  it("heads each group with the claim, the way to its passage and how many rows are under it", () => {
     paint(
       owner({
         debate: artefact({
-          claims: noClaims,
-          direct: { rows: [direct()], counts: counts({ returnedSources: 5 }) },
+          claims: {
+            rows: [claim(), claim({ id: "spya-c7w2d3", url: "https://third.example/x" })],
+            counts: counts({ reportedRows: 2, keptRows: 2 }),
+          },
         }),
       }),
+      "claims",
     );
-    const kids = [...(host.querySelector(".dbt-scroll")?.children ?? [])];
-    const list = kids.findIndex((k) => k.querySelector(".dbt-item") !== null || k.matches("ol"));
-    const lead = kids.findIndex((k) => (k.textContent ?? "").includes(DEBATE_CLAIMS_NONE));
-    expect(list).toBeGreaterThanOrEqual(0);
-    expect(lead).toBeGreaterThan(list);
-    expect(lead).toBe(kids.length - 1);
+    const groups = [...host.querySelectorAll("details.dbt-claim-group")];
+    expect(groups).toHaveLength(1);
+    const summary = groups[0]?.querySelector("summary");
+    expect(summary?.querySelector(".dbt-group-quote")?.textContent).toBe("“a starter needs cool water”");
+    expect(summary?.querySelector(".dbt-group-count")?.textContent).toBe("2");
+    expect(groups[0]?.querySelectorAll(".dbt-item")).toHaveLength(2);
+    /* The claim is the heading, so the rows under it do not repeat it. */
+    expect(host.querySelectorAll(".dbt-item .dbt-claim")).toHaveLength(0);
+    /* `BlockRef` is a real `<a href>` so the browser's own affordances work —
+       status bar, ⌘-click, copy link address — and a plain left click jumps
+       in place. src/web/BlockRef.tsx. */
+    const ref = summary?.querySelector<HTMLAnchorElement>("a.block-ref");
+    expect(ref, "a block reference for the claim's block").not.toBeNull();
+    expect(ref?.textContent).toContain(KNOWN.slice(-6));
+    press(ref);
+    expect(jumped).toEqual([KNOWN]);
   });
 
-  it("is the whole answer, at the top, when no search kept anything", () => {
-    paint(owner({ debate: artefact({ direct: noDirect, claims: noClaims }) }));
-    const first = host.querySelector(".dbt-scroll")?.firstElementChild;
-    expect(first?.textContent).toContain(DEBATE_RESPONSES_NONE);
-    expect(first?.textContent).toContain(DEBATE_CLAIMS_NONE);
-    expect(host.querySelector(".dbt-item")).toBeNull();
+  /* Native `<details>`, open: a reader sees every claim's rows on arrival, and
+     can fold away the ones they are not checking. */
+  it("draws every group open", () => {
+    paint(owner(), "claims");
+    const group = host.querySelector<HTMLDetailsElement>("details.dbt-claim-group");
+    expect(group?.open).toBe(true);
   });
 
-  it("does not promise that claim rows follow when the relevance bar has hidden all of them", () => {
-    const onlyLoose = {
-      rows: [claim3({ bears: "loosely" })],
-      counts: counts({ reportedRows: 1, keptRows: 1 }),
-    };
+  it("groups in the order the article makes its claims, not the order the search found them", () => {
+    const EARLY = "spya-w7t24d" as BlockId;
     paint(
-      owner({ debate: artefact({ direct: noDirect, claims: onlyLoose }) }),
-      "named",
+      owner({
+        debate: artefact({
+          claims: {
+            rows: [
+              claim({ id: "spya-c7w2d3", claimQuote: "the later claim" }),
+              claim({ id: "spya-c7w2d4", blockId: EARLY, claimQuote: "the earlier claim" }),
+            ],
+            counts: counts({ reportedRows: 2, keptRows: 2 }),
+          },
+        }),
+      }),
+      "claims",
       "prioritised",
-      new Map(),
-      { relevance: "directly" },
+      new Map([
+        [EARLY, 0],
+        [KNOWN, 5],
+      ]),
     );
-    expect(host.querySelectorAll(".dbt-item")).toHaveLength(0);
-    expect(text()).toContain(DEBATE_RESPONSES_NONE);
-    expect(text()).not.toContain(DEBATE_CLAIMS_FOLLOW);
+    const heads = [...host.querySelectorAll(".dbt-group-quote")].map((h) => h.textContent);
+    expect(heads).toEqual(["“the earlier claim”", "“the later claim”"]);
   });
 
-  /* A visitor's lead is `sharedLeadNote`'s, placed the same way. */
-  it("places a visitor's lead the same way", () => {
-    paintShared(
-      {
-        searchedAt: "2026-09-05T10:00:00.000Z",
-        direct: { rows: [], sourceNotPublishable: 0 },
-        claims: { rows: [claim()], sourceNotPublishable: 0 },
-      } as unknown as PublicDebate,
-      "claim",
-    );
-    const first = host.querySelector(".dbt-scroll")?.firstElementChild;
-    expect(first?.querySelector("h3")?.textContent).toBe("About this piece");
-    expect(first?.textContent).toContain(DEBATE_RESPONSES_NONE_SHARED);
+  /* No for/against tally in a heading (GPT Sol's F9): it would promote the
+     model's reading of each page into a headline in our voice. */
+  it("puts no stance tally in a claim's heading", () => {
+    paint(owner(), "claims");
+    const head = host.querySelector("details.dbt-claim-group > summary")?.textContent ?? "";
+    for (const look of Object.values(LEAN_APPEARANCE)) expect(head).not.toContain(look.label);
+    expect(head.toLowerCase()).not.toMatch(/against|supportive|critical/);
+  });
+
+  it("has no order control, and ignores `debateby`", () => {
+    const rows = [
+      claim({ id: "spya-c7w2d3", title: "Supportive one", lean: "leans-for" }),
+      claim({ id: "spya-c7w2d4", title: "Critical one", lean: "leans-against" }),
+    ];
+    const debate = artefact({ claims: { rows, counts: counts({ reportedRows: 2, keptRows: 2 }) } });
+    for (const order of ["prioritised", "stance", "date"] as const) {
+      paint(owner({ debate }), "claims", order);
+      expect(host.querySelector(".gloss-sort"), order).toBeNull();
+      expect(rowTitles(), order).toEqual(["Supportive one", "Critical one"]);
+    }
   });
 });
+
+describe("Reception's order bar", () => {
+  const supportive = direct({ id: "spya-d2w4r3", url: "https://fan.example/x", title: "Supportive", lean: "leans-for" });
+  const critical = direct({ id: "spya-d2w4r4", url: "https://critic.example/x", title: "Critical", lean: "leans-against" });
+  const two = () =>
+    artefact({ direct: { rows: [supportive, critical], counts: counts({ reportedRows: 2, keptRows: 2 }) } });
+
+  it("offers as found and stance, in Glossary's words, with as found pressed", () => {
+    paint(owner({ debate: two() }));
+    const group = host.querySelector("[role='group'][aria-label='Order the sources by']");
+    expect(group).not.toBeNull();
+    const buttons = [...(group?.querySelectorAll("button") ?? [])];
+    expect(buttons.map((b) => b.textContent)).toEqual(["as found", "stance"]);
+    expect(host.querySelector(".gloss-sort-btn[aria-pressed='true']")?.textContent).toBe("as found");
+    expect(rowTitles()).toEqual(["Supportive", "Critical"]);
+  });
+
+  /* Date is asked for and no row carries a year, so what is drawn is *as
+     found* — and the pressed button has to say so. */
+  it("presses the order actually drawn, not the one the URL asked for", () => {
+    paint(owner({ debate: two() }), "reception", "date");
+    expect(host.querySelector(".gloss-sort-btn[aria-pressed='true']")?.textContent).toBe("as found");
+  });
+
+  it("hands a press back as the order's word", () => {
+    paint(owner({ debate: two() }));
+    press([...host.querySelectorAll(".gloss-sort-btn")].find((b) => b.textContent === "stance"));
+    expect(ordered).toEqual(["stance"]);
+  });
+
+  /* The per-order sentence over the list went on 2026-10-03 (plan 261003o,
+     step 8): the pressed button already says the order. */
+  it("draws no sentence about the order over the list", () => {
+    paint(owner({ debate: two() }), "reception", "stance");
+    expect(host.querySelector(".dbt-frame")).toBeNull();
+  });
+
+  it("puts the critical rows first in stance", () => {
+    paint(owner({ debate: two() }), "reception", "stance");
+    expect(rowTitles()).toEqual(["Critical", "Supportive"]);
+  });
+
+  /* Each order is applied **within** the two identification groups: a
+     title-only row never climbs above one that quotes the piece. */
+  it("orders within the two groups, never across them", () => {
+    const quoting = (id: string, title: string, lean: DebateLean) =>
+      direct({
+        id,
+        title,
+        lean,
+        url: `https://quoting.example/${id}`,
+        identifies: [{ kind: "quoted", quote: "a starter needs cool water", blockId: KNOWN, coverage: 0.04, density: 0.13 }],
+      });
+    paint(
+      owner({
+        debate: artefact({
+          direct: {
+            rows: [
+              direct({ id: "spya-d2w4r3", title: "Named, supportive", lean: "leans-for" }),
+              quoting("spya-d2w4r4", "Quoted, supportive", "leans-for"),
+              quoting("spya-d2w4r5", "Quoted, critical", "leans-against"),
+              direct({ id: "spya-d2w4r6", title: "Named, critical", lean: "leans-against" }),
+            ],
+            counts: counts({ reportedRows: 4, keptRows: 4 }),
+          },
+        }),
+      }),
+      "reception",
+      "stance",
+    );
+    expect(rowTitles()).toEqual(["Quoted, critical", "Quoted, supportive", "Named, critical", "Named, supportive"]);
+    expect(host.querySelectorAll("section.dbt-title-only .dbt-item")).toHaveLength(2);
+  });
+
+  /* F14: two buttons that draw the same list teach the reader the control does
+     nothing. One row cannot be ordered. */
+  it("draws no bar when no two orders would draw different lists", () => {
+    paint(owner());
+    expect(host.querySelector(".gloss-sort")).toBeNull();
+  });
+
+  it("gives a visitor the same bar and the same orders", () => {
+    paintShared(
+      shared({ direct: { rows: [supportive, critical], sourceNotPublishable: 0 } } as Partial<PublicDebate>),
+      "reception",
+      "stance",
+    );
+    expect([...host.querySelectorAll(".gloss-sort-btn")].map((b) => b.textContent)).toEqual(["as found", "stance"]);
+    expect(host.querySelector(".gloss-sort-btn[aria-pressed='true']")?.textContent).toBe("stance");
+  });
+});
+
+describe("Reception by date, and the marker at this piece's year", () => {
+  const dated = () =>
+    artefact({
+      direct: {
+        rows: [
+          direct({ id: "spya-d2w4r2", title: "No year" }),
+          direct3({ id: "spya-d2w4r3", title: "Later", publishedYear: 2024 }),
+          direct3({ id: "spya-d2w4r4", title: "Same year", publishedYear: 2022 }),
+          direct3({ id: "spya-d2w4r5", title: "Earlier", publishedYear: 2016 }),
+        ],
+        counts: counts({ returnedSources: 4, reportedRows: 4, keptRows: 4 }),
+      },
+    });
+
+  it("draws oldest first, the marker before the first row of the article's year, undated last", () => {
+    paint(owner({ debate: dated() }), "reception", "date", new Map(), { articleYear: 2022 });
+    expect(host.querySelector(".gloss-sort-btn[aria-pressed='true']")?.textContent).toBe("date");
+    expect(sequence()).toEqual([
+      "Earlier",
+      "This piece, 2022",
+      "Same year",
+      "Later",
+      DEBATE_UNDATED,
+      "No year",
+    ]);
+    /* Never "after this piece": a year cannot order two things inside itself. */
+    expect(text().toLowerCase()).not.toContain("after this piece");
+  });
+
+  it("draws no marker when the article gives no year", () => {
+    paint(owner({ debate: dated() }), "reception", "date");
+    expect(host.querySelector(".dbt-marker")).toBeNull();
+    expect(sequence()).toEqual(["Earlier", "Same year", "Later", DEBATE_UNDATED, "No year"]);
+  });
+});
+
 
 /* ------------------------------------------------------ stage 2 (debate/3) --
    What the search now keeps about the work — title, authors, year — and the
@@ -1547,6 +1570,11 @@ describe("the lead sentence, said where it is true", () => {
 /** A claim row with stage 2's fields, cast the way the store casts. */
 function claim3(over: Partial<ClaimDebateRow> & Record<string, unknown>): ClaimDebateRow {
   return claim(over as Partial<ClaimDebateRow>);
+}
+
+/** …and a row about this piece with them. */
+function direct3(over: Partial<DirectDebateRow> & Record<string, unknown>): DirectDebateRow {
+  return direct(over as Partial<DirectDebateRow>);
 }
 
 /** What a reader sees, in document order: titles, markers and the missing-data lines. */
@@ -1567,19 +1595,19 @@ describe("the work: title, authors and year", () => {
     });
 
   it("draws authors · year · site under the title, with et al. past three", () => {
-    paint(owner({ debate: authored(["Maingret", "Girardeau", "Todorova", "Goutierre"]) }));
+    paint(owner({ debate: authored(["Maingret", "Girardeau", "Todorova", "Goutierre"]) }), "claims");
     expect(host.querySelector(".dbt-byline")?.textContent).toBe("Maingret, Girardeau et al. · 2016");
     const meta = host.querySelector(".dbt-meta")?.textContent ?? "";
     expect(meta.indexOf("2016")).toBeLessThan(meta.indexOf("nature.com"));
   });
 
   it("names all of them up to three", () => {
-    paint(owner({ debate: authored(["Maingret", "Girardeau", "Todorova"]) }));
+    paint(owner({ debate: authored(["Maingret", "Girardeau", "Todorova"]) }), "claims");
     expect(host.querySelector(".dbt-byline")?.textContent).toBe("Maingret, Girardeau, Todorova · 2016");
   });
 
   it("puts every author in more, and says whose reading they are", () => {
-    paint(owner({ debate: authored(["Maingret", "Girardeau", "Todorova", "Goutierre"]) }));
+    paint(owner({ debate: authored(["Maingret", "Girardeau", "Todorova", "Goutierre"]) }), "claims");
     const detail = host.querySelector(".dbt-detail");
     expect(detail?.querySelector(".dbt-authors")?.textContent).toBe(
       "By Maingret, Girardeau, Todorova, Goutierre",
@@ -1599,8 +1627,7 @@ describe("the work: title, authors and year", () => {
           claims: { rows: [claim3({ title: "On starters", workTitle: "The AI's reading" })], counts: counts() },
         }),
       }),
-      "named",
-      "stance",
+      "claims",
     );
     const titles = [...host.querySelectorAll("a.dbt-title")].map((a) => a.textContent);
     expect(titles).toContain("On starters");
@@ -1626,6 +1653,7 @@ describe("the work: title, authors and year", () => {
           },
         }),
       }),
+      "claims",
     );
     expect(host.querySelector("a.dbt-title")?.textContent).toBe(
       "Memory Sources Associated with REM and NREM Dream Reports Throughout the Night",
@@ -1638,7 +1666,7 @@ describe("the work: title, authors and year", () => {
   it("uses the workTitle where the engine gave none, with the site kept", () => {
     const untitled = claim3({ workTitle: "A paper", url: "https://arxiv.org/pdf/1809.10635" });
     delete untitled.title;
-    paint(owner({ debate: artefact({ direct: { rows: [], counts: counts() }, claims: { rows: [untitled], counts: counts() } }) }));
+    paint(owner({ debate: artefact({ direct: { rows: [], counts: counts() }, claims: { rows: [untitled], counts: counts() } }) }), "claims");
     expect(host.querySelector("a.dbt-title")?.textContent).toBe("A paper");
     expect(host.querySelector(".dbt-site")?.textContent).toBe("arxiv.org");
   });
@@ -1651,7 +1679,7 @@ describe("the work: title, authors and year", () => {
   });
 });
 
-describe("prioritised, and the relevance bar", () => {
+describe("Claims, and the relevance bar", () => {
   const judged = () =>
     artefact({
       claims: {
@@ -1665,48 +1693,51 @@ describe("prioritised, and the relevance bar", () => {
       },
     });
 
-  it("is the order drawn by default once rows carry bears, with its sentence", () => {
-    paint(owner({ debate: judged() }));
-    expect(host.querySelector(".gloss-sort-btn[aria-pressed='true']")?.textContent).toBe("prioritised");
-    expect(text()).toContain(DEBATE_ORDER_PRIORITISED);
-    expect(sequence()).toEqual(["A reply to the piece", "Direct", "Part", "Loose", DEBATE_UNJUDGED, "Unjudged"]);
+  /* Within a claim: most directly bearing first, the unjudged last. */
+  it("puts the rows the AI judged most direct first within a claim, and the unjudged last", () => {
+    paint(owner({ debate: judged() }), "claims");
+    expect(rowTitles()).toEqual(["Direct", "Part", "Loose", "Unjudged"]);
   });
 
   it("puts the bears word on the AI line, before the relation", () => {
-    paint(owner({ debate: judged() }));
+    paint(owner({ debate: judged() }), "claims");
     const line = [...host.querySelectorAll(".dbt-ai-line")].find((l) => l.textContent?.includes("bears directly"));
     expect(line?.textContent).toMatch(/^AIbears directly·qualifies/);
   });
 
-  it("hides nothing until the reader moves it, and says so", () => {
-    paint(owner({ debate: judged() }));
+  /* A bar speaks only when it hides something (plan 261003o, step 8):
+     *"Nothing is hidden by this threshold."* is gone. */
+  it("hides nothing until the reader moves it, and says nothing while it hides nothing", () => {
+    paint(owner({ debate: judged() }), "claims");
     expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears loosely · 3 of 3 judged");
-    expect(host.querySelector(".dbt-rel .dbt-bar-note")?.textContent).toBe("Nothing is hidden by this threshold.");
+    expect(host.querySelector(".dbt-rel .dbt-bar-note")).toBeNull();
+    expect(text()).not.toContain("Nothing is hidden by this threshold.");
     expect(host.querySelector(".dbt-rel .dbt-bar-reset")).toBeNull();
   });
 
-  it("hides claim rows only, never an unjudged one, and its count is the rows drawn", () => {
-    paint(owner({ debate: judged() }), "named", "prioritised", new Map(), { relevance: "directly" });
-    expect(sequence()).toEqual(["A reply to the piece", "Direct", DEBATE_UNJUDGED, "Unjudged"]);
+  it("never hides an unjudged row, and its count is the rows drawn", () => {
+    paint(owner({ debate: judged() }), "claims", "prioritised", new Map(), { relevance: "directly" });
+    expect(rowTitles()).toEqual(["Direct", "Unjudged"]);
     /* Its N of M counts the rows the AI judged: one drawn of three. The
-       unjudged row is still on the list, under its own line, but is not made to
-       look as though it cleared "bears directly". */
+       unjudged row is still on the list but is not made to look as though it
+       cleared "bears directly". */
     expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears directly · 1 of 3 judged");
     expect(host.querySelector(".dbt-rel .dbt-bar-note")?.textContent).toBe(
       "2 answers to its claims are hidden by this threshold. Drag the slider left to show them.",
     );
-    /* The other bar's rows are untouched, and so is its count. */
-    expect(host.querySelector(".dbt-name .dbt-bar-value")?.textContent).toBe("names it · 1 of 1");
-    expect(card()).toContain("3 excerpts on screen.");
+    /* The claim's own count is the rows under it, and so is the segment's. */
+    expect(host.querySelector(".dbt-group-count")?.textContent).toBe("2");
+    expect(segments()).toEqual(["Reception1", "Claims2"]);
+    expect(card()).toContain("2 excerpts on screen.");
     /* The foot counts pages behind the rows drawn, not the ones hidden. */
     expect(card()).toContain("returned evidence from 4 pages; 2 contribute to the rows shown");
     expect(host.querySelector(".dbt-rel .dbt-bar-reset")).not.toBeNull();
   });
 
-  /* GPT Sol round 2, R2: with every judged row hidden and an unjudged one still
-     drawn, the note said "All 2 answers to its claims are hidden" over a list
-     with an answer on it. The count may say "judged"; the note is about the
-     list, so it counts every claim row. */
+  /* GPT Sol round 2 of 260929h, R2: with every judged row hidden and an
+     unjudged one still drawn, the note said "All 2 answers to its claims are
+     hidden" over a list with an answer on it. The count may say "judged"; the
+     note is about the list, so it counts every claim row. */
   it("never says all are hidden while an unjudged answer is still on the list", () => {
     const allJudgedHidden = artefact({
       claims: {
@@ -1718,16 +1749,45 @@ describe("prioritised, and the relevance bar", () => {
         counts: counts({ returnedSources: 3, reportedRows: 3, keptRows: 3 }),
       },
     });
-    paint(owner({ debate: allJudgedHidden }), "named", "prioritised", new Map(), { relevance: "directly" });
-    expect(sequence()).toContain("Unjudged");
+    paint(owner({ debate: allJudgedHidden }), "claims", "prioritised", new Map(), { relevance: "directly" });
+    expect(rowTitles()).toContain("Unjudged");
     expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears directly · 0 of 2 judged");
     const note = host.querySelector(".dbt-rel .dbt-bar-note")?.textContent ?? "";
     expect(note).not.toMatch(/^All /);
     expect(note).toBe("2 answers to its claims are hidden by this threshold. Drag the slider left to show them.");
   });
 
+  /* **GPT Sol's F2 on plan 261003o.** Every row at one level does not make the
+     bar useless: two `partly` rows are both hidden by `?bears=directly`, and a
+     reader who arrives on that link needs the bar on screen to see why the
+     list is empty, and its reset to get out. */
+  it("still shows the bar and its reset over rows all at one level, when the address hides them all", () => {
+    const allPartly = artefact({
+      claims: {
+        rows: [
+          claim3({ id: "spya-c7w2d2", title: "One", bears: "partly" }),
+          claim3({ id: "spya-c7w2d3", title: "Two", bears: "partly" }),
+        ],
+        counts: counts({ reportedRows: 2, keptRows: 2 }),
+      },
+    });
+    paint(owner({ debate: allPartly }), "claims", "prioritised", new Map(), { relevance: "directly" });
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(0);
+    expect(host.querySelector(".dbt-rel")).not.toBeNull();
+    expect(host.querySelector(".dbt-rel .dbt-bar-note")?.textContent).toMatch(/^All 2 answers to its claims are hidden/);
+    /* A list the reader's own setting emptied is not a search that found nothing. */
+    expect(host.querySelector(".dbt-empty")).toBeNull();
+    expect(text()).not.toContain(DEBATE_CLAIMS_NONE);
+    press(host.querySelector(".dbt-rel .dbt-bar-reset"));
+    expect(relevanced).toEqual([null]);
+    /* …and untouched, the same rows show the bar too. */
+    paint(owner({ debate: allPartly }), "claims");
+    expect(host.querySelector(".dbt-rel")).not.toBeNull();
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(2);
+  });
+
   it("hands the drag back as a word", () => {
-    paint(owner({ debate: judged() }));
+    paint(owner({ debate: judged() }), "claims");
     const slider = document.getElementById("dbt-rel-bar") as HTMLInputElement | null;
     expect(slider?.value).toBe("0");
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -1738,89 +1798,34 @@ describe("prioritised, and the relevance bar", () => {
     expect(relevanced).toEqual(["partly"]);
   });
 
-  it("is not there, and filters nothing, in any other order", () => {
-    paint(owner({ debate: judged() }), "named", "claim", new Map(), { relevance: "directly" });
+  it("is not there, and filters nothing, in Reception", () => {
+    paint(owner({ debate: judged() }), "reception", "prioritised", new Map(), { relevance: "directly" });
     expect(host.querySelector(".dbt-rel")).toBeNull();
-    expect(host.querySelectorAll(".dbt-item")).toHaveLength(5);
-  });
-
-  it("honours an explicit by-claim URL and ignores bears even when prioritised starts in the same order", () => {
-    const oneLoose = artefact({
-      direct: { rows: [], counts: counts({ returnedSources: 0, reportedRows: 0, keptRows: 0 }) },
-      claims: {
-        rows: [claim3({ title: "Loose", bears: "loosely" })],
-        counts: counts({ reportedRows: 1, keptRows: 1 }),
-      },
-    });
-    paint(owner({ debate: oneLoose }), "named", "claim", new Map(), { relevance: "directly" });
     expect(host.querySelectorAll(".dbt-item")).toHaveLength(1);
-    expect(host.querySelector(".dbt-rel")).toBeNull();
-    expect(text()).toContain(DEBATE_ORDER_BY_CLAIM);
   });
 
   it("is not offered on rows without bears", () => {
-    paint(owner());
+    paint(owner(), "claims");
     expect(host.querySelector(".dbt-rel")).toBeNull();
-    expect([...host.querySelectorAll(".gloss-sort-btn")].map((b) => b.textContent)).not.toContain("prioritised");
+  });
+
+  /* **GPT Sol's F3.** A visitor's rows carry `bears` since 2026-10-01
+     (src/public/dto.ts § `publicDebateRowBase`), so the bar is theirs too. */
+  it("is a visitor's too, on a public payload whose rows carry bears", () => {
+    const rows = [
+      claim3({ id: "spya-c7w2d2", title: "Loose", bears: "loosely" }),
+      claim3({ id: "spya-c7w2d3", title: "Direct", bears: "directly" }),
+    ];
+    const debate = shared({ claims: { rows, sourceNotPublishable: 0 } } as Partial<PublicDebate>);
+    paintShared(debate, "claims");
+    expect(host.querySelector(".dbt-rel .dbt-bar-value")?.textContent).toBe("bears loosely · 2 of 2 judged");
+    expect(rowTitles()).toEqual(["Direct", "Loose"]);
+    paintShared(debate, "claims", "prioritised", { relevance: "directly" });
+    expect(rowTitles()).toEqual(["Direct"]);
+    expect(host.querySelector(".dbt-rel .dbt-bar-reset")).not.toBeNull();
   });
 });
 
-describe("date, and the marker at this piece's year", () => {
-  const dated = () =>
-    artefact({
-      direct: { rows: [direct({ title: "No year" })], counts: counts() },
-      claims: {
-        rows: [
-          claim3({ id: "spya-c7w2d2", url: "https://a.example/x", title: "Later", publishedYear: 2024 }),
-          claim3({ id: "spya-c7w2d3", url: "https://b.example/x", title: "Same year", publishedYear: 2022 }),
-          claim3({ id: "spya-c7w2d4", url: "https://c.example/x", title: "Earlier", publishedYear: 2016 }),
-        ],
-        counts: counts({ returnedSources: 3, reportedRows: 3, keptRows: 3 }),
-      },
-    });
-
-  it("draws oldest first, the marker before the first row of the article's year, undated last", () => {
-    paint(owner({ debate: dated() }), "named", "date", new Map(), { articleYear: 2022 });
-    expect(host.querySelector(".gloss-sort-btn[aria-pressed='true']")?.textContent).toBe("date");
-    expect(sequence()).toEqual([
-      "Earlier",
-      "This piece, 2022",
-      "Same year",
-      "Later",
-      DEBATE_UNDATED,
-      "No year",
-    ]);
-    /* Never "after this piece": a year cannot order two things inside itself. */
-    expect(text().toLowerCase()).not.toContain("after this piece");
-  });
-
-  it("draws no marker when the article gives no year", () => {
-    paint(owner({ debate: dated() }), "named", "date");
-    expect(host.querySelector(".dbt-marker")).toBeNull();
-    expect(sequence()).toEqual(["Earlier", "Same year", "Later", DEBATE_UNDATED, "No year"]);
-  });
-});
-
-describe("a visitor, whose rows carry none of the new fields", () => {
-  it("gets by claim and stance only, even when the owner's rows would offer all four", () => {
-    /* The public DTO does not pass the new fields (it is a listed defence, and
-       unchanged): a visitor's rows look like this. */
-    paintShared(
-      {
-        searchedAt: "2026-09-05T10:00:00.000Z",
-        direct: { rows: [direct()], sourceNotPublishable: 0 },
-        claims: { rows: [claim()], sourceNotPublishable: 0 },
-      } as unknown as PublicDebate,
-      "prioritised",
-    );
-    expect([...host.querySelectorAll(".gloss-sort-btn")].map((b) => b.textContent)).toEqual([
-      "by claim",
-      "stance",
-    ]);
-    expect(host.querySelector(".dbt-rel")).toBeNull();
-    expect(host.querySelector(".dbt-byline")).toBeNull();
-  });
-});
 
 /* ------------------------------------------------------------------ threads --
    Plan 260930j (SPIDERYARN-READING2-6M): the themes the sources share and the
@@ -1843,17 +1848,17 @@ describe("DebatePanel — threads", () => {
   const titles = () => [...host.querySelectorAll(".dbt-title")].map((a) => a.textContent);
 
   it("draws nothing for a debate searched before synthesis existed, or one too small to ask", () => {
-    paint(owner({ debate: withSynthesis(undefined) }), "named", "claim");
+    paint(owner({ debate: withSynthesis(undefined) }), "claims", "prioritised");
     expect(host.querySelector(".dbt-threads")).toBeNull();
     expect(host.querySelector(".dbt-thread-failed")).toBeNull();
-    paint(owner({ debate: withSynthesis({ kind: "too-few", rows: 2 }) }), "named", "claim");
+    paint(owner({ debate: withSynthesis({ kind: "too-few", rows: 2 }) }), "claims", "prioritised");
     expect(host.querySelector(".dbt-threads")).toBeNull();
     expect(host.querySelector(".dbt-thread-failed")).toBeNull();
     expect(titles()).toEqual(["One", "Two", "Three"]);
   });
 
   it("says so, quietly, when the call failed — and keeps every row", () => {
-    paint(owner({ debate: withSynthesis({ kind: "failed" }) }), "named", "claim");
+    paint(owner({ debate: withSynthesis({ kind: "failed" }) }), "claims", "prioritised");
     expect(host.querySelector(".dbt-threads")).toBeNull();
     expect(host.querySelector(".dbt-thread-failed")?.textContent).toMatch(/still listed below/);
     expect(titles()).toEqual(["One", "Two", "Three"]);
@@ -1872,20 +1877,20 @@ describe("DebatePanel — threads", () => {
       },
       synthesis: made,
     } as Partial<Debate>;
-    paint(owner({ debate: artefact(hidden) }), "named", "prioritised", new Map(), {
+    paint(owner({ debate: artefact(hidden) }), "claims", "prioritised", new Map(), {
       relevance: "directly",
       thread: "spya-thm002",
     });
     expect(titles()).toEqual([]);
     expect(host.querySelector(".dbt-thread-showing")?.textContent).toMatch(
-      /The bars above are hiding every source on this thread/,
+      /The relevance bar is hiding every source on this thread/,
     );
     /* The pressed button stays pressable, so it can be let go. */
     expect((host.querySelector(".dbt-thread.on") as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("offers the key sources first, then each theme, each with its count", () => {
-    paint(owner({ debate: withSynthesis(made) }), "named", "claim");
+    paint(owner({ debate: withSynthesis(made) }), "claims", "prioritised");
     const buttons = [...host.querySelectorAll(".dbt-thread")];
     expect(host.querySelector(".dbt-thread-list")?.getAttribute("role")).toBe("group");
     expect(host.querySelector(".dbt-thread-list")?.getAttribute("aria-label")).toMatch(/Show only/);
@@ -1898,7 +1903,7 @@ describe("DebatePanel — threads", () => {
   });
 
   it("marks a key row with its reason", () => {
-    paint(owner({ debate: withSynthesis(made) }), "named", "claim");
+    paint(owner({ debate: withSynthesis(made) }), "claims", "prioritised");
     const lines = [...host.querySelectorAll(".dbt-key-line")];
     expect(lines).toHaveLength(1);
     expect(lines[0]?.textContent).toContain("Key source · takes a different view");
@@ -1906,7 +1911,7 @@ describe("DebatePanel — threads", () => {
   });
 
   it("narrows the list to the thread the address names, and says how to undo it", () => {
-    paint(owner({ debate: withSynthesis(made) }), "named", "claim", new Map(), { thread: "spya-thm002" });
+    paint(owner({ debate: withSynthesis(made) }), "claims", "prioritised", new Map(), { thread: "spya-thm002" });
     expect(titles()).toEqual(["One", "Two"]);
     expect(host.querySelector(".dbt-thread.on")?.getAttribute("aria-pressed")).toBe("true");
     expect(host.querySelector(".dbt-thread-showing")?.textContent).toContain(
@@ -1930,24 +1935,24 @@ describe("DebatePanel — threads", () => {
       },
       synthesis: made,
     });
-    paint(owner({ debate }), "named", "claim", new Map(), { thread: "spya-thm002" });
+    paint(owner({ debate }), "claims", "prioritised", new Map(), { thread: "spya-thm002" });
     expect(card()).toContain(
       "The search for answers to what it claims returned evidence from 3 pages; 2 contribute to the rows shown.",
     );
   });
 
   it("hands a press back as the thread's id, and a second press as a clear", () => {
-    paint(owner({ debate: withSynthesis(made) }), "named", "claim");
+    paint(owner({ debate: withSynthesis(made) }), "claims", "prioritised");
     act(() => (host.querySelectorAll(".dbt-thread")[0] as HTMLButtonElement).click());
     expect(threaded).toEqual(["key"]);
-    paint(owner({ debate: withSynthesis(made) }), "named", "claim", new Map(), { thread: "key" });
+    paint(owner({ debate: withSynthesis(made) }), "claims", "prioritised", new Map(), { thread: "key" });
     expect(titles()).toEqual(["Three"]);
     act(() => (host.querySelector(".dbt-thread.on") as HTMLButtonElement).click());
     expect(threaded).toEqual(["key", null]);
   });
 
   it("reads an id this debate does not have as no filter, not an empty list", () => {
-    paint(owner({ debate: withSynthesis(made) }), "named", "claim", new Map(), { thread: "spya-gone00" });
+    paint(owner({ debate: withSynthesis(made) }), "claims", "prioritised", new Map(), { thread: "spya-gone00" });
     expect(titles()).toEqual(["One", "Two", "Three"]);
     expect(host.querySelector(".dbt-thread-showing")).toBeNull();
   });
@@ -1964,10 +1969,10 @@ describe("DebatePanel — threads", () => {
         claims: { rows: [rowA, rowB, rowC], sourceNotPublishable: 0 },
         ...(synthesis ? { synthesis } : {}),
       }) as unknown as PublicDebate;
-    paintShared(shared(made), "claim");
+    paintShared(shared(made), "claims");
     expect(host.querySelector(".dbt-threads")?.textContent).toContain("replication");
     expect(host.querySelector(".dbt-key-line")).not.toBeNull();
-    paintShared(shared(), "claim");
+    paintShared(shared(), "claims");
     expect(host.querySelector(".dbt-threads")).toBeNull();
     expect(titles()).toEqual(["One", "Two", "Three"]);
   });
@@ -1985,11 +1990,60 @@ describe("DebatePanel — threads", () => {
       },
       synthesis: made,
     } as Partial<Debate>;
-    paint(owner({ debate: artefact(judgedRows) }), "named", "prioritised", new Map(), {
+    paint(owner({ debate: artefact(judgedRows) }), "claims", "prioritised", new Map(), {
       relevance: "directly",
     });
     const theme = host.querySelectorAll(".dbt-thread")[1] as HTMLButtonElement;
     expect(theme.disabled).toBe(true);
     expect(theme.querySelector(".dbt-thread-count")?.textContent).toBe("0");
+    expect(theme.title).toBe("The relevance bar is hiding every source on this");
+  });
+
+  /* **Scoped to the sub-mode** — plan 261003o, step 6. A thread is offered
+     where it has a *stored* row; one whose rows are all in the other sub-mode
+     is not offered here, and an address that names it narrows nothing here.
+     Greg's `debatethread=key` link, whose key sources were all on one claim, is
+     the case: it must not empty Reception. */
+  describe("scoped to the sub-mode on screen", () => {
+    const reply = direct({ id: "spya-thrd01", title: "A reply" });
+    const mixed = (synthesis: DebateSynthesis) =>
+      artefact({
+        direct: { rows: [reply], counts: counts() },
+        claims: { rows: [rowA, rowB, rowC], counts: counts() },
+        synthesis,
+      } as Partial<Debate>);
+    const labels = () => [...host.querySelectorAll(".dbt-thread .dbt-thread-name")].map((b) => b.textContent);
+
+    it("offers no thread in a sub-mode where none has a stored row", () => {
+      paint(owner({ debate: mixed(made) }));
+      expect(host.querySelector(".dbt-threads")).toBeNull();
+      paint(owner({ debate: mixed(made) }), "claims");
+      expect(labels()).toEqual(["Key sources", "replication"]);
+    });
+
+    it("offers a thread in each sub-mode where it has a stored row, counted there", () => {
+      const both: DebateSynthesis = {
+        kind: "made",
+        themes: [{ id: "spya-thm002", label: "replication", gist: "Both retest it.", rowIds: [rowA.id, reply.id] }],
+        key: [{ rowId: rowC.id, role: "dissents", why: "It takes the other side." }],
+      };
+      paint(owner({ debate: mixed(both) }));
+      expect(labels()).toEqual(["replication"]);
+      expect(host.querySelector(".dbt-thread-count")?.textContent).toBe("1");
+      paint(owner({ debate: mixed(both) }), "claims");
+      expect(labels()).toEqual(["Key sources", "replication"]);
+    });
+
+    it("neither narrows nor selects on a thread the address names that has no stored row here", () => {
+      paint(owner({ debate: mixed(made) }), "reception", "prioritised", new Map(), { thread: "key" });
+      expect(titles()).toEqual(["A reply"]);
+      expect(host.querySelector(".dbt-thread.on")).toBeNull();
+      expect(host.querySelector(".dbt-thread-showing")).toBeNull();
+      expect(segments()).toEqual(["Reception1", "Claims1"]);
+      /* The positive control: the same address narrows Claims, and says so. */
+      paint(owner({ debate: mixed(made) }), "claims", "prioritised", new Map(), { thread: "key" });
+      expect(titles()).toEqual(["Three"]);
+      expect(host.querySelector(".dbt-thread-showing")?.textContent).toContain("Showing 1 excerpt picked as key");
+    });
   });
 });

@@ -590,6 +590,44 @@
   ]
  },
  {
+  "id": "submode:debate:reception",
+  "label": "Reception",
+  "description": "What others have written about this piece itself: replies, reviews, and work that cites it and says something about it",
+  "aliases": [
+   "Debate",
+   "Reception Debate",
+   "Debate Reception",
+   "Reception mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "submode:debate:claims",
+  "label": "Claims",
+  "description": "What has been written about the claims it makes, by people who may never have read it",
+  "aliases": [
+   "Debate",
+   "Claims Debate",
+   "Debate Claims",
+   "Claims mode"
+  ],
+  "kind": "submode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:remember:recall",
   "label": "Recall",
   "description": "Say what you took from the piece, and find out where it holds up",

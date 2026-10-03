@@ -409,8 +409,8 @@ async function commandPlan(o: Options): Promise<void> {
 
 /**
  * **Each kept row, one line** — `replay --rows`. A reception row says how the
- * page identifies the piece (`named`, `quoted`, `linked`), which is what the
- * panel's identification bar filters on; a claims row says which claim it
+ * page identifies the piece (`named`, `quoted`, `linked`), which is what
+ * Reception groups its rows by; a claims row says which claim it
  * answers. Added for investigation 261003g, which needed to count the rows a
  * default bar hides and how a run's rows spread over claims. Hosts and the
  * article's own words only, never a page's text.

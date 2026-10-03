@@ -57,6 +57,23 @@ describe("rememberableSearch", () => {
     expect(hasArticleState("?summary=simple")).toBe(true);
   });
 
+  /* Debate's Reception | Claims, since 2026-10-03 (plan 261003o; GPT Sol's
+     F6). Left out of `REMEMBERED`, a reader who was reading Claims comes back
+     to Reception — on a paper with no reception, an empty band. Restoring it
+     spends nothing: Debate searches on a press, never on arrival. */
+  it("keeps Debate's sub-mode, so Claims is restored as Claims", () => {
+    expect(rememberableSearch("?mode=debate&debate=claims&bears=partly")).toBe(
+      "?mode=debate&debate=claims&bears=partly",
+    );
+    expect(restoredHref("/read/x", "", "?mode=debate&debate=claims")).toBe("/read/x?mode=debate&debate=claims");
+    expect(hasArticleState("?debate=claims")).toBe(true);
+  });
+
+  it("no longer stores the retired identification threshold, or puts an old one back", () => {
+    expect(rememberableSearch("?mode=debate&name=linked")).toBe("?mode=debate");
+    expect(restoredHref("/read/x", "", "?mode=debate&name=linked")).toBe("/read/x?mode=debate");
+  });
+
   it("keeps each pair byte-for-byte, so a comma list is not reserialised", () => {
     /* `URLSearchParams` would hand back `crits=spya-a%2Cspya-b`, which parses
        to the same thing and reads as somebody else's URL. Same reason

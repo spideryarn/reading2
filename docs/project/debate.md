@@ -77,6 +77,13 @@ Each module's header comment says what it owns and why; start with `src/debate.t
 - [`src/web/DebatePanel.tsx`](../../src/web/DebatePanel.tsx) — the panel, and
   [`src/web/modes/debate/`](../../src/web/modes/debate/DebateMode.tsx) the mode controller that
   mounts it.
+- [`src/web/debate-levels.ts`](../../src/web/debate-levels.ts) — Reception's two groups, and why the
+  slider that used to hide the title-only one is gone.
+  [`src/web/debate-order.ts`](../../src/web/debate-order.ts) — Reception's orders, Claims' grouping
+  and the relevance bar. [`src/web/debate-threads.ts`](../../src/web/debate-threads.ts) — the
+  threads, scoped to a sub-mode.
+- [`src/scholar-search.ts`](../../src/scholar-search.ts) — the Scholar search Reception ends with;
+  browser-safe, shared with Citations.
 
 Related: [citations.md](citations.md) shares the bibliographic lookup
 ([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Debate's residual risk;

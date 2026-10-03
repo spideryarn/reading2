@@ -640,18 +640,37 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   debate: {
-    keywords: "critiques reception responses reviews criticism replies web what others say reaction sources supportive critical",
+    keywords: "critiques reception responses reviews criticism replies web what others say reaction sources supportive critical claims cited citing citations scholar",
     whenToUse: (
       <p>
         For a well-known paper, a contested essay, or anything you are about to rely on; not for a
         blog post nobody has linked to. It waits for you to press <strong>Search the web</strong>, and
-        takes about half a minute. Most pieces turn out to have no reception at all, and it says so —
+        takes about a minute. Many pieces turn out to have no reception at all, and it says so —
         a real answer, not a failure. Only whoever added the article can run the search; visitors to a
         shared article see what has already been found.
       </p>
     ),
     reading: (
       <ul>
+        <li>
+          Two searches, two views. <strong>Reception</strong> is what others have written about this
+          piece itself: replies, reviews, and work that cites it and says something about it.{" "}
+          <strong>Claims</strong> is what has been written about the claims it makes, by people who
+          may never have read it. The number on each is how many sources it is showing.
+        </li>
+        <li>
+          In Reception, pages that link to the piece or quote it come first. Pages that only mention
+          its title follow under <strong>Names this piece by its title only</strong>: often a paper
+          citing it, sometimes a page about something else with the same title, so check before you
+          rely on one. <strong>Who cites it: search Google Scholar</strong>, at the end, opens a
+          search for the piece’s title; we do not list every paper that cites it.
+        </li>
+        <li>
+          In Claims, each claim is quoted in the piece’s own words, with a link to that passage and
+          the sources on it underneath. Press a claim to fold its sources away. The{" "}
+          <strong>relevance</strong> slider hides sources the AI judged to bear on their claim only
+          loosely or partly.
+        </li>
         <li>
           Anything tagged <strong>AI</strong> is the AI’s reading, checked against nothing: the threads
           across sources, the key-source picks (starred), each page’s lean (Supportive, Critical,
@@ -663,13 +682,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           Press one to show only its sources.
         </li>
         <li>
-          Two sliders thin the list: <strong>identification</strong> is how firmly a page points at
-          this article (names it, quotes it, links to it), <strong>relevance</strong> how directly it
-          bears on the claim it answers.
-        </li>
-        <li>
-          Orders: <strong>prioritised</strong> (replies to this piece first), <strong>by claim</strong>,{" "}
-          <strong>date</strong> and <strong>stance</strong> (most critical first).
+          Reception can be ordered <strong>as found</strong>, by <strong>date</strong> or by{" "}
+          <strong>stance</strong> (most critical first).
         </li>
       </ul>
     ),
