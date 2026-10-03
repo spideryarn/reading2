@@ -63,7 +63,7 @@ const BLOCKS: Block[] = [
 
 describe("hoisting the structure prompt's three values", () => {
   it("moved the stamp and the effort without moving either value", () => {
-    expect(PROMPT_VERSION).toBe("toc/11");
+    expect(PROMPT_VERSION).toBe("toc/12");
     expect(PRODUCTION_EFFORT).toBe("low");
   });
 
@@ -122,10 +122,12 @@ describe("hoisting the structure prompt's three values", () => {
    * moved from `749c4a601f07fea7` on 2026-10-01, when SYSTEM gained the
    * paperwork rule and the stamp went to `toc/10` (plan 261001p). It moved
    * from `b6130eea42744aee` for toc/11's starts-only schema (plan 261001s).
+   * It moved from `2aa7d4a737bab61b` for toc/12's title, references and
+   * abstract wording (plan 261003c).
    */
-  it("mints one stable key for the toc/11 structure request", () => {
+  it("mints one stable key for the toc/12 structure request", () => {
     expect(checkpointKey(canonicalWholeDocumentRequest(wholeDocumentRequest(BLOCKS).params, "standard"))).toBe(
-      "2aa7d4a737bab61b",
+      "79b9112d141e7229",
     );
   });
 });

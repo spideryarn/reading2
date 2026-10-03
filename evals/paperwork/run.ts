@@ -34,7 +34,26 @@ import { loadEnvLocal } from "../../src/env.js";
 import { blindCoin } from "../plain-words/run.js";
 
 const REPO = path.join(import.meta.dirname, "..", "..");
-const OUT = path.join(REPO, "evals", "results", "paperwork");
+/** Results folder. `--set front-matter` keeps 261003c's arms apart from 261001p's. */
+let OUT = path.join(REPO, "evals", "results", "paperwork");
+
+/**
+ * **Each paper's front abstract, as a block range**, read by hand from the local
+ * blocks for docs/plans/261003c-summary-and-structure-skip-the-front-matter.md:
+ * from the abstract's first block to the last block before the body begins, so
+ * a trailing keywords line (entropy-24) or the publisher's "Similar content" box
+ * (s41598) is inside it. scaling-hypothesis's abstract is its one-paragraph
+ * dek; the blockquote after it is body. A paper not listed is not counted.
+ */
+const ABSTRACT: Record<string, [string, string]> = {
+  "analog-cognition-and-consciousness-4-28-26-spya-f03kqf": ["spya-c5z6sr", "spya-d238cn"],
+  "entropy-24-00930-spya-pywwkq": ["spya-xn9j9k", "spya-y66sc5"],
+  "scaling-hypothesis": ["spya-suzdvz", "spya-suzdvz"],
+  "s41598-023-33209-9-spya-s0qydm": ["spya-wrnsf9", "spya-anyy22"],
+};
+
+/** Node titles that name front or back matter. A screen, printed so it can be read. */
+const FRONT_OR_BACK = /\b(abstract|title|byline|keywords?|references?|bibliograph\w*|works cited|backlinks?)\b/i;
 const SOURCES = ["structure.ts", "simple-summary.ts", "tweets.ts", "paperwork.ts"];
 
 /** Words that mark a line as being about the paperwork rather than the piece. A screen. */
@@ -65,6 +84,10 @@ interface ArmFile {
   versions: { toc: string; tweets: string; simple: string };
   gists: Line[] | { error: string };
   simple: { brief: string[]; simple: string[]; fuller: string[] } | { error: string };
+  /** Each paragraph's ids, per level; absent in results written before 261003c. */
+  simpleIds?: { brief: string[][]; simple: string[][]; fuller: string[][] };
+  /** Every block id's position in the article, for the abstract screen. */
+  ordinals?: Record<string, number>;
   tweets: string[] | { error: string };
 }
 
@@ -150,7 +173,12 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
                 const run = await simple.generateSimpleSummary({ article: withSlug, profile: null, power: "standard" });
                 const texts = (level: "brief" | "simple" | "fuller") =>
                   run.simpleSummary.levels[level].map((p) => p.text);
-                return { brief: texts("brief"), simple: texts("simple"), fuller: texts("fuller") };
+                const ids = (level: "brief" | "simple" | "fuller") =>
+                  run.simpleSummary.levels[level].map((p) => [...p.ids]);
+                return {
+                  texts: { brief: texts("brief"), simple: texts("simple"), fuller: texts("fuller") },
+                  ids: { brief: ids("brief"), simple: ids("simple"), fuller: ids("fuller") },
+                };
               }),
               attempt(async () => {
                 const run = await tweets.generateTweets({ article: withSlug, profile: null, power: "standard" });
@@ -180,7 +208,9 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
             simple: simple.SIMPLE_PROMPT_VERSION,
           },
           gists: result.gists,
-          simple: result.summary,
+          simple: failed(result.summary) ? result.summary : result.summary.texts,
+          ...(failed(result.summary) ? {} : { simpleIds: result.summary.ids }),
+          ordinals: Object.fromEntries(article.blocks.map((b, i) => [b.id, i])),
           tweets: result.thread,
         };
         fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
@@ -222,7 +252,43 @@ function report(): void {
       const simpleVersion = r.versions.simple.startsWith("simple-prompt/")
         ? r.versions.simple
         : `Simple prompt unknown (legacy result recorded shape ${r.versions.simple})`;
+      const abs = ABSTRACT[r.slug];
+      let inAbstract = "abstract ids: -";
+      if (abs && r.simpleIds && r.ordinals) {
+        const lo = r.ordinals[abs[0]];
+        const hi = r.ordinals[abs[1]];
+        const at = (id: string) => r.ordinals?.[id];
+        const isAbstract = (id: string) => lo !== undefined && hi !== undefined && (at(id) ?? -1) >= lo && (at(id) ?? -1) <= hi;
+        const parts: string[] = [];
+        for (const level of ["brief", "simple", "fuller"] as const) {
+          const all = r.simpleIds[level].flat();
+          const paras = r.simpleIds[level].filter((ids) => ids.some(isAbstract)).length;
+          parts.push(`${level} ${all.filter(isAbstract).length}/${all.length} ids, ${paras}/${r.simpleIds[level].length} paragraphs`);
+        }
+        inAbstract = `abstract ids: ${parts.join("; ")}`;
+      }
+      /* **By position, not by title** (GPT Sol's plan review of 261003c, P2-1):
+         a node that ends inside the abstract and starts at or before it covers
+         only the front matter and the abstract — the nodes the rule labels. A
+         node that runs on into the body is not one, whatever it is called.
+         Titles are printed beside them only for front- and back-matter names. */
+      const frontBack: string[] = [];
+      if (!failed(r.gists)) {
+        const lo = abs && r.ordinals ? r.ordinals[abs[0]] : undefined;
+        const hi = abs && r.ordinals ? r.ordinals[abs[1]] : undefined;
+        for (const g of r.gists) {
+          if (g.depth === 0) continue;
+          const [first, last] = g.range.split("..");
+          const end = last && r.ordinals ? r.ordinals[last] : undefined;
+          const abstractOnly = lo !== undefined && hi !== undefined && end !== undefined && end >= lo && end <= hi;
+          if (!abstractOnly && !FRONT_OR_BACK.test(g.title)) continue;
+          const tag = abstractOnly ? "ABSTRACT-ONLY" : "named";
+          frontBack.push(`${tag} d${g.depth} "${g.title}" [${first}..${last}]${g.question ? " +question" : ""}: ${g.gist ?? "(no gist)"}`);
+        }
+      }
       console.log(`${r.slug} (${r.versions.toc}, ${r.versions.tweets}, ${simpleVersion}): Brief ${brief}; simple ${failed(r.simple) ? "-" : words(r.simple.simple.join(" "))}, fuller ${failed(r.simple) ? "-" : words(r.simple.fuller.join(" "))}; ${hits.length} paperwork hits`);
+      console.log(`    ${inAbstract}`);
+      for (const f of frontBack) console.log(`    ${f}`);
       for (const h of hits) console.log(`    ${h}`);
       for (const f of [r.gists, r.simple, r.tweets]) if (failed(f)) console.log(`    FAILED: ${f.error}`);
     }
@@ -297,6 +363,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     return at >= 0 ? rest[at + 1] : undefined;
   };
   const positional = rest.filter((x, i) => !x.startsWith("--") && !rest[i - 1]?.startsWith("--"));
+  const set = flag("--set");
+  if (set) {
+    if (!/^[a-z0-9-]+$/.test(set)) throw new Error("--set takes a folder name like front-matter");
+    OUT = path.join(REPO, "evals", "results", set);
+  }
   if (cmd === "generate") {
     const arm = flag("--arm");
     if (!arm || positional.length === 0) throw new Error("generate --arm <arm> <slug>...");

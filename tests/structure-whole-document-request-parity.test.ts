@@ -54,6 +54,9 @@
  * **RE-PINNED 2026-10-01 for `toc/10`**: the paperwork rule,
  * `paperwork("structure")` from src/paperwork.ts, follows the plain-words core,
  * held literally for the same reason (Greg, SPIDERYARN-READING2-8M; plan 261001p).
+ * **RE-PINNED 2026-10-03 for `toc/12`**: the paperwork list names the title
+ * block and the reference list, and Structure's abstract paragraph follows it
+ * (Greg, spya-abs6bj; plan 261003c).
  * docs/plans/260926a-plainer-summaries-and-glossary.md.
  */
 
@@ -234,15 +237,17 @@ Plainer than the article, never further from it: never less exact, and never bey
 
 PAPERWORK IS NOT THE PIECE
 
-Around a piece's content there may be paperwork: the list of authors and where
-they work, contact and correspondence details, acknowledgements and thanks,
-funding and grants, conflict-of-interest and other disclosures, ethics
-approval, author contributions, data-availability statements, and the
-publisher's notices. Where it only records how the piece was produced and
-published, it is paperwork.
+Around a piece's content there may be paperwork: the title block (the title,
+subtitle, byline, dates, DOI, keywords and the journal's header), the list of
+authors and where they work, contact and correspondence details,
+acknowledgements and thanks, funding and grants, conflict-of-interest and other
+disclosures, ethics approval, author contributions, data-availability
+statements, the publisher's notices, and, at the end, the reference list or
+bibliography and any lists of backlinks or related links. Where it only records
+how the piece was produced, published and sourced, it is paperwork.
 A range that is only paperwork still gets its node, because every block
-must be covered. For that node alone, and as the only exception to the gist
-rules above: its gist is a short plain label of WHAT it is ("The authors and
+must be covered. For that node alone, and as an exception to the gist rules
+above: its gist is a short plain label of WHAT it is ("The authors and
 where they work.", "Funding and conflict-of-interest statements."), never what
 it says, with no word floor and no claim. Send no "question" on it, at any
 depth. Every other gist, the root's included, ignores it.
@@ -250,7 +255,18 @@ depth. Every other gist, the root's included, ignores it.
 Judge it by what it does, not by its heading. If the piece uses any of these as
 evidence, reasoning, method or a limit on its findings — a funder's role that
 it says may bias the result, an ethics rule that shaped the study, an article
-ABOUT research funding — it is content, and the usual rules apply.`;
+ABOUT research funding — it is content, and the usual rules apply.
+
+The abstract at the START of a paper is the author's own summary of all of
+it, and the root and the other parts already say what it says. A node whose
+range is only the abstract, or only the abstract and paperwork, gets the
+paperwork node's treatment above: a short plain label of what it is ("The
+authors' summary of the paper."), no claim, no word floor, and no question
+(leave "question" empty). Other gists may still draw on what it says. A
+summary or key-points box at the start is treated the same way only where the
+body goes on to make each of its claims; where it says something the body does
+not, it is content. A "Summary" or "Conclusions" section after the body has
+begun is content, and the usual rules apply.`;
 
 const EXPECTED_SYSTEM = EXPECTED_TOC10_SYSTEM
   .replace(

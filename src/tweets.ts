@@ -79,8 +79,12 @@ import { paperwork } from "./paperwork.js";
  *
  * `tweets/7`, 2026-10-02: the request gained `TWEETS_OUTPUT_SCHEMA`; the
  * prompt text is unchanged.
+ *
+ * `tweets/8`, 2026-10-03: the shared paperwork rule names the title block and
+ * the reference list as paperwork (Greg, spya-abs6bj;
+ * docs/plans/261003c-summary-and-structure-skip-the-front-matter.md).
  */
-export const PROMPT_VERSION = "tweets/7";
+export const PROMPT_VERSION = "tweets/8";
 
 /** The most passages one post may link to. More is a row of chips nobody reads. */
 export const MAX_POST_BLOCKS = 3;
