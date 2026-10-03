@@ -295,7 +295,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   referee: {
     kind: "none",
     reason:
-      "opens on Criteria, which has nothing to run until the referee has written one; the chips arm themselves",
+      "opens a panel without starting a model call; only the Claims chip can arm a run",
   },
   remember: {
     kind: "none",

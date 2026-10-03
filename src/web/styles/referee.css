@@ -315,6 +315,36 @@
   line-height: 1.45;
   color: var(--ink-soft);
 }
+/* **How to read this**, at the end of the lead line: the button the panel's
+   rule sentences are behind (RefereeMode.tsx § HowToRead; plan 261003m).
+   `.ref-notices-btn`'s quiet — no fill, no weight — and inline, so on a wide
+   band it costs no line of its own. `nowrap`, so the icon and its words wrap
+   as one. The padding is its hit area; § a coarse pointer below raises it. */
+.ref-rules {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+.ref-rules:hover { color: var(--ink); border-color: var(--rule); }
+.ref-rules.on { color: var(--ink); border-color: var(--rule-strong); }
+.ref-rules:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+@media (pointer: coarse) {
+  .ref-rules { padding: 0.45rem 0.55rem; }
+}
+/* Its card: the sentences as paragraphs, `.band-about-card`'s spacing. */
+.ref-rules-card { max-width: min(24rem, calc(100vw - 1.75rem)); }
+.ref-rules-card p { margin: 0; }
+.ref-rules-card p + p { margin-top: 0.4rem; }
 
 /* --- Criteria, the first sub-mode. src/web/CriteriaPanel.tsx.
 
@@ -401,11 +431,6 @@
   cursor: pointer;
   padding: 0;
 }
-
-/* **What the tick does**, above the list. Claims says the same thing inside its
-   checkbox's own label; here the label is the criterion's words, so the sentence
-   has to live beside the list rather than in it. */
-.crit-how { margin: 0.25rem 0; font-size: 0.83rem; color: var(--ink-faint); }
 
 /* **The key**, shown only while a for/against criterion is switched on —
    `TheKey` in CriteriaPanel.tsx says what it is for and why it tracks the mode's
@@ -604,8 +629,9 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 
 .clm { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
 
-/* What a row is and is not, above the button, because it is the thing a referee
-   is likeliest to read past: linkage, never adequacy. */
+/* The panel's quiet notes about its own list: what was withheld, what the cap
+   cut, the other text in quotes. (Linkage-never-adequacy wore this class above
+   the button until 2026-10-03; it is behind `.ref-rules` now.) */
 .clm-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 
 .clm-run {
@@ -690,10 +716,6 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
    channel. docs/project/colour-scales.md, and the panel's own header. */
 
 .mir { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
-
-/* What the mode is, above the button, because it is the thing a referee is
-   likeliest to misread: this call is not given the paper. */
-.mir-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 
 .mir-run {
   align-self: flex-start;

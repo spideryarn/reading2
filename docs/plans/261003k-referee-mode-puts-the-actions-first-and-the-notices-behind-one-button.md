@@ -212,6 +212,10 @@ Criteria prints two lines above its list once there are criteria.
 - *Move them into each panel's hover cards or the (i).* Shorter panels. The (i) would get long,
   and a phone has no hover, so some would be seen by nobody.
 - Recommendation: leave them, and look again after you have used the new layout. Not built.
+- **Answered 2026-10-03: *"Q-referee-panel-rules B"*.** Built in
+  [261003m](261003m-referee-panels-how-to-read-sentences-behind-a-tap-to-open-button.md), behind a
+  button a tap opens. The other two were answered the same day: notices stay behind the button, and
+  Candidates stays press-to-start (*"yeah that's fine for now"*).
 
 ## Before
 

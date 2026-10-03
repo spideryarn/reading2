@@ -268,10 +268,11 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
       "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
     /* **"No model call" and not "nothing"**, which was the draft: the mode does
        start a source scan on mount, so the flat claim was false — GPT Sol,
-       2026-09-07. And "the one it opens on" rather than naming Criteria,
-       because `?referee=` is persistent query state that survives leaving the
-       mode (params.ts), so which sub-mode it opens on is not invariant. */
-    how: "This button starts no model call: the sub-modes inside arm themselves, and the one it opens on has nothing to run until you have written a criterion. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you.",
+       2026-09-07. "Can start" because an existing Claims list is reused
+       (`useAutoRun` retires the activation when the artefact is ready).
+       `?referee=` survives leaving the mode, so its opening panel need not
+       be Criteria and cannot be described as waiting for a criterion. */
+    how: "This button starts no model call. Of the chips inside, only Claims can start one; every other run waits for its own button. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you.",
     /* The three words this mode was deliberately *not* named, and they are free
        to point here: `review` was vacated by the `review` → `remember` rename,
        and `reviewer` was passed over only because it would have sat beside it.
