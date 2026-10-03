@@ -117,6 +117,38 @@ stage 2's fallback through today's fetch or upload paths: both normalise to vali
 storing. Whether any pre-2026-08-27 raw row survives was not established, which is why the fallback
 stays.
 
+**Code — GPT Sol, 2026-10-03, SHIP**
+([the review](261003g-sweep-clusters-2-and-3-code-review-sol.md)), write-capable over
+`3c6ab877f..de9fbbdb0`. No runtime change. Three P2s, all in the tests and all fixed by it: a
+`part()` that caught only a bare `%` passed (CR-1); reading every margin off the first section
+passed (CR-2); a live region mounted only with a result passed (CR-3). Three P3 prose fixes. Twelve
+mutations, three of which survived until those tests were strengthened. One finding outside the
+stage, reported and not fixed: `security-map.md` lists five untrusted parties, calls them four, and
+then calls the signed-in reader the fifth (CR-7).
+
+**Browser — a Sonnet subagent, Playwright on the box, 2026-10-03.** Spine: 19 cards on one article,
+no bullet repeating a row, bullets and `+ n more` still there. Contents list: at a 20px root font
+the computed margin reads `120px` and the clicked section is the one marked. Copy: with the
+clipboard removed, the red line appears under the link. Two things it saw at the ends of the
+contents list (nothing marked at scroll 0 on one walk; *Export* marked near the foot) are the
+first-entry and at-the-bottom rules, which this change does not touch, and were not chased.
+
 ## What landed
 
-(filled in as each stage lands)
+All five, on `dev`, 2026-10-03:
+
+| Stage | Commit |
+|---|---|
+| 1. `part()` answers 400 | `3c6ab877f` (pushed first, alone, for cluster 6a) |
+| 2. The scan reads stored HTML as UTF-8 | `be1d4fd5a` |
+| 3. The spine card does not repeat a row | `a93af4623` |
+| 4. The contents list follows the scroll margin | `848a32084` |
+| 5. The copy button says when it failed | `de9fbbdb0` |
+| Sol's code-review fixes (tests and prose) | `f09897985` |
+
+Two files outside the cluster's list were touched, each for one small hunk: `src/messages.ts` (the
+failure sentence) and `src/web/Metadata.tsx` (a comment the stage 4 change had made false).
+
+**Not done, on purpose:** whether the spine card's bullet list goes altogether is still Greg's
+(umbrella, For Greg 1). Whether any pre-2026-08-27 raw HTML row survives in production was not
+counted; stage 2's fallback makes the answer not matter.
