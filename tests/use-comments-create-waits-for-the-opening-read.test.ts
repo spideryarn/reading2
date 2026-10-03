@@ -263,6 +263,62 @@ describe("a create before the opening read has settled", () => {
     expect(bodies(), "a comment on the last article was drawn on this one").toEqual([]);
   });
 
+  it("finishes a queued edit on the old article without replacing a same-id row on the new one", async () => {
+    const oldGet = held();
+    const newGet = held();
+    const post = held();
+    const patch = held();
+    const writes: { url: string; method: string }[] = [];
+    answer = (url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") return url.includes("another-piece") ? newGet.promise : oldGet.promise;
+      writes.push({ url, method });
+      return method === "POST" ? post.promise : patch.promise;
+    };
+
+    await show("a-piece");
+    let edited = false;
+    act(() => {
+      void latest!.create(NEW);
+      void latest!.edit(NEW.id, "edited on the old article").then(() => {
+        edited = true;
+      });
+    });
+    await show("another-piece");
+    await settle();
+    expect(writes).toEqual([{ url: "/api/comments/a-piece", method: "POST" }]);
+
+    const onNewArticle: Comment = {
+      ...OLD,
+      id: NEW.id,
+      body: "the unrelated same-id row on the new article",
+    };
+    newGet.release(json({ comments: [onNewArticle] }));
+    post.release(json({ comment: { ...NEW, createdAt: OLD.createdAt, status: "none" } }));
+    await settle();
+    expect(writes).toEqual([
+      { url: "/api/comments/a-piece", method: "POST" },
+      { url: `/api/comments/a-piece/${NEW.id}`, method: "PATCH" },
+    ]);
+    expect(bodies()).toEqual([onNewArticle.body]);
+
+    patch.release(
+      json({
+        comment: {
+          ...NEW,
+          body: "edited on the old article",
+          createdAt: OLD.createdAt,
+          status: "none",
+        },
+      }),
+    );
+    await settle();
+    expect(edited, "the queued caller was left waiting after the slug changed").toBe(true);
+    expect(bodies(), "the old PATCH answer replaced a same-id row on the new article").toEqual([
+      onNewArticle.body,
+    ]);
+  });
+
   it("puts an edit of that id after the held create, not in front of it", async () => {
     const get = held();
     const writes: string[] = [];
@@ -323,6 +379,61 @@ describe("a create before the opening read has settled", () => {
     expect(deleted).toEqual([]);
     expect(bodies()).toEqual([OLD.body]);
   });
+
+  it("lets a later create reuse the id after the cancelled held create has settled", async () => {
+    const { get, posted } = server();
+    await show("a-piece");
+
+    let cancelled: Comment | null | undefined;
+    act(() => {
+      void latest!.create(NEW).then((comment) => {
+        cancelled = comment;
+      });
+      latest!.remove(NEW.id);
+    });
+    get.release(json({ comments: [OLD] }));
+    await settle();
+    expect(cancelled, "the cancelled caller was left waiting").toBeNull();
+    expect(posted).toEqual([]);
+
+    let retried: Comment | null | undefined;
+    act(() => {
+      void latest!.create(NEW).then((comment) => {
+        retried = comment;
+      });
+    });
+    await settle();
+    expect(posted, "the old tombstone cancelled a later use of the same id").toHaveLength(1);
+    expect(retried?.id).toBe(NEW.id);
+    expect(bodies()).toEqual([OLD.body, NEW.body]);
+  });
+
+  it("settles every queued patch without sending it when delete cancels the held create", async () => {
+    const get = held();
+    const writes: string[] = [];
+    answer = (_url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") return get.promise;
+      writes.push(method);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    };
+    await show("a-piece");
+
+    let settled = 0;
+    act(() => {
+      void latest!.create(NEW).then(() => settled++);
+      void latest!.edit(NEW.id, "edited").then(() => settled++);
+      void latest!.recolour(NEW.id, "pink").then(() => settled++);
+      void latest!.place(NEW.id, { criterionId: "spya-crw001", valence: -40 }).then(() => settled++);
+      latest!.remove(NEW.id);
+    });
+    get.release(json({ comments: [OLD] }));
+    await settle();
+
+    expect(settled, "one of the cancelled callers was left waiting").toBe(4);
+    expect(writes, "a queued write ran after its create was cancelled").toEqual([]);
+    expect(bodies()).toEqual([OLD.body]);
+  });
 });
 
 describe("once the read has settled", () => {
@@ -370,6 +481,83 @@ describe("once the read has settled", () => {
     await settle();
     expect(writes).toEqual(["POST", "DELETE"]);
     expect(bodies(), "the late create answer resurrected the deleted row").toEqual([]);
+  });
+
+  it("re-deletes after an in-flight create may have landed but its response was lost", async () => {
+    const get = held();
+    const post = held();
+    const writes: string[] = [];
+    let posts = 0;
+    answer = (_url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") return get.promise;
+      writes.push(method);
+      if (method === "POST") {
+        posts++;
+        return posts === 1
+          ? post.promise
+          : Promise.resolve(
+              json({ comment: { ...NEW, createdAt: OLD.createdAt, status: "none" } }),
+            );
+      }
+      return Promise.resolve(new Response(null, { status: 204 }));
+    };
+    await show("a-piece");
+    get.release(json({ comments: [] }));
+    await settle();
+
+    let result: Comment | null | undefined;
+    act(() => {
+      void latest!.create(NEW).then((comment) => {
+        result = comment;
+      });
+      latest!.remove(NEW.id);
+    });
+    post.fail(new TypeError("the response was lost after the request left"));
+    await settle();
+
+    expect(result, "the deleted create's caller was left waiting").toBeNull();
+    expect(writes, "an ambiguously completed POST was not followed by DELETE").toEqual([
+      "POST",
+      "POST",
+      "DELETE",
+    ]);
+    expect(bodies()).toEqual([]);
+  });
+
+  it("does not delete a different same-id row when an ambiguous create proves to be a collision", async () => {
+    const get = held();
+    const post = held();
+    const writes: string[] = [];
+    let posts = 0;
+    answer = (_url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") return get.promise;
+      writes.push(method);
+      if (method === "POST") {
+        posts++;
+        return posts === 1
+          ? post.promise
+          : Promise.resolve(json({ error: "That comment id is already in use." }, 409));
+      }
+      return Promise.resolve(new Response(null, { status: 204 }));
+    };
+    await show("a-piece");
+    get.release(json({ comments: [] }));
+    await settle();
+
+    act(() => {
+      void latest!.create(NEW);
+      latest!.remove(NEW.id);
+    });
+    post.fail(new TypeError("the collision response was lost"));
+    await settle();
+
+    expect(writes, "the collision row was deleted without proving the create owned it").toEqual([
+      "POST",
+      "POST",
+    ]);
+    expect(bodies()).toEqual([]);
   });
 });
 

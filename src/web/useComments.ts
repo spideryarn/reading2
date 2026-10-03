@@ -24,7 +24,7 @@ import {
   type HighlightColour,
 } from "../types.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
-import { apiFetch, failure, fetchOk, leavingFetch, readJson } from "./lib/api.js";
+import { apiFetch, failure, fetchOk, leavingFetch, readJson, statusOf } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { openingRead } from "./lib/opening-read.js";
@@ -406,10 +406,16 @@ export function useComments(slug: string): CommentsApi {
    * still means *this write is done* — which is what
    * tests/refused-writes-are-reported.test.tsx waits on.
    */
-  const queue = useCallback((id: string, write: () => Promise<void>): Promise<void> => {
+  const queue = useCallback((
+    id: string,
+    write: (isCurrent: () => boolean) => Promise<void>,
+  ): Promise<void> => {
     const tombstones = deleted.current;
     const chains = patching.current;
-    const run = () => (tombstones.has(id) ? Promise.resolve() : write());
+    /* The write still belongs to this captured article after a slug change, but
+       its response no longer belongs in the hook's now-new state. */
+    const isCurrent = () => patching.current === chains;
+    const run = () => (tombstones.has(id) ? Promise.resolve() : write(isCurrent));
     const next = (chains.get(id) ?? Promise.resolve()).then(run, run);
     chains.set(id, next);
     return next;
@@ -505,7 +511,7 @@ export function useComments(slug: string): CommentsApi {
 
   /** The DELETE itself, checked. Also used to re-delete after a late answer. */
   const forget = useCallback(
-    async (id: string) => {
+    async (id: string, reportFailure = true) => {
       try {
         // A DELETE that 500s used to remove the comment from the screen and say
         // nothing, so the reader saw it gone and found it back after a reload.
@@ -514,7 +520,9 @@ export function useComments(slug: string): CommentsApi {
           { method: "DELETE" },
         );
       } catch (e) {
-        setError(describeFetchFailure(e as Error));
+        /* A write captured for the article we just left must still finish, but
+           its failure does not belong in the next article's error state. */
+        if (reportFailure) setError(describeFetchFailure(e as Error));
       }
     },
     [slug],
@@ -711,8 +719,17 @@ export function useComments(slug: string): CommentsApi {
   const create = useCallback(
     (input: NewCommentInput): Promise<Comment | null> => {
       const id = input.id;
+      /* The same id while its first create is live is the same attempt. Apart
+         from avoiding two POSTs, this keeps a retry from clearing the tombstone
+         that is making an older, deleted attempt stop. Once that task has
+         settled, a new call really is a new attempt — notably the gutter
+         bookmark's retry after a cancelled create — and may reuse the id. */
+      const existing = creating.current.get(id);
+      if (existing) return existing;
       const url = `/api/comments/${encodeURIComponent(slug)}`;
       const tombstones = deleted.current;
+      const isCurrent = () => deleted.current === tombstones;
+      tombstones.delete(id);
       const births = creating.current;
       const chains = patching.current;
       const task = (async (): Promise<Comment | null> => {
@@ -738,36 +755,60 @@ export function useComments(slug: string): CommentsApi {
            id collision — which is the failure the rollback exists to prevent.
            GPT Sol, reviewing the built code. */
         let displaced: ClientComment | undefined;
-        setComments((prev) => {
-          displaced = prev.find((c) => c.id === id);
-          return prev.some((c) => c.id === id)
-            ? prev.map((c) => (c.id === id ? optimistic : c))
-            : [...prev, optimistic];
-        });
-        setError(null);
+        if (isCurrent()) {
+          setComments((prev) => {
+            displaced = prev.find((c) => c.id === id);
+            return prev.some((c) => c.id === id)
+              ? prev.map((c) => (c.id === id ? optimistic : c))
+              : [...prev, optimistic];
+          });
+          setError(null);
+        }
         try {
           const r = await fetchOk(url, createRequest(input));
           const { comment } = await readJson<{ comment: Comment }>(r);
           if (tombstones.has(id)) {
             /* DELETE was deliberately held behind this POST. Now the row is
                known to exist, make the reader's later action win. */
-            await forget(comment.id);
+            await forget(comment.id, isCurrent());
             return null;
           }
           /* The server may have minted a different id. Drop the row we invented
              before putting the real one, or `put` appends it and the reader has
              two marks over one passage. */
-          if (comment.id !== id) setComments((prev) => prev.filter((c) => c.id !== id));
-          put(comment);
+          if (isCurrent()) {
+            if (comment.id !== id) setComments((prev) => prev.filter((c) => c.id !== id));
+            put(comment);
+          }
           return comment;
         } catch (e) {
-          if (tombstones.has(id)) return null;
-          setComments((prev) =>
-            displaced
-              ? prev.map((c) => (c.id === id ? displaced! : c))
-              : prev.filter((c) => c.id !== id),
-          );
-          setError(describeFetchFailure(e as Error));
+          if (tombstones.has(id)) {
+            /* The POST was already in flight when delete happened. With no HTTP
+               response, or a server failure, it may have committed before its
+               answer was lost. Retry the identical idempotent create first: a
+               success proves this id names our row and it is safe to DELETE; a
+               409 proves it names a collision that must not be touched. */
+            const status = statusOf(e);
+            if (status === null || status >= 500) {
+              try {
+                const retry = await fetchOk(url, createRequest(input));
+                const { comment } = await readJson<{ comment: Comment }>(retry);
+                await forget(comment.id, isCurrent());
+              } catch {
+                /* Still ambiguous, or a confirmed collision. Deleting by id
+                   without proving ownership could erase an older real row. */
+              }
+            }
+            return null;
+          }
+          if (isCurrent()) {
+            setComments((prev) =>
+              displaced
+                ? prev.map((c) => (c.id === id ? displaced! : c))
+                : prev.filter((c) => c.id !== id),
+            );
+            setError(describeFetchFailure(e as Error));
+          }
           return null;
         }
       })();
@@ -818,8 +859,8 @@ export function useComments(slug: string): CommentsApi {
    */
   const edit = useCallback(
     (id: string, body: string | null): Promise<void> =>
-      queue(id, async () => {
-        setError(null);
+      queue(id, async (isCurrent) => {
+        if (isCurrent()) setError(null);
         try {
           const r = await fetchOk(
             `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
@@ -842,9 +883,9 @@ export function useComments(slug: string): CommentsApi {
              Replacing is also why this had to be queued: it carries the mark
              the server held when it answered, so out of order it is a mark the
              referee has already changed. */
-          setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+          if (isCurrent()) setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
         } catch (e) {
-          setError(describeFetchFailure(e as Error));
+          if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
     [slug, queue],
@@ -882,8 +923,8 @@ export function useComments(slug: string): CommentsApi {
    */
   const place = useCallback(
     (id: string, mark: Mark): Promise<void> =>
-      queue(id, async () => {
-        setError(null);
+      queue(id, async (isCurrent) => {
+        if (isCurrent()) setError(null);
         try {
           const r = await fetchOk(
             `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/mark`,
@@ -899,9 +940,9 @@ export function useComments(slug: string): CommentsApi {
             },
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
-          setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+          if (isCurrent()) setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
         } catch (e) {
-          setError(describeFetchFailure(e as Error));
+          if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
     [slug, queue],
@@ -918,8 +959,8 @@ export function useComments(slug: string): CommentsApi {
    */
   const recolour = useCallback(
     (id: string, colour: HighlightColour | null): Promise<void> =>
-      queue(id, async () => {
-        setError(null);
+      queue(id, async (isCurrent) => {
+        if (isCurrent()) setError(null);
         try {
           const r = await fetchOk(
             `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/colour`,
@@ -930,9 +971,9 @@ export function useComments(slug: string): CommentsApi {
             },
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
-          setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+          if (isCurrent()) setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
         } catch (e) {
-          setError(describeFetchFailure(e as Error));
+          if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
     [slug, queue],
