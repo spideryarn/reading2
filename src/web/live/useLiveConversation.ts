@@ -96,6 +96,20 @@ import { resolvePlacement, type ResolvedPlacement } from "./mic-placement.js";
 import { apiWiring, type LiveWiring } from "./wiring.js";
 import { ToolResponses } from "./tool-responses.js";
 import { stallOf, type LiveStall } from "./stall.js";
+import {
+  DISCONNECT_GRACE_MS,
+  GRACE_POLL_MS,
+  HANGUP_GRACE_MS,
+  IDLE_CAP_MS,
+  SEED_TIMEOUT_MS,
+  SESSION_CAP_MS,
+  STALL_REPORT_AFTER_MS,
+  STALL_TICK_MS,
+  TOOL_TIMEOUT_MS,
+  shownPassage,
+  silentTrack,
+  startupMessage,
+} from "./session-shared.js";
 import { captureClientFailure } from "../monitoring.js";
 
 /** Where the connection is. `failed` carries a sentence in `error`. */
@@ -219,24 +233,6 @@ export interface LiveOptions {
 }
 
 /**
- * How long the channel is held open after the reader hangs up.
- *
- * Not a guess at the network. It is the window in which OpenAI delivers the
- * things that arrive *after* the audio stops — above all
- * `…input_audio_transcription.completed` for the sentence just spoken, which
- * routinely lands after the answer to it. Closing at once keeps the answer and
- * loses the question, in the reader's own transcript, with nothing to show it
- * happened.
- *
- * It ends early whenever the ledger has nothing unfinished, so a reader who
- * stops after a completed answer waits for none of it.
- */
-const HANGUP_GRACE_MS = 2_500;
-
-/** How often the grace window asks whether it can stop waiting. */
-const GRACE_POLL_MS = 100;
-
-/**
  * How long a hang-up mutes the microphone before stopping it, so that a
  * sentence in progress can be closed and committed by the voice detector.
  *
@@ -257,52 +253,6 @@ const SETTLE_MS = 1_200;
  */
 const SPEECH_LATENCY_MS = 1_500;
 
-/**
- * **The two caps, and why a live session needs any.**
- *
- * The meter measures this now (./meter.ts), but measuring is not limiting:
- * nothing on our server can end somebody's session, so the only thing standing
- * between a forgotten tab and an hour of billed room noise is a clock in the
- * browser. OpenAI ends a session at sixty minutes, which bounds the damage and
- * does not prevent it.
- *
- * Two clocks rather than one, because they answer different questions. The idle
- * one is the useful one: a reader who has stopped talking has stopped having a
- * conversation, whatever the tab still shows. The wall clock is the backstop
- * for a room that is never quiet — a fan, a television, an open window — where
- * the voice detector keeps finding speech that is not the reader's.
- *
- * Generous on purpose. A conversation with long pauses for thinking is exactly
- * what this feature is for (`semantic_vad` in src/live.ts exists for the same
- * reason), so the idle cap must not cut off somebody who is reading a paragraph
- * before they answer.
- */
-const IDLE_CAP_MS = 5 * 60_000;
-const SESSION_CAP_MS = 20 * 60_000;
-
-/**
- * How long the seeding barrier may stay up before the session is called failed.
- *
- * Generous, because it covers the channel opening as well as the round trip for
- * every seeded item, and a slow connection is not a broken one. It is a deadline
- * on something going *wrong* rather than on the network being quick.
- */
-const SEED_TIMEOUT_MS = 15_000;
-const TOOL_TIMEOUT_MS = 60_000;
-const DISCONNECT_GRACE_MS = 8_000;
-
-/** How often a live session asks ./stall.ts whether it is stuck. */
-const STALL_TICK_MS = 1_000;
-
-/**
- * How long a stall must last before Sentry hears about it.
- *
- * A Bluetooth route change can mute the microphone for a fraction of a second,
- * and a report per blip would bury the ones that matter. The notice is shown at
- * once regardless; this only decides what is worth writing down.
- */
-const STALL_REPORT_AFTER_MS = 5_000;
-
 /** The counts a stall report carries. Numbers only — never a word the reader said. */
 interface StallTally {
   speechStarted: number;
@@ -321,41 +271,6 @@ const freshTally = (): StallTally => ({
   mutes: 0,
   disconnects: 0,
 });
-
-function startupMessage(error: unknown): string {
-  if (error instanceof DOMException) {
-    if (error.name === "NotAllowedError") return "Microphone access was blocked. Allow it in your browser, then try Live again, or carry on typing.";
-    if (error.name === "NotFoundError") return "No microphone is available. Connect one and try Live again, or carry on typing.";
-    if (error.name === "NotReadableError") return "The microphone could not be opened. Check whether another app is using it, then try again.";
-  }
-  const message = error instanceof Error ? error.message : String(error);
-  if (/\[live-(?:not-set-up|upstream)\]|OPENAI_API_KEY|fetch|network|load failed/i.test(message)) {
-    console.error("[live] voice startup failed", error instanceof Error ? error.name : "unknown");
-    return "Live voice is unavailable right now. Try again, or carry on typing or dictation.";
-  }
-  return message;
-}
-
-/**
- * A track that carries silence, so an offer can have audio in it with no
- * permission prompt.
- *
- * A gain of zero rather than a muted track: a muted track is still a
- * `getUserMedia` track and still needs the grant. This is an oscillator that is
- * never audible, which is a real `MediaStreamTrack` from the peer connection's
- * point of view and costs the reader nothing because there is no reader.
- */
-function silentTrack(ctx: AudioContext): MediaStreamTrack {
-  const dest = ctx.createMediaStreamDestination();
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  gain.gain.value = 0;
-  osc.connect(gain).connect(dest);
-  osc.start();
-  const track = dest.stream.getAudioTracks()[0];
-  if (!track) throw new Error("no synthetic audio track [live-no-track]");
-  return track;
-}
 
 export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveApi {
   const [phase, setPhase] = useState<LivePhase>("idle");
@@ -856,19 +771,14 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       };
 
       if (name === "show_passage") {
-        const ids = Array.isArray(args.blockIds) ? args.blockIds.map(String) : [];
-        const why = typeof args.why === "string" ? args.why : "";
+        const { blockIds: ids, why, output, label, detail } = shownPassage(args);
         setPointers((p) => [...p, { blockIds: ids, why, at: Date.now() }]);
         /* The stored answer's own pointers. A spoken answer cites nothing in
            its text — it is forbidden to say an id aloud — so without these the
            transcript is an uncited claim, which is the one thing the chat
            contract exists to prevent. docs/plans/260831l-live-conversation-in-chat.md § 1b. */
         ledger.current.passage(callId, { blockIds: ids, why });
-        finish(
-          `Showed the reader ${ids.length} passage${ids.length === 1 ? "" : "s"}.`,
-          "pointed at",
-          ids.join(" "),
-        );
+        finish(output, label, detail);
         return;
       }
 
@@ -1934,7 +1844,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              here is waiting on a reader: the microphone was handed back in
              `stop`'s first step. */
           await stopRef.current();
-          setError(startupMessage(err));
+          setError(startupMessage(err, /OPENAI_API_KEY/i));
           setPhase("failed");
         }
       })();

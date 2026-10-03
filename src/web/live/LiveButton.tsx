@@ -4,6 +4,8 @@ import { LoaderCircle, PhoneOff, Radio, X } from "lucide-react";
 
 import type { MicPlacement } from "../../types.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
+import { useExperimental } from "../useExperimental.js";
+import { ENGINE_COPY, effectiveEngine, parseEngine, rememberEngine, useEnginePreference } from "./engine.js";
 import { rememberPlacement, rememberedPlacement } from "./mic-placement.js";
 import type { LiveApi } from "./useLiveConversation.js";
 
@@ -30,6 +32,11 @@ export function LiveButton({ live, disabled, onStart, labelled, continues }: {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+  /* **Which engine the next call uses**, offered only while Experimental
+     features are on. With the switch off there is no choice and the engine is
+     Realtime, as it was before there were two. ./engine.ts, ./useLive.ts. */
+  const experimental = useExperimental();
+  const engine = effectiveEngine(useEnginePreference(), experimental.on);
   const connecting = live.phase === "connecting";
   const on = live.phase === "live";
   const closing = live.phase === "closing";
@@ -84,6 +91,30 @@ export function LiveButton({ live, disabled, onStart, labelled, continues }: {
           </select>
         </label>
       </Tooltip>
+      {experimental.on && <Tooltip placement="top" keepSide className="tip-soon" content={
+        <ControlTip head="Voice engine"
+          what={`${ENGINE_COPY.realtime.label}: ${ENGINE_COPY.realtime.tip.toLowerCase()}.`}
+          how={`${ENGINE_COPY["gpt-live"].label}: ${ENGINE_COPY["gpt-live"].tip.toLowerCase()}.`}
+          state={on || connecting || closing ? "Hang up to change it." : undefined}
+        />
+      }>
+        {/* The same small select as the microphone setup beside it. Disabled
+            for the whole of a call: the engine is pinned to the call, and a
+            control that could be changed mid-call would say otherwise. */}
+        <label className="chat-live-mic chat-live-engine">
+          <span className="sr-only">Voice engine</span>
+          <select value={engine} disabled={on || connecting || closing}
+            onKeyDown={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              const next = parseEngine(e.target.value);
+              if (next) rememberEngine(next);
+            }}
+          >
+            <option value="realtime" title={ENGINE_COPY.realtime.tip}>{ENGINE_COPY.realtime.label}</option>
+            <option value="gpt-live" title={ENGINE_COPY["gpt-live"].tip}>{ENGINE_COPY["gpt-live"].label}</option>
+          </select>
+        </label>
+      </Tooltip>}
     </span>
   );
 }

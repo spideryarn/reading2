@@ -40,6 +40,7 @@ import type {
   ChatAnchor,
   ChatMessage,
   ChatThread,
+  LiveEngine,
   ThreadKind,
   ToolRun,
 } from "../types.js";
@@ -95,6 +96,13 @@ export interface SpokenExchange {
   tools?: ToolRun[];
   /** The reader talked over it, so the text may run past what they heard. */
   interrupted?: boolean;
+  /**
+   * Which live engine spoke, so the server can mark the row with the right
+   * model. **Absent means Realtime**, and the Realtime hook sends nothing;
+   * only `useGptLive` names itself.
+   * docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md.
+   */
+  engine?: LiveEngine;
 }
 
 /**
@@ -491,6 +499,7 @@ export function useChat(slug: string): ChatApi {
           reply,
           expectedTailId: spoken.expectedTailId,
           at: now,
+          ...(spoken.engine ? { engine: spoken.engine } : {}),
         },
         onThreadId,
       );

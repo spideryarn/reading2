@@ -11,6 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  GPT_LIVE_DELEGATION_MS,
   GPT_LIVE_NO_REPLY_MS,
   gptLiveStallOf,
   replyOwedSince,
@@ -24,6 +25,8 @@ function facts(over: Partial<GptLiveStallFacts> = {}): GptLiveStallFacts {
   return {
     now: T,
     readerLastAt: null,
+    /* A real sentence unless a case says otherwise: more than four words. */
+    readerWords: 12,
     companionLastBeganAt: null,
     delegations: [],
     delegationEndedAt: null,
@@ -51,7 +54,7 @@ describe("an ordinary conversation is not a stall", () => {
     expect(
       gptLiveStallOf(
         facts({
-          delegations: [{ id: "d1", finalAt: T - GPT_LIVE_NO_REPLY_MS + 1 }],
+          delegations: [{ id: "d1", startedAt: T - GPT_LIVE_NO_REPLY_MS + 1 - 2_000, finalAt: T - GPT_LIVE_NO_REPLY_MS + 1 }],
           delegationEndedAt: T - GPT_LIVE_NO_REPLY_MS + 1,
         }),
       ),
@@ -65,14 +68,14 @@ describe("an ordinary conversation is not a stall", () => {
           readerLastAt: T - 5 * GPT_LIVE_NO_REPLY_MS,
           /* Filler, then a long search. */
           companionLastBeganAt: T - 5 * GPT_LIVE_NO_REPLY_MS + 1_000,
-          delegations: [{ id: "d1", finalAt: null }],
+          delegations: [{ id: "d1", startedAt: T - 10_000, finalAt: null }],
         }),
       ),
     ).toBeNull();
     /* And with no filler at all: the running delegation suspends the reader's clock. */
     expect(
       gptLiveStallOf(
-        facts({ readerLastAt: T - 5 * GPT_LIVE_NO_REPLY_MS, delegations: [{ id: "d1", finalAt: null }] }),
+        facts({ readerLastAt: T - 5 * GPT_LIVE_NO_REPLY_MS, delegations: [{ id: "d1", startedAt: T - 10_000, finalAt: null }] }),
       ),
     ).toBeNull();
   });
@@ -82,7 +85,7 @@ describe("an ordinary conversation is not a stall", () => {
       gptLiveStallOf(
         facts({
           readerLastAt: T - 60_000,
-          delegations: [{ id: "d1", finalAt: T - 50_000 }],
+          delegations: [{ id: "d1", startedAt: T - 50_000 - 2_000, finalAt: T - 50_000 }],
           delegationEndedAt: T - 50_000,
           companionLastBeganAt: T - 49_000,
         }),
@@ -102,7 +105,7 @@ describe("a reply that is owed", () => {
 
   it("the backend finished and the voice never said anything (the spike's eleventh run)", () => {
     const final = T - GPT_LIVE_NO_REPLY_MS;
-    const f = facts({ delegations: [{ id: "d1", finalAt: final }], delegationEndedAt: final });
+    const f = facts({ delegations: [{ id: "d1", startedAt: final - 2_000, finalAt: final }], delegationEndedAt: final });
     expect(replyOwedSince(f)).toBe(final);
     expect(gptLiveStallOf(f)).toBe("no-reply");
   });
@@ -115,7 +118,7 @@ describe("a reply that is owed", () => {
           readerLastAt: final - 9_000,
           /* "One moment", after the tool and before the backend's final answer. */
           companionLastBeganAt: final - 500,
-          delegations: [{ id: "d1", finalAt: final }],
+          delegations: [{ id: "d1", startedAt: final - 2_000, finalAt: final }],
           delegationEndedAt: final,
         }),
       ),
@@ -129,7 +132,7 @@ describe("a reply that is owed", () => {
       gptLiveStallOf(
         facts({
           readerLastAt: final - 2_000,
-          delegations: [{ id: "d1", finalAt: final }],
+          delegations: [{ id: "d1", startedAt: final - 2_000, finalAt: final }],
           delegationEndedAt: final,
         }),
       ),
@@ -140,7 +143,7 @@ describe("a reply that is owed", () => {
     const final = T - 5_000;
     const f = facts({
       readerLastAt: T - 60_000,
-      delegations: [{ id: "d1", finalAt: final }],
+      delegations: [{ id: "d1", startedAt: final - 2_000, finalAt: final }],
       delegationEndedAt: final,
     });
     expect(replyOwedSince(f)).toBe(final);
@@ -162,13 +165,77 @@ describe("a reply that is owed", () => {
   });
 });
 
+describe("a few words are not a question (decided after the reducer was built)", () => {
+  it("\"right, thanks\" followed by silence is not a stall", () => {
+    expect(gptLiveStallOf(facts({ readerLastAt: T - 5 * GPT_LIVE_NO_REPLY_MS, readerWords: 2 }))).toBeNull();
+    /* Four is still an interjection; five is a sentence. The same line `interrupted` draws. */
+    expect(gptLiveStallOf(facts({ readerLastAt: T - GPT_LIVE_NO_REPLY_MS, readerWords: 4 }))).toBeNull();
+    expect(gptLiveStallOf(facts({ readerLastAt: T - GPT_LIVE_NO_REPLY_MS, readerWords: 5 }))).toBe("no-reply");
+  });
+
+  it("still owes the answer of a delegation those few words started", () => {
+    const final = T - GPT_LIVE_NO_REPLY_MS;
+    expect(
+      gptLiveStallOf(
+        facts({
+          readerLastAt: final - 3_000,
+          readerWords: 3,
+          delegations: [{ id: "d1", startedAt: final - 2_000, finalAt: final }],
+          delegationEndedAt: final,
+        }),
+      ),
+    ).toBe("no-reply");
+  });
+
+  it("and is still owed a reply when the delegation they started failed", () => {
+    const failedAt = T - GPT_LIVE_NO_REPLY_MS;
+    expect(
+      gptLiveStallOf(facts({ readerLastAt: failedAt - 3_000, readerWords: 3, delegationEndedAt: failedAt })),
+    ).toBe("no-reply");
+  });
+});
+
+describe("a backend that hangs", () => {
+  it("a delegation still running after a minute is a stall", () => {
+    const f = facts({
+      readerLastAt: T - GPT_LIVE_DELEGATION_MS - 2_000,
+      delegations: [{ id: "d1", startedAt: T - GPT_LIVE_DELEGATION_MS, finalAt: null }],
+    });
+    expect(gptLiveStallOf(f)).toBe("no-reply");
+    expect(gptLiveStallOf({ ...f, now: T - 1 })).toBeNull();
+  });
+
+  it("is not excused by filler spoken while it hangs", () => {
+    expect(
+      gptLiveStallOf(
+        facts({
+          companionLastBeganAt: T - 1_000,
+          delegations: [{ id: "d1", startedAt: T - GPT_LIVE_DELEGATION_MS, finalAt: null }],
+        }),
+      ),
+    ).toBe("no-reply");
+  });
+
+  it("a delegation that finished, however slowly, is not hanging", () => {
+    expect(
+      gptLiveStallOf(
+        facts({
+          delegations: [{ id: "d1", startedAt: T - 5 * GPT_LIVE_DELEGATION_MS, finalAt: T - 30_000 }],
+          delegationEndedAt: T - 30_000,
+          companionLastBeganAt: T - 29_000,
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
 describe("two delegations at once", () => {
   it("speech for the first does not clear the second, which finished afterwards", () => {
     const f = facts({
       readerLastAt: T - 40_000,
       delegations: [
-        { id: "d1", finalAt: T - 30_000 },
-        { id: "d2", finalAt: T - 20_000 },
+        { id: "d1", startedAt: T - 30_000 - 2_000, finalAt: T - 30_000 },
+        { id: "d2", startedAt: T - 20_000 - 2_000, finalAt: T - 20_000 },
       ],
       delegationEndedAt: T - 20_000,
       /* The first delegation's answer, spoken before the second finished. */
@@ -183,8 +250,8 @@ describe("two delegations at once", () => {
     const f = facts({
       readerLastAt: T - 40_000,
       delegations: [
-        { id: "d1", finalAt: T - GPT_LIVE_NO_REPLY_MS },
-        { id: "d2", finalAt: null },
+        { id: "d1", startedAt: T - GPT_LIVE_NO_REPLY_MS - 2_000, finalAt: T - GPT_LIVE_NO_REPLY_MS },
+        { id: "d2", startedAt: T - 10_000, finalAt: null },
       ],
       delegationEndedAt: T - GPT_LIVE_NO_REPLY_MS,
     });
@@ -197,8 +264,8 @@ describe("two delegations at once", () => {
         facts({
           readerLastAt: T - 60_000,
           delegations: [
-            { id: "d1", finalAt: T - 50_000 },
-            { id: "d2", finalAt: T - 48_000 },
+            { id: "d1", startedAt: T - 50_000 - 2_000, finalAt: T - 50_000 },
+            { id: "d2", startedAt: T - 48_000 - 2_000, finalAt: T - 48_000 },
           ],
           delegationEndedAt: T - 48_000,
           companionLastBeganAt: T - 47_000,

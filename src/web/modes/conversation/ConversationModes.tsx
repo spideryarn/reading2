@@ -29,7 +29,7 @@ import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle }
 import { type QuizRead, useQuiz } from "../../useQuiz.js";
 import type { ReadSoFar } from "../../read-filter.js";
 import { useChat } from "../../useChat.js";
-import { useLiveConversation } from "../../live/useLiveConversation.js";
+import { useLive } from "../../live/useLive.js";
 import { ChatPanel } from "../../ChatPanel.js";
 
 /**
@@ -474,8 +474,11 @@ export function ConversationBand({
    *   while the session was connecting;
    * - `onThreadId`, so `?thread=` follows if the server names the conversation
    *   something other than what this tab invented.
+   *
+   * `useLive` holds both engines' hooks (Realtime and GPT-Live) and hands back
+   * the one that owns the call, as the same `LiveApi`. ../../live/useLive.ts.
    */
-  const live = useLiveConversation(slug, {
+  const live = useLive(slug, {
     speak,
     tailNow: (id) => threadsRef.current.find((t) => t.id === id)?.messages.at(-1)?.id ?? null,
     onThreadId: (id, startedThreadId) => {

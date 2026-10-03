@@ -17,7 +17,7 @@
  * which is what lets tests/chat-reduce.test.ts run the whole machine without a
  * DOM.
  */
-import type { ChatMessage, ChatThread, Citation, ThreadKind, ToolRun } from "../../types.js";
+import type { ChatMessage, ChatThread, Citation, LiveEngine, ThreadKind, ToolRun } from "../../types.js";
 
 /**
  * The name of one asynchronous action, and **branded** so that a thread id, a
@@ -366,6 +366,8 @@ export interface SpokenOperation extends Registered {
   expectedTailId: string | null;
   /** `updatedAt` for the conversation. Minted outside the reducer. */
   at: string;
+  /** Which live engine spoke. Absent means Realtime. `SpokenExchange.engine` in useChat.ts. */
+  engine?: LiveEngine;
 }
 
 /**
@@ -839,6 +841,8 @@ export type ChatCommand =
       passages?: { blockIds: string[]; why: string }[];
       tools?: ToolRun[];
       interrupted?: boolean;
+      /** Sent only for GPT-Live. The server reads an absent engine as Realtime. */
+      engine?: LiveEngine;
       /**
        * The kind of the conversation as this tab has it, which is the only
        * place a conversation Remember began and nobody has written to yet

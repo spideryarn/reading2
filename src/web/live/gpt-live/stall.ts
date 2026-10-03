@@ -27,7 +27,17 @@
  *   words** until a companion fragment that began after them. If a delegation
  *   ended after those words (finished or failed), the clock starts again from
  *   that ending.
+ * - **A few words owe nothing.** The reader's words start that clock only when
+ *   their segment was more than `BACKCHANNEL_WORDS` long: "right, thanks"
+ *   followed by silence is a conversation that has paused, not one that has
+ *   stalled. The exception is words a delegation followed. The voice took
+ *   them for a question, so if that delegation failed a reply is still owed.
+ *   (Decided after the reducer was first built, 2026-10-03.)
  * - Owed for `GPT_LIVE_NO_REPLY_MS` is a stall.
+ * - **A delegation still running after `GPT_LIVE_DELEGATION_MS` is a stall
+ *   too**, whatever has been said meanwhile: a backend that hangs. It is
+ *   reported as `no-reply`, since that is what the reader is experiencing and
+ *   the notice and Reconnect are the same. (Decided the same day.)
  *
  * ## What it can and cannot tell apart
  *
@@ -56,6 +66,7 @@
  * caller can say when a fragment *began*: `zero + start_ms`.
  */
 import type { LiveStall } from "../stall.js";
+import { BACKCHANNEL_WORDS } from "./segments.js";
 
 /**
  * How long a reply may be owed before it is called missing.
@@ -67,9 +78,20 @@ import type { LiveStall } from "../stall.js";
  */
 export const GPT_LIVE_NO_REPLY_MS = 20_000;
 
+/**
+ * How long a delegation may run before it is called hung.
+ *
+ * The same minute a single tool is given (`TOOL_TIMEOUT_MS`). A delegation can
+ * rightly take longer than one tool, over several rounds; by then the reader
+ * has been listening to silence for a minute and should be offered Reconnect.
+ */
+export const GPT_LIVE_DELEGATION_MS = 60_000;
+
 /** One delegation, as far as the stall rule cares. */
 export interface DelegationDebt {
   id: string;
+  /** When it was first seen, on the caller's clock. */
+  startedAt: number;
   /**
    * When its final backend response completed, on the caller's clock. Null
    * while it is still running. A failed delegation is not listed at all: the
@@ -83,6 +105,8 @@ export interface GptLiveStallFacts {
   now: number;
   /** When the reader's latest fragment ended, or null if the reader has not spoken. */
   readerLastAt: number | null;
+  /** How many words the reader's latest segment has. Zero if the reader has not spoken. */
+  readerWords: number;
   /** When the companion's latest fragment began, or null if it has not spoken. */
   companionLastBeganAt: number | null;
   /** Every delegation that has not failed. Paid ones may stay listed; they are ignored. */
@@ -108,14 +132,22 @@ export function replyOwedSince(f: GptLiveStallFacts): number | null {
      from the last delegation to end after the reader spoke: the wait for a
      tool is not the voice being late. */
   if (!running && f.readerLastAt !== null) {
+    const delegated = f.delegationEndedAt !== null && f.delegationEndedAt > f.readerLastAt;
+    const asked = f.readerWords > BACKCHANNEL_WORDS || delegated;
     const since = Math.max(f.readerLastAt, f.delegationEndedAt ?? f.readerLastAt);
-    if (!paid(since)) oldest = oldest === null ? since : Math.min(oldest, since);
+    if (asked && !paid(since)) oldest = oldest === null ? since : Math.min(oldest, since);
   }
   return oldest;
 }
 
-/** `"no-reply"` when a reply has been owed for `GPT_LIVE_NO_REPLY_MS`, else null. */
+/**
+ * `"no-reply"` when a reply has been owed for `GPT_LIVE_NO_REPLY_MS`, or a
+ * delegation has been running for `GPT_LIVE_DELEGATION_MS`. Else null.
+ */
 export function gptLiveStallOf(f: GptLiveStallFacts): Extract<LiveStall, "no-reply"> | null {
+  for (const delegation of f.delegations) {
+    if (delegation.finalAt === null && f.now - delegation.startedAt >= GPT_LIVE_DELEGATION_MS) return "no-reply";
+  }
   const since = replyOwedSince(f);
   return since !== null && f.now - since >= GPT_LIVE_NO_REPLY_MS ? "no-reply" : null;
 }
