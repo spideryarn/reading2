@@ -1332,3 +1332,62 @@ td.text.has-hit[data-hues="8"] {
    over the prose column, which is exactly where the next sentence is. */
 .cmt-dialog { transition: opacity 0.1s; }
 .cmt-dialog.dodging { opacity: 0.1; pointer-events: none; }
+
+/* **What a finger's selection gets** — TouchSelectionChip.tsx, and
+   docs/project/touch.md § A finger's selection gets a button.
+
+   `--chip-x` / `--chip-y` are the viewport coordinates of the end of the words
+   that will be saved; everything else is here, so the clamping is the
+   stylesheet's and reads the same notch and bar tokens everything else does.
+
+   - **Below the words**, because iOS puts its own callout above them. The gap
+     is there for the selection handle, whose knob hangs under the last line.
+   - **Clamped to the viewport**, inside the safe area and above the bottom bar
+     where it is showing. The width is stated so the right-hand clamp can be
+     arithmetic rather than a measurement.
+   - **44px tall at every pointer**, not only a coarse one: nothing but a finger
+     ever draws it, and a hybrid's primary pointer may be the trackpad.
+   - **z-index 50**: over the bars (40), the spine (45) and the mode bands
+     (44–46); under every dialog (70) and the bottom bar (96). */
+.touch-select-chip {
+  --chip-w: 13rem;
+  --chip-gap: 1.25rem;
+  position: fixed;
+  z-index: 50;
+  left: clamp(
+    calc(var(--safe-left) + 0.5rem),
+    var(--chip-x, 0px),
+    calc(100vw - var(--safe-right) - var(--chip-w) - 0.5rem)
+  );
+  top: clamp(
+    calc(var(--safe-top) + 0.5rem),
+    calc(var(--chip-y, 0px) + var(--chip-gap)),
+    calc(100dvh - max(var(--dock-bottom), var(--safe-bottom)) - var(--control-h-lg) - 0.5rem)
+  );
+  box-sizing: border-box;
+  inline-size: var(--chip-w);
+  block-size: var(--control-h-lg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0 0.9rem;
+  background: var(--surface-raised);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  /* A press on it must not select its label, raise the iOS callout over it, or
+     wait 300ms to find out whether it was a double-tap. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+.touch-select-chip svg { flex: none; color: var(--highlight-text); }
+.touch-select-chip:active { background: var(--highlight-wash); }
