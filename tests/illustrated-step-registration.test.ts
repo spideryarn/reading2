@@ -190,13 +190,14 @@ const PLATES = path.join(REPO, "evals", "results", "illustrated-2026-09-03b");
 let root = "";
 let store: MemoryArtifactStore;
 
-function ctxFor(): StepContext {
+function ctxFor(illustrationNote?: string): StepContext {
   return {
     power: "standard",
     slug: SLUG,
     report: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
+    ...(illustrationNote ? { illustrationNote } : {}),
   };
 }
 
@@ -309,9 +310,9 @@ async function script(): Promise<void> {
 }
 
 /** Run the stage for real and write what it produced, exactly as `jobs.ts` does. */
-async function runAndWrite(): Promise<Illustrated> {
+async function runAndWrite(illustrationNote?: string): Promise<Illustrated> {
   await script();
-  const ctx = ctxFor();
+  const ctx = ctxFor(illustrationNote);
   const result = await STEPS.illustrated.run(ctx, store, nullCheckpointStore());
   expect(answers, "the stub ran short — the stage took a path this file did not intend").toEqual([]);
   const illustrated = result.parts?.illustrated as Illustrated;
@@ -875,5 +876,49 @@ describe("one press that draws and then paints", () => {
       "the Sketch was not taken away, so `false` below is about staleness rather than absence",
     ).toBeNull();
     expect(await stepIsDone(STEPS.sketch, ctxFor(), store)).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------ the steering note -- */
+
+/**
+ * **The reader's note is the job's request, not a drifting input** — plan
+ * 261002j. The step stamps with the job's note and the run records that same
+ * note, so the two cases that matter are both here: a second press with the
+ * same note is done (the post-run stamp matches), and a press with a different
+ * note — or none — is not, so it is never skipped while reporting success.
+ *
+ * **Mutation.** Run 2026-10-03: dropping `ctx.illustrationNote` from the step's
+ * `stamp` (src/pipeline.ts) reddens all three cases here and nothing else in
+ * the file.
+ *
+ * **Blind to.** Whether the note ever reaches `ctx` — that is the job store's
+ * and `runStep`'s, and tests/jobs.test.ts holds the request half; and the two
+ * read sites, which tests/illustrated-run.test.ts § `isStale` covers.
+ */
+describe("the reader's steering note", () => {
+  const NOTE = "Fewer scenes, and bigger lettering.";
+
+  it("records the note it painted with, and hashes it into sourceHash", async () => {
+    const illustrated = await runAndWrite(NOTE);
+    expect(illustrated.note).toBe(NOTE);
+    expect(illustrated.sourceHash).toBe(
+      illustratedFingerprint(await readSketch(), undefined, "", NOTE),
+    );
+    expect(illustrated.sourceHash).not.toBe(illustratedFingerprint(await readSketch()));
+  });
+
+  it("is done for a second press with the same note, and not for another note or none", async () => {
+    await runAndWrite(NOTE);
+    expect(await stepIsDone(STEPS.illustrated, ctxFor(NOTE), store)).toBe(true);
+    expect(await stepIsDone(STEPS.illustrated, ctxFor("A medieval map instead."), store)).toBe(false);
+    expect(await stepIsDone(STEPS.illustrated, ctxFor(), store)).toBe(false);
+  });
+
+  it("is not done for a noted press on a plain picture", async () => {
+    const plain = await runAndWrite();
+    expect(plain.note).toBeUndefined();
+    expect(await stepIsDone(STEPS.illustrated, ctxFor(), store)).toBe(true);
+    expect(await stepIsDone(STEPS.illustrated, ctxFor(NOTE), store)).toBe(false);
   });
 });

@@ -492,9 +492,59 @@ export interface Illustrated {
    * `Summaries.profileHash`; src/types.ts has the table.
    */
   profileHash?: string | null;
+  /**
+   * **The reader's own note on how they wanted it to come out**, exactly as
+   * the job carried it — absent when they gave none, which is every picture
+   * painted before 2026-10-03. A request parameter rather than an input that
+   * can drift, so it is recorded here and never makes a picture stale: the
+   * read sites fingerprint with this, the step with the job's
+   * (src/illustrated.ts § `inputFingerprint`). Read back by
+   * `readStoredIllustrated` only, never from a model's brief.
+   * docs/plans/261002j-illustrated-steering-note.md.
+   */
+  note?: string;
   /** One sentence naming the register and why this article suits it. */
   style: string;
   plates: IllustratedPlate[];
+}
+
+/**
+ * **The longest steering note a reader may give**, in characters. Room for a
+ * few dictated sentences; a note past it is refused rather than cut, so
+ * nothing the reader said silently vanishes.
+ */
+export const MAX_ILLUSTRATION_NOTE_CHARS = 400;
+
+/**
+ * **A reader's steering note, checked** — `{ ok: undefined }` for none (absent,
+ * `null`, or blank once trimmed), the trimmed text, or why it is refused.
+ *
+ * The same character policy as everything a model writes on this plate
+ * (`FORBIDDEN` below), and for the same reason: the note is displayed to the
+ * reader and forwarded to a model, so a bidi override would show one thing and
+ * send another. The route answers a refusal with a 400; the stored reader
+ * drops a note that fails, so an artefact can never display one the route
+ * would have refused.
+ */
+export function checkIllustrationNote(v: unknown): { ok: string | undefined } | { bad: string } {
+  if (v === undefined || v === null) return { ok: undefined };
+  if (typeof v !== "string") return { bad: "illustrationNote must be a string" };
+  /* Check the value before trimming it. `String.trim()` removes U+FEFF, so
+     checking afterwards would silently cut a forbidden format character when
+     it sat at either edge. Carriage return is allowed in the model-written
+     plate prose below, but not in this request field: its contract permits
+     newline and tab as the only controls. */
+  if (v.includes("\r") || FORBIDDEN.test(v)) {
+    return { bad: "The note contains a control or invisible formatting character." };
+  }
+  const s = v.trim();
+  if (!s) return { ok: undefined };
+  if (s.length > MAX_ILLUSTRATION_NOTE_CHARS) {
+    return {
+      bad: `The note is ${s.length} characters; it can be at most ${MAX_ILLUSTRATION_NOTE_CHARS}.`,
+    };
+  }
+  return { ok: s };
 }
 
 /* ------------------------------------------------------------------ reading */
@@ -795,6 +845,12 @@ function read(
   }
   if (typeof raw.profileHash === "string" || raw.profileHash === null) {
     illustrated.profileHash = raw.profileHash;
+  }
+  /* **Ours alone**: a model's brief never sets the reader's note, so a brief
+     that writes one is ignored rather than believed. */
+  if (trust === "stored") {
+    const note = checkIllustrationNote(raw.note);
+    if ("ok" in note && note.ok !== undefined) illustrated.note = note.ok;
   }
 
   return {

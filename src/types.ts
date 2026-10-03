@@ -3265,6 +3265,17 @@ export interface Job {
    */
   profile?: string;
   /**
+   * **The reader's note on how the Illustrated picture should come out** —
+   * present only on a job naming `illustrated` whose reader typed or dictated
+   * one in the box under the picture. Checked once at the route
+   * (`checkIllustrationNote`, src/illustrated-plate.ts), frozen here for the
+   * reasons `profile` gives above (a restart, a Retry), and compared by
+   * `sameWork`. Stripped from the wire by `publicJob`, like the profile: it is
+   * the reader's own words, and the panel reads it off the picture instead.
+   * docs/plans/261002j-illustrated-steering-note.md.
+   */
+  illustrationNote?: string;
+  /**
    * **Present exactly when this job is a reset** — "as if just imported", with
    * the extras dropped. `jobs.reset` in src/db/schema.ts; src/reset.ts says
    * what an extra is. Absent on every other job.

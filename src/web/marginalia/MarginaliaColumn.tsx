@@ -354,14 +354,18 @@ function CommentNote({
       stamp={only ? MARK_KIND_LABEL[only.as] : "Yours"}
       tip={viewer === "owner" ? "comment-own" : "comment-owner"}
       line={only ? entryLine(only) : count}
-      lineVoice={only && only.as !== "question" && only.comment.body ? "reader" : "ui"}
+      lineVoice={only ? entryVoice(only) : "ui"}
     >
       {items.map((e) =>
         e.as === "question" ? (
           <div key={`q:${e.asked.id}`} className="marg-open-item">
             <p className="marg-open-head">
               <span className="marg-stamp">{MARK_KIND_LABEL.question}</span>{" "}
-              {e.asked.quote !== undefined ? `“${e.asked.quote}”` : "About this paragraph"}
+              {e.asked.quote !== undefined ? (
+                <span className={voiceClass("author")}>“{e.asked.quote}”</span>
+              ) : (
+                "About this paragraph"
+              )}
             </p>
             {onOpenAsked && (
               <button type="button" className="linky marg-open-asked" onClick={() => onOpenAsked(e.asked.id)}>
@@ -389,6 +393,14 @@ function CommentNote({
 function entryLine(e: MarginEntry): string {
   if (e.as === "question") return e.asked.quote ?? "About this paragraph";
   return e.comment.body ?? (e.comment.answer ? "AI answer" : "Asked the AI about this passage");
+}
+
+/** Whose words `entryLine` is (fonts.md): a question's passage is the
+    article's, a comment's body the reader's, and our stand-ins are ours.
+    SPIDERYARN-READING2-9A, plan 261003b. */
+function entryVoice(e: MarginEntry): Voice {
+  if (e.as === "question") return e.asked.quote !== undefined ? "author" : "ui";
+  return e.comment.body ? "reader" : "ui";
 }
 
 /**

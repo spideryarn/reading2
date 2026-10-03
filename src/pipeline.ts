@@ -670,6 +670,19 @@ export interface StepContext {
    */
   profile?: string;
   /**
+   * **The reader's note on how the Illustrated picture should come out**,
+   * frozen on the job (`Job.illustrationNote`, src/types.ts) and read by the
+   * `illustrated` step alone. Absent: no note, and the brief is asked exactly
+   * what it was asked before notes existed.
+   *
+   * Unlike `profile` it **is** part of that step's stamp — but only as the
+   * job's request, never as something that drifts: the step stamps with this,
+   * the read sites with the picture's own recorded note. So an unforced press
+   * with a new note is not skipped as done, and no painted picture ever goes
+   * stale because of one. docs/plans/261002j-illustrated-steering-note.md.
+   */
+  illustrationNote?: string;
+  /**
    * Whether this step should pay to cache the article it is about to send.
    *
    * True when **any other step of this same job** renders the same article the
@@ -4275,7 +4288,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!usableSketch(sketch)) return null;
       const assets = await store.read(ctx.slug, "assets", "assets");
       return {
-        inputHash: illustratedFingerprint(sketch, undefined, figuresFingerprint(assets)),
+        /* **The job's note**, the same value `run` below records and
+           fingerprints with — so a finished noted run is done for a second
+           press with the same note, and not for one with a different note. */
+        inputHash: illustratedFingerprint(
+          sketch,
+          undefined,
+          figuresFingerprint(assets),
+          ctx.illustrationNote ?? "",
+        ),
         promptVersion: ILLUSTRATED_PROMPT_VERSION,
         model: CAPABLE_MODEL,
         /* **The Sketch's, never `ctx.profile`.** The stamp has to predict what
@@ -4375,6 +4396,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         power: ctx.power,
         cacheArticle: ctx.cacheArticle,
         figures: figureSurvey.figures,
+        ...(ctx.illustrationNote ? { note: ctx.illustrationNote } : {}),
       });
 
       /* **Written here rather than in `generateIllustrated`**, which writes
@@ -4385,8 +4407,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         sketch,
         undefined,
         figuresFingerprint(assets),
+        ctx.illustrationNote ?? "",
       );
       run.illustrated.profileHash = sketch.profileHash ?? null;
+      /* The note this was painted with, from the same `ctx` value the two
+         hashes above and in `stamp` use — `isStale` reads it back. */
+      if (ctx.illustrationNote) run.illustrated.note = ctx.illustrationNote;
+      else delete run.illustrated.note;
 
       /* **The bytes, one plate at a time, and a failure here is that plate's
          alone.** The blob store is content-addressed and create-only, so a run
@@ -4444,6 +4471,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           figuresOffered: figureSurvey.figures.length,
           figuresSkipped: figureSurvey.skipped,
           figuresDrawn: run.draws.reduce((n, d) => n + d.figures, 0),
+          /* The note's LENGTH, never the note — it is the reader's own words. */
+          noteChars: ctx.illustrationNote?.length ?? 0,
         },
         `illustrated ${ctx.slug}: ${stored} of ${run.illustrated.plates.length} plate(s) drawn`,
       );

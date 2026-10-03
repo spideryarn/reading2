@@ -144,6 +144,14 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* Opened, the line wraps: with one item it IS the question, the title or the
+   headline, and the open half does not say it again. Greg, spya-qcgyb0: "it
+   shows the FAQ answer, but the FAQ question is still truncated." Plan 261003b. */
+.marg-shut[data-open] .marg-shut-label {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 p.marg-shut {
   overflow: hidden;
   white-space: nowrap;

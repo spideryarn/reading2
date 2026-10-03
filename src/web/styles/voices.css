@@ -263,6 +263,7 @@
     .tip-hit-criterion,
     .fb-body,
     .fb-earlier-body,
+    .ill-steer-input,
     .cmdbar-input
 ) {
     font-family: var(--font-reader);
@@ -287,6 +288,7 @@
     .cnd-box,
     .prof-box-input,
     .fb-body,
+    .ill-steer-input,
     .cmdbar-input
 )::placeholder {
     font-family: var(--font-ui);

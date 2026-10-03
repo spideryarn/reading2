@@ -127,6 +127,15 @@ interface StepRun<S extends StepName> {
    */
   useProfile?: boolean;
   /**
+   * **The reader's note on how the Illustrated picture should come out** —
+   * sent as `illustrationNote`, and only when there is one, so every other
+   * request is the same bytes it has always been. The server refuses it on a
+   * job that does not name `illustrated` (src/routes.ts § `parseJobRequest`),
+   * so a mode other than Illustrated passing one fails loudly rather than
+   * sending a field nothing reads. Plan 261002j.
+   */
+  illustrationNote?: string;
+  /**
    * **Steps this one needs run first, in the same job.**
    *
    * One job holding many steps is what the queue is already for: `orderSteps`
@@ -321,8 +330,15 @@ export interface StepJob<S extends StepName = StepName> {
 export function stepRunRequest<S extends StepName>(
   slug: string,
   step: S,
-  { force = false, useProfile = true, precededBy }: StepRun<S> = {},
-): { slug: string; steps: StepName[]; force?: StepName[]; useProfile?: false } {
+  { force = false, useProfile = true, precededBy, illustrationNote }: StepRun<S> = {},
+): {
+  slug: string;
+  steps: StepName[];
+  force?: StepName[];
+  useProfile?: false;
+  illustrationNote?: string;
+} {
+  const note = illustrationNote?.trim();
   return {
     slug,
     /* Sent in reading order because that is what the request means, not
@@ -335,6 +351,7 @@ export function stepRunRequest<S extends StepName>(
        for both halves of why. */
     ...(force ? { force: [step] } : {}),
     ...(useProfile ? {} : { useProfile: false as const }),
+    ...(note ? { illustrationNote: note } : {}),
   };
 }
 

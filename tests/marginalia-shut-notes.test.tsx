@@ -190,6 +190,44 @@ describe("a shut line", () => {
     expect(label).toContain("overflow: hidden");
     expect(label).toContain("text-overflow: ellipsis");
   });
+
+  /* Greg, spya-qcgyb0: "when I click to expand, it shows the FAQ answer, but
+     the FAQ question is still truncated." With one item the line IS the
+     question (or the work's title, or the headline), and the open half does not
+     repeat it, so opening has to let the line wrap. Plan 261003b. */
+  it("lets the line wrap once it is open, so a lone FAQ question is read whole", () => {
+    const css = readFileSync("src/web/styles/marginalia.css", "utf8");
+    const opened = css.match(/\.marg-shut\[data-open\] \.marg-shut-label\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(opened).toContain("white-space: normal");
+    expect(opened).toContain("overflow: visible");
+    const el = draw([{ kind: "faq", items: [{ question, quote: "because it does", morePassages: 0 }] }]);
+    const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
+    act(() => button?.click());
+    expect(el.querySelector(".marg-shut")?.hasAttribute("data-open")).toBe(true);
+    expect(button?.querySelector(".marg-shut-label")?.textContent).toContain("Why does the bound hold?");
+  });
+
+  /* SPIDERYARN-READING2-9A, plan 261003b: a question's passage is the
+     article's words, so it is in the author's face (docs/project/fonts.md). */
+  it("draws the passage a question was asked from in the author's face, shut and open", () => {
+    const asked = { id: "t1", blockId: "spya-aaaaa1", createdAt: "t", quote: "the bound holds" };
+    const only = draw([{ kind: "comment", items: [{ as: "question", asked }] }]);
+    expect(only.querySelector(".marg-shut-line")?.classList.contains("voice-author")).toBe(true);
+    act(() => root?.unmount());
+    host?.remove();
+
+    const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", body: "mine", status: "none" } as unknown as MarginComment;
+    const two = draw([{ kind: "comment", items: [{ as: "comment", comment }, { as: "question", asked }] }]);
+    act(() => two.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+    const quoted = [...two.querySelectorAll(".marg-open .voice-author")].map((s) => s.textContent);
+    expect(quoted).toEqual(["“the bound holds”"]);
+  });
+
+  it("leaves a question with no passage, and a count, in the app's face", () => {
+    const asked = { id: "t1", blockId: "spya-aaaaa1", createdAt: "t" };
+    const el = draw([{ kind: "comment", items: [{ as: "question", asked }] }]);
+    expect(el.querySelector(".marg-shut-line")?.classList.contains("voice-ui")).toBe(true);
+  });
 });
 
 class RecordingResizeObserver {

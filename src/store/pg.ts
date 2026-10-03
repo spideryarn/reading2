@@ -2129,10 +2129,13 @@ function illustratedIsCurrent(revision: {
     {
       /* The paper's stored figures too, as the step stamps them —
          `figuresFingerprint`, src/illustrated-figures.ts. */
+      /* With the picture's **own** note: a note is how it was asked for, not
+         an input that can move (src/illustrated.ts § `inputFingerprint`). */
       inputHash: illustratedFingerprint(
         sketch,
         undefined,
         figuresFingerprint(revision.assets as Assets | null),
+        typeof found.note === "string" ? found.note : "",
       ),
       promptVersion: ILLUSTRATED_PROMPT_VERSION,
       model: CAPABLE_MODEL,
