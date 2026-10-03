@@ -190,7 +190,6 @@ import {
   Info,
   Layers,
   LifeBuoy,
-  ListOrdered,
   MessageSquareText,
   MessagesSquare,
   Search,
@@ -251,6 +250,8 @@ import {
   marginInSearch,
   type Mode,
   type Panel,
+  summaryInSearch,
+  type SummaryView,
 } from "./params.js";
 import { isMarginaliaModeWord, modeFromParam } from "../modes.js";
 import { cn } from "@/lib/utils";
@@ -365,6 +366,33 @@ interface Props {
    * docs/plans/261001i-annotations-column-beside-a-band-mode.md.
    */
   margin?: boolean;
+  /**
+   * **Which of Summary's views is showing** (`?summary=`), as the reading view
+   * has parsed it — the same React state that picks the band. Off the reading
+   * view the carried query string says (`summaryInSearch`).
+   *
+   * **The reading view must pass it, and must not let this fall back to the
+   * address.** nuqs moves React first and `location` up to ~50ms later, and a
+   * Summary press armed from the stale address leaves a `simple` token with
+   * the thread mounted, for Back to spend (activation.ts § `PressContext`; GPT
+   * Sol, F1 of the 261003l review). tests/summary-thread-press.test.tsx holds
+   * it.
+   */
+  summary?: SummaryView;
+  /**
+   * **Which picture Diagram is showing** (`?diagram=`), as the reading view has
+   * parsed it — `diagramParam`'s value, which is the one `diagramInSearch`
+   * gives for a settled address (params.ts § `DEFAULT_DIAGRAM`). Off the
+   * reading view the carried query string says.
+   *
+   * **The same rule as `summary` above, for the same reason**, and it was the
+   * older of the two: a Diagram press armed from the stale address left a
+   * `sketch` token with Force mounted, and Back to the Sketch spent it on a
+   * drawing nobody pressed for (GPT Sol, F8 of the 261003l review;
+   * docs/postmortems/261003f-activation-targets-read-from-delayed-urls-can-outlive-their-presses.md).
+   * tests/every-mode-draws-its-surface.test.tsx holds it.
+   */
+  diagram?: DiagramKind;
   /**
    * **Whether this reader sees the modes that are still being built** — and
    * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
@@ -758,17 +786,10 @@ const MODES_UI = [
     group: "shape",
     icon: Layers,
   },
-  /* **A mode since 2026-09-29**, a loose link to a page of its own before
-     (SPIDERYARN-READING2-5A). In the shape run after Summary because a thread is
-     the same move Summary makes — the article restated, shorter — and Greg did
-     not place it by hand; the plan records that as an assumption he can move.
-     `ListOrdered`, the icon the link carried.
-     docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
-  {
-    mode: "tweets",
-    group: "shape",
-    icon: ListOrdered,
-  },
+  /* Tweets stood here from 2026-09-29 to 2026-10-03, with `ListOrdered`. The
+     thread is Summary's Thread view now, one button fewer on the bar — Greg:
+     *"I would like to have fewer modes"* (spya-thpsnd,
+     docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
   /* **In the shape run, just after Summary, since 2026-09-29**, because it is
      the same move Summary makes — the article restated — with a picture
      instead of prose. It had sat between Referee and Chat, and Greg's reorder
@@ -810,7 +831,7 @@ const MODES_UI = [
      the plan first put it and Greg had not yet placed it by hand.
 
      `Route`, used nowhere else — a path with stops on it, which is the mode.
-     Not `ListOrdered`, which is the Tweets mode's numbered thread.
+     Not `ListOrdered`, which was the Tweets mode's numbered thread.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c. */
   {
     mode: "skim",
@@ -1559,6 +1580,7 @@ function useActivateMode(
   slug: string,
   search: string,
   diagram: DiagramKind,
+  summary: SummaryView,
   onMode: Props["onMode"],
   arms: boolean,
   current: BandMode | undefined,
@@ -1591,10 +1613,10 @@ function useActivateMode(
          Only the press that turns the column on asks for its relation words
          (plan 261003f). */
       const marginOn = next === "marginalia" && margin;
-      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram });
+      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary });
       onMode(next, undefined, toggles);
     },
-    [slug, search, diagram, onMode, arms, current, toggles, margin],
+    [slug, search, diagram, summary, onMode, arms, current, toggles, margin],
   );
 }
 
@@ -1657,6 +1679,8 @@ export function Dock({
   mode,
   onMode,
   margin: marginProp,
+  summary: summaryProp,
+  diagram: diagramProp,
   marked,
   visitor,
   shelfRow,
@@ -1769,15 +1793,23 @@ export function Dock({
    * opened something else, which is precisely the extra button-click the
    * auto-run rule removed. params.ts owns the degrade rule and every reader
    * takes it from there.
+   *
+   * **The reading view's own parsed state where there is one**, and the carried
+   * address only off it, where a press is a link and arms nothing anyway — the
+   * address lags a chip press by up to ~50ms. § Props `diagram`.
    */
-  const diagram = diagramInSearch(search);
+  const diagram = diagramProp ?? diagramInSearch(search);
+  /* Which of Summary's views a Summary press would land on: the reading view's
+     own parsed state where there is one, and the carried address only off it,
+     where a press is a link and arms nothing anyway. § Props `summary`. */
+  const summary = summaryProp ?? summaryInSearch(search);
 
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const activateMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, false, margin);
+  const activateMode = useActivateMode(slug, search, diagram, summary, onMode, !isVisitor, mode, false, margin);
   /* The bar's own buttons: the same door, but a second press closes. */
-  const pressMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, true, margin);
+  const pressMode = useActivateMode(slug, search, diagram, summary, onMode, !isVisitor, mode, true, margin);
   const activateSubMode = useActivateSubMode(slug, search, onMode, !isVisitor);
 
   /* **How much of itself the bar spells out is measured, not guessed** — the

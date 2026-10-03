@@ -750,6 +750,7 @@ describe("a body saved by an older deployment", () => {
       siteName: "A site",
       gist: "In one sentence",
       lastOpenedAt: "2026-08-29T09:00:00.000Z",
+      publishedAt: "2024-03-12",
       fixture: true,
       visibility: "public",
       sourceReusable: false,
@@ -757,6 +758,7 @@ describe("a body saved by an older deployment", () => {
     expect(shelfFromCachedBody({ articles: [rich] })).toEqual([rich]);
     expect(shelfFromCachedBody({ articles: [{ ...rich, visibility: "private" }] })).toBeNull();
     expect(shelfFromCachedBody({ articles: [{ ...rich, lastOpenedAt: 17 }] })).toBeNull();
+    expect(shelfFromCachedBody({ articles: [{ ...rich, publishedAt: 2024 }] })).toBeNull();
     expect(shelfFromCachedBody({ articles: [{ ...rich, sourceReusable: "yes" }] })).toBeNull();
     const { sourceReusable: _missing, ...old } = rich;
     expect(shelfFromCachedBody({ articles: [old] })).toBeNull();

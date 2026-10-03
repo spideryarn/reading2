@@ -118,10 +118,6 @@ const SILENT: BandMode[] = [
      docs/plans/260916d-faq-mode.md § Deferred. When it lands, this entry moves
      to PRODUCERS. */
   "faq",
-  /* Earned for FAQ's reason: each post's links are jumps through `onJump`,
-     not a selection, and a Tweets band that marked every post's passages would
-     mark most of the article. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
-  "tweets",
   /* Marginalia is not here since 2026-10-01: its column is a switch beside the
      band, not a value of `?mode=` (`BandMode`) —
      docs/plans/261001i-annotations-column-beside-a-band-mode.md. */

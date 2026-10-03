@@ -26,8 +26,7 @@
 import { describe, expect, it } from "vitest";
 
 import { MODES, type Mode } from "../src/modes.js";
-import { OWNER_MODE_NOTE } from "../src/messages.js";
-import { MODE_LABEL } from "../src/title-text.js";
+import { SHARED_THREAD } from "../src/messages.js";
 import type { Glossary, PublicArtefacts, SimpleSummary } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
 import { sharedInventory, type InventoryItem } from "../src/web/shared-inventory.js";
@@ -157,23 +156,33 @@ describe("the sweep over the modes", () => {
   });
 
   /**
-   * **The thread is one row, and it is the mode's.**
+   * **The thread is one row of its own, and it follows the thread.**
    *
-   * It was hand-added beside the sweep while it was a page. Once Tweets became
-   * a mode on 2026-09-29 the sweep reached it through `POLICY.tweets` too, and
-   * a hand-added row would have listed it twice under one key — which the
-   * partition above catches as a duplicate, and this names: exactly one row,
-   * labelled and described the way every other mode row is (plan 260929f).
+   * Hand-added beside the sweep while it was a page; the sweep's own row while
+   * Tweets was a mode (2026-09-29 to 2026-10-03, through `POLICY.tweets`); and
+   * hand-added again now that the thread is Summary's Thread view. Summary is
+   * `available` whatever is stored, so its row is in *shared* either way and
+   * cannot say whether a thread goes out — this row can (GPT Sol's closing
+   * note on plan 261003l). Exactly one, under the wire key.
    */
   it.each([
-    ["nothing built", NOTHING],
-    ["everything built", EVERYTHING],
-  ])("lists Tweets once, as a mode row, with %s", (_name, available) => {
-    const { shared, ifBuilt, withheld } = sharedInventory(available);
+    ["nothing built", NOTHING, "ifBuilt"],
+    ["everything built", EVERYTHING, "shared"],
+  ] as const)("lists the thread once, with %s, under %s — and Summary as shared either way", (_name, available, where) => {
+    const inventory = sharedInventory(available);
+    const { shared, ifBuilt, withheld } = inventory;
     const rows = [...shared, ...ifBuilt, ...withheld].filter((i) => i.key === "tweets");
-    expect(rows).toEqual([
-      { key: "tweets", label: MODE_LABEL.tweets, detail: OWNER_MODE_NOTE.tweets },
-    ]);
+    expect(rows).toEqual([SHARED_THREAD]);
+    expect(keys(inventory[where])).toContain("tweets");
+    expect(keys(shared)).toContain("summary");
+  });
+
+  it("names the thread to the owner only once a thread is stored", () => {
+    /* The make-public dialog's *goes out now* list. */
+    const withThread = sharedInventory({ ...NOTHING, tweets: true });
+    const without = sharedInventory({ ...NOTHING, simpleSummary: true });
+    expect(withThread.shared.map((i) => i.label)).toContain(SHARED_THREAD.label);
+    expect(without.shared.map((i) => i.label)).not.toContain(SHARED_THREAD.label);
   });
 
   /**

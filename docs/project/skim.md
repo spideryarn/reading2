@@ -46,11 +46,13 @@ v1, for the article's owner only, and behind the experimental switch until later
   pinned head with `‹ Stop k of N ›` and **Gist · More · Most** (only the depths that add stops),
   then the stops with their section paths and (since 260928e) their words, the role shown on the current row only. Until
   2026-09-29 a deeper pass also listed the shallower passes' stops, dimmed; since then each pass
-  lists and walks only its own (below).
+  lists and walks only its own (below) — and, since 2026-10-03, any earlier stop the route
+  carries into it, with pips on each row saying which passes it is in (below).
 - **In the prose**: the current stop's quote is ringed and barred, brought into view on every
   step (centred since 2026-09-29, below), and followed by a **Next stop ›** door — *More detail ›*
-  at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below. On a narrow window the band steps aside once a stop is
-  chosen, and the door carries the walk.
+  at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below. On a narrow window the band steps aside when a row is
+  pressed, and the door carries the walk; the head's ‹ › and depth buttons keep the band up (since
+  2026-10-03, below).
 - **Keys and address**: ← / → step the stops while the mode is open
   ([keyboard.md](keyboard.md) § ← / → in Skim); `?depth=` pushes and `?stop=`
   replaces ([url-state.md](url-state.md)). The rules for where a step or a depth change lands are
@@ -199,7 +201,10 @@ his words quoted there):
 
 **Each pass walks only its own stops** — Greg's SPIDERYARN-READING2-4P, 2026-09-29
 ([plan 260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md), which quotes
-the whole report):
+the whole report). **Amended 2026-10-03**: a pass may now also walk an earlier stop the route
+carries into it — *A stop may be walked at more than one depth*, below. What follows is what was
+built on 2026-09-29, and it is still how a route with no carried stop walks, which is every route
+planned before `skim/9`:
 
 > In Trajectory mode, it's a bit annoying for the more detailed levels of granularity to reuse the
 > same snippets as the coarser levels if I've just read the coarser level. [...] The main thing is
@@ -298,6 +303,76 @@ row, and the passages it opened, were removed, and Skim no longer reads the FAQ 
 terms, ideas and events on the card stay, and so does the cue above the quote, which is a different
 thing: the question to read the passage with.
 
+**On a phone, the head's controls stay in Skim; a row goes to the article** — Greg, 2026-10-03,
+report spya-kudr63, plan
+[261003l](../plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md) § Stage 1.
+Where the band lies over the prose, every step used to step it aside, so ‹ › showed one stop and
+closed the band. Greg: *"in this special case, the left and right buttons of skim mode should stay
+in skim mode ... if it's showing me a quote and I click on the quote, I think I do want to be taken
+to the article."* So ‹ ›, ← → and Gist · More · Most leave the band up — the prose still scrolls to
+the stop underneath, and its flash is held until the prose shows — and only a row press steps aside
+(`SkimMode.tsx` § `moveTo`, `onRow`). It keys on `covers`, the app's one test for "band and prose
+cannot both be seen", not on a device or an orientation.
+
+**A stop may be walked at more than one depth, and pips say which** — Greg, 2026-10-03, report
+spya-ms9d69, plan [261003l](../plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md) § Stage 2. It reverses, in part, his own report of four days
+earlier (*Each pass walks only its own stops*, above):
+
+> So I guess it is okay if they show up across multiple levels. It probably is better. But maybe we
+> could indicate in the UI that either that I've already read them, you know, because I spent a
+> long time looking at them in other mode, or that they show up in the other modes. So maybe there'd
+> be, and again, if possible, we want to avoid text labels. So maybe it's some kind of subtle visual
+> indicator that indicates which of the three it shows up for. A bit like we have a spark line at
+> the top of skim mode to show the trajectory. [...] So it's not a guarantee, but nor is it excluded
+> that something in a coarser level shows up in a more detailed level. And the visual indicator is a
+> way for me to see whether I've probably read it or not.
+>
+> — Greg, 2026-10-03
+
+What set it off: two related points, one placed in Gist and the other in More, read as disjointed
+when each pass walked only its own. So:
+
+- **A stop keeps its one `depth`, and gains `again`** (`SkimStop`, src/types.ts): the deeper passes
+  it is walked in as well. It is walked in pass *d* when `depth === d` or `again` names *d* —
+  `walkedIn` in [`skim-route.ts`](../../src/web/skim-route.ts), the one definition, which the list,
+  the counts on the depth buttons, ← / →, the door and the links all ask. A carried stop keeps its
+  one place in the route order.
+- **A carried stop does not make a pass.** A depth is offered only when some stop is first placed
+  there, as before; an `again` naming a depth the route does not offer is ignored (GPT Sol, plan
+  review F1 — one Gist stop carried into an otherwise empty More would be the same stop again).
+- **A depth change still lands on stop 1 of the new pass.** That can now be the stop you are on,
+  when it is carried and comes first there: the pass changes, one history entry is pushed, and the
+  page does not move. *More detail ›* is the same.
+- **A link's `?stop=` still wins over its `?depth=`**, and draws the asked pass when the stop is
+  walked in it, otherwise the stop's own. A link with no `?depth=`, and every link to a route with
+  no carried stop, arrive exactly as before.
+- **The pips.** Under each row's number, one small dot per pass the route offers, shallowest first,
+  filled when the stop is in that pass (`SkimPanel.tsx` § `StopPasses`, `skim.css` § `.skim-pips`).
+  One filled is this pass only; more than one is a stop you may have met already. No printed label
+  and nothing to press — the number's column is inside the row's own button, and the "where am I"
+  button already lies over the position line, which moves down to make room (Sol F3). A screen
+  reader hears the other passes in the row's name (*"Also in Gist"*), and the band's (i) says what
+  the dots mean, since a phone has no hover. **Not drawn** where they would never vary: a route
+  offering one depth, or one with no carried stop.
+- **The prompt is `skim/9`**: it asks the model which earlier stops to carry, and when not to
+  (src/skim.ts). A route planned before it has no `again`, is not announced as out of date
+  (260929c), and walks as it did until planned again from Metadata. Measured on six articles, three
+  rounds ([261003e](../investigations/261003e-skim-again-carried-stops-eval.md)). As shipped: about
+  a quarter of a More walk and a fifth of a Most walk are carried stops (the most in any one walk,
+  40%), against 43% under full nesting; aggregate Idea coverage held, and three of twelve runs moved
+  one stop between passes. A blind read preferred the new More for a reader who starts there in 12
+  of 12 pairs. For a reader coming from Gist it was preferred 8 to 2, which is inside what two runs
+  of the old prompt differ by, so **that half — the walk Greg reported — is not shown**.
+- **Two things the measurement changed.** The first wording put every carried stop at the head of
+  More, as a recap, because the old prompt already listed Gist stops first; the prompt now says the
+  route is one order with the depths mixed. And wording alone let one run carry every Gist stop and
+  the next none, so **a pass carries at most half as many earlier stops as it has of its own, rounded
+  up** (`maxCarried`, src/skim.ts: one into a pass of one or two, two into a pass of three), said in the prompt and enforced in `validateRoute` (GPT Sol, code
+  review F7). The model kept under it in 10 of 12 runs once told.
+
+Not built, and named in the plan: a mark for "I have actually read this", from reading time — the
+other thing he offered — and the pips on the prose's door.
+
 ### What we tried for v2
 
 Three static mockups, on real data from the entropy paper
@@ -374,7 +449,11 @@ Three things follow from Greg's words and they shape everything below:
   depth up, because the stop you are on is still there.~~ **Reversed 2026-09-29**: walking the
   first pass's stops again at the second was the thing Greg found annoying, so each pass now walks
   only the stops it adds (above, under *Each pass walks only its own stops*). The route is still
-  one order, planned as nesting passes; only the walk changed.
+  one order, planned as nesting passes; only the walk changed. **Amended 2026-10-03**: part of the
+  way back — a pass may carry earlier stops chosen by the route and marked with pips (above, under
+  *A stop may be walked at more than one depth*). Capped since the same day at half as many as the
+  pass has of its own, rounded up (`maxCarried`); before the cap, measured routes sometimes carried
+  all of Gist into More.
 
 **Who is reading changes the route.** When the reader has said who they are
 ([reader-profile.md](reader-profile.md) — *About you*) or why they are reading this piece (the

@@ -63,7 +63,9 @@ const TITLES = {
   "Remember.": "remember",
   "Quiz.": "remember",
   "Referee mode.": "referee",
-  "Tweets.": "tweets",
+  /* The thread is Summary's Thread view since 2026-10-03 (plan 261003l); its
+     tile stays, tagged with the mode it is found in. */
+  "Thread.": "summary",
 } satisfies Record<string, Mode>;
 
 /**

@@ -7,7 +7,7 @@
  * The shape is `useFaq`'s: `useOrderedRead` for the ordering, `useStepJob` for
  * the job — and not `useAutoRun` for the first open.
  *
- * **Opening it writes the thread, however the owner arrived** — the one mode
+ * **Opening it writes the thread, however the owner arrived** — the one view
  * that breaks *a press spends, arriving does not*, and it breaks it on Greg's
  * word rather than by accident:
  *
@@ -18,11 +18,15 @@
  *
  * As a page that was `useAutoRunOnArrival` (260915e), because a reload or a
  * pasted link had shown him the button. Becoming a mode did not revoke that, so
- * the rule came across with it (GPT Sol, plan review, 2026-09-29). The one
- * arrival that is *not* intent — the shelf restoring the last view — is closed
- * by `NEEDS_AN_EXPLICIT_PRESS` in last-view.ts, which drops `?mode=tweets` from
- * a restore. src/web/useAutoRun.ts § `useAutoRunOnArrival` has what it spends
- * on and why that is bounded.
+ * the rule came across with it (GPT Sol, plan review, 2026-09-29) — and again
+ * on 2026-10-03, when the mode became Summary's Thread view and Greg said
+ * *"keep all of the tweet thread. Functionality and UI"*
+ * (docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md
+ * § Decision 6). The one arrival that is *not* intent — the shelf restoring
+ * the last view — is closed in last-view.ts § `opensTheThread`, which drops
+ * the mode from a restore that would open the thread.
+ * src/web/useAutoRun.ts § `useAutoRunOnArrival` has what it spends on and why
+ * that is bounded.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { THREAD_RECHECK_FAILED } from "../messages.js";

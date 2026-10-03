@@ -119,8 +119,19 @@ export type {
  * Trajectory until 2026-10-01 (plan 261001r), and respelling that unchanged
  * tag alone would have staled every stored route. This request change is the
  * first reason to move it, so the new tag also takes the mode's new name.
+ *
+ * `skim/9`, 2026-10-03: a stop may be walked in more than one pass. Each stop
+ * gained `again`, the deeper passes it is carried into, and section 2 of the
+ * prompt stopped saying the passes nest — the reader has not walked them that
+ * way since plan 260929e — and says instead when to carry a stop and when not
+ * to. Greg's report spya-ms9d69: two related points had been split between
+ * Gist and More, and the walk read as disjointed. `depth` keeps its meaning,
+ * so the caps, the counts and the growth rule are untouched, and **the input
+ * hash is unchanged**: only this version stales a stored route, which goes on
+ * walking each pass as its own stops until it is planned again.
+ * docs/plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md.
  */
-export const PROMPT_VERSION = "skim/8";
+export const PROMPT_VERSION = "skim/9";
 
 /**
  * **A cue is one line, not a paragraph about the passage**: an instruction or
@@ -158,14 +169,15 @@ const EFFORT: Effort = "low";
 
 /**
  * The answer budget in tokens: a base for the JSON around the list, plus per
- * stop the label, the depth and a cue at the cap, at a conservative three
- * characters a token — for every quote the list can hold, because the prompt
+ * stop the label, the depth, the longest `again` there is (`[2, 3]` — what
+ * took the allowance from 60 characters to 80 at `skim/9`) and a cue at the
+ * cap, at a conservative three characters a token — for every quote the list can hold, because the prompt
  * says depth 3 should include nearly all of them and a model may list past the
  * cap. Undersizing does not degrade: it throws `truncationFailure`.
  * tests/skim.test.ts builds the largest permitted answer and checks it
  * fits.
  */
-export const ANSWER_TOKENS = 300 + MAX_QUOTES_TOTAL * Math.ceil((MAX_CUE_CHARS + 60) / 3);
+export const ANSWER_TOKENS = 300 + MAX_QUOTES_TOTAL * Math.ceil((MAX_CUE_CHARS + 80) / 3);
 
 /* ------------------------------------------------------------ pure helpers -- */
 
@@ -178,6 +190,8 @@ export function emptyDrops(): SkimDrops {
     malformed: 0,
     badRole: 0,
     badCue: 0,
+    badAgain: 0,
+    overCarried: 0,
     overCap: 0,
   };
 }
@@ -590,6 +604,7 @@ interface RawStop {
   quote?: unknown;
   depth?: unknown;
   cue?: unknown;
+  again?: unknown;
 }
 
 function isDepth(value: unknown): value is SkimDepth {
@@ -600,6 +615,28 @@ function cueOf(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const cue = value.trim();
   return cue.length === 0 || cue.length > MAX_CUE_CHARS ? null : cue;
+}
+
+/**
+ * **The deeper passes a stop is carried into, from whatever the model wrote**
+ * (plan 261003l). Kept: 2 or 3, strictly deeper than the stop's own `depth`,
+ * once each, ascending. Everything else is dropped and counted — an entry at
+ * or above the stop's own depth, a repeat, anything that is not a pass. A
+ * value that is not an array is no list at all and counts once; an absent or
+ * `null` field is simply "none", which is all an answer from before `skim/9`
+ * can say, and is not counted. Whether a kept entry names a pass the route
+ * actually has cannot be known here — `validateRoute` rule 7.
+ */
+function againOf(value: unknown, depth: SkimDepth): { again: SkimDepth[]; bad: number } {
+  if (value === undefined || value === null) return { again: [], bad: 0 };
+  if (!Array.isArray(value)) return { again: [], bad: 1 };
+  const kept = new Set<SkimDepth>();
+  let bad = 0;
+  for (const entry of value) {
+    if ((entry === 2 || entry === 3) && entry > depth && !kept.has(entry)) kept.add(entry);
+    else bad++;
+  }
+  return { again: [...kept].sort((a, b) => a - b), bad };
 }
 
 /**
@@ -617,7 +654,22 @@ function cueOf(value: unknown): string | null {
  *    otherwise two stops would mark one paragraph;
  * 6. the cumulative caps, in route order: a stop is dropped if keeping it would
  *    take the count at its own depth **or any deeper one** over its cap
- *    (`overCap`). Never demoted.
+ *    (`overCap`). Never demoted;
+ * 7. `again`, the deeper passes a stop is also walked in (plan 261003l): read
+ *    by `againOf` beside rule 3, and like a bad cue **it never drops the
+ *    stop**. Then, once the kept stops are known, an entry naming a depth at
+ *    which **no kept stop is first placed** goes too (Sol F1): a one-stop Gist
+ *    with `again: [2]` would otherwise offer a More that is the same stop
+ *    again. Every dropped entry is counted (`badAgain`). Of a quote named
+ *    twice, the winner of rule 4 keeps its own `again`; the two are not
+ *    merged. A stop carried nowhere has **no `again` key**, so a route that
+ *    carries nothing is shaped exactly as one from before `skim/9`.
+ * 8. the carried stops of each pass are capped against its own
+ *    (`maxCarried`), in route order: past the cap an `again` entry goes
+ *    (`overCarried`), and **the stop is kept** (Sol, code review F7).
+ *
+ * `again` reaches none of rules 1–6: the caps and `visibleCounts` count a stop
+ * once, at its `depth`, however many passes it is walked in.
  */
 export function validateRoute(
   raw: readonly unknown[],
@@ -649,8 +701,16 @@ export function validateRoute(
     }
     const cue = cueOf(r.cue);
     if (cue === null) dropped.badCue = (dropped.badCue ?? 0) + 1;
+    const { again, bad } = againOf(r.again, r.depth);
+    if (bad > 0) dropped.badAgain = (dropped.badAgain ?? 0) + bad;
     read.push({
-      stop: { quoteId: quote.id, depth: r.depth, role: null, cue },
+      stop: {
+        quoteId: quote.id,
+        depth: r.depth,
+        role: null,
+        cue,
+        ...(again.length > 0 ? { again } : {}),
+      },
       blockId: quote.blockId,
       index,
     });
@@ -685,7 +745,58 @@ export function validateRoute(
     for (let d = stop.depth - 1; d < 3; d++) visible[d]!++;
     kept.push(stop);
   }
-  return kept;
+
+  /* 7 — a stop is carried only into a pass that exists. A pass exists when
+     some kept stop is first placed at its depth, which is the client's
+     `offeredDepths` (src/web/skim-route.ts) and deliberately not "some stop is
+     walked there": that would let `again` create the pass it points at. */
+  const placedAt = new Set<SkimDepth>(kept.map((s) => s.depth));
+  /* 8 — the carried stops of a pass are capped against its own, in route
+     order: the earliest keep their place and the rest lose that one `again`
+     entry, never the stop (`maxCarried`). */
+  const own = (d: SkimDepth) => kept.reduce((n, s) => (s.depth === d ? n + 1 : n), 0);
+  const room: Record<SkimDepth, number> = { 1: 0, 2: maxCarried(own(2)), 3: maxCarried(own(3)) };
+  return kept.map((stop): SkimStop => {
+    if (!stop.again) return stop;
+    const again: SkimDepth[] = [];
+    for (const d of stop.again) {
+      if (!placedAt.has(d)) {
+        dropped.badAgain = (dropped.badAgain ?? 0) + 1;
+      } else if (room[d] <= 0) {
+        dropped.overCarried = (dropped.overCarried ?? 0) + 1;
+      } else {
+        room[d]--;
+        again.push(d);
+      }
+    }
+    if (again.length === stop.again.length) return stop;
+    const { again: _was, ...rest } = stop;
+    return again.length > 0 ? { ...rest, again } : rest;
+  });
+}
+
+/**
+ * **How many earlier stops a pass may carry: half as many as it has of its
+ * own, rounded up.** So a deeper walk is mostly new passages — at most a third
+ * carried when its own count is even, up to 40% when it is odd (two carried
+ * into a pass of three), half only for a pass of one — which is what the
+ * prompt's "mostly NEW passages" asks and what wording alone did not hold: measured
+ * uncapped, one More was half carried stops and two routes carried every Gist
+ * stop, while another run of the same article carried none
+ * (docs/investigations/261003e-skim-again-carried-stops-eval.md; GPT Sol, code
+ * review F7). Greg found full nesting annoying (SPIDERYARN-READING2-4P) and
+ * no carrying disjointed (spya-ms9d69); this is the bound between them. A
+ * number to measure, like `targetsFor`, not a product constant. Which entries
+ * go — the latest in route order — is arbitrary: it knows position, not which
+ * carried stop is the useful one. Measured, the model keeps under the cap
+ * itself once the prompt states it (2 entries cut in 12 runs), so this is a
+ * backstop; if it starts cutting often, change the prompt, not the cut order.
+ * The prompt's own sentence is a shade stricter ("never as many as it adds",
+ * which a pass of one would break at one carried); that wording is the one
+ * measured, and the validator is the looser of the two on purpose.
+ */
+export function maxCarried(ownStops: number): number {
+  return Math.ceil(ownStops / 2);
 }
 
 /** How many stops are visible at depth ≤ 1, ≤ 2 and ≤ 3. */
@@ -839,14 +950,42 @@ WHAT YOU DECIDE
    report with its conclusion. It varies from piece to piece: judge what each
    passage DOES, and put first what a first-time reader most needs.
 
-2. THE DEPTH of each stop — the shallowest pass it belongs to:
+2. THE DEPTH of each stop — the first (shallowest) pass it belongs to:
    1 = GIST: the few stops that give the gist on their own;
    2 = MORE: go round again, in more detail — the stops that fill in how and why;
    3 = MOST: nearly everything else worth stopping at.
-   The passes nest: depth 2 shows every stop at depth 1 or 2, in your route
-   order, and depth 3 shows them all. So one route, one order — a depth-1 stop
-   is simply one the reader meets on every pass.
-   Each pass must ADD stops to the one before it.
+   Each pass must ADD stops of its own when its target is larger than the one
+   before it. When two adjacent targets are the same because only one or two
+   quotes were offered, that pass may be absent.
+
+   And "again" for each stop: the deeper passes it is ALSO walked in. The
+   reader walks one pass at a time. A pass is its own stops (the ones whose
+   depth it is) plus any earlier stop you carry into it, all in your one route
+   order. A depth-1 stop with "again": [2] is met in GIST and again in MORE;
+   with "again": [] it is met in GIST only. Only a pass deeper than the stop's
+   own depth can go in "again", so for a depth-3 stop it is always [].
+
+   Carry a stop into a deeper pass when:
+   - that pass's own stops lean on it: it is one half of a pair, or it is the
+     claim the new stops explain, and they would read as loose ends without it;
+   - or a reader who STARTS at that pass, without walking the one before,
+     would miss a main point of the piece without it.
+   Do not carry a stop when:
+   - the deeper pass already breaks it into finer stops that say the same
+     thing in more detail;
+   - or the only reason is that it matters. Do not carry everything: a reader
+     who walked the shallower pass first should mostly meet NEW passages in
+     the deeper one. Carry into a pass at most half as many stops as it
+     has of its own: one or two into a pass of four, never as many as it adds.
+   Carrying is neither required nor forbidden. Some routes carry several
+   stops, some one, some none: decide stop by stop.
+
+   A carried stop keeps its one place in the route order, so that place has
+   to work in every pass it is walked in. The route is ONE order with the
+   depths mixed, not the depth-1 stops first and the deeper ones after them.
+   Put each deeper stop where it belongs among the others: next to the stop
+   it explains or pairs with. Then a carried stop is met beside the stops that
+   lean on it, not as a recap before them.
 
    EACH PASS COVERS AS MANY KEY IDEAS AS THE QUOTES ALLOW. A reader who stops
    after any pass should have met the main points, not just the first few:
@@ -880,18 +1019,22 @@ WHAT YOU DECIDE
 RULES
 
 - Only the labels given (Q1, Q2, …), exactly as written. Never invent one.
-- Each quote at most once.
+- Each quote is at most one entry in the list, never two. "again" is how a
+  stop appears in more than one pass.
 - There is at most one offered quote from any paragraph.
 - Depth 3 should normally include nearly all the quotes. Leave one out only if
   it adds nothing a stop already gives.
-- The user message gives a target for each depth. Aim near it.
+- The user message gives a target for each depth. Aim near it. The targets
+  count each stop once, at its depth; a carried stop does not count again.
 
 OUTPUT
 
 JSON only, no prose, no code fence. The array order IS the route:
 
 {"stops": [
-  {"quote": "Q7", "depth": 1, "cue": "..."}
+  {"quote": "Q7", "depth": 1, "again": [2], "cue": "..."},
+  {"quote": "Q3", "depth": 1, "again": [], "cue": "..."},
+  {"quote": "Q12", "depth": 2, "again": [], "cue": "..."}
 ]}
 
 THE ANSWER MUST PARSE. Inside a string, a straight double quote ends the
@@ -958,6 +1101,7 @@ export function renderPromptParts(opts: {
   const prompt = `Plan the route through these ${count} quotes.
 
 Targets: about ${t.gist} at depth 1; about ${t.more} at depth 1 or 2; about ${t.most} in all.
+Each stop counts once, at its depth: a stop carried into a deeper pass with "again" does not count again.
 ${who ? `\n${who}\n` : ""}
 === THE KEY IDEAS ===
 
@@ -1036,10 +1180,16 @@ export const SKIM_OUTPUT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["quote", "depth", "cue"],
+        /* `again` is required, not optional: OpenAI-strict wants every declared
+           property required, and "omit the field" is the comma trap
+           (docs/project/prompting-guide.md § What the model writes back). An
+           empty array is the model's "nowhere". That an entry is deeper than
+           `depth` is beyond the schema language; `againOf` checks it. */
+        required: ["quote", "depth", "again", "cue"],
         properties: {
           quote: { type: "string" },
           depth: { type: "integer", enum: [1, 2, 3] },
+          again: { type: "array", items: { type: "integer", enum: [2, 3] } },
           cue: { type: "string" },
         },
       },

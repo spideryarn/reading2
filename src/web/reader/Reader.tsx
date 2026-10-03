@@ -51,7 +51,6 @@ import { quoteCardQuotes, useQuoteMarks } from "./useQuoteMarks.js";
 import { DebateBand, VisitorDebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand, VisitorCitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
-import { TweetsBand, VisitorTweetsBand } from "../modes/tweets/TweetsMode.js";
 import {
   armSkimOpening,
   firstSkimArrival,
@@ -173,6 +172,7 @@ import { makeBlockBookmarker } from "../block-bookmark.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-context.js";
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
+import { useModeFlashOwnership } from "./mode-flash.js";
 import { proseFound, railFound, selectPassages } from "./passages.js";
 import { quoteAlphaByBlock } from "../spine-marks.js";
 import { stepQuote } from "../QuotesPanel.js";
@@ -338,6 +338,15 @@ export function Reader({
    * So this is a single value the layout reads, not a flag each feature checks.
    */
   const [mode, setMode] = useQueryState("mode", modeParam);
+  /* **Which of Summary's views is showing** — Brief, Fuller or Thread. Read
+     here, beside the mode, because three things outside the band depend on it
+     and must agree with the band in every frame: the band's shape (the thread
+     is the wide one, layout.ts § `bandShapeFor`), and what a Summary press
+     from the bar arms (`<Dock summary>`). The band reads the same nuqs state,
+     so this is the state that picks it, not a second parse of the address —
+     which lags a press by up to ~50ms (activation.ts § `PressContext`).
+     docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
+  const [summaryView] = useQueryState("summary", summaryParam);
   /**
    * **Whether Marginalia's column of notes is on**, right of the prose — a
    * switch of its own beside `mode` since 2026-10-01, so the notes can sit
@@ -402,8 +411,9 @@ export function Reader({
   /**
    * **The band has stepped aside from the prose** — on a narrow window, where
    * it lies over the whole article (`band-covers`), after the reader follows a
-   * passage link out of any band (`bandJump` below, since 2026-09-29) or chooses
-   * a Skim stop (since 2026-09-28). The band stays mounted, so everything
+   * passage link out of any band (`bandJump` below, since 2026-09-29) or presses
+   * a Skim row (since 2026-09-28; its ‹ › and depth buttons did too until
+   * 2026-10-03, spya-kudr63). The band stays mounted, so everything
    * in it survives; only its paint goes (narrow-window.css § a band that has
    * stepped aside). `BandBackChip` offers it back, as does Skim's door
    * (SkimPanel.tsx § SkimDoor).
@@ -463,7 +473,7 @@ export function Reader({
   /* One answer for both the live fit and the Marginalia press's hypothetical
      fit. Keeping the value shared stops the press swapping columns at a
      threshold different from the layout it is about to draw. */
-  const bandShape = bandShapeFor(mode);
+  const bandShape = bandShapeFor(mode, summaryView);
 
   const fit = useMemo(
     () =>
@@ -617,6 +627,18 @@ export function Reader({
   useEffect(() => {
     if (!bandOverProse) flushPendingFlash();
   }, [bandOverProse]);
+  /* **A held flash belongs to the mode that made it.** Since Skim's ‹ › stopped
+     stepping a covering band aside (spya-kudr63, plan 261003l) a flash can sit
+     held for as long as the reader walks the route. Leaving for Plain plays it,
+     above, which is the point. Leaving for *another covering band* must not
+     keep it: the prose can be moved from there by a path that never passes
+     `beginJump` and so never drops it (comment-jump.ts § `stepToComment`, for
+     one), and the next time the prose is exposed the old stop would wash,
+     wherever the reader had got to. A change which exposes the prose skips the
+     drop (`bandOverProse` is false), then the passive effect above plays it.
+     Only on a real change of mode, never on mount; the hook's layout effect runs
+     before an incoming child's passive landing effect, so that new flash survives. */
+  useModeFlashOwnership(mode, bandOverProse);
   /* A held or live flash belongs to this article. ArticlePage keys the reader
      by slug, so leaving it unmounts here; clear both the pending id and the live
      removal timer rather than retaining a detached prose cell for 1.2s. */
@@ -2439,10 +2461,25 @@ export function Reader({
       /* The plain-words levels are an artefact, so since 2026-09-30 this is an
          owner/visitor pair — the visitor's band takes the stored paragraphs off
          the payload and fetches nothing.
-         docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+         docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+
+         **And the thread, since 2026-10-03**: Summary's third view, a mode of
+         its own (Tweets) before. The band picks between the two artefacts by
+         `?summary=`, and is the wide one while the thread shows (`bandShape`
+         above). No passages either way: each post's links are jumps.
+         docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
       case "summary":
-        if (!owner) return <VisitorSummaryBand simple={artefacts?.simpleSummary} onJump={bandJump} />;
-        return <SummaryBand slug={slug} onJump={bandJump} />;
+        if (!owner)
+          return (
+            <VisitorSummaryBand
+              slug={slug}
+              simple={artefacts?.simpleSummary}
+              thread={artefacts?.tweets}
+              article={article}
+              onJump={bandJump}
+            />
+          );
+        return <SummaryBand slug={slug} article={article} onJump={bandJump} />;
       /* **Mounted for a visitor too, since 2026-09-04** — one branch rather
          than the owner/visitor pair the artefact modes have, because there is
          no artefact to carry and no second component to build: the default
@@ -2592,16 +2629,6 @@ export function Reader({
       case "faq":
         if (!owner) return artefacts?.faq ? <VisitorFaqBand faq={artefacts.faq} onJump={bandJump} /> : null;
         return <FaqBand slug={slug} onJump={bandJump} />;
-      /* **A mode since 2026-09-29**, a page of its own before. FAQ's shape: no
-         passages, each post's links are jumps. The band is the wide one
-         (`bandShape` above). docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
-      case "tweets":
-        if (!owner) {
-          return artefacts?.tweets ? (
-            <VisitorTweetsBand slug={slug} thread={artefacts.tweets} article={article} onJump={bandJump} />
-          ) : null;
-        }
-        return <TweetsBand slug={slug} article={article} onJump={bandJump} />;
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band
@@ -3429,6 +3456,10 @@ export function Reader({
         experimental={experimental}
         mode={mode}
         margin={marginOpen}
+        summary={summaryView}
+        /* The same state the Diagram band's chips read (`diagramParam`), not
+           the address, which lags a chip press — Dock.tsx § Props `diagram`. */
+        diagram={subNav.diagram}
         onMode={(next, sub, toggle = false) => {
           /* The callback itself is proof of a press. Arm before `setMode`:
              nuqs updates React now but may leave `location.href` on the old

@@ -217,12 +217,10 @@ export const MODES = [
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md,
      docs/project/skim.md. */
   "skim",
-  /* 2026-09-29: the article as a numbered thread, each post linked to the
-     passages it came from. A page of its own at `/read/<slug>/tweets` from
-     2026-08-25 until Greg asked for it as a normal mode with a wide band beside
-     the text (SPIDERYARN-READING2-5A); the old address redirects here.
-     docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
-  "tweets",
+  /* `tweets` stood here from 2026-09-29 to 2026-10-03 — the article as a
+     numbered thread. It is Summary's Thread view now (`?summary=thread`), and
+     the word is in `RETIRED_MODES` below.
+     docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
   /* **Marginalia, 2026-10-01** (called Annotations until later that day) — the
      first mode drawn to the RIGHT of the prose: notes level with the blocks
      they belong to, scrolling with the page, and no left band at all. Greg
@@ -331,6 +329,14 @@ export const RETIRED_MODES: Readonly<Record<string, BandMode>> = {
   /* `trajectory` was the mode's name until 2026-10-01, when it became Skim
      (docs/plans/261001r-trajectory-becomes-skim-and-marginalia-rename-audit.md). */
   trajectory: "skim",
+  /* The thread, a mode of its own from 2026-09-29 to 2026-10-03, is Summary's
+     Thread view. **This row alone opens Summary at Brief**: the word has to
+     become `?mode=summary&summary=thread`, which is `liftLegacyTweets` in
+     src/web/router.ts, on boot, on a client navigation and on Back. This row
+     is what the frame before that rewrite, the tab title and a feedback
+     report's mode read.
+     docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
+  tweets: "summary",
 };
 
 /**
