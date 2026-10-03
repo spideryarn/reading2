@@ -403,10 +403,11 @@ const NOT_A_BLOCK_SELECTION = [
      A search-only hit stays excluded, which is what it is today; whether that is
      right is not this change's question.
 
-     **`mark.hit:not([data-quote])` is redundant today** — every hit without a
-     quote tier gets `data-wash` (annotate.ts § `washes`) — and is kept as the
-     one entry that states the rule rather than a consequence of it. If the two
-     ever disagree, exclusion wins: `closest` takes the list as an OR.
+     **`mark.hit:not([data-quote])` was redundant until 2026-10-03** — every
+     hit without a quote tier got `data-wash` (annotate.ts § `washes`). A quick
+     hit now has neither (`Mark.bare`), and this entry is the one that keeps it
+     excluded, as it was while it had a wash. If the two ever disagree,
+     exclusion wins: `closest` takes the list as an OR.
 
      **The one case this still gets wrong**: a quote inside a `<mark>` the
      *article itself* wrote. `annotateHtml` nests its own mark inside the

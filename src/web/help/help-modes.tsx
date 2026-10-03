@@ -244,9 +244,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           fast model scores every paragraph, and the ones that match are marked whole, with no
           reasons. It searches whenever you pause typing, and what you type keeps one saved search,
           updated as you go rather than a new one each time. Press Enter when you are done; typing
-          again after that, or after a break, starts a new one. Use it for a first look;{" "}
-          <strong>flesh out</strong> on a quick search runs the full meaning search on the same
-          words.
+          again after that, or after a break, starts a new one. Its paragraphs are marked with a
+          bar down the side and a mark in the spine, not a highlight over the words. Use it for a
+          first look; <strong>thorough</strong> on a quick search runs the full meaning search on
+          the same words, in about half a minute, and replaces the quick one.
         </p>
         <p>
           To start a quick search from anywhere in the article, type in the{" "}

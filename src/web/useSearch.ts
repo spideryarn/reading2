@@ -108,8 +108,13 @@ export interface SearchApi {
   /**
    * Run a new search of this kind — `quick` or `meaning`. Returns the id it
    * minted, so `?runs=` can name it.
+   *
+   * `colour` pins the new row to a palette slot from its first paint — what
+   * *thorough* uses to hand a quick row's colour to the meaning row that
+   * replaces it (plan 261003i B2). It is this tab's choice like any other
+   * (`chosen`), and it is stored once `begin` has said which row to write.
    */
-  ask(criterion: string, kind: SearchKind): string;
+  ask(criterion: string, kind: SearchKind, colour?: number): string;
   /** The same criterion again, and the same kind — for a run whose model call failed. */
   retry(id: string): void;
   /**
@@ -136,7 +141,7 @@ export interface SearchApi {
    *
    * Keyed on kind as well as words, because a quick search and a meaning
    * search for the same words are two different questions. The box can ask
-   * meaning while quick is still out; *flesh out* appears once quick finishes
+   * meaning while quick is still out; *thorough* appears once quick finishes
    * (plan 261002e, review F5).
    */
   isRunning(criterion: string, kind: SearchKind): boolean;
@@ -642,6 +647,18 @@ export function useSearch(
                  effect worth avoiding. */
               if (begun.sourceHash !== undefined) setFingerprint({ hash: begun.sourceHash });
               if (begun.id !== liveId) follow(begun.id);
+              else if (
+                !gone &&
+                chosen.current.has(liveId) &&
+                (chosen.current.get(liveId) ?? null) !== (begun.colour ?? null)
+              ) {
+                /* **A colour chosen before the server had the row**: one `ask`
+                   was given, or a swatch pressed in the gap. This frame is the
+                   first moment there is a row to write it to — a PATCH sent
+                   earlier names an id the server may not have yet. `follow`
+                   does the same for a renamed row, one line up. */
+                recolour(liveId, chosen.current.get(liveId) ?? null);
+              }
               me.begun = true;
               if (!gone) {
                 if (fresh) put(begun);
@@ -759,8 +776,10 @@ export function useSearch(
   reviseRef.current = revise;
 
   const ask = useCallback(
-    (criterion: string, kind: SearchKind) => {
+    (criterion: string, kind: SearchKind, colour?: number) => {
       const id = mintId();
+      // Before `send`, so the pending row is painted in it — `put` reads `chosen`.
+      if (colour !== undefined) chosen.current.set(id, colour);
       send(id, criterion.trim(), kind, new Date().toISOString());
       return id;
     },

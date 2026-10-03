@@ -5,7 +5,7 @@
  *
  * The panel actually mounted and pressed: the third arm of the toggle asks
  * with its own kind, the draft survives a switch between quick and meaning,
- * a quick row says so and offers *flesh out* to its owner only, the
+ * a quick row says so and offers *thorough* to its owner only, the
  * "already searching" guard is per kind, and a quick hit's score explains
  * itself as a quick score rather than as the meaning model's confidence.
  *
@@ -20,6 +20,7 @@ import { assignSlots } from "../src/web/hit-colours.js";
 import type { Matcher } from "../src/web/params.js";
 import type { Found } from "../src/web/search-hits.js";
 import type { SavedSearch } from "../src/web/useSearch.js";
+import { readerCssNoComments } from "./helpers/stylesheets.js";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -156,8 +157,8 @@ function findButton(): HTMLButtonElement {
   return el;
 }
 
-function fleshOut(): HTMLButtonElement | null {
-  return container.querySelector<HTMLButtonElement>("button.srch-flesh");
+function thorough(): HTMLButtonElement | null {
+  return container.querySelector<HTMLButtonElement>("button.srch-thorough");
 }
 
 beforeEach(() => {
@@ -276,48 +277,91 @@ describe("a quick row", () => {
     expect(rows[1]?.querySelector(".srch-saved-kind")).toBeNull();
   });
 
-  it("offers its owner flesh out, which asks the same words as meaning and unticks it", async () => {
-    await mount({ access: owner(), runs: [QUICK, MEANING], start: "meaning", active: [QUICK.id] });
-    const buttons = container.querySelectorAll("button.srch-flesh");
+  /* What the owner of the rows does with that source id — delete the quick
+     row, hand on its colour and its tick — is tests/search-as-you-type.test.tsx
+     § thorough replaces the quick row. The panel only says which row. */
+  it("offers its owner thorough, which asks the same words as meaning and names the row it replaces", async () => {
+    const access = owner();
+    const sources: (string | undefined)[] = [];
+    if (access.kind === "owner") {
+      const ask = access.onAsk;
+      access.onAsk = (criterion, kind, sourceId) => {
+        sources.push(sourceId);
+        ask(criterion, kind);
+      };
+    }
+    await mount({ access, runs: [QUICK, MEANING], start: "meaning", active: [QUICK.id] });
+    const buttons = container.querySelectorAll("button.srch-thorough");
     expect(buttons, "only on the quick row").toHaveLength(1);
-    act(() => fleshOut()?.click());
+    expect(thorough()?.textContent).toBe("thorough");
+    expect(thorough()?.title).toContain("replaces this quick search");
+    expect(container.textContent?.toLowerCase()).not.toContain("flesh");
+    act(() => thorough()?.click());
     expect(asked).toEqual([[QUICK.criterion, "meaning"]]);
-    expect(toggled).toEqual([[QUICK.id, false]]);
+    expect(sources).toEqual([QUICK.id]);
+    expect(toggled, "the tick is the row owner's to move, with the delete").toEqual([]);
   });
 
-  it("offers no flesh out while that meaning search is already out", async () => {
-    const fleshing: SavedSearch = {
+  /** Greg's `spya-fwcwun`: the colour key, on a row that is not ticked as much as on one that is. */
+  it("shows each row's colour as a swatch beside its words, ticked or not, and not as a control", async () => {
+    await mount({ access: owner(), runs: [QUICK, MEANING], start: "meaning", active: [QUICK.id] });
+    const slots = assignSlots([QUICK, MEANING]);
+    const rows = [...container.querySelectorAll<HTMLElement>(".srch-saved-row")];
+    expect(rows).toHaveLength(2);
+    for (const [i, run] of [QUICK, MEANING].entries()) {
+      const swatches = rows[i]!.querySelectorAll(".srch-saved-swatch");
+      expect(swatches).toHaveLength(1);
+      const swatch = swatches[0]!;
+      expect(swatch.closest("button")?.className).toBe("srch-saved-body");
+      expect(swatch.tagName).toBe("SPAN");
+      expect(swatch.getAttribute("aria-hidden")).toBe("true");
+      // The colour is the row's, which the swatch and the edge both read.
+      expect(rows[i]!.getAttribute("style")).toContain(`var(--cat-${slots.get(run.id)}-rgb)`);
+      // The box is still its own target, outside the button.
+      expect(rows[i]!.querySelector(".srch-saved-tick")?.contains(swatch)).toBe(false);
+    }
+    const css = readerCssNoComments();
+    const rule = (selector: string) =>
+      new RegExp(`(?:^|})\\s*${selector.replace(".", "\\.")}\\s*{([^}]*)}`).exec(css)?.[1] ?? "";
+    // Full strength, with the neutral fallback, and no rule that waits for the tick.
+    expect(rule(".srch-saved-swatch")).toContain("background: rgb(var(--cat-rgb, var(--hit-wash-rgb)))");
+    expect(rule(".srch-saved-row")).toContain("border-left: 2px solid rgb(var(--cat-rgb, var(--hit-wash-rgb)))");
+    expect(css).not.toMatch(/\.srch-saved-row\.on\s*{[^}]*border/);
+  });
+
+  it("offers no thorough while that meaning search is already out", async () => {
+    const already: SavedSearch = {
       ...MEANING,
       id: "spya-mean3c",
       criterion: QUICK.criterion,
       status: "pending",
     };
     await mount({
-      access: owner(new Set([fleshing.id])),
-      runs: [QUICK, fleshing],
+      access: owner(new Set([already.id])),
+      runs: [QUICK, already],
       start: "meaning",
       active: [],
     });
-    expect(fleshOut()?.disabled).toBe(true);
-    act(() => fleshOut()?.click());
+    expect(thorough()?.disabled).toBe(true);
+    act(() => thorough()?.click());
     expect(asked).toEqual([]);
   });
 
-  it("offers no flesh out until it has finished", async () => {
+  it("offers no thorough until it has finished", async () => {
     await mount({
       access: owner(),
       runs: [{ ...QUICK, status: "pending" }],
       start: "quick",
       active: [],
     });
-    expect(fleshOut()).toBeNull();
+    expect(thorough()).toBeNull();
   });
 
   /** F6: a visitor sees the tag and the hits, and nothing that asks. */
-  it("shows a visitor the tag and no flesh out", async () => {
+  it("shows a visitor the tag and no thorough", async () => {
     await mount({ access: { kind: "visitor" }, runs: [QUICK], start: "meaning", active: [QUICK.id], found: [HIT] });
     expect(container.querySelector(".srch-saved-kind")?.textContent?.trim()).toBe("quick");
-    expect(fleshOut()).toBeNull();
+    expect(thorough()).toBeNull();
     expect(container.querySelectorAll(".srch-hit")).toHaveLength(1);
   });
 });

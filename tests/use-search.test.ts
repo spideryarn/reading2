@@ -660,7 +660,7 @@ describe("a run that begin answers under a new id", () => {
  * **A run's kind travels with it** — quick search, plan 261002e. The box asks
  * with the matcher's kind; a retry asks with the run's own, whatever the box
  * is on now; and "already running" is the same words *as the same kind*, so
- * *flesh out* can ask the meaning search while the quick one is still out
+ * *thorough* can ask the meaning search while the quick one is still out
  * (GPT Sol's plan review, F5).
  */
 describe("a search's kind", () => {

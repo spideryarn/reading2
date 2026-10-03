@@ -269,6 +269,16 @@ interface MarkBase {
    */
   quoteStroke?: QuoteStroke;
   /**
+   * **Paint nothing on these words** — `hit` marks only. A quick search's hit
+   * is its whole paragraph by design, so the paragraph bar and the spine mark
+   * say everything a wash over every line would (Greg, `spya-m59qg0`,
+   * 2026-10-03; plan 261003i B4). The mark is still drawn, with its
+   * `data-hit`, because the scroll and the flash find the passage by it
+   * (rows.ts § passageMarks) and the pressed ring hangs off it; it adds
+   * nothing to the wash, its strength or the stripes of a run it shares.
+   */
+  bare?: boolean;
+  /**
    * The accessible name of an `xref` mark — the whole phrase, which the first
    * piece carries as its `aria-label` so a phrase split across an `<em>` is
    * announced whole rather than as its first fragment. `xref` marks only.
@@ -536,7 +546,9 @@ function annotate(html: string, marks: readonly Mark[]): string {
            its bottom padding off. Before it, those were unconditional on
            `mark.hit` — so a quote arrived wearing a fill, which is the opposite
            of what a quote is supposed to look like. */
-        const washes = hits.filter((m) => m.quoteStroke === undefined);
+        /* A bare hit is neither: it is on the element for its `data-hit` and
+           its pressed state, and paints nothing — see `Mark.bare`. */
+        const washes = hits.filter((m) => m.quoteStroke === undefined && !m.bare);
         const quoted = hits.filter((m) => m.quoteStroke !== undefined);
         const style: string[] = [];
         if (washes.length > 0) {

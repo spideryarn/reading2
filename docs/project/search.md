@@ -86,7 +86,7 @@ empty one:
    ▬▬▭  where in the article the passage falls — on a literal result too
    ▐62▌how sure ▬▭ where   the legend, so neither mark is hover-only
    ┃    the bar down a matched paragraph, scaled HARDER than the wash
-   ▂    the wash, over the words the model actually quoted
+   ▂    the wash, over the words the model actually quoted (a quick hit has none)
 ```
 
 **Chat can now run both of these matchers as tools** — `search_article_meaning` is `findPassages`,
@@ -178,9 +178,11 @@ search asks it one yes/no question per block — *does this passage match what t
 for?* — all in one request, and keeps the blocks it says yes to. What follows from that shape:
 
 - **A hit is a whole paragraph.** Jev scores blocks, so there is no sentence inside one to quote;
-  the wash covers the paragraph, and the row and hover show a bounded preview of it rather than all
-  of it (the snippet caps above still hold).
-- **No reasoning line**, and that is what *flesh out* is for (below).
+  the row and hover show a bounded preview of it rather than all of it (the snippet caps above
+  still hold).
+- **Its words are not washed.** A quick hit draws the bar down its paragraph and the mark in the
+  spine, and nothing on the text (since 2026-10-03, below).
+- **No reasoning line**, and that is what *thorough* is for (below).
 - **The confidence is Jev's p(yes) × 100**, so a quick 88 and a meaning 88 are different numbers.
   It is still printed, because [§ The confidence](#the-confidence-and-the-unit-that-changed-silently)
   is about not hiding uncertainty; the row's *quick* tag, and each result's score explanation, say
@@ -202,12 +204,50 @@ for?* — all in one request, and keeps the blocks it says yes to. What follows 
   and *Prioritised* bar, and `search_runs.kind` says `'quick'` (meaning rows are `'meaning'`). The
   kind is stated on the row rather than inferred from the model, because a pending row has no model
   yet. It travels through export and the public reader, so a visitor sees the tag and the hits, and
-  never *flesh out*.
-- **Flesh out**, on a finished quick row, runs the full meaning search on the same words as a new
-  row and unticks the quick one so the two do not paint over each other. Kind is part of a run's
-  identity — retry resends with its own kind, and the guard against a duplicate in-flight search
-  is per kind and criterion — which is what lets the meaning search start while a quick one with
-  the same words is still on screen.
+  never *thorough*.
+- **Thorough**, on a finished quick row, runs the full meaning search on the same words and
+  **replaces** the quick row (below). Kind is part of a run's identity — retry resends with its own
+  kind, and the guard against a duplicate in-flight search is per kind and criterion — which is
+  what lets the meaning search start while a quick one with the same words is still on screen.
+
+### Thorough replaces the quick row, and a quick hit has no wash
+
+Both from Greg's reports of 2026-10-03; the plan is
+[261003i](../plans/261003i-quick-search-eval-thorough-replaces-quick-colour-key-and-no-wash.md).
+
+> If I do a quick search and then click flesh out, I think the flesh out should replace the quick
+> search because the flesh out version is presumably going to be better in every respect.
+>
+> — Greg, `spya-z4bae4`. And, `spya-pra2h3`: *"I don't think that phrase, flesh out, is very clear.
+> Perhaps we could replace it with 'thorough'."*
+
+The button was *flesh out* and kept both rows, unticking the quick one. Now one press does three
+things, all in the browser (`onAsk` in
+[`SearchMode.tsx`](../../src/web/modes/search/SearchMode.tsx)), with no server change:
+
+- **It asks the meaning search** for the same words, and ticks it.
+- **It deletes the quick row at once**, not when the meaning search succeeds. If the thorough search
+  fails, its row says so and has the retry button; the quick answer is gone, and is a second to ask
+  again. Deleting only on success was the plan's first version, and its review says what that would
+  have needed: a server-side replace, protection from the 30-row trim, and a new column.
+- **The new row wears the quick row's colour.** The slot the browser *resolved* for the quick row,
+  because an automatic colour is not stored. It is passed to `ask`, painted on the pending row, and
+  written with the ordinary colour PATCH once `begin` has said which row the server is using. So the
+  new row's colour is a pinned one from then on.
+
+> […] it looks like it also sort of highlights the actual text of the block with the same color,
+> which I think is probably not helpful because at the moment search only works at the level of a
+> block, so it doesn't make sense to highlight the actual text, and it's just a little bit too much
+> extra visual noise on top of all the other annotations we already have.
+>
+> — Greg, `spya-m59qg0`
+
+So a quick hit is **bare**: `Found.bare`, set from the run's kind, becomes `Mark.bare`, and
+`annotateHtml` leaves a bare mark out of the wash, its strength and the coloured rules. The
+`<mark>` is still drawn with its `data-hit`, because the scroll and the flash find the passage by it,
+and a pressed quick hit gets the ring without a wash. It is not the `whole` flag: that one means a
+meaning hit's quote could not be placed, and that hit keeps its wash, as a words match does. Whether
+a meaning hit should lose its wash too is [open](#what-is-still-open).
 
 **On the wire** it is the product's one call on OpenRouter's Decisions API, through its own gateway
 seam, `openRouterDecisions` in [`src/ai-call.ts`](../../src/ai-call.ts), as the job `search-quick` —
@@ -244,7 +284,7 @@ including shorter words, and ends the session; explicit submissions wait for the
 words sealed. The previous answer's marks stay on screen until the revision's arrive. The rules are a
 pure reducer, [`src/web/quick-session.ts`](../../src/web/quick-session.ts), and its header is the
 list; in short, a session **ends** on Enter or *find*, the box emptied, a matcher switch, ↺, ✕ or
-*flesh out* on its row, leaving the mode or the article, and the box blurred for longer than a
+*thorough* on its row, leaving the mode or the article, and the box blurred for longer than a
 pause — so a reader who searches, reads for five minutes and types again starts a new row rather
 than overwriting one they may want. Words left in a box are inert: remounting never asks.
 
@@ -736,6 +776,18 @@ across the lot, each row wearing its search's colour on a dot and its left edge.
 a sub-list per search — keeps provenance obvious but makes "the strongest match anywhere" a question
 the panel can no longer answer. So provenance moves into the row instead: the dot, the edge, the
 criterion in the hover card, and the criterion in the row's accessible name.
+
+**A saved row says its colour three times**: the box, a solid swatch beside its words, and its left
+edge. The swatch and the edge are at full strength whether or not the row is ticked.
+
+> In the Search mode UI, it's not obvious enough next to the search terms which color they
+> correspond to.
+>
+> — Greg, `spya-fwcwun`, 2026-10-03
+
+Until then the edge was at 30% on an unticked row and there was no swatch, so an unticked row barely
+said its colour at all. The swatch is decoration inside the row's own button, not a control; the
+palette icon is still how the colour is changed.
 
 ### Asking the next question before the last one answers
 
@@ -1433,8 +1485,13 @@ a hope.
   the first thing somebody will ask for.
 - **Quick search does not run as you type**, though a second is fast enough to tempt: every pause
   would be a saved row and a call. A natural v2, and the reason it has a *find* button too.
-- **A quick hit cannot point inside its paragraph.** Jev scores blocks, so the wash covers the whole
-  paragraph; the quote is what *flesh out* buys.
+- **A quick hit cannot point inside its paragraph.** Jev scores blocks, so it marks the whole
+  paragraph, with the bar and the spine only; the quote is what *thorough* buys.
+- **Should a meaning hit lose its wash too?** A quick hit's words are no longer washed
+  (`spya-m59qg0`). A meaning hit's still are, because there the words are a real quote inside the
+  paragraph. Greg has been asked; not decided.
+- **A failed thorough search has already cost the quick answer.** Accepted for v1, because it is a
+  second to ask again; the alternative is in the plan (261003i, B2).
 - **Quick scores wobble from run to run** — up to 0.17 between identical requests in the spike — so
   the order of close hits, and whether a block near 0.7 makes it in, is not stable. Another reason
   the row says *quick*. Its known failure is *about* versus *against*: "things Claude should never

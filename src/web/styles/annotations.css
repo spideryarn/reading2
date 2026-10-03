@@ -767,6 +767,15 @@ mark.hit[data-wash][data-hit-open] {
   background-color: rgb(var(--hit-wash-rgb) / calc(var(--hit-a) * 0.55));
   box-shadow: 0 0 0 1px rgb(var(--hit-wash-rgb) / 0.8);
 }
+/* **A pressed quick hit: the same ring, and no wash.** A quick hit paints
+   nothing on its words (annotate.ts § `Mark.bare`), so it has no `data-wash`
+   for the rule above to hang off — and without this one, pressing its row
+   would show nothing in the prose at all. The ring alone, because the reader
+   asked which paragraph this row is; a wash is what they asked not to see
+   (`spya-m59qg0`, plan 261003i B4). */
+mark.hit[data-hit-open]:not([data-wash]):not([data-quote]) {
+  box-shadow: 0 0 0 1px rgb(var(--hit-wash-rgb) / 0.8);
+}
 /* **A pressed quote changes colour rather than getting thicker**, and that took
    three attempts to get right. The first two added pixels to the ring — a
    stroke, a 1px gap, then a halo — and both failed the only test that matters:
