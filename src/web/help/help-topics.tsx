@@ -367,7 +367,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             the next term. <kbd>Esc</kbd> takes you back.
           </li>
           <li>
-            <kbd>⌘ Enter</kbd> / <kbd>Ctrl Enter</kbd> opens the article’s Metadata page. In a box you
+            <kbd>⌘ Enter</kbd> / <kbd>Ctrl Enter</kbd> opens the article’s Metadata page, and on it
+            takes you back to the article, as pressing <strong>Metadata</strong> again does. In a box you
             are typing in — a comment, feedback, a quiz answer — it saves or sends instead, and plain{" "}
             <kbd>Enter</kbd> starts a new line.
           </li>

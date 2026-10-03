@@ -22,7 +22,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GlossaryOwner } from "../src/web/GlossaryPanel.js";
-import type { BlockId, Glossary } from "../src/types.js";
+import type { BlockId, Glossary, Job } from "../src/types.js";
+import { DRIVER_STALLED } from "../src/job-state.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -249,5 +250,56 @@ describe("where the run row is, and what it says", () => {
   it("while a run is going, shows its progress in the same place", async () => {
     await mount(owner(glossary(null), { starting: true }));
     expect(host.querySelector(".gloss-more")?.textContent).toMatch(/starting/i);
+  });
+
+  /* Moving the stale banner's progress into the run row must carry its
+     transport warning and Retry too — a healthy poll is not proof the tab
+     can advance the job. Code review of 261003c. */
+  it.each([false, true])("keeps the stalled-job warning in the one run row (stale: %s)", async (stale) => {
+    const job: Job = {
+      id: "job-glossary",
+      ownerId: "owner" as Job["ownerId"],
+      slug: "constitution",
+      status: "running",
+      createdAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      steps: [{ name: "glossary", label: "Finding the terms", status: "running" }],
+    };
+    await mount(owner(glossary(null), { stale, job, stalled: true }));
+    expect(host.querySelector(".gloss-more")?.textContent).toContain(DRIVER_STALLED);
+    expect(host.textContent?.split(DRIVER_STALLED)).toHaveLength(2);
+    await mount(owner(glossary(null), { stale, job, stalled: false }));
+    expect(host.textContent).not.toContain(DRIVER_STALLED);
+    expect(host.querySelector(".gloss-more")?.textContent).toContain("Stop");
+  });
+
+  it("retries a failed stale-list job rather than sending a fresh run", async () => {
+    const retry = vi.fn(async () => {});
+    const more = vi.fn(async () => {});
+    await mount(owner(glossary(null), {
+      stale: true,
+      more,
+      failed: { message: "The connection failed.", retryable: true, retry },
+    }));
+    const button = [...host.querySelectorAll<HTMLButtonElement>(".gloss-more button")]
+      .find((b) => b.textContent?.includes("Retry"));
+    expect(button, "no Retry for the failed job").toBeDefined();
+    await act(async () => button?.click());
+    expect(retry).toHaveBeenCalledOnce();
+    expect(more).not.toHaveBeenCalled();
+  });
+
+  it("offers no paid run under a stale-list failure another go cannot fix", async () => {
+    await mount(owner(glossary(null), {
+      stale: true,
+      failed: { message: "The article is too long.", retryable: false, retry: null },
+    }));
+    expect(host.querySelector(".gloss-more")?.textContent).toContain("The article is too long.");
+    expect(host.querySelector(".gloss-more button")).toBeNull();
+  });
+
+  it("keeps the run button for an owner's zero-entry list", async () => {
+    await mount(owner({ ...glossary(null), entries: [] }, {}));
+    expect(moreButton()?.textContent).toMatch(/find more/i);
   });
 });

@@ -24,7 +24,7 @@ until you know what they are for.
  ┌─────────────┬─────────────────────┬─────────────────────────┐
  │             │  Mode: glossary   back to contents              │
  │  ▇▇▇▇▇▇▇▇   ├─────────────────────┼─────────────────────────┤
- │  ▇▇▇▇▇      │ Glossary    24 terms│ … a broadly nonreductive│
+ │  ▇▇▇▇▇      │ 🔍 Find more        │ … a broadly nonreductive│
  │  ▇▇▇        │ order [prioritised] │   explanation of what it│
  │  ▇▇▇▇▇▇▇    │   first use hardest │   ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈   │
  │  ▇▇         ├─────────────────────┤   is like to be an      │
@@ -55,9 +55,6 @@ until you know what they are for.
  │             │   k3m9qt qw82nf      │                         │
  │             │ interoception d·66 c·61                        │
  │             │ …                   │                         │
- │             ├─────────────────────┤                         │
- │             │ ☐ use my profile    │                         │
- │             │ 🔍 Find more        │                         │
  ├─────────────┴─────────────────────┴─────────────────────────┤
  │ ⊞Hierarchy ▤Summary 📖Glossary ● 🔍Search ⌸Chat  …            │
  └─────────────────────────────────────────────────────────────┘
@@ -195,6 +192,28 @@ glossary is the one of the five that already had this right: forcing this step *
 `find` was never allowed to force. The second is "Find more". There is no command line: the stage's
 own one was deleted on 2026-09-01 as a second way to do this
 ([setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages)).
+
+### The run row: Find more, or Find terms again
+
+> There used to be a Find More button in Glossary mode. Add it back, at the top of the column
+>
+> — Greg, 2026-10-02 (spya-s660yh)
+
+The owner's one run button is the band's **first row**, above *Look up a term*, on every finished
+list. It was the band's foot until 2026-10-03, and hidden there on an outdated list. Its press is
+always the forced run, in the list's own profile setting (`more(profiled)`), but the forced run does
+not always append: `existingFor` merges only when the article, the prompt version and the profile
+all match. So the button is labelled by what it will do — **Find more** when it appends, **Find
+terms again** when it rewrites — and the glossary read says which: `panelRun` on
+`GET /api/glossary/:slug`, from `panelRunKind` in [src/glossary.ts](../../src/glossary.ts), computed
+in the route beside `profileChanged` because the profile half needs the reader's current profile.
+That includes the case `profileChanged` leaves out on purpose: a list written for a profile the
+reader has since **cleared** is run plainly, so it rewrites. A rewrite keeps the terms the reader
+added (they are outside the document) and, when the article has not changed, the ids of terms it
+finds again under the same name; a
+term it does not find again goes, with whatever was attached to it, and the tooltip says so. The
+stale banner says the article has moved and leaves the button to this row.
+[261003c](../plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md).
 
 ## The two bugs this feature is shaped around
 
@@ -606,9 +625,11 @@ reason the section above gives. The concept-allusion pair was added in round-2 r
 `after-7` and `after-8` reran it, but ordinary definitions still landed in `senseHere` as often as
 under the old prompt. The bump marked every owner's older glossary *outdated*, which at the time
 drew the *written by a different version* banner as the migration; since 2026-09-29 that banner is
-gone and an outdated glossary is not announced, has no *Find more* (its run would replace, not
-append), and is rewritten from Metadata — Greg, SPIDERYARN-READING2-55
-([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)).
+gone and an outdated glossary is not announced — Greg, SPIDERYARN-READING2-55
+([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). It also hid
+*Find more* on such a list, because its run would replace rather than append; that hid the button
+on most lists, Greg's included, and since 2026-10-03 the button is back, at the top of the band,
+labelled for what it will do — [§ The run row](#the-run-row-find-more-or-find-terms-again).
 [260926a](../plans/260926a-plainer-summaries-and-glossary.md).
 
 ### Name the thing, not the topic
@@ -1248,11 +1269,8 @@ hand. [260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md
 
 ## Finding more
 
-One button in the foot, and one thing it does:
-
-| | What it does | How |
-|---|---|---|
-| **Find more** | another pass, told what it already has, appended to the list | `force: ["glossary"]` on the job — the step is current, so nothing else would run it |
+The [run row](#the-run-row-find-more-or-find-terms-again) is the one button at the top of the
+column. Its forced run appends only when `existingFor` accepts the list; otherwise it rewrites.
 
 ### There was a *Start again* beside it, and it went
 

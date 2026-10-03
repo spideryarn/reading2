@@ -110,3 +110,24 @@ encoded `%70anel=` → predates this work and is not touched; noted here.
 
 `docs/project/glossary.md`, `docs/project/url-state.md` if it lists the link, the Help page's
 modes text, feedback notes for both reports.
+
+## Code review
+
+GPT Sol's code review (`261003c-code-review-sol.md`) found no P0/P1 and fixed two P2s inside the
+stage: the run row now passes `owner.stalled` (the stale banner had carried the stalled warning),
+and a failed job is drawn by `JobProgress` with its own Retry policy rather than a fresh paid run
+under every failure. Postmortem:
+[261003a](../postmortems/261003a-consolidating-duplicate-controls-keeps-the-survivors-omissions.md).
+It also added `panelRun` assertions to `tests/route-profile-concurrency.test.ts`, including the
+cleared-profile case. The Help page's "without adding it to the list" (stale since 261002f) is
+corrected. Left as is: `carriedSearch` keeping an encoded `%70anel=`, which predates this work.
+
+## Browser check
+
+Playwright on the box, 1400px and 390px, at 1e42388eb (before the code review's two fixes,
+which do not change the idle row). The run row is the column's first row on both widths, clear of
+the (i); one button, none in the foot. Both labels seen locally and each matched `panelRun`:
+*Find more* on `fowler-phrenology` (`append`), *Find terms again* on `smart-spya-fq4q5h`
+(`rewrite`, profile changed), and on most other local lists. Metadata pressed on Metadata, and
+Ctrl-Enter there, returned to `/read/fowler-phrenology?mode=glossary&at=spya-ntpaad` with the
+band open and, on the phone, that block at the top. No page errors. Shots in `261003c-shots/`.

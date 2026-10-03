@@ -359,7 +359,10 @@ doing it pushed the parameter. See [search.md § The URL](search.md#the-url).
 same article, and which page you are on is not something you would want to reset by changing a
 parameter. An unknown third segment is the shelf too. The query string travels between all three, so
 stepping out to the metadata page and back returns you to the paragraph you left; `?panel=` is the
-one thing left behind, because a drawer is not a place you were. See `carriedSearch` in
+one thing left behind, because a drawer is not a place you were. The way back is the bar's own
+Metadata button, pressed again (or ⌘-Enter): on the metadata page it points at the article with the
+same query string, so a second press closes Metadata the way it closes a band — Greg, 2026-10-02,
+spya-bpczdx ([261003c](../plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md)). See `carriedSearch` in
 [`router.ts`](../../src/web/router.ts) and
 [library.md § The routes](library.md#the-routes).
 

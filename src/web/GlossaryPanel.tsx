@@ -378,6 +378,7 @@ export function GlossaryPanel({
           job={owner.job}
           starting={owner.starting}
           failed={owner.failed}
+          stalled={owner.stalled}
           /* The server's verdict when it gave one (`panelRunKind`, which
              also sees a changed or cleared profile); otherwise the two facts
              the panel has. Plan 261003c, GPT Sol's plan review P1. */
@@ -2196,6 +2197,7 @@ function MoreRow({
   job,
   starting,
   failed,
+  stalled,
   rewrites,
   onMore,
   onCancel,
@@ -2215,6 +2217,8 @@ function MoreRow({
    */
   starting: boolean;
   failed: StepFailure | null;
+  /** The tab can see this job but cannot advance it — `useStepJob.stalled`. */
+  stalled: boolean;
   /**
    * **This press writes a fresh list rather than adding to this one** —
    * `existingFor` (src/glossary.ts) refuses to merge when the article, the
@@ -2235,17 +2239,17 @@ function MoreRow({
   const title = rewrites
     ? "Writes a fresh list rather than adding to this one, so some terms here may not come back. Terms you added are kept"
     : "Another model call, told what it has already found, looking for the quieter terms";
-  if (job || starting) {
+  /* The stale banner used to own the transport warning and the failed job's
+     Retry. Consolidating the controls must carry both, not just the spinner
+     and Stop — code review of plan 261003c. */
+  if (job || starting || failed) {
     return (
       <div className="gloss-more">
         <Progress
           job={job}
           starting={starting}
-          failed={null}
-          /* Not reachable from here: `stalled` is about a job of ours the queue
-             has stopped advancing, and the surface that warns about it is the
-             shelf card — useStepJob.ts § `stalled`. */
-          stalled={false}
+          failed={failed}
+          stalled={stalled}
           onRun={() => onMore()}
           onCancel={onCancel}
           label={label}
@@ -2262,8 +2266,6 @@ function MoreRow({
           {label}
         </button>
       </div>
-
-      {failed && <p className="gloss-error">{failed.message}</p>}
     </div>
   );
 }

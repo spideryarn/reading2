@@ -242,6 +242,22 @@ describe("⌘/Ctrl-Enter is left alone", () => {
    case asserted the press was left alone ("nothing to toggle back to", plan
    260929g). docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 2. */
 describe("⌘/Ctrl-Enter on the Metadata page", () => {
+  it.each(["input", "textarea"])("leaves a Metadata %s's chord alone", (tag) => {
+    const start = "/read/a-piece/metadata?mode=glossary";
+    history.replaceState(null, "", start);
+    mount({ view: "metadata" });
+    focusOn(document.createElement(tag));
+    expect(press()).toBe(false);
+    expect(here()).toBe(start);
+  });
+
+  it("returns from a visitor's public Metadata page with the carried search", () => {
+    history.replaceState(null, "", "/read/a-piece/metadata?mode=glossary&margin=1&panel=questions");
+    mount({ view: "metadata", visitor: true, onMode: undefined, mode: undefined });
+    expect(press({ metaKey: false, ctrlKey: true })).toBe(true);
+    expect(here()).toBe("/read/a-piece?mode=glossary&margin=1");
+  });
+
   it("goes back to the article, carrying the mode and the place", () => {
     history.replaceState(null, "", "/read/a-piece/metadata?mode=glossary&at=spya-k3m9qt");
     act(() => {
