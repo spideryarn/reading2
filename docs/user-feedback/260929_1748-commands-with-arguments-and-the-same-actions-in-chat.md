@@ -41,18 +41,20 @@ left; everything is in
 
 - **Jump to the first place it says X.** Type *jump to first free energy* or *where does it first
   mention free energy*. Enter takes you to that passage, and Back returns you.
-- **Look up X in the glossary.** *define X* or *look up X* opens the glossary's entry if it has one.
-  If it has not, the row offers to look the term up in the article (one model call, marked as such).
+- **Look up X in the glossary.** *define X* or *look up X* opens a matching entry in the glossary's
+  visible list. Otherwise the row offers to look the term up in the article (one model call, marked
+  as such).
 - **Tags.** *tag X*, *add a tag of X to this paper*, *untag X*.
 - **Experimental features on or off**, as one row whose label follows the switch, rather than two
   rows with one greyed out.
 - **Dictation** in the bar's box.
-- **The same actions in chat.** Ask chat to bookmark a passage, tag the article, find or jump to
-  some words, or look up a term, and its answer carries a button for it. Nothing happens until you
-  press it, which is the rule you accepted on 2026-10-02
-  ([chat-tools.md](../project/chat-tools.md), § Command buttons). The bar and chat run one shared
-  list of commands, so a command added to one is a line away from the other. The prompt change was
-  measured: [261003b](../investigations/261003b-chat-proposes-commands-as-chips.md).
+- **The same actions in chat.** Chat can offer a button when asked to bookmark a passage, tag the
+  article, find or jump to some words, or look up a term. Nothing happens until you press it, which
+  is the rule you accepted on 2026-10-02
+  ([chat-tools.md](../project/chat-tools.md), § Command buttons). The bar and chat share the command
+  proposal and dispatcher; chat has its own explicit allowlist of which proposals it may offer.
+  The prompt change was measured, including the requests where the model omitted the button:
+  [261003b](../investigations/261003b-chat-proposes-commands-as-chips.md).
 
 **Not done, each on purpose:**
 

@@ -167,10 +167,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           you rewrite your question.
         </p>
         <p>
-          <strong>Buttons in an answer.</strong> Ask Chat to bookmark a passage, add or remove a tag,
-          look a term up in the glossary, or show where the article first says something, and its
-          answer ends with a button for it. Nothing happens until you press the button; Chat cannot
-          do any of these itself.
+          <strong>Buttons in an answer.</strong> Chat can offer a button when you ask it to bookmark a
+          passage, add or remove a tag, look a term up in the glossary, or show where the article first
+          says something. Nothing happens until you press the button; Chat cannot do any of these
+          itself.
         </p>
         <p>
           <strong>Talking instead of typing.</strong> The microphone turns your speech into text in

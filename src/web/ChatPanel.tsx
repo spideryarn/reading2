@@ -88,6 +88,7 @@ import type {
 import { isSingleThreadKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
 import { useChatCommands } from "./CommandChip.js";
+import { chipFor } from "./chat-commands.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -1421,6 +1422,7 @@ function Turn({
    */
   const pencil = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(editing);
+  const commands = useChatCommands() ?? undefined;
   useEffect(() => {
     if (wasEditing.current && !editing) pencil.current?.focus();
     wasEditing.current = editing;
@@ -1556,7 +1558,14 @@ function Turn({
       <WebSources citations={message.citations} />
       {message.status !== "pending" && (
         <div className="chat-actions">
-          {message.text !== "" && <CopyAnswer text={withoutCommandLines(message.text)} />}
+          {message.text !== "" && (
+            <CopyAnswer
+              text={withoutCommandLines(
+                message.text,
+                (raw) => commands !== undefined && chipFor(raw, commands, blocks) !== null,
+              )}
+            />
+          )}
           {/* "Answer again" is a regenerate, not only a retry — it is offered on
               a perfectly good answer too. So the extra condition is narrow: it
               disappears only when this turn *failed*, and failed in a way that
