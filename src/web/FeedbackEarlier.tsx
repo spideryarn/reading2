@@ -68,12 +68,24 @@ type EarlierStates = Record<EarlierFeedbackShow, EarlierState>;
 
 const IDLE: EarlierStates = { all: { kind: "idle" }, shipped: { kind: "idle" }, unshipped: { kind: "idle" } };
 
-/** A 200 is only success when it carries the wire shape the panel can render. */
-function isEarlierFeedbackPage(value: unknown): value is EarlierFeedbackPage {
+/**
+ * A 200 is only success when it carries the wire shape the panel can render —
+ * and counts that agree with themselves and with the list they came with, so
+ * neither a pill nor "of N" can say something the list contradicts.
+ */
+function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): value is EarlierFeedbackPage {
   if (typeof value !== "object" || value === null) return false;
   const page = value as Record<string, unknown>;
   if (!Array.isArray(page.reports) || typeof page.more !== "boolean") return false;
-  return page.reports.every((value: unknown) => {
+  if (typeof page.counts !== "object" || page.counts === null) return false;
+  const counts = page.counts as Record<string, unknown>;
+  const { all, shipped, unshipped } = counts;
+  if (![all, shipped, unshipped].every((n) => Number.isSafeInteger(n) && (n as number) >= 0)) return false;
+  if ((all as number) !== (shipped as number) + (unshipped as number)) return false;
+  const here = counts[which] as number;
+  if (page.more && page.reports.length !== EARLIER_FEEDBACK_LIMIT) return false;
+  if (page.reports.length > here || page.more !== (here > page.reports.length)) return false;
+  if (!page.reports.every((value: unknown) => {
     if (typeof value !== "object" || value === null) return false;
     const report = value as Record<string, unknown>;
     return (
@@ -84,12 +96,30 @@ function isEarlierFeedbackPage(value: unknown): value is EarlierFeedbackPage {
       typeof report.body === "string" &&
       typeof report.shipped === "boolean"
     );
-  });
+  })) return false;
+  const reports = page.reports as EarlierFeedbackPage["reports"];
+  /* A store row is unique by (owner, id), and each row's shipped flag comes
+     from the same map as the counts. Reject a response that could make a
+     filtered page show the wrong kind of row, or make React reconcile two
+     rows through the same key. */
+  if (new Set(reports.map((report) => report.id)).size !== reports.length) return false;
+  const listedShipped = reports.filter((report) => report.shipped).length;
+  if (listedShipped > (shipped as number) || reports.length - listedShipped > (unshipped as number)) {
+    return false;
+  }
+  if (which !== "all" && reports.some((report) => report.shipped !== (which === "shipped"))) return false;
+  return true;
 }
 
 export interface EarlierFeedback {
   /** The state of the filter showing. */
   earlier: EarlierState;
+  /**
+   * How many under each filter, from the showing filter's answer if it has
+   * one and otherwise any other answer in this opening; `null` until one
+   * lands. Every answer carries all three, so the first read labels every pill.
+   */
+  counts: EarlierFeedbackPage["counts"] | null;
   show: EarlierFeedbackShow;
   setShow(show: EarlierFeedbackShow): void;
   retry(): void;
@@ -122,7 +152,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean): EarlierFeedb
       }
       const page: unknown = await res.json();
       settle(
-        isEarlierFeedbackPage(page)
+        isEarlierFeedbackPage(page, which)
           ? { kind: "loaded", page }
           : { kind: "failed", message: FEEDBACK_EARLIER_FAILED.message },
       );
@@ -149,7 +179,16 @@ export function useEarlierFeedback(open: boolean, wanted: boolean): EarlierFeedb
     if (open && wanted && earlier.kind === "idle") void load(show);
   }, [open, wanted, earlier.kind, show, load]);
 
-  return { earlier, show, setShow, retry: () => void load(show) };
+  let counts: EarlierFeedbackPage["counts"] | null = null;
+  for (const which of [show, ...EARLIER_FEEDBACK_SHOWS]) {
+    const state = states[which];
+    if (state.kind === "loaded") {
+      counts = state.page.counts;
+      break;
+    }
+  }
+
+  return { earlier, counts, show, setShow, retry: () => void load(show) };
 }
 
 /** Shorter than the toggle's "A problem": this is a label on a row, not a choice. */
@@ -169,6 +208,13 @@ const EMPTY: Record<EarlierFeedbackShow, string> = {
   all: "You haven't sent us any feedback yet.",
   shipped: "None of your reports has a shipped change yet.",
   unshipped: "Every report you've sent has a shipped change.",
+};
+
+/** What the cap line counts: "of your 45 not-shipped reports" (261003b). */
+const CAP_NOUN: Record<EarlierFeedbackShow, string> = {
+  all: "reports",
+  shipped: "shipped reports",
+  unshipped: "not-shipped reports",
 };
 
 const SHIPPED_TITLE = "We shipped a change for this, and it is in the version of Spideryarn you're using.";
@@ -195,12 +241,22 @@ function when(iso: string, now: number): string {
  * All · Shipped · Not shipped. `aria-pressed` buttons in a fieldset, the same shape as the
  * Problem / Suggestion toggle; every one `type="button"` so none can submit
  * the hidden Write form.
+ *
+ * > Perhaps include a number/badge in the tab-pills for Shipped and Not shipped?
+ * >
+ * > — Greg, 2026-10-01 (SPIDERYARN-READING2-95)
+ *
+ * Each pill carries its count once an answer has landed, and nothing before:
+ * a pill never shows a guess. All has one too, or it would look as though All
+ * had no number. docs/plans/261003b-earlier-tab-counts-on-the-pills.md.
  */
 export function EarlierFilter({
   show,
+  counts,
   onShow,
 }: {
   show: EarlierFeedbackShow;
+  counts: EarlierFeedbackPage["counts"] | null;
   onShow(show: EarlierFeedbackShow): void;
 }) {
   return (
@@ -215,6 +271,12 @@ export function EarlierFilter({
           onClick={() => onShow(which)}
         >
           {SHOW_WORD[which]}
+          {counts === null ? null : (
+            <>
+              {" "}
+              <span className="fb-show-count">{counts[which]}</span>
+            </>
+          )}
         </button>
       ))}
     </fieldset>
@@ -253,7 +315,7 @@ export function EarlierList({
         </div>
       );
     case "loaded": {
-      const { reports, more } = earlier.page;
+      const { reports, more, counts } = earlier.page;
       /* Once per render, so every row is measured from the same moment. */
       const now = Date.now();
       if (reports.length === 0) {
@@ -293,7 +355,11 @@ export function EarlierList({
             ))}
           </ol>
           {more ? (
-            <p className="fb-earlier-status">Showing your {EARLIER_FEEDBACK_LIMIT} most recent.</p>
+            /* "of N", so the reader need not take the cap on trust
+               (SPIDERYARN-READING2-95: "Is that true?"). */
+            <p className="fb-earlier-status">
+              Showing the {EARLIER_FEEDBACK_LIMIT} most recent of your {counts[show]} {CAP_NOUN[show]}.
+            </p>
           ) : null}
         </>
       );
