@@ -2166,7 +2166,6 @@ export function Reader({
    *    hand-off (glossary-ask-handoff.ts), not the address.
    *  - `bookmark` under the same gate as the prose's own bookmark button (F6).
    */
-  const isOwner = owner !== null;
   const glossaryReady = glossaryRead?.status === "ready" && glossaryRead.glossary !== null;
   const canBookmark = owner !== null && owner.comments.loaded && owner.comments.loadError === null;
   const executor = useMemo(
