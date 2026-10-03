@@ -254,6 +254,8 @@ export function Reader({
    * drift apart. The visitor's `available` is read the same way.
    */
   const owner = capability.kind === "owner" ? capability : null;
+  /** The same fact as a boolean, for a hook that needs only that — `owner` is a new object every render. */
+  const isOwner = owner !== null;
   /**
    * The visitor's half, read the same way and for the same reason.
    *
@@ -2153,7 +2155,7 @@ export function Reader({
          press. So it is silent: they keep their selection and the page does not
          grow a box about an account. The ask lives where they went looking for
          something — the marked modes and the notice under the title. */
-      if (!owner) return;
+      if (!isOwner) return;
       /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
          call the reader had not asked for; then it opened an ask box; since
          2026-08-28 it opens a *comment* box, where saving is free and the model
@@ -2169,7 +2171,13 @@ export function Reader({
          stored until the reader asks — so clearing it would leave them looking
          at a quote in a box with no idea which words on the page it came from. */
     },
-    [owner, setNote, setThread],
+    /* **`isOwner`, not `owner`.** The capability is a new object on every
+       render of `OwnedReader` (ArticlePage.tsx), and a reading-time step is one
+       of those — so depending on the object made this a new function each
+       time, and it is `memo(TableView)`'s `onSelect`. GPT Sol's F2 on
+       docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md;
+       tests/spine-reading.test.ts reads this list. */
+    [isOwner, setNote, setThread],
   );
 
   /**
@@ -2790,7 +2798,7 @@ export function Reader({
           outline={outline}
           layoutKey={layoutKey}
           matches={hitBlocks}
-          reading={owner?.readingTime.levels}
+          reading={owner?.readingTime.reach}
           quotes={quoteRail}
           onJump={jumpTo}
         />

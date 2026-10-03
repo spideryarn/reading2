@@ -101,6 +101,18 @@
   --chat-mark: oklch(0.72 0.12 235);
   --chat-mark-wash: color-mix(in oklab, var(--chat-mark) 18%, var(--page));
 
+  /* **Where you have spent time reading**, on the spine: the area's fill (at
+     0.4) and its edge (opaque) — spine.css § reading time. A cyan, because the
+     rail's own ground is the part tint, an orange at hue ~52, and this has to
+     be told from it at a glance in a strip twelve pixels wide. It sits between
+     the quote strip's green (~165) and `--chat-mark`'s blue (235) and is
+     lighter than either. **Not a hue nothing else uses** — there is none left
+     (styles/tokens.css § --quote-stroke-rgb says the same): two of the
+     reader-picked search colours, `--cat-11` and `--cat-12`, are its
+     neighbours, and are told from it by being thin lanes on the rail's other
+     side. docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md. */
+  --read-time: oklch(0.82 0.11 200);
+
   /* **A highlight's four washes** — the reader's own colours, stored by name on
      the comment (`HighlightColour`, src/types.ts) so they can be retuned here
      without a migration. docs/plans/261003e-span-highlights-with-a-colour.md.
@@ -438,6 +450,8 @@
   --toward-page: white;
   --toward-ink-rgb: 0 0 0;
   --chat-mark: oklch(0.52 0.13 235);
+  /* The same cyan, darkened: on the light rail the edge has to be a dark line. */
+  --read-time: oklch(0.5 0.1 200);
 
   /* The reader's four highlighter washes (span highlights, plan 261003e-span-highlights): the
      same bases, mixed into the light page a little harder, because a share

@@ -1,7 +1,7 @@
 # Reading time — where you have spent time in the piece
 
-**The spine is thicker where you have spent longer, and a faint hairline beside each passage says
-the same thing up close.** It is there so a reader who has been thrown around the article — by a
+**The spine carries a tinted area that reaches further across where you have spent longer, with a
+line down its edge, and a faint hairline beside each passage says the same thing up close.** It is there so a reader who has been thrown around the article — by a
 citation, a search hit, a rotation — can find the place they had got to by eye. Part of
 [reading-view-overview.md](reading-view-overview.md). The plan, and every number's reasoning, is
 [260916c](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md).
@@ -25,9 +25,29 @@ and the drawing.
   counts) in the last five minutes, and the prose on screen. `Reader` decides the last of those,
   because `.band-covers` is also set when no band is open.
   [`useReadingTime.ts`](../../src/web/useReadingTime.ts) header.
-- **Thickness is per block and absolute**: four steps of the time spent over the time the block takes
-  to read at 230 words a minute, never under a second. Not relative to the most-read block, which
-  would make everything else look unread. `readLevel`.
+- **The amount is per block and absolute**: the time spent over the time the block takes to read at
+  230 words a minute, never under a second. Not relative to the most-read block, which would make
+  everything else look unread. The gutter reads it as four levels, `readLevel`; the spine reads it
+  as a **reach in sixteenths of the rail**, `readReach`, on the same scale, so a level is always the
+  reach's quarter and the boundaries below are where they were.
+- **On the spine it is an area chart on its side**, since 2026-10-03: a semi-opaque area in a colour
+  of its own (`--read-time`) from the left edge out to each block's reach, and an opaque line down
+  its right-hand edge. An unread stretch has neither. Before that it was four widths of a faint
+  `--ink` bar, which read as a paler part tint.
+
+  > I think the spine is now indicating which bits I have spent time reading and which bits I haven't,
+  > but I can't make sense of it. I wondered about having, using some kind of horizontal line or area,
+  > like an area chart, but sort of rotated 90 degrees, where the, yeah, I'm almost imagining like a
+  > water level but rotated 90 degrees. So the distance from the left-hand margin would be an
+  > indication of how much time I've spent reading it, and maybe the area would have some kind of
+  > semi-opaque color that it adds. And so I could just look at a glance and see that wiggly line going
+  > down to show which bits I've read the most, or something else. But right now I can't easily tell
+  > what I've read and what I haven't.
+  >
+  > — Greg, 2026-10-03 (spya-jhe9mc)
+
+  [261003j](../plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md).
+  spine-marks.ts § `readingAreaPaths`, spine.css § reading time.
 - **Each level's elapsed-time threshold doubles**: 0.35, 0.7, 1.4 and 2.8 of the reading time. A
   glance draws nothing, one brisk read is faint, and full strength takes a slow read or nearly
   three. 0.7 is a boundary because it is the quiz's "read".
