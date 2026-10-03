@@ -1,0 +1,134 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>spike gpt-live browser tool loop</title>
+<body style="font:13px monospace">
+<p>Query: audio=silent|tiny|tone|mic · ask=text · askAfter=ms · delay=ms · allow=1|min · bigInstr=words · bigBackend=words · auto=1</p>
+<button id="go">Start</button> <button id="askb">Ask (typed)</button> <button id="closeb">session.close</button>
+<pre id="log" style="white-space:pre-wrap"></pre>
+<audio id="out" autoplay></audio>
+<script>
+const q = new URLSearchParams(location.search);
+const T0 = performance.now();
+window.__events = [];
+window.__notes = {};
+const pre = document.getElementById('log');
+function rec(dir, ev) {
+  const t = Math.round(performance.now() - T0);
+  window.__events.push({ t, wall: Date.now(), dir, ev });
+  const inner = ev.type === 'response.event' ? '/' + ev.event?.type : '';
+  pre.textContent += `${String(t).padStart(6)} ${dir} ${ev.type}${inner} ${JSON.stringify(ev).slice(0, 300)}\n`;
+}
+const note = (k, v) => { window.__notes[k] = v; rec('note', { type: 'note.' + k, v }); };
+
+let pc, dc, sender;
+const active = new Map();   // delegation -> current nested response id
+const pending = new Map();  // delegation\0response -> [{call_id,name,arguments}]
+const ran = new Set();
+const send = (ev) => { rec('out', ev); dc.send(JSON.stringify(ev)); };
+
+async function synthTrack(kind) {
+  const ctx = new AudioContext();
+  try { await ctx.resume(); } catch (e) { note('ctxResumeError', String(e)); }
+  note('audioContextState', ctx.state);
+  const osc = ctx.createOscillator(); osc.frequency.value = 440;
+  const gain = ctx.createGain();
+  gain.gain.value = kind === 'silent' ? 0 : kind === 'tiny' ? 0.0005 : 0.2;
+  const dest = ctx.createMediaStreamDestination();
+  osc.connect(gain).connect(dest); osc.start();
+  window.__ctx = ctx;
+  return { track: dest.stream.getAudioTracks()[0], stream: dest.stream };
+}
+
+// Peak level of the voice's audio, sampled every 250ms, so "it spoke" does not rest on transcripts.
+window.__levels = [];
+function meter(stream) {
+  const ctx = new AudioContext();
+  const an = ctx.createAnalyser(); an.fftSize = 2048;
+  ctx.createMediaStreamSource(stream).connect(an);
+  const buf = new Float32Array(an.fftSize);
+  setInterval(() => {
+    an.getFloatTimeDomainData(buf);
+    let peak = 0; for (const v of buf) peak = Math.max(peak, Math.abs(v));
+    window.__levels.push({ t: Math.round(performance.now() - T0), peak: Math.round(peak * 1000) / 1000 });
+  }, 250);
+}
+
+async function onBackend(delegationId, ev) {
+  const d = delegationId ?? 'uncorrelated';
+  if (ev.type === 'response.created' && ev.response?.id) { active.set(d, ev.response.id); return; }
+  if (ev.type === 'response.output_item.done' && ev.item?.type === 'function_call' && ev.item.call_id) {
+    if (ran.has(ev.item.call_id)) return;
+    ran.add(ev.item.call_id);
+    const rid = active.get(d);
+    const key = d + '\0' + rid;
+    pending.set(key, [...(pending.get(key) ?? []), ev.item]);
+    return;
+  }
+  if (ev.type === 'response.completed' || ev.type === 'response.incomplete' || ev.type === 'response.failed') {
+    const rid = ev.response?.id ?? active.get(d);
+    const key = d + '\0' + rid;
+    if (active.get(d) === rid) active.delete(d);
+    const calls = pending.get(key) ?? [];
+    pending.delete(key);
+    if (ev.type !== 'response.completed' || calls.length === 0) return;
+    const results = await Promise.all(calls.map(async (c) => {
+      const r = await fetch('/tool?delay=' + (q.get('delay') ?? 0), { method: 'POST', body: c.arguments });
+      return { call_id: c.call_id, output: (await r.json()).output };
+    }));
+    for (const r of results) send({ type: 'response.item.create', item: { type: 'function_call_output', call_id: r.call_id, output: r.output } });
+    send({ type: 'response.create' });
+  }
+}
+
+window.ask = (text) => {
+  send({ type: 'response.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } });
+  send({ type: 'response.create' });
+};
+window.closeSession = () => send({ type: 'session.close' });
+
+async function start() {
+  const audio = q.get('audio') ?? 'tone';
+  pc = new RTCPeerConnection();
+  window.__pc = pc;
+  pc.ontrack = (e) => { document.getElementById('out').srcObject = e.streams[0]; note('remoteTrack', e.track.kind); meter(e.streams[0]); };
+  pc.onconnectionstatechange = () => note('pcState', pc.connectionState);
+  // 'mic' starts on a silent synthesized track, then swaps in getUserMedia once session.started
+  // arrives, so a fake-capture WAV is heard from its first word.
+  const first = await synthTrack(audio === 'mic' ? 'silent' : audio);
+  sender = pc.addTrack(first.track, first.stream);
+  dc = pc.createDataChannel('oai-events');
+  dc.onopen = () => note('dcOpen', dc.label);
+  dc.onclose = () => note('dcClose', dc.label);
+  dc.onmessage = async (m) => {
+    let ev; try { ev = JSON.parse(m.data); } catch { note('unparsed', String(m.data).slice(0, 200)); return; }
+    rec('in', ev);
+    if (ev.type === 'session.started') {
+      window.__started = true;
+      if (audio === 'mic') {
+        try {
+          const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+          await sender.replaceTrack(s.getAudioTracks()[0]);
+          note('micSwapped', s.getAudioTracks()[0].label);
+        } catch (e) { note('micError', String(e)); }
+      }
+      if (q.get('ask')) setTimeout(() => window.ask(q.get('ask')), Number(q.get('askAfter') ?? 1500));
+      // extra=<json event> is sent raw 9s after start, e.g. to see what a disallowed client event does.
+      if (q.get('extra')) setTimeout(() => send(q.get('extra') === 'mute' ? { type: 'session.input_audio.mute', event_id: 'spike_mute_1' } : JSON.parse(q.get('extra'))), 9000);
+    }
+    if (ev.type === 'session.closed') window.__closed = true;
+    if (ev.type === 'response.event') onBackend(ev.delegation_id, ev.event).catch((e) => note('loopError', String(e)));
+  };
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  const variant = { allow: q.get('allow') ?? '', bigInstr: Number(q.get('bigInstr') ?? 0), bigBackend: Number(q.get('bigBackend') ?? 0) };
+  const res = await fetch('/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sdp: offer.sdp, variant }) });
+  const json = await res.json();
+  note('sessionHttp', { status: res.status, sessionId: json.sessionId, raw: json.raw, error: json.error, answerSdpChars: json.sdp?.length, offerSdpChars: offer.sdp.length });
+  if (!res.ok) { window.__failed = true; return; }
+  await pc.setRemoteDescription({ type: 'answer', sdp: json.sdp });
+}
+document.getElementById('go').onclick = () => start().catch((e) => { note('startError', String(e)); window.__failed = true; });
+document.getElementById('askb').onclick = () => window.ask('What does the article say about the lighthouse?');
+document.getElementById('closeb').onclick = () => window.closeSession();
+if (q.get('auto') === '1') document.getElementById('go').click();
+</script>
