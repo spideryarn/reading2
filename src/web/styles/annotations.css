@@ -788,10 +788,13 @@ mark.hit[data-quote][data-hit-open] {
   --quote-stroke-color: #ffffff;
   background-color: rgb(var(--quote-stroke-rgb) / 0.18);
 }
-/* A comment over a hit keeps its underline: it is the one you can click, and
-   losing the affordance to a wash would make it look inert. Same call
+/* An uncoloured comment over a hit keeps its underline: it is the one you can
+   click, and losing the affordance to a wash would make it look inert. A
+   coloured highlight already has its own wash and deliberately keeps no orange
+   line (the rule near the top); `[data-colour]` must therefore stay excluded
+   here despite this rule appearing later in the cascade. Same call
    `mark.cmt.term` makes, for the same reason. */
-mark.cmt.hit {
+mark.cmt.hit:not([data-colour]) {
   border-bottom-color: var(--highlight);
 }
 

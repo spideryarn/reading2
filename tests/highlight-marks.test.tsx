@@ -17,6 +17,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/web/perf.js", () => ({
@@ -179,5 +180,42 @@ describe("a click on an overlap opens the comment whose colour it wears (S5)", (
     });
     expect(onOpenComment).toHaveBeenCalledTimes(1);
     expect(onOpenComment).toHaveBeenCalledWith("spya-hlm005");
+  });
+
+  it("opens a newer uncoloured note rather than the older highlight underneath", async () => {
+    await draw([
+      over("spya-hlm006", 10, 40, { colour: "yellow", createdAt: "2026-10-01T09:00:00.000Z" }),
+      over("spya-hlm007", 10, 40, { body: "the later note", createdAt: "2026-10-02T09:00:00.000Z" }),
+    ]);
+    const overlap = marks()[0];
+    if (!overlap) throw new Error("the overlapping comments drew no mark — the test would prove nothing");
+    expect(overlap.getAttribute("data-comment")).toBe("spya-hlm007 spya-hlm006");
+    expect(overlap.hasAttribute("data-colour")).toBe(false);
+    expect(overlap.hasAttribute("data-mark-end")).toBe(true);
+    act(() => {
+      overlap.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    });
+    expect(onOpenComment).toHaveBeenCalledTimes(1);
+    expect(onOpenComment).toHaveBeenCalledWith("spya-hlm007");
+  });
+});
+
+describe("a coloured highlight keeps its own treatment over a search hit (S6)", () => {
+  it("does not regain the orange comment underline", () => {
+    const style = document.createElement("style");
+    style.textContent = readFileSync("src/web/styles/annotations.css", "utf8");
+    const mark = document.createElement("mark");
+    mark.className = "cmt hit";
+    mark.dataset.colour = "yellow";
+    mark.dataset.wash = "";
+    document.head.appendChild(style);
+    document.body.appendChild(mark);
+    try {
+      /* jsdom serialises the `transparent` keyword to its computed RGBA value. */
+      expect(getComputedStyle(mark).borderBottomColor).toBe("rgba(0, 0, 0, 0)");
+    } finally {
+      mark.remove();
+      style.remove();
+    }
   });
 });

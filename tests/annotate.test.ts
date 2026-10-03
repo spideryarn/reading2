@@ -155,9 +155,11 @@ describe("annotateHtml — highlights", () => {
     expect(overlap?.getAttribute("data-colour")).toBe("blue");
   });
 
-  it("puts the newest COLOURED comment first when a newer uncoloured one covers it", () => {
-    /* One wash per run, so the click has to open the comment whose colour is
-       showing — `commentOrder`'s rule. */
+  it("puts a newer uncoloured comment first instead of exposing an older highlight", () => {
+    /* One total priority for appearance and clicks (plan-review S5). A newer
+       note supersedes an older highlight on their shared run: otherwise the
+       visible ✳ belongs to the note while pressing it opens the wordless
+       highlight underneath. */
     const host = parse(
       annotateHtml(html, [
         { id: "spya-hla007", start: 0, end: 10, colour: "yellow", createdAt: "2026-10-01T00:00:00.000Z" },
@@ -165,8 +167,8 @@ describe("annotateHtml — highlights", () => {
       ]),
     );
     const overlap = [...host.querySelectorAll("mark.cmt")].find((m) => m.textContent === "beta");
-    expect(overlap?.getAttribute("data-comment")).toBe("spya-hla007 spya-hla008");
-    expect(overlap?.getAttribute("data-colour")).toBe("yellow");
+    expect(overlap?.getAttribute("data-comment")).toBe("spya-hla008 spya-hla007");
+    expect(overlap?.hasAttribute("data-colour")).toBe(false);
   });
 
   it("draws no ✳ on a wordless highlight", () => {

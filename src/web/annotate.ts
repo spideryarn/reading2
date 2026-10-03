@@ -299,16 +299,12 @@ interface MarkBase {
  * wears. Plan 261003e, review S5: the colour shown and the comment opened must
  * never be two different comments.
  *
- * The rule: **the newest coloured comment, if any covers the run; otherwise
- * the newest comment.** Then the rest, newest first. "Newest" is `createdAt`,
- * then `id`, both descending; a mark with no `createdAt` sorts as oldest and
- * keeps its input order among its peers.
- *
- * Coloured first rather than strictly newest first because a run wears one
- * wash: if an uncoloured note were newer than a yellow highlight beneath it,
- * strictly-newest would show yellow and open the note. A newer uncoloured
- * comment over a highlight still draws its underline and ✳, and is one click
- * away in the drawer or the gutter.
+ * The rule is one total priority: **newest first**, by `createdAt`, then `id`,
+ * both descending. A mark with no `createdAt` sorts as oldest and keeps its
+ * input order among its peers. The first comment supplies both the click target
+ * and, when it has one, the colour. Thus a newer uncoloured note supersedes an
+ * older highlight on their shared words rather than painting the older row's
+ * colour beside the newer note's ✳ and opening the wrong one.
  */
 export function commentOrder(comments: readonly Mark[]): Mark[] {
   const newestFirst = [...comments].sort((a, b) => {
@@ -318,8 +314,6 @@ export function commentOrder(comments: readonly Mark[]): Mark[] {
     if (ac === "") return 0;
     return a.id === b.id ? 0 : a.id < b.id ? 1 : -1;
   });
-  const winner = newestFirst.findIndex((m) => m.colour !== undefined);
-  if (winner > 0) newestFirst.unshift(...newestFirst.splice(winner, 1));
   return newestFirst;
 }
 
