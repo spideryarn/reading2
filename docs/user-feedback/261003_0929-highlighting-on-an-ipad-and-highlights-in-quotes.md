@@ -89,5 +89,4 @@ own words, verbatim). What would make
 B right: if you use Quotes to see what *the model* thought mattered and would find your own lines in
 it a distraction.
 
-Nothing for this is built. The Overseer has been asked to put it in its queue as its own item,
-waiting on Greg.
+Nothing for this is built. It is Overseer queue item `qi-xafwewcr`, waiting on Greg.
