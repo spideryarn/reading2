@@ -194,6 +194,16 @@ describe("the card's owner actions", () => {
     hover(mark());
     expect(button("Dig deeper")).toBeTruthy();
     expect(button("Hide")).toBeTruthy();
+    /* One row, since 2026-10-03 (spya-za77hj): Greg, *"They should all be on
+       the same row to minimize vertical space"*. The owner's two verbs sit in
+       the foot beside the way out, which is now named for what it does. */
+    const foot = card()?.querySelector(".prose-card-foot");
+    const group = foot?.querySelector(".prose-card-term-acts");
+    expect(button("Dig deeper")?.parentElement).toBe(group);
+    expect(button("Hide")?.parentElement).toBe(group);
+    expect(group?.lastElementChild?.textContent).toBe("Open glossary");
+    expect(foot?.querySelector(".prose-card-open")?.textContent).toBe("Open glossary");
+    expect(card()?.querySelectorAll("p.prose-card-foot, p.prose-card-acts")).toHaveLength(1);
 
     act(() => root.render(<Harness entries={[TERM]} actions={null} />));
     act(() => {
@@ -201,7 +211,8 @@ describe("the card's owner actions", () => {
     });
     hover(mark());
     expect(card(), "the visitor's card did not open").not.toBeNull();
-    expect(card()?.querySelector(".prose-card-acts")).toBeNull();
+    expect(card()?.querySelector(".prose-card-act")).toBeNull();
+    expect(card()?.querySelector(".prose-card-open")?.textContent).toBe("Open glossary");
   });
 
   it("Dig deeper starts the dig, opens the band on the term, and closes the card", () => {

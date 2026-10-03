@@ -154,7 +154,7 @@ tooltips get there through `Tooltip.tsx`'s `mouseOnly`; this one owns its own li
 gesture lives in `useHoverCard.ts`.
 
 **A quote's outline joined it on 2026-10-02** (`mark.hit[data-quote]`), as a fourth half of the
-same card — scores, reason, ‹ › and *open in Quotes* ([quotes.md](quotes.md) § In the spine, on a
+same card — scores, reason, ‹ › and *open Quotes* ([quotes.md](quotes.md) § In the spine, on a
 card, and one at a time). Pointer only, and not in `tapSelector`, because a tap on a bare quote
 selects its paragraph. It brought the hook one option, **`openDelay`**: a per-hit rest before a cold
 open, so a quote — a passage the reader rests in while reading — waits 900ms where a word waits
