@@ -218,7 +218,7 @@ file — the one somebody actually works down when configuring a project — nev
 the one artefact shaped like a checklist did not carry it.
 
 **The automated production check delegated its judgement to the thing that was wrong.**
-[`scripts/check-production-gate.sh`](../../scripts/check-production-gate.sh) does hit the endpoint:
+`scripts/check-production-gate.sh` (deleted 2026-10-03, 261003g) does hit the endpoint:
 
 ```sh
 if grep -q '"ok":true' <<<"$hbody"; then ok "GET /api/health → ok:true"

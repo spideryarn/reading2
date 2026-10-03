@@ -6261,13 +6261,13 @@ export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
  * tab shows it** — `GET /api/feedback`.
  * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
  *
- * **Five fields, written out.** Not a `Pick` of
+ * **Six fields, written out.** Not a `Pick` of
  * `FeedbackReport` or of the admin row: a field added to either of those must
  * not widen what this response carries by itself. The email, the address, the
  * diagnostics and the screenshot stay behind — a list whose job is "what did I
  * say" has no use for them, and the address can carry the reader's own search
  * terms or a credential in an `/add/` URL (docs/project/feedback.md § The one
- * rule). Four come from the store; the route derives `shipped` from this build's
+ * rule). Five come from the store; the route derives `shipped` from this build's
  * note map. Here rather than in src/store/contracts.ts because the dialog reads
  * it, and nothing under src/web/ may import the store.
  */
@@ -6277,6 +6277,14 @@ export interface EarlierFeedback {
   createdAt: string;
   kind: FeedbackKind | null;
   body: string;
+  /**
+   * **Which page the report was filed from — a label, not the address.** The
+   * path alone, with an import collapsed to `/add`: src/feedback-page.ts has
+   * the rule, and it is what lets this field exist beside the sentence above.
+   * `null` for a report with no stored address (one, from before 2026-09-02).
+   * docs/plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md.
+   */
+  page: string | null;
   /**
    * **A change for this report has shipped, and is in the build answering.**
    * Derived from the report's note in docs/user-feedback/, compiled into the

@@ -848,7 +848,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           notes, comments, chats or profile.
         </p>
         <p>
-          The <strong>Earlier</strong> tab lists what you have sent, and marks a report{" "}
+          The <strong>Earlier</strong> tab lists what you have sent and the page you sent it from, and marks a report{" "}
           <strong>Shipped</strong> once a change made for it is live. Most things that go wrong here
           fail quietly, so even a two-line report helps.
         </p>

@@ -166,11 +166,21 @@ first `await`, so a large pasted screenshot is stringified before React gets to 
 > — Greg, 2026-09-12 (SPIDERYARN-READING2-3R)
 
 The dialog has two tabs, **Write** and **Earlier**. Earlier is the signed-in reader's own reports,
-newest first — the date, problem or suggestion, and what they wrote — read by `GET /api/feedback`,
-which is owner-scoped in the store like every other read and sends **four fields a report and
-nothing else**: not the email, the address, the diagnostics or the screenshot (`EarlierFeedback` in
-[`src/types.ts`](../../src/types.ts) says why). Fifty at most, and the list says so when there were
-more.
+newest first — the date, problem or suggestion, the page it was filed from, and what they wrote —
+read by `GET /api/feedback`, which is owner-scoped in the store like every other read and sends
+**those fields, whether it shipped, and nothing else**: not the email, the address, the diagnostics
+or the screenshot (`EarlierFeedback` in [`src/types.ts`](../../src/types.ts) says why). Fifty at
+most, and the list says so when there were more.
+
+**The page is a label, not the address**, since 2026-10-03. Greg asked that a report carry the page
+he was on (`spya-y4upzw`); it had since 2026-09-02, to the row, Sentry, `/admin/feedback` and the
+admin's mail, and the dialog was the one place that never showed it. So each row now says
+*on /admin/vouchers*. The label is the path alone, with no origin, query string or fragment, and
+anything under `/add/` is just `/add`, because that is where a search term or somebody else's
+credentialled URL would be. The store makes it, so the address never leaves `listMine`:
+[`src/feedback-page.ts`](../../src/feedback-page.ts), and
+[the plan](../plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md) has the
+surface-by-surface check.
 
 ### Shipped or not, since 2026-09-30
 

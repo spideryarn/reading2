@@ -60,7 +60,7 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 | [`scripts/supabase-auth-config.ts`](../../scripts/supabase-auth-config.ts) | `show` / `apply` the project's auth settings through the Management API. **Not** `supabase config push`, and the header says why |
 | [`scripts/check-owner-identity.ts`](../../scripts/check-owner-identity.ts) | whose shelf a sign-in lands on — run before and after the first Google sign-in |
 | [`scripts/check-google-redirect.sh`](../../scripts/check-google-redirect.sh) | does Google accept a given redirect URI for our client. Checks a known-bad one every time |
-| [`scripts/check-production-gate.sh`](../../scripts/check-production-gate.sh) | the live site refuses an anonymous request |
+| `npm run deploy -- --verify-only` ([`scripts/deploy.ts`](../../scripts/deploy.ts) § `verify`) | the live site refuses an anonymous request. It replaced `scripts/check-production-gate.sh` on 2026-10-03, which passed over a page with no app in it |
 | [`scripts/seed-accounts.ts`](../../scripts/seed-accounts.ts) | who `npm run db:seed-owner` creates **locally**, and the fence that keeps it off anything else |
 
 ## Locally, signing in needs no Google at all
