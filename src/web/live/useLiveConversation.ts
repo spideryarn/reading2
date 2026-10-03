@@ -386,6 +386,7 @@ const TAP_TAIL_MS = 300;
 const TAP_MIN_MS = 500;
 /** Every tap-to-talk client event's `event_id` starts with this. See the `error` handler. */
 const TAP_EVENT = "spya-tap-";
+type TapEventKind = "entry" | "clear" | "commit" | "response";
 
 /** The counts a stall report carries. Numbers only — never a word the reader said. */
 interface StallTally {
@@ -517,8 +518,14 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const keepTalkMode = useRef(false);
   /** Tap to talk's own client events, numbered so an `error` can name which one it refused. */
   const tapSeq = useRef(0);
-  /** The `session.update` that turned the detector off; refusing it means back to hands-free. */
-  const tapEntryEvent = useRef<string | null>(null);
+  /**
+   * Tap events actually sent by this session, and what each one was for.
+   *
+   * The string prefix is for diagnosis; it is not authority. A provider error
+   * carrying an old session's id, or merely a similarly named id, must remain a
+   * provider error rather than being swallowed as recoverable tap traffic.
+   */
+  const tapEvents = useRef(new Map<string, TapEventKind>());
   const talkStartedAt = useRef(0);
   /** Done's short wait for the last frames already in flight, before the commit. */
   const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -763,9 +770,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   }, []);
 
   /** Send one of tap to talk's events, under an id the `error` handler can recognise. */
-  const sendTap = useCallback((msg: Record<string, unknown>): string => {
+  const sendTap = useCallback((kind: TapEventKind, msg: Record<string, unknown>): string => {
     tapSeq.current += 1;
     const id = `${TAP_EVENT}${tapSeq.current}`;
+    tapEvents.current.set(id, kind);
     send({ ...msg, event_id: id });
     return id;
   }, [send]);
@@ -778,11 +786,11 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
    */
   const detectorOff = useCallback(() => {
     if (micTrack.current) micTrack.current.enabled = false;
-    tapEntryEvent.current = sendTap({
+    sendTap("entry", {
       type: "session.update",
       session: { type: "realtime", audio: { input: { turn_detection: null } } },
     });
-    sendTap({ type: "input_audio_buffer.clear" });
+    sendTap("clear", { type: "input_audio_buffer.clear" });
   }, [sendTap]);
 
   /** A reply is now owed, if one was not already. `StallFacts.owedSince`. */
@@ -1163,7 +1171,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
            still `no-reply`. */
         if (tapCommitPending.current) {
           tapCommitPending.current = false;
-          sendTap({ type: "response.create" });
+          sendTap("response", { type: "response.create" });
         }
       }
 
@@ -1298,23 +1306,34 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
            empty buffer, a `session.update` the service will not take. Hanging
            up on the reader for either would be worse than the noise was. */
         const refused = typeof detail?.event_id === "string" ? detail.event_id : "";
-        if (refused.startsWith(TAP_EVENT)) {
+        const tapEvent = tapEvents.current.get(refused);
+        if (tapEvent) {
+          tapEvents.current.delete(refused);
           tapCommitPending.current = false;
-          if (refused === tapEntryEvent.current) {
-            tapEntryEvent.current = null;
+          if (tapEvent === "entry") {
             talkModeRef.current = "hands-free";
             setTalkModeState("hands-free");
             if (micTrack.current) micTrack.current.enabled = true;
             setNotice("Tap to talk couldn’t start, so the conversation is listening as before.");
+          } else if (talkModeRef.current === "hands-free") {
+            /* `detectorOff` sends update then clear. If both are refused, the
+               update's recovery has already restored hands-free; the following
+               clear error must not mute it again or replace its explanation. */
+          } else if (tapEvent === "response" && talkModeRef.current === "tap-sending") {
+            /* The commit succeeded, so the reader's item is already in both the
+               provider conversation and our ledger. Calling it Ready would put
+               a new turn behind an unanswered one and stop the ledger harvesting
+               later exchanges. Keep the turn closed and its reply debt honest;
+               Reconnect is the recovery for a session that refused to answer. */
+            if (micTrack.current) micTrack.current.enabled = false;
+            setNotice(`Tap to talk: ${detail?.message ?? "the reply couldn’t start"}. Reconnect to try again.`);
           } else {
-            /* A refused clear, commit or reply: back to Ready, whatever it was.
+            /* A refused clear or commit: back to Ready, whatever it was.
                Not recording onto a buffer whose state is unknown, and not
                owing a reply to a turn the service never took. */
             if (micTrack.current) micTrack.current.enabled = false;
-            if (talkModeRef.current !== "hands-free") {
-              talkModeRef.current = "tap-idle";
-              setTalkModeState("tap-idle");
-            }
+            talkModeRef.current = "tap-idle";
+            setTalkModeState("tap-idle");
             owedSince.current = null;
             setNotice(`Tap to talk: ${detail?.message ?? "that didn’t go through"}. Tap Talk to try again.`);
           }
@@ -1743,7 +1762,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       keepTalkMode.current = false;
       talkModeRef.current = nextMode;
       setTalkModeState(nextMode);
-      tapEntryEvent.current = null;
+      tapEvents.current = new Map();
       tapCommitPending.current = false;
       if (doneTimer.current) clearTimeout(doneTimer.current);
       doneTimer.current = null;
@@ -2454,8 +2473,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
    */
   const talk = useCallback(() => {
     if (!isLive() || talkModeRef.current !== "tap-idle" || doneTimer.current) return;
-    if (toolResponses.current.inProgress || speakingNow.current || toolRequests.current.size > 0) return;
-    sendTap({ type: "input_audio_buffer.clear" });
+    if (toolResponses.current.responding || speakingNow.current || toolRequests.current.size > 0) return;
+    sendTap("clear", { type: "input_audio_buffer.clear" });
     if (micTrack.current) micTrack.current.enabled = true;
     talkStartedAt.current = Date.now();
     lastHeard.current = Date.now();
@@ -2470,7 +2489,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     setTalkModeState("tap-idle");
     lastHeard.current = Date.now();
     if (Date.now() - talkStartedAt.current < TAP_MIN_MS) {
-      sendTap({ type: "input_audio_buffer.clear" });
+      sendTap("clear", { type: "input_audio_buffer.clear" });
       return;
     }
     talkModeRef.current = "tap-sending";
@@ -2483,7 +2502,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       doneTimer.current = null;
       if (sessionNo.current !== mine || !isLive() || talkModeRef.current !== "tap-sending") return;
       tapCommitPending.current = true;
-      sendTap({ type: "input_audio_buffer.commit" });
+      sendTap("commit", { type: "input_audio_buffer.commit" });
       owe();
     }, TAP_TAIL_MS);
   }, [isLive, sendTap, owe]);

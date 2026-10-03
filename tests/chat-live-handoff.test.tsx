@@ -676,10 +676,19 @@ describe("the live session in the shipping chat composer", () => {
     expect(button("Talk")?.disabled, "Talk over a reply that cannot be interrupted").toBe(true);
     paint({ ...api, talkMode: "tap-sending" });
     expect(button("Talk")?.disabled, "Talk before the last turn's reply began").toBe(true);
+    expect(host.querySelector(".mic-level, [class*='mic-level']"), "the meter returned while no audio was being sent").toBeNull();
+    paint({ ...api, talkMode: "tap-sending", quietInput: true });
+    expect(host.textContent, "Sending showed a microphone warning for audio the conversation cannot hear").not.toMatch(/No sound detected/);
     paint({ ...api, talkMode: "tap-talking" });
     expect(host.textContent).toMatch(/tap Done/);
     act(() => button("Done")?.click());
     expect(events).toContain("done");
+  });
+
+  it("does not say a reconnecting tap session will hear the microphone after loading", () => {
+    const { api } = fakeLive("connecting");
+    paint({ ...api, talkMode: "tap-idle" });
+    expect(host.textContent).not.toMatch(/will hear you once it has loaded/i);
   });
 
   it("does not offer Reconnect, or a stall, when the call is not live", () => {

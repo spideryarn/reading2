@@ -120,6 +120,10 @@ export function LiveStatus({ live, onRestart, blocks, onJump }: {
 
   if (!visible) return null;
   const { state, sentence } = describe(live);
+  /* The meter reads an always-enabled clone. Show it only while the
+     conversation can hear the original track, or it depicts room noise that
+     tap mode is deliberately keeping out. */
+  const hearingInput = live.talkMode === "hands-free" || live.talkMode === "tap-talking";
   /** Use the hook's reconnect intent, so cancellation and failed saves still win. */
   const reconnectIfLive = () => {
     if (live.phase === "live") live.reconnect();
@@ -134,10 +138,10 @@ export function LiveStatus({ live, onRestart, blocks, onJump }: {
     <section className={`chat-live-status is-${state}`} aria-label="Live conversation" onKeyDown={(e) => e.stopPropagation()}>
       <div className="chat-live-status-head">
         <span className="chat-live-state">{STATE_WORD[state]}</span>
-        {/* Hidden, with the quiet-input notice, while tap to talk is Ready: the
-            meter reads the capture, not what is sent, so it would show a
-            street the conversation cannot hear. */}
-        {active && live.measuringInput && live.talkMode !== "tap-idle" && <MicLevel level={live.inputLevel} detected={false} />}
+        {/* Hidden, with the quiet-input notice, whenever tap mode is not
+            actively talking: the meter reads the capture, not what is sent,
+            so it would show a street the conversation cannot hear. */}
+        {active && live.measuringInput && hearingInput && <MicLevel level={live.inputLevel} detected={false} />}
         <span className="chat-live-sentence" role="status">{sentence}</span>
       </div>
       {live.phase === "connecting" && <ol className="chat-live-steps" aria-label="Connecting">
@@ -148,10 +152,10 @@ export function LiveStatus({ live, onRestart, blocks, onJump }: {
             aria-current={here === at ? "step" : undefined}>{STEP[step].replace("…", "")}</li>;
         })}
       </ol>}
-      {live.phase === "connecting" && live.measuringInput && <p className="chat-live-notice">
+      {live.phase === "connecting" && live.measuringInput && live.talkMode === "hands-free" && <p className="chat-live-notice">
         Your microphone is on. The conversation will hear you once it has loaded.
       </p>}
-      {live.quietInput && active && live.talkMode !== "tap-idle" && <p className="chat-live-notice">No sound detected yet. Check your microphone under Advanced.</p>}
+      {live.quietInput && active && hearingInput && <p className="chat-live-notice">No sound detected yet. Check your microphone under Advanced.</p>}
       {live.notice && <p className="chat-live-notice">{live.notice}</p>}
       {stalled && <div className="chat-live-notice chat-live-stall" role="status">
         <span>{STALL_NOTICE[live.stall!]}</span>{" "}

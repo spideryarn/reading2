@@ -2280,6 +2280,28 @@ describe("a stall says so, and Reconnect recovers it", () => {
     } finally { h.unmount(); vi.useRealTimers(); }
   });
 
+  it("keeps a committed turn closed and reports no reply when response.create is refused", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().enterTapToTalk());
+      act(() => h.get().talk());
+      await advance(2_000);
+      act(() => h.get().doneTalking());
+      await advance(400);
+      await act(async () => { channel?.deliver({ type: "input_audio_buffer.committed", item_id: "tap-u" }); });
+      const response = sent.find((event) => event.type === "response.create");
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "reply refused", event_id: response?.event_id } });
+      });
+      expect(h.get().phase).toBe("live");
+      expect(h.get().talkMode, "a second turn could start behind the committed unanswered one").toBe("tap-sending");
+      expect(mic?.enabled).toBe(false);
+      expect(h.get().notice).toMatch(/Reconnect/);
+      await advance(13_000);
+      expect(h.get().stall, "the committed turn's missing reply was forgiven").toBe("no-reply");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
   it("a refused clear on Talk closes the microphone again rather than recording into an unknown buffer", async () => {
     const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
     try {
@@ -2293,6 +2315,40 @@ describe("a stall says so, and Reconnect recovers it", () => {
       expect(h.get().phase).toBe("live");
       expect(h.get().talkMode).toBe("tap-idle");
       expect(mic?.enabled).toBe(false);
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("stays hands-free when the entry update and its following clear are both refused", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().enterTapToTalk());
+      const update = sent.find((event) => event.type === "session.update" && isTap(event));
+      const clear = sent.find((event) => event.type === "input_audio_buffer.clear" && isTap(event));
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "update refused", event_id: update?.event_id } });
+        channel?.deliver({ type: "error", error: { message: "clear refused too", event_id: clear?.event_id } });
+      });
+      expect(h.get().phase).toBe("live");
+      expect(h.get().talkMode).toBe("hands-free");
+      expect(mic?.enabled, "the follow-up clear error muted the hands-free recovery").toBe(true);
+      expect(h.get().notice).toMatch(/listening as before/);
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("does not swallow a tap-shaped error id from an earlier session", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().enterTapToTalk());
+      const oldUpdate = sent.find((event) => event.type === "session.update" && isTap(event));
+      await act(async () => { await h.get().stop(); });
+      act(() => h.get().start({ threadId: THREAD, microphone: true }));
+      await advance(0);
+      await act(async () => { channel?.open(); });
+      expect(h.get().talkMode).toBe("hands-free");
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "current session failed", event_id: oldUpdate?.event_id } });
+      });
+      expect(h.get().phase, "a non-tap provider error was mistaken for this session's tap error").not.toBe("live");
     } finally { h.unmount(); vi.useRealTimers(); }
   });
 
@@ -2350,6 +2406,78 @@ describe("a stall says so, and Reconnect recovers it", () => {
     } finally { h.unmount(); vi.useRealTimers(); }
   });
 
+  it("stores a tap turn's tool continuation as one exchange and keeps Talk closed while it starts", async () => {
+    const written: SpokenExchange[] = [];
+    const speak = async (x: SpokenExchange): Promise<SpokenLanded> => {
+      written.push(x);
+      return { ok: true, threadId: THREAD, tailId: "spya-srva01" };
+    };
+    const wiring: LiveWiring = {
+      ...wiringFor(ticketWith()),
+      runTool: async () => ({ content: "The source says 1824.", label: "searched", detail: "one match" }),
+    };
+    const h = await liveOnFakeClock({ wiring, speak });
+    try {
+      act(() => h.get().enterTapToTalk());
+      act(() => h.get().talk());
+      await advance(2_000);
+      act(() => h.get().doneTalking());
+      await advance(400);
+      await act(async () => {
+        channel?.deliver({ type: "input_audio_buffer.committed", item_id: "tap-tool-u" });
+        channel?.deliver({ type: "conversation.item.added", item: { id: "tap-tool-u", role: "user", type: "message" } });
+        channel?.deliver({ type: "response.created", response: { id: "tap-tool-r1" } });
+        channel?.deliver({
+          type: "response.output_audio_transcript.done",
+          response_id: "tap-tool-r1",
+          item_id: "tap-tool-a1",
+          transcript: "Let me check.",
+        });
+        channel?.deliver({
+          type: "response.function_call_arguments.done",
+          response_id: "tap-tool-r1",
+          call_id: "tap-tool-call",
+          name: "search_library",
+          arguments: "{}",
+        });
+        channel?.deliver({
+          type: "response.done",
+          response: {
+            id: "tap-tool-r1",
+            status: "completed",
+            output: [{ type: "function_call", call_id: "tap-tool-call", name: "search_library", arguments: "{}" }],
+          },
+        });
+      });
+      await advance(0);
+      expect(sent.filter((event) => event.type === "response.create")).toHaveLength(2);
+      act(() => h.get().talk());
+      expect(h.get().talkMode, "Talk opened before the requested continuation had begun").toBe("tap-idle");
+      expect(mic?.enabled).toBe(false);
+      await act(async () => {
+        channel?.deliver({ type: "response.created", response: { id: "tap-tool-r2" } });
+        channel?.deliver({
+          type: "response.output_audio_transcript.done",
+          response_id: "tap-tool-r2",
+          item_id: "tap-tool-a2",
+          transcript: "It was published in 1824.",
+        });
+        channel?.deliver({ type: "response.done", response: { id: "tap-tool-r2", status: "completed", output: [] } });
+        channel?.deliver({
+          type: "conversation.item.input_audio_transcription.completed",
+          item_id: "tap-tool-u",
+          transcript: "When was it published?",
+        });
+      });
+      await advance(0);
+      expect(written).toMatchObject([{
+        question: "When was it published?",
+        answer: "Let me check. It was published in 1824.",
+        tools: [{ name: "search_library", label: "searched", detail: "one match" }],
+      }]);
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
   it("a hang-up during Done's tail sends nothing into the next call", async () => {
     const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
     try {
@@ -2381,11 +2509,16 @@ describe("a stall says so, and Reconnect recovers it", () => {
     } finally { h.unmount(); vi.useRealTimers(); }
   });
 
-  it.each([true, false])("keeps tap to talk through a Reconnect (talking: %s), and a fresh start is hands-free", async (talking) => {
+  it.each(["idle", "talking", "sending"] as const)("keeps tap to talk through a Reconnect from %s, and a fresh start is hands-free", async (from) => {
     const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
     try {
       act(() => h.get().enterTapToTalk());
-      if (talking) act(() => h.get().talk());
+      if (from !== "idle") act(() => h.get().talk());
+      if (from === "sending") {
+        await advance(2_000);
+        act(() => h.get().doneTalking());
+        await advance(400);
+      }
       act(() => h.get().reconnect());
       await advance(5_000);
       expect(pcs).toHaveLength(2);
