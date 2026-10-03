@@ -191,6 +191,31 @@ polar interpolation drags a mix round to 11.7° and the result is quietly pink i
   because "43 days ago" is worse than the date (that file's header), so an old date shows only the
   timestamp. A coarser `2mo ago` would make the rule hold everywhere; nobody has built it yet.
 
+## Draw a number rather than print it
+
+- **Prefer a small chart or an icon to a sentence for a figure the reader glances at**, with the
+  exact figure and what it measures on a rich card ([tooltips.md](tooltips.md)) and in an `aria-label`.
+  Greg, twice:
+
+  > Prefer to use UI (e.g. a little sparkline/bar rather than numbers) plus tooltip instead of
+  > numbers for the most-striking values, etc.
+  >
+  > — 2026-08-31, about the glossary's and quotes' scores
+
+  > And make a note in design.md or similar to prefer little charts/icons/etc rather than text.
+  >
+  > — 2026-10-01 (spya-mafmm6), about the quiz's "about X% of the piece read so far"
+
+  Reach for what exists before drawing another: [`ScoreBars`](../../src/web/ScoreBars.tsx) for
+  0–1 scores on a list row, [`SharePie`](../../src/web/SharePie.tsx) for a share of a whole. Their
+  headers say what keeps a picture honest: a fixed scale, the exact quantity drawn (an edge too
+  thin to see is the card's words to tell, not a stretched slice), and the figure in words for a
+  screen reader. `SharePie` is a button, because its card holds the only explanation and must be
+  reachable by touch and keyboard; `ScoreBars` stays out of the tab order, because its accessible
+  name already carries every score. This is a preference for glanceable
+  quantities, not a ban on numbers: words stay for a warning, a failure, or anything that is not a
+  quantity.
+
 ## The band's (i)
 
 Every mode band has an (i) in its top-right corner (`BandAbout`, put there by `ModeSurface`;

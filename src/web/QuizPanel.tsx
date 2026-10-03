@@ -88,6 +88,7 @@ import { showPremise } from "./quiz-ladder.js";
 import { firstWrongIn, type SectionTally, sectionTally, weakSections } from "./quiz-sections.js";
 import type { Section } from "./position.js";
 import { lastBefore, questionIsRead, type ReadSoFar, readShareLabel, shareRead } from "./read-filter.js";
+import { SharePie } from "./SharePie.js";
 import type { Attempt, UseQuiz } from "./useQuiz.js";
 import { REMEMBER_VIEWS, type RememberView } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
@@ -1202,6 +1203,8 @@ function LookAgain({
 /**
  * **"Only what I've read", and how much that is.**
  *
+ * How much is a small pie with the figure on its card, not a line of text
+ * (spya-mafmm6; docs/plans/261003e-quiz-read-so-far-as-a-small-pie-chart.md).
  * The figure is the share of the body's words in passages read — the same
  * rule as the tick-box — so the two cannot disagree. Said only once the levels
  * can be believed: while loading it says nothing, and after a failed read it
@@ -1219,16 +1222,29 @@ function OnlyRead({
   const share = readSoFar.status === "loaded" ? shareRead(readSoFar.levels, readSoFar.bodyWords) : null;
   return (
     <div className="quiz-only-read">
-      <label>
-        <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} /> Only what
-        I’ve read
-      </label>
-      {share !== null && <span className="gloss-hint">{readShareLabel(share)} of the piece read so far</span>}
+      <span className="quiz-only-read-what">
+        <label>
+          <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} /> Only
+          what I’ve read
+        </label>
+        {share !== null && (
+          <SharePie
+            share={share}
+            label={sentenceCase(`${readShareLabel(share)} of the piece read so far`)}
+            detail="Counted in words, from the passages that have been on screen long enough to read."
+          />
+        )}
+      </span>
       {readSoFar.status === "failed" && on && (
         <span className="gloss-hint">couldn’t load what you have read, so this is every question</span>
       )}
     </div>
   );
+}
+
+/** "about 40% of…" → "About 40% of…": the card's line is a sentence. */
+function sentenceCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**

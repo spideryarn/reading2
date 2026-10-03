@@ -336,7 +336,9 @@ Greg, 2026-09-30 (SPIDERYARN-READING2-61):
 > questions for the stuff that the user has read.
 
 With [reading time](reading-time.md) on, the band has a tick-box, **Only what I've read**, on by
-default, and beside it how much of the piece you have read ("about 40% of the piece read so far").
+default, and beside it a small pie of how much of the piece you have read, with the figure on its
+card ("About 40% of the piece read so far";
+[261003e](../plans/261003e-quiz-read-so-far-as-a-small-pie-chart.md), spya-mafmm6).
 The batch is still written over the whole article; the filter is the panel's, computed in the
 browser from the levels the page already has. The plan and GPT Sol's six changes to it are
 [260930e](../plans/260930e-quiz-only-asks-about-what-you-have-read.md).

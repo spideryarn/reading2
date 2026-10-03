@@ -216,3 +216,11 @@ until Greg answers. On dev as 3e2d0b9a8 + 7bbc132d8:
 
 Sol code review: [261003e-span-highlights-code-review-sol.md](261003e-span-highlights-code-review-sol.md),
 "land after fixes (made)"; the Postgres tests it asked for pass (comment-colour, public-visibility-pg).
+
+**Browser-checked, 2026-10-03** (Sonnet subagent, Playwright on the box, `/read/fowler-phrenology`),
+once the peer's migration landed and this one applied: swatch row by mouse and keyboard, all four
+washes legible and distinct from each other and from the orange, recolour and remove without a
+reload and persisted across one, the overlap (pink inside yellow opens pink, yellow around it opens
+yellow), a words-mode search over highlights keeps both, no overflow at 400px, no page errors. One
+change from it: the wash's rounded corners notched the seams where a highlight is cut around a
+glossary term, so the corners are square.
