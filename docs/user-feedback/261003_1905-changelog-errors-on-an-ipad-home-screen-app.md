@@ -19,7 +19,7 @@ Postmortem:
 
 ## What it was
 
-The home-screen icon is the cause, and no, you do not need to try it in Safari. The changelog page
+The home-screen icon is related, and no, you do not need to try it in Safari. The changelog page
 itself is fine on an iPad. The app opened from the icon is never reloaded — iOS wakes the same copy
 for days — and each deploy removes the files an older copy would ask for. The changelog's code is
 fetched only when you go there, so an old copy asked for a file that was gone and showed *"Part of
@@ -33,11 +33,34 @@ button. Reproduced in WebKit with two real builds.
   it cannot loop. This covers `/changelog`, `/help`, `/design` and `/admin`.
 - **The error message has a Reload button**, for when that cannot help, and no longer says "tab".
 
-## To know
+## What is not settled, and one question for you
 
-- **The app now reloads without asking** in that one case. Nothing is lost by it on these pages.
-  Say if you would rather it asked.
-- **One error is not explained.** 78 seconds before this report Sentry recorded a different crash
-  on your account (`SPIDERYARN-READING2-BJ`, the whole-app `[render]` message) on a copy eleven
-  hours old. It could not be reproduced or tied to `/changelog`. It has its own queue entry, as does
-  the wider fix: noticing a deploy when the app wakes, before anything breaks.
+**Which message did you see?** There are two error screens, and they end differently:
+
+- *"Part of Spideryarn didn't arrive … **[chunk]**"* — this is the one fixed here. Sentry recorded
+  it on your account on 1 October and twice on the morning of the 3rd.
+- *"… reloading will probably hit it again. **[render]**"* — a different crash, and **not fixed**.
+  Sentry recorded one on your account 78 seconds before this report (`SPIDERYARN-READING2-BJ`), on
+  a copy of the app eleven hours old. It could not be reproduced, and Sentry does not say which
+  page it was on. An old copy opening the changelog gave `[chunk]` every time it was tried.
+
+If it was `[chunk]`, this report is done. If it was `[render]`, the queue entry for it is the real
+one and should move up. Either way the entry exists; the ending here is *shipped* because the
+failure that could be reproduced is fixed and the rest is queued, not because both are closed.
+
+Two more things:
+
+- **The app now reloads without asking** in one case: a page's code is missing and a different
+  build is live. Nothing is lost, because it happens before the page has appeared. Say if you would
+  rather it asked.
+- **It has not been tried on a real iPad.** The check was WebKit on the box, pretending to be an
+  iPad. That cannot imitate iOS putting the app to sleep and waking it. After the next deploy plus
+  one more, opening *What's new* from the home-screen app is the real test.
+
+## Deferred, each in the Overseer's queue
+
+- `qi-wxt4gtyn` — notice a deploy when the app wakes, and take the next navigation as a full page load, so nothing
+  has to fail first.
+- `qi-58e7v32s` — the `[render]` crash above, `SPIDERYARN-READING2-BJ`.
+
+Both are proposals: nothing starts on either until you authorise it.

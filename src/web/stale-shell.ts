@@ -149,9 +149,10 @@ function browserDeps(): StaleShellDeps {
 }
 
 /**
- * Reload if a different build is live, this session has not already reloaded
- * for it, and the reader is still where the failure happened. `true` means the
- * page is on its way out.
+ * Request a reload if a different build is live, this session has not already
+ * reloaded for it, and the reader is still where the failure happened. `true`
+ * means the reload call returned without throwing; the caller still needs a
+ * fallback because browsers do not acknowledge that navigation began.
  */
 export async function reloadIfStale(deps: StaleShellDeps = browserDeps()): Promise<boolean> {
   const { mine, storage } = deps;

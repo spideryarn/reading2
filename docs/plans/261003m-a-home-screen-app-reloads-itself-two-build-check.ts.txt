@@ -1,0 +1,84 @@
+// Signed-in stale-shell reproduction: sign in on the OLD build, "deploy" the new
+// one, then go to /changelog without reloading. /api is proxied to a dev server.
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { webkit, chromium } from "/home/greg/code/spideryarn2/.claude/worktrees/fbu6uba0-changelog-errors-on-ipad/node_modules/playwright-core/index.mjs";
+import { signIn } from "/home/greg/code/spideryarn2/.claude/worktrees/fbu6uba0-changelog-errors-on-ipad/scripts/browser-sign-in.ts";
+
+const S = "/tmp/claude-1000/-home-greg-code-spideryarn2/777c6327-7413-451b-839c-fd55ec436a82/scratchpad";
+const API = process.env.U6_API ?? "http://localhost:5275";
+const OLD = path.join(S, process.env.U6_OLD ?? "u6-old/dist");
+const NEW = path.join(S, process.env.U6_NEW ?? "u6-new/dist");
+let root = OLD;
+const TYPES: Record<string, string> = { ".js": "text/javascript", ".css": "text/css", ".html": "text/html; charset=utf-8", ".png": "image/png", ".json": "application/json", ".woff2": "font/woff2", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json" };
+const missing: string[] = [];
+const server = http.createServer((req, res) => {
+  const u = new URL(req.url ?? "/", "http://x");
+  const p = decodeURIComponent(u.pathname);
+  if (p.startsWith("/api/")) {
+    const target = new URL(req.url ?? "/", API);
+    const headers = { ...req.headers, host: target.host };
+    const up = http.request(target, { method: req.method, headers }, (r) => {
+      res.writeHead(r.statusCode ?? 502, r.headers);
+      r.pipe(res);
+    });
+    up.on("error", () => { res.writeHead(502); res.end(); });
+    req.pipe(up);
+    return;
+  }
+  const f = path.join(root, p);
+  if (p !== "/" && f.startsWith(root) && fs.existsSync(f) && fs.statSync(f).isFile()) {
+    res.writeHead(200, { "content-type": TYPES[path.extname(f)] ?? "application/octet-stream" });
+    res.end(fs.readFileSync(f));
+    return;
+  }
+  if (p.startsWith("/assets/")) missing.push(p);
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  res.end(fs.readFileSync(path.join(root, "index.html")));
+});
+await new Promise<void>((r) => server.listen(0, "localhost", r));
+const addr = server.address();
+if (addr === null || typeof addr === "string") throw new Error("no port");
+const base = `http://localhost:${addr.port}`;
+
+const IPAD_UA = "Mozilla/5.0 (iPad; CPU OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1";
+const engineName = process.argv[2] ?? "webkit";
+const from = process.argv[3] ?? "/";
+const browser = engineName === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: "/usr/bin/google-chrome-stable" });
+const ctx = await browser.newContext(
+  engineName === "webkit"
+    ? { userAgent: IPAD_UA, hasTouch: true, isMobile: true, deviceScaleFactor: 2, viewport: { width: 1024, height: 1366 } }
+    : { viewport: { width: 1280, height: 900 } },
+);
+const page = await ctx.newPage();
+const log: string[] = [];
+page.on("console", (m) => { if (m.type() === "error") log.push(`console.error: ${m.text().slice(0, 400)}`); });
+page.on("pageerror", (e) => log.push(`pageerror: ${e.name}: ${e.message.slice(0, 400)}`));
+
+const who = await signIn(page, base);
+console.log("signed in:", JSON.stringify(who).slice(0, 160));
+await page.goto(new URL(from, base).href, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(3000);
+console.log("before deploy, at:", page.url(), "| changelog links on page:", await page.locator('a[href="/changelog"]').count());
+log.length = 0;
+
+root = NEW; // the "deploy"
+
+const link = page.locator('a[href="/changelog"]').first();
+if ((await link.count()) > 0 && (await link.isVisible())) {
+  await link.click();
+  console.log("went by: clicking the page's own changelog link");
+} else {
+  await page.evaluate(() => {
+    history.pushState({}, "", "/changelog");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  console.log("went by: pushState + popstate");
+}
+await page.waitForTimeout(3000);
+const text = (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 500);
+console.log(`\n=== ${engineName} signed in, from ${from}\nurl: ${page.url()}\nbody: ${text}\nmissing assets asked for: ${missing.join(", ") || "none"}\n${log.join("\n") || "(no errors logged)"}`);
+await page.screenshot({ path: path.join(S, `u6-signed-in-${engineName}.png`) });
+await browser.close();
+server.close();

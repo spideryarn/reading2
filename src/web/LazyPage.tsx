@@ -170,9 +170,10 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
  * What a failed load does before React hears of it: if this copy of the app
  * has outlived a deploy, reload rather than show the escape.
  *
- * Greg's iPad, 2026-10-03 (spya-u6uba0). The app opened from a home-screen icon
- * is never reloaded, so it is routinely several deploys old, and the escape
- * above told him to reload in the one place with no way to. stale-shell.ts has
+ * From Greg's iPad report, 2026-10-03 (spya-u6uba0). The app opened from a
+ * home-screen icon is never reloaded, so it is routinely several deploys old —
+ * Sentry had this escape on his account three times that week — and the escape
+ * says to reload in the one place with no way to. stale-shell.ts has
  * the mechanism and its one-reload limit; the plan is
  * docs/plans/261003m-a-home-screen-app-reloads-itself-when-a-page-s-code-has-moved.md.
  *
@@ -180,14 +181,17 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
  * escape flash before the page goes, and a copy that was merely old sends
  * Sentry nothing — it is not a fault.
  *
- * **A promise that never settles** is what "the page is on its way out" means
- * to Suspense: the spinner stays until the reload replaces the document.
- * Resolving would need a component to resolve to; rejecting would draw the
- * escape for the moment before the reload.
+ * **Hold the rejection while the reload starts**, so Suspense keeps the
+ * spinner rather than flashing the escape before the document is replaced.
+ * A reload call has no success acknowledgement, though: if the browser leaves
+ * this document in place, the original failure is released after a short
+ * grace period rather than leaving the reader on a spinner for ever.
  *
  * **The original error is what is rethrown**, always — the check failing is
  * not the failure the boundary should report.
  */
+const RELOAD_GRACE_MS = 5000;
+
 async function orReloadIfStale(err: unknown): Promise<never> {
   let leaving = false;
   try {
@@ -195,7 +199,7 @@ async function orReloadIfStale(err: unknown): Promise<never> {
   } catch {
     leaving = false;
   }
-  if (leaving) return new Promise<never>(() => {});
+  if (leaving) await new Promise<void>((resolve) => setTimeout(resolve, RELOAD_GRACE_MS));
   throw err;
 }
 

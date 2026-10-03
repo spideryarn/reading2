@@ -15,7 +15,7 @@ the error it shows is `LazyPage.tsx` § `ChunkBoundary`, and its words are gover
 
 ## What is wrong
 
-**The home-screen icon is related, and it is the whole of it.** Nothing about `/changelog` is broken
+**The home-screen icon is related** (for the failure reproduced here; § What is and is not established has the part that is not). Nothing about `/changelog` is broken
 in Safari's engine: opened fresh in WebKit with an iPad's user agent, the live build draws all 97
 releases with no error.
 
@@ -129,12 +129,12 @@ and Greg's report is exactly a reader who saw that error and did not know what i
 
 ## Deferred, each with its own queue entry
 
-1. **Notice a deploy before the reader trips over it.** When the app comes back to the foreground,
+1. **Notice a deploy before the reader trips over it** (`qi-wxt4gtyn`, a proposal awaiting Greg). When the app comes back to the foreground,
    check `/build.json`; if a newer build is live, make the *next* in-app navigation a full page load.
    That would cover every lazy import (maths' `temml` too), and the wider family below, without even
    the spinner. Not in v1 because it changes `router.ts`'s `navigate`, which everything goes
    through, to fix what v1 already fixes for the reported page.
-2. **`SPIDERYARN-READING2-BJ`** — the `[render]` crash on an eleven-hour-old copy, not reproduced.
+2. **`SPIDERYARN-READING2-BJ`** (`qi-58e7v32s`, a proposal awaiting Greg) — the `[render]` crash on an eleven-hour-old copy, not reproduced.
    Likely old client code meeting something newer; item 1 would shrink its window. Needs its own
    look.
 
@@ -147,7 +147,7 @@ it asked.
 ## Stages
 
 - [x] Stage 1 — GPT Sol reviews this plan (`--sandbox review`): build it with changes, six findings, all taken.
-- [ ] Stage 2 — failing tests, then `stale-shell.ts`, `LazyPage.tsx`, docs. Gates: `npm test` on the
+- [x] Stage 2 — failing tests, then `stale-shell.ts`, `LazyPage.tsx`, docs. Gates: `npm test` on the
       touched suites, `npm run typecheck`, lint on touched files, the WebKit reproduction.
 - [ ] Stage 3 — GPT Sol reviews the code (`--sandbox workspace-write`); postmortem; feedback note;
       queue entries for the two deferrals; push to `dev`.
@@ -183,3 +183,19 @@ one thing in the note Greg is asked to do.
 Not because these pages hold no state — `/admin/vouchers` has a form and `/help` a search box — but
 because the loader fails **before the page exists**: there is no form yet to have typed into. With
 finding 3 fixed, the reload can only ever replace the spinner the reader is looking at.
+
+## GPT Sol's code review
+
+[The review](261003m-a-home-screen-app-reloads-itself-code-review-sol.md): *ship it with the fixes
+made*. Its diff was read line by line.
+
+| # | Finding | Outcome |
+|---|---|---|
+| P1 | The loader waited for ever if `location.reload()` returned without replacing the document. | Fixed by Sol: the original error is released after five seconds, so the reader gets `[chunk]` and its Reload button. Test seen red by Sol. |
+| P2 | The lazy-page test claimed a reload while its stub only returned `true`. | Fixed by Sol: the stub calls `reloadPage`, and the test asserts it. |
+| P2 | The postmortem and two comments still said Greg certainly saw `[chunk]`. | Fixed by me: all three now say what Sentry recorded and that which screen he saw is not established. |
+| P2 | `scripts/build-stamp.ts` and `vite.config.ts` called `builtAt` "informational, never asserted" — it is now half of the build identity. | Fixed by me: both comments say the client compares it and the two must be one string. |
+| P3 | Any rejected lazy import is treated as possibly stale, including a bug in the page's own module. | Accepted: at worst one needless reload when a different build is live. It cannot loop and nothing mounted is lost. |
+
+Sol could not run the full suite (its sandbox has no database) and wrote that a pre-review run was
+green. **No full run had been made at that point**; the one that counts is the one below.

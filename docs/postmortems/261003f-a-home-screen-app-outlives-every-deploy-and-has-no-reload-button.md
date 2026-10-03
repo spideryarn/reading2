@@ -6,9 +6,14 @@ report is [spya-u6uba0](../user-feedback/261003_1905-changelog-errors-on-an-ipad
 
 ## What happened
 
-Greg opened `/changelog` on his iPad, from the home-screen icon, and got *"Part of Spideryarn didn't
-arrive … Reloading the page usually fixes it. [chunk]"*. It had happened on 1 October and twice more
-on the morning of the 3rd (`SPIDERYARN-READING2-3H`). On his laptop it never did.
+Greg reported that `/changelog` gave an error on his iPad, opened from the home-screen icon, and
+never on his laptop. Sentry had *"Part of Spideryarn didn't arrive … Reloading the page usually
+fixes it. [chunk]"* on his account on 1 October and twice on the morning of the 3rd
+(`SPIDERYARN-READING2-3H`), each time from a copy of the app older than the live deploy.
+
+**Which screen he was looking at when he wrote the report is not established.** The crash nearest it
+in time is a different one (`BJ`, below). This postmortem is about the `[chunk]` failure, which was
+reproduced and is fixed.
 
 ## The real root cause
 

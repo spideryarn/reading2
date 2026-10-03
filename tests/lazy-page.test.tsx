@@ -90,6 +90,10 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   quietConsole.mockRestore();
+  if (vi.isFakeTimers()) {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  }
 });
 
 /** A page the loader can hand back, distinguishable from the escape. */
@@ -244,21 +248,26 @@ describe("a route whose code does not arrive", () => {
   });
 
   /**
-   * Greg's iPad, 2026-10-03 (spya-u6uba0): the app opened from a home-screen
-   * icon is never reloaded, so it outlives every deploy, and `/changelog`'s code
-   * had moved by the time he asked for it. The message told him to reload, in
-   * the one place with no reload button.
+   * From Greg's iPad report, 2026-10-03 (spya-u6uba0): the app opened from a
+   * home-screen icon is never reloaded, so it outlives every deploy, and a lazy
+   * page's code has moved by the time an old copy asks for it. The message says
+   * to reload, in the one place with no reload button.
    * docs/plans/261003m-a-home-screen-app-reloads-itself-when-a-page-s-code-has-moved.md.
    */
   describe("when this copy of the app has outlived a deploy", () => {
     it("reloads instead of showing the escape, and reports nothing", async () => {
-      reloadIfStale.mockResolvedValue(true);
+      vi.useFakeTimers();
+      reloadIfStale.mockImplementation(async () => {
+        reloadPage();
+        return true;
+      });
       const load = vi.fn(async () => {
         throw new Error(SECRET);
       });
       await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
 
       expect(reloadIfStale).toHaveBeenCalledTimes(1);
+      expect(reloadPage, "the stale-shell answer must follow a reload request").toHaveBeenCalledTimes(1);
       expect(text()).not.toContain("[chunk]");
       expect(host.querySelector('[role="alert"]')).toBeNull();
       /* Still waiting: the page is about to be replaced, and a blank or an
@@ -267,6 +276,28 @@ describe("a route whose code does not arrive", () => {
       /* Not a fault, so not a report. */
       expect(captureClientFailure).not.toHaveBeenCalled();
       expect(recordLog).not.toHaveBeenCalled();
+    });
+
+    it("shows the escape if a requested reload does not replace the document", async () => {
+      vi.useFakeTimers();
+      reloadIfStale.mockImplementation(async () => {
+        reloadPage();
+        return true;
+      });
+      const load = vi.fn(async () => {
+        throw new Error(SECRET);
+      });
+      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
+
+      expect(reloadPage).toHaveBeenCalledTimes(1);
+      expect(host.querySelector('[role="status"]')).not.toBeNull();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+
+      expect(text()).toContain("[chunk]");
+      expect(host.querySelector('[role="status"]')).toBeNull();
+      expect((captureClientFailure.mock.calls[0] as [Error])[0].message).toBe(SECRET);
     });
 
     it("shows the escape when the copy is current, having asked", async () => {
