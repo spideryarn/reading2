@@ -319,3 +319,4 @@ check each by id.
   **F7 closed**, the stated guarantee accurate and every number recomputed from the JSON; one P3,
   F11 — three passages said "half" or "no limit" where the code says half rounded up — corrected
   in the docs. *Land after fixes (F11).*
+- 2026-10-03: full suite at `9f216614a` plus the cap: 1479 files passed; the 5 that failed need a built bundle in a fresh worktree and passed after `npm run build` and `npm run build:fleet`. Merged `origin/dev`, typecheck and the Skim, flash, doc-link and guard tests green, pushed to `dev` as `063b63642`. **Finished.**
