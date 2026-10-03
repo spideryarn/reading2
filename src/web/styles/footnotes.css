@@ -277,11 +277,13 @@ td.text.note-open {
    this panel gives about the quality of what the model returned. */
 .gloss-nowhere { color: var(--ink-faint); font-style: italic; }
 
-/* ---- the foot ---- */
+/* ---- the run row ----
+   The foot until 2026-10-03, pinned under the list; now the column's first row
+   (plan 261003c), so its rule is underneath. */
 
-.gloss-foot {
+.gloss-more {
   padding: 0.5rem 0.7rem;
-  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
 }
 .gloss-actions {
   display: flex;

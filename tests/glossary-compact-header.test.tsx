@@ -406,8 +406,9 @@ describe("the kind of a term", () => {
    (SPIDERYARN-READING2-55): *"perhaps even don't bother showing it."* And with
    no banner, *Find more* must not stand in for it: on an outdated list the run
    it sends replaces the list rather than appending (src/glossary.ts §
-   existingFor), so it is hidden, as Quotes hides its own. A job or a failure
-   still shows in the foot. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md. */
+   existingFor). It was hidden until 2026-10-03; since then the run row at the
+   top of the column says *Find terms again* there instead (Greg, spya-s660yh;
+   plan 261003c). docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md. */
 describe("an outdated glossary", () => {
   const RUNNING: Job = {
     id: "job-glossary",
@@ -428,23 +429,23 @@ describe("an outdated glossary", () => {
   const findMore = () =>
     [...host.querySelectorAll("button")].some((b) => /find more/i.test(b.textContent ?? ""));
 
-  it("says nothing about it, and offers no Find more", async () => {
+  it("says nothing about it, and offers no Find more (it offers Find terms again)", async () => {
     await mount(owner(glossary(null, SCORED), { outdated: true }));
     expect(host.querySelector(".gloss-stale")).toBeNull();
     expect(host.textContent).not.toContain("different version of the glossary");
     expect(findMore()).toBe(false);
   });
 
-  it("still shows a running job, and a failure, in the foot", async () => {
+  it("still shows a running job, and a failure, in the run row", async () => {
     await mount(owner(glossary(null, SCORED), { outdated: true, job: RUNNING }));
-    expect(host.querySelector(".gloss-foot")?.textContent).toContain("Stop");
+    expect(host.querySelector(".gloss-more")?.textContent).toContain("Stop");
     await mount(
       owner(glossary(null, SCORED), {
         outdated: true,
         failed: { message: "The re-run failed visibly.", retryable: false, retry: null },
       }),
     );
-    expect(host.querySelector(".gloss-foot")?.textContent).toContain("The re-run failed visibly.");
+    expect(host.querySelector(".gloss-more")?.textContent).toContain("The re-run failed visibly.");
   });
 
   it("keeps the stale banner, and a current list keeps Find more", async () => {

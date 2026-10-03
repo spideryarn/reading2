@@ -426,6 +426,7 @@ import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
+import { panelRunKind } from "./glossary.js";
 import { routeProfileIsStale } from "./skim.js";
 import {
   type ArticleStage,
@@ -6030,6 +6031,13 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
    * replace still treats deletion as no reason to rewrite them.
    */
   clearedCountsAsChanged = false,
+  /**
+   * Anything else the route answers from the current profile — the glossary's
+   * `panelRun` alone, plan 261003c. Here rather than a second
+   * `resolveProfile` in the route, which would be two more queries for a hash
+   * this function already has.
+   */
+  alsoFrom?: (found: Omit<R, "profileChanged">, nowHash: string | null) => Partial<R>,
 ): Promise<R> {
   /* Both started before either is awaited — that is the point of the thunk. */
   const artefact = load();
@@ -6044,6 +6052,7 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
   const nowHash = now ? hashProfile(now) : null;
   return {
     ...found,
+    ...alsoFrom?.(found, nowHash),
     profileChanged:
       profileIsStale(recorded, nowHash) ||
       (clearedCountsAsChanged && recorded != null && nowHash === null),
@@ -8477,7 +8486,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res } }, captures) => {
       {
         const at = slugPart(captures, 1);
-        send(res, 200, await withProfileChanged<GlossaryResponse>(at, () => loadGlossary(at), (found) => found.glossary));
+        send(
+          res,
+          200,
+          await withProfileChanged<GlossaryResponse>(
+            at,
+            () => loadGlossary(at),
+            (found) => found.glossary,
+            false,
+            (found, nowHash) => ({ panelRun: panelRunKind(found, nowHash) }),
+          ),
+        );
       }
     },
   },

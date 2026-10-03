@@ -463,6 +463,32 @@ export function glossaryRunKind(
 }
 
 /**
+ * **What the glossary panel's own run button will do** — append or rewrite —
+ * for its label: *Find more* or *Find terms again*. Plan 261003c § 1.
+ *
+ * The same three tests as `existingFor`, read off what the glossary read
+ * already has: `stale` is the source test (`isStale` compares the same
+ * fingerprint `existingFor` does), `outdated` is the prompt test, and the
+ * profile test is against **the press's** profile, which is not Metadata's.
+ * The panel's press keeps the list's own setting (`more(profiled)` in
+ * src/web/GlossaryPanel.tsx): a plain list is run plainly, so it matches; a
+ * list written for a profile is run with today's, so it matches only if today's
+ * hashes the same — and not if the reader has changed it **or cleared it**,
+ * which `profileChanged` deliberately does not count (src/profile.ts §
+ * `profileIsStale`). GPT Sol's plan review of 261003c, P1.
+ *
+ * `nowHash` is the hash of the reader's current profile, or null for none.
+ */
+export function panelRunKind(
+  found: { glossary: Glossary; stale: boolean; outdated: boolean },
+  nowHash: string | null,
+): "append" | "rewrite" {
+  const recorded = found.glossary.profileHash ?? null;
+  const pressHash = recorded === null ? null : nowHash;
+  return found.stale || found.outdated || recorded !== pressHash ? "rewrite" : "append";
+}
+
+/**
  * The ids an older list already spent, keyed by every name it answers to.
  *
  * **This is the half that was missing**, and its absence is what made refusing

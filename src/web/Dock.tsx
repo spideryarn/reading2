@@ -1483,13 +1483,13 @@ function useCommandBarChord(
  *  - Not over an open native `<dialog>`, and not once a handler nearer the
  *    press has `preventDefault`ed it.
  *
- * `preventDefault()` only when claimed. Reading view only (`enabled`): on the
- * metadata page there is nothing to toggle back to — plan 260929g,
- * assumption 3.
+ * `preventDefault()` only when claimed. **On the metadata page it goes back to
+ * the article**, as the button does there (`metadataHref`), since 2026-10-03;
+ * until then it stood down, "nothing to toggle back to" (plan 260929g,
+ * assumption 3).
  */
-function useMetadataChord(enabled: boolean, href: string): void {
+function useMetadataChord(href: string): void {
   useEffect(() => {
-    if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
       if (!isModChord(e, "Enter") || e.defaultPrevented) return;
       const focused = document.activeElement;
@@ -1500,7 +1500,7 @@ function useMetadataChord(enabled: boolean, href: string): void {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled, href]);
+  }, [href]);
 }
 
 /**
@@ -1864,9 +1864,18 @@ export function Dock({
   const commandBar = useCommandBarChord(!isVisitor, onPanel);
   /* One value for the Metadata button and its chord, so the two cannot send
      the reader to different places. Keyed on `view` rather than `onMode`, unlike
-     ⌘-K: a visitor's reading view draws the Metadata button too. */
-  const metadataHref = readHref(slug, search, "metadata");
-  useMetadataChord(view === "article", metadataHref);
+     ⌘-K: a visitor's reading view draws the Metadata button too.
+
+     **On the metadata page it points back at the article**, since 2026-10-03 —
+     Greg, spya-bpczdx: *"Tapping on Metadata mode in bottom bar when active
+     should close it"*, the feel a second press on a band has had since
+     261002g (`modePress`). The carried string already holds `?mode=`,
+     `?margin=` and `?at=`, so the reader lands where they were, in the mode
+     they came from. Not `history.back()`: arriving from a pasted link or the
+     shelf, that would leave the article altogether.
+     docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 2. */
+  const metadataHref = readHref(slug, search, view === "metadata" ? "article" : "metadata");
+  useMetadataChord(metadataHref);
   /* One value for the Help link and the command bar's Help row, for the same
      reason: two doors that open on different sections teach the reader that
      neither can be trusted. */
@@ -2469,9 +2478,9 @@ const NOT_A_MODE = {
     how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
   },
   metadata: {
-    /* The chord in the Commands card's own format. Said on the metadata page
-       too, where it does not fire — hence "from the article". */
-    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it from the article",
+    /* The chord in the Commands card's own format. The same card on both
+       pages, so it says both directions (since 2026-10-03, plan 261003c). */
+    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it; either, pressed again, goes back to the article",
     /* **"Opening it spends nothing" — and the two wider claims that came
        before it were each false, a few hours apart.**
 

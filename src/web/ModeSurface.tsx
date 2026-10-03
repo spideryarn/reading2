@@ -174,7 +174,7 @@ export function ModeSurface({
    * its own**, because every one of them is already a direct child of the band
    * and the CSS says so.
    *
-   * **Seven panels want it, not four**: `.gloss-foot`, `.ideas-again`,
+   * **Seven panels want it, not four**: `.gloss-foot` (the top of the column since 2026-10-03, plan 261003c), `.ideas-again`,
    * `.quotes-foot`, `.tl-again`, and — missed by the first inventory and by the
    * plan — Debate's `.dbt-again` and Quiz's `.quiz-rewrite`, plus Skim's
    * `.skim-foot`. All are direct
