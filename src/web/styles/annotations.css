@@ -246,14 +246,6 @@ mark.cmt.term {
 mark.cite {
   background: none;
   color: inherit;
-  /* **Undo `.cite`**, the block-id chip's class (mode-band.css), which matches
-     this mark too and made it an `inline-flex` box with a 0.1rem margin each
-     side. Nobody could see that until 2026-10-03, when a quote became a fill:
-     the margin was a gap in the fill either side of a cited phrase, and the
-     box stood 3px taller than its line. An `inline-flex` mark also cannot
-     wrap. Found by the browser check for plan 261003l. */
-  display: inline;
-  margin: 0;
   text-decoration: underline dashed;
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;

@@ -36,9 +36,10 @@ and [search.md § An outline](../project/search.md#an-outline-since-2026-10-03).
   the dark page, black on the light one).
 - Help and `/design` say the new thing.
 
-Two older faults showed up once a quote was a fill, and are fixed: a cited phrase inside a quote had
-a thin gap either side of it, and a phrase a conversation was started from had black text on the
-dark `/design` page.
+Two older faults showed up once a quote was a fill. A phrase a conversation was started from had
+black text on the dark `/design` page, fixed here. A cited phrase inside a quote had a thin gap in
+the fill either side of it; a sibling session fixed its cause the same hour (`spya-trg9kz`, the
+chips' class was leaking onto the citation mark), so this change carries no fix of its own for it.
 
 ## What was checked
 
