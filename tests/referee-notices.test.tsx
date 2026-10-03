@@ -24,7 +24,7 @@
  * tests/pressing-a-chip-arms-it.test.tsx gives: the band wants `?referee=`, a
  * fetch and the reader's comments. The frame is everything this file is about.
  */
-import { act, createElement } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -79,13 +79,9 @@ afterEach(() => {
 function paint(scan: SourceScanState, view: RefereeView = "criteria"): void {
   act(() => {
     root.render(
-      createElement(RefereeFrame, {
-        slug: "a-piece",
-        view,
-        onView: () => {},
-        scan,
-        children: createElement("p", { className: "the-panel" }, "the panel"),
-      }),
+      <RefereeFrame slug="a-piece" view={view} onView={() => {}} scan={scan}>
+        <p className="the-panel">the panel</p>
+      </RefereeFrame>,
     );
   });
 }
@@ -135,6 +131,18 @@ describe("shut, which is the ordinary first screen", () => {
 });
 
 describe("a finding opens the box without a press", () => {
+  it("updates an existing live region when findings arrive behind closed Notices", () => {
+    paint(LOADING);
+    const announcement = host.querySelector('[role="status"][aria-live="polite"]');
+    expect(announcement, "no live region exists before the result arrives").not.toBeNull();
+    expect(announcement?.textContent).toBe("");
+    paint(examined([HIDDEN]));
+    expect(host.querySelector('[role="status"][aria-live="polite"]')).toBe(announcement);
+    expect(announcement?.textContent).toContain("The source check found text to inspect in Notices.");
+    paint(examined([]));
+    expect(announcement?.textContent).toBe("");
+  });
+
   it.each([
     ["an unexplained finding", [HIDDEN]],
     ["a finding with an everyday label", [LABELLED]],
@@ -187,10 +195,35 @@ describe("the band says what to do in the sub-mode it is showing", () => {
     const group = host.querySelector('[role="radiogroup"]');
     expect(group?.querySelectorAll('[role="radio"]').length).toBe(4);
     expect(group?.contains(notices())).toBe(false);
+    expect(notices().getAttribute("role")).toBeNull();
   });
 
-  it("has the band's (i) in the corner, like every other mode", () => {
+  it("has the band's (i) in the corner with the explanation of the colours", async () => {
     paint(PDF);
-    expect(host.querySelector(".mode-band.referee.has-about .band-about")).not.toBeNull();
+    const about = host.querySelector<HTMLButtonElement>(".mode-band.referee.has-about .band-about");
+    expect(about).not.toBeNull();
+    expect(host.querySelector(".mode-band")?.firstElementChild).toBe(about);
+    await act(async () => about?.click());
+    expect(document.querySelector(".band-about-card")?.textContent).toContain("What the colours mean.");
+  });
+
+  it("lets article navigation keys through the Notices button", () => {
+    paint(PDF);
+    const reached: string[] = [];
+    const record = (event: KeyboardEvent) => reached.push(event.key);
+    const keys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"];
+    window.addEventListener("keydown", record);
+    try {
+      act(() => notices().focus());
+      for (const key of keys) {
+        const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+        act(() => notices().dispatchEvent(event));
+        expect(event.defaultPrevented).toBe(false);
+      }
+      expect(reached).toEqual(keys);
+      expect(isOpen()).toBe(false);
+    } finally {
+      window.removeEventListener("keydown", record);
+    }
   });
 });

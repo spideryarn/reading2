@@ -28,8 +28,8 @@ What the band is now: [referee-mode.md § What the band looks like](../project/r
 - **The Candidates chip no longer starts a run**; its own button does, with the search-engine
   sentence beside it. That is what let that warning leave the top of the other three sub-modes.
 
-At 1280 × 800 the criterion box started 607px down the band before; the plan's § After has where it
-starts now.
+The criterion box now starts 151px down the band at 1280 × 800 (it was 607), 205px on an iPad (783)
+and 184px on a phone (627).
 
 ## Not built, and asked
 

@@ -325,7 +325,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     reading: (
       <>
         <p>
-          <strong>Hidden instructions</strong>, at the top, checks the original web page for text a
+          <strong>Hidden instructions</strong>, behind the Notices button, checks the original web page for text a
           person would not see but an AI would read — text the colour of its background, too small to
           read, invisible characters, instructions written to a model. It reports and blocks nothing.
           “Nothing found” is not a clean bill: PDFs and some parts of a page are not checked, and it

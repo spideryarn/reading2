@@ -13,8 +13,9 @@
  * ## It belongs to the band, not to a sub-mode
  *
  * A hidden instruction is a fact about the *document*, so it bears on Criteria,
- * Claims, Mirror and Candidates alike. `RefereeBand` draws this above the
- * sub-mode chips and it stays there whichever panel is open.
+ * Claims, Mirror and Candidates alike. `RefereeBand` draws this inside Notices
+ * whichever panel is open. Notices opens itself for findings; otherwise the
+ * scan's headline and details are behind that button (plan 261003k).
  *
  * ## Shut until there is something to read
  *
@@ -26,7 +27,8 @@
  * > — Greg, 2026-09-02
  *
  * So the panel is a disclosure with a **headline that is on screen shut or
- * open**, and the default is *computed* rather than remembered: open when the
+ * open while Notices is open**, and the default is *computed* rather than
+ * remembered: open when the
  * scan looked at the source and found something, shut otherwise — including for
  * a PDF, which is not checked at all and is therefore no news in either
  * direction. `shown()` below returns that decision beside the words, so the two
@@ -51,9 +53,9 @@
  *    never empty, and `WhatWasNotChecked` below is rendered on the examined arm
  *    unconditionally. Since that list is now behind the disclosure, **the
  *    headline carries the caveat itself** — the words *not a clean bill* are in
- *    the same sentence as *nothing found*, on screen whether the panel is open
- *    or shut. A clean result behind a collapse with nothing to say it is
- *    incomplete is what rule 2 forbids; a headline that says so is not that.
+ *    the same sentence as *nothing found*, whether this scan disclosure is open
+ *    or shut inside Notices. A clean result behind a collapse with nothing to
+ *    say it is incomplete is what rule 2 forbids; a headline that says so is not that.
  * 3. **A label sorts a finding last; it never removes one.** `ordinary` is read
  *    off class and element names, so `class="sr-only"` on a paragraph of
  *    instructions earns it — docs/project/security.md says any UI over this must

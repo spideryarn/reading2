@@ -89,21 +89,11 @@ import { useRenderCount } from "./perf.js";
 /**
  * The band: the thread, the fetch that belongs to it, and the opening turn.
  *
- * **The opening turn is automatic on a press, and never on a mount.** Those are
- * two different sentences and this file has held all three positions:
- *
- *  - until 2026-09-02 it fired from a `useEffect` on **mount**, which meant a
- *    pasted link, a Back step or a re-render bought a run over the paper and
- *    sent search terms to a search engine;
- *  - then it fired only from `StartBrief`'s button;
- *  - since 2026-09-06 it fires from either — the button, or the **press on the
- *    Candidates chip** that opened this sub-mode, through the activation token
- *    (src/web/activation.ts).
- *
- * The 2026-09-02 rule is intact and is the load-bearing one: a *mount* still
- * spends nothing, and `tests/referee-candidates-press.test.tsx` mounts this band
- * with nothing armed and asserts exactly that. What changed is that a press on
- * the chip counts as asking, which a mount never did.
+ * **Only Build the reviewer brief starts the opening turn.** The chip opens
+ * the panel and arms nothing; Try again repeats a failed read and starts no
+ * turn. Both a bare mount and a chip press are free. The search-engine warning
+ * stays beside this panel's controls, including the follow-up composer.
+ * src/web/activation.ts § REFEREE_TARGET and plan 261003k explain the choice.
  *
  * A component of its own for `ConversationBand`'s reason — `useChat` fetches on
  * mount, and a reader who never opens this sub-mode should not pay for it.
@@ -143,31 +133,11 @@ export function CandidatesBand({
    * on its own, and it is the query the conversation then refines — so if the
    * names layer disappoints, this still stands.
    *
-   * **What changed on 2026-09-02 is when it runs, and 2026-09-06 did not undo
-   * it.** It used to fire from a `useEffect` the moment this sub-mode first
-   * mounted, which made Candidates the one chip in the radiogroup that spends
-   * money on being *looked at* — the other three are inert to a press. A
-   * first-time referee clicking along the row to find out what the four words
-   * mean paid for a run and, worse, sent search terms drawn from an unpublished
-   * manuscript to a search engine. That is **a different third party at a
-   * different time** from the model provider the band's notice is about, and the
-   * notice cannot cover it: the notice is in the past tense, and this had not
-   * happened yet. docs/plans/260902f-make-referee-mode-understandable.md § Stage 3.
-   *
-   * On 2026-09-06 it started running on a **press of the chip** as well as on a
-   * press of the button — Greg's rule that opening a mode is the reader asking
-   * for it (src/web/activation.ts). Read the paragraph above before deciding
-   * that is the same mistake again, because it is not: what made the mount
-   * version wrong was that a pasted link, a Back step and a re-render all reach
-   * a mount, and none of them is anybody asking for anything. A press on the
-   * chip is a person, and `armActivationForRefereeView` is minted from that
-   * `onClick` and from nowhere else.
-   *
-   * **What the press now costs is unchanged and is still worth stating**: a
-   * first turn may reach a search engine with terms drawn from the manuscript.
-   * The chip's own `ControlTip` (`REFEREE_VIEW_TIP.candidates`) says so, and
-   * that card is what the referee reads on the way to pressing it. If that
-   * sentence is ever weakened, this behaviour has to go back to a button.
+   * **A first turn may reach a search engine with terms from the manuscript.**
+   * That is a different third party from the model provider; the visible
+   * StartBrief note names it before the turn starts. The chip started a turn
+   * from 2026-09-06 to 2026-10-03, with its warning above all four sub-modes.
+   * It stopped so the work could come first (plan 261003k).
    *
    * `startBrief` is what the button below calls, what the automatic run calls,
    * and nothing else. `loaded` still guards it for `ConversationBand`'s reason —
@@ -234,26 +204,13 @@ export function CandidatesBand({
   }, [thread, loaded]);
 
   /**
-   * **The editor pressed Candidates and this paper has no thread — build the
-   * brief.** The press is minted by the chip in `RefereeViews` (App.tsx) and by
-   * nothing else; see `startBrief` above for why that is not the mount-fired
-   * version this file used to have.
+   * **The old chip-driven automatic run is dormant.** REFEREE_TARGET no longer
+   * has a Candidates producer; this hook stays so reversing that decision is
+   * one table entry, together with restoring the warning above the chips.
    *
-   * The four states, out of what `useChat` reports:
-   *
-   *  - `!loaded` → **loading**, and the press waits;
-   *  - `loadFailed` → **error**, which is not an answer, so the press is kept
-   *    and `reload` asks again. This panel needs that way out: with the fetch
-   *    failed it draws no start button at all, so the chip is the only control
-   *    left. useAutoRun.ts § A failed read is not an answer;
-   *  - a thread → **ready**, and the press retires having spent nothing, which
-   *    is the ordinary case on a second visit;
-   *  - otherwise **none**, and the brief is asked for.
-   *
-   * `startBrief`'s own `!loaded || thread` guard is left in place rather than
-   * relied upon: this hook has already answered both questions by the time it
-   * calls, and two guards that agree are cheaper than working out which one is
-   * load-bearing later.
+   * `useChat` supplies loading, error, ready or none. With no activation token,
+   * none of these states starts a turn or retries a read. The panel's Try again
+   * calls reload; a successful read shows the thread or Build the reviewer brief.
    */
   const status: ArtefactStatus = !loaded
     ? "loading"

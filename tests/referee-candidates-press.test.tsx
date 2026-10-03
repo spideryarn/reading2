@@ -2,9 +2,6 @@
 /**
  * **Candidates does not spend money on being looked at.**
  *
- * *Looked at*, not *asked for*, and since 2026-09-06 those are different things
- * — so read the next two paragraphs together.
- *
  * Candidates fired a model call from a `useEffect` the moment the sub-mode first
  * **mounted**: a paid run over the paper, **and** web searches whose terms are
  * drawn from an unpublished manuscript and go to a search engine. That last part
@@ -13,15 +10,11 @@
  * notice is about, and that notice is in the past tense, so it cannot be
  * covering something that has not happened yet.
  *
- * **A mount is still not an ask, and that is what every test here holds.** What
- * changed on 2026-09-06 is that the *chip press* which opens the sub-mode counts
- * as one, through the activation token
- * ([260906b](../docs/plans/260906b-opening-a-mode-starts-it-generating.md)) — so
- * the four chips are no longer "three inert and one not": Claims and Candidates
- * both run what they open, and Criteria and Mirror arm nothing. Nothing in this
- * file arms a token, so every mount below is the bare mount, which is exactly
- * the case that must stay free. Which gesture *mints* a token is
- * [`tests/pressing-a-chip-arms-it.test.tsx`](./pressing-a-chip-arms-it.test.tsx).
+ * **A mount is still not an ask, and that is what every test here holds.**
+ * From 2026-09-06 to 2026-10-03 the chip press also counted as asking through
+ * an activation token. It opens the panel and arms nothing now; only Build the
+ * reviewer brief and the composer start turns. Try again only repeats a failed
+ * read. tests/pressing-a-chip-arms-it.test.tsx holds the chip's half.
  *
  * ## The mutation each test catches
  *
@@ -72,6 +65,8 @@ import type { Block, BlockId, ChatThread } from "../src/types.js";
 let calls: { url: string; method: string }[] = [];
 /** What the conversation GET answers, decided by the test that is running. */
 let threads: ChatThread[] = [];
+/** Fail this many reads before returning the thread list. */
+let failedReads = 0;
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>(
@@ -81,6 +76,10 @@ vi.mock("../src/web/lib/api.js", async () => {
     const method = (init.method ?? "GET").toUpperCase();
     calls.push({ url, method });
     if (method === "GET") {
+      if (failedReads > 0) {
+        failedReads -= 1;
+        return new Response(JSON.stringify({ error: "offline" }), { status: 503 });
+      }
       return new Response(JSON.stringify({ threads }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -129,6 +128,7 @@ let root: Root;
 beforeEach(() => {
   calls = [];
   threads = [];
+  failedReads = 0;
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -170,6 +170,63 @@ function startButton(): HTMLElement | null {
 }
 
 describe("opening the Candidates sub-mode", () => {
+  it.each([false, true])(
+    "retries failed reads without starting a turn (stored thread: %s)",
+    async (stored) => {
+      failedReads = 2;
+      if (stored) {
+        threads = [{
+          id: "spya-thr2aa",
+          kind: "candidates",
+          title: "Candidates",
+          createdAt: "2026-09-01T09:00:00.000Z",
+          updatedAt: "2026-09-01T09:00:00.000Z",
+          messages: [{
+            id: "spya-msg2aa",
+            role: "assistant",
+            text: "Stored reviewer brief.",
+            createdAt: "2026-09-01T09:00:01.000Z",
+            status: "done",
+          }],
+        } as ChatThread];
+      }
+      mount();
+      await flush();
+      expect(calls.filter((c) => c.method === "GET")).toHaveLength(1);
+      expect(startButton()).toBeNull();
+      for (const reads of [2, 3]) {
+        const again = [...host.querySelectorAll("button")].find(
+          (button) => button.textContent?.trim() === "Try again",
+        );
+        expect(again, "a failed read must leave a retry control").toBeDefined();
+        act(() => again?.click());
+        await flush();
+        expect(calls.filter((c) => c.method === "GET")).toHaveLength(reads);
+        expect(posts(), "retrying a read started a paid turn").toEqual([]);
+      }
+      expect(host.textContent).not.toContain("Could not load this conversation.");
+      expect(startButton() !== null).toBe(!stored);
+      if (stored) {
+        expect(host.textContent).toContain("Stored reviewer brief.");
+        const box = host.querySelector<HTMLTextAreaElement>(".cnd-box");
+        expect(box, "a stored thread has no composer").not.toBeNull();
+        act(() => {
+          Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
+            box, "Leave out the authors' own lab",
+          );
+          box?.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        const ask = host.querySelector<HTMLButtonElement>(".cnd-send");
+        expect(ask?.disabled).toBe(false);
+        act(() => ask?.click());
+      } else {
+        act(() => startButton()?.click());
+      }
+      await flush();
+      expect(posts()).toHaveLength(1);
+    },
+  );
+
   it("asks nothing when it is merely mounted, with nothing pressed", async () => {
     /* No activation token is armed anywhere in this file, so this is a bare
        mount: a pasted `?referee=candidates`, a Back step, a re-render. The

@@ -1037,9 +1037,12 @@ Every one of those is named in the result: `blindSpots` is **never empty** (`app
 is always on it), so the list of what was not checked travels with the findings instead of being
 something a reader has to remember. The panel is collapsed by default (2026-09-02,
 [referee-mode.md § rule 5](referee-mode.md)), so the list itself is now one press away — and the
-rule survived by moving into the line that is on screen either way: a clean result reads *nothing
+rule survived by moving into the panel's headline: a clean result reads *nothing
 found in the HTML source — which is not a clean bill*, never *nothing found* alone. That is the half
-a type cannot enforce, in both versions.
+a type cannot enforce, in both versions. Since 2026-10-03 the whole panel, headline included, is
+behind Referee's Notices button, which opens by itself only when something was found; whether a
+one-line result should stay on screen is an open question for Greg
+([261003k](../plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md)).
 `tests/source-scan-notice.test.tsx` is where that, the PDF branch, and the sorting of labelled
 findings are held; each was watched red against a mutated panel before it was believed.
 

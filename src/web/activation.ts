@@ -575,7 +575,7 @@ export function activationForDiagram(kind: DiagramKind): AutoRunTarget | null {
 }
 
 /**
- * The same, for a press on one of Referee's four sub-mode chips. Two of them
+ * The same, for a press on one of Referee's four sub-mode chips. Three of them
  * arm nothing — `REFEREE_TARGET` says which and why.
  *
  * Called from the chip's own `onClick` in `RefereeViews`, and from nowhere

@@ -234,8 +234,67 @@ of notice and explanation stood above the first control on desktop, 20 on an iPa
 
 ## After
 
-_Filled in from the browser pass._
+Same articles, same machine, Notices shut. Offsets are from the top of the band to the criterion
+box.
+
+| Viewport | Top row | Criterion box starts at | Before |
+|---|---|---|---|
+| desktop 1280×800 | 49 | **151** | 607 |
+| iPad 820×1180 | 83 | **205** | 783 |
+| phone 390×844 | 82 | **184** | 627 |
+
+Also checked in the browser:
+
+- **No overlap and no sideways overflow** at 1280×800, 820×1180, 390×844, 1280×720 and 900×337. The
+  Notices button never meets the corner (i).
+- **With Notices open in a short window** the panel keeps its floor: at 1280×720 the box is 272px
+  and the panel 359px; at 900×337 the box is 57px (scrolling, 440px of content) and the panel 80px.
+  Cramped at that size, and nothing is pushed off the band.
+- **Pressing the Candidates chip sends two `GET /api/chat/<slug>` and no `POST`.** The panel shows
+  *Build the reviewer brief* and the search-engine sentence.
+- **The (i)** opens a card with *What the colours mean*, wholly inside the window on desktop and
+  phone.
+- **Keyboard**: Tab runs Criteria, Claims, Mirror, Candidates, Notices, then the criterion box.
+  Enter on Notices opens and shuts the box.
+- No page errors and no React warnings in the console.
+
+Two faults the first pass found, both fixed and re-shot: the Notices hover card stayed open over
+the box it had just opened, and on an iPad's narrow band Notices sat alone on a third line (the top
+row was 116px; it is 83px with the chips and the button wrapping as one run).
+
+![after, desktop, Criteria](261003k-shot-after-desktop-criteria.png)
+![after, iPad, Criteria](261003k-shot-after-ipad-criteria.png)
+![after, phone, Criteria](261003k-shot-after-phone-criteria.png)
+![after, desktop, Claims](261003k-shot-after-desktop-claims.png)
+![after, phone, Candidates](261003k-shot-after-phone-candidates.png)
+![after, desktop, Notices open on a PDF](261003k-shot-after-desktop-notices-pdf.png)
+![after, iPad, Notices open](261003k-shot-after-ipad-notices.png)
+![after, desktop, the (i)](261003k-shot-after-desktop-about.png)
+
+Not measured: a real iPad or iPhone. The pass was Chrome at those window sizes, and `.ref-views`
+uses `display: contents`, which older Safari handled badly for accessibility roles; current Safari
+does not, but nobody has listened to it with VoiceOver.
 
 ## Reviews
 
-_The code review is added here when it returns._
+- [The plan, by GPT Sol](261003k-referee-mode-actions-first-plan-review-sol.md): *build after
+  changes*. § What the plan review changed.
+- [The code, by GPT Sol](261003k-referee-mode-actions-first-code-review-sol.md)
+  ([its brief](261003k-referee-mode-actions-first-code-review-prompt.md)): *land after fixes*, with
+  the fixes made. Each was read and the gates re-run before committing.
+  - A scan that finds something late used to change the text of a live region already on the page,
+    so a screen reader announced it. Inside a box that only mounts when it opens, the region arrived
+    already filled and announced nothing. There is now a small status region that is always present.
+    Whether a screen reader actually speaks it is not verified.
+    [Postmortem 261003e](../postmortems/261003e-a-live-region-mounted-with-its-message-has-no-update-to-announce.md).
+  - The **Try again** test was at the panel only, so wiring the band's retry to the *start* function
+    passed. Two band-level tests now cover a failed read followed by a good one.
+  - Two mutations left the suite green (Notices given `role="radio"`; the colours paragraph removed
+    from the (i)); both now fail a test. Seventeen mutations tried in all, none surviving.
+  - Stale comments and the opening of referee-mode.md corrected.
+- Reported by the review and fixed afterwards: the Help page said the hidden-instructions check is
+  *"at the top"* (it now says *behind the Notices button*), and mode.md, security.md and three
+  comments still described the old arrangement.
+- Reported and **not** changed, because it is a published sentence: `MODE_CATALOG`'s line for
+  Referee says *"the sub-modes inside arm themselves"*. Only Claims does now. It is shown in the
+  Dock's card and in the new (i).

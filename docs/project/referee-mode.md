@@ -53,15 +53,10 @@ window `RefereeClaimsStore.sweep`'s one boolean cannot express — without it a 
 loading the panel would error a run the first one is still streaming
 ([`src/store/pg-referee-claims.ts`](../../src/store/pg-referee-claims.ts)).
 
-**Candidates works end to end** as of 2026-09-01 — open the sub-mode and the opening ask goes out on
-the press that opened it, creating the thread; then scope the search in the composer and names arrive
-with the shortlist above the transcript. **The brief used to arrive unprompted**, on a `useEffect`
-the first time the sub-mode was *mounted*, and that is why the button was added: a mount is not a
-gesture — a pasted link, a Back step and a re-render all reach one — so a first-time referee paid for
-a model call and sent paper-derived terms to a search engine without having asked for either
-(2026-09-02). The press-not-mount rule survives; since 2026-09-06 a press on the **chip** counts as
-one, and the button stays for the reader whose automatic attempt failed
-([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md), and § the disclosure, below). It is a third `ThreadKind` on chat's own machinery
+**Candidates works end to end** — open the sub-mode, then press *Build the reviewer brief* to
+create its thread; scope the search in the composer and names arrive with the shortlist above the
+transcript. Opening the panel and retrying a failed read start no turn (§ What the band looks like).
+It is a third `ThreadKind` on chat's own machinery
 (`drizzle/0050_candidates_thread_kind.sql`, [`src/converse.ts`](../../src/converse.ts) § `systemFor`,
 [`src/referee-candidates.ts`](../../src/referee-candidates.ts),
 [`src/web/CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx)). See § 4 below for where each of
@@ -74,7 +69,7 @@ cannot reach a referee, and its `coverage` cannot stop any UI from saying 'nothi
 `GET /api/referee/scan/:slug` now runs it over the stored **raw source**
 ([`src/source-scan.ts`](../../src/source-scan.ts)), and
 [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx) draws the answer at the
-**mode** level — above the sub-mode chips, on screen whichever panel is open — because a hidden
+**mode** level — inside Notices, whichever panel is open — because a hidden
 instruction is a fact about the document and bears on Criteria, Claims, Mirror and Candidates
 alike. Rule 5 below says where each of its rules is enforced.
 

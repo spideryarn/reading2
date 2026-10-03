@@ -27,8 +27,8 @@ import { REFEREE_SUB_MODES } from "../../sub-modes.js";
 import { useRenderCount } from "../../perf.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 /* Referee mode's rule 5, and the one thing in the band that is not a sub-mode:
-   the deterministic scan of the document's own source, drawn above the chips
-   because a hidden instruction bears on all four panels. src/injection-scan.ts
+   the deterministic scan of the document's own source, inside Notices because
+   a hidden instruction bears on all four panels. src/injection-scan.ts
    is the scanner and it calls no model. */
 import { SourceScanNotice, sourceScanOpens } from "../../SourceScanNotice.js";
 import { type SourceScanState, useSourceScan } from "../../useSourceScan.js";
@@ -43,9 +43,8 @@ import { ModeSurface } from "../../ModeSurface.js";
  *
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md. The band itself is
  * stage 1 — the confidentiality notice, the four buttons, and a line per panel
- * saying what that panel will do — and it still calls no model. **Three of the
- * four panels underneath it now do**: Criteria (stage 3), Claims (stage 4) and
- * Mirror (stage 5b). Candidates is still its stage 1 placeholder.
+ * saying what that panel will do — and it still calls no model. All four panels
+ * underneath it can: Criteria, Claims, Mirror and Candidates.
  *
  * There are **four** of them and the plan on disk says three: `candidates` was
  * added on Greg's say-so the same night, overruling the cut the plan's appendix
@@ -205,6 +204,12 @@ export function RefereeFrame({
           button is a sibling of the radiogroup rather than inside it, because it
           is not one of the four. */}
       <div className="ref-top">
+        {/* Keep a live region present before the asynchronous result arrives.
+            The scan's own region mounts populated when Notices opens itself,
+            which does not establish a live update for assistive technology. */}
+        <span className="sr-only" role="status" aria-live="polite">
+          {sourceScanOpens(scan) ? "The source check found text to inspect in Notices." : ""}
+        </span>
         <RefereeViews slug={slug} view={view} onView={onView} />
         <Tooltip
           placement="bottom"
@@ -374,10 +379,10 @@ export function RefereeViews({
               tabIndex={0}
               className={`ref-view-btn${v === view ? " on" : ""}`}
               onClick={() => {
-                /* **The gesture seam for Claims and Candidates.** Pressing
-                   either chip with nothing there starts it — Greg's rule about
-                   opening a mode, one level down. Criteria and Mirror arm
-                   nothing, and the table that says so is
+                /* **The gesture seam for Claims.** Pressing its chip with
+                   nothing there starts it — Greg's rule about opening a mode,
+                   one level down. The other three chips arm nothing; Candidates
+                   waits for Build the reviewer brief. The table is
                    src/web/activation.ts § REFEREE_TARGET, which is also where
                    the note about Candidates and the search engine lives.
 

@@ -9,13 +9,9 @@
 
 /* -------------------------------------------------------- § referee mode ----
    The mode for somebody who has been asked to peer-review the piece. The shell
-   is `.mode-band` above and the head is `.band-head`, unchanged; what is here
-   is the three things this band has that no other one does. See App.tsx
-   § RefereeBand and docs/plans/260831an-referee-mode-for-peer-reviewers.md.
-
-   Everything else is borrowed on purpose rather than duplicated — `.band-head`
-   for the title row and `.gloss-quiet` for the placeholder lines — so this
-   section stays the size of what is genuinely new. */
+   is `.mode-band` in mode-band.css; this owns the chips and Notices row,
+   the Notices box and the panel. See modes/referee/RefereeMode.tsx
+   and docs/project/referee-mode.md. */
 
 /* **The mode's own preamble — the notice and the scan — capped at 40% of the
    band and scrolling inside it.**
@@ -91,7 +87,7 @@
    `.gloss-stale`, and specifically NOT `--highlight-ink`, the red of
    `.gloss-error`. A red panel makes a person dismiss the sentence as chrome
    they have seen before, which is the exact failure this notice exists to
-   avoid — and there is nothing to dismiss it with, because it is always here.
+   avoid. Notices collapses it for this visit and remembers nothing.
 
    Wider measure than the panel's other text and a taller line height: it is a
    paragraph somebody has to actually read, not a label. */
@@ -111,8 +107,8 @@
 /* The disclosure line is for a different reader — somebody whose agreement
    permits this — so it is separated rather than run on. */
 .ref-notice .ref-notice-also { margin-top: 0.45rem; color: var(--ink-faint); }
-/* **The source scan.** src/web/SourceScanNotice.tsx, and it sits between the
-   confidentiality notice and the sub-mode chips because it belongs to the mode
+/* **The source scan.** src/web/SourceScanNotice.tsx, first inside Notices,
+   before the confidentiality paragraphs, because it belongs to the mode
    rather than to a panel: a hidden instruction is a fact about the document.
 
    Styled as a notice, not as an error, for the same reason `.ref-notice` above
