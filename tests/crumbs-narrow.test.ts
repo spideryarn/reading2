@@ -65,3 +65,38 @@ describe("the breadcrumb's narrow rules", () => {
     expect(clamps[0]?.slice(1)).toEqual([NARROW]);
   });
 });
+
+/* The other end of the width range: a bar holding the breadcrumb takes the
+   strip above a mode band once it is stuck at the top. Before it sticks it is
+   level with the band, so a rule without the attribute puts the path's first
+   words behind the band. docs/plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md */
+describe("the bar above a mode band", () => {
+  it("starts at the spine only while stuck and holding the breadcrumb, at any width", () => {
+    const pulls = chains(crumbs, /margin-left:\s*calc\(-1 \* var\(--mode-w\)\)/g);
+    expect(pulls.length).toBe(1);
+    const chain = pulls[0] ?? [];
+    /* Its own selector and nothing around it: no media query. */
+    expect(chain.length).toBe(1);
+    expect(chain[0]).toContain(":root[data-bar-stuck]");
+    expect(chain[0]).toContain(".controls:has(> .crumbs)");
+    /* All three, or it does not move: the margin pulls it out of `.reader`'s
+       padding, `left` is the sticky floor, and `width` gives back what the
+       margin took so the page is no wider. */
+    const rule = crumbs.slice(crumbs.indexOf(chain[0] ?? ""));
+    const body = rule.slice(rule.indexOf("{") + 1, rule.indexOf("}"));
+    const decls = body
+      .split(";")
+      .map((d) => d.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    expect(decls).toEqual([
+      "margin-left: calc(-1 * var(--mode-w))",
+      "left: calc(var(--spine-w) + var(--safe-left))",
+      "width: calc(var(--page-w) - var(--spine-w))",
+    ]);
+  });
+
+  it("is the only rule anywhere that keys on the attribute", () => {
+    const keyed = [...everything.matchAll(/\[data-bar-stuck\]/g)];
+    expect(keyed.length).toBe(1);
+  });
+});

@@ -92,6 +92,40 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ------------------------------------------------------ § above the band -----
+   **Once the bar is stuck at the top, it starts at the spine, not at the band.**
+
+   > the headings rail spans the whole width of the screen, but the bit showing
+   > the headings actually only spans the middle column, and so it's wasting
+   > space either side
+   >
+   > — Greg, 2026-10-03 (spya-ft2cgg)
+
+   Measured at 1180 with Summary and the marginalia open: the bar ran from the
+   band's right edge to the window's, and the 336px above the band held
+   nothing while the current section was cut by 123px.
+
+   **Only while stuck.** The band is fixed from `--bar-bottom` at every scroll
+   position, and the bar is in flow under the masthead: at the top of an
+   article the two are level, and a bar that started at the spine would have
+   its first words behind the band. `data-bar-stuck` is scroll.ts §
+   `watchBarStuck`. The path moves sideways once as the masthead leaves; there
+   is no transition, because one on `left` and `width` would also run every
+   time a mode opened.
+
+   **The negative margin is what moves it.** `left` on a sticky box is a floor,
+   and the bar's place in flow is after `.reader`'s `--mode-w` of padding. The
+   margin and the wider `width` cancel, so the page is no wider for it.
+
+   No query: with no band beside the prose `--mode-w` is `0px` and this is
+   shell.css's own rule. (0,4,0), over `.controls` there.
+   docs/plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md */
+:root[data-bar-stuck] :where(.reader) > .controls:has(> .crumbs) {
+  margin-left: calc(-1 * var(--mode-w));
+  left: calc(var(--spine-w) + var(--safe-left));
+  width: calc(var(--page-w) - var(--spine-w));
+}
+
 /* ---------------------------------------------------- § a narrow window ------
    **Three lines in a taller bar, on a window too narrow for the path.**
 

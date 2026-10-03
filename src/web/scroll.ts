@@ -55,6 +55,56 @@ export function controlsBar(): HTMLElement | null {
 }
 
 /**
+ * **`data-bar-stuck`: the controls bar has reached the top of the window.**
+ *
+ * The bar is sticky and sits in flow under the masthead, so at the top of an
+ * article it is level with a mode band, which is `position: fixed` from
+ * `--bar-bottom` at every scroll position. Only once the masthead has gone is
+ * the bar above the band, and only then may it take the strip over it:
+ * crumbs.css § above the band is the one rule that reads this.
+ *
+ * `sentinel` is a zero-height element directly before the bar
+ * (BarStuckSentinel.tsx). It has left by the top exactly when the bar has
+ * stuck. An observer rather than a rect read in `watchBarVisibility`, whose
+ * callback is deliberately free of DOM reads; and an attribute rather than
+ * React state, for `data-bars`'s reason.
+ *
+ * **Late is safe and early is not.** The root margin is `0px`, not
+ * `--safe-top`, so in the installed app the attribute arrives a few pixels
+ * after the bar sticks and leaves a few before it lets go. Both leave a stuck
+ * bar narrower than it could be. The other direction would put the bar's left
+ * end behind the band.
+ *
+ * `stopped` because `disconnect()` does not drop entries already queued: a
+ * callback delivered after teardown would put the attribute back with nothing
+ * left to clear it. Without `IntersectionObserver` this does nothing and the
+ * bar stays where it always was.
+ *
+ * Returns its own teardown.
+ * docs/plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md
+ */
+export function watchBarStuck(sentinel: Element): () => void {
+  if (typeof IntersectionObserver === "undefined") return () => {};
+  let stopped = false;
+  const observer = new IntersectionObserver((entries) => {
+    if (stopped) return;
+    const last = entries.at(-1);
+    if (!last) return;
+    if (!last.isIntersecting && last.boundingClientRect.top < 0) {
+      document.documentElement.dataset.barStuck = "";
+    } else {
+      delete document.documentElement.dataset.barStuck;
+    }
+  });
+  observer.observe(sentinel);
+  return () => {
+    stopped = true;
+    observer.disconnect();
+    delete document.documentElement.dataset.barStuck;
+  };
+}
+
+/**
  * Height of the fixed bar along the bottom — Dock.tsx.
  *
  * The counterpart to `stickyOffset`, and it exists for the same reason: a line

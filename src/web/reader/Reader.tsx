@@ -65,6 +65,7 @@ import type { Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
+import { BarStuckSentinel } from "../BarStuckSentinel.js";
 import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
 import { SummaryBand, VisitorSummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
@@ -3005,6 +3006,9 @@ export function Reader({
           one stray `{" "}` away from drawing the strip again with nothing to
           say so. docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md
           § The simpler options passed over. */}
+      {/* Directly before the bar, and only for a bar that holds the breadcrumb:
+          BarStuckSentinel.tsx. */}
+      {showCrumbs && <BarStuckSentinel />}
       {showBar && (
         <div className="controls">
           {/* First of all: what footing you are reading on outranks every control
