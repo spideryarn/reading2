@@ -314,5 +314,6 @@ Spend: $2.09 ($0.80 B, $1.29 B′), excluding text-to-speech. The spike's total 
   That holds `main-sessions.jsonl` (A, B, and the superseded first C run),
   `c-rerun-sessions.jsonl` (C and Cin, the measure used here), the run metadata, samples of the raw
   event logs, `analyse.mjs` (the tables) and `vad-split.mjs` (the Realtime end-of-turn split; it
-  needs the full event logs, which stayed in the box's `logs/f4sp-spike/`). The B′ follow-up is
+  needs the full event logs, which are gitignored and live on the box in the primary checkout's
+  `logs/f4sp-spike/`, with the OpenAI guides read for this in `logs/f4eq-openai-docs/`). The B′ follow-up is
   `bprime-short-sessions.jsonl`, `bprime-long-sessions.jsonl` and `analyse-bprime.mjs`.
