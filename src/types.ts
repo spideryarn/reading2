@@ -1072,6 +1072,21 @@ export interface Quote {
   importance?: number;
   /** 0–1: how memorable, quotable, well-put it is. The model's judgment. */
   striking?: number;
+  /**
+   * When the run that chose this quote finished, ISO — **its own time, not the
+   * list's.** `Quotes.generatedAt` is overwritten by every *Find more*, so
+   * without this a line appended on Tuesday to Monday's list could not say
+   * Monday. Greg, 2026-10-03: *"Store when it happened."*
+   *
+   * **Absent on every quote stored before 2026-10-03, and never backfilled.**
+   * For those the list's `generatedAt` is an upper bound, not their time, and
+   * the tooltip says *on or before*; writing the bound into the field would
+   * turn it into a claim. Kept across an append and across a replace that
+   * inherits the id (src/quotes.ts § `InheritedQuote`).
+   *
+   * Display only. It enters no hash, no freshness comparison and no dedupe.
+   */
+  addedAt?: string;
 }
 
 /**

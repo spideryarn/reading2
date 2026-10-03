@@ -227,6 +227,58 @@
 /* Wider than a spine tooltip, because this holds a sentence rather than a
    label. */
 .quotes-why-card { max-width: 16rem; }
+/* The reason and the line under it are two lines of one card. The card is in
+   the model's face (voices.css names `.quotes-why-card`); the last line — who
+   chose it and when — is ours, so it sets the app's face on itself rather than
+   inheriting the model's. docs/project/fonts.md. */
+.quotes-why-reason,
+.quotes-yours-note { display: block; }
+.quotes-prov {
+  display: block;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+:is(.quotes-why-reason, .quotes-yours-note) + .quotes-prov { margin-top: 0.3rem; }
+
+/* ---- the reader's own highlights, as rows (plan 261003h) -----------------
+   The same row, and a bar down its left edge in the highlight's own colour —
+   the solid, not the wash the prose wears, which is too pale to carry a 3px
+   edge. The word "yours" says it again for anyone who cannot tell the four
+   apart. The model's rows keep their neutral rule. */
+.quotes-row-yours {
+  box-shadow: inset 3px 0 0 var(--hl-solid, var(--rule-strong));
+}
+.quotes-row-yours[data-colour="yellow"] { --hl-solid: var(--hl-yellow-solid); }
+.quotes-row-yours[data-colour="green"] { --hl-solid: var(--hl-green-solid); }
+.quotes-row-yours[data-colour="blue"] { --hl-solid: var(--hl-blue-solid); }
+.quotes-row-yours[data-colour="pink"] { --hl-solid: var(--hl-pink-solid); }
+/* The bar is the row's mark of where the words came from, so the quote's own
+   left rule steps back rather than drawing a second line beside it. */
+.quotes-row-yours .quotes-text { border-left-color: transparent; }
+.quotes-yours {
+  display: inline-block;
+  margin: 0.3rem 0 0 0.5rem;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.quotes-yours-noted {
+  display: flex;
+  align-items: center;
+  padding: 0.15rem;
+  color: var(--ink-faint);
+}
+.quotes-yours-card { max-width: 16rem; }
+/* Before there is a list of the model's: the reader's rows are as tall as they
+   are, and the status and the offer sit under them rather than at the foot of
+   an empty stretch. */
+.quotes-list.quotes-list-yours-only {
+  flex: 0 1 auto;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
 .quotes-where { flex: none; }
 
 /* One child now — the rerun button — but the column and the gap stay: they cost
