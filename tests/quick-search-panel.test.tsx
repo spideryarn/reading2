@@ -13,7 +13,7 @@
  */
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockId, SearchKind } from "../src/types.js";
 import { SearchPanel, type SearchAccess } from "../src/web/SearchPanel.js";
 import { assignSlots } from "../src/web/hit-colours.js";
@@ -170,6 +170,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
 });
 
 describe("the third arm of the toggle", () => {
@@ -199,6 +200,28 @@ describe("the third arm of the toggle", () => {
       input().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     });
     expect(asked).toEqual([["anywhere he gives numbers", "quick"]]);
+  });
+
+  it.each(["quick", "meaning"] as const)("puts the soft keyboard away on the %s find button", async (start) => {
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("visualViewport", { height: 464, offsetTop: 0, scale: 1 });
+    await mount({ access: owner(), runs: [], start, active: [] });
+    type("statistical evidence");
+    input().focus();
+    act(() => findButton().click());
+    expect(asked).toEqual([["statistical evidence", start]]);
+    expect(document.activeElement).not.toBe(input());
+  });
+
+  it("keeps desktop focus when find sends", async () => {
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("visualViewport", { height: 800, offsetTop: 0, scale: 1 });
+    await mount({ access: owner(), runs: [], start: "meaning", active: [] });
+    type("statistical evidence");
+    input().focus();
+    act(() => findButton().click());
+    expect(asked).toEqual([["statistical evidence", "meaning"]]);
+    expect(document.activeElement).toBe(input());
   });
 
   /* Sol's D9, 261002h stage 3 review: an Enter that ends an IME composition

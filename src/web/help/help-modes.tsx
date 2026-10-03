@@ -201,7 +201,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
       <>
         <p>
           Clicking an underlined word does nothing: point at it for the card, and use the card’s{" "}
-          <strong>in the glossary</strong> button for the full entry. On a touchscreen, tap once for
+          <strong>Open glossary</strong> button for the full entry. On a touchscreen, tap once for
           the card and again for the entry. Press <kbd>G</kbd> in a paragraph to jump to its terms.
         </p>
         <p>In an entry:</p>

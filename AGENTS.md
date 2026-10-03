@@ -451,6 +451,9 @@ nothing else has a copy of.
   rather than only the idea. Which steps do, which decide freshness another way, and how:
   [architecture.md § Conventions](docs/project/architecture.md#conventions) — read it before you
   trust a skipped step or add one.
+- **Store when it happened.** Anything a reader does or a model makes gets a timestamp column,
+  even if nothing shows it yet. Greg, 2026-10-03: *"I just have a hunch that occasionally it will
+  be useful."* Showing it is a separate, case-by-case call.
 - **Structure — the deeply-nested table of contents — and the granularity-zoom tree are
   [the same structure](docs/project/granularity-zoom.md#the-tree)**, produced by stages 4 and 5
   together. They must not diverge into two trees. (The step was called `hierarchy` until 2026-10-02.)

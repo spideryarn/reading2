@@ -1067,7 +1067,7 @@ export function Reader({
   );
 
   /**
-   * Point at a term in the prose and press "in the glossary": open the band on
+   * Point at a term in the prose and press "Open glossary": open the band on
    * that entry.
    *
    * The `?term=` subscription that `GlossaryBand` deliberately keeps to itself
@@ -1082,7 +1082,7 @@ export function Reader({
    * be opened.**
    *
    * Since 2026-09-03 the prioritised glossary hides what is below the gate
-   * rather than grouping it, so pressing "in the glossary" on a low-scoring
+   * rather than grouping it, so pressing "Open glossary" on a low-scoring
    * term would take the reader to a band with no such row in it — the panel
    * asked to select something it is not drawing. `gateToReveal` answers the
    * gate that puts it back, and null when the current one already shows it.

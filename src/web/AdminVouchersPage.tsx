@@ -23,6 +23,7 @@ import { RefreshCw } from "lucide-react";
 import { type VoucherEmailState, giftEmailHeading, giftEmailSubject } from "../admin-vouchers.js";
 import { readableDate } from "../billing-plan.js";
 import { Shell } from "./AdminPage.js";
+import { Button } from "./components/ui/button.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { exactly } from "./relative-time.js";
 import { ADMIN_HREF } from "./router.js";
@@ -141,26 +142,17 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
             className={`${INPUT} tw:w-full`}
           />
         </label>
-        <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
-          Private note (optional — only you see it)
-          <input
-            id="voucher-new-note"
-            type="text"
-            enterKeyHint="go"
-            maxLength={500}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className={`${INPUT} tw:w-full`}
-          />
-        </label>
-        <button type="submit" disabled={busy} className={BUTTON}>
-          {busy ? "Creating…" : "Create voucher"}
-        </button>
       </div>
+      {/* **The note they will read comes first and is the loud one**; the
+          note only the admin sees is last and quiet. Greg, 2026-10-03
+          (spya-prv9yu): *"emphasise the public over the private message"*. */}
       <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-start tw:gap-3">
         <div className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-72 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
           <label className="tw:flex tw:flex-col tw:gap-1">
-            Note to them (optional — it goes in their email, above our words)
+            <span>
+              <span className="tw:text-sm tw:font-medium tw:text-foreground">Note to them</span> (optional — it
+              goes in their email, above our words)
+            </span>
             <textarea
               id="voucher-new-recipient-note"
               rows={3}
@@ -179,6 +171,26 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
           </p>
         </div>
         <EmailSketch articles={wholeNumber(articles)} note={recipientNote} />
+      </div>
+      {/* The submit is the form's last control and its one filled button —
+          *"Make the 'Create voucher' button more visible"*, the same report.
+          It was a quiet outline pill in the middle of the first row. */}
+      <div className="tw:mt-4 tw:flex tw:flex-wrap tw:items-end tw:gap-3">
+        <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
+          Private note (optional — only you see it)
+          <input
+            id="voucher-new-note"
+            type="text"
+            enterKeyHint="go"
+            maxLength={500}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className={`${INPUT} tw:w-full`}
+          />
+        </label>
+        <Button type="submit" disabled={busy}>
+          {busy ? "Creating…" : "Create voucher"}
+        </Button>
       </div>
     </form>
   );
@@ -480,22 +492,6 @@ function VoucherRow({
           voucher.articles
         )}
       </td>
-      <td className={`${CELL} tw:min-w-32`}>
-        {editing ? (
-          <input
-            type="text"
-            aria-label="Private note"
-            enterKeyHint="done"
-            form={`voucher-${voucher.id}`}
-            maxLength={500}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className={`${INPUT} tw:w-48`}
-          />
-        ) : (
-          <span className="tw:text-muted-foreground">{voucher.note ?? ""}</span>
-        )}
-      </td>
       <td className={`${CELL} tw:min-w-48`}>
         {editing ? (
           <>
@@ -516,6 +512,22 @@ function VoucherRow({
           </>
         ) : (
           <span className="tw:whitespace-pre-wrap tw:break-words">{voucher.recipientNote ?? ""}</span>
+        )}
+      </td>
+      <td className={`${CELL} tw:min-w-32`}>
+        {editing ? (
+          <input
+            type="text"
+            aria-label="Private note"
+            enterKeyHint="done"
+            form={`voucher-${voucher.id}`}
+            maxLength={500}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className={`${INPUT} tw:w-48`}
+          />
+        ) : (
+          <span className="tw:text-muted-foreground">{voucher.note ?? ""}</span>
         )}
       </td>
       <td className={`${CELL} tw:whitespace-nowrap`}>{readableDate(voucher.createdAt) ?? "—"}</td>
@@ -617,8 +629,8 @@ export function AdminVouchersPage() {
               <tr className="tw:border-b tw:border-border">
                 <th className={HEAD}>Email</th>
                 <th className={`${HEAD} tw:text-right`}>Articles</th>
-                <th className={HEAD}>Private note</th>
                 <th className={HEAD}>Note to them</th>
+                <th className={HEAD}>Private note</th>
                 <th className={HEAD}>Created</th>
                 <th className={HEAD}>Status</th>
                 <th className={HEAD}>Claimant's free usage</th>

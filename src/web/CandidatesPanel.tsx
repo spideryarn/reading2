@@ -82,6 +82,7 @@ import { isSendEnter } from "./key-chord.js";
 import { BlockRef } from "./BlockRef.js";
 import { hostOf } from "../urls.js";
 import { useChat } from "./useChat.js";
+import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 
 /**
@@ -861,15 +862,20 @@ function Composer({
   onAsk(question: string): void;
 }) {
   const [text, setText] = useState("");
+  const box = useRef<HTMLTextAreaElement>(null);
   const send = () => {
     const question = text.trim();
     if (question === "" || busy || disabled) return;
     setText("");
     onAsk(question);
+    /* The search has started and its answer arrives under the keys
+       (useVisualViewport.ts § `putKeyboardAway`). */
+    putKeyboardAway(box.current);
   };
   return (
     <div className="cnd-composer">
       <textarea
+        ref={box}
         className="cnd-box"
         rows={2}
         /* Enter sends, per the handler below, so the soft keyboard says so. */

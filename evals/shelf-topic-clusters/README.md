@@ -14,6 +14,13 @@ The judge is a fresh Opus subagent per case that reads only `results/pairs/<case
 `results/judgements/<case>.json`. Check each file landed: one judge reported writing a file it had
 not written.
 
+## One real shelf
+
+`npm run shelf-topics:preview -- --owner <email or uuid> [--archived] [--members]`
+(`preview-shelf.ts`) prints a real shelf's size and today's pills beside the proposed ones. It
+reads inside one read-only transaction, makes one paid call of about a cent, and records nothing.
+Its header says what "today" means there and what it leaves out.
+
 ## The judge's brief
 
 Each judge was given this, with its own case's file name, and nothing else:

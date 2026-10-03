@@ -1736,7 +1736,7 @@ function QuoteCard({
             }}
           >
             <QuoteIcon size={10} />
-            open in Quotes
+            open Quotes
           </button>
         )}
       </p>
@@ -2162,7 +2162,13 @@ function TermCard({
         </div>
       )}
 
-      <p className="prose-card-foot">
+      {/* **One row**, since 2026-10-03. Greg (spya-za77hj): *"it shows a
+          tooltip with dig deeper, hide, and in the glossary. They should all
+          be on the same row to minimize vertical space"*. Until then the
+          owner's two verbs were a second row under this one (plan 261002c § 3).
+          The row wraps rather than overflowing: an entry with a link and a
+          *Dig deeper again* is wider than the card. */}
+      <p className="prose-card-foot prose-card-term-foot">
         {entry.url && (
           /* `noreferrer` as well as `noopener`, as in the panel: the article's
              own URL is a reading history and a model-supplied link should not be
@@ -2172,51 +2178,52 @@ function TermCard({
             {hostOf(entry.url)}
           </a>
         )}
+        {/* **The three buttons are one group that never breaks**, pushed right.
+            When a link beside them leaves no room, the group moves to a line
+            of its own whole, rather than *Hide* parting from *Dig deeper* or
+            *Open glossary* landing alone (GPT Sol, plan review of 261003h). */}
+        <span className="prose-card-term-acts">
+        {/* The owner's two verbs, beside the way out. Plain buttons, like
+            that one: a tap inside the card is left entirely alone by the touch
+            path (useHoverCard.ts § "Inside the card"), so they work on a
+            finger as it does. */}
+        {actions && (
+          <>
+            <button
+              type="button"
+              className="prose-card-act"
+              disabled={digBusy || unquoted}
+              title={unquoted ? DIG_DEEPER_UNQUOTED : DIG_DEEPER_SAYS}
+              onClick={dig}
+            >
+              {digging ? <LoaderCircle size={10} className="cmt-spinner" /> : <Globe size={10} />}
+              {digging ? "Digging deeper…" : entry.lookup ? "Dig deeper again" : "Dig deeper"}
+            </button>
+            <button
+              type="button"
+              className="prose-card-act"
+              disabled={hiding}
+              /* Statements, not two instructions in one run — spya-d886ah's rule
+                 (Tooltip.tsx § `ControlTip.press`). Until 2026-10-02 it ended
+                 "Unhide it from the glossary's Hidden list." */
+              title="Takes this term out of your glossary and its underlines, for you only. The glossary's Hidden list brings it back."
+              onClick={() => void hide()}
+            >
+              <Trash2 size={10} />
+              Hide
+            </button>
+          </>
+        )}
         {/* The way out to the full entry. Without it the underline is a
             dead end: the mark itself stays inert to a click, because pressing
-            prose has always meant selecting it. */}
+            prose has always meant selecting it. It said "in the glossary" until
+            2026-10-03; Greg asked for a label that says what pressing it does. */}
         <button type="button" className="prose-card-open" onClick={onOpen}>
           <BookA size={10} />
-          in the glossary
+          Open glossary
         </button>
+        </span>
       </p>
-
-      {/* The owner's two verbs, a row of their own under the ways out, so the
-          foot does not wrap in an 18rem card. Plain buttons, like *in the
-          glossary*: a tap inside the card is left entirely alone by the touch
-          path (useHoverCard.ts § "Inside the card"), so they work on a finger
-          as that one does. */}
-      {actions && (
-        <p className="prose-card-acts">
-          <button
-            type="button"
-            className="prose-card-act"
-            disabled={digBusy || unquoted}
-            title={unquoted ? DIG_DEEPER_UNQUOTED : DIG_DEEPER_SAYS}
-            onClick={dig}
-          >
-            {digging ? (
-              <LoaderCircle size={10} className="cmt-spinner" />
-            ) : (
-              <Globe size={10} />
-            )}
-            {digging ? "Digging deeper…" : entry.lookup ? "Dig deeper again" : "Dig deeper"}
-          </button>
-          <button
-            type="button"
-            className="prose-card-act"
-            disabled={hiding}
-            /* Statements, not two instructions in one run — spya-d886ah's rule
-               (Tooltip.tsx § `ControlTip.press`). Until 2026-10-02 it ended
-               "Unhide it from the glossary's Hidden list." */
-            title="Takes this term out of your glossary and its underlines, for you only. The glossary's Hidden list brings it back."
-            onClick={() => void hide()}
-          >
-            <Trash2 size={10} />
-            Hide
-          </button>
-        </p>
-      )}
       {hideFailed && <p className="prose-card-text prose-card-failed">{hideFailed}</p>}
     </div>
   );
