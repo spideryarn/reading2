@@ -251,3 +251,17 @@ dictation.md's list of boxes, the Help page, url-state.md if a param changes. A 
     chip does not import the bar.
   - Not done here, for Stage 3: *Copy answer* copies the raw token; `evals/README.md` has no entry
     for `evals/chat-commands/` yet.
+- **Stage 2 review** (GPT Sol, [261003f-stage-2-code-review-sol.md](261003f-stage-2-code-review-sol.md)):
+  F15 a complete token on the still-open last line of a streaming answer was briefly pressable
+  (fixed: held until the line settles); F16 a token inside a blockquote became a button (fixed:
+  text); F17 the investigation's spend did not match its results files (fixed); F18 *Copy answer*
+  copied the raw token (fixed here: `withoutCommandLines`, src/citable.ts).
+- **Stage 3**: docs and Help updated (chat-tools.md § Command buttons is the owner of the chat
+  half; reading-view-overview.md § The command bar of the bar's). **Browser check** (Playwright,
+  system Chrome, 1280 and 390 px, `useful-spya-zu5r34`; shots `261003f-shot-1…8`): all eight items
+  passed — the jump and Back, the not-found sentence, *define* opening a term, the look-up making
+  exactly one `POST …/ask` and no job, tags from the bar on both pages, the Experimental row
+  flipping, the microphone at 390 px, the regressions, and chat's bookmark and tag buttons, with
+  *Copy answer* free of tokens. No defects found.
+- **Deferred, queued**: the best place for X, qi-cehs9yfh. The interface model is the sibling
+  session's (qi-3wb7cgda, `fb-command-bar-nl`), which had not started when this landed.
