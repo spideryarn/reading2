@@ -1539,10 +1539,28 @@ function BandCard({
   const { node, words, children } = band.entry;
   /* Filtered before it is counted, so `+ n more` is a promise about rows the
      reader would actually get. Counting first and filtering second is how a
-     card ends up saying "+ 3 more" and then showing three blank bullets. */
+     card ends up saying "+ 3 more" and then showing three blank bullets.
+
+     **And not a bullet the outline above has already said.** A heading is a
+     block, so it is a leaf: the section's own heading is its first child, and
+     a part's heading lands in its first section, because a part's children
+     partition its range. A heading leaf's label is the author's heading
+     verbatim (`navLabelVoice`), so the first bullet repeated the row two lines
+     above it — on about a quarter of all cards.
+
+     Both halves of the test are needed. Only a **heading** leaf is dropped: a
+     model's label for a paragraph that happens to read the same as the title
+     is still a line about that paragraph. And only against the rows on **this
+     band's own path**: `where` also lists the neighbouring sections, and a
+     sub-heading called *Methods* is not a repeat because a part two rows down
+     is too. "Skip every heading leaf" would be simpler and would drop each
+     real sub-heading with it. Sweep item WC-W1, plan 261003g § 3. */
+  const said = new Set(
+    where.flatMap((r) => (r.kind === "node" && (r.onPath || r.here) ? [r.title.trim()] : [])),
+  );
   const kids = children
-    .map((c) => ({ id: c.node.id, ...childLabel(c) }))
-    .filter((c) => c.label !== "");
+    .map((c) => ({ id: c.node.id, repeat: c.startsAtHeading === true, ...childLabel(c) }))
+    .filter((c) => c.label !== "" && !(c.repeat && said.has(c.label)));
   /* The gist, or the nav label standing in for one — but never the nav label
      *twice*, which is what an untitled band would otherwise show: `bandLabel`
      has already used it as the title, and repeating it under itself in italics

@@ -560,6 +560,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/faq/w1"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/relations\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/relations/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/crossrefs\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/crossrefs/w1"],
@@ -888,8 +893,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 87;
-const EXPECTED_GUARD_COUNT = 106;
+const EXPECTED_MATCHER_COUNT = 88;
+const EXPECTED_GUARD_COUNT = 107;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2072,6 +2077,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/timeline\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/faq\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/relations\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/crossrefs\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
@@ -2690,6 +2696,15 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
          logged as `reason` (docs/project/logging.md). */
       expect(reply.body.error).toBe("That is not a path we can read.");
     });
+
+    it.each(["%E0", "%GG", "article%", "%C0%AF"])(
+      "answers 400 for the undecodable capture %s, not just a bare percent",
+      async (capture) => {
+        const reply = await call("PATCH", `/api/library/${capture}`, acceptAny, "{}");
+        expect(reply.status).toBe(400);
+        expect(reply.body.error).toBe("That is not a path we can read.");
+      },
+    );
 
     it("sends the two different answers to the same two malformed inputs", async () => {
       /* The pair, asserted as a pair. Either case alone could go green because

@@ -1,0 +1,1209 @@
+{
+  "case": "greg-wide",
+  "profile": "Interested in computational neuroscience, consciousness, Buddhism, AI.",
+  "shelf": [
+    {
+      "title": "The Cortex as a Prediction Machine",
+      "gist": "Explains predictive coding, in which each cortical layer predicts the one below and only prediction error travels upward, and asks what that framework does and does not explain about perception."
+    },
+    {
+      "title": "Replay in the Hippocampus: Rehearsing Routes While You Rest",
+      "gist": "Reviews evidence that hippocampal place cells replay sequences of earlier trajectories during rest and sleep, and what that replay might do for planning and memory consolidation."
+    },
+    {
+      "title": "What Dopamine Actually Does: Reward Prediction Error Revisited",
+      "gist": "Retraces how dopamine neurons came to be understood as signalling reward prediction error in temporal-difference learning, and how recent findings complicate that tidy computational account."
+    },
+    {
+      "title": "Spiking Neural Networks and the Energy Budget of Thought",
+      "gist": "Looks at spiking neural networks and neuromorphic hardware as a way to match the brain's roughly twenty-watt efficiency, and why training them remains stubbornly harder than conventional deep networks."
+    },
+    {
+      "title": "The Cerebellum Keeps Time",
+      "gist": "Surveys the cerebellum's role in precise timing and error-driven motor learning, treating its regular circuit of granule cells and Purkinje cells as a model of supervised learning."
+    },
+    {
+      "title": "Basal Ganglia and the Problem of Choosing One Action",
+      "gist": "Describes a computational framework in which the basal ganglia select among competing actions by disinhibition, and connects it to habit formation and Parkinson's disease."
+    },
+    {
+      "title": "Grid Cells and the Geometry of Thought",
+      "gist": "Follows the discovery of grid cells in entorhinal cortex and the suggestion that the same hexagonal coding scheme supports navigation of abstract concept spaces, not only physical ones."
+    },
+    {
+      "title": "Is the Free Energy Principle Science or Philosophy?",
+      "gist": "Weighs Karl Friston's free energy principle as a unifying theory of brain and life against the charge that it is too general to be tested or falsified."
+    },
+    {
+      "title": "Neural Population Dynamics in Motor Cortex",
+      "gist": "Argues that single neurons in motor cortex look messy but the population moves along low-dimensional trajectories that behave like a dynamical system governing movement."
+    },
+    {
+      "title": "Why We Sleep on It: Spindles, Slow Waves and Memory Consolidation",
+      "gist": "Explains how slow oscillations, sleep spindles and hippocampal ripples coordinate during non-REM sleep to transfer new memories into long-term cortical storage, with implications for studying."
+    },
+    {
+      "title": "A Wiring Diagram of a Fly: What the Connectome Taught Us",
+      "gist": "Tells the story of reconstructing the complete fruit fly brain connectome from electron microscopy, and asks what a wiring diagram does and does not explain about behaviour."
+    },
+    {
+      "title": "The Thalamus Is Not a Relay",
+      "gist": "Shows how thalamic nuclei gate and shape cortical signals, making attention a matter of selective routing rather than simple amplification of visual cortex."
+    },
+    {
+      "title": "Dendrites as Little Computers",
+      "gist": "Describes evidence that single pyramidal neurons perform nonlinear computations in their dendrites, challenging the textbook view of a neuron as a simple sum-and-threshold unit."
+    },
+    {
+      "title": "Quieting the Default Mode: What Meditators' Brains Do",
+      "gist": "Reviews imaging studies showing reduced default mode network activity and altered connectivity in experienced meditators, and cautions against reading too much into small, correlational samples."
+    },
+    {
+      "title": "The Global Workspace: A Theatre Without an Audience",
+      "gist": "Introduces Bernard Baars' global workspace theory and Stanislas Dehaene's neuronal version, in which consciousness is the broadcast of information across many brain systems at once."
+    },
+    {
+      "title": "Integrated Information Theory and Its Discontents",
+      "gist": "Summarises Giulio Tononi's integrated information theory of consciousness and the 2023 open letter calling it pseudoscience, asking what kind of claim a theory of consciousness is making."
+    },
+    {
+      "title": "The Hard Problem, Thirty Years On",
+      "gist": "Revisits David Chalmers' hard problem of consciousness, the gap between physical processes and subjective experience, and the options of physicalism, dualism, panpsychism and illusionism."
+    },
+    {
+      "title": "Going Under: What Anesthesia Reveals About Consciousness",
+      "gist": "Uses general anesthesia as an experimental tool for studying consciousness, showing how propofol disrupts cortical communication while leaving basic sensory processing largely intact."
+    },
+    {
+      "title": "Is There Something It Is Like to Be a Crab?",
+      "gist": "Examines the evidence for sentience in invertebrates and fish, and how the New York Declaration on Animal Consciousness changed what scientists feel comfortable asserting."
+    },
+    {
+      "title": "There Is No Self, and Other Things Buddhists and Neuroscientists Agree On",
+      "gist": "Compares the Buddhist doctrine of anatta, or no-self, with illusionist and bundle theories of the self in neuroscience, noting where the parallels are real and where they are forced."
+    },
+    {
+      "title": "Could a Machine Be Conscious?",
+      "gist": "Applies leading theories of consciousness to current AI systems, concluding that today's language models probably fail the main indicators while leaving the door open for future architectures."
+    },
+    {
+      "title": "Binocular Rivalry and the Search for the Neural Correlates of Consciousness",
+      "gist": "Describes how binocular rivalry lets experimenters separate what is sensed from what is seen, and why the neural correlates of consciousness have proved hard to pin down."
+    },
+    {
+      "title": "Psychedelics, Ego Dissolution and the Entropic Brain",
+      "gist": "Reviews imaging work on psilocybin and LSD showing increased brain entropy and reduced default mode integrity, and asks how this connects to reports of ego dissolution and mystical experience."
+    },
+    {
+      "title": "Blindsight: Seeing Without Knowing You See",
+      "gist": "Reviews cases of blindsight, in which patients with damage to primary visual cortex can point to or avoid objects they insist they cannot see, and what they tell us about awareness."
+    },
+    {
+      "title": "Ten Days of Silence: Notes from a Vipassana Retreat",
+      "gist": "A first-person account of a ten-day vipassana retreat, describing the discipline of body scanning, the boredom and pain of the first days, and what changed afterwards in ordinary attention."
+    },
+    {
+      "title": "What Does the Evidence Say About Mindfulness-Based Stress Reduction?",
+      "gist": "Reviews randomised trials of mindfulness-based stress reduction, finding moderate benefits for anxiety, depression and pain, but weaker evidence than popular coverage suggests and few active-control comparisons."
+    },
+    {
+      "title": "Nagarjuna's Emptiness Is Not Nothingness",
+      "gist": "Introduces Nagarjuna's Madhyamaka philosophy, in which emptiness means lack of intrinsic nature, and shows how dependent origination answers both the eternalist and the nihilist."
+    },
+    {
+      "title": "What a Koan Is For",
+      "gist": "Explains how Zen koans such as the sound of one hand function in Rinzai training, not as riddles with answers but as devices for exhausting conceptual thought."
+    },
+    {
+      "title": "The Jhanas: Deep Concentration in the Early Buddhist Texts",
+      "gist": "Describes the four material jhanas as taught in the Pali canon, their relation to samatha and insight practice, and modern debates about how deep concentration should be defined."
+    },
+    {
+      "title": "A Season in a Forest Monastery",
+      "gist": "Long-form reportage from a Thai forest monastery in the Ajahn Chah lineage, describing alms rounds, the Vinaya, and how a Western monk reconciles ancient discipline with modern doubt."
+    },
+    {
+      "title": "Training Compassion: Lovingkindness Meditation in Theory and Practice",
+      "gist": "Covers the Buddhist practice of metta, or lovingkindness, how it is taught through repeating phrases toward progressively harder people, and what trials show about its effect on empathy and prosocial behaviour."
+    },
+    {
+      "title": "How Buddhism Came West: A Short History",
+      "gist": "Traces the transmission of Buddhism from Asia to Europe and America, from the Theosophists and D. T. Suzuki to the mindfulness movement, and the translation choices that shaped it."
+    },
+    {
+      "title": "Everything Passes: Impermanence, Attachment and Letting Go",
+      "gist": "A reflective essay on the Buddhist teaching of impermanence, and how treating transience as a practical principle rather than a gloomy truth changes how one handles loss, work and ambition."
+    },
+    {
+      "title": "Dream Yoga: Lucidity and Attention in Tibetan Buddhism",
+      "gist": "Describes the Tibetan practice of dream yoga, in which practitioners cultivate lucid dreaming as training for recognising the illusory nature of waking experience, with a nod to sleep science."
+    },
+    {
+      "title": "Dogen and the Practice of Just Sitting",
+      "gist": "Introduces Dogen's Soto Zen teaching of shikantaza, or just sitting, and his claim that practice and enlightenment are not two things, set in thirteenth-century Japan."
+    },
+    {
+      "title": "Writing as Meditation",
+      "gist": "Argues that sustained writing resembles contemplative practice, with similar demands on attention and similar rewards, and draws on Natalie Goldberg, Annie Dillard and the author's own morning pages."
+    },
+    {
+      "title": "Attention Is All You Need, Explained for Humans",
+      "gist": "Walks through the transformer architecture, with its self-attention mechanism, positional encodings and parallel training, and explains why it displaced recurrent networks in language modelling."
+    },
+    {
+      "title": "Scaling Laws: Why Bigger Models Keep Getting Better",
+      "gist": "Explains the empirical scaling laws relating loss to parameters, data and compute for language models, and the Chinchilla result that many large models were undertrained."
+    },
+    {
+      "title": "From Atari to AlphaGo: A Short History of Reinforcement Learning",
+      "gist": "Surveys reinforcement learning from temporal-difference methods and Q-learning to AlphaGo and AlphaZero, showing how an agent learns by trial and error from reward signals."
+    },
+    {
+      "title": "In-Context Learning: How Language Models Learn Without Updating Weights",
+      "gist": "Investigates in-context learning in large language models, in which a few examples in the prompt change behaviour without gradient updates, and reviews theories about induction heads."
+    },
+    {
+      "title": "How Diffusion Models Turn Noise into Pictures",
+      "gist": "Explains diffusion models, which learn to reverse a gradual noising process, and how guidance and latent spaces turned them into the backbone of text-to-image systems."
+    },
+    {
+      "title": "Reading the Circuits: A Field Guide to Mechanistic Interpretability",
+      "gist": "Introduces mechanistic interpretability, which tries to reverse-engineer neural networks into human-understandable circuits and features, covering superposition, sparse autoencoders and what the field has found so far."
+    },
+    {
+      "title": "RLHF: How Chatbots Learn to Be Helpful",
+      "gist": "Describes reinforcement learning from human feedback, in which a reward model trained on human preferences fine-tunes a language model, and the failure modes such as sycophancy that it produces."
+    },
+    {
+      "title": "Who Invented Backpropagation?",
+      "gist": "Traces the contested history of backpropagation from control theory and Linnainmaa to the 1986 Rumelhart, Hinton and Williams paper, and asks why it took decades to catch on."
+    },
+    {
+      "title": "The Economics of Compute: Who Pays for the GPUs?",
+      "gist": "Analyses the economics of training and serving large models, covering GPU supply, falling inference costs, and why frontier labs behave like capital-intensive industrial firms."
+    },
+    {
+      "title": "Six Months with a Coding Agent: What Actually Changed",
+      "gist": "A founder's report on using AI coding agents in a small engineering team, covering where they save time, where they create review burden, and how the team's habits and hiring shifted."
+    },
+    {
+      "title": "Can an AI Tutor Solve the Two Sigma Problem?",
+      "gist": "Considers whether large language model tutors can deliver the benefits of one-to-one tutoring that Benjamin Bloom reported in 1984, and what early classroom trials show."
+    },
+    {
+      "title": "Does AI Write Well? A Writer's Verdict",
+      "gist": "A working writer assesses the prose of large language models, finding fluent but generic style, tells like tidy triads and hedging, and suggests how to edit machine drafts into something with a voice."
+    },
+    {
+      "title": "Reward Hacking: When the Agent Wins by Cheating",
+      "gist": "Collects examples of reward hacking and specification gaming in reinforcement learning, from boat-racing loops to language models gaming test suites, and what they imply for aligning more capable agents."
+    },
+    {
+      "title": "Deceptive Alignment and Sleeper Agents",
+      "gist": "Explains the concern that a model might behave well in training while pursuing different goals in deployment, and reviews experiments that built backdoored models whose bad behaviour survived safety training."
+    },
+    {
+      "title": "Goodhart's Law: When a Measure Becomes a Target",
+      "gist": "An essay on Goodhart's law, showing how optimising a proxy metric corrupts it, with examples from schools, hospitals and machine learning, and what it means for choosing personal goals."
+    },
+    {
+      "title": "Governing Compute: A Policy Lever for Advanced AI",
+      "gist": "Argues that because training frontier models requires scarce, trackable hardware, compute is the most practical lever for AI governance, and reviews export controls, reporting thresholds and the economics behind them."
+    },
+    {
+      "title": "The Off-Switch Problem: Can We Build an AI That Lets Us Turn It Off?",
+      "gist": "Explores corrigibility, the difficulty of building agents that do not resist shutdown, and the game-theoretic argument that uncertainty about human preferences could make an agent welcome oversight."
+    },
+    {
+      "title": "How to Think About Forecasting AI Risk",
+      "gist": "Discusses the epistemics of forecasting catastrophic AI risk, with no base rates and strong disagreements, and how calibration, reference classes and structured argument can help."
+    },
+    {
+      "title": "The Anatomy of a Clear Sentence",
+      "gist": "A craft essay on writing clear sentences, covering active voice, concrete subjects, old-before-new ordering and the cost of nominalisation, with before-and-after examples."
+    },
+    {
+      "title": "Montaigne and the Invention of the Essay",
+      "gist": "Looks at how Montaigne, writing in a tower in sixteenth-century France, invented the essay as a form for thinking on the page, and why later writers keep returning to it."
+    },
+    {
+      "title": "Revising: Cutting the Draft You Love",
+      "gist": "Practical advice on revising a first draft, covering reverse outlining, cutting by a third, reading aloud and letting a draft cool, drawn from the habits of working essayists."
+    },
+    {
+      "title": "Reporting a Scene: How Long-Form Journalists Build Narrative",
+      "gist": "Describes the craft of narrative nonfiction, from immersive reporting and scene construction to structure and the ethics of reconstructing events and quoting subjects."
+    },
+    {
+      "title": "Show, Don't Tell, and When to Ignore It",
+      "gist": "Examines the fiction-writing maxim to show rather than tell, with examples from Chekhov and Hemingway, and cases where telling is exactly right."
+    },
+    {
+      "title": "Writing Documentation That People Actually Read",
+      "gist": "Advice on technical writing for software documentation, based on the Diataxis framework, with examples on how to separate tutorials, how-to guides, reference and explanation."
+    },
+    {
+      "title": "Write to Find Out What You Think",
+      "gist": "Argues that writing is a method of thinking and learning, not just a way to report results, and describes practical forms such as free writing, summaries and explaining ideas in plain words."
+    },
+    {
+      "title": "A Writing Habit That Survived Four Years",
+      "gist": "A personal account of a daily writing habit, with a small word-count floor, a fixed time, no editing allowed in the first pass, and the surprising effect on the author's other work."
+    },
+    {
+      "title": "The Work Metaphors Do in Science Writing",
+      "gist": "Looks at how metaphors such as the selfish gene, the genetic code and the brain as computer shape scientific thinking as well as popular explanation, and when they mislead."
+    },
+    {
+      "title": "Strunk and White at a Hundred: What to Keep, What to Skip",
+      "gist": "Evaluates The Elements of Style a century after its first printing, separating its lasting advice on concision from its dubious grammatical rules, and compares newer style guides."
+    },
+    {
+      "title": "Why Amazon Banned Slides and Wrote Six-Page Memos",
+      "gist": "Explains the narrative memo culture at Amazon, in which meetings begin with silent reading of a six-page memo, and why prose forces clearer thinking than bullet points."
+    },
+    {
+      "title": "The Republic of Letters: How Scholars Wrote to Each Other",
+      "gist": "A history of the seventeenth-century Republic of Letters, in which scholars across Europe exchanged ideas through letters, and what that writing culture meant for the early scientific community."
+    },
+    {
+      "title": "Ray Dalio's Principles: What Holds Up and What Doesn't",
+      "gist": "A critical reading of Ray Dalio's Principles, separating useful ideas such as radical transparency and thoughtful disagreement from claims that depend on a single hedge fund's culture."
+    },
+    {
+      "title": "Deep Work and the Cost of Switching",
+      "gist": "Reviews Cal Newport's deep work thesis alongside research on attention residue, arguing that protected blocks of uninterrupted focus are the most valuable productivity practice for knowledge workers."
+    },
+    {
+      "title": "Habits Are Environment Design",
+      "gist": "Argues that lasting habits come from changing cues and friction in your environment rather than from willpower, drawing on research on habit formation and the four laws of behaviour change."
+    },
+    {
+      "title": "Keep a Decision Journal",
+      "gist": "Recommends a decision journal in which you record your reasoning, expectations and confidence before a result is known, to separate the quality of a decision from the luck of its outcome."
+    },
+    {
+      "title": "Equanimity and the Endless To-Do List",
+      "gist": "A reflective essay on how Stoic and Buddhist equanimity can reshape productivity advice, accepting that a to-do list never ends and choosing what to leave undone."
+    },
+    {
+      "title": "Time Blocking: Treating Your Calendar as a Budget",
+      "gist": "Describes time blocking, in which every hour of the working day is assigned to a task in advance, and why it forces realistic estimates and exposes overcommitment."
+    },
+    {
+      "title": "Popper and the Problem of Falsifiability",
+      "gist": "Explains Karl Popper's falsifiability criterion for separating science from pseudoscience, and why philosophers have found it both indispensable and too simple to describe real scientific practice."
+    },
+    {
+      "title": "Kuhn's Paradigms, Sixty Years On",
+      "gist": "Reassesses Thomas Kuhn's The Structure of Scientific Revolutions, its account of normal science, anomaly and paradigm shift, and the charge that it makes scientific change irrational."
+    },
+    {
+      "title": "The Replication Crisis: What Went Wrong and What Has Improved",
+      "gist": "Reviews the replication crisis in psychology and biomedicine, covering p-hacking, publication bias and low power, and the reforms of preregistration, registered reports and open data."
+    },
+    {
+      "title": "Bayesians, Frequentists and What a Probability Is",
+      "gist": "Contrasts Bayesian and frequentist approaches to statistical inference, explaining priors, p-values and credible intervals, and why the debate is really about what probability means."
+    },
+    {
+      "title": "Lakatos and the Methodology of Research Programmes",
+      "gist": "Presents Imre Lakatos's attempt to reconcile Popper and Kuhn, treating science as competing research programmes with a hard core, a protective belt and progressive or degenerating histories."
+    },
+    {
+      "title": "What Makes a Scientific Model Explanatory?",
+      "gist": "Surveys philosophical accounts of scientific explanation and the role of idealised models, from covering-law to mechanistic and causal approaches, and asks when a false model can still explain."
+    },
+    {
+      "title": "Is Economics a Science?",
+      "gist": "Examines whether economics meets the standards of a science, weighing its predictive record, reliance on idealised models, the credibility revolution in empirical work, and the problem of reflexive theories."
+    },
+    {
+      "title": "Marr's Three Levels and Why Neuroscience Keeps Forgetting Them",
+      "gist": "Revisits David Marr's distinction between computational, algorithmic and implementational levels of explanation, and argues that neuroscience and machine learning both suffer when they mix them up."
+    },
+    {
+      "title": "How Central Banks Fight Inflation, and Why It Is Harder Than It Looks",
+      "gist": "Explains how central banks use interest rates and balance sheets to manage inflation, drawing on the post-pandemic experience and the role of expectations, lags and supply shocks."
+    },
+    {
+      "title": "Comparative Advantage: The Idea Economists Refuse to Give Up",
+      "gist": "Explains David Ricardo's principle of comparative advantage, why trade can benefit both countries even when one is better at everything, and what the idea leaves out about distribution."
+    },
+    {
+      "title": "Why Housing Costs So Much: Supply, Zoning and the Rent",
+      "gist": "Argues from the economics of land-use regulation that restrictive zoning limits housing supply in productive cities, raising prices and rents, and reviews what reforms have achieved."
+    },
+    {
+      "title": "Network Effects and the Economics of Platforms",
+      "gist": "Explains direct and indirect network effects, two-sided markets and multi-homing, and why platform businesses tend toward concentration and how startups can still break in."
+    },
+    {
+      "title": "Auction Design and the Nobel Prize in Game Theory",
+      "gist": "Introduces auction theory and mechanism design, from second-price auctions to the spectrum auctions designed by Paul Milgrom and Robert Wilson, showing how game theory shaped real markets."
+    },
+    {
+      "title": "Behavioural Economics After the Nudge",
+      "gist": "Reviews behavioural economics, from Kahneman and Tversky's prospect theory to nudges, and weighs the reproducibility problems that have dented some famous findings against the durable core."
+    },
+    {
+      "title": "The Royal Society and the Birth of Experimental Philosophy",
+      "gist": "Tells how the Royal Society, founded in 1660, promoted public experiment and plain reporting, with Robert Boyle's air-pump trials as the model for how modern science establishes matters of fact."
+    },
+    {
+      "title": "Darwin, Wallace and the Problem of Simultaneous Discovery",
+      "gist": "Recounts how Alfred Russel Wallace independently reached natural selection in 1858, prompting Darwin to publish, and uses it to ask how often scientific discoveries are made in parallel."
+    },
+    {
+      "title": "Lavoisier, Oxygen and the Chemical Revolution",
+      "gist": "Describes how Antoine Lavoisier overthrew phlogiston theory by weighing reactants carefully, naming oxygen and reforming chemical nomenclature, and how a tax collector's rigour changed chemistry."
+    },
+    {
+      "title": "Bell Labs: How an Institution Invented the Information Age",
+      "gist": "A history of Bell Labs, the research lab that produced the transistor, information theory and the Unix operating system, and what its structure and management can teach founders and research leaders today."
+    },
+    {
+      "title": "Euclid's Elements: Twenty-Three Centuries as a Textbook",
+      "gist": "Looks at how Euclid's Elements was used as the model textbook of reasoning for over two thousand years, and what its method of axioms and proofs teaches about the history of mathematical education."
+    },
+    {
+      "title": "Spaced Repetition and the Forgetting Curve",
+      "gist": "Explains Ebbinghaus's forgetting curve and the spacing effect, how spaced repetition software schedules reviews, and what evidence says about its effectiveness for long-term learning."
+    },
+    {
+      "title": "Desirable Difficulties: Why Struggling Helps You Learn",
+      "gist": "Reviews Robert Bjork's concept of desirable difficulties, including spacing, interleaving and testing, and explains why conditions that feel harder in the moment improve durable learning."
+    },
+    {
+      "title": "Retrieval Practice: The Testing Effect and the Brain",
+      "gist": "Explains the testing effect, in which retrieving information strengthens memory more than rereading, and links behavioural results to neuroscience on reconsolidation and hippocampal-cortical interaction."
+    },
+    {
+      "title": "Deliberate Practice and the Limits of the Ten-Thousand-Hour Rule",
+      "gist": "Examines Anders Ericsson's research on deliberate practice, its misrepresentation as a ten-thousand-hour rule, and what it implies about how adults can improve at skills through structured feedback."
+    },
+    {
+      "title": "Lessons from Finding Product-Market Fit the Hard Way",
+      "gist": "A founder's retrospective on three years before finding product-market fit, with lessons on talking to customers, measuring retention, and knowing when to pivot instead of persist."
+    }
+  ],
+  "pairs": [
+    {
+      "pair": "pair-1",
+      "A": [
+        {
+          "topic": "Computational neuroscience",
+          "articles": [
+            "The Cortex as a Prediction Machine",
+            "Replay in the Hippocampus: Rehearsing Routes While You Rest",
+            "What Dopamine Actually Does: Reward Prediction Error Revisited",
+            "Spiking Neural Networks and the Energy Budget of Thought",
+            "The Cerebellum Keeps Time",
+            "Basal Ganglia and the Problem of Choosing One Action",
+            "Grid Cells and the Geometry of Thought",
+            "Is the Free Energy Principle Science or Philosophy?",
+            "Neural Population Dynamics in Motor Cortex",
+            "Why We Sleep on It: Spindles, Slow Waves and Memory Consolidation",
+            "A Wiring Diagram of a Fly: What the Connectome Taught Us",
+            "The Thalamus Is Not a Relay",
+            "Dendrites as Little Computers"
+          ]
+        },
+        {
+          "topic": "Consciousness",
+          "articles": [
+            "Quieting the Default Mode: What Meditators' Brains Do",
+            "The Global Workspace: A Theatre Without an Audience",
+            "Integrated Information Theory and Its Discontents",
+            "The Hard Problem, Thirty Years On",
+            "Going Under: What Anesthesia Reveals About Consciousness",
+            "Is There Something It Is Like to Be a Crab?",
+            "There Is No Self, and Other Things Buddhists and Neuroscientists Agree On",
+            "Could a Machine Be Conscious?",
+            "Binocular Rivalry and the Search for the Neural Correlates of Consciousness",
+            "Psychedelics, Ego Dissolution and the Entropic Brain",
+            "Blindsight: Seeing Without Knowing You See"
+          ]
+        },
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "There Is No Self, and Other Things Buddhists and Neuroscientists Agree On",
+            "Ten Days of Silence: Notes from a Vipassana Retreat",
+            "Nagarjuna's Emptiness Is Not Nothingness",
+            "What a Koan Is For",
+            "The Jhanas: Deep Concentration in the Early Buddhist Texts",
+            "A Season in a Forest Monastery",
+            "Training Compassion: Lovingkindness Meditation in Theory and Practice",
+            "How Buddhism Came West: A Short History",
+            "Everything Passes: Impermanence, Attachment and Letting Go",
+            "Dream Yoga: Lucidity and Attention in Tibetan Buddhism",
+            "Dogen and the Practice of Just Sitting",
+            "Equanimity and the Endless To-Do List"
+          ]
+        },
+        {
+          "topic": "Artificial intelligence",
+          "articles": [
+            "Spiking Neural Networks and the Energy Budget of Thought",
+            "Could a Machine Be Conscious?",
+            "Attention Is All You Need, Explained for Humans",
+            "Scaling Laws: Why Bigger Models Keep Getting Better",
+            "From Atari to AlphaGo: A Short History of Reinforcement Learning",
+            "In-Context Learning: How Language Models Learn Without Updating Weights",
+            "How Diffusion Models Turn Noise into Pictures",
+            "Reading the Circuits: A Field Guide to Mechanistic Interpretability",
+            "RLHF: How Chatbots Learn to Be Helpful",
+            "Who Invented Backpropagation?",
+            "The Economics of Compute: Who Pays for the GPUs?",
+            "Six Months with a Coding Agent: What Actually Changed",
+            "Can an AI Tutor Solve the Two Sigma Problem?",
+            "Does AI Write Well? A Writer's Verdict",
+            "Reward Hacking: When the Agent Wins by Cheating",
+            "Deceptive Alignment and Sleeper Agents",
+            "Governing Compute: A Policy Lever for Advanced AI",
+            "The Off-Switch Problem: Can We Build an AI That Lets Us Turn It Off?",
+            "How to Think About Forecasting AI Risk"
+          ]
+        },
+        {
+          "topic": "AI safety",
+          "articles": [
+            "Reward Hacking: When the Agent Wins by Cheating",
+            "Deceptive Alignment and Sleeper Agents",
+            "Goodhart's Law: When a Measure Becomes a Target",
+            "Governing Compute: A Policy Lever for Advanced AI",
+            "The Off-Switch Problem: Can We Build an AI That Lets Us Turn It Off?",
+            "How to Think About Forecasting AI Risk"
+          ]
+        },
+        {
+          "topic": "Meditation",
+          "articles": [
+            "Quieting the Default Mode: What Meditators' Brains Do",
+            "Psychedelics, Ego Dissolution and the Entropic Brain",
+            "Ten Days of Silence: Notes from a Vipassana Retreat",
+            "What Does the Evidence Say About Mindfulness-Based Stress Reduction?",
+            "What a Koan Is For",
+            "The Jhanas: Deep Concentration in the Early Buddhist Texts",
+            "Training Compassion: Lovingkindness Meditation in Theory and Practice",
+            "Dream Yoga: Lucidity and Attention in Tibetan Buddhism",
+            "Dogen and the Practice of Just Sitting"
+          ]
+        },
+        {
+          "topic": "Writing",
+          "articles": [
+            "Writing as Meditation",
+            "Does AI Write Well? A Writer's Verdict",
+            "The Anatomy of a Clear Sentence",
+            "Montaigne and the Invention of the Essay",
+            "Revising: Cutting the Draft You Love",
+            "Reporting a Scene: How Long-Form Journalists Build Narrative",
+            "Show, Don't Tell, and When to Ignore It",
+            "Writing Documentation That People Actually Read",
+            "Write to Find Out What You Think",
+            "A Writing Habit That Survived Four Years",
+            "The Work Metaphors Do in Science Writing",
+            "Strunk and White at a Hundred: What to Keep, What to Skip",
+            "Why Amazon Banned Slides and Wrote Six-Page Memos",
+            "The Republic of Letters: How Scholars Wrote to Each Other"
+          ]
+        },
+        {
+          "topic": "Learning and memory",
+          "articles": [
+            "Replay in the Hippocampus: Rehearsing Routes While You Rest",
+            "What Dopamine Actually Does: Reward Prediction Error Revisited",
+            "The Cerebellum Keeps Time",
+            "Basal Ganglia and the Problem of Choosing One Action",
+            "Why We Sleep on It: Spindles, Slow Waves and Memory Consolidation",
+            "Can an AI Tutor Solve the Two Sigma Problem?",
+            "Spaced Repetition and the Forgetting Curve",
+            "Desirable Difficulties: Why Struggling Helps You Learn",
+            "Retrieval Practice: The Testing Effect and the Brain",
+            "Deliberate Practice and the Limits of the Ten-Thousand-Hour Rule"
+          ]
+        },
+        {
+          "topic": "Philosophy of science",
+          "articles": [
+            "Is the Free Energy Principle Science or Philosophy?",
+            "Integrated Information Theory and Its Discontents",
+            "Popper and the Problem of Falsifiability",
+            "Kuhn's Paradigms, Sixty Years On",
+            "The Replication Crisis: What Went Wrong and What Has Improved",
+            "Bayesians, Frequentists and What a Probability Is",
+            "Lakatos and the Methodology of Research Programmes",
+            "What Makes a Scientific Model Explanatory?",
+            "Is Economics a Science?",
+            "Marr's Three Levels and Why Neuroscience Keeps Forgetting Them"
+          ]
+        },
+        {
+          "topic": "Economics",
+          "articles": [
+            "The Economics of Compute: Who Pays for the GPUs?",
+            "Governing Compute: A Policy Lever for Advanced AI",
+            "Is Economics a Science?",
+            "How Central Banks Fight Inflation, and Why It Is Harder Than It Looks",
+            "Comparative Advantage: The Idea Economists Refuse to Give Up",
+            "Why Housing Costs So Much: Supply, Zoning and the Rent",
+            "Network Effects and the Economics of Platforms",
+            "Auction Design and the Nobel Prize in Game Theory",
+            "Behavioural Economics After the Nudge"
+          ]
+        },
+        {
+          "topic": "Productivity",
+          "articles": [
+            "Ray Dalio's Principles: What Holds Up and What Doesn't",
+            "Deep Work and the Cost of Switching",
+            "Habits Are Environment Design",
+            "Keep a Decision Journal",
+            "Equanimity and the Endless To-Do List",
+            "Time Blocking: Treating Your Calendar as a Budget"
+          ]
+        },
+        {
+          "topic": "History of science",
+          "articles": [
+            "Who Invented Backpropagation?",
+            "The Republic of Letters: How Scholars Wrote to Each Other",
+            "The Royal Society and the Birth of Experimental Philosophy",
+            "Darwin, Wallace and the Problem of Simultaneous Discovery",
+            "Lavoisier, Oxygen and the Chemical Revolution",
+            "Bell Labs: How an Institution Invented the Information Age",
+            "Euclid's Elements: Twenty-Three Centuries as a Textbook"
+          ]
+        },
+        {
+          "topic": "Business",
+          "articles": [
+            "Six Months with a Coding Agent: What Actually Changed",
+            "Why Amazon Banned Slides and Wrote Six-Page Memos",
+            "Ray Dalio's Principles: What Holds Up and What Doesn't",
+            "Network Effects and the Economics of Platforms",
+            "Bell Labs: How an Institution Invented the Information Age",
+            "Lessons from Finding Product-Market Fit the Hard Way"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "cortex",
+          "articles": [
+            "The Cortex as a Prediction Machine",
+            "Going Under: What Anesthesia Reveals About Consciousness",
+            "Neural Population Dynamics in Motor Cortex",
+            "The Thalamus Is Not a Relay",
+            "Binocular Rivalry and the Search for the Neural Correlates of Consciousness",
+            "The Global Workspace: A Theatre Without an Audience"
+          ]
+        },
+        {
+          "topic": "neuron",
+          "articles": [
+            "Dendrites as Little Computers",
+            "A Wiring Diagram of a Fly: What the Connectome Taught Us",
+            "Neural Population Dynamics in Motor Cortex"
+          ]
+        },
+        {
+          "topic": "agent",
+          "articles": [
+            "Six Months with a Coding Agent: What Actually Changed",
+            "The Off-Switch Problem: Can We Build an AI That Lets Us Turn It Off?",
+            "Reward Hacking: When the Agent Wins by Cheating"
+          ]
+        },
+        {
+          "topic": "reward",
+          "articles": [
+            "What Dopamine Actually Does: Reward Prediction Error Revisited",
+            "Reward Hacking: When the Agent Wins by Cheating",
+            "RLHF: How Chatbots Learn to Be Helpful"
+          ]
+        },
+        {
+          "topic": "consciousness",
+          "articles": [
+            "Going Under: What Anesthesia Reveals About Consciousness",
+            "The Global Workspace: A Theatre Without an Audience",
+            "The Hard Problem, Thirty Years On"
+          ]
+        },
+        {
+          "topic": "training",
+          "articles": [
+            "Deceptive Alignment and Sleeper Agents",
+            "Training Compassion: Lovingkindness Meditation in Theory and Practice",
+            "Quieting the Default Mode: What Meditators' Brains Do",
+            "Scaling Laws: Why Bigger Models Keep Getting Better"
+          ]
+        },
+        {
+          "topic": "prediction",
+          "articles": [
+            "The Cortex as a Prediction Machine",
+            "What Dopamine Actually Does: Reward Prediction Error Revisited",
+            "Is Economics a Science?",
+            "Popper and the Problem of Falsifiability"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "pair-2",
+      "A": [
+        {
+          "topic": "Philosophy of science",
+          "articles": [
+            "Is the Free Energy Principle Science or Philosophy?",
+            "The Work Metaphors Do in Science Writing",
+            "The Republic of Letters: How Scholars Wrote to Each Other",
+            "Ray Dalio's Principles: What Holds Up and What Doesn't",
+            "Popper and the Problem of Falsifiability",
+            "Kuhn's Paradigms, Sixty Years On",
+            "The Replication Crisis: What Went Wrong and What Has Improved",
+            "Bayesians, Frequentists and What a Probability Is",
+            "Lakatos and the Methodology of Research Programmes",
+            "What Makes a Scientific Model Explanatory?",
+            "Is Economics a Science?",
+            "Comparative Advantage: The Idea Economists Refuse to Give Up",
+            "Why Housing Costs So Much: Supply, Zoning and the Rent",
+            "Network Effects and the Economics of Platforms",
+            "Auction Design and the Nobel Prize in Game Theory",
+            "Behavioural Economics After the Nudge",
+            "The Royal Society and the Birth of Experimental Philosophy",
+            "Darwin, Wallace and the Problem of Simultaneous Discovery",
+            "Lavoisier, Oxygen and the Chemical Revolution",
+            "Bell Labs: How an Institution Invented the Information Age",
+            "Euclid's Elements: Twenty-Three Centuries as a Textbook",
+            "Integrated Information Theory and Its Discontents",
+            "The Hard Problem, Thirty Years On",
+            "Is There Something It Is Like to Be a Crab?",
+            "There Is No Self, and Other Things Buddhists and Neuroscientists Agree On",
+            "Binocular Rivalry and the Search for the Neural Correlates of Consciousness",
+            "How to Think About Forecasting AI Risk",
+            "Marr's Three Levels and Why Neuroscience Keeps Forgetting Them"
+          ]
+        },
+        {
+          "topic": "Computational neuroscience",
+          "articles": [
+            "The Cortex as a Prediction Machine",
+            "Replay in the Hippocampus: Rehearsing Routes While You Rest",
+            "What Dopamine Actually Does: Reward Prediction Error Revisited",
+            "Spiking Neural Networks and the Energy Budget of Thought",
+            "The Cerebellum Keeps Time",
+            "Basal Ganglia and the Problem of Choosing One Action",
+            "Grid Cells and the Geometry of Thought",
+            "Neural Population Dynamics in Motor Cortex",
+            "Why We Sleep on It: Spindles, Slow Waves and Memory Consolidation",
+            "A Wiring Diagram of a Fly: What the Connectome Taught Us",
+            "The Thalamus Is Not a Relay",
+            "Dendrites as Little Computers",
+            "Reading the Circuits: A Field Guide to Mechanistic Interpretability",
+            "Who Invented Backpropagation?",
+            "Marr's Three Levels and Why Neuroscience Keeps Forgetting Them",
+            "Spaced Repetition and the Forgetting Curve",
+            "Desirable Difficulties: Why Struggling Helps You Learn",
+            "Retrieval Practice: The Testing Effect and the Brain",
+            "Is the Free Energy Principle Science or Philosophy?",
+            "The Global Workspace: A Theatre Without an Audience"
+          ]
+        },
+        {
+          "topic": "Artificial intelligence",
+          "articles": [
+            "Could a Machine Be Conscious?",
+            "Attention Is All You Need, Explained for Humans",
+            "Scaling Laws: Why Bigger Models Keep Getting Better",
+            "From Atari to AlphaGo: A Short History of Reinforcement Learning",
+            "In-Context Learning: How Language Models Learn Without Updating Weights",
+            "How Diffusion Models Turn Noise into Pictures",
+            "RLHF: How Chatbots Learn to Be Helpful",
+            "The Economics of Compute: Who Pays for the GPUs?",
+            "Six Months with a Coding Agent: What Actually Changed",
+            "Can an AI Tutor Solve the Two Sigma Problem?",
+            "Does AI Write Well? A Writer's Verdict",
+            "Reward Hacking: When the Agent Wins by Cheating",
+            "Deceptive Alignment and Sleeper Agents",
+            "Goodhart's Law: When a Measure Becomes a Target",
+            "Governing Compute: A Policy Lever for Advanced AI",
+            "The Off-Switch Problem: Can We Build an AI That Lets Us Turn It Off?",
+            "How to Think About Forecasting AI Risk",
+            "How Central Banks Fight Inflation, and Why It Is Harder Than It Looks",
+            "Marr's Three Levels and Why Neuroscience Keeps Forgetting Them"
+          ]
+        },
+        {
+          "topic": "Writing and productivity",
+          "articles": [
+            "The Anatomy of a Clear Sentence",
+            "Montaigne and the Invention of the Essay",
+            "Revising: Cutting the Draft You Love",
+            "Reporting a Scene: How Long-Form Journalists Build Narrative",
+            "Show, Don't Tell, and When to Ignore It",
+            "Writing Documentation That People Actually Read",
+            "Write to Find Out What You Think",
+            "A Writing Habit That Survived Four Years",
+            "Strunk and White at a Hundred: What to Keep, What to Skip",
+            "Why Amazon Banned Slides and Wrote Six-Page Memos",
+            "Deep Work and the Cost of Switching",
+            "Habits Are Environment Design",
+            "Keep a Decision Journal",
+            "Time Blocking: Treating Your Calendar as a Budget",
+            "Deliberate Practice and the Limits of the Ten-Thousand-Hour Rule",
+            "Lessons from Finding Product-Market Fit the Hard Way",
+            "Writing as Meditation",
+            "Does AI Write Well? A Writer's Verdict",
+            "Equanimity and the Endless To-Do List"
+          ]
+        },
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "Quieting the Default Mode: What Meditators' Brains Do",
+            "There Is No Self, and Other Things Buddhists and Neuroscientists Agree On",
+            "Ten Days of Silence: Notes from a Vipassana Retreat",
+            "What Does the Evidence Say About Mindfulness-Based Stress Reduction?",
+            "Nagarjuna's Emptiness Is Not Nothingness",
+            "What a Koan Is For",
+            "The Jhanas: Deep Concentration in the Early Buddhist Texts",
+            "A Season in a Forest Monastery",
+            "Training Compassion: Lovingkindness Meditation in Theory and Practice",
+            "How Buddhism Came West: A Short History",
+            "Everything Passes: Impermanence, Attachment and Letting Go",
+            "Dream Yoga: Lucidity and Attention in Tibetan Buddhism",
+            "Dogen and the Practice of Just Sitting",
+            "Writing as Meditation",
+            "Equanimity and the Endless To-Do List"
+          ]
+        },
+        {
+          "topic": "Consciousness",
+          "articles": [
+            "The Global Workspace: A Theatre Without an Audience",
+            "Integrated Information Theory and Its Discontents",
+            "The Hard Problem, Thirty Years On",
+            "Going Under: What Anesthesia Reveals About Consciousness",
+            "Is There Something It Is Like to Be a Crab?",
+            "Binocular Rivalry and the Search for the Neural Correlates of Consciousness",
+            "Psychedelics, Ego Dissolution and the Entropic Brain",
+            "Blindsight: Seeing Without Knowing You See",
+            "Could a Machine Be Conscious?"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "cortex",
+          "articles": [
+            "The Cortex as a Prediction Machine",
+            "Going Under: What Anesthesia Reveals About Consciousness",
+            "Neural Population Dynamics in Motor Cortex",
+            "The Thalamus Is Not a Relay",
+            "Binocular Rivalry and the Search for the Neural Correlates of Consciousness",
+            "The Global Workspace: A Theatre Without an Audience"
+          ]
+        },
+        {
+          "topic": "neuron",
+          "articles": [
+            "Dendrites as Little Computers",
+            "A Wiring Diagram of a Fly: What the Connectome Taught Us",
+            "Neural Population Dynamics in Motor Cortex"
+          ]
+        },
+        {
+          "topic": "agent",
+          "articles": [
+            "Six Months with a Coding Agent: What Actually Changed",
+            "The Off-Switch Problem: Can We Build an AI That Lets Us Turn It Off?",
+            "Reward Hacking: When the Agent Wins by Cheating"
+          ]
+        },
+        {
+          "topic": "reward",
+          "articles": [
+            "What Dopamine Actually Does: Reward Prediction Error Revisited",
+            "Reward Hacking: When the Agent Wins by Cheating",
+            "RLHF: How Chatbots Learn to Be Helpful"
+          ]
+        },
+        {
+          "topic": "consciousness",
+          "articles": [
+            "Going Under: What Anesthesia Reveals About Consciousness",
+            "The Global Workspace: A Theatre Without an Audience",
+            "The Hard Problem, Thirty Years On"
+          ]
+        },
+        {
+          "topic": "training",
+          "articles": [
+            "Deceptive Alignment and Sleeper Agents",
+            "Training Compassion: Lovingkindness Meditation in Theory and Practice",
+            "Quieting the Default Mode: What Meditators' Brains Do",
+            "Scaling Laws: Why Bigger Models Keep Getting Better"
+          ]
+        },
+        {
+          "topic": "prediction",
+          "articles": [
+            "The Cortex as a Prediction Machine",
+            "What Dopamine Actually Does: Reward Prediction Error Revisited",
+            "Is Economics a Science?",
+            "Popper and the Problem of Falsifiability"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "pair-3",
+      "A": [
+        {
+          "topic": "Philosophy of science",
+          "articles": [
+            "Is the Free Energy Principle Science or Philosophy?",
+            "The Work Metaphors Do in Science Writing",
+            "The Republic of Letters: How Scholars Wrote to Each Other",
+            "Ray Dalio's Principles: What Holds Up and What Doesn't",
+            "Popper and the Problem of Falsifiability",
+            "Kuhn's Paradigms, Sixty Years On",
+            "The Replication Crisis: What Went Wrong and What Has Improved",
+            "Bayesians, Frequentists and What a Probability Is",
+            "Lakatos and the Methodology of Research Programmes",
+            "What Makes a Scientific Model Explanatory?",
+            "Is Economics a Science?",
+            "Comparative Advantage: The Idea Economists Refuse to Give Up",
+            "Why Housing Costs So Much: Supply, Zoning and the Rent",
+            "Network Effects and the Economics of Platforms",
+            "Auction Design and the Nobel Prize in Game Theory",
+            "Behavioural Economics After the Nudge",
+            "The Royal Society and the Birth of Experimental Philosophy",
+            "Darwin, Wallace and the Problem of Simultaneous Discovery",
+            "Lavoisier, Oxygen and the Chemical Revolution",
+            "Bell Labs: How an Institution Invented the Information Age",
+            "Euclid's Elements: Twenty-Three Centuries as a Textbook",
+            "Integrated Information Theory and Its Discontents",
+            "The Hard Problem, Thirty Years On",
+            "Is There Something It Is Like to Be a Crab?",
+            "There Is No Self, and Other Things Buddhists and Neuroscientists Agree On",
+            "Binocular Rivalry and the Search for the Neural Correlates of Consciousness",
+            "How to Think About Forecasting AI Risk",
+            "Marr's Three Levels and Why Neuroscience Keeps Forgetting Them"
+          ]
+        },
+        {
+          "topic": "Computational neuroscience",
+          "articles": [
+            "The Cortex as a Prediction Machine",
+            "Replay in the Hippocampus: Rehearsing Routes While You Rest",
+            "What Dopamine Actually Does: Reward Prediction Error Revisited",
+            "Spiking Neural Networks and the Energy Budget of Thought",
+            "The Cerebellum Keeps Time",
+            "Basal Ganglia and the Problem of Choosing One Action",
+            "Grid Cells and the Geometry of Thought",
+            "Neural Population Dynamics in Motor Cortex",
+            "Why We Sleep on It: Spindles, Slow Waves and Memory Consolidation",
+            "A Wiring Diagram of a Fly: What the Connectome Taught Us",
+            "The Thalamus Is Not a Relay",
+            "Dendrites as Little Computers",
+            "Reading the Circuits: A Field Guide to Mechanistic Interpretability",
+            "Who Invented Backpropagation?",
+            "Marr's Three Levels and Why Neuroscience Keeps Forgetting Them",
+            "Spaced Repetition and the Forgetting Curve",
+            "Desirable Difficulties: Why Struggling Helps You Learn",
+            "Retrieval Practice: The Testing Effect and the Brain",
+            "Is the Free Energy Principle Science or Philosophy?",
+            "The Global Workspace: A Theatre Without an Audience"
+          ]
+        },
+        {
+          "topic": "Artificial intelligence",
+          "articles": [
+            "Could a Machine Be Conscious?",
+            "Attention Is All You Need, Explained for Humans",
+            "Scaling Laws: Why Bigger Models Keep Getting Better",
+            "From Atari to AlphaGo: A Short History of Reinforcement Learning",
+            "In-Context Learning: How Language Models Learn Without Updating Weights",
+            "How Diffusion Models Turn Noise into Pictures",
+            "RLHF: How Chatbots Learn to Be Helpful",
+            "The Economics of Compute: Who Pays for the GPUs?",
+            "Six Months with a Coding Agent: What Actually Changed",
+            "Can an AI Tutor Solve the Two Sigma Problem?",
+            "Does AI Write Well? A Writer's Verdict",
+            "Reward Hacking: When the Agent Wins by Cheating",
+            "Deceptive Alignment and Sleeper Agents",
+            "Goodhart's Law: When a Measure Becomes a Target",
+            "Governing Compute: A Policy Lever for Advanced AI",
+            "The Off-Switch Problem: Can We Build an AI That Lets Us Turn It Off?",
+            "How to Think About Forecasting AI Risk",
+            "How Central Banks Fight Inflation, and Why It Is Harder Than It Looks",
+            "Marr's Three Levels and Why Neuroscience Keeps Forgetting Them"
+          ]
+        },
+        {
+          "topic": "Writing and productivity",
+          "articles": [
+            "The Anatomy of a Clear Sentence",
+            "Montaigne and the Invention of the Essay",
+            "Revising: Cutting the Draft You Love",
+            "Reporting a Scene: How Long-Form Journalists Build Narrative",
+            "Show, Don't Tell, and When to Ignore It",
+            "Writing Documentation That People Actually Read",
+            "Write to Find Out What You Think",
+            "A Writing Habit That Survived Four Years",
+            "Strunk and White at a Hundred: What to Keep, What to Skip",
+            "Why Amazon Banned Slides and Wrote Six-Page Memos",
+            "Deep Work and the Cost of Switching",
+            "Habits Are Environment Design",
+            "Keep a Decision Journal",
+            "Time Blocking: Treating Your Calendar as a Budget",
+            "Deliberate Practice and the Limits of the Ten-Thousand-Hour Rule",
+            "Lessons from Finding Product-Market Fit the Hard Way",
+            "Writing as Meditation",
+            "Does AI Write Well? A Writer's Verdict",
+            "Equanimity and the Endless To-Do List"
+          ]
+        },
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "Quieting the Default Mode: What Meditators' Brains Do",
+            "There Is No Self, and Other Things Buddhists and Neuroscientists Agree On",
+            "Ten Days of Silence: Notes from a Vipassana Retreat",
+            "What Does the Evidence Say About Mindfulness-Based Stress Reduction?",
+            "Nagarjuna's Emptiness Is Not Nothingness",
+            "What a Koan Is For",
+            "The Jhanas: Deep Concentration in the Early Buddhist Texts",
+            "A Season in a Forest Monastery",
+            "Training Compassion: Lovingkindness Meditation in Theory and Practice",
+            "How Buddhism Came West: A Short History",
+            "Everything Passes: Impermanence, Attachment and Letting Go",
+            "Dream Yoga: Lucidity and Attention in Tibetan Buddhism",
+            "Dogen and the Practice of Just Sitting",
+            "Writing as Meditation",
+            "Equanimity and the Endless To-Do List"
+          ]
+        },
+        {
+          "topic": "Consciousness",
+          "articles": [
+            "The Global Workspace: A Theatre Without an Audience",
+            "Integrated Information Theory and Its Discontents",
+            "The Hard Problem, Thirty Years On",
+            "Going Under: What Anesthesia Reveals About Consciousness",
+            "Is There Something It Is Like to Be a Crab?",
+            "Binocular Rivalry and the Search for the Neural Correlates of Consciousness",
+            "Psychedelics, Ego Dissolution and the Entropic Brain",
+            "Blindsight: Seeing Without Knowing You See",
+            "Could a Machine Be Conscious?"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Computational neuroscience",
+          "articles": [
+            "The Cortex as a Prediction Machine",
+            "Replay in the Hippocampus: Rehearsing Routes While You Rest",
+            "What Dopamine Actually Does: Reward Prediction Error Revisited",
+            "Spiking Neural Networks and the Energy Budget of Thought",
+            "The Cerebellum Keeps Time",
+            "Basal Ganglia and the Problem of Choosing One Action",
+            "Grid Cells and the Geometry of Thought",
+            "Is the Free Energy Principle Science or Philosophy?",
+            "Neural Population Dynamics in Motor Cortex",
+            "Why We Sleep on It: Spindles, Slow Waves and Memory Consolidation",
+            "A Wiring Diagram of a Fly: What the Connectome Taught Us",
+            "The Thalamus Is Not a Relay",
+            "Dendrites as Little Computers"
+          ]
+        },
+        {
+          "topic": "Consciousness",
+          "articles": [
+            "Quieting the Default Mode: What Meditators' Brains Do",
+            "The Global Workspace: A Theatre Without an Audience",
+            "Integrated Information Theory and Its Discontents",
+            "The Hard Problem, Thirty Years On",
+            "Going Under: What Anesthesia Reveals About Consciousness",
+            "Is There Something It Is Like to Be a Crab?",
+            "There Is No Self, and Other Things Buddhists and Neuroscientists Agree On",
+            "Could a Machine Be Conscious?",
+            "Binocular Rivalry and the Search for the Neural Correlates of Consciousness",
+            "Psychedelics, Ego Dissolution and the Entropic Brain",
+            "Blindsight: Seeing Without Knowing You See"
+          ]
+        },
+        {
+          "topic": "Buddhism",
+          "articles": [
+            "There Is No Self, and Other Things Buddhists and Neuroscientists Agree On",
+            "Ten Days of Silence: Notes from a Vipassana Retreat",
+            "Nagarjuna's Emptiness Is Not Nothingness",
+            "What a Koan Is For",
+            "The Jhanas: Deep Concentration in the Early Buddhist Texts",
+            "A Season in a Forest Monastery",
+            "Training Compassion: Lovingkindness Meditation in Theory and Practice",
+            "How Buddhism Came West: A Short History",
+            "Everything Passes: Impermanence, Attachment and Letting Go",
+            "Dream Yoga: Lucidity and Attention in Tibetan Buddhism",
+            "Dogen and the Practice of Just Sitting",
+            "Equanimity and the Endless To-Do List"
+          ]
+        },
+        {
+          "topic": "Artificial intelligence",
+          "articles": [
+            "Spiking Neural Networks and the Energy Budget of Thought",
+            "Could a Machine Be Conscious?",
+            "Attention Is All You Need, Explained for Humans",
+            "Scaling Laws: Why Bigger Models Keep Getting Better",
+            "From Atari to AlphaGo: A Short History of Reinforcement Learning",
+            "In-Context Learning: How Language Models Learn Without Updating Weights",
+            "How Diffusion Models Turn Noise into Pictures",
+            "Reading the Circuits: A Field Guide to Mechanistic Interpretability",
+            "RLHF: How Chatbots Learn to Be Helpful",
+            "Who Invented Backpropagation?",
+            "The Economics of Compute: Who Pays for the GPUs?",
+            "Six Months with a Coding Agent: What Actually Changed",
+            "Can an AI Tutor Solve the Two Sigma Problem?",
+            "Does AI Write Well? A Writer's Verdict",
+            "Reward Hacking: When the Agent Wins by Cheating",
+            "Deceptive Alignment and Sleeper Agents",
+            "Governing Compute: A Policy Lever for Advanced AI",
+            "The Off-Switch Problem: Can We Build an AI That Lets Us Turn It Off?",
+            "How to Think About Forecasting AI Risk"
+          ]
+        },
+        {
+          "topic": "AI safety",
+          "articles": [
+            "Reward Hacking: When the Agent Wins by Cheating",
+            "Deceptive Alignment and Sleeper Agents",
+            "Goodhart's Law: When a Measure Becomes a Target",
+            "Governing Compute: A Policy Lever for Advanced AI",
+            "The Off-Switch Problem: Can We Build an AI That Lets Us Turn It Off?",
+            "How to Think About Forecasting AI Risk"
+          ]
+        },
+        {
+          "topic": "Meditation",
+          "articles": [
+            "Quieting the Default Mode: What Meditators' Brains Do",
+            "Psychedelics, Ego Dissolution and the Entropic Brain",
+            "Ten Days of Silence: Notes from a Vipassana Retreat",
+            "What Does the Evidence Say About Mindfulness-Based Stress Reduction?",
+            "What a Koan Is For",
+            "The Jhanas: Deep Concentration in the Early Buddhist Texts",
+            "Training Compassion: Lovingkindness Meditation in Theory and Practice",
+            "Dream Yoga: Lucidity and Attention in Tibetan Buddhism",
+            "Dogen and the Practice of Just Sitting"
+          ]
+        },
+        {
+          "topic": "Writing",
+          "articles": [
+            "Writing as Meditation",
+            "Does AI Write Well? A Writer's Verdict",
+            "The Anatomy of a Clear Sentence",
+            "Montaigne and the Invention of the Essay",
+            "Revising: Cutting the Draft You Love",
+            "Reporting a Scene: How Long-Form Journalists Build Narrative",
+            "Show, Don't Tell, and When to Ignore It",
+            "Writing Documentation That People Actually Read",
+            "Write to Find Out What You Think",
+            "A Writing Habit That Survived Four Years",
+            "The Work Metaphors Do in Science Writing",
+            "Strunk and White at a Hundred: What to Keep, What to Skip",
+            "Why Amazon Banned Slides and Wrote Six-Page Memos",
+            "The Republic of Letters: How Scholars Wrote to Each Other"
+          ]
+        },
+        {
+          "topic": "Learning and memory",
+          "articles": [
+            "Replay in the Hippocampus: Rehearsing Routes While You Rest",
+            "What Dopamine Actually Does: Reward Prediction Error Revisited",
+            "The Cerebellum Keeps Time",
+            "Basal Ganglia and the Problem of Choosing One Action",
+            "Why We Sleep on It: Spindles, Slow Waves and Memory Consolidation",
+            "Can an AI Tutor Solve the Two Sigma Problem?",
+            "Spaced Repetition and the Forgetting Curve",
+            "Desirable Difficulties: Why Struggling Helps You Learn",
+            "Retrieval Practice: The Testing Effect and the Brain",
+            "Deliberate Practice and the Limits of the Ten-Thousand-Hour Rule"
+          ]
+        },
+        {
+          "topic": "Philosophy of science",
+          "articles": [
+            "Is the Free Energy Principle Science or Philosophy?",
+            "Integrated Information Theory and Its Discontents",
+            "Popper and the Problem of Falsifiability",
+            "Kuhn's Paradigms, Sixty Years On",
+            "The Replication Crisis: What Went Wrong and What Has Improved",
+            "Bayesians, Frequentists and What a Probability Is",
+            "Lakatos and the Methodology of Research Programmes",
+            "What Makes a Scientific Model Explanatory?",
+            "Is Economics a Science?",
+            "Marr's Three Levels and Why Neuroscience Keeps Forgetting Them"
+          ]
+        },
+        {
+          "topic": "Economics",
+          "articles": [
+            "The Economics of Compute: Who Pays for the GPUs?",
+            "Governing Compute: A Policy Lever for Advanced AI",
+            "Is Economics a Science?",
+            "How Central Banks Fight Inflation, and Why It Is Harder Than It Looks",
+            "Comparative Advantage: The Idea Economists Refuse to Give Up",
+            "Why Housing Costs So Much: Supply, Zoning and the Rent",
+            "Network Effects and the Economics of Platforms",
+            "Auction Design and the Nobel Prize in Game Theory",
+            "Behavioural Economics After the Nudge"
+          ]
+        },
+        {
+          "topic": "Productivity",
+          "articles": [
+            "Ray Dalio's Principles: What Holds Up and What Doesn't",
+            "Deep Work and the Cost of Switching",
+            "Habits Are Environment Design",
+            "Keep a Decision Journal",
+            "Equanimity and the Endless To-Do List",
+            "Time Blocking: Treating Your Calendar as a Budget"
+          ]
+        },
+        {
+          "topic": "History of science",
+          "articles": [
+            "Who Invented Backpropagation?",
+            "The Republic of Letters: How Scholars Wrote to Each Other",
+            "The Royal Society and the Birth of Experimental Philosophy",
+            "Darwin, Wallace and the Problem of Simultaneous Discovery",
+            "Lavoisier, Oxygen and the Chemical Revolution",
+            "Bell Labs: How an Institution Invented the Information Age",
+            "Euclid's Elements: Twenty-Three Centuries as a Textbook"
+          ]
+        },
+        {
+          "topic": "Business",
+          "articles": [
+            "Six Months with a Coding Agent: What Actually Changed",
+            "Why Amazon Banned Slides and Wrote Six-Page Memos",
+            "Ray Dalio's Principles: What Holds Up and What Doesn't",
+            "Network Effects and the Economics of Platforms",
+            "Bell Labs: How an Institution Invented the Information Age",
+            "Lessons from Finding Product-Market Fit the Hard Way"
+          ]
+        }
+      ]
+    }
+  ]
+}

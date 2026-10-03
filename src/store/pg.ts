@@ -79,6 +79,13 @@ import {
   PROMPT_VERSION as FAQ_PROMPT_VERSION,
 } from "../faq.js";
 import {
+  inputFingerprint as relationsFingerprint,
+  isOutdated as relationsAreOutdated,
+  isStale as relationsIsStale,
+  PROMPT_VERSION as RELATIONS_PROMPT_VERSION,
+  type RelationFingerprintBlock,
+} from "../relations.js";
+import {
   inputFingerprint as crossrefsFingerprint,
   isStale as crossrefsIsStale,
   PROMPT_VERSION as CROSSREFS_PROMPT_VERSION,
@@ -175,6 +182,8 @@ import type {
   DebateFound,
   Faq,
   FaqFound,
+  Relations,
+  RelationsResponse,
   Crossrefs,
   CrossrefsFound,
   SimpleSummary,
@@ -525,6 +534,7 @@ type RevisionReader =
   | "debate"
   | "citations"
   | "faq"
+  | "relations"
   | "skim"
   | "crossrefs"
   | "simpleSummary"
@@ -574,7 +584,7 @@ const REVISION_READ_POLICY: Record<
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
     illustrated: "value", debate: "value", assets: "value", citations: "value", faq: "value",
-    skim: "value", crossrefs: "value", simpleSummary: "value",
+    relations: "value", skim: "value", crossrefs: "value", simpleSummary: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -620,6 +630,8 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
+    /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
+    relations: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -643,6 +655,8 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
+    /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
+    relations: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -666,6 +680,8 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
+    /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
+    relations: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -732,6 +748,8 @@ const REVISION_READ_POLICY: Record<
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
+    /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
+    relations: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -786,6 +804,8 @@ const REVISION_READ_POLICY: Record<
     citations: "value",
     /* `faq` hashes the outline too: the skeleton is in its user message. */
     faq: "value",
+    /* FAQ's fingerprint exactly, so the outline too. */
+    relations: "value",
     /* The top-level skeleton is in its user message, so it needs the tree. */
     crossrefs: "value",
     /* Not for a skeleton — its user message is a constant — but for the
@@ -921,6 +941,11 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and not the library — the call
      `quiz` and `citations` make. `isCurrent` needs the column for its arm. */
   faq: { metadata: "value", faq: "value" },
+  /* Its own reader and the metadata page, and not the library — the call
+     `faq` makes. `isCurrent` needs the column for its arm. **And no public
+     read**: src/store/public-reader.ts does not select it (Sol P1-4,
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md). */
+  relations: { metadata: "value", relations: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm, and
      `personalisedSteps` needs it because the route carries a `profileHash`. */
@@ -1224,6 +1249,8 @@ export const REVISION_PROJECTIONS = {
     /* For `isCurrent`'s arm, as `debate` above. */
     faq: articleRevisions.faq,
     /* For `isCurrent`'s arm, as `debate` above. */
+    relations: articleRevisions.relations,
+    /* For `isCurrent`'s arm, as `debate` above. */
     crossrefs: articleRevisions.crossrefs,
     /* For `isCurrent`'s arm, as `debate` above. */
     simpleSummary: articleRevisions.simpleSummary,
@@ -1308,6 +1335,12 @@ export const REVISION_PROJECTIONS = {
   faq: {
     id: articleRevisions.id,
     faq: articleRevisions.faq,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* The cited set, as `faq`: the same bytes and the same fingerprint. */
+  relations: {
+    id: articleRevisions.id,
+    relations: articleRevisions.relations,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited head and tree its own exact-request fingerprint needs. */
@@ -1584,6 +1617,22 @@ async function blockHashInputs(revisionId: string): Promise<BlockFingerprint[]> 
   return blockHashQuery(getDb(), revisionId);
 }
 
+/** The narrow block read for Relations' exact-request fingerprint. */
+async function relationsFingerprintInputs(
+  revisionId: string,
+): Promise<RelationFingerprintBlock[]> {
+  const rows = await relationsFingerprintQuery(getDb(), revisionId);
+  return rows.map((row) => ({
+    id: row.id as Block["id"],
+    text: row.text,
+    kind: row.kind as Block["kind"],
+    words: row.words,
+    ...(row.treatment === null
+      ? {}
+      : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
+  }));
+}
+
 /** The title fallback `loadArticle` would put in `articleWithIds`'s head. */
 async function firstHeadingTitle(revisionId: string): Promise<string | null> {
   const [row] = await getDb()
@@ -1621,6 +1670,28 @@ export function blockHashQuery(
       id: revisionBlocks.blockId,
       text: revisionBlocks.text,
       role: revisionBlocks.role,
+      treatment: revisionBlocks.treatment,
+    })
+    .from(revisionBlocks)
+    .where(eq(revisionBlocks.revisionId, revisionId))
+    .orderBy(asc(revisionBlocks.ordinal));
+}
+
+/**
+ * Relations renders the id and text, filters the article by `treatment`, and
+ * builds its user list from `kind` and `words`. These five fields are therefore
+ * its whole fingerprint input; HTML and the generated search vector stay out.
+ */
+export function relationsFingerprintQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  revisionId: string,
+) {
+  return db
+    .select({
+      id: revisionBlocks.blockId,
+      text: revisionBlocks.text,
+      kind: revisionBlocks.kind,
+      words: revisionBlocks.words,
       treatment: revisionBlocks.treatment,
     })
     .from(revisionBlocks)
@@ -1874,6 +1945,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   debate: ["article_revisions.debate"],
   citations: ["article_revisions.citations"],
   faq: ["article_revisions.faq"],
+  relations: ["article_revisions.relations"],
   skim: ["article_revisions.skim"],
   crossrefs: ["article_revisions.crossrefs"],
   simple: ["article_revisions.simple_summary"],
@@ -3231,6 +3303,23 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
+        /* `faq`'s stamp exactly: the same fingerprint over the same cited head. */
+        case "relations": {
+          const relations = revision.relations as Relations | null;
+          if (!relations || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: relations.sourceHash,
+              promptVersion: relations.version,
+              model: relations.generator,
+            },
+            {
+              inputHash: relationsFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: RELATIONS_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         /* The same stamp shape as `faq`, over its own exact request input. */
         case "crossrefs": {
           const crossrefs = revision.crossrefs as Crossrefs | null;
@@ -3742,6 +3831,47 @@ const rawPgArticleReader: ArticleReader = {
       // Unknown counts as stale, the same way round as its neighbours.
       stale: !tree || faqIsStale(faq, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: faq.version !== FAQ_PROMPT_VERSION,
+    };
+  },
+
+  /**
+   * The relation words on their own — the Postgres half of `loadRelations`.
+   *
+   * The cited head supplies the rendered prompt head; the tree supplies its
+   * fallback title. **A 404 is the ordinary case** (the step is off
+   * `DEFAULT_INGEST_STEPS`); an EMPTY object is a 200 — an article with fewer
+   * than two paragraphs — as `SHAPE.relations` decides at the store boundary.
+   * **Owner only**: there is no public twin of this read.
+   * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+   */
+  async loadRelations(slug: string): Promise<RelationsResponse> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "relations");
+    if (!found) throw notFound(slug);
+    const relations = found.revision.relations as Relations | null;
+    if (
+      !relations ||
+      typeof relations.relations !== "object" ||
+      relations.relations === null ||
+      Array.isArray(relations.relations)
+    ) {
+      throw Object.assign(
+        new Error(
+          `No relations for "${slug}" yet. Build them with ` +
+            `POST /api/jobs { "slug": "${slug}", "steps": ["relations"] }.`,
+        ),
+        { status: 404 },
+      );
+    }
+    const blocks = await relationsFingerprintInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      relations,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale:
+        !tree ||
+        relationsIsStale(relations, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: relationsAreOutdated(relations),
     };
   },
 

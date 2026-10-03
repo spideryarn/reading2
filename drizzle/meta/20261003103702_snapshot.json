@@ -1,5 +1,5 @@
 {
-  "id": "db0375c8-e244-4a09-94a4-fe4a9ec0e1ae",
+  "id": "afce08cd-674a-459a-94c2-c5b70da9bbdf",
   "prevId": "64569ab6-f4c0-4729-895c-89c0b1f6f5a7",
   "version": "7",
   "dialect": "postgresql",
@@ -710,6 +710,12 @@
         },
         "faq": {
           "name": "faq",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "relations": {
+          "name": "relations",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -5117,12 +5123,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "attempt_id": {
-          "name": "attempt_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -5754,7 +5754,7 @@
       "checkConstraints": {
         "revision_step_runs_step": {
           "name": "revision_step_runs_step",
-          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','sketch','illustrated','debate','citations','crossrefs','simple')"
+          "value": "\"spideryarn\".\"revision_step_runs\".\"step_name\" in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','citations','crossrefs','simple')"
         },
         "revision_step_runs_status": {
           "name": "revision_step_runs_status",

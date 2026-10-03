@@ -581,3 +581,90 @@ describe("the footer", () => {
     expect(text).toContain("% in"); // the rest of the footer is still there
   });
 });
+
+/**
+ * **A heading is a block, so it is somebody's leaf — and the outline above the
+ * bullets already says it.** A part's children partition its range, so the
+ * part's own heading block lands in its *first section*, as that section's
+ * first leaf; and every titled section's own heading is its first leaf too. A
+ * heading leaf's `navLabel` is the author's heading verbatim, so the first
+ * bullet repeated a row drawn two lines above it. Counted on a local database
+ * of 66 articles: 531 of 1,321 cards open on a heading leaf, about 319 of them
+ * an exact repeat. Sweep item WC-W1, plan 261003g § 3.
+ *
+ * The fixture above could not show it: none of its leaves is a heading.
+ */
+describe("a bullet that would repeat a row of the outline", () => {
+  /** A leaf that starts at a heading block: its label is the author's heading. */
+  const heading = (id: string, label: string): OutlineEntry => ({
+    ...leaf(id, label),
+    startsAtHeading: true,
+  });
+
+  const HEADED: OutlineEntry[] = [
+    {
+      node: node("m", 1, { title: "Methods", gist: "How it was done." }),
+      startRow: 0,
+      endRow: 7,
+      words: 900,
+      children: [
+        section("m1", "Participants", 0, 3, [
+          heading("h0", "Methods"), // the part's heading block
+          heading("h1", "Participants"), // the section's own
+          leaf("h2", "forty adults were recruited"),
+          leaf("h3", "two"),
+          leaf("h4", "three"),
+          leaf("h5", "four"),
+          leaf("h6", "five"),
+          leaf("h7", "six"),
+        ]),
+        section("m2", "Procedure", 4, 7, [
+          heading("h8", "Procedure"),
+          heading("h9", "Stimulus timing"), // a real sub-heading: it stays
+          heading("h10", "Participants"), // a neighbouring section's title, and
+          heading("h11", "Results"), // a neighbouring part's: rows, but not on this band's path
+          leaf("h12", "Procedure"), // a paragraph's label, not a heading: it stays
+        ]),
+      ],
+    },
+    {
+      node: node("r", 1, { title: "Results", gist: "What happened." }),
+      startRow: 8,
+      endRow: 11,
+      words: 300,
+      children: [],
+    },
+  ];
+
+  it("leaves out the part's heading and the section's own", () => {
+    mountSpine(HEADED);
+    const card = openCard(0);
+    expect(outlineOf(card).join("\n")).toContain("Methods");
+    expect(kidText(card).slice(0, 5)).toEqual([
+      "forty adults were recruited",
+      "two",
+      "three",
+      "four",
+      "five",
+    ]);
+  });
+
+  it("does not count them in `+ n more` either", () => {
+    /* Eight leaves, two of them repeats: five shown and one more, not three. */
+    mountSpine(HEADED);
+    expect(kidText(openCard(0))[5]).toBe("+ 1 more");
+  });
+
+  it("keeps a sub-heading, a heading that matches a neighbouring row, and a paragraph that matches the title", () => {
+    /* The three ways a wider rule would lose a real line — GPT Sol's PR-2 on
+       the plan, which reproduced the second against "drop whatever any row
+       says". The neighbours really are rows of this card, or this would pass
+       without the path check. */
+    mountSpine(HEADED);
+    const card = openCard(1);
+    const rows = outlineOf(card).join("\n");
+    expect(rows).toContain("Participants");
+    expect(rows).toContain("Results");
+    expect(kidText(card)).toEqual(["Stimulus timing", "Participants", "Results", "Procedure"]);
+  });
+});

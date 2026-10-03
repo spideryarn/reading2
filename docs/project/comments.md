@@ -1056,6 +1056,9 @@ rather than blanked, and if none survives the key comes off entirely.
 - **A selection spanning two blocks is clamped to the first.** A comment addresses one block —
   that is what makes it storable against the id spine — and silently doing the first paragraph beats
   appearing to ignore the drag.
+- **A finger's selection opens nothing by itself.** There is no mouseup on an iPad, so a touch
+  selection gets a "Highlight or comment" button below it, and the press opens this box —
+  [touch.md § A finger's selection gets a button](touch.md#a-fingers-selection-gets-a-button).
 - **A comment is stored `pending` before the model is called**, so a crash mid-answer leaves a
   visible unanswered question rather than a selection that evaporated. The dialog offers a retry.
 - **A `pending` comment nobody is answering becomes an `error` on the next read.** `pending` in the

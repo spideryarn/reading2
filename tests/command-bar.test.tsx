@@ -571,7 +571,9 @@ describe("the backdrop", () => {
  * one level down.
  */
 const GENERATES: Record<Mode, boolean> = {
-  marginalia: false,
+  /* Its relation words (so, but, vs), asked for by the press that turns the
+     column on — plan 261003f. Everything else in it is read. */
+  marginalia: true,
   plain: false,
   /* Views of one already-built tree, in either of Structure's faces, so
      nothing to fill. */

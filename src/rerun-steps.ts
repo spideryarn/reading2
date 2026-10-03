@@ -103,6 +103,17 @@ export const METADATA_RERUN_STEPS = [
   "timeline",
   "quiz",
   "faq",
+  /* **Joined on 2026-10-03 with the step**, the way to redo the margin's
+     relation words by hand (the owner's press on Marginalia makes them the
+     first time, and again when they are stale). The three answers: **one**
+     metered call a press — a single `streamMessage`, no tools
+     (`generateRelations`), and none at all on an article with fewer than two
+     paragraphs; **no prerequisite** beyond the article itself; and **safe to
+     publish over a good one**, draft-then-publish — an answer covering fewer
+     than half the paragraphs throws and writes nothing (`toRelations`). Not a
+     mode, so no switch hides it.
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  "relations",
   "sketch",
   "skim",
   "debate",
