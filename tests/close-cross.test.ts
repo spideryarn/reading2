@@ -21,7 +21,6 @@ const CLOSES: ReadonlyArray<readonly [string, string]> = [
   ["FeedbackDialog.tsx", "fb-close"],
   ["Lightbox.tsx", "lightbox-close"],
   ["Dock.tsx", "dock-close"],
-  ["RefereeCard.tsx", "ref-how-close"],
 ];
 
 /* Comments out, or the one above a rule becomes part of its selector. */

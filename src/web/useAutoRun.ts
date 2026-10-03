@@ -9,7 +9,8 @@
  *
  * Eleven targets can do this — Glossary, Ideas, Quotes, Timeline, Debate and
  * Citations; the Sketch and Illustrated pictures inside Diagram; the Quiz half
- * of Remember; Referee's Claims and Candidates — reached by twelve controls,
+ * of Remember; Referee's Claims and Candidates (whose chip stopped arming it
+ * on 2026-10-03, so nothing reaches that one today) — reached by twelve controls,
  * since Diagram's bar button and its Sketch chip both arm the Sketch. The Tweets
  * page was a twelfth target until 2026-09-15 and now starts on arrival instead:
  * `useAutoRunOnArrival` at the foot of this file. This is the whole of it, in

@@ -378,24 +378,29 @@ export function modeStep(mode: Mode): StepName | null {
  *
  * `criteria` and `mirror` are absent because neither has anything to generate
  * until the referee has written a criterion or left a comment — there is no
- * empty artefact for a press to fill. The two that are here both reach a third
- * party, and `candidates` reaches one the band's own notice cannot cover: a
- * first turn may run a web search, which sends terms drawn from an unpublished
- * manuscript to a search engine.
+ * empty artefact for a press to fill.
  *
- * **The disclosure for that is not on this chip's tooltip**, and must not be:
- * this repo has already written down, after a browser pass, that *a tooltip is
- * not read by anybody in a hurry, which is what a referee is*
- * (docs/project/referee-mode.md). It is `REFEREE_CANDIDATES_REACHES_SEARCH`,
- * drawn above the chips and outside the notice's collapse, so it is on screen
- * before any chip has been pressed. If that line goes, this row goes with it.
- * CandidatesPanel.tsx § `startBrief` carries the whole argument.
+ * **`candidates` was here from 2026-09-06 to 2026-10-03, and is absent on
+ * purpose.** Its first turn may run a web search, which sends terms drawn from
+ * an unpublished manuscript to a search engine — a third party the model
+ * provider's notice does not cover. While the chip started it, that warning had
+ * to be on screen before any chip was pressed, so it was drawn above the chips
+ * in all four sub-modes; Greg met the result as a mode that buries its actions
+ * under warnings (`spya-vbeyse`). A tooltip on the chip could not stand in: a
+ * touch device has no hover. So the chip opens the panel and the panel's own
+ * button starts the turn, with the sentence beside it (CandidatesPanel.tsx §
+ * `StartBrief`).
+ *
+ * `useAutoRun(slug, "candidates", …)` in `CandidatesBand` is left in place and
+ * has no producer: putting the row back is then the whole of undoing this, and
+ * whether to is an open question for Greg ([Q-candidates-press] in
+ * docs/plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md).
+ * If it comes back, the warning above the chips comes back with it.
  *
  * docs/plans/260906b-opening-a-mode-starts-it-generating.md § Stage 4.
  */
 const REFEREE_TARGET: Partial<Record<RefereeView, AutoRunTarget>> = {
   claims: "claims",
-  candidates: "candidates",
 };
 
 /**
@@ -570,7 +575,7 @@ export function activationForDiagram(kind: DiagramKind): AutoRunTarget | null {
 }
 
 /**
- * The same, for a press on one of Referee's four sub-mode chips. Two of them
+ * The same, for a press on one of Referee's four sub-mode chips. Three of them
  * arm nothing — `REFEREE_TARGET` says which and why.
  *
  * Called from the chip's own `onClick` in `RefereeViews`, and from nowhere

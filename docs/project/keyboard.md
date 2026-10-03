@@ -713,7 +713,7 @@ above. Anything new should look like the ten, not the two.
   *unmounting itself* asks whether focus is still inside it, because React runs cleanup **before**
   detaching and `activeElement` has not fallen to `<body>` yet (`ChatDialog`); one that reacts to a
   flag going false can ask the simpler `activeElement === null || activeElement === document.body`
-  afterwards (`TitleEditor`, `RefereeCard`).
+  afterwards (`TitleEditor`).
 - **Name a destination for when the opener has gone**, because often it has: the gutter's Help button
   closes its own disclosure before opening a chat, so the control that opened the panel is never
   there when the panel closes.

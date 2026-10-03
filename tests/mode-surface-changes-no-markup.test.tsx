@@ -1957,13 +1957,15 @@ const DIAGRAM_VISITOR: BandShape = {
  * mode's narrow face (docs/plans/260910g-structure-mode-subsumes-outline.md):
  * the label is the mode's name, `Structure`, and `data-outline-clamp` joined
  * the rung as the second half of what the fit chose — whether titles had to
- * be cut to one line to fit (OutlinePanel.tsx § `fit`).
+ * be cut to one line to fit (OutlinePanel.tsx § `fit`). On 2026-10-03 the
+ * clamp went and `data-outline-scroll` took its place: whether the list
+ * scrolls (plan 261003k).
  */
 const OUTLINE: BandShape = {
   className: "mode-band outln has-about",
   label: "Structure",
   head: false,
-  attrs: ["aria-label", "class", "data-outline-clamp", "data-outline-rung"],
+  attrs: ["aria-label", "class", "data-outline-rung", "data-outline-scroll"],
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "ol.outln-list[aria-activedescendant,aria-label,role,tabindex]",
@@ -1980,15 +1982,15 @@ const OUTLINE: BandShape = {
  * standing in for the whole-output check the other ten get.
  */
 const REFEREE: BandShape = {
-  className: "mode-band gloss referee",
+  className: "mode-band gloss referee has-about",
   label: "Referee",
-  head: true,
+  /* No `.band-head` since 2026-10-03: "How this works" became the band's (i),
+     and the chips' own row holds the Notices button. `.ref-brief` is absent
+     because Notices is shut unless the scan found something (plan 261003k;
+     tests/referee-notices.test.tsx holds when it opens). */
+  head: false,
   parent: ".reader",
-  children: ["div.band-head", "div.ref-brief", "div.ref-views[aria-label,role]", "div.ref-panel"],
-  /* The mode's name went in September; the row stays for the "how this works"
-     button, which is unconditional — so Referee's header is the second that
-     cannot empty out. */
-  headChildren: ["button.ref-how-btn[aria-expanded,type]"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.ref-top", "div.ref-panel"],
 };
 
 describe("the bands stage 2 migrated, as they stood before it", () => {
