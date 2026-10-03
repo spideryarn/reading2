@@ -1,0 +1,311 @@
+{
+  "case": "history",
+  "profile": "A history reader interested in the Industrial Revolution, the Roman Empire and the history of science.",
+  "shelf": [
+    {
+      "title": "The Steam Engine and the Age of Machines",
+      "gist": "Explains how the steam engine, refined over decades, freed factories from rivers and became the mechanical heart of the industrial revolution."
+    },
+    {
+      "title": "Cotton Mills of Lancashire",
+      "gist": "An essay on how the cotton mills of Lancashire depended on child labour and reshaped whole towns around the rhythm of the machine."
+    },
+    {
+      "title": "Children of the Factory Floor",
+      "gist": "A news-style report on child labour in the industrial revolution's cotton mills, and the campaign that finally brought railways of inspectors and reformers to the factory gates."
+    },
+    {
+      "title": "Iron Rails, Iron Will: Building Britain's Railways",
+      "gist": "A blog post celebrating how railways, powered by the steam engine, replaced the horse and stitched the country together faster than anyone expected."
+    },
+    {
+      "title": "The Roman Legions on the March",
+      "gist": "An essay on how the discipline of the Roman legions, more than any single general, held the Roman Empire together for centuries."
+    },
+    {
+      "title": "Roads That Built an Empire",
+      "gist": "An explainer on how the Roman Empire's road network, engineered to outlast the men who built it, bound distant provinces of the Roman Empire together."
+    },
+    {
+      "title": "The Fall of Rome, Revisited",
+      "gist": "An essay reconsidering why the Roman Empire's legions, once unbeatable, could no longer hold the frontier by the empire's final morning."
+    },
+    {
+      "title": "Hadrian's Wall: The Empire's Northern Edge",
+      "gist": "A blog post on Hadrian's Wall as the visible edge of the Roman Empire, patrolled by legions who traded the horse for a life on foot along the frontier."
+    },
+    {
+      "title": "The Royal Society and the Birth of Modern Science",
+      "gist": "An explainer on how the Royal Society turned scattered curiosity into a shared method, corresponding by letter about experiments including Darwin's later work on natural selection."
+    },
+    {
+      "title": "Newton's Quiet Revolution",
+      "gist": "An essay on how Isaac Newton, working largely alone, used the Royal Society and the printing press to turn private calculation into shared, lasting science."
+    },
+    {
+      "title": "Darwin's Voyage and the Idea of Natural Selection",
+      "gist": "A news-style account of how Charles Darwin's voyage supplied the evidence behind natural selection, which he later brought before the Royal Society and set in print by the printing press."
+    },
+    {
+      "title": "The Printing Press and the Spread of Ideas",
+      "gist": "An essay on how the printing press turned the rare, hand-copied book into an ordinary object, letting the Royal Society and ideas like natural selection reach a wide public."
+    },
+    {
+      "title": "Threads of Change: Cotton, Steam and the Factory Age",
+      "gist": "A blog post tying together the steam engine, the railways and the cotton mills of the industrial revolution, and the child labour that powered all three."
+    }
+  ],
+  "pairs": [
+    {
+      "pair": "pair-1",
+      "A": [
+        {
+          "topic": "Roman Empire",
+          "articles": [
+            "Roads That Built an Empire",
+            "The Fall of Rome, Revisited",
+            "The Roman Legions on the March",
+            "Hadrian's Wall: The Empire's Northern Edge"
+          ]
+        },
+        {
+          "topic": "Royal Society",
+          "articles": [
+            "The Royal Society and the Birth of Modern Science",
+            "Newton's Quiet Revolution",
+            "The Printing Press and the Spread of Ideas",
+            "Darwin's Voyage and the Idea of Natural Selection"
+          ]
+        },
+        {
+          "topic": "cotton mills",
+          "articles": [
+            "Cotton Mills of Lancashire",
+            "Children of the Factory Floor",
+            "Threads of Change: Cotton, Steam and the Factory Age"
+          ]
+        },
+        {
+          "topic": "steam engine",
+          "articles": [
+            "The Steam Engine and the Age of Machines",
+            "Threads of Change: Cotton, Steam and the Factory Age",
+            "Iron Rails, Iron Will: Building Britain's Railways"
+          ]
+        },
+        {
+          "topic": "industrial revolution",
+          "articles": [
+            "Children of the Factory Floor",
+            "The Steam Engine and the Age of Machines",
+            "Threads of Change: Cotton, Steam and the Factory Age"
+          ]
+        },
+        {
+          "topic": "railways",
+          "articles": [
+            "Iron Rails, Iron Will: Building Britain's Railways",
+            "Threads of Change: Cotton, Steam and the Factory Age",
+            "Children of the Factory Floor"
+          ]
+        },
+        {
+          "topic": "roads",
+          "articles": [
+            "Roads That Built an Empire",
+            "Iron Rails, Iron Will: Building Britain's Railways",
+            "The Roman Legions on the March"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "Industrial Revolution",
+          "articles": [
+            "The Steam Engine and the Age of Machines",
+            "Cotton Mills of Lancashire",
+            "Children of the Factory Floor",
+            "Iron Rails, Iron Will: Building Britain's Railways",
+            "Threads of Change: Cotton, Steam and the Factory Age"
+          ]
+        },
+        {
+          "topic": "Roman Empire",
+          "articles": [
+            "The Roman Legions on the March",
+            "Roads That Built an Empire",
+            "The Fall of Rome, Revisited",
+            "Hadrian's Wall: The Empire's Northern Edge"
+          ]
+        },
+        {
+          "topic": "History of science",
+          "articles": [
+            "The Royal Society and the Birth of Modern Science",
+            "Newton's Quiet Revolution",
+            "Darwin's Voyage and the Idea of Natural Selection",
+            "The Printing Press and the Spread of Ideas"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "pair-2",
+      "A": [
+        {
+          "topic": "Roman Empire",
+          "articles": [
+            "Roads That Built an Empire",
+            "The Fall of Rome, Revisited",
+            "The Roman Legions on the March",
+            "Hadrian's Wall: The Empire's Northern Edge"
+          ]
+        },
+        {
+          "topic": "Royal Society",
+          "articles": [
+            "The Royal Society and the Birth of Modern Science",
+            "Newton's Quiet Revolution",
+            "The Printing Press and the Spread of Ideas",
+            "Darwin's Voyage and the Idea of Natural Selection"
+          ]
+        },
+        {
+          "topic": "cotton mills",
+          "articles": [
+            "Cotton Mills of Lancashire",
+            "Children of the Factory Floor",
+            "Threads of Change: Cotton, Steam and the Factory Age"
+          ]
+        },
+        {
+          "topic": "steam engine",
+          "articles": [
+            "The Steam Engine and the Age of Machines",
+            "Threads of Change: Cotton, Steam and the Factory Age",
+            "Iron Rails, Iron Will: Building Britain's Railways"
+          ]
+        },
+        {
+          "topic": "industrial revolution",
+          "articles": [
+            "Children of the Factory Floor",
+            "The Steam Engine and the Age of Machines",
+            "Threads of Change: Cotton, Steam and the Factory Age"
+          ]
+        },
+        {
+          "topic": "railways",
+          "articles": [
+            "Iron Rails, Iron Will: Building Britain's Railways",
+            "Threads of Change: Cotton, Steam and the Factory Age",
+            "Children of the Factory Floor"
+          ]
+        },
+        {
+          "topic": "roads",
+          "articles": [
+            "Roads That Built an Empire",
+            "Iron Rails, Iron Will: Building Britain's Railways",
+            "The Roman Legions on the March"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "History of Science",
+          "articles": [
+            "The Steam Engine and the Age of Machines",
+            "The Royal Society and the Birth of Modern Science",
+            "Newton's Quiet Revolution",
+            "Darwin's Voyage and the Idea of Natural Selection",
+            "The Printing Press and the Spread of Ideas"
+          ]
+        },
+        {
+          "topic": "Roman Empire",
+          "articles": [
+            "Iron Rails, Iron Will: Building Britain's Railways",
+            "The Roman Legions on the March",
+            "Roads That Built an Empire",
+            "The Fall of Rome, Revisited",
+            "Hadrian's Wall: The Empire's Northern Edge"
+          ]
+        },
+        {
+          "topic": "Industrial Revolution",
+          "articles": [
+            "Cotton Mills of Lancashire",
+            "Children of the Factory Floor",
+            "Threads of Change: Cotton, Steam and the Factory Age",
+            "The Steam Engine and the Age of Machines"
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "pair-3",
+      "A": [
+        {
+          "topic": "Industrial Revolution",
+          "articles": [
+            "The Steam Engine and the Age of Machines",
+            "Cotton Mills of Lancashire",
+            "Children of the Factory Floor",
+            "Iron Rails, Iron Will: Building Britain's Railways",
+            "Threads of Change: Cotton, Steam and the Factory Age"
+          ]
+        },
+        {
+          "topic": "Roman Empire",
+          "articles": [
+            "The Roman Legions on the March",
+            "Roads That Built an Empire",
+            "The Fall of Rome, Revisited",
+            "Hadrian's Wall: The Empire's Northern Edge"
+          ]
+        },
+        {
+          "topic": "History of science",
+          "articles": [
+            "The Royal Society and the Birth of Modern Science",
+            "Newton's Quiet Revolution",
+            "Darwin's Voyage and the Idea of Natural Selection",
+            "The Printing Press and the Spread of Ideas"
+          ]
+        }
+      ],
+      "B": [
+        {
+          "topic": "History of Science",
+          "articles": [
+            "The Steam Engine and the Age of Machines",
+            "The Royal Society and the Birth of Modern Science",
+            "Newton's Quiet Revolution",
+            "Darwin's Voyage and the Idea of Natural Selection",
+            "The Printing Press and the Spread of Ideas"
+          ]
+        },
+        {
+          "topic": "Roman Empire",
+          "articles": [
+            "Iron Rails, Iron Will: Building Britain's Railways",
+            "The Roman Legions on the March",
+            "Roads That Built an Empire",
+            "The Fall of Rome, Revisited",
+            "Hadrian's Wall: The Empire's Northern Edge"
+          ]
+        },
+        {
+          "topic": "Industrial Revolution",
+          "articles": [
+            "Cotton Mills of Lancashire",
+            "Children of the Factory Floor",
+            "Threads of Change: Cotton, Steam and the Factory Age",
+            "The Steam Engine and the Age of Machines"
+          ]
+        }
+      ]
+    }
+  ]
+}

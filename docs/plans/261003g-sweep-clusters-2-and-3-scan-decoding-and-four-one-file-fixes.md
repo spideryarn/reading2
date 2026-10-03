@@ -40,7 +40,7 @@ for it.
   high byte is almost never valid UTF-8, so it takes the fallback and scans as it does now.
 - **Simpler option passed over:** unconditional UTF-8. One line fewer, but a legacy raw page would
   then scan as U+FFFD noise with nothing said — the same silent blindness, moved.
-- **Tests (red first), in `tests/source-scan.test.ts`,** every page stored through the real
+- **Tests (red first), in `tests/source-scan.test.ts`,** current-page cases stored through the real
   `storedDocumentBytes`: (a) the control — zero-width characters and a Unicode-tag payload, with
   `<meta charset="utf-8">`; (b) the same page with **no** meta finds the same; (c) the same page
   with a stale `<meta charset="windows-1252">` finds the same, so "believe the meta when there is
@@ -85,11 +85,11 @@ for it.
 - **Re-checked:** `CopyLink` returns silently with no clipboard and maps a rejection to
   `copied = false`, which is the idle look.
 - **Fix:** three states — idle, copied, failed — as `CopyAnswer` in `ChatPanel.tsx` has. A failure
-  shows on the button and is announced, and says the link can be selected and copied by hand. The
-  sentence goes in `src/messages.ts` beside `SHARING_COPY_TIP`, which is one file outside the
-  cluster's list and is where reader-facing words live.
+  shows beside the button in a pre-mounted polite live region, and says the link can be selected
+  and copied by hand. The sentence goes in `src/messages.ts` beside `SHARING_COPY_TIP`, which is
+  one file outside the cluster's list and is where reader-facing words live.
 - **Tests (red first), Sol's PR-4:** no clipboard object, and a clipboard that rejects, are two
-  paths and each gets a case — the button says it failed, the live region says so, and the
+  paths and each gets a case — the live region beside the button says it failed, and the
   by-hand guidance is on screen; and a copy that works puts the exact link on the clipboard.
 - **Passed over:** a shared copy-button hook. That is cluster 20, which names this cluster as a
   predecessor.
@@ -117,6 +117,38 @@ stage 2's fallback through today's fetch or upload paths: both normalise to vali
 storing. Whether any pre-2026-08-27 raw row survives was not established, which is why the fallback
 stays.
 
+**Code — GPT Sol, 2026-10-03, SHIP**
+([the review](261003g-sweep-clusters-2-and-3-code-review-sol.md)), write-capable over
+`3c6ab877f..de9fbbdb0`. No runtime change. Three P2s, all in the tests and all fixed by it: a
+`part()` that caught only a bare `%` passed (CR-1); reading every margin off the first section
+passed (CR-2); a live region mounted only with a result passed (CR-3). Three P3 prose fixes. Twelve
+mutations, three of which survived until those tests were strengthened. One finding outside the
+stage, reported and not fixed: `security-map.md` lists five untrusted parties, calls them four, and
+then calls the signed-in reader the fifth (CR-7).
+
+**Browser — a Sonnet subagent, Playwright on the box, 2026-10-03.** Spine: 19 cards on one article,
+no bullet repeating a row, bullets and `+ n more` still there. Contents list: at a 20px root font
+the computed margin reads `120px` and the clicked section is the one marked. Copy: with the
+clipboard removed, the red line appears under the link. Two things it saw at the ends of the
+contents list (nothing marked at scroll 0 on one walk; *Export* marked near the foot) are the
+first-entry and at-the-bottom rules, which this change does not touch, and were not chased.
+
 ## What landed
 
-(filled in as each stage lands)
+All five, on `dev`, 2026-10-03:
+
+| Stage | Commit |
+|---|---|
+| 1. `part()` answers 400 | `3c6ab877f` (pushed first, alone, for cluster 6a) |
+| 2. The scan reads stored HTML as UTF-8 | `be1d4fd5a` |
+| 3. The spine card does not repeat a row | `a93af4623` |
+| 4. The contents list follows the scroll margin | `848a32084` |
+| 5. The copy button says when it failed | `de9fbbdb0` |
+| Sol's code-review fixes (tests and prose) | `f09897985` |
+
+Two files outside the cluster's list were touched, each for one small hunk: `src/messages.ts` (the
+failure sentence) and `src/web/Metadata.tsx` (a comment the stage 4 change had made false).
+
+**Not done, on purpose:** whether the spine card's bullet list goes altogether is still Greg's
+(umbrella, For Greg 1). Whether any pre-2026-08-27 raw HTML row survives in production was not
+counted; stage 2's fallback makes the answer not matter.
