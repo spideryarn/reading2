@@ -31,10 +31,18 @@ What is built is in [reader-profile.md](../project/reader-profile.md).
 
 ## What Greg should know
 
-- **The contents list and search box are not on Profile.** That half is a question, not a decline:
-  `[Q-profile-contents-list]` in the session's debrief. With six headings on about one screen the
-  recommendation is to leave it off. The sections already carry what the list reads, so adding it
-  later is small.
+- **The contents list and search box are on Profile too**, since later the same day. The first
+  pass left that half as a question, `[Q-profile-contents-list]`, with a recommendation to leave
+  it off. Greg's answer:
+
+  > Q-profile-contents-list I don't understand the question. Probably B
+  >
+  > — Greg, 2026-10-03
+
+  B was: at desktop width, a column on the left lists Profile's sections with a search box above;
+  pressing one opens it and scrolls to it; hidden on an iPad in portrait and a phone, as on
+  Metadata. Built as queue item `qi-fnypfagn`, with Metadata's own component rather than a copy:
+  [261003n](../plans/261003n-profile-gets-the-contents-list-and-search-box.md).
 - **Open or shut is not remembered.** The three start shut on every visit, as Metadata's do.
 - The shut headings are 14 pixels tall, which is small under a thumb. It is Metadata's heading
   exactly, so changing it changes both pages.

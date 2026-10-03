@@ -2728,7 +2728,11 @@ export async function generateStructure(opts: {
   /**
    * **One whole-document call, from request to an answer we can try to build** —
    * everything that refuses an answer *before* it is read as a tree (transport,
-   * refusal, truncation) throws in here, so none of them is ever asked again.
+   * refusal, truncation) throws in here, so none of them is ever asked again
+   * **by this step**. Since 2026-10-03 the gateway itself re-sends a call whose
+   * transport failed before the answer began (src/messages-stream.ts §
+   * `TRANSPORT_ATTEMPTS`), so one "call" here can be up to three network
+   * requests; the ledger counts each, `wholeDocumentCalls` counts answers.
    */
   const askForWholeDocument = async (
     /* Prefixed to every progress line of this call, so "asking again" is not

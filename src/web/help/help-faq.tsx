@@ -88,7 +88,9 @@ export const HELP_FAQ: Record<FaqId, HelpSection> = {
         row links to its source. Glossary’s <strong>Dig deeper</strong>, Citations’{" "}
         <strong>Dig deeper</strong> and Referee’s <strong>Candidates</strong> can also search or fetch
         outside sources. The glossary’s <strong>background</strong> notes and Citations’ influence bars
-        come from the model’s general knowledge, and a reader profile can shape how some aids are
+        come from the model’s general knowledge (a row says <em>influence unknown</em> where no usable
+        influence score was saved; new lists ask the model to leave it unknown when unsure; a bar marked{" "}
+        <em>from the web</em> is instead an AI estimate from a page Dig deeper found), and a reader profile can shape how some aids are
         written. Most other reading aids work from the article itself.
       </p>
     ),

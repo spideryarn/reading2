@@ -1,0 +1,353 @@
+{
+  "slug": "antikythera-mechanism-spya-zhxrzm",
+  "run": 1,
+  "influenceVersion": "citation-influence/2",
+  "model": "anthropic/claude-opus-5.5",
+  "at": "2026-10-03T20:30:41.447Z",
+  "kept": 0,
+  "asked": 8,
+  "works": [
+    {
+      "id": "spya-kmxu5c",
+      "title": "Decoding the ancient Greek astronomical calculator known as the Antikythera Mechanism",
+      "authors": "Freeth, T.; Bitsakis, Y.; Moussas, X.; Seiradakis, J. H.; et al.",
+      "year": "2006",
+      "listInfluence": 0.9,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "nature.com",
+          "hasTitle": true,
+          "titleNamesWork": true,
+          "extractChars": 1500
+        },
+        {
+          "host": "exa.ai",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 227
+        },
+        {
+          "host": "preview-www.nature.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "en.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 403
+        },
+        {
+          "host": "users.uoa.gr",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        }
+      ],
+      "rawAnswer": {
+        "influence": null,
+        "source": null,
+        "quote": null
+      },
+      "kept": false,
+      "ms": 10420,
+      "why": "said-unknown"
+    },
+    {
+      "id": "spya-bujhg2",
+      "title": "Gears from the Greeks. The Antikythera Mechanism: A Calendar Computer from ca. 80 B.C.",
+      "authors": "Price, Derek de Solla",
+      "year": "1974",
+      "listInfluence": 0.9,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "sites.dlib.nyu.edu",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 219
+        },
+        {
+          "host": "en.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "ftp.math.utah.edu",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1499
+        },
+        {
+          "host": "ccat.sas.upenn.edu",
+          "hasTitle": false,
+          "titleNamesWork": false,
+          "extractChars": 224
+        },
+        {
+          "host": "api.drum.lib.umd.edu",
+          "hasTitle": false,
+          "titleNamesWork": false,
+          "extractChars": 237
+        }
+      ],
+      "rawAnswer": null,
+      "kept": false,
+      "ms": 5245,
+      "why": "no-page-about-work"
+    },
+    {
+      "id": "spya-c6pcvs",
+      "title": "A Portable Cosmos: Revealing the Antikythera Mechanism, Scientific Wonder of the Ancient World",
+      "authors": "Jones, Alexander",
+      "year": "2017",
+      "listInfluence": 0.6,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "mitpressbookstore.mit.edu",
+          "hasTitle": true,
+          "titleNamesWork": true,
+          "extractChars": 1349
+        },
+        {
+          "host": "journals.uchicago.edu",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 545
+        },
+        {
+          "host": "en.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "publishersweekly.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 249
+        },
+        {
+          "host": "bmcr.brynmawr.edu",
+          "hasTitle": true,
+          "titleNamesWork": true,
+          "extractChars": 1500
+        }
+      ],
+      "rawAnswer": {
+        "influence": null,
+        "source": null,
+        "quote": null
+      },
+      "kept": false,
+      "ms": 7066,
+      "why": "said-unknown"
+    },
+    {
+      "id": "spya-z55t7c",
+      "title": "The Calendars of Ancient Egypt",
+      "authors": "Parker, Richard Anthony",
+      "year": "1950",
+      "listInfluence": 0.5,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "en.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1072
+        },
+        {
+          "host": "en.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1499
+        },
+        {
+          "host": "dokumen.pub",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "openlibrary.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 197
+        },
+        {
+          "host": "goodreads.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 243
+        }
+      ],
+      "rawAnswer": null,
+      "kept": false,
+      "ms": 7059,
+      "why": "no-page-about-work"
+    },
+    {
+      "id": "spya-jc3zq3",
+      "title": "The Antikythera Mechanism: a new gearing scheme",
+      "authors": "Wright, Michael T.",
+      "year": "2005",
+      "listInfluence": 0.5,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "en.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "hist.science.online.fr",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 236
+        },
+        {
+          "host": "hist.science.online.fr",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "de.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 250
+        },
+        {
+          "host": "antikmuseet.au.dk",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 247
+        }
+      ],
+      "rawAnswer": null,
+      "kept": false,
+      "ms": 4549,
+      "why": "no-page-about-work"
+    },
+    {
+      "id": "spya-w36dc9",
+      "title": "Solar anomaly and planetary displays in the Antikythera Mechanism",
+      "authors": "Evans, James; Carman, Christián C.; Thorndyke, Alan",
+      "year": "2010",
+      "listInfluence": 0.5,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "journals.sagepub.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 250
+        },
+        {
+          "host": "webspace.pugetsound.edu",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "researchgate.net",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 212
+        },
+        {
+          "host": "en.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 959
+        },
+        {
+          "host": "journals.sagepub.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 247
+        }
+      ],
+      "rawAnswer": null,
+      "kept": false,
+      "ms": 4864,
+      "why": "no-page-about-work"
+    },
+    {
+      "id": "spya-j5w4pe",
+      "title": "On the epoch of the Antikythera mechanism and its eclipse predictor",
+      "authors": "Carman, Christián C.; Evans, James",
+      "year": "2014",
+      "listInfluence": 0.5,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "en.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "mdpi.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        }
+      ],
+      "rawAnswer": null,
+      "kept": false,
+      "ms": 5320,
+      "why": "no-page-about-work"
+    },
+    {
+      "id": "spya-n98m9t",
+      "title": "Science and Civilisation in China, Vol. 4 Part 2",
+      "authors": "Needham, Joseph",
+      "year": "2000",
+      "listInfluence": 0.6,
+      "searches": 1,
+      "pages": [
+        {
+          "host": "en.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "en.wikipedia.org",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 857
+        },
+        {
+          "host": "exa.ai",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 1500
+        },
+        {
+          "host": "pure.mpg.de",
+          "hasTitle": false,
+          "titleNamesWork": false,
+          "extractChars": 276
+        },
+        {
+          "host": "link.springer.com",
+          "hasTitle": true,
+          "titleNamesWork": false,
+          "extractChars": 151
+        }
+      ],
+      "rawAnswer": null,
+      "kept": false,
+      "ms": 4510,
+      "why": "no-page-about-work"
+    }
+  ]
+}

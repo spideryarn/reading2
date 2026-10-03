@@ -729,13 +729,25 @@ state: it is not in the URL and is not remembered, so the three start shut on ev
 `keepMounted`. Settings' saves live in a store outside the component or on the device, and the two
 read-outs are fed by fetches the page owns, so shutting a section cancels nothing.
 
-**The contents list and search box in the margin are not here**, and that is a question left for
-Greg rather than a decision: his report describes them and then asks for the folding. Each section
-already carries the `data-section` and `keywords` the list reads, so adding it is a
-`<PageContents>` and a margin class. The reasoning is in
-[plan 261003k](../plans/261003k-feedback-screenshot-shrinks-to-fit-and-profile-sections-collapse.md).
+**The contents list and its search box are in the left margin**, as on Metadata, from 1024px wide
+up; an iPad in portrait and a phone do not get them. Pressing an entry opens that section if it is
+shut, scrolls to it and flashes it. 261003k left this as a question, and Greg's answer was:
+
+> Q-profile-contents-list I don't understand the question. Probably B
+>
+> — Greg, 2026-10-03
+
+B was this. It is Metadata's own component,
+[`src/web/PageContents.tsx`](../../src/web/PageContents.tsx), which reads the page's sections off
+the DOM, so there is no second list of the six. **A new section needs `keywords`** (a type error
+without them): the words a reader would type into that box. The search uses its own billing
+synonym table, `PROFILE_SYNONYMS` in `ProfilePage.tsx`: *bill* and
+*usage* find *Plan*. Metadata's article-action groups do not belong here; *hide experimental
+features* must still find *Settings*, and *archived articles* must not promise them under
+*Recently read*, which excludes them.
+[Plan 261003n](../plans/261003n-profile-gets-the-contents-list-and-search-box.md).
 [`tests/profile-sections-collapsed.test.tsx`](../../tests/profile-sections-collapsed.test.tsx)
-holds which three are which.
+holds which three sections are which, and that the list reaches them.
 
 ## Where the pieces are
 

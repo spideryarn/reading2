@@ -53,6 +53,8 @@ const wire = vi.hoisted(() => ({
   calls: [] as { maxTokens: number; parts: string[] }[],
   /** What to answer, indexed by call number. Set by each test. */
   answers: [] as Array<string | { fail: () => never }>,
+  /** Network attempts reported by each logical call, indexed by call number. */
+  attempts: [] as number[],
 }));
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
@@ -76,6 +78,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
       return {
         onText: () => {},
         aborted: () => false,
+        attempts: () => wire.attempts[at] ?? 1,
         finalMessage: async () => {
           if (typeof answer !== "string") return answer.fail();
           return {
@@ -178,6 +181,7 @@ function allBut(n: number, gaps: number[], how?: string): string {
 beforeEach(() => {
   wire.calls.length = 0;
   wire.answers.length = 0;
+  wire.attempts.length = 0;
 });
 
 describe("a batch that comes back short", () => {
@@ -237,6 +241,18 @@ describe("a batch that comes back short", () => {
 
     expect(wire.calls.length).toBe(1);
     expect(run.dropped).toEqual([]);
+  });
+
+  it("counts every network attempt inside one logical batch call", async () => {
+    const { tree, blocks } = oneSection(12);
+    wire.answers.push(allBut(12, []));
+    wire.attempts.push(2);
+
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+
+    expect(wire.calls).toHaveLength(1);
+    expect(run.calls).toBe(2);
+    expect(run.file.batches?.[0]?.requests).toBe(2);
   });
 
   it("still re-draws the whole batch when the answer was truncated", async () => {
