@@ -1256,7 +1256,9 @@ waits like everything else.
 **A predecessor that is stopping still blocks.** Stop on a *queued* job settles it terminal at once
 and it leaves the line by itself; Stop on a *running* one leaves it `running` with `cancelling` set
 until its claimant releases or its lease lapses, and the line still counts that row as running. The
-successor unblocks when the cancellation becomes terminal, not when Stop is pressed.
+successor unblocks when the cancellation becomes terminal, not when Stop is pressed. When it was
+pressed is `jobs.cancel_requested_at`, written on both branches and never cleared; `finished_at` is
+the later settlement.
 
 **The cost, named rather than solved: an abandoned `queued` row blocks its own article's line.** It
 is not swept, and there is no `last_seen_at` — that would turn *"durable until resumed or

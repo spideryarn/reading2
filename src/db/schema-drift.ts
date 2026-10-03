@@ -75,7 +75,8 @@ export type DriftReport = {
   /**
    * `table.column` the code expects the DATABASE to default, where it no longer
    * does. The column exists, so an existence check calls this healthy — and
-   * every insert that omits the column fails.
+   * every insert that omits the column fails if it is `not null`, or quietly
+   * writes null if it is nullable (a `created_at` that stops being kept).
    */
   defaultLost: string[];
   /** `table.column` where code and database disagree about NOT NULL. */
@@ -228,8 +229,15 @@ export function compareSchema(declared: DeclaredTable[], actual: ActualSchema): 
          src/store/pg-jobs.ts `tryEnqueue` never sets it — the database default
          is the only thing that fills it in. Drop that default and the column
          still EXISTS, so an existence check stays green while every insert
-         fails. GPT Sol's second review, finding 2. */
-      if (column.notNull && column.hasDefault && !found.hasDefault && !found.generated && !found.identity) {
+         fails. GPT Sol's second review, finding 2.
+
+         **Nullable columns too**, since 2026-10-03. A nullable
+         `created_at … default now()` that no store names is stamped by the
+         database default alone; lose it and nothing fails — every insert
+         succeeds and writes null, so the time silently stops being kept. That
+         is quieter than the `not null` case, not safer. GPT Sol's review of
+         docs/plans/261003j, finding 5. */
+      if (column.hasDefault && !found.hasDefault && !found.generated && !found.identity) {
         defaultLost.push(key);
       }
       /* Declared nullable but required in the database: a write of `null` that
@@ -294,7 +302,8 @@ export function driftWarnings(report: DriftReport): string[] {
   if (report.defaultLost.length > 0) {
     warnings.push(
       `${report.defaultLost.length} column(s) this code relies on the database to default no longer have one: ` +
-        `${report.defaultLost.join(", ")} — inserts that omit them will fail`,
+        `${report.defaultLost.join(", ")} — inserts that omit them will fail where the column is NOT NULL, ` +
+        "and where it is nullable the omitted value will silently become null",
     );
   }
   if (report.nullabilityMismatch.length > 0) {

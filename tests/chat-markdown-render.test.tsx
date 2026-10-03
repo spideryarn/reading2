@@ -163,7 +163,7 @@ describe("the marks inside a block", () => {
 
   it("keeps a citation chip working inside a list item", () => {
     paint("- because of this [spya-k3m9qt]");
-    const chip = host.querySelector("li .cite .block-ref");
+    const chip = host.querySelector("li .cite-chips .block-ref");
     expect(chip).not.toBeNull();
     expect(chip?.textContent).toContain("k3m9qt");
   });
@@ -172,7 +172,7 @@ describe("the marks inside a block", () => {
     paint("The id `spya-k3m9qt` and the markers `**` are literal.");
     expect(all("code.fmt-code").map((c) => c.textContent)).toEqual(["spya-k3m9qt", "**"]);
     // No chip: inside backticks an id is a string being discussed, not a place.
-    expect(all(".cite")).toHaveLength(0);
+    expect(all(".cite-chips")).toHaveLength(0);
     expect(all("strong")).toHaveLength(0);
   });
 
@@ -194,7 +194,7 @@ describe("the marks inside a block", () => {
     // would put a second, differently-behaved thing inside something the
     // reader is about to press.
     paint("[spya-k3m9qt](https://a.example/x)");
-    expect(all(".cite")).toHaveLength(0);
+    expect(all(".cite-chips")).toHaveLength(0);
     expect(host.querySelector("a.cited-link")?.textContent).toContain("spya-k3m9qt");
   });
 });
@@ -372,7 +372,7 @@ describe("the client and the server agree about what a citation is", () => {
     (citableText(answer).match(/spya-[a-z0-9]{6}/g) ?? []).length;
   const chipsOnScreen = (answer: string) => {
     paint(answer);
-    return all(".cite .block-ref").length;
+    return all(".cite-chips .block-ref").length;
   };
 
   it.each([
@@ -453,7 +453,7 @@ describe("the summary panel, which reads marks but not structure", () => {
   it("reads bold and block ids", () => {
     summarise("He calls it **computational functionalism** [spya-k3m9qt].");
     expect(host.querySelector("strong")?.textContent).toBe("computational functionalism");
-    expect(host.querySelector(".cite .block-ref")).not.toBeNull();
+    expect(host.querySelector(".cite-chips .block-ref")).not.toBeNull();
   });
 
   it("emits no block elements, because it sits inside a <p>", () => {

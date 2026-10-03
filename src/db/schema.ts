@@ -298,6 +298,22 @@ export const articles = spideryarn.table("articles", {
    */
   highPowerSince: timestamp("high_power_since", { withTimezone: true }),
   /**
+   * **The latest change the reader made to this article's own settings**: its
+   * title (`title_override`), its `purpose`, archiving or un-archiving it, and
+   * High-powered AI going on or off. Null means none since 2026-10-03, when we
+   * started keeping it.
+   *
+   * It exists for the changes that leave nothing behind: a rename has no clock
+   * at all, un-archiving nulls `archived_at`, and switching High-powered AI off
+   * nulls `high_power_since`. Those columns keep their meanings exactly.
+   *
+   * **Not "the row changed".** An open (`last_opened_at`), a visibility change
+   * (`article_visibility_changes`), a publish (`public_at`) and the pipeline's
+   * own writes each have their own time and do not move this one. Stored, not
+   * shown — docs/plans/261003j-store-when-it-happened-timestamp-audit.md.
+   */
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+  /**
    * **How much of the pipeline this article has had: `'minimal'` or `'full'`.**
    *
    * A *minimal* paper is a file added in a batch with only its title, authors,
@@ -1782,6 +1798,22 @@ export const refereeCriteria = spideryarn.table(
      * runs. Sol's finding 7 is that those two must not be the same channel.
      */
     colour: integer("colour"),
+    /**
+     * When the reader last picked or cleared `colour`. Null means never, or
+     * before 2026-10-03. Nothing else moves it, and a recolour moves nothing
+     * else. Stored, not shown (plan 261003j).
+     */
+    colourAt: timestamp("colour_at", { withTimezone: true }),
+    /**
+     * **When the latest attempt ended**: the results landed, the call failed,
+     * or the sweep declared it abandoned. Null while `pending` — every path
+     * back to `pending` nulls it — and on a row finished before 2026-10-03.
+     *
+     * Written only inside the attempt-fenced `finish` and by the sweep, so a
+     * stale attempt's late answer cannot move it. `attempt_started_at` cannot
+     * stand in: it is nulled at the same moment. Stored, not shown.
+     */
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -1923,6 +1955,16 @@ export const refereeClaims = spideryarn.table(
      * both-or-neither check. `text`, like `search_runs` and `referee_criteria`.
      */
     attemptId: text("attempt_id"),
+    /**
+     * **When this run ended**: the claims landed, the call failed, or the sweep
+     * declared it abandoned. Null while `pending` — `begin` nulls it, on a first
+     * run and a re-run alike — and on a row finished before 2026-10-03.
+     *
+     * Written only inside the attempt-fenced `finish` and by the sweep.
+     * `created_at` above stays the run's *start*. Stored, not shown (plan
+     * 261003j).
+     */
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [
     check("referee_claims_status", sql`${t.status} in ('pending','done','error')`),
@@ -2042,6 +2084,25 @@ export const comments = spideryarn.table(
      * migration; the names are `HIGHLIGHT_COLOURS` in src/types.ts.
      */
     colour: text("colour"),
+    /**
+     * When the reader last recoloured this highlight or took its colour away.
+     * Null means never recoloured (a colour picked at creation is timed by
+     * `created_at`), or before 2026-10-03. **Not `updated_at`**, which means
+     * "the words were edited" and which a recolour must not move. Stored, not
+     * shown (plan 261003j).
+     */
+    colourAt: timestamp("colour_at", { withTimezone: true }),
+    /**
+     * **When the model's latest answer ended**: it landed, it failed, or the
+     * sweep declared the attempt abandoned. Null on a comment nobody asked the
+     * model about (`status = 'none'`), while `pending` — `beginAnswer` nulls it,
+     * because a new attempt has not finished — and on an answer from before
+     * 2026-10-03.
+     *
+     * Written only inside the attempt-fenced `patch` and by `sweepPending`, so
+     * a stale attempt's late write cannot move it. Stored, not shown.
+     */
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -2269,6 +2330,19 @@ export const jobs = spideryarn.table(
     error: text("error"),
     /** Stop was pressed and the abort has not landed yet. */
     cancelling: boolean("cancelling").notNull().default(false),
+    /**
+     * **When the reader last pressed Stop and the request was accepted** —
+     * `requestCancel`, on both branches: a queued or abandoned job cancelled on
+     * the spot, and a running one flagged `cancelling` for its claimant. Null
+     * means nobody has, or before 2026-10-03.
+     *
+     * A past request, not the attempt's end: `finished_at` is when the job
+     * settled, which for a running job is later and need not even be
+     * `cancelled`. So it is **not cleared** when `cancelling` is, and a refused
+     * request (the job was already terminal, or is somebody else's) does not
+     * write it. Stored, not shown (plan 261003j).
+     */
+    cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
     /**
      * Fences every write against a worker whose lease expired mid-model-call.
      * Such a worker cannot be stopped, so it must be stopped from *writing*.
@@ -3505,6 +3579,14 @@ export const chatThreads = spideryarn.table(
     createdAt: createdAt(),
     /** Bumped on every stored message, so the list can show recent first. */
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * When the reader last renamed this conversation. Null means never (the
+     * title is still the one derived from the first message, or the one an
+     * edit of that message re-derived), or before 2026-10-03. **Not
+     * `updated_at`**: the panel sorts by that, and a rename must not jump a
+     * conversation to the top. Stored, not shown (plan 261003j).
+     */
+    renamedAt: timestamp("renamed_at", { withTimezone: true }),
 
     /**
      * **The passage this conversation was started from**, as three columns.
@@ -3757,6 +3839,23 @@ export const chatMessages = spideryarn.table(
      */
     attemptId: text("attempt_id"),
     attemptStartedAt: timestamp("attempt_started_at", { withTimezone: true }),
+    /**
+     * **When this message stopped being `pending`.** For a model's reply: the
+     * answer landed, failed or was stopped (the fenced `finish`), or the sweep
+     * declared it abandoned. Null while `pending` — a retry nulls it — and on a
+     * row written before 2026-10-03.
+     *
+     * **A row that is born complete takes its own `created_at`**: the reader's
+     * question, and both halves of a spoken exchange (`appendSpoken`), are
+     * whole when they are inserted. That is one rule for every insert —
+     * "pending is null, anything else finished when it was written" — rather
+     * than a second meaning of null for user rows. An edit of a question is
+     * `edited_at`, and does not move this.
+     *
+     * `attempt_started_at` cannot stand in: it is nulled at finish. Stored, not
+     * shown (plan 261003j).
+     */
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.threadId, t.id] }),
@@ -3897,6 +3996,23 @@ export const searchRuns = spideryarn.table(
      * migrate. `MAX_STORED_COLOUR`, src/searches.ts, is the same number.
      */
     colour: integer("colour"),
+    /**
+     * When the reader last picked or cleared `colour`. Null means never, or
+     * before 2026-10-03. Nothing else moves it, and a recolour moves nothing
+     * else. Stored, not shown (plan 261003j).
+     */
+    colourAt: timestamp("colour_at", { withTimezone: true }),
+    /**
+     * **When the latest attempt ended**: the hits landed, the call failed, or
+     * the sweep declared it abandoned. Null while `pending` — every path back to
+     * `pending` (a retry of an errored run, a quick search re-run) nulls it —
+     * and on a run finished before 2026-10-03.
+     *
+     * Written only inside the attempt-fenced `finish` and by the sweep, so a
+     * stale attempt's late answer cannot move it. `created_at` stays "when it
+     * was asked"; `attempt_started_at` is nulled at finish. Stored, not shown.
+     */
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
 
     /**
      * **Which matcher answered** — `'meaning'` (src/search.ts) or `'quick'`
@@ -3984,6 +4100,15 @@ export const glossaryLookups = spideryarn.table(
      * docs/plans/261002f-glossary-add-a-looked-up-term.md.
      */
     addedName: text("added_name"),
+    /**
+     * **When this row was first written** — the first lookup, and for a reader-added term the moment the reader added it. `at` is re-stamped by
+     * a later re-run, which overwrites the row; this keeps the first, because
+     * the upsert in the store never names it. Filled by the database default,
+     * so every writer is covered. **Null means before 2026-10-03, when we
+     * started keeping it** — nullable on purpose, since no row is given an
+     * invented time. AGENTS.md § Writing code, "Store when it happened".
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
@@ -4062,6 +4187,15 @@ export const citationFinds = spideryarn.table(
     lookupContextHash: text("lookup_context_hash"),
     /** R-4: the result's URL, title and extract. Provenance only. */
     lookupEvidenceHash: text("lookup_evidence_hash"),
+    /**
+     * **When this row was first written** — the first find of this work. `found_at` is re-stamped by
+     * a later re-run, which overwrites the row; this keeps the first, because
+     * the upsert in the store never names it. Filled by the database default,
+     * so every writer is covered. **Null means before 2026-10-03, when we
+     * started keeping it** — nullable on purpose, since no row is given an
+     * invented time. AGENTS.md § Writing code, "Store when it happened".
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
@@ -4194,6 +4328,15 @@ export const citationInvestigations = spideryarn.table(
      * survived the check.
      */
     paperPassages: jsonb("paper_passages").$type<PaperPassage[]>(),
+    /**
+     * **When this row was first written** — the first press of *Investigate* on this work. `at` is re-stamped by
+     * a later re-run, which overwrites the row; this keeps the first, because
+     * the upsert in the store never names it. Filled by the database default,
+     * so every writer is covered. **Null means before 2026-10-03, when we
+     * started keeping it** — nullable on purpose, since no row is given an
+     * invented time. AGENTS.md § Writing code, "Store when it happened".
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
@@ -4383,8 +4526,12 @@ export const readingTime = spideryarn.table(
  *   `reading_time` has: an entry id is minted from the same alphabet as a
  *   block id but is not one.
  * - **No `owner_id`**, like `reading_time`: only the owner writes, and
- *   ownership is inherited through the article. **No timestamp**: nothing reads
- *   when (GPT Sol's plan review, finding 6).
+ *   ownership is inherited through the article.
+ * - **`created_at` is when the reader hid it**, and nothing reads it yet. The
+ *   table was made without a time because nothing read one (GPT Sol's plan
+ *   review, finding 6); the rule since is Greg's, 2026-10-03 — AGENTS.md
+ *   § Writing code, "Store when it happened". A second hide is `do nothing`,
+ *   so it keeps the first; un-hiding deletes the row and its time with it.
  *
  * Attached to the owner's read as `hidden: true` in `loadGlossary`; the public
  * read never touches this table.
@@ -4396,6 +4543,12 @@ export const glossaryHiddenEntries = spideryarn.table(
       .notNull()
       .references(() => articles.id, { onDelete: "cascade" }),
     entryId: text("entry_id").notNull(),
+    /**
+     * When the reader hid the entry, from the database default. **Null means
+     * hidden before 2026-10-03, when we started keeping it** — nullable on
+     * purpose, since no row is given an invented time.
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.entryId] }),
@@ -4452,6 +4605,16 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
    */
   experimentalSince: timestamp("experimental_since", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * **When the row was first written** — the reader's first profile text or
+   * first flip of the switch above, whichever came first. `updated_at` moves
+   * on every write; this does not, because neither upsert in
+   * src/store/pg-reader.ts names it and the database default fills it in.
+   * **Null means a row from before 2026-10-03, when we started keeping it** —
+   * nullable on purpose, since no row is given an invented time. AGENTS.md
+   * § Writing code, "Store when it happened".
+   */
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
 /**
@@ -6265,6 +6428,15 @@ export const linkSummaries = spideryarn.table(
      * lease, which is why an abandoned generation cannot wedge a link.
      */
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /**
+     * **When the model's answer landed** — the fenced `fill`. `created_at` is
+     * the *claim*, so without this the row says when somebody started asking
+     * and never when it was answered. Null on a `pending` row (a claim or a
+     * reclaim nulls it) and on an answer from before 2026-10-03. A losing
+     * claimant's `fill` changes neither the answer nor this. Stored, not shown
+     * (plan 261003j).
+     */
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.ownerId, t.articleId, t.target, t.blockId] }),
