@@ -43,7 +43,7 @@ import { useEffect, useRef } from "react";
 import type { Block, BlockId } from "../types.js";
 import { armJump, clearArmedJump, type JumpOrigin } from "./jump-history.js";
 import { activeSectionIndex } from "./position.js";
-import { dropPendingFlash, flashBlock } from "./flash.js";
+import { dropPendingFlash, flashBlock, type FlashTarget, type JumpAim } from "./flash.js";
 import {
   SCROLL_MS,
   abandonScroll,
@@ -319,13 +319,24 @@ export function measureOrigin(blocks: Block[]): JumpOrigin {
  * `passage` narrows that flash for the one history-pushing jump whose
  * destination is finer than a block: a Skim row is a quote. Omitted by
  * every other caller, so their block wash is unchanged (plan 260928a § 7b).
+ *
+ * **`aim` is that passage key, or a `FlashTarget`** — the second for a citation
+ * chip whose sentence quotes the article, whose `quotes` narrow the *paint* and
+ * nothing else (flash.ts § `FlashTarget.quotes`; a reader's report,
+ * spya-hzpf9b). Only the passage half reaches `alreadyThere` and
+ * `scrollToBlock`: a quote names no drawn mark, and the scroll would treat it
+ * as a passage still to arrive and go on re-measuring. So a quote jump scrolls
+ * exactly as a bare block jump does, centred on the block.
  */
 export function beginJump(
   blocks: Block[],
   target: BlockId,
   push: (id: BlockId) => void,
-  passage?: string,
+  aim?: JumpAim,
 ): boolean {
+  const given: FlashTarget = typeof aim === "string" ? { passage: aim } : (aim ?? {});
+  const passage = given.passage ?? undefined;
+  const flash: FlashTarget = given.quotes === undefined ? { passage } : { passage, quotes: given.quotes };
   clearArmedJump();
   /* A held landing belongs to the last jump. Supersede it when the next jump
      begins, not only if that next scroll eventually settles: if the reader
@@ -337,7 +348,7 @@ export function beginJump(
     /* Only a glide in flight needs stopping; with none, `abandonScroll` would
        only drop the arrival anchor the reader is standing on (plan 260929a). */
     if (glideTarget() !== null) abandonScroll();
-    flashBlock(target, { passage });
+    flashBlock(target, flash);
     return false;
   }
   /* `from` is the whole address, not just the path: it is what lets the wrapper
@@ -356,7 +367,7 @@ export function beginJump(
     target,
     "smooth",
     (outcome) => {
-      if (outcome === "settled") flashBlock(target, { passage });
+      if (outcome === "settled") flashBlock(target, flash);
     },
     { align: "centre", passage },
   );

@@ -473,8 +473,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Tutorial</strong>: short turns, a little of the piece at a time. Say what you
-            remember, or that you haven’t read it yet, and each reply teaches one small piece,
-            links the passage, and asks you to put it in your own words, give an example or push back.
+            remember; it’s fine if you haven’t read it yet, or haven’t finished. Each reply teaches
+            one small piece, links the passage, and asks you to put it in your own words, explain
+            why the author needs it or connect it to an earlier part. It is about what the author
+            is saying; now and then it asks what you think.
             Now and then it comes back to an earlier point. It takes your profile and your reason for
             reading into account. Typed or dictated; there is no Live conversation here yet.
           </li>

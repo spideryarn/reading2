@@ -23,7 +23,10 @@
  * row its own way. With the prose column off (`?text=0`) there is nothing to
  * flash and nothing is kept for later. **Skim narrows it to the quote's
  * own words** (`FlashTarget.passage`, plan 260928a § 7b), because its stop is
- * a quote rather than a paragraph; every other caller washes the cell.
+ * a quote rather than a paragraph. **A citation chip whose sentence quotes the
+ * article narrows it too**, by another route: it has words but no mark, so the
+ * words are found at the flash and painted as `Range`s (`FlashTarget.quotes`;
+ * a reader's report, spya-hzpf9b). Every other caller washes the cell.
  *
  * **A flash nobody can see is held, not spent.** On a narrow window a mode's
  * band lies over the whole article (`.reader.band-covers`), so a flash fired
@@ -36,6 +39,8 @@
  * memoised table owns, and re-rendering 2,000 rows to toggle one class would
  * be the wrong trade.
  */
+import { findQuote } from "../quote-match.js";
+import { RESERVED_ATTRS } from "../reserved.js";
 import type { BlockId } from "../types.js";
 import { blockRow, passageMarks } from "./rows.js";
 import { reducedMotion } from "./scroll.js";
@@ -71,10 +76,51 @@ const ALL = [MOVING, STILL, PASSAGE_MOVING, PASSAGE_STILL, ELEMENT_MOVING, ELEME
  */
 export interface FlashTarget {
   passage?: string | null | undefined;
+  /**
+   * **Words to find in the block and paint, where there is no mark to wash** —
+   * the quotations in a citation chip's own sentence of a model's answer
+   * (Cited.tsx § `cited`). A reader's report, spya-hzpf9b: the chip after *"an
+   * intelligent data pattern"* washed a 250-word paragraph, and the sentence
+   * could not be found in it. Plan
+   * docs/plans/261003i-tutorial-leans-to-retention-a-softer-blurb-quote-links-that-show-the-quote.md.
+   *
+   * **Every one that is in the block is painted, and the rest are ignored.**
+   * The sender is deliberately generous about which quotations belong to a
+   * chip (citations.ts § `quotesBefore`), and this is why it can be: a
+   * quotation that is not this block's words finds nothing here, so it can
+   * never put a highlight on the wrong ones. None found, or a browser with no
+   * highlight API, washes the cell as before.
+   *
+   * Not a `passage`, and it must not be sent as one: a passage is a key naming
+   * marks annotate.ts has drawn, and `scrollToBlock` treats a key that resolves
+   * to nothing as provisional and goes on re-measuring (scroll.ts § `aimAt`).
+   * Nothing draws a mark for these words — they are located at the moment of
+   * the flash and painted as `Range`s (`paintQuotes`, below).
+   */
+  quotes?: readonly string[] | undefined;
 }
 
-/** What is washing now, and the timer that will take the wash off. */
-let live: { els: HTMLElement[]; timer: ReturnType<typeof setTimeout> } | null = null;
+/**
+ * **What a jump may say about where it lands, beyond the block**: a bare string
+ * is a passage key, which is what every caller passed before `quote` existed
+ * and what Skim and Citations still pass. keynav.ts § `beginJump` takes it
+ * apart.
+ */
+export type JumpAim = string | FlashTarget;
+
+/**
+ * The one named highlight quotes are painted under (prose.css §
+ * `::highlight(quote-flash)`). One name and one live flash, holding every
+ * Range of it, so registering a new one replaces the old and there is never a
+ * second to clear.
+ */
+export const QUOTE_HIGHLIGHT = "quote-flash";
+
+/**
+ * What is washing now, and the timer that will take the wash off. `quote` says
+ * the wash is a registered highlight rather than a class on `els`.
+ */
+let live: { els: HTMLElement[]; quote: boolean; timer: ReturnType<typeof setTimeout> } | null = null;
 /** A flash waiting for the prose to be exposed. */
 let pending: { id: BlockId; target: FlashTarget } | null = null;
 
@@ -87,7 +133,110 @@ function stop(): void {
   if (!live) return;
   clearTimeout(live.timer);
   for (const el of live.els) el.classList.remove(...ALL);
+  if (live.quote) highlights()?.delete(QUOTE_HIGHLIGHT);
   live = null;
+}
+
+/**
+ * The CSS Custom Highlight API's registry, or `null` where there is none —
+ * jsdom, and Firefox before 140. Asked for at each use rather than once at
+ * import, so a missing API is simply the old behaviour and never a throw.
+ */
+function highlights(): HighlightRegistry | null {
+  if (typeof CSS === "undefined" || typeof Highlight !== "function") return null;
+  return (CSS as { highlights?: HighlightRegistry }).highlights ?? null;
+}
+
+/**
+ * Footnote controls: a marker in the prose, and a note's back-link. Stamped by
+ * stage 2 and by nobody else (src/notes.ts), which is why they can be told
+ * apart from the article's own characters.
+ */
+const NOTE_CONTROL = `[${RESERVED_ATTRS.noteRef}], [${RESERVED_ATTRS.noteBack}]`;
+
+/**
+ * **Where each of `quotes` is in the cell, as `Range`s** — one for every quote
+ * that is there, none for one that is not.
+ *
+ * The cell's text is rebuilt here one text node at a time, with each node's
+ * offset kept, because the answer has to be pairs of (node, offset) points and
+ * `textContent` cannot be mapped back to them. `findQuote` does the matching —
+ * forgiving of case, whitespace and curly quotes, the same rule every other
+ * quote on the page is found by (src/quote-match.ts).
+ *
+ * **Footnote markers are left out of the text that is searched.** An article
+ * prints them inside phrases: the DOM reads `Self2 as a process` where the
+ * author wrote, and the model quotes, `Self as a process`. They are skipped by
+ * **node** — the stamp stage 2 put on the marker — never by a digit pattern,
+ * which would take the 2 out of `CO2` (src/blocks.ts § the same rule, for the
+ * same reason). Because the offsets are into the nodes that were kept, the
+ * Range still starts and ends in the right places and simply runs across the
+ * marker.
+ */
+function quoteRanges(cell: HTMLElement, quotes: readonly string[]): Range[] {
+  const nodes: { node: Text; start: number }[] = [];
+  let text = "";
+  const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+    if (n.parentElement?.closest(NOTE_CONTROL)) continue;
+    const node = n as Text;
+    nodes.push({ node, start: text.length });
+    text += node.data;
+  }
+  /* The last node that begins before `offset` (`strictly`), or at or before
+     it. The start of a span belongs to the node it is inside; the end, being
+     exclusive, to the node it finishes in — so a quote ending exactly at a
+     node boundary ends in that node rather than at offset 0 of the next. */
+  const nodeAt = (offset: number, strictly: boolean) => {
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      if (n && (strictly ? n.start < offset : n.start <= offset)) return n;
+    }
+    return null;
+  };
+  const ranges: Range[] = [];
+  for (const quote of quotes) {
+    const span = findQuote(text, quote);
+    if (span === null || span.end <= span.start) continue;
+    const first = nodeAt(span.start, false);
+    const last = nodeAt(span.end, true);
+    if (!first || !last) continue;
+    const range = document.createRange();
+    range.setStart(first.node, span.start - first.start);
+    range.setEnd(last.node, span.end - last.start);
+    ranges.push(range);
+  }
+  return ranges;
+}
+
+/**
+ * **Paint `quotes` inside the cell for `CITE_FLASH_MS`**, ending whatever was
+ * washing before; `false` if none of them could be, and then the caller washes
+ * the cell.
+ *
+ * Registered `Range`s rather than `<mark>`s, because the prose's marks are
+ * annotate.ts's and are rebuilt from `Found`s on every change — a mark written
+ * here would be one nothing else knows about, in the html every offset on the
+ * page is measured against. A highlight touches no DOM at all.
+ *
+ * **It does not animate**: `::highlight()` takes colours and nothing else, so
+ * the paint is a steady tint that goes when the timer does. That makes reduced
+ * motion and ordinary motion the same thing here. It holds for the cited-words
+ * length, not the paragraph's, for the reason that length exists — a few words
+ * are a small patch (SPIDERYARN-READING2-7X).
+ *
+ * If the prose is re-rendered underneath it the Ranges collapse and the paint
+ * goes early. Nothing is left behind, and the timer still clears the registry.
+ */
+function paintQuotes(cell: HTMLElement, quotes: readonly string[]): boolean {
+  const registry = highlights();
+  if (registry === null) return false;
+  const ranges = quoteRanges(cell, quotes);
+  if (ranges.length === 0) return false;
+  stop();
+  registry.set(QUOTE_HIGHLIGHT, new Highlight(...ranges));
+  live = { els: [], quote: true, timer: setTimeout(stop, CITE_FLASH_MS) };
+  return true;
 }
 
 /**
@@ -102,7 +251,7 @@ function wash(els: HTMLElement[], cls: string, ms: number): void {
   for (const el of els) el.classList.remove(...ALL);
   void els[0]?.offsetWidth;
   for (const el of els) el.classList.add(cls);
-  live = { els, timer: setTimeout(stop, ms) };
+  live = { els, quote: false, timer: setTimeout(stop, ms) };
 }
 
 export function flashBlock(id: BlockId, target: FlashTarget = {}): void {
@@ -114,6 +263,9 @@ export function flashBlock(id: BlockId, target: FlashTarget = {}): void {
     return;
   }
   const marks = target.passage ? passageMarks(cell, target.passage) : [];
+  /* Drawn marks win: they are the passage as the page already shows it.
+     Quotes are for the jump that has none. */
+  if (marks.length === 0 && target.quotes?.length && paintQuotes(cell, target.quotes)) return;
   const els = marks.length > 0 ? marks : [cell];
   const still = reducedMotion();
   const cls = marks.length > 0 ? (still ? PASSAGE_STILL : PASSAGE_MOVING) : still ? STILL : MOVING;
