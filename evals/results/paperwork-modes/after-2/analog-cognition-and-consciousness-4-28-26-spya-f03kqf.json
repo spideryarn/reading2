@@ -1,0 +1,2640 @@
+{
+  "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+  "arm": "after-2",
+  "sourceSha256": {
+    "sketch.ts": "e6bd113d57cfc45a5c9b65052ea1c4ae072d802a81bcee2115e41742a4eb52e7",
+    "illustrated.ts": "591c1a2e9669c6aca6d1d196d5769d0d2ada5da9accebfc62ff8b8fe5fe589e0",
+    "faq.ts": "62d97e7d5c672575aa1393a7368a8e8db28c7afaaf5277c55a0181afb98f3f75",
+    "quiz.ts": "6742583dbeb9ac2f8accefac716bdfd5c31a81285d1d26d28e1437bda7a72e83",
+    "ideas.ts": "3d88d5b85f122c5770ec471fb3b129154f31771c6190cbfaab67352b4bee53bf",
+    "quotes.ts": "5ead833d172ed71e447ead37840453c192d79254350726d6a439c530bb7b9691",
+    "glossary.ts": "22e53eb4fda265f69811e48ff5abfe2f4aae18eb39c86ea8b5cb5780ad9f4ad7",
+    "timeline.ts": "af08595750bec2e6cb8bc93c29ef942afb80ef077961d924df9e1b5afc4c102d",
+    "arc.ts": "ea33babf476c83f4df77c0c91edaf570e8e2d4f7a3ff47ac08ed776c33215866",
+    "paperwork.ts": "8b0a4ec27a7868bed1c08c0fbddb5c96ed734a5d589ec8885bb245de59556c6d"
+  },
+  "outputs": {
+    "sketch": {
+      "sketch": {
+        "version": "sketch/5",
+        "title": "Chain into synthesis",
+        "caption": "A chain: the puzzle of flexible, multifunctional neurons drives the piece from classical connectionism through oscillation-based control to a wave-based theory of consciousness.",
+        "scenes": [
+          {
+            "id": "overview",
+            "title": "Overview",
+            "height": 1080,
+            "items": [
+              {
+                "kind": "node",
+                "id": "intro",
+                "shape": "ellipse",
+                "x": 280,
+                "y": 30,
+                "w": 200,
+                "h": 70,
+                "text": "Flexible top-down control needs fast coordination",
+                "size": "sm",
+                "block": "spya-f6m6jv"
+              },
+              {
+                "kind": "node",
+                "id": "classic",
+                "shape": "box",
+                "x": 280,
+                "y": 130,
+                "w": 200,
+                "h": 70,
+                "text": "Classical view: fixed, specialized neurons",
+                "size": "sm",
+                "block": "spya-k046f6"
+              },
+              {
+                "kind": "node",
+                "id": "mixed",
+                "shape": "box",
+                "x": 280,
+                "y": 230,
+                "w": 200,
+                "h": 70,
+                "text": "Real neurons are multifunctional (mixed selectivity)",
+                "size": "sm",
+                "detail": "Cortical neurons blend sensory, motor, and context signals.",
+                "block": "spya-v0gbwq"
+              },
+              {
+                "kind": "node",
+                "id": "oscill",
+                "shape": "hex",
+                "x": 80,
+                "y": 330,
+                "w": 190,
+                "h": 70,
+                "text": "Brain waves organize & route spiking",
+                "size": "sm",
+                "block": "spya-jnp59d"
+              },
+              {
+                "kind": "node",
+                "id": "ephap",
+                "shape": "hex",
+                "x": 480,
+                "y": 330,
+                "w": 190,
+                "h": 70,
+                "text": "Waves act on spikes via ephaptic coupling",
+                "size": "sm",
+                "block": "spya-mapqhv"
+              },
+              {
+                "kind": "node",
+                "id": "spatial",
+                "shape": "box",
+                "x": 280,
+                "y": 440,
+                "w": 200,
+                "h": 80,
+                "text": "Spatial Computing: alpha/beta stencils gate gamma/spiking",
+                "size": "md",
+                "tone": 1,
+                "block": "spya-qck2sw",
+                "opens": "inside-spatial"
+              },
+              {
+                "kind": "node",
+                "id": "explains",
+                "shape": "note",
+                "x": 560,
+                "y": 450,
+                "w": 170,
+                "h": 70,
+                "text": "Explains mixed selectivity & subspace coding",
+                "size": "xs",
+                "tone": 1,
+                "block": "spya-m63zb9"
+              },
+              {
+                "kind": "node",
+                "id": "travel",
+                "shape": "box",
+                "x": 280,
+                "y": 560,
+                "w": 200,
+                "h": 80,
+                "text": "Traveling waves shift coding states",
+                "size": "md",
+                "tone": 2,
+                "block": "spya-y09vju",
+                "opens": "inside-waves"
+              },
+              {
+                "kind": "node",
+                "id": "analog",
+                "shape": "hex",
+                "x": 280,
+                "y": 680,
+                "w": 200,
+                "h": 70,
+                "text": "Wave interference = analog computation",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-h5qjz4"
+              },
+              {
+                "kind": "node",
+                "id": "anesth",
+                "shape": "box",
+                "x": 80,
+                "y": 800,
+                "w": 210,
+                "h": 70,
+                "text": "Anesthesia disrupts waves, not receptors",
+                "size": "sm",
+                "block": "spya-uvev07"
+              },
+              {
+                "kind": "node",
+                "id": "hybrid",
+                "shape": "box",
+                "x": 280,
+                "y": 800,
+                "w": 200,
+                "h": 80,
+                "text": "Hybrid synapse/wave framework",
+                "size": "md",
+                "tone": 3,
+                "block": "spya-dnv2tp"
+              },
+              {
+                "kind": "node",
+                "id": "compare",
+                "shape": "note",
+                "x": 520,
+                "y": 800,
+                "w": 190,
+                "h": 80,
+                "text": "Compared with GW, IIT, Higher-Order theories",
+                "size": "xs",
+                "block": "spya-xn7mdj"
+              },
+              {
+                "kind": "node",
+                "id": "conclusion",
+                "shape": "ellipse",
+                "x": 280,
+                "y": 930,
+                "w": 200,
+                "h": 80,
+                "text": "Waves organize cognition & consciousness efficiently",
+                "size": "md",
+                "block": "spya-smkrcs"
+              },
+              {
+                "kind": "edge",
+                "from": "intro",
+                "to": "classic",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "classic",
+                "to": "mixed",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end",
+                "label": "fails to explain"
+              },
+              {
+                "kind": "edge",
+                "from": "mixed",
+                "to": "oscill",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "mixed",
+                "to": "ephap",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "oscill",
+                "to": "spatial",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "ephap",
+                "to": "spatial",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "spatial",
+                "to": "explains",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "spatial",
+                "to": "travel",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "travel",
+                "to": "analog",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "analog",
+                "to": "hybrid",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "anesth",
+                "to": "hybrid",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "hybrid",
+                "to": "compare",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "hybrid",
+                "to": "conclusion",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "compare",
+                "to": "conclusion",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              }
+            ],
+            "caption": "The argument runs forward in time down the page: a problem with fixed-wiring models leads step by step to a hybrid synapse/wave theory of cognition and consciousness."
+          },
+          {
+            "id": "inside-spatial",
+            "title": "Spatial Computing Theory",
+            "height": 680,
+            "items": [
+              {
+                "kind": "node",
+                "id": "core",
+                "shape": "ellipse",
+                "x": 280,
+                "y": 40,
+                "w": 200,
+                "h": 80,
+                "text": "Alpha/beta as inhibitory stencils on gamma/spiking",
+                "size": "md",
+                "tone": 1,
+                "block": "spya-qck2sw"
+              },
+              {
+                "kind": "node",
+                "id": "gammabeta",
+                "shape": "box",
+                "x": 40,
+                "y": 180,
+                "w": 220,
+                "h": 70,
+                "text": "Gamma = feedforward excitation; alpha/beta = feedback suppression",
+                "size": "sm",
+                "block": "spya-thnz7b"
+              },
+              {
+                "kind": "node",
+                "id": "confirm",
+                "shape": "box",
+                "x": 300,
+                "y": 180,
+                "w": 220,
+                "h": 70,
+                "text": "Primate prefrontal data confirm contextual alpha/beta patterns",
+                "size": "sm",
+                "block": "spya-azz3c8"
+              },
+              {
+                "kind": "node",
+                "id": "scale",
+                "shape": "note",
+                "x": 540,
+                "y": 180,
+                "w": 190,
+                "h": 80,
+                "text": "Alpha/beta's mid spatial scale suits top-down control",
+                "size": "xs",
+                "block": "spya-q606tk"
+              },
+              {
+                "kind": "node",
+                "id": "mixedexp",
+                "shape": "box",
+                "x": 60,
+                "y": 320,
+                "w": 220,
+                "h": 80,
+                "text": "Explains mixed selectivity: same neuron gated differently by context",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-zmknun"
+              },
+              {
+                "kind": "node",
+                "id": "subspace",
+                "shape": "box",
+                "x": 320,
+                "y": 320,
+                "w": 220,
+                "h": 80,
+                "text": "Explains subspace coding: stencils segregate activity into orthogonal subspaces",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-m63zb9"
+              },
+              {
+                "kind": "node",
+                "id": "traj",
+                "shape": "note",
+                "x": 200,
+                "y": 460,
+                "w": 260,
+                "h": 70,
+                "text": "Smooth population trajectories may reflect wave dynamics",
+                "size": "xs",
+                "block": "spya-ah94dx"
+              },
+              {
+                "kind": "edge",
+                "from": "core",
+                "to": "gammabeta",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "core",
+                "to": "confirm",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "core",
+                "to": "scale",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "gammabeta",
+                "to": "mixedexp",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "confirm",
+                "to": "subspace",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "mixedexp",
+                "to": "traj",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "subspace",
+                "to": "traj",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              }
+            ],
+            "caption": "A hub: spatially patterned alpha/beta rhythms act as inhibitory stencils that gate gamma/spiking, and this single mechanism accounts for several puzzling findings."
+          },
+          {
+            "id": "inside-waves",
+            "title": "Traveling Waves and Analog Computation",
+            "height": 620,
+            "items": [
+              {
+                "kind": "node",
+                "id": "tw",
+                "shape": "box",
+                "x": 280,
+                "y": 40,
+                "w": 220,
+                "h": 70,
+                "text": "Waves sweep across cortex as traveling waves",
+                "size": "sm",
+                "block": "spya-uqt5yf"
+              },
+              {
+                "kind": "node",
+                "id": "beta_tw",
+                "shape": "box",
+                "x": 280,
+                "y": 140,
+                "w": 220,
+                "h": 70,
+                "text": "Beta traveling waves mark movement and memory-loading moments",
+                "size": "sm",
+                "block": "spya-qr9ra4"
+              },
+              {
+                "kind": "node",
+                "id": "statechange",
+                "shape": "box",
+                "x": 280,
+                "y": 240,
+                "w": 220,
+                "h": 80,
+                "text": "Proposed role: traveling waves shift activity between coding subspaces",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-mrsvfu"
+              },
+              {
+                "kind": "node",
+                "id": "theta",
+                "shape": "note",
+                "x": 540,
+                "y": 240,
+                "w": 180,
+                "h": 80,
+                "text": "Theta waves organize larger-scale coordination",
+                "size": "xs",
+                "block": "spya-jcpyd5"
+              },
+              {
+                "kind": "node",
+                "id": "analogintro",
+                "shape": "hex",
+                "x": 280,
+                "y": 360,
+                "w": 220,
+                "h": 70,
+                "text": "Analog computing: waves add, cancel, interfere directly",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-vp5h33"
+              },
+              {
+                "kind": "node",
+                "id": "efficient",
+                "shape": "box",
+                "x": 280,
+                "y": 460,
+                "w": 220,
+                "h": 70,
+                "text": "Parallel, energy-efficient vs digital computation",
+                "size": "sm",
+                "block": "spya-mgnqxk"
+              },
+              {
+                "kind": "node",
+                "id": "context_sum",
+                "shape": "box",
+                "x": 280,
+                "y": 550,
+                "w": 220,
+                "h": 60,
+                "text": "Summed context waves compute intersections of task demands",
+                "size": "sm",
+                "block": "spya-prykb8"
+              },
+              {
+                "kind": "edge",
+                "from": "tw",
+                "to": "beta_tw",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "beta_tw",
+                "to": "statechange",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "beta_tw",
+                "to": "theta",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "statechange",
+                "to": "analogintro",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "analogintro",
+                "to": "efficient",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "efficient",
+                "to": "context_sum",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              }
+            ],
+            "caption": "A chain: waves that move across cortex drive shifts in neural coding, and that same wave interference is proposed as the brain's mechanism for efficient, parallel computation."
+          }
+        ],
+        "generator": "claude-sonnet-5",
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.ce29b6cc004bedb5",
+        "profileHash": null
+      },
+      "raw": "{\"caption\":\"A chain: the puzzle of flexible, multifunctional neurons drives the piece from classical connectionism through oscillation-based control to a wave-based theory of consciousness.\",\"title\":\"Chain into synthesis\",\"scenes\":[{\"id\":\"overview\",\"title\":\"Overview\",\"caption\":\"The argument runs forward in time down the page: a problem with fixed-wiring models leads step by step to a hybrid synapse/wave theory of cognition and consciousness.\",\"height\":1080,\"items\":[{\"kind\":\"node\",\"id\":\"intro\",\"shape\":\"ellipse\",\"x\":280,\"y\":30,\"w\":200,\"h\":70,\"text\":\"Flexible top-down control needs fast coordination\",\"size\":\"sm\",\"block\":\"spya-f6m6jv\"},{\"kind\":\"node\",\"id\":\"classic\",\"shape\":\"box\",\"x\":280,\"y\":130,\"w\":200,\"h\":70,\"text\":\"Classical view: fixed, specialized neurons\",\"size\":\"sm\",\"block\":\"spya-k046f6\"},{\"kind\":\"node\",\"id\":\"mixed\",\"shape\":\"box\",\"x\":280,\"y\":230,\"w\":200,\"h\":70,\"text\":\"Real neurons are multifunctional (mixed selectivity)\",\"size\":\"sm\",\"block\":\"spya-v0gbwq\",\"detail\":\"Cortical neurons blend sensory, motor, and context signals.\"},{\"kind\":\"node\",\"id\":\"oscill\",\"shape\":\"hex\",\"x\":80,\"y\":330,\"w\":190,\"h\":70,\"text\":\"Brain waves organize & route spiking\",\"size\":\"sm\",\"block\":\"spya-jnp59d\"},{\"kind\":\"node\",\"id\":\"ephap\",\"shape\":\"hex\",\"x\":480,\"y\":330,\"w\":190,\"h\":70,\"text\":\"Waves act on spikes via ephaptic coupling\",\"size\":\"sm\",\"block\":\"spya-mapqhv\"},{\"kind\":\"node\",\"id\":\"spatial\",\"shape\":\"box\",\"x\":280,\"y\":440,\"w\":200,\"h\":80,\"text\":\"Spatial Computing: alpha/beta stencils gate gamma/spiking\",\"size\":\"md\",\"tone\":1,\"block\":\"spya-qck2sw\",\"opens\":\"inside-spatial\"},{\"kind\":\"node\",\"id\":\"explains\",\"shape\":\"note\",\"x\":560,\"y\":450,\"w\":170,\"h\":70,\"text\":\"Explains mixed selectivity & subspace coding\",\"size\":\"xs\",\"tone\":1,\"block\":\"spya-m63zb9\"},{\"kind\":\"node\",\"id\":\"travel\",\"shape\":\"box\",\"x\":280,\"y\":560,\"w\":200,\"h\":80,\"text\":\"Traveling waves shift coding states\",\"size\":\"md\",\"tone\":2,\"block\":\"spya-y09vju\",\"opens\":\"inside-waves\"},{\"kind\":\"node\",\"id\":\"analog\",\"shape\":\"hex\",\"x\":280,\"y\":680,\"w\":200,\"h\":70,\"text\":\"Wave interference = analog computation\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-h5qjz4\"},{\"kind\":\"node\",\"id\":\"anesth\",\"shape\":\"box\",\"x\":80,\"y\":800,\"w\":210,\"h\":70,\"text\":\"Anesthesia disrupts waves, not receptors\",\"size\":\"sm\",\"block\":\"spya-uvev07\"},{\"kind\":\"node\",\"id\":\"hybrid\",\"shape\":\"box\",\"x\":280,\"y\":800,\"w\":200,\"h\":80,\"text\":\"Hybrid synapse/wave framework\",\"size\":\"md\",\"tone\":3,\"block\":\"spya-dnv2tp\"},{\"kind\":\"node\",\"id\":\"compare\",\"shape\":\"note\",\"x\":520,\"y\":800,\"w\":190,\"h\":80,\"text\":\"Compared with GW, IIT, Higher-Order theories\",\"size\":\"xs\",\"block\":\"spya-xn7mdj\"},{\"kind\":\"node\",\"id\":\"conclusion\",\"shape\":\"ellipse\",\"x\":280,\"y\":930,\"w\":200,\"h\":80,\"text\":\"Waves organize cognition & consciousness efficiently\",\"size\":\"md\",\"block\":\"spya-smkrcs\"},{\"kind\":\"edge\",\"from\":\"intro\",\"to\":\"classic\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"classic\",\"to\":\"mixed\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\",\"label\":\"fails to explain\"},{\"kind\":\"edge\",\"from\":\"mixed\",\"to\":\"oscill\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"mixed\",\"to\":\"ephap\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"oscill\",\"to\":\"spatial\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"ephap\",\"to\":\"spatial\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"spatial\",\"to\":\"explains\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"spatial\",\"to\":\"travel\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"travel\",\"to\":\"analog\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"analog\",\"to\":\"hybrid\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"anesth\",\"to\":\"hybrid\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"hybrid\",\"to\":\"compare\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"hybrid\",\"to\":\"conclusion\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"compare\",\"to\":\"conclusion\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"}]},{\"id\":\"inside-spatial\",\"title\":\"Spatial Computing Theory\",\"caption\":\"A hub: spatially patterned alpha/beta rhythms act as inhibitory stencils that gate gamma/spiking, and this single mechanism accounts for several puzzling findings.\",\"height\":680,\"items\":[{\"kind\":\"node\",\"id\":\"core\",\"shape\":\"ellipse\",\"x\":280,\"y\":40,\"w\":200,\"h\":80,\"text\":\"Alpha/beta as inhibitory stencils on gamma/spiking\",\"size\":\"md\",\"tone\":1,\"block\":\"spya-qck2sw\"},{\"kind\":\"node\",\"id\":\"gammabeta\",\"shape\":\"box\",\"x\":40,\"y\":180,\"w\":220,\"h\":70,\"text\":\"Gamma = feedforward excitation; alpha/beta = feedback suppression\",\"size\":\"sm\",\"block\":\"spya-thnz7b\"},{\"kind\":\"node\",\"id\":\"confirm\",\"shape\":\"box\",\"x\":300,\"y\":180,\"w\":220,\"h\":70,\"text\":\"Primate prefrontal data confirm contextual alpha/beta patterns\",\"size\":\"sm\",\"block\":\"spya-azz3c8\"},{\"kind\":\"node\",\"id\":\"scale\",\"shape\":\"note\",\"x\":540,\"y\":180,\"w\":190,\"h\":80,\"text\":\"Alpha/beta's mid spatial scale suits top-down control\",\"size\":\"xs\",\"block\":\"spya-q606tk\"},{\"kind\":\"node\",\"id\":\"mixedexp\",\"shape\":\"box\",\"x\":60,\"y\":320,\"w\":220,\"h\":80,\"text\":\"Explains mixed selectivity: same neuron gated differently by context\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-zmknun\"},{\"kind\":\"node\",\"id\":\"subspace\",\"shape\":\"box\",\"x\":320,\"y\":320,\"w\":220,\"h\":80,\"text\":\"Explains subspace coding: stencils segregate activity into orthogonal subspaces\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-m63zb9\"},{\"kind\":\"node\",\"id\":\"traj\",\"shape\":\"note\",\"x\":200,\"y\":460,\"w\":260,\"h\":70,\"text\":\"Smooth population trajectories may reflect wave dynamics\",\"size\":\"xs\",\"block\":\"spya-ah94dx\"},{\"kind\":\"edge\",\"from\":\"core\",\"to\":\"gammabeta\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"core\",\"to\":\"confirm\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"core\",\"to\":\"scale\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"gammabeta\",\"to\":\"mixedexp\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"confirm\",\"to\":\"subspace\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"mixedexp\",\"to\":\"traj\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"subspace\",\"to\":\"traj\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"}]},{\"id\":\"inside-waves\",\"title\":\"Traveling Waves and Analog Computation\",\"caption\":\"A chain: waves that move across cortex drive shifts in neural coding, and that same wave interference is proposed as the brain's mechanism for efficient, parallel computation.\",\"height\":620,\"items\":[{\"kind\":\"node\",\"id\":\"tw\",\"shape\":\"box\",\"x\":280,\"y\":40,\"w\":220,\"h\":70,\"text\":\"Waves sweep across cortex as traveling waves\",\"size\":\"sm\",\"block\":\"spya-uqt5yf\"},{\"kind\":\"node\",\"id\":\"beta_tw\",\"shape\":\"box\",\"x\":280,\"y\":140,\"w\":220,\"h\":70,\"text\":\"Beta traveling waves mark movement and memory-loading moments\",\"size\":\"sm\",\"block\":\"spya-qr9ra4\"},{\"kind\":\"node\",\"id\":\"statechange\",\"shape\":\"box\",\"x\":280,\"y\":240,\"w\":220,\"h\":80,\"text\":\"Proposed role: traveling waves shift activity between coding subspaces\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-mrsvfu\"},{\"kind\":\"node\",\"id\":\"theta\",\"shape\":\"note\",\"x\":540,\"y\":240,\"w\":180,\"h\":80,\"text\":\"Theta waves organize larger-scale coordination\",\"size\":\"xs\",\"block\":\"spya-jcpyd5\"},{\"kind\":\"node\",\"id\":\"analogintro\",\"shape\":\"hex\",\"x\":280,\"y\":360,\"w\":220,\"h\":70,\"text\":\"Analog computing: waves add, cancel, interfere directly\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-vp5h33\"},{\"kind\":\"node\",\"id\":\"efficient\",\"shape\":\"box\",\"x\":280,\"y\":460,\"w\":220,\"h\":70,\"text\":\"Parallel, energy-efficient vs digital computation\",\"size\":\"sm\",\"block\":\"spya-mgnqxk\"},{\"kind\":\"node\",\"id\":\"context_sum\",\"shape\":\"box\",\"x\":280,\"y\":550,\"w\":220,\"h\":60,\"text\":\"Summed context waves compute intersections of task demands\",\"size\":\"sm\",\"block\":\"spya-prykb8\"},{\"kind\":\"edge\",\"from\":\"tw\",\"to\":\"beta_tw\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"beta_tw\",\"to\":\"statechange\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"beta_tw\",\"to\":\"theta\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"statechange\",\"to\":\"analogintro\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"analogintro\",\"to\":\"efficient\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"efficient\",\"to\":\"context_sum\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"}]}]}",
+      "report": {
+        "faults": [],
+        "written": 54,
+        "kept": 54,
+        "inferred": 0
+      },
+      "score": {
+        "scenes": 3,
+        "unreachable": 0,
+        "inferred": 0,
+        "nodes": 27,
+        "linked": 27,
+        "reach": 0.11956521739130435,
+        "flow": 0.9870962335856491,
+        "overlap": 0.0037154989384288748,
+        "overflowing": 0,
+        "faults": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 27067,
+      "outputTokens": 4073,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 33091
+    },
+    "illustrated": {
+      "illustrated": {
+        "version": "illustrated/6",
+        "style": "An antique hand-drawn map in sepia ink and faded ochre wash on aged parchment, its argument laid out as a winding road of little scenes down the page, because the article itself describes a chain of mechanisms discovered one after another.",
+        "plates": [
+          {
+            "sceneId": "overview",
+            "title": "The Road from Fixed Wires to Living Waves",
+            "prompt": "Draw a tall antique map in sepia ink and faded ochre wash on cream parchment, cracked at the edges like an old chart, its subject a single inked road winding from the top of the page to the bottom. At the very top, tiny neuron-dots are gathered at once by converging hairline strokes, titled NEURONS COORDINATED IN AN INSTANT. The road descends to a stepped hillside diagram where lines and edges thicken into limbs, paws, nose and whiskers before resolving into a cat's and a dog's face, titled LINES BUILT INTO CAT OR DOG. Next a single neuron figure appears twice beside two small shapes marked in sequence, firing only toward the first, titled NEURON FIRES ONLY WHEN FIRST. Here the road forks: on the left, tight fast ripples climb upward through layered cortex past loose slow ripples sinking down, titled GAMMA UP, ALPHA/BETA DOWN; on the right, branching Purkinje-cell figures radiate faint rings to neighbors with no synapse-lines drawn, titled PURKINJE CELLS SYNC WITHOUT WIRES. The forks rejoin at a wheeled brake clamped onto a moving limb, titled BETA AS A BRAKE ON MOVEMENT. The road continues to a ripple sweeping a cortical surface as an object is set into a basket resting on its folds, titled WAVE AT MEMORY LOADING MOMENT, then to an old brass tide-predicting machine of turning wheels and disks tracing a curve, titled TIDE PREDICTOR OF WHEELS AND DISKS. A side-path now joins from the margin: three differently shaped vials pour into one shared ripple over a drawn brain, titled THREE DRUGS, ONE WAVE PATTERN, merging into the main road at a loaf shaped like tangled wiring pulled from a small oven, its crust worked with sun and object shapes, titled WORLD BAKED INTO SYNAPSES. The road ends at a brain glowing as faintly as a single dim bulb, radiating soft ripples, titled BRAIN AS A DIM LIGHT BULB. Render all figures in fine cross-hatched sepia linework with pale rust and faded teal washes for the wave-ripples only, in the manner of a 17th-century cartographer's hand. Letter each title in small plain capitals directly beneath its scene and nowhere else on the page — no banners, no borders of text, no other words anywhere. Leave generous bare parchment between scenes rather than crowding the margins.",
+            "vignettes": [
+              {
+                "block": "spya-hec5rz",
+                "quote": "until the brain constructs a representation of a holistic category or concept (e.g., cat, dog).",
+                "depicts": "A stepped diagram of lines and edges climbing a hillside path, thickening into limbs, paws, a nose, whiskers, and finally resolving at the top into the faces of a cat and a dog.",
+                "title": "LINES BUILT INTO CAT OR DOG",
+                "node": "classic"
+              },
+              {
+                "block": "spya-x5m34h",
+                "quote": "A neuron might spike to object A, but only when it was seen first,",
+                "depicts": "A single neuron figure is drawn twice in sequence beside two small object-shapes marked first and second; ink rays shoot from the neuron only toward the first object.",
+                "title": "NEURON FIRES ONLY WHEN FIRST",
+                "node": "mixed"
+              },
+              {
+                "block": "spya-trb3jf",
+                "quote": "cortical feedforward and feedback processing are associated with oscillations in distinct frequency bands, gamma (~30–80 Hz) vs alpha/beta (~10–30 Hz)",
+                "depicts": "On the left fork of the road, tight fast ripples climb upward through layered cortex, beside loose slow ripples sinking downward, the two frequencies passing each other.",
+                "title": "GAMMA UP, ALPHA/BETA DOWN",
+                "node": "oscill"
+              },
+              {
+                "block": "spya-bzqaf5",
+                "quote": "cerebellar Purkinje cells generate extracellular potentials that are large enough to drive synchrony in nearby cells",
+                "depicts": "On the right fork, branching Purkinje-cell figures radiate faint field-rings outward to neighboring cells, with no synapse-lines drawn between them at all.",
+                "title": "PURKINJE CELLS SYNC WITHOUT WIRES",
+                "node": "ephap"
+              },
+              {
+                "block": "spya-thnz7b",
+                "quote": "In the motor cortex, for example, beta acts like a brake on movement execution.",
+                "depicts": "The two forks rejoin at a single scene: a wheeled brake-lever is clamped onto a moving limb, holding it still.",
+                "title": "BETA AS A BRAKE ON MOVEMENT",
+                "node": "spatial"
+              },
+              {
+                "block": "spya-qr9ra4",
+                "quote": "evident at the start of the “memory delay period” in working memory paradigms",
+                "depicts": "A ripple sweeps across a drawn cortical surface at the exact moment a small object is set down into an open basket resting on the brain's folds.",
+                "title": "WAVE AT MEMORY LOADING MOMENT",
+                "node": "travel"
+              },
+              {
+                "block": "spya-wa647r",
+                "quote": "mechanical tide predictors and differential analyzers used wheels and disks to even solve complex 18-variable differential equations",
+                "depicts": "An old brass tide-predicting machine of turning wheels and stacked disks sits on the road, its gears meshing to trace a wavering curve.",
+                "title": "TIDE PREDICTOR OF WHEELS AND DISKS",
+                "node": "analog"
+              },
+              {
+                "block": "spya-wnqgmn",
+                "quote": "propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects",
+                "depicts": "A side-path joins the main road: three differently shaped vials pour their contents into one shared slow ripple spreading across a drawn brain.",
+                "title": "THREE DRUGS, ONE WAVE PATTERN",
+                "node": "anesth"
+              },
+              {
+                "block": "spya-z6esvz",
+                "quote": "Experience effectively “bakes” information about the world into the brain’s synaptic wiring",
+                "depicts": "Where the side-path rejoins, a loaf shaped like tangled neural wiring is pulled from a small oven, with little sun and object shapes worked into its crust.",
+                "title": "WORLD BAKED INTO SYNAPSES",
+                "node": "hybrid"
+              },
+              {
+                "block": "spya-jbtup9",
+                "quote": "performs vast amounts of computation while consuming only about 20 watts, roughly the power of a dim light bulb",
+                "depicts": "At the road's end, a brain shape glows as faintly as a single dim bulb, ripples of wave-pattern radiating softly outward from it.",
+                "title": "BRAIN AS A DIM LIGHT BULB",
+                "node": "conclusion"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "At the head of the road, a dense swarm of tiny neuron-dots is shown being gathered at once by converging hairline ink strokes, as if rounded up in an instant.",
+                "title": "NEURONS COORDINATED IN AN INSTANT"
+              },
+              {
+                "where": "A stepped diagram of lines and edges climbing a hillside path, thickening into limbs, paws, a nose, whiskers, and finally resolving at the top into the faces of a cat and a dog.",
+                "title": "LINES BUILT INTO CAT OR DOG"
+              },
+              {
+                "where": "A single neuron figure is drawn twice in sequence beside two small object-shapes marked first and second; ink rays shoot from the neuron only toward the first object.",
+                "title": "NEURON FIRES ONLY WHEN FIRST"
+              },
+              {
+                "where": "On the left fork of the road, tight fast ripples climb upward through layered cortex, beside loose slow ripples sinking downward, the two frequencies passing each other.",
+                "title": "GAMMA UP, ALPHA/BETA DOWN"
+              },
+              {
+                "where": "On the right fork, branching Purkinje-cell figures radiate faint field-rings outward to neighboring cells, with no synapse-lines drawn between them at all.",
+                "title": "PURKINJE CELLS SYNC WITHOUT WIRES"
+              },
+              {
+                "where": "The two forks rejoin at a single scene: a wheeled brake-lever is clamped onto a moving limb, holding it still.",
+                "title": "BETA AS A BRAKE ON MOVEMENT"
+              },
+              {
+                "where": "A ripple sweeps across a drawn cortical surface at the exact moment a small object is set down into an open basket resting on the brain's folds.",
+                "title": "WAVE AT MEMORY LOADING MOMENT"
+              },
+              {
+                "where": "An old brass tide-predicting machine of turning wheels and stacked disks sits on the road, its gears meshing to trace a wavering curve.",
+                "title": "TIDE PREDICTOR OF WHEELS AND DISKS"
+              },
+              {
+                "where": "A side-path joins the main road: three differently shaped vials pour their contents into one shared slow ripple spreading across a drawn brain.",
+                "title": "THREE DRUGS, ONE WAVE PATTERN"
+              },
+              {
+                "where": "Where the side-path rejoins, a loaf shaped like tangled neural wiring is pulled from a small oven, with little sun and object shapes worked into its crust.",
+                "title": "WORLD BAKED INTO SYNAPSES"
+              },
+              {
+                "where": "At the road's end, a brain shape glows as faintly as a single dim bulb, ripples of wave-pattern radiating softly outward from it.",
+                "title": "BRAIN AS A DIM LIGHT BULB"
+              }
+            ]
+          },
+          {
+            "sceneId": "inside-spatial",
+            "title": "The Stencil of Alpha and Beta",
+            "prompt": "Continue the same antique sepia-and-ochre map on aged parchment, this plate being the inside of the brake scene from the overview. At the top, reprise that exact scene — a wheeled brake clamped onto a moving limb — titled BETA AS A BRAKE ON MOVEMENT, as the gateway into this page. From it, three paths fan downward. To the lower left, the brake lifts free as fast tight ripples burst and the limb swings, titled BRAKE LIFTS, LIMB MOVES. To the right, a monkey's brain surface is mapped in a patchwork of shaded recorded regions, titled PRIMATE CORTEX PATCHWORK, beside which a small ruler is laid across a few millimeters of cortex matching one ripple's width, titled RULER OF A FEW MILLIMETERS. Below the lifted-brake scene, one neuron is drawn twice receiving the same two incoming signal-lines, covered by a cut stencil-shadow in one drawing and left bare in the other, titled ONE NEURON, TWO STENCILS. Below the patchwork map, a neuron labeled 1 sits untouched outside a stencil-cutout in two side-by-side panels, spiking identically in both, titled NEURON OUTSIDE THE STENCIL. At the foot of the page, where both lower branches converge, draw a long ripple towing a trailing wake of small spiking dots behind it along one smooth curved path, titled WAVE TOWING A SMOOTH TRAIL. Keep the fine cross-hatched sepia linework, pale rust ink for stencil shadows, faded teal for ripple-wakes, consistent with the first plate's hand. Letter each title in small plain capitals beneath its own scene only; no other lettering appears anywhere on the page, no borders, no banners. Space the seven scenes generously across the full width of the page rather than crowding them into a narrow column, with bare parchment showing between them.",
+            "vignettes": [
+              {
+                "block": "spya-thnz7b",
+                "quote": "In the motor cortex, for example, beta acts like a brake on movement execution.",
+                "depicts": "Reprising the overview's scene at the top of this plate: a wheeled brake-lever clamped onto a moving limb, the frame through which this whole page is entered.",
+                "title": "BETA AS A BRAKE ON MOVEMENT",
+                "node": "core"
+              },
+              {
+                "block": "spya-thnz7b",
+                "quote": "When alpha/beta decreases locally, gamma and spiking increase, and movement becomes more likely",
+                "depicts": "Below and to the left, the brake lifts away from the limb as tight fast ripples burst upward and the limb swings free.",
+                "title": "BRAKE LIFTS, LIMB MOVES",
+                "node": "gammabeta"
+              },
+              {
+                "block": "spya-azz3c8",
+                "quote": "Alpha/beta rhythms reflected learned, internally generated contextual and categorical information, organized into spatial patterns across the cortical surface.",
+                "depicts": "To the right of the frame, a monkey's brain surface is mapped with a patchwork of shaded regions recorded during a task, each patch a distinct learned pattern.",
+                "title": "PRIMATE CORTEX PATCHWORK",
+                "node": "confirm"
+              },
+              {
+                "block": "spya-q606tk",
+                "quote": "which extend over a range of a few millimeters, might be just the right spatial scale for top-down control",
+                "depicts": "A small measuring ruler is laid across a patch of cortex no wider than a few millimeters, matching exactly the width of one ripple.",
+                "title": "RULER OF A FEW MILLIMETERS",
+                "node": "scale"
+              },
+              {
+                "block": "spya-ectcj5",
+                "quote": "the same neuron may receive many different sensory signals and may lie inside the inhibitory stencil in one context",
+                "depicts": "Beneath the lifted brake, one neuron is drawn twice receiving the same two signal-lines; in one drawing a stencil-shaped shadow covers it, in the other it is left uncovered.",
+                "title": "ONE NEURON, TWO STENCILS",
+                "node": "mixedexp"
+              },
+              {
+                "block": "spya-az9405",
+                "quote": "The neuron labeled ‘1’ lies outside of the suppressive alpha/beta “stencil” in both contexts, resulting in “pure” context-independent object selectivity",
+                "depicts": "Beneath the patchwork map, a neuron marked 1 sits untouched outside a cut stencil-shape in both of two side-by-side panels, spiking the same way each time.",
+                "title": "NEURON OUTSIDE THE STENCIL",
+                "node": "subspace"
+              },
+              {
+                "block": "spya-ah94dx",
+                "quote": "they may “pull” population spiking activity along, creating repeatable smooth trajectories",
+                "depicts": "At the foot of the plate, where the two branches converge, a long ripple is shown towing a trailing wake of small spiking dots behind it in one smooth curved path.",
+                "title": "WAVE TOWING A SMOOTH TRAIL",
+                "node": "traj"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "Reprising the overview's scene at the top of this plate: a wheeled brake-lever clamped onto a moving limb, the frame through which this whole page is entered.",
+                "title": "BETA AS A BRAKE ON MOVEMENT"
+              },
+              {
+                "where": "Below and to the left, the brake lifts away from the limb as tight fast ripples burst upward and the limb swings free.",
+                "title": "BRAKE LIFTS, LIMB MOVES"
+              },
+              {
+                "where": "To the right of the frame, a monkey's brain surface is mapped with a patchwork of shaded regions recorded during a task, each patch a distinct learned pattern.",
+                "title": "PRIMATE CORTEX PATCHWORK"
+              },
+              {
+                "where": "A small measuring ruler is laid across a patch of cortex no wider than a few millimeters, matching exactly the width of one ripple.",
+                "title": "RULER OF A FEW MILLIMETERS"
+              },
+              {
+                "where": "Beneath the lifted brake, one neuron is drawn twice receiving the same two signal-lines; in one drawing a stencil-shaped shadow covers it, in the other it is left uncovered.",
+                "title": "ONE NEURON, TWO STENCILS"
+              },
+              {
+                "where": "Beneath the patchwork map, a neuron marked 1 sits untouched outside a cut stencil-shape in both of two side-by-side panels, spiking the same way each time.",
+                "title": "NEURON OUTSIDE THE STENCIL"
+              },
+              {
+                "where": "At the foot of the plate, where the two branches converge, a long ripple is shown towing a trailing wake of small spiking dots behind it in one smooth curved path.",
+                "title": "WAVE TOWING A SMOOTH TRAIL"
+              }
+            ]
+          },
+          {
+            "sceneId": "inside-waves",
+            "title": "Waves That Carry and Waves That Compute",
+            "prompt": "Continue the same antique sepia-and-ochre map on aged parchment, this plate being the inside of the memory-wave scene from the overview. At the top, reprise that exact scene — a ripple sweeping a cortical surface as an object is set into a basket resting on its folds — titled WAVE AT MEMORY LOADING MOMENT, as the gateway into this page. Below it, a long cortical surface is crossed by ripples of many different spacings side by side, from broad slow furrows to tight fast ones, titled WAVES SWEEP ACROSS THE CORTEX. From here the road forks: on the left, a wave-shape is shown physically pushing a cluster of small dots out of one marked hollow in the ground into an adjacent one, titled WAVE SHIFTS ACTIVITY TO NEW STATE; on the right, a single large slow ripple tows two smaller faster ripples behind it like boats in its wake, titled THETA WAVE DRAGS BETA AND GAMMA, ending that branch. The left branch continues downward: two overlapping sine-wave ripples merge, their peaks rising into a taller crest where they meet and their troughs flattening where they oppose, titled WAVES ADD, CANCEL, AND COMBINE. Beneath that, a balance scale tips heavily, one pan holding a small dim wave-device and the other a larger brighter device weighted down many times over, titled ANALOG OUTPACES DIGITAL TENFOLD. At the foot of the page, two distinct ripple-patterns for two different task contexts are drawn overlapping until they settle into one single unique combined pattern across the cortex, titled TWO CONTEXT WAVES SUM TO ONE. Keep the fine cross-hatched sepia linework and faded teal ripple-washes consistent with the earlier plates. Letter each title in small plain capitals beneath its own scene only; nothing else on the page is lettered — no banners, no borders, no inscriptions. Spread the seven scenes across the full width of the page with bare parchment between them rather than crowding a narrow column.",
+            "vignettes": [
+              {
+                "block": "spya-qr9ra4",
+                "quote": "evident at the start of the “memory delay period” in working memory paradigms",
+                "depicts": "Reprising the overview's scene at the top: a ripple sweeps a drawn cortical surface at the moment an object is set into a basket resting on its folds.",
+                "title": "WAVE AT MEMORY LOADING MOMENT",
+                "node": "beta_tw"
+              },
+              {
+                "block": "spya-uqt5yf",
+                "quote": "Traveling waves have been observed at temporal frequencies ranging from the delta to gamma bands (~1–80 Hz)",
+                "depicts": "Below the frame, a long cortical surface is crossed by ripples of many different spacings side by side, from broad slow furrows to tight fast ones.",
+                "title": "WAVES SWEEP ACROSS THE CORTEX",
+                "node": "tw"
+              },
+              {
+                "block": "spya-mrsvfu",
+                "quote": "alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another",
+                "depicts": "On the left branch, a wave-shape is shown physically pushing a cluster of small dots out of one marked hollow and into an adjacent one.",
+                "title": "WAVE SHIFTS ACTIVITY TO NEW STATE",
+                "node": "statechange"
+              },
+              {
+                "block": "spya-jcpyd5",
+                "quote": "theta traveling waves “drag” coupled beta and gamma (in different theta phases) across the surface of the cortex",
+                "depicts": "On the right branch, a single large slow ripple is shown towing two smaller, faster ripples behind it like boats in its wake across the cortical surface.",
+                "title": "THETA WAVE DRAGS BETA AND GAMMA",
+                "node": "theta"
+              },
+              {
+                "block": "spya-vp5h33",
+                "quote": "When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference",
+                "depicts": "Continuing from the left branch, two overlapping sine-wave ripples merge: their peaks add into a taller crest where they meet, their troughs cancel into flatness where they oppose.",
+                "title": "WAVES ADD, CANCEL, AND COMBINE",
+                "node": "analogintro"
+              },
+              {
+                "block": "spya-mgnqxk",
+                "quote": "analog computation can improve energy efficiency over digital by more than an order of magnitude",
+                "depicts": "A balance scale tips heavily: one pan holds a small dim wave-device, the other a larger, brighter device weighted down many times over.",
+                "title": "ANALOG OUTPACES DIGITAL TENFOLD",
+                "node": "efficient"
+              },
+              {
+                "block": "spya-prykb8",
+                "quote": "wave summation would essentially compute an intersection of constraints, resulting in a unique spatiotemporal pattern of neural activation",
+                "depicts": "At the foot of the page, two distinct ripple-patterns, one for each of two task contexts, are drawn overlapping to settle into one single unique combined pattern across the cortex.",
+                "title": "TWO CONTEXT WAVES SUM TO ONE",
+                "node": "context_sum"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "Reprising the overview's scene at the top: a ripple sweeps a drawn cortical surface at the moment an object is set into a basket resting on its folds.",
+                "title": "WAVE AT MEMORY LOADING MOMENT"
+              },
+              {
+                "where": "Below the frame, a long cortical surface is crossed by ripples of many different spacings side by side, from broad slow furrows to tight fast ones.",
+                "title": "WAVES SWEEP ACROSS THE CORTEX"
+              },
+              {
+                "where": "On the left branch, a wave-shape is shown physically pushing a cluster of small dots out of one marked hollow and into an adjacent one.",
+                "title": "WAVE SHIFTS ACTIVITY TO NEW STATE"
+              },
+              {
+                "where": "On the right branch, a single large slow ripple is shown towing two smaller, faster ripples behind it like boats in its wake across the cortical surface.",
+                "title": "THETA WAVE DRAGS BETA AND GAMMA"
+              },
+              {
+                "where": "Continuing from the left branch, two overlapping sine-wave ripples merge: their peaks add into a taller crest where they meet, their troughs cancel into flatness where they oppose.",
+                "title": "WAVES ADD, CANCEL, AND COMBINE"
+              },
+              {
+                "where": "A balance scale tips heavily: one pan holds a small dim wave-device, the other a larger, brighter device weighted down many times over.",
+                "title": "ANALOG OUTPACES DIGITAL TENFOLD"
+              },
+              {
+                "where": "At the foot of the page, two distinct ripple-patterns, one for each of two task contexts, are drawn overlapping to settle into one single unique combined pattern across the cortex.",
+                "title": "TWO CONTEXT WAVES SUM TO ONE"
+              }
+            ]
+          }
+        ],
+        "generator": "claude-sonnet-5",
+        "illustrator": "google/gemini-3.1-flash-image",
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "profileHash": null
+      },
+      "cancelled": false,
+      "raw": "{\"style\":\"An antique hand-drawn map in sepia ink and faded ochre wash on aged parchment, its argument laid out as a winding road of little scenes down the page, because the article itself describes a chain of mechanisms discovered one after another.\",\"plates\":[{\"sceneId\":\"overview\",\"title\":\"The Road from Fixed Wires to Living Waves\",\"vignettes\":[{\"node\":\"intro\",\"block\":\"spya-f6m6jv\",\"quote\":\"requires a control system that can coordinate hundreds of millions of neurons within fractions of a second\",\"depicts\":\"At the head of the road, a dense swarm of tiny neuron-dots is shown being gathered at once by converging hairline ink strokes, as if rounded up in an instant.\",\"title\":\"NEURONS COORDINATED IN AN INSTANT\"},{\"node\":\"classic\",\"block\":\"spya-hec5rz\",\"quote\":\"until the brain constructs a representation of a holistic category or concept (e.g., cat, dog).\",\"depicts\":\"A stepped diagram of lines and edges climbing a hillside path, thickening into limbs, paws, a nose, whiskers, and finally resolving at the top into the faces of a cat and a dog.\",\"title\":\"LINES BUILT INTO CAT OR DOG\"},{\"node\":\"mixed\",\"block\":\"spya-x5m34h\",\"quote\":\"A neuron might spike to object A, but only when it was seen first,\",\"depicts\":\"A single neuron figure is drawn twice in sequence beside two small object-shapes marked first and second; ink rays shoot from the neuron only toward the first object.\",\"title\":\"NEURON FIRES ONLY WHEN FIRST\"},{\"node\":\"oscill\",\"block\":\"spya-trb3jf\",\"quote\":\"cortical feedforward and feedback processing are associated with oscillations in distinct frequency bands, gamma (~30–80 Hz) vs alpha/beta (~10–30 Hz)\",\"depicts\":\"On the left fork of the road, tight fast ripples climb upward through layered cortex, beside loose slow ripples sinking downward, the two frequencies passing each other.\",\"title\":\"GAMMA UP, ALPHA/BETA DOWN\"},{\"node\":\"ephap\",\"block\":\"spya-bzqaf5\",\"quote\":\"cerebellar Purkinje cells generate extracellular potentials that are large enough to drive synchrony in nearby cells\",\"depicts\":\"On the right fork, branching Purkinje-cell figures radiate faint field-rings outward to neighboring cells, with no synapse-lines drawn between them at all.\",\"title\":\"PURKINJE CELLS SYNC WITHOUT WIRES\"},{\"node\":\"spatial\",\"block\":\"spya-thnz7b\",\"quote\":\"In the motor cortex, for example, beta acts like a brake on movement execution.\",\"depicts\":\"The two forks rejoin at a single scene: a wheeled brake-lever is clamped onto a moving limb, holding it still.\",\"title\":\"BETA AS A BRAKE ON MOVEMENT\"},{\"node\":\"travel\",\"block\":\"spya-qr9ra4\",\"quote\":\"evident at the start of the “memory delay period” in working memory paradigms\",\"depicts\":\"A ripple sweeps across a drawn cortical surface at the exact moment a small object is set down into an open basket resting on the brain's folds.\",\"title\":\"WAVE AT MEMORY LOADING MOMENT\"},{\"node\":\"analog\",\"block\":\"spya-wa647r\",\"quote\":\"mechanical tide predictors and differential analyzers used wheels and disks to even solve complex 18-variable differential equations\",\"depicts\":\"An old brass tide-predicting machine of turning wheels and stacked disks sits on the road, its gears meshing to trace a wavering curve.\",\"title\":\"TIDE PREDICTOR OF WHEELS AND DISKS\"},{\"node\":\"anesth\",\"block\":\"spya-wnqgmn\",\"quote\":\"propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects\",\"depicts\":\"A side-path joins the main road: three differently shaped vials pour their contents into one shared slow ripple spreading across a drawn brain.\",\"title\":\"THREE DRUGS, ONE WAVE PATTERN\"},{\"node\":\"hybrid\",\"block\":\"spya-z6esvz\",\"quote\":\"Experience effectively “bakes” information about the world into the brain’s synaptic wiring\",\"depicts\":\"Where the side-path rejoins, a loaf shaped like tangled neural wiring is pulled from a small oven, with little sun and object shapes worked into its crust.\",\"title\":\"WORLD BAKED INTO SYNAPSES\"},{\"node\":\"conclusion\",\"block\":\"spya-jbtup9\",\"quote\":\"performs vast amounts of computation while consuming only about 20 watts, roughly the power of a dim light bulb\",\"depicts\":\"At the road's end, a brain shape glows as faintly as a single dim bulb, ripples of wave-pattern radiating softly outward from it.\",\"title\":\"BRAIN AS A DIM LIGHT BULB\"}],\"prompt\":\"Draw a tall antique map in sepia ink and faded ochre wash on cream parchment, cracked at the edges like an old chart, its subject a single inked road winding from the top of the page to the bottom. At the very top, tiny neuron-dots are gathered at once by converging hairline strokes, titled NEURONS COORDINATED IN AN INSTANT. The road descends to a stepped hillside diagram where lines and edges thicken into limbs, paws, nose and whiskers before resolving into a cat's and a dog's face, titled LINES BUILT INTO CAT OR DOG. Next a single neuron figure appears twice beside two small shapes marked in sequence, firing only toward the first, titled NEURON FIRES ONLY WHEN FIRST. Here the road forks: on the left, tight fast ripples climb upward through layered cortex past loose slow ripples sinking down, titled GAMMA UP, ALPHA/BETA DOWN; on the right, branching Purkinje-cell figures radiate faint rings to neighbors with no synapse-lines drawn, titled PURKINJE CELLS SYNC WITHOUT WIRES. The forks rejoin at a wheeled brake clamped onto a moving limb, titled BETA AS A BRAKE ON MOVEMENT. The road continues to a ripple sweeping a cortical surface as an object is set into a basket resting on its folds, titled WAVE AT MEMORY LOADING MOMENT, then to an old brass tide-predicting machine of turning wheels and disks tracing a curve, titled TIDE PREDICTOR OF WHEELS AND DISKS. A side-path now joins from the margin: three differently shaped vials pour into one shared ripple over a drawn brain, titled THREE DRUGS, ONE WAVE PATTERN, merging into the main road at a loaf shaped like tangled wiring pulled from a small oven, its crust worked with sun and object shapes, titled WORLD BAKED INTO SYNAPSES. The road ends at a brain glowing as faintly as a single dim bulb, radiating soft ripples, titled BRAIN AS A DIM LIGHT BULB. Render all figures in fine cross-hatched sepia linework with pale rust and faded teal washes for the wave-ripples only, in the manner of a 17th-century cartographer's hand. Letter each title in small plain capitals directly beneath its scene and nowhere else on the page — no banners, no borders of text, no other words anywhere. Leave generous bare parchment between scenes rather than crowding the margins.\"},{\"sceneId\":\"inside-spatial\",\"title\":\"The Stencil of Alpha and Beta\",\"vignettes\":[{\"node\":\"core\",\"block\":\"spya-thnz7b\",\"quote\":\"In the motor cortex, for example, beta acts like a brake on movement execution.\",\"depicts\":\"Reprising the overview's scene at the top of this plate: a wheeled brake-lever clamped onto a moving limb, the frame through which this whole page is entered.\",\"title\":\"BETA AS A BRAKE ON MOVEMENT\"},{\"node\":\"gammabeta\",\"block\":\"spya-thnz7b\",\"quote\":\"When alpha/beta decreases locally, gamma and spiking increase, and movement becomes more likely\",\"depicts\":\"Below and to the left, the brake lifts away from the limb as tight fast ripples burst upward and the limb swings free.\",\"title\":\"BRAKE LIFTS, LIMB MOVES\"},{\"node\":\"confirm\",\"block\":\"spya-azz3c8\",\"quote\":\"Alpha/beta rhythms reflected learned, internally generated contextual and categorical information, organized into spatial patterns across the cortical surface.\",\"depicts\":\"To the right of the frame, a monkey's brain surface is mapped with a patchwork of shaded regions recorded during a task, each patch a distinct learned pattern.\",\"title\":\"PRIMATE CORTEX PATCHWORK\"},{\"node\":\"scale\",\"block\":\"spya-q606tk\",\"quote\":\"which extend over a range of a few millimeters, might be just the right spatial scale for top-down control\",\"depicts\":\"A small measuring ruler is laid across a patch of cortex no wider than a few millimeters, matching exactly the width of one ripple.\",\"title\":\"RULER OF A FEW MILLIMETERS\"},{\"node\":\"mixedexp\",\"block\":\"spya-ectcj5\",\"quote\":\"the same neuron may receive many different sensory signals and may lie inside the inhibitory stencil in one context\",\"depicts\":\"Beneath the lifted brake, one neuron is drawn twice receiving the same two signal-lines; in one drawing a stencil-shaped shadow covers it, in the other it is left uncovered.\",\"title\":\"ONE NEURON, TWO STENCILS\"},{\"node\":\"subspace\",\"block\":\"spya-az9405\",\"quote\":\"The neuron labeled ‘1’ lies outside of the suppressive alpha/beta “stencil” in both contexts, resulting in “pure” context-independent object selectivity\",\"depicts\":\"Beneath the patchwork map, a neuron marked 1 sits untouched outside a cut stencil-shape in both of two side-by-side panels, spiking the same way each time.\",\"title\":\"NEURON OUTSIDE THE STENCIL\"},{\"node\":\"traj\",\"block\":\"spya-ah94dx\",\"quote\":\"they may “pull” population spiking activity along, creating repeatable smooth trajectories\",\"depicts\":\"At the foot of the plate, where the two branches converge, a long ripple is shown towing a trailing wake of small spiking dots behind it in one smooth curved path.\",\"title\":\"WAVE TOWING A SMOOTH TRAIL\"}],\"prompt\":\"Continue the same antique sepia-and-ochre map on aged parchment, this plate being the inside of the brake scene from the overview. At the top, reprise that exact scene — a wheeled brake clamped onto a moving limb — titled BETA AS A BRAKE ON MOVEMENT, as the gateway into this page. From it, three paths fan downward. To the lower left, the brake lifts free as fast tight ripples burst and the limb swings, titled BRAKE LIFTS, LIMB MOVES. To the right, a monkey's brain surface is mapped in a patchwork of shaded recorded regions, titled PRIMATE CORTEX PATCHWORK, beside which a small ruler is laid across a few millimeters of cortex matching one ripple's width, titled RULER OF A FEW MILLIMETERS. Below the lifted-brake scene, one neuron is drawn twice receiving the same two incoming signal-lines, covered by a cut stencil-shadow in one drawing and left bare in the other, titled ONE NEURON, TWO STENCILS. Below the patchwork map, a neuron labeled 1 sits untouched outside a stencil-cutout in two side-by-side panels, spiking identically in both, titled NEURON OUTSIDE THE STENCIL. At the foot of the page, where both lower branches converge, draw a long ripple towing a trailing wake of small spiking dots behind it along one smooth curved path, titled WAVE TOWING A SMOOTH TRAIL. Keep the fine cross-hatched sepia linework, pale rust ink for stencil shadows, faded teal for ripple-wakes, consistent with the first plate's hand. Letter each title in small plain capitals beneath its own scene only; no other lettering appears anywhere on the page, no borders, no banners. Space the seven scenes generously across the full width of the page rather than crowding them into a narrow column, with bare parchment showing between them.\"},{\"sceneId\":\"inside-waves\",\"title\":\"Waves That Carry and Waves That Compute\",\"vignettes\":[{\"node\":\"beta_tw\",\"block\":\"spya-qr9ra4\",\"quote\":\"evident at the start of the “memory delay period” in working memory paradigms\",\"depicts\":\"Reprising the overview's scene at the top: a ripple sweeps a drawn cortical surface at the moment an object is set into a basket resting on its folds.\",\"title\":\"WAVE AT MEMORY LOADING MOMENT\"},{\"node\":\"tw\",\"block\":\"spya-uqt5yf\",\"quote\":\"Traveling waves have been observed at temporal frequencies ranging from the delta to gamma bands (~1–80 Hz)\",\"depicts\":\"Below the frame, a long cortical surface is crossed by ripples of many different spacings side by side, from broad slow furrows to tight fast ones.\",\"title\":\"WAVES SWEEP ACROSS THE CORTEX\"},{\"node\":\"statechange\",\"block\":\"spya-mrsvfu\",\"quote\":\"alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another\",\"depicts\":\"On the left branch, a wave-shape is shown physically pushing a cluster of small dots out of one marked hollow and into an adjacent one.\",\"title\":\"WAVE SHIFTS ACTIVITY TO NEW STATE\"},{\"node\":\"theta\",\"block\":\"spya-jcpyd5\",\"quote\":\"theta traveling waves “drag” coupled beta and gamma (in different theta phases) across the surface of the cortex\",\"depicts\":\"On the right branch, a single large slow ripple is shown towing two smaller, faster ripples behind it like boats in its wake across the cortical surface.\",\"title\":\"THETA WAVE DRAGS BETA AND GAMMA\"},{\"node\":\"analogintro\",\"block\":\"spya-vp5h33\",\"quote\":\"When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference\",\"depicts\":\"Continuing from the left branch, two overlapping sine-wave ripples merge: their peaks add into a taller crest where they meet, their troughs cancel into flatness where they oppose.\",\"title\":\"WAVES ADD, CANCEL, AND COMBINE\"},{\"node\":\"efficient\",\"block\":\"spya-mgnqxk\",\"quote\":\"analog computation can improve energy efficiency over digital by more than an order of magnitude\",\"depicts\":\"A balance scale tips heavily: one pan holds a small dim wave-device, the other a larger, brighter device weighted down many times over.\",\"title\":\"ANALOG OUTPACES DIGITAL TENFOLD\"},{\"node\":\"context_sum\",\"block\":\"spya-prykb8\",\"quote\":\"wave summation would essentially compute an intersection of constraints, resulting in a unique spatiotemporal pattern of neural activation\",\"depicts\":\"At the foot of the page, two distinct ripple-patterns, one for each of two task contexts, are drawn overlapping to settle into one single unique combined pattern across the cortex.\",\"title\":\"TWO CONTEXT WAVES SUM TO ONE\"}],\"prompt\":\"Continue the same antique sepia-and-ochre map on aged parchment, this plate being the inside of the memory-wave scene from the overview. At the top, reprise that exact scene — a ripple sweeping a cortical surface as an object is set into a basket resting on its folds — titled WAVE AT MEMORY LOADING MOMENT, as the gateway into this page. Below it, a long cortical surface is crossed by ripples of many different spacings side by side, from broad slow furrows to tight fast ones, titled WAVES SWEEP ACROSS THE CORTEX. From here the road forks: on the left, a wave-shape is shown physically pushing a cluster of small dots out of one marked hollow in the ground into an adjacent one, titled WAVE SHIFTS ACTIVITY TO NEW STATE; on the right, a single large slow ripple tows two smaller faster ripples behind it like boats in its wake, titled THETA WAVE DRAGS BETA AND GAMMA, ending that branch. The left branch continues downward: two overlapping sine-wave ripples merge, their peaks rising into a taller crest where they meet and their troughs flattening where they oppose, titled WAVES ADD, CANCEL, AND COMBINE. Beneath that, a balance scale tips heavily, one pan holding a small dim wave-device and the other a larger brighter device weighted down many times over, titled ANALOG OUTPACES DIGITAL TENFOLD. At the foot of the page, two distinct ripple-patterns for two different task contexts are drawn overlapping until they settle into one single unique combined pattern across the cortex, titled TWO CONTEXT WAVES SUM TO ONE. Keep the fine cross-hatched sepia linework and faded teal ripple-washes consistent with the earlier plates. Letter each title in small plain capitals beneath its own scene only; nothing else on the page is lettered — no banners, no borders, no inscriptions. Spread the seven scenes across the full width of the page with bare parchment between them rather than crowding a narrow column.\"}]}",
+      "report": {
+        "faults": [
+          {
+            "where": "plate[0].vignettes[0]",
+            "what": "quote is not in block spya-f6m6jv"
+          }
+        ],
+        "written": 25,
+        "kept": 24,
+        "platesWritten": 3,
+        "platesKept": 3
+      },
+      "model": "claude-sonnet-5",
+      "imageModel": "google/gemini-3.1-flash-image",
+      "inputTokens": 22316,
+      "outputTokens": 31608,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "briefMs": 268260,
+      "draws": [
+        {
+          "sceneId": "overview",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": false,
+          "figures": 0
+        },
+        {
+          "sceneId": "inside-spatial",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": true,
+          "figures": 0
+        },
+        {
+          "sceneId": "inside-waves",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": true,
+          "figures": 0
+        }
+      ],
+      "elapsedMs": 268276
+    },
+    "faq": {
+      "faq": {
+        "version": "faq/6",
+        "generator": "claude-sonnet-5",
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.ce29b6cc004bedb5",
+        "questions": [
+          {
+            "id": "spya-ps8v8j",
+            "question": "If spikes generate the waves that then control spiking, isn't the whole control mechanism just circular?",
+            "passages": [
+              {
+                "blockId": "spya-z9g2s3",
+                "quote": "Spikes shape brain waves, while the waves in turn influence when and where spikes occur.",
+                "start": 602
+              },
+              {
+                "blockId": "spya-f0dqyd",
+                "quote": "This creates a feedback loop: Synapses shape spiking, spiking contributes to brain waves, and waves shape spiking.",
+                "start": 363
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.8
+          },
+          {
+            "id": "spya-adbwy4",
+            "question": "If mixed selectivity reflects the need for flexible top-down routing, why does it also show up in primary sensory and motor cortex, where processing is supposedly more fixed?",
+            "passages": [
+              {
+                "blockId": "spya-njs6ff",
+                "quote": "They are prevalent in higher areas like prefrontal cortex (Abbass et al., 2025; Dang et al., 2022; Mouille et al., 2025; Parthasarathy et al., 2017; Warden and Miller, 2007) but also in primary sensory and motor cortex",
+                "start": 761
+              }
+            ],
+            "difficulty": 0.5,
+            "centrality": 0.4
+          },
+          {
+            "id": "spya-dm7ws0",
+            "question": "Why should alpha/beta rhythms specifically be the ones carrying top-down control, rather than faster gamma or slower theta/delta waves?",
+            "passages": [
+              {
+                "blockId": "spya-q606tk",
+                "quote": "Oscillations in the intermediate alpha/beta range, which extend over a range of a few millimeters, might be just the right spatial scale for top-down control (Miller et al., 2024).",
+                "start": 623
+              }
+            ],
+            "difficulty": 0.6,
+            "centrality": 0.4
+          },
+          {
+            "id": "spya-p2ry4f",
+            "question": "Does spatial computing theory still require some neurons to be fixed 'context' or 'object' detectors under the hood?",
+            "passages": [
+              {
+                "blockId": "spya-ee45vr",
+                "quote": "there is no requirement for specialized “context neurons” or “object neurons” with fixed tuning predicted by classical connectionists views of cortex.",
+                "start": 14
+              }
+            ],
+            "difficulty": 0.6,
+            "centrality": 0.6
+          },
+          {
+            "id": "spya-fh45gc",
+            "question": "If beta waves traveling across cortex drive shifts between neural codes, shouldn't wave timing track the specific sensory content rather than just the general timing of representational change?",
+            "passages": [
+              {
+                "blockId": "spya-qaza0y",
+                "quote": "This hypothesis predicts that wave incidence should correlate with the overall temporal dynamics of population activity, but show little variation with specific sensory conditions.",
+                "start": 0
+              }
+            ],
+            "difficulty": 0.7,
+            "centrality": 0.3
+          },
+          {
+            "id": "spya-ckxb0m",
+            "question": "Since propofol, ketamine, and dexmedetomidine act on completely different molecular receptors, why would they all disrupt consciousness the same way?",
+            "passages": [
+              {
+                "blockId": "spya-wnqgmn",
+                "quote": "Despite acting on different molecular targets, different anesthetic agents, such as propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects in the cortex",
+                "start": 0
+              },
+              {
+                "blockId": "spya-k02vdw",
+                "quote": "This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.",
+                "start": 173
+              }
+            ],
+            "difficulty": 0.4,
+            "centrality": 0.7
+          },
+          {
+            "id": "spya-hrnd0b",
+            "question": "If moment-to-moment thought is carried by fleeting waves rather than synapses, how does any of it end up as lasting memory?",
+            "passages": [
+              {
+                "blockId": "spya-z6esvz",
+                "quote": "Through the downward influence of the waves on spikes, these new thoughts can be “baked” into synaptic wiring, adding new information.",
+                "start": 545
+              }
+            ],
+            "difficulty": 0.5,
+            "centrality": 0.6
+          },
+          {
+            "id": "spya-wxef4r",
+            "question": "Is this wave-based account really a distinct theory of consciousness, or just a mechanistic retelling of Global Workspace, IIT, and Higher-Order theories?",
+            "passages": [
+              {
+                "blockId": "spya-m3dn2u",
+                "quote": "We, however, emphasize how this integration occurs via dynamic field interactions rather than broadcasting of information (GW) and spikes alone (GWNT).",
+                "start": 221
+              },
+              {
+                "blockId": "spya-nkg5v2",
+                "quote": "In our framework, we conceptualize consciousness as emerging naturally when higher‑order predictive models, implemented through oscillatory wave patterns, impose organized structure on lower‑level cortical processes.",
+                "start": 530
+              },
+              {
+                "blockId": "spya-j6qfz4",
+                "quote": "In our framework, we instead place emphasis on top-down influences exerted by wave dynamics.",
+                "start": 513
+              }
+            ],
+            "difficulty": 0.6,
+            "centrality": 0.5
+          },
+          {
+            "id": "spya-pwcbbt",
+            "question": "Does this theory require some exotic new neural machinery, or can ordinary cortical circuits already do this?",
+            "passages": [
+              {
+                "blockId": "spya-m8bzur",
+                "quote": "Cortical circuits naturally generate oscillatory dynamics and propagate waves through recurrent connectivity across scales. The dynamics we emphasize thus require no special machinery.",
+                "start": 77
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.4
+          }
+        ],
+        "dropped": {
+          "unknownIds": 0,
+          "unquoted": 0,
+          "tooLong": 0,
+          "duplicate": 0,
+          "unanchored": 0,
+          "overCap": 0,
+          "malformed": 0
+        },
+        "generatedAt": "2026-10-03T04:28:48.885Z",
+        "elapsedMs": 28938
+      },
+      "blocks": 92,
+      "words": 6489,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 0,
+        "tooLong": 0,
+        "duplicate": 0,
+        "unanchored": 0,
+        "overCap": 0,
+        "malformed": 0
+      },
+      "scoreDrops": {
+        "difficultyAbsent": 0,
+        "difficultyRejected": 0,
+        "centralityAbsent": 0,
+        "centralityRejected": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 19993,
+      "outputTokens": 3256,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "maxTokens": 45920,
+      "elapsedMs": 28945
+    },
+    "quiz": {
+      "quiz": {
+        "version": "quiz/7",
+        "generator": "claude-sonnet-5",
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.ce29b6cc004bedb5",
+        "batchId": "spya-bgjukj",
+        "questions": [
+          {
+            "id": "spya-dugm7p",
+            "question": "Why do the authors think relying only on synaptic changes could not provide flexible top-down control?",
+            "premise": "Brain waves are proposed to provide this control, alongside synapses that store memories.",
+            "referenceAnswer": "Because it would require a control system to know exactly which synapses and neurons were used for a given representation and to coordinate them within fractions of a second, which seems like an implausible computational demand.",
+            "evidence": [
+              {
+                "blockId": "spya-d73kfb",
+                "quote": "That would require a control system to “know” which synapses and neurons were employed for any given neural representation and selectively coordinate them with subsecond precision, a seemingly implausible computational demand.",
+                "start": 372
+              }
+            ]
+          },
+          {
+            "id": "spya-pwebxs",
+            "question": "What relationship between brain waves and spiking activity makes waves a plausible candidate for this control mechanism?",
+            "premise": "Synaptic changes alone seem too slow and cumbersome for the subsecond precision flexible control would require.",
+            "referenceAnswer": "The relationship is bidirectional: spikes help shape brain waves, but the waves in turn influence when and where spikes occur, rather than waves being a passive byproduct of spiking.",
+            "evidence": [
+              {
+                "blockId": "spya-z9g2s3",
+                "quote": "Spikes shape brain waves, while the waves in turn influence when and where spikes occur.",
+                "start": 602
+              }
+            ]
+          },
+          {
+            "id": "spya-mdm3e0",
+            "question": "Under the classical connectionist model of cortex, what did a given neuron's spiking activity always 'mean'?",
+            "referenceAnswer": "The same unique, fixed thing: each neuron was thought to serve one stable, specialized function.",
+            "evidence": [
+              {
+                "blockId": "spya-p6hwth",
+                "quote": "In this view, each neuron serves a stable, specialized function, i.e., a given neuron’s spikes always “mean” the same unique thing.",
+                "start": 287
+              }
+            ]
+          },
+          {
+            "id": "spya-xffuqv",
+            "question": "What finding about prefrontal cortex activity was hard to explain under this traditional model?",
+            "premise": "Classical models held that each neuron has one stable, specialized meaning.",
+            "referenceAnswer": "The finding that any given task engages around a third of all prefrontal neurons, which under the pure-specialization view would imply the brain could only learn about three different cognitive functions before all prefrontal neurons were used up.",
+            "evidence": [
+              {
+                "blockId": "spya-amx5qf",
+                "quote": "any given task engages around a third of all neurons in the prefrontal cortex",
+                "start": 261
+              },
+              {
+                "blockId": "spya-amx5qf",
+                "quote": "we can only learn about three different cognitive functions before essentially all prefrontal neurons have been “assigned a function”",
+                "start": 490
+              }
+            ]
+          },
+          {
+            "id": "spya-fn3ew0",
+            "question": "What term describes the phenomenon in which neurons multiplex different kinds of information in a nonlinear way?",
+            "premise": "This finding suggested prefrontal neurons are not narrowly dedicated to a single function.",
+            "referenceAnswer": "Nonlinear mixed selectivity.",
+            "evidence": [
+              {
+                "blockId": "spya-amx5qf",
+                "quote": "This phenomenon has come to be called nonlinear “mixed selectivity”",
+                "start": 1099
+              }
+            ]
+          },
+          {
+            "id": "spya-wx5qq7",
+            "question": "In the two-object sequence memory task, how did mixed-selectivity neurons respond differently from what 'pure' selectivity would predict?",
+            "premise": "Mixed selectivity means neurons multiplex different kinds of information rather than being narrowly specialized.",
+            "referenceAnswer": "Pure selectivity predicts a neuron would respond the same way to an object regardless of its order; mixed-selectivity neurons instead changed their response to an object depending on whether it came first or second, such as firing to one object only when it was first and to another only when it was second.",
+            "evidence": [
+              {
+                "blockId": "spya-d6h3pv",
+                "quote": "Classical “pure” selectivity for object identity would predict similar neural responses to the same objects, regardless of their order in the sequence",
+                "start": 160
+              },
+              {
+                "blockId": "spya-x5m34h",
+                "quote": "A neuron might spike to object A, but only when it was seen first, and to object B, but only when it is seen second.",
+                "start": 319
+              }
+            ]
+          },
+          {
+            "id": "spya-nc8wzm",
+            "question": "Why does this multifunctional, context-dependent firing make routing by fixed synaptic weights alone difficult?",
+            "premise": "Mixed-selectivity neurons fire differently to the same object depending on its context.",
+            "referenceAnswer": "Because the cortex is not a set of isolated specialized circuits but a dense web of overlapping networks, with the same neurons shifting membership between networks as context changes, so dynamically routing signals through this web is hard to achieve with synaptic weights alone.",
+            "evidence": [
+              {
+                "blockId": "spya-fnm872",
+                "quote": "This indicates the cortex is not a mosaic of isolated, specialized, circuits of specialized areas.",
+                "start": 173
+              },
+              {
+                "blockId": "spya-dtnkkk",
+                "quote": "Such flexible routing is difficult to reconcile with a purely connectionist framework based solely on changing synaptic weights.",
+                "start": 210
+              }
+            ]
+          },
+          {
+            "id": "spya-fj83ep",
+            "question": "What is ephaptic coupling?",
+            "premise": "A more tractable routing mechanism than fixed synapses seemed to be needed, pointing toward brain waves.",
+            "referenceAnswer": "It is the direct influence of a neuron's electric field on the membrane potential of nearby neurons, letting neurons interact and coordinate without needing a synaptic connection between them.",
+            "evidence": [
+              {
+                "blockId": "spya-bzqaf5",
+                "quote": "Ephaptic coupling in the brain is the influence of neuronal electric fields on nearby neurons’ membrane potentials, allowing interaction and coordination independent of synapses",
+                "start": 156
+              }
+            ]
+          },
+          {
+            "id": "spya-eesukp",
+            "question": "What advantage do these electric fields have over spikes and synaptic transmission in terms of speed and spread?",
+            "premise": "Ephaptic coupling lets electric fields directly influence nearby neurons without needing synapses.",
+            "referenceAnswer": "Electric fields spread continuously across millimeters or more and change essentially instantaneously, at the speed of electromagnetic propagation, whereas spikes are brief and sparse and are slowed by axonal conduction and synaptic transmission.",
+            "evidence": [
+              {
+                "blockId": "spya-j7k4hu",
+                "quote": "changes in electric fields arise essentially concurrently with the underlying transmembrane currents and spread through the local tissue at the speed of electromagnetic propagation, making them effectively instantaneous on neuronal timescales",
+                "start": 922
+              }
+            ]
+          },
+          {
+            "id": "spya-nvnwcf",
+            "question": "What opposed computational roles do gamma versus alpha/beta oscillations play in Spatial Computing theory?",
+            "referenceAnswer": "Gamma rhythms are linked to net excitation and increased spiking, carrying feedforward sensory content, while alpha/beta rhythms are linked to reduced activity and carry top-down control signals, forming a push-pull relationship between the two.",
+            "evidence": [
+              {
+                "blockId": "spya-hcav4k",
+                "quote": "It also exploits the distinct functional roles and push-pull relationship between gamma (~30–80 Hz) vs alpha and beta (~13–30 Hz) rhythms",
+                "start": 188
+              },
+              {
+                "blockId": "spya-thnz7b",
+                "quote": "Gamma rhythms are associated with net excitation and thus increased spiking, while alpha/beta rhythms are linked to reduced activity.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-zhhpkj",
+            "question": "According to Spatial Computing theory, how is it decided where feedforward sensory information actually gets expressed as spiking?",
+            "premise": "Gamma drives excitation and spiking while alpha/beta suppresses activity, in a push-pull relationship.",
+            "referenceAnswer": "It depends on the interaction between spatially random feedforward inputs and the spatially organized pattern of alpha/beta suppression, so spiking is only allowed to emerge in the 'open' locations where alpha/beta is weak.",
+            "evidence": [
+              {
+                "blockId": "spya-gkfdys",
+                "quote": "Where spiking is expressed thus depends on the interaction between spatially random feedforward inputs and spatially organized alpha/beta suppression",
+                "start": 765
+              }
+            ]
+          },
+          {
+            "id": "spya-zqdv36",
+            "question": "How does this explain mixed selectivity without needing specialized 'context neurons'?",
+            "premise": "Spiking is only expressed where alpha/beta suppression is weak, and those locations shift with context.",
+            "referenceAnswer": "The same broadly responsive neuron can fall inside the inhibitory alpha/beta pattern in one context and outside it in another, so its effective selectivity changes with context, producing the nonlinear mixed selectivity seen in recordings, with no need for neurons dedicated to a fixed context or object.",
+            "evidence": [
+              {
+                "blockId": "spya-ectcj5",
+                "quote": "This context-dependent gating can make a neuron effectively change its selectivity, producing the nonlinear mixed selectivity observed by many studies",
+                "start": 589
+              },
+              {
+                "blockId": "spya-ee45vr",
+                "quote": "there is no requirement for specialized “context neurons” or “object neurons” with fixed tuning predicted by classical connectionists views of cortex",
+                "start": 14
+              }
+            ]
+          },
+          {
+            "id": "spya-d35r5r",
+            "question": "What further role do traveling alpha/beta waves play, beyond holding a fixed spatial pattern in place?",
+            "premise": "Each context's alpha/beta pattern can make the same neuron appear selective to different things.",
+            "referenceAnswer": "By sweeping patterns of inhibition and excitation across the cortex over time, traveling alpha/beta waves are proposed to drive transitions in which neurons are allowed to spike, shifting population activity from one coding subspace to another.",
+            "evidence": [
+              {
+                "blockId": "spya-mrsvfu",
+                "quote": "we propose that alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another",
+                "start": 340
+              }
+            ]
+          },
+          {
+            "id": "spya-h59hr7",
+            "question": "What is analog computation using waves, as the authors describe it?",
+            "premise": "Traveling waves are proposed to drive shifts between different coding states.",
+            "referenceAnswer": "A form of computing in which continuous physical quantities, such as wave amplitude and phase, directly represent variables, and in which overlapping waves combine through superposition and interference to solve a problem all at once in parallel, rather than step by step as in digital computing.",
+            "evidence": [
+              {
+                "blockId": "spya-vp5h33",
+                "quote": "Analog computing uses continuous physical quantities, such as voltages or mechanical motion, to directly represent and solve mathematical problems",
+                "start": 0
+              },
+              {
+                "blockId": "spya-mgnqxk",
+                "quote": "Because the wave interactions occur everywhere simultaneously, the computation is inherently parallel.",
+                "start": 330
+              }
+            ]
+          },
+          {
+            "id": "spya-r89g0j",
+            "question": "In the example combining sequence order with response mode (cued recall vs matching), what does summing the two corresponding wave patterns compute?",
+            "premise": "Wave superposition lets a computation happen everywhere at once rather than step by step.",
+            "referenceAnswer": "It computes an intersection of the two constraints, producing a unique spatiotemporal pattern of neural activation for each specific combination of the two contexts.",
+            "evidence": [
+              {
+                "blockId": "spya-prykb8",
+                "quote": "Their wave summation would essentially compute an intersection of constraints, resulting in a unique spatiotemporal pattern of neural activation for every possible combination of contexts",
+                "start": 318
+              }
+            ]
+          },
+          {
+            "id": "spya-wg7a9y",
+            "question": "Despite acting on completely different molecular targets, what common change in cortical wave activity do propofol, ketamine, and dexmedetomidine all produce?",
+            "referenceAnswer": "They all shift the mixed, low-amplitude, higher-frequency activity seen in wakefulness into high-power, slow delta oscillations that are temporally misaligned across brain regions, disrupting coordinated communication.",
+            "evidence": [
+              {
+                "blockId": "spya-wnqgmn",
+                "quote": "The mixed, low-amplitude higher-frequency activity of wakefulness transitions to high-power slow delta (~1–4 Hz) oscillations across frontal, parietal, and sensory regions. These slow waves are often temporally misaligned, disrupting coordinated communication.",
+                "start": 282
+              }
+            ]
+          },
+          {
+            "id": "spya-t09dt5",
+            "question": "What does this convergence suggest about what consciousness most depends on?",
+            "premise": "Anesthetics with completely different molecular targets all end up producing slow, desynchronized cortical waves.",
+            "referenceAnswer": "It suggests consciousness depends less on particular receptors or cell types and more on the integrity of organized, large-scale wave activity across the cortex.",
+            "evidence": [
+              {
+                "blockId": "spya-k02vdw",
+                "quote": "This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.",
+                "start": 173
+              }
+            ]
+          },
+          {
+            "id": "spya-dqe9yj",
+            "question": "How does the authors' framework differ from Global Workspace and Global Neuronal Workspace theories in explaining how information gets integrated across the brain?",
+            "premise": "Loss of consciousness under anesthesia tracks disrupted large-scale wave organization rather than any single receptor type.",
+            "referenceAnswer": "Instead of explaining integration through broadcasting of information or through spikes alone, the authors attribute integration to dynamic electric field (wave) interactions.",
+            "evidence": [
+              {
+                "blockId": "spya-m3dn2u",
+                "quote": "We, however, emphasize how this integration occurs via dynamic field interactions rather than broadcasting of information (GW) and spikes alone (GWNT).",
+                "start": 221
+              }
+            ]
+          },
+          {
+            "id": "spya-je9afg",
+            "question": "In the authors' hybrid framework, what distinct roles do synapses and brain waves each play in cognition and consciousness?",
+            "premise": "The authors' framework favors wave-based integration over broadcast- or spike-based integration.",
+            "referenceAnswer": "Synapses, shaped by experience, store long-term information and define a network's possible activity patterns, while brain waves determine moment-to-moment which of those representations are actually active, and can bind distributed representations into a single unified conscious state.",
+            "evidence": [
+              {
+                "blockId": "spya-f0dqyd",
+                "quote": "Synaptic connections, shaped by experience, store long‑term information and define potential activity patterns.",
+                "start": 76
+              },
+              {
+                "blockId": "spya-tdqde5",
+                "quote": "Synapses provide representational capacity for storing information, while brain waves determine which representations are active at any given moment.",
+                "start": 306
+              }
+            ]
+          }
+        ],
+        "dropped": {
+          "unknownIds": 0,
+          "unquoted": 1,
+          "truncated": 0,
+          "overCap": 0,
+          "malformed": 0,
+          "duplicate": 0,
+          "unanchored": 1,
+          "gaps": 1
+        },
+        "generatedAt": "2026-10-03T04:30:09.654Z",
+        "elapsedMs": 109692,
+        "profileHash": null
+      },
+      "blocks": 92,
+      "words": 6489,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 1,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "duplicate": 0,
+        "unanchored": 1,
+        "gaps": 1
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 22108,
+      "outputTokens": 13592,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 109712
+    },
+    "ideas": {
+      "ideas": {
+        "version": "ideas/5",
+        "generator": "claude-sonnet-5",
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.ce29b6cc004bedb5",
+        "profileHash": null,
+        "ideas": [
+          {
+            "id": "spya-m5pwym",
+            "name": "Physical dynamics that mimic equations are genuine computation",
+            "provenance": "assumed",
+            "statement": "A physical process counts as actually performing a computation, not merely resembling one, whenever its evolving state tracks the solution to a mathematical problem.",
+            "whyYouNeedIt": "Without accepting that physics can literally compute, calling wave summation 'analog computation' that 'generates new brain states according to computational principles' is just a colorful metaphor, and the paper's central claim that waves do real work rather than just correlate with it falls apart.",
+            "analogy": "Like a network of soap films stretched between pegs settling into the shortest-connection shape: the film is not symbolically solving a geometry problem, yet its physical settling literally produces the answer.",
+            "occurrences": [
+              {
+                "blockId": "spya-vp5h33",
+                "quote": "Analog computing uses continuous physical quantities, such as voltages or mechanical motion, to directly represent and solve mathematical problems",
+                "reasoning": "Asserts that a physical quantity settling into a state is the same thing as solving a problem, which is the assumption in question rather than something argued for here.",
+                "start": 0
+              },
+              {
+                "blockId": "spya-mgnqxk",
+                "quote": "How the waves interact (e.g., their geometry, frequencies, and phase relationships) model the equation.",
+                "reasoning": "Treats wave geometry as being identical to an equation's structure, which only holds if physical process and mathematical operation can be equated.",
+                "start": 129
+              },
+              {
+                "blockId": "spya-xf7ap4",
+                "quote": "Analog wave dynamics can thus create new patterns of excitation in a computationally principled fashion.",
+                "reasoning": "Calls the resulting excitation pattern 'computationally principled' rather than merely physically caused, relying on the unstated equation of physical causation with computation.",
+                "start": 261
+              },
+              {
+                "blockId": "spya-z5qnp2",
+                "quote": "As they overlap, their interactions can result in temporary excitation of some neuron groups and suppression of others. This might be employed to route and shape neural activity.",
+                "reasoning": "Moves from a description of physical field overlap straight to calling it something that can be 'employed' for routing, presupposing the interactions are computations usable by the system.",
+                "start": 180
+              }
+            ]
+          },
+          {
+            "id": "spya-h2k6ju",
+            "name": "Spikes and waves shape each other in a loop",
+            "provenance": "introduced",
+            "statement": "Brain waves are not just a byproduct of neurons firing; the electric fields that waves create also feed back to change when and where neurons fire, so spiking and waves continuously shape each other.",
+            "analogy": "Like traffic flow and congestion patterns: individual cars create the jam, but the jam pattern then determines where any given car can move next.",
+            "occurrences": [
+              {
+                "blockId": "spya-z9g2s3",
+                "quote": "Spikes shape brain waves, while the waves in turn influence when and where spikes occur.",
+                "reasoning": "Makes explicit the loop in which each direction of causation is asserted.",
+                "start": 602
+              },
+              {
+                "blockId": "spya-f0dqyd",
+                "quote": "This creates a feedback loop: Synapses shape spiking, spiking contributes to brain waves, and waves shape spiking.",
+                "reasoning": "Restates the loop as the backbone of the hybrid framework proposed later.",
+                "start": 363
+              }
+            ]
+          },
+          {
+            "id": "spya-e3j6rj",
+            "name": "Neurons are multifunctional, not single-purpose",
+            "provenance": "introduced",
+            "statement": "Many cortical neurons do not have one fixed job; the same neuron's firing can mean different things depending on context, a pattern called mixed selectivity, and this is what allows a limited number of neurons to support unlimited cognitive functions.",
+            "analogy": "Like a utility player on a sports team who can fill different positions depending on what the game situation calls for, rather than being locked into one role forever.",
+            "occurrences": [
+              {
+                "blockId": "spya-njs6ff",
+                "quote": "nonlinear mixed selectivity seems to reflect a core computational principle",
+                "reasoning": "Elevates mixed selectivity from a curious finding to the paper's foundational computational claim.",
+                "start": 660
+              },
+              {
+                "blockId": "spya-x5m34h",
+                "quote": "A neuron might spike to object A, but only when it was seen first, and to object B, but only when it is seen second.",
+                "reasoning": "Gives the concrete case that defines what context-dependent, multifunctional firing means.",
+                "start": 319
+              },
+              {
+                "blockId": "spya-fnm872",
+                "quote": "Because mixed selectivity neurons blend sensory, motor, and contextual information, they are inherently multifunctional, sending different messages in different situations.",
+                "reasoning": "Generalizes the single-neuron example into the claim that cortical neurons as a class lack fixed, stable meanings.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-d7s3gq",
+            "name": "Electric fields can move neurons without synapses",
+            "provenance": "introduced",
+            "statement": "Oscillating extracellular electric fields can directly push nearby neurons' membrane voltage up or down and change their firing, independent of any synaptic connection between them, a mechanism called ephaptic coupling.",
+            "analogy": "Like a radio transmitter inducing a current in a nearby antenna through its field alone, with no wire connecting them.",
+            "occurrences": [
+              {
+                "blockId": "spya-bzqaf5",
+                "quote": "Ephaptic coupling in the brain is the influence of neuronal electric fields on nearby neurons’ membrane potentials, allowing interaction and coordination independent of synapses",
+                "reasoning": "Defines the non-synaptic field-to-neuron influence the paper needs as its control mechanism.",
+                "start": 156
+              },
+              {
+                "blockId": "spya-bzqaf5",
+                "quote": "cerebellar Purkinje cells generate extracellular potentials that are large enough to drive synchrony in nearby cells, even when chemical synapses and gap junctions are blocked",
+                "reasoning": "Gives direct experimental evidence that field effects alone, without synapses, can coordinate neurons.",
+                "start": 538
+              },
+              {
+                "blockId": "spya-j7k4hu",
+                "quote": "the electric fields it helps create can spread across millimeters or more, due to correlated activity",
+                "reasoning": "Explains why field-based coupling can coordinate a wider neighborhood than individual synaptic contacts could.",
+                "start": 191
+              }
+            ]
+          },
+          {
+            "id": "spya-ab0rvp",
+            "name": "Alpha/beta waves act as a spatial stencil on gamma spiking",
+            "provenance": "introduced",
+            "statement": "Spatial Computing theory proposes that patterns of alpha/beta waves spread across the cortical surface act like temporary masks, suppressing fast gamma-band spiking in some locations while leaving it free in others, and this push-pull pattern determines where sensory information gets expressed.",
+            "analogy": "Like a dimmer-switch grid over a stage that darkens certain areas while leaving others lit, so which performers appear active depends on which lights are currently dimmed.",
+            "occurrences": [
+              {
+                "blockId": "spya-gkfdys",
+                "quote": "Spatial computing theory (Fig. 3) proposes that alpha/beta rhythms convey internally-generated signals whose spatial patterning reflects top-down information",
+                "reasoning": "States the theory's core claim that wave spatial pattern itself carries the control signal.",
+                "start": 69
+              },
+              {
+                "blockId": "spya-thnz7b",
+                "quote": "Gamma rhythms are associated with net excitation and thus increased spiking, while alpha/beta rhythms are linked to reduced activity.",
+                "reasoning": "Establishes the push-pull relationship between the two bands that the stencil mechanism depends on.",
+                "start": 0
+              },
+              {
+                "blockId": "spya-gxyg0d",
+                "quote": "This scheme allows for flexible control over the neural expression of information in spiking, without the control system needing to know the precise neurons and synapses employed for any specific information",
+                "reasoning": "States the payoff of the stencil mechanism: control without needing to track specific synapses.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-q88ys8",
+            "name": "Traveling waves drive transitions between neural coding states",
+            "provenance": "introduced",
+            "statement": "Moving (traveling) alpha/beta waves sweeping across the cortex are proposed to actively carry population activity from one organized coding pattern (subspace) to another, rather than just marking stable states.",
+            "occurrences": [
+              {
+                "blockId": "spya-mrsvfu",
+                "quote": "we propose that alpha/beta waves may constitute a control mechanism that transitions cortical population activity from one subspace to another",
+                "reasoning": "States directly that traveling waves are the proposed mechanism for switching between neural coding states.",
+                "start": 340
+              },
+              {
+                "blockId": "spya-qr9ra4",
+                "quote": "prefrontal population spiking activity forms new representations (stimulus and movement onset) or transforms representations between orthogonal coding subspaces (memory delay)",
+                "reasoning": "Links the timing of observed traveling waves to moments when representational transitions are claimed to occur.",
+                "start": 987
+              },
+              {
+                "blockId": "spya-ah94dx",
+                "quote": "As traveling waves sweep continuously over the cortex, they may “pull” population spiking activity along, creating repeatable smooth trajectories",
+                "reasoning": "Proposes the mechanical image of waves physically dragging population activity through its state space.",
+                "start": 643
+              }
+            ]
+          },
+          {
+            "id": "spya-vvqp4b",
+            "name": "Wave interference as literal computation",
+            "provenance": "introduced",
+            "statement": "When multiple brain waves overlap, their summation and cancellation can carry out genuine mathematical operations in parallel across the whole tissue at once, rather than just metaphorically resembling computation.",
+            "analogy": "Like ripples from several stones dropped into a pond adding together everywhere at once, effectively computing their sum instantaneously rather than one point at a time.",
+            "occurrences": [
+              {
+                "blockId": "spya-vp5h33",
+                "quote": "When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference",
+                "reasoning": "States the physical mechanism being treated as computation rather than mere correlation.",
+                "start": 328
+              },
+              {
+                "blockId": "spya-mgnqxk",
+                "quote": "Because the wave interactions occur everywhere simultaneously, the computation is inherently parallel.",
+                "reasoning": "Asserts that the physical process itself constitutes a parallel computation, not an analogy to one.",
+                "start": 330
+              },
+              {
+                "blockId": "spya-prykb8",
+                "quote": "Their wave summation would essentially compute an intersection of constraints, resulting in a unique spatiotemporal pattern of neural activation for every possible combination of contexts",
+                "reasoning": "Applies the computation claim concretely to combining two task contexts via wave summation.",
+                "start": 318
+              }
+            ]
+          },
+          {
+            "id": "spya-pegbby",
+            "name": "Anesthesia's convergent effect on waves implicates waves in consciousness",
+            "provenance": "introduced",
+            "statement": "Different anesthetic drugs act on completely different molecular receptors but all produce the same large-scale shift toward slow, desynchronized cortical waves, suggesting that losing consciousness tracks the breakdown of wave organization rather than any specific receptor or cell type.",
+            "occurrences": [
+              {
+                "blockId": "spya-wnqgmn",
+                "quote": "Despite acting on different molecular targets, different anesthetic agents, such as propofol (GABAergic), ketamine (NMDAergic), and dexmedetomidine (alpha-2 adrenergic), all converge on similar large-scale electrical effects in the cortex",
+                "reasoning": "Gives the empirical convergence across mechanistically distinct drugs that the inference about consciousness rests on.",
+                "start": 0
+              },
+              {
+                "blockId": "spya-k02vdw",
+                "quote": "This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.",
+                "reasoning": "Draws the explicit conclusion from the convergence that wave organization, not local circuitry, underlies consciousness.",
+                "start": 173
+              },
+              {
+                "blockId": "spya-m57373",
+                "quote": "Anesthetics do not simply shut off the cortex. Instead, they profoundly alter wave dynamics",
+                "reasoning": "Frames unconsciousness as a change in wave dynamics rather than a simple reduction of neural activity.",
+                "start": 99
+              }
+            ]
+          }
+        ],
+        "generatedAt": "2026-10-03T04:30:16.728Z",
+        "elapsedMs": 116777
+      },
+      "blocks": 92,
+      "words": 6489,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 1,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "unargued": 0,
+        "unanchored": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 20791,
+      "outputTokens": 12116,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 116784
+    },
+    "quotes": {
+      "quotes": {
+        "version": "quotes/9",
+        "generator": "claude-sonnet-5",
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.54f9262f1f26a7d7",
+        "profileHash": null,
+        "quotes": [
+          {
+            "id": "spya-f8a5wb",
+            "blockId": "spya-d238cn",
+            "text": "Cognition and consciousness may arise from bidirectional interactions between neuron spiking and large-scale brain waves. We propose that, while synapses store memories, brain waves provide an executive-like control process that organizes millions of neurons into lower-dimensional, coordinated patterns in real time.",
+            "start": 0,
+            "reason": "States the core thesis of the paper.",
+            "importance": 1,
+            "striking": 0.7
+          },
+          {
+            "id": "spya-ym5yr5",
+            "blockId": "spya-d73kfb",
+            "text": "However, synaptic changes are likely too cumbersome for flexible top-down control. That would require a control system to “know” which synapses and neurons were employed for any given neural representation and selectively coordinate them with subsecond precision, a seemingly implausible computational demand.",
+            "start": 289,
+            "reason": "The key objection to the classic synapse-only model that motivates the wave-based alternative.",
+            "importance": 0.9,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-ch9p7m",
+            "blockId": "spya-z9g2s3",
+            "text": "Crucially, brain waves do not merely mirror spiking activity. They alter the electrical field environment that is itself critical for generating spikes. Spikes shape brain waves, while the waves in turn influence when and where spikes occur.",
+            "start": 449,
+            "reason": "Captures the bidirectional feedback loop central to the theory.",
+            "importance": 0.85,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-s8vrh4",
+            "blockId": "spya-amx5qf",
+            "text": "An early example was the consistent finding that any given task engages around a third of all neurons in the prefrontal cortex (Asaad et al., 2000; Freedman et al., 2001; Wallis et al., 2001; Xiang et al., 2025). Under the traditional connectionist model, this would imply that we can only learn about three different cognitive functions before essentially all prefrontal neurons have been “assigned a function”, and its computational capacity is saturated.",
+            "start": 212,
+            "reason": "A concrete, striking empirical problem for the classical specialized-neuron model.",
+            "importance": 0.8,
+            "striking": 0.75
+          },
+          {
+            "id": "spya-d9zgrp",
+            "blockId": "spya-x5m34h",
+            "text": "A neuron might spike to object A, but only when it was seen first, and to object B, but only when it is seen second.",
+            "start": 319,
+            "reason": "A clear, concrete illustration of mixed selectivity.",
+            "importance": 0.6,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-u5qw3v",
+            "blockId": "spya-njs6ff",
+            "text": "Thus, these neurons embody the flexible, context-dependent behavior associated with higher cognition (Rigotti et al., 2013; Fusi et al., 2016; Tye et al., 2024).",
+            "start": 0,
+            "reason": "States why mixed selectivity matters for cognition.",
+            "importance": 0.6
+          },
+          {
+            "id": "spya-nsf055",
+            "blockId": "spya-dtnkkk",
+            "text": "A control system therefore has the challenge of dynamically routing signals through a dense web of overlapping networks, allowing the same neurons to contribute to different computations in different contexts. Such flexible routing is difficult to reconcile with a purely connectionist framework based solely on changing synaptic weights. A more computationally tractable mechanism seems to be needed. Neural oscillations, i.e., brain waves, could serve that role.",
+            "start": 0,
+            "reason": "Bridges the mixed-selectivity evidence to the wave-based control proposal.",
+            "importance": 0.85,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-s8gayg",
+            "blockId": "spya-trb3jf",
+            "text": "Neural oscillations are not just a passive byproduct of spiking activity, they help actively shape it.",
+            "start": 465,
+            "reason": "Compact statement of the oscillations' active causal role.",
+            "importance": 0.6,
+            "striking": 0.55
+          },
+          {
+            "id": "spya-geaykx",
+            "blockId": "spya-bzqaf5",
+            "text": "Because many cortical neurons operate with membrane potentials fluctuating near the spike threshold, even weak oscillatory extracellular fields can induce small subthreshold voltage changes that significantly modulate both spiking probability and spike timing in local populations of neurons (Buzsáki and Draguhn, 2004; Ladenbauer and Obermayer, 2019; Radman et al., 2007).",
+            "start": 1052,
+            "reason": "Key mechanistic claim for how ephaptic coupling can matter despite being weak.",
+            "importance": 0.7
+          },
+          {
+            "id": "spya-uyu90w",
+            "blockId": "spya-j7k4hu",
+            "text": "By contrast, changes in electric fields arise essentially concurrently with the underlying transmembrane currents and spread through the local tissue at the speed of electromagnetic propagation, making them effectively instantaneous on neuronal timescales (Han et al., 2008; Schmidt et al., 2021b; Teleńczuk et al., 2017). This speed makes electric fields well suited for rapidly coordinating local activity (Pinotsis and Miller, 2023).",
+            "start": 909,
+            "reason": "Explains the speed advantage of wave-based over synaptic coordination.",
+            "importance": 0.65
+          },
+          {
+            "id": "spya-sz6eka",
+            "blockId": "spya-thnz7b",
+            "text": "Gamma rhythms are associated with net excitation and thus increased spiking, while alpha/beta rhythms are linked to reduced activity. In the motor cortex, for example, beta acts like a brake on movement execution. When alpha/beta decreases locally, gamma and spiking increase, and movement becomes more likely (Barone and Rossiter, 2021; Engel and Fries, 2010; Khanna and Carmena, 2017).",
+            "start": 0,
+            "reason": "Establishes the push-pull relationship central to Spatial Computing theory.",
+            "importance": 0.75,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-jtsnmg",
+            "blockId": "spya-gkfdys",
+            "text": "Spatial computing theory (Fig. 3) proposes that alpha/beta rhythms convey internally-generated signals whose spatial patterning reflects top-down information (Fig. 3A). They function as temporary inhibitory “stencils” across the surface of cortex.",
+            "start": 69,
+            "reason": "The core metaphor of the Spatial Computing theory.",
+            "importance": 0.9,
+            "striking": 0.75
+          },
+          {
+            "id": "spya-eq7mby",
+            "blockId": "spya-gxyg0d",
+            "text": "This scheme allows for flexible control over the neural expression of information in spiking, without the control system needing to know the precise neurons and synapses employed for any specific information (Badre et al., 2021; Chandrasekaran et al., 2025; MacDowell et al., 2022). It also allows for compositional reuse of the same control signals for any arbitrary information.",
+            "start": 0,
+            "reason": "States why the stencil mechanism solves the routing problem raised earlier.",
+            "importance": 0.85
+          },
+          {
+            "id": "spya-ggwfyb",
+            "blockId": "spya-azz3c8",
+            "text": "Alpha/beta rhythms reflected learned, internally generated contextual and categorical information, organized into spatial patterns across the cortical surface. These patterns inversely mirrored the spatial distribution of sensory information in spiking activity and predicted behavioral errors through mismatches in contextual representation.",
+            "start": 188,
+            "reason": "Reports the empirical confirmation of the theory's key predictions.",
+            "importance": 0.75
+          },
+          {
+            "id": "spya-v60ynx",
+            "blockId": "spya-ee45vr",
+            "text": "In this view, there is no requirement for specialized “context neurons” or “object neurons” with fixed tuning predicted by classical connectionists views of cortex. Instead, mixed selectivity arises from the interaction between broadly responsive neurons and mesoscale wave patterns that control when and where spiking is expressed.",
+            "start": 0,
+            "reason": "Sharply contrasts the new account with the classical view it replaces.",
+            "importance": 0.85,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-g9qrkk",
+            "blockId": "spya-qsz9ur",
+            "text": "This framework reconciles two observations: Single neurons are noisy and context dependent, yet populations exhibit structured, low-dimensional behavior. Rather than independent units driven solely by local, specialized connections, cortical populations behave like a coordinated flock governed by shared dynamics.",
+            "start": 0,
+            "reason": "A vivid summary image (the flock) of how population coordination resolves a paradox.",
+            "importance": 0.7,
+            "striking": 0.8
+          },
+          {
+            "id": "spya-m0vpgy",
+            "blockId": "spya-mrsvfu",
+            "text": "We propose that one role of traveling waves, particularly in the alpha/beta band, may be in instantiating state changes in neural coding. That is, by moving patterns of inhibition vs excitation across the surface of cortex, alpha/beta waves can alter which subsets of neurons are permitted to spike and their correlational structure.",
+            "start": 0,
+            "reason": "Core claim of the traveling-waves section.",
+            "importance": 0.8
+          },
+          {
+            "id": "spya-nqbrvf",
+            "blockId": "spya-vp5h33",
+            "text": "Unlike digital systems that rely on binary on/off signals, analog systems combine information continuously. When waves meet, they naturally add together, cancel out, or form new patterns through their superposition and interference (Fig. 6).",
+            "start": 220,
+            "reason": "Explains the basic mechanism of analog wave computation.",
+            "importance": 0.75
+          },
+          {
+            "id": "spya-sgwqpy",
+            "blockId": "spya-mgnqxk",
+            "text": "An analog system does not loop through variables but settles into a solution as a whole. This is in contrast to digital computing, which is inherently sequential, solving problems one step at a time.",
+            "start": 433,
+            "reason": "Crisp contrast explaining why analog wave computation is efficient and parallel.",
+            "importance": 0.75,
+            "striking": 0.65
+          },
+          {
+            "id": "spya-b736fx",
+            "blockId": "spya-jbtup9",
+            "text": "The efficiency of analog computation could explain how the brain performs vast amounts of computation while consuming only about 20 watts, roughly the power of a dim light bulb (Kováč, 2010). By contrast, modern digital AI systems require enormous energy.",
+            "start": 162,
+            "reason": "A striking, memorable comparison grounding the efficiency argument.",
+            "importance": 0.7,
+            "striking": 0.9
+          },
+          {
+            "id": "spya-q680kr",
+            "blockId": "spya-k02vdw",
+            "text": "The main point here is that different pharmacological routes of different drugs nonetheless converge on the same systems-level outcome: Slow, desynchronized cortical waves. This suggests that consciousness depends less on specific receptors or cell types and more on the integrity of large-scale wave organization.",
+            "start": 0,
+            "reason": "Key evidence from anesthesia supporting wave-based theory of consciousness.",
+            "importance": 0.85
+          },
+          {
+            "id": "spya-nenhhv",
+            "blockId": "spya-f0dqyd",
+            "text": "Synaptic connections, shaped by experience, store long‑term information and define potential activity patterns. When neurons fire spikes, they generate electric fields that influence nearby neurons through ephaptic coupling, i.e., electrical interaction without direct synaptic contact. This creates a feedback loop: Synapses shape spiking, spiking contributes to brain waves, and waves shape spiking.",
+            "start": 76,
+            "reason": "Summarizes the hybrid synapse/wave framework's core mechanism.",
+            "importance": 0.9
+          },
+          {
+            "id": "spya-f95kd7",
+            "blockId": "spya-tdqde5",
+            "text": "Moment‑to‑moment coordination underlying cognition and consciousness is thus dominated by brain waves rather than rapid synaptic changes.",
+            "start": 0,
+            "reason": "A concise statement of the paper's central reframing of brain function.",
+            "importance": 0.85,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-sufvt3",
+            "blockId": "spya-tdqde5",
+            "text": "Brain waves can thus help solve the binding problem by dynamically linking distributed neural representations into a unified conscious experience.",
+            "start": 456,
+            "reason": "Directly links the wave mechanism to the classic binding problem in consciousness studies.",
+            "importance": 0.8
+          },
+          {
+            "id": "spya-m0kwrm",
+            "blockId": "spya-nkg5v2",
+            "text": "In our framework, we conceptualize consciousness as emerging naturally when higher‑order predictive models, implemented through oscillatory wave patterns, impose organized structure on lower‑level cortical processes.",
+            "start": 530,
+            "reason": "States how the theory positions itself relative to higher-order and predictive-coding theories.",
+            "importance": 0.7
+          },
+          {
+            "id": "spya-arwnrv",
+            "blockId": "spya-m8bzur",
+            "text": "Given strong evolutionary pressure to maximize computation per unit energy, it would be surprising if evolution did not exploit such a built‑in analog computing substrate.",
+            "start": 589,
+            "reason": "The closing argument tying efficiency and evolution together.",
+            "importance": 0.7,
+            "striking": 0.65
+          }
+        ],
+        "discarded": {
+          "unfound": 0,
+          "otherVoice": 0,
+          "wrongLength": 0,
+          "overlapping": 0,
+          "overCap": 0,
+          "malformed": 0
+        },
+        "passes": 1,
+        "lastAdded": 26,
+        "generatedAt": "2026-10-03T04:28:47.158Z",
+        "elapsedMs": 27051
+      },
+      "blocks": 92,
+      "words": 6489,
+      "dropped": {
+        "unfound": 0,
+        "otherVoice": 0,
+        "wrongLength": 0,
+        "overlapping": 0,
+        "overCap": 0,
+        "malformed": 0
+      },
+      "scores": {
+        "importanceAbsent": 0,
+        "importanceRejected": 0,
+        "strikingAbsent": 11,
+        "strikingRejected": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 19800,
+      "outputTokens": 3625,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 27213
+    },
+    "glossary": {
+      "glossary": {
+        "version": "glossary/8",
+        "generator": "claude-sonnet-5",
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.54f9262f1f26a7d7",
+        "profileHash": null,
+        "entries": [
+          {
+            "id": "spya-zfxycj",
+            "name": "Analog Computation",
+            "kind": "concept",
+            "aliases": [
+              "analog computing"
+            ],
+            "senseHere": "Solving a problem by letting continuous physical quantities (like overlapping wave amplitudes) interact directly, with the answer emerging from the physics itself rather than from a sequence of discrete logical steps. The article argues overlapping brain waves compute this way, combining control signals for different contexts into a single new spatial pattern all at once.",
+            "difficulty": 0.55,
+            "centrality": 0.9,
+            "blocks": [
+              "spya-d238cn",
+              "spya-h5qjz4",
+              "spya-evzx4h",
+              "spya-vp5h33",
+              "spya-szhg6f",
+              "spya-wa647r",
+              "spya-mgnqxk",
+              "spya-fp5844",
+              "spya-jbtup9",
+              "spya-k062r7",
+              "spya-z6esvz",
+              "spya-m9exy5",
+              "spya-m8bzur"
+            ]
+          },
+          {
+            "id": "spya-s5pab0",
+            "name": "Connectionism",
+            "kind": "concept",
+            "aliases": [
+              "connectionist model",
+              "connectionist framework"
+            ],
+            "senseHere": "The traditional view that the cortex works through feedforward hierarchies of neurons, each specialized for one stable role, built up from simple features to complex concepts purely through fixed synaptic wiring. The article presents this as foundational but incomplete, unable to explain multifunctional neurons or flexible top-down control.",
+            "difficulty": 0.3,
+            "centrality": 0.7,
+            "blocks": [
+              "spya-gj263p",
+              "spya-amx5qf",
+              "spya-dtnkkk"
+            ]
+          },
+          {
+            "id": "spya-vj5gyg",
+            "name": "Mixed Selectivity",
+            "kind": "concept",
+            "aliases": [
+              "nonlinear mixed selectivity"
+            ],
+            "senseHere": "A single neuron's response depends on a nonlinear combination of several task variables at once, rather than reflecting one fixed property. For example, a neuron spikes to one object only when it appeared first, and to a different object only when it appeared second, so the same cell's 'meaning' changes with context.",
+            "difficulty": 0.6,
+            "centrality": 0.9,
+            "blocks": [
+              "spya-amx5qf",
+              "spya-v0gbwq",
+              "spya-d6h3pv",
+              "spya-x7vunr",
+              "spya-njs6ff",
+              "spya-fnm872",
+              "spya-zmknun",
+              "spya-ectcj5",
+              "spya-ee45vr",
+              "spya-xphb7u",
+              "spya-az9405",
+              "spya-sye2jf"
+            ]
+          },
+          {
+            "id": "spya-sddq2m",
+            "name": "Ephaptic Coupling",
+            "kind": "concept",
+            "aliases": [],
+            "senseHere": "Neurons influencing each other's electrical activity directly through the electric fields they generate, without any synapse or chemical signal passing between them. The article treats this as the physical channel by which brain waves can shape spiking directly and almost instantly.",
+            "difficulty": 0.65,
+            "centrality": 0.75,
+            "blocks": [
+              "spya-trb3jf",
+              "spya-mapqhv",
+              "spya-bzqaf5",
+              "spya-f0dqyd"
+            ]
+          },
+          {
+            "id": "spya-p0c05y",
+            "name": "Local Field Potential",
+            "kind": "term",
+            "aliases": [
+              "LFP",
+              "LFPs"
+            ],
+            "senseHere": "The combined electrical signal recorded from inside brain tissue that reflects the summed activity of many nearby neurons, used in this article as the measurable signature of brain waves at the mesoscale.",
+            "difficulty": 0.4,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-trb3jf"
+            ]
+          },
+          {
+            "id": "spya-m35wga",
+            "name": "Gamma Oscillations",
+            "kind": "term",
+            "aliases": [
+              "gamma band",
+              "gamma rhythms"
+            ],
+            "senseHere": "Fast brain-wave activity (roughly 30-80 Hz) that the article links to local excitation, feedforward sensory signaling, and the fine-grained spiking that carries the actual 'content' of a thought or percept.",
+            "difficulty": 0.4,
+            "centrality": 0.75,
+            "blocks": [
+              "spya-thnz7b",
+              "spya-vzew3p",
+              "spya-uqt5yf",
+              "spya-jcpyd5"
+            ]
+          },
+          {
+            "id": "spya-mx7gtd",
+            "name": "Alpha/Beta Oscillations",
+            "kind": "term",
+            "aliases": [
+              "alpha/beta rhythms",
+              "beta rhythms"
+            ],
+            "senseHere": "Slower brain-wave activity (roughly 10-30 Hz) that the article casts as a top-down control signal, acting like an inhibitory brake that suppresses gamma-driven spiking in particular cortical locations to implement goals and context.",
+            "difficulty": 0.4,
+            "centrality": 0.9,
+            "blocks": [
+              "spya-thnz7b",
+              "spya-vzew3p",
+              "spya-gkfdys",
+              "spya-azz3c8",
+              "spya-qr9ra4",
+              "spya-qaza0y"
+            ]
+          },
+          {
+            "id": "spya-ssnavp",
+            "name": "Spatial Computing (theory)",
+            "kind": "concept",
+            "aliases": [
+              "Spatial Computing theory"
+            ],
+            "senseHere": "The article's proposed mechanism in which spatially patterned alpha/beta waves act like a stencil laid over the cortex, damping gamma-band spiking in some locations while leaving it free in others. Which locations are open versus suppressed depends on context or goals, so the same neurons can be recruited into different computations at different times.",
+            "difficulty": 0.65,
+            "centrality": 1,
+            "blocks": [
+              "spya-vzew3p",
+              "spya-gkfdys",
+              "spya-azz3c8",
+              "spya-ectcj5",
+              "spya-ns23sq",
+              "spya-mrsvfu"
+            ]
+          },
+          {
+            "id": "spya-sfg57n",
+            "name": "Subspace Coding",
+            "kind": "concept",
+            "aliases": [
+              "activity subspace",
+              "coding subspace"
+            ],
+            "senseHere": "The idea that although any one neuron's firing is noisy and context-dependent, the activity of the whole population traces out a much smaller, structured set of patterns than the huge number of neurons would allow in principle. Different tasks or contexts are proposed to occupy distinct, non-overlapping ('orthogonal') regions of this reduced pattern-space, which the article explains as a byproduct of alpha/beta control gating different, correlated subsets of neurons.",
+            "difficulty": 0.65,
+            "centrality": 0.7,
+            "blocks": [
+              "spya-m63zb9",
+              "spya-az9405",
+              "spya-ns23sq",
+              "spya-ah94dx",
+              "spya-qr9ra4"
+            ]
+          },
+          {
+            "id": "spya-r60x78",
+            "name": "Traveling Waves",
+            "kind": "concept",
+            "aliases": [
+              "traveling wave"
+            ],
+            "senseHere": "Brain-wave patterns that sweep continuously across the cortical surface rather than staying fixed in one spot, moving through the long-range connections of superficial cortical layers. The article proposes these moving patterns actively drag neural population activity from one coding state to another, rather than merely marking a stable condition.",
+            "difficulty": 0.5,
+            "centrality": 0.85,
+            "blocks": [
+              "spya-ah94dx",
+              "spya-y09vju",
+              "spya-uqt5yf",
+              "spya-qr9ra4",
+              "spya-mrsvfu",
+              "spya-gbpnax",
+              "spya-qaza0y",
+              "spya-jcpyd5",
+              "spya-tkruda",
+              "spya-e9rw5j",
+              "spya-z6esvz"
+            ]
+          },
+          {
+            "id": "spya-pu6wxu",
+            "name": "Binding Problem",
+            "kind": "concept",
+            "aliases": [],
+            "senseHere": "The puzzle of how separate pieces of information, processed in different and widely distributed neural populations, get combined into one unified experience or representation. The article proposes that brain waves solve this by dynamically linking distributed activity together.",
+            "difficulty": 0.5,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-tdqde5"
+            ]
+          },
+          {
+            "id": "spya-pa6res",
+            "name": "Global Neuronal Workspace Theory",
+            "kind": "concept",
+            "aliases": [
+              "GNWT",
+              "Global Workspace"
+            ],
+            "senseHere": "A theory of consciousness holding that information becomes conscious when it is broadcast widely across a distributed network of brain regions via spiking activity, making it globally available to many processes at once.",
+            "background": "Developed by Stanislas Dehaene and Bernard Baars among others, it is one of the most prominent neuroscientific theories of consciousness, built on evidence from attention and perception experiments showing a sudden widespread 'ignition' of frontoparietal activity when a stimulus becomes consciously reportable.",
+            "difficulty": 0.55,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-m3dn2u"
+            ]
+          },
+          {
+            "id": "spya-e2xbhn",
+            "name": "Integrated Information Theory",
+            "kind": "concept",
+            "aliases": [
+              "IIT"
+            ],
+            "senseHere": "A theory holding that consciousness arises from a system's capacity to integrate information so that its current state constrains its own future and past states more than the sum of its separate parts would. The article contrasts its own wave-based mechanism with IIT's emphasis on a specific posterior 'hot zone' of cortex.",
+            "background": "Proposed by Giulio Tononi, it attempts to give a mathematical measure (phi) of how much a system's parts are irreducibly unified, and has been used to argue that consciousness could in principle be assessed in any sufficiently integrated system, biological or not.",
+            "difficulty": 0.6,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-m3dn2u"
+            ]
+          },
+          {
+            "id": "spya-bvr8k4",
+            "name": "Higher-Order Theories",
+            "kind": "concept",
+            "aliases": [
+              "HOTs",
+              "Higher-Order Theory"
+            ],
+            "senseHere": "Theories holding that a brain state becomes conscious only when another, higher-level brain state represents or monitors it, typically originating in frontal cortex. The article aligns its own framework with this idea but substitutes oscillatory wave patterns for a separate representing system.",
+            "background": "Associated with philosophers and scientists such as David Rosenthal, this view treats consciousness as requiring a kind of self-monitoring representation, distinguishing merely having a mental state from being aware that one has it.",
+            "difficulty": 0.55,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-nkg5v2"
+            ]
+          },
+          {
+            "id": "spya-cdp4yd",
+            "name": "Predictive Coding",
+            "kind": "concept",
+            "aliases": [],
+            "senseHere": "The theory that the cortex continuously generates top-down predictions about incoming sensory input and updates its internal models based on the mismatch between prediction and actual input. The article treats its own account of top-down wave organization as compatible with and extending this framework.",
+            "background": "Closely associated with Karl Friston's free-energy framework, predictive coding proposes that perception itself is a process of inference, with higher cortical areas sending predictions downward and lower areas sending prediction errors upward.",
+            "difficulty": 0.55,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-nkg5v2"
+            ]
+          }
+        ],
+        "passes": 1,
+        "generatedAt": "2026-10-03T04:28:46.595Z",
+        "elapsedMs": 26574
+      },
+      "scores": {
+        "difficultyAbsent": 0,
+        "difficultyRejected": 0,
+        "centralityAbsent": 0,
+        "centralityRejected": 0
+      },
+      "blocks": 92,
+      "words": 6489,
+      "added": 15,
+      "unmatched": 0,
+      "model": "claude-sonnet-5",
+      "inputTokens": 21086,
+      "outputTokens": 2871,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 26649
+    },
+    "timeline": {
+      "timeline": {
+        "version": "timeline/5",
+        "generator": "claude-sonnet-5",
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.0895067b657957a8",
+        "events": [
+          {
+            "id": "spya-tqnbya",
+            "label": "Discovery that tasks engage ~1/3 of PFC neurons",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 1,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-amx5qf",
+                "quote": "An early example was the consistent finding that any given task engages around a third of all neurons in the prefrontal cortex",
+                "start": 212
+              }
+            ]
+          },
+          {
+            "id": "spya-r5dtqj",
+            "label": "Confirmation that cortical neurons multiplex information",
+            "dating": {
+              "kind": "words",
+              "phrase": "Subsequently"
+            },
+            "order": 2,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-amx5qf",
+                "quote": "Subsequently, it was confirmed that many cortical (and subcortical) neurons do indeed multiplex different kinds of information in their activity",
+                "start": 788
+              }
+            ]
+          },
+          {
+            "id": "spya-p842rn",
+            "label": "Mixed selectivity observed in sequence-order task",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 3,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-x5m34h",
+                "quote": "as we observed in many prefrontal neurons (Rigotti et al., 2013; Warden and Miller, 2007)",
+                "start": 228
+              }
+            ]
+          },
+          {
+            "id": "spya-nga4w4",
+            "label": "Conserved laminar gamma/alpha-beta pattern found across species",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 4,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-thnz7b",
+                "quote": "we found these gamma vs alpha/beta oscillations form a specific laminar pattern conserved across four species (mouse, marmoset, macaque, and human) and multiple (14+) cortical areas",
+                "start": 513
+              }
+            ]
+          },
+          {
+            "id": "spya-pcs3fe",
+            "label": "Spatial Computing theory proposed",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 5,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-hcav4k",
+                "quote": "The “Spatial Computing” model builds on this idea by proposing how spatially-structured oscillations can exert flexible executive control over neural computation (Lundqvist et al., 2023)",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-zq2w4b",
+            "label": "Confirmation of Spatial Computing predictions in primates",
+            "dating": {
+              "kind": "words",
+              "phrase": "recently"
+            },
+            "order": 6,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-azz3c8",
+                "quote": "We recently confirmed several key predictions of Spatial Computing theory by examining prefrontal cortex activity in non-human primates during complex cognitive tasks (Chen et al., 2026).",
+                "start": 0
+              }
+            ]
+          }
+        ],
+        "orderConflicts": 0,
+        "generatedAt": "2026-10-03T04:28:48.183Z",
+        "elapsedMs": 28233
+      },
+      "blocks": 92,
+      "words": 6489,
+      "frame": null,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 0,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "datedLabel": 0,
+        "unanchored": 0,
+        "unordered": 0,
+        "unparseablePhrase": 0,
+        "phraseNotInOccurrence": 0,
+        "noDateInPhrase": 2,
+        "noYearFrame": 0,
+        "phraseNotFound": 0,
+        "duplicateOrders": 0,
+        "orderConflicts": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 20353,
+      "outputTokens": 3088,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 28235
+    },
+    "arc": {
+      "arc": {
+        "version": "arc/7",
+        "generator": "claude-sonnet-5",
+        "slug": "analog-cognition-and-consciousness-4-28-26-spya-f03kqf",
+        "entries": [
+          {
+            "range": [
+              "spya-ac3022",
+              "spya-rmrvzr"
+            ],
+            "text": "Before any claim is made, only the authors and their disclosures are settled."
+          },
+          {
+            "range": [
+              "spya-c5z6sr",
+              "spya-d238cn"
+            ],
+            "text": "Synapses alone seem too slow for flexible control; waves are proposed as the missing coordinator."
+          },
+          {
+            "range": [
+              "spya-f6m6jv",
+              "spya-amx5qf"
+            ],
+            "text": "Fixed-function neurons are shown inadequate; multifunctional neurons demand a new coordination story."
+          },
+          {
+            "range": [
+              "spya-v0gbwq",
+              "spya-f59f0p"
+            ],
+            "text": "Mixed selectivity demands fast, flexible routing; oscillations and ephaptic coupling emerge as candidate mechanisms."
+          },
+          {
+            "range": [
+              "spya-qck2sw",
+              "spya-qsz9ur"
+            ],
+            "text": "With oscillations as candidates, Spatial Computing spells out how alpha/beta stencils shape gamma spiking into mixed selectivity and subspaces."
+          },
+          {
+            "range": [
+              "spya-y09vju",
+              "spya-xf7ap4"
+            ],
+            "text": "Spatial Computing's static stencils now move: traveling waves and their interference are proposed as actual computation."
+          },
+          {
+            "range": [
+              "spya-uvev07",
+              "spya-sq6h79"
+            ],
+            "text": "Anesthesia's wave disruption extends the case; set against rival theories, waves, not circuits, are left organizing consciousness."
+          }
+        ],
+        "sourceHash": "c2a9e49f22c40fac.181e19d862003db1.54f9262f1f26a7d7"
+      },
+      "model": "claude-sonnet-5",
+      "parts": [
+        {
+          "id": "n0002",
+          "gist": "Credits the authors and MIT affiliation, providing contact information and conflict-of-interest disclosures for this cognition and consciousness proposal.",
+          "depth": 1,
+          "range": [
+            "spya-ac3022",
+            "spya-rmrvzr"
+          ],
+          "title": "Authorship and Disclosures",
+          "parent": "n0001",
+          "children": [
+            "n0003",
+            "n0007"
+          ],
+          "question": "Who are the authors and what is their institutional affiliation?"
+        },
+        {
+          "id": "n0014",
+          "gist": "Proposes that brain waves, interacting bidirectionally with neural spiking, provide flexible executive control underlying cognition and unified consciousness.",
+          "depth": 1,
+          "range": [
+            "spya-c5z6sr",
+            "spya-d238cn"
+          ],
+          "title": "Waves as Executive Control",
+          "parent": "n0001",
+          "children": [
+            "n0015",
+            "n0016"
+          ],
+          "question": "How can brain-wide waves implement flexible executive control over spiking neurons?",
+          "sourceHeading": "Abstract"
+        },
+        {
+          "id": "n0017",
+          "gist": "Traces the shift from classical connectionist models, where neurons have fixed specialized functions, to evidence necessitating flexible top-down control mechanisms.",
+          "depth": 1,
+          "range": [
+            "spya-f6m6jv",
+            "spya-amx5qf"
+          ],
+          "title": "From Connectionism to Flexible Control",
+          "parent": "n0001",
+          "children": [
+            "n0018",
+            "n0023"
+          ],
+          "question": "Why can't traditional synaptic connectionist models account for flexible cognition?"
+        },
+        {
+          "id": "n0029",
+          "gist": "Shows that multifunctional, mixed-selectivity neurons require a flexible routing mechanism beyond synaptic weights, pointing to oscillations and ephaptic coupling as candidate controllers.",
+          "depth": 1,
+          "range": [
+            "spya-v0gbwq",
+            "spya-f59f0p"
+          ],
+          "title": "Mixed Selectivity and Oscillatory Coordination",
+          "parent": "n0001",
+          "children": [
+            "n0030",
+            "n0038",
+            "n0041"
+          ],
+          "question": "How can flexible neural routing be achieved without reassigning synaptic connections?"
+        },
+        {
+          "id": "n0046",
+          "gist": "Proposes that spatially-patterned alpha/beta oscillations suppress gamma-driven spiking in a push-pull dynamic, flexibly routing information and explaining mixed selectivity and subspace coding.",
+          "depth": 1,
+          "range": [
+            "spya-qck2sw",
+            "spya-qsz9ur"
+          ],
+          "title": "Spatial Computing Theory",
+          "parent": "n0001",
+          "children": [
+            "n0047",
+            "n0054",
+            "n0057",
+            "n0061"
+          ],
+          "question": "How do oscillatory dynamics implement flexible executive control over which neurons spike?",
+          "sourceHeading": "Spatial Computing: A theory of oscillatory control of neural information"
+        },
+        {
+          "id": "n0069",
+          "gist": "Argues traveling alpha/beta waves drive transitions between neural coding states, and that wave interference performs efficient analog computation generating new brain activity patterns.",
+          "depth": 1,
+          "range": [
+            "spya-y09vju",
+            "spya-xf7ap4"
+          ],
+          "title": "Traveling Waves and Analog Computation",
+          "parent": "n0001",
+          "children": [
+            "n0070",
+            "n0078",
+            "n0083"
+          ],
+          "question": "How do waves moving across cortex transform neural representations and perform computation?"
+        },
+        {
+          "id": "n0092",
+          "gist": "Argues altered wave dynamics explain unconsciousness under anesthesia, positions the hybrid synapse/wave framework against rival theories, and concludes wave-based computation efficiently underlies consciousness.",
+          "depth": 1,
+          "range": [
+            "spya-uvev07",
+            "spya-sq6h79"
+          ],
+          "title": "Consciousness, Unconsciousness, and Rival Theories",
+          "parent": "n0001",
+          "children": [
+            "n0093",
+            "n0098",
+            "n0105",
+            "n0111",
+            "n0116"
+          ],
+          "question": "What does this wave-based framework imply for unconsciousness and existing theories of consciousness?"
+        }
+      ],
+      "blocks": 92,
+      "inputTokens": 19897,
+      "outputTokens": 1265,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 11994
+    }
+  }
+}

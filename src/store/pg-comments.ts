@@ -33,6 +33,7 @@ import { and, asc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm"
 
 import {
   COMMENT_SWEPT,
+  ColourNeedsWords,
   CommentIdTaken,
   NotAnExplanation,
   type AnswerPatch,
@@ -45,7 +46,7 @@ import { comments as commentsTable } from "../db/schema.js";
 import { isSpideryarnId, mintUniqueId } from "../ids.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
-import type { Comment } from "../types.js";
+import type { Comment, HighlightColour } from "../types.js";
 import { MissingAttempt, type CommentStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
@@ -108,6 +109,9 @@ function toComment(row: typeof commentsTable.$inferSelect): Comment {
        so. See `Comment.valence` in src/types.ts. */
     ...(row.criterionId === null ? {} : { criterionId: row.criterionId }),
     ...(row.valence === null ? {} : { valence: row.valence }),
+    /* `comments_colour` keeps the column to the four names, so the cast is a
+       statement of what the database already refuses. */
+    ...(row.colour === null ? {} : { colour: row.colour as HighlightColour }),
     status: row.status as Comment["status"],
     ...(row.answer === null ? {} : { answer: row.answer }),
     ...(row.citations === null ? {} : { citations: row.citations }),
@@ -210,6 +214,7 @@ const rawPgCommentStore: CommentStore = {
          has already refused. */
       criterionId: input.criterionId ?? null,
       valence: input.valence ?? null,
+      colour: input.colour ?? null,
       status: "none",
       answer: null,
       citations: null,
@@ -265,7 +270,11 @@ const rawPgCommentStore: CommentStore = {
            delete a judgement the referee already made. `sameMark` in
            src/comments.ts is the filesystem half of this. */
         stored.criterionId === input.criterionId &&
-        stored.valence === input.valence;
+        stored.valence === input.valence &&
+        /* And the colour, for the same reason: the same id resent with a
+           different colour is a recolour, which has its own operation, not a
+           retry (plan 261003e, review S10). Absent and a named colour differ. */
+        stored.colour === input.colour;
       if (!same) throw new CommentIdTaken(supplied);
       logger.info(
         { slug, id: stored.id, blockId: stored.blockId, repeat: true },
@@ -489,6 +498,44 @@ const rawPgCommentStore: CommentStore = {
       { slug, id, criterionId: mark.criterionId, placed: mark.valence !== null },
       "comment placement edited",
     );
+    return toComment(row);
+  },
+
+  /**
+   * The reader recoloured a highlight, or took its colour away. `colour` and
+   * nothing else — not `updated_at`, which means "the words were edited" and
+   * would make a recolour read as an edit.
+   *
+   * `quote is not null` is in the WHERE, so a whole-block row is refused by the
+   * statement itself rather than by a read beforehand; the follow-up read only
+   * says which refusal it was (404 or 409), exactly as `beginAnswer` does.
+   * `comments_colour_needs_quote` would refuse it as well, but as a constraint
+   * error rather than a sentence the reader can be shown.
+   */
+  async patchColour(slug: string, id: string, colour: HighlightColour | null): Promise<Comment> {
+    const db = getDb();
+    const articleId = await articleIdForOwned(slug);
+    const [row] = await db
+      .update(commentsTable)
+      .set({ colour })
+      .where(
+        and(
+          eq(commentsTable.articleId, articleId),
+          eq(commentsTable.id, id),
+          sql`${commentsTable.quote} is not null`,
+        ),
+      )
+      .returning();
+    if (!row) {
+      const [found] = await db
+        .select({ id: commentsTable.id })
+        .from(commentsTable)
+        .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)));
+      if (!found) throw new NotAnExplanation(id, "missing");
+      throw new ColourNeedsWords(id);
+    }
+    /* The colour name is a fact about the app, not the reader's prose. */
+    logger.info({ slug, id, colour }, "comment colour edited");
     return toComment(row);
   },
 

@@ -74,12 +74,14 @@ import {
   libraryByParam,
   libraryQueryParam,
   libraryShowParam,
+  libraryTagsParam,
   libraryTopicsParam,
   libraryViewParam,
   sortDirParam,
 } from "./params.js";
-import { isArchived, narrowShelf, topicCountsForVisible } from "./shelf-narrow.js";
+import { chosenTopics, isArchived, narrowShelf, tagFacets, topicCountsForVisible, topicMembers } from "./shelf-narrow.js";
 import { ShelfTerms, ShelfTermsLoading } from "./ShelfTerms.js";
+import { ShelfTagFilter } from "./ShelfTagFilter.js";
 import { shelfKeyOf, useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
@@ -146,6 +148,8 @@ export function Library({
   const [show, setShow] = useQueryState("show", libraryShowParam);
   /* The topics row and the archive switch — docs/project/shelf-terms.md. */
   const [requestedTopics, setTopics] = useQueryState("topics", libraryTopicsParam);
+  /* The reader's own tags, in their own row and their own key — plan 261003d. */
+  const [requestedTags, setTags] = useQueryState("tags", libraryTagsParam);
   const [archivedOn, setArchivedOn] = useQueryState("archived", libraryArchivedParam);
   /* Include public — what other readers have shared, in its own section under
      the list. ShelfPublicSection.tsx; plan 261002b § Part A. */
@@ -287,9 +291,26 @@ export function Library({
      `useMemo` because this runs on every keystroke over every article, and
      because the identity of the array it returns is what decides whether the
      whole table is rebuilt. */
+  /* **The reader's own tags as facets**, from the entries in scope (each
+     carries its tags), so they need no request and are never "loading". A
+     chosen tag no entry in scope carries is ignored, never dropped from the
+     URL: an edit in flight or a list still loading must not eat a filter
+     (plan 261003d, Sol 3). Keyed on the joined string, for the render-loop
+     reason `useChosenTopics` gives. */
+  const tagList = useMemo(() => tagFacets(scope ?? []), [scope]);
+  const askedTags = requestedTags.join(",");
+  const tagsChosen = useMemo(
+    () => chosenTopics(askedTags ? askedTags.split(",") : [], scope ? tagList : null),
+    [askedTags, scope, tagList],
+  );
+  /* Both rows' chosen sets, one AND (shelf-narrow.ts § `withTopics`). */
+  const chosenSets = useMemo(
+    () => [...members, ...topicMembers(tagList, tagsChosen)],
+    [members, tagList, tagsChosen],
+  );
   const rows = useMemo(
-    () => (scope ? narrowShelf(scope, { query, unread: show === "unread", topics: members }) : null),
-    [scope, query, show, members],
+    () => (scope ? narrowShelf(scope, { query, unread: show === "unread", topics: chosenSets }) : null),
+    [scope, query, show, chosenSets],
   );
   /* The expensive search has already run in the row memo. Count from its
      result instead of repeating it over every article on each keypress. */
@@ -300,6 +321,19 @@ export function Library({
         terms.data?.terms ?? [],
       ),
     [rows, terms.data?.terms],
+  );
+  const tagCounts = useMemo(
+    () => topicCountsForVisible((rows ?? []).map((entry) => entry.slug), tagList),
+    [rows, tagList],
+  );
+  const toggleTag = useCallback(
+    (key: string) =>
+      pushView(() => {
+        const was = requestedTags;
+        const next = was.includes(key) ? was.filter((k) => k !== key) : [...was, key];
+        void setTags(next.length ? next : null);
+      }),
+    [pushView, requestedTags, setTags],
   );
 
   /* Toggled against what the URL asks for rather than what applies, so a key
@@ -434,7 +468,8 @@ export function Library({
   const showing = rows?.length ?? 0;
   const archivedShowing = useMemo(() => (rows ?? []).filter(isArchived).length, [rows]);
   // Said only when something is actually being hidden. "12 of 12" is noise.
-  const narrowed = (searching || show === "unread" || topics.length > 0) && showing !== total;
+  const narrowed =
+    (searching || show === "unread" || topics.length > 0 || tagsChosen.length > 0) && showing !== total;
 
   /* The slugs the Unread chip lets through, whatever the search box says — the
      passages are the answer to the search, so narrowing them by the search
@@ -734,6 +769,16 @@ export function Library({
           result of everything above it. Only once there is a shelf and an
           answer: a failed request draws nothing (useShelfTerms.ts), and
           while one is out a spinner holds the row's place. */}
+      {/* The reader's own tags, above the topics — ShelfTagFilter.tsx. */}
+      {total > 0 && (
+        <ShelfTagFilter
+          facets={tagList}
+          counts={tagCounts}
+          selected={tagsChosen}
+          onToggle={toggleTag}
+          onClear={() => pushView(() => void setTags(null))}
+        />
+      )}
       {total > 0 && !terms.data && terms.loading && <ShelfTermsLoading articleCount={total} />}
       {total > 0 && terms.data && (
         <ShelfTerms
@@ -778,7 +823,7 @@ export function Library({
       )}
       {showing === 0 && total > 0 && (
         <p className="tw:text-sm tw:text-muted-foreground">
-          {nothingLeft(query, show, topics.length > 0)}
+          {nothingLeft(query, show, topics.length > 0, tagsChosen.length > 0)}
         </p>
       )}
 
@@ -992,13 +1037,14 @@ const ADD_URL_ID = "add-url";
  * otherwise pressing Unread on a shelf you have read all of looks like the
  * search box has broken.
  */
-function nothingLeft(query: string, show: ShelfFilter, topics: boolean): string {
+function nothingLeft(query: string, show: ShelfFilter, topics: boolean, tags: boolean): string {
   const q = query.trim();
-  /* Named first when it is on: of the three narrowings, a topic chosen from a
+  /* Named first when it is on: of the narrowings, a topic or tag chosen from a
      link is the one a reader is least likely to remember is there. */
-  if (topics) {
+  if (topics || tags) {
     if (q || show === "unread") return "Nothing on the shelf matches everything chosen above.";
-    return "No article on the shelf has every topic chosen.";
+    const what = topics && tags ? "tag and topic" : tags ? "tag" : "topic";
+    return `No article on the shelf has every ${what} chosen.`;
   }
   if (q && show === "unread") return `No unopened article matches “${q}”.`;
   if (q) return `No article's title, author or blurb matches “${q}”.`;

@@ -566,6 +566,44 @@ matters, the answer is a table of events, not another column.
 the server from inside `GET /api/article/:slug`. A GET that writes is a GET that a prefetch, a retry
 or a health check inflates without anybody deciding to.
 
+### Your own tags
+
+> In non-logged-in homepage shelf, add a way for me to easily add/edit my own tags to an article
+> (with a nice combo-dropdown that enables me to type and/or select). These tags should be part of
+> the topics-pill faceted-filtering interface for the Library shelf so I can filter by one or more
+> etc. Also add this near the top of the article's Metadata page, reusing machinery.
+>
+> — Greg, 2026-10-01 (report `spya-qmev0s`)
+
+A tag is a short label a reader puts on one of their own articles. **Private**: only the owner's
+shelf listing and Metadata answer carry them; no public route does. Plan, decisions and what was
+deferred: [261003d](../plans/261003d-your-own-tags-on-articles-on-the-shelf-and-the-metadata-page.md).
+
+- **Stored lowercase, so a tag is its own identity.** `AI` and `ai` are one tag. Keeping the reader's
+  case would need a vocabulary table to stay one spelling per reader when two first adds race; the
+  topic pills are lowercase anyway. The spelling rule (trimmed, inner whitespace collapsed, NFC, 1–40
+  characters, no comma, no control character) is [`src/tags.ts`](../../src/tags.ts) § `normaliseTag`,
+  and the same rule is a CHECK on `article_tags.tag`.
+- **One table, `article_tags`**, keyed `(article_id, tag)`, cascading with the article, no
+  `owner_id` — ownership comes through the article, as for every table under `articles`. Reader
+  state, so on `articles` and not on a revision, for § Shelf state's reason.
+- **One write, additive**: `PATCH /api/library/:slug/tags { add?, remove? }` answers the tags after.
+  Two tabs cannot clobber each other the way a replace-the-set PUT would, and the command bar's
+  later "add a tag of X" is `{ add: [X] }` through the same client function
+  ([`src/web/article-tags.ts`](../../src/web/article-tags.ts)). The edit locks the article row, so
+  the 30-per-article cap holds under a race —
+  [`tests/store-tags-pg.test.ts`](../../tests/store-tags-pg.test.ts) has the test that goes red
+  without the lock, and why the first two versions of it did not.
+- **One editor**, [`TagEditor.tsx`](../../src/web/TagEditor.tsx): a type-or-select combobox over the
+  tags the reader already uses (`GET /api/library/tags`, fetched on first focus). On a card or table
+  row it opens from a small Tag button beside the chips
+  ([`ShelfTags.tsx`](../../src/web/ShelfTags.tsx)) — not in the action row, whose touch machinery a
+  sixth button would have to join; on Metadata it sits under the title. No optimistic update: the
+  chips are the server's last answer.
+- **A Tags row above Topics** ([`ShelfTagFilter.tsx`](../../src/web/ShelfTagFilter.tsx)), built on the
+  client from the entries' own tags and narrowing by the Topics row's rules — AND across every chip in
+  both rows, one count — [shelf-terms.md § Your own tags, in the row above](shelf-terms.md#your-own-tags-in-the-row-above).
+
 ### The tooltip
 
 *The cards view's.* The table has a card of its own, on each title, built differently —

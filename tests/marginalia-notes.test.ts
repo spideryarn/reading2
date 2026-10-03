@@ -318,6 +318,22 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
     expect(here[0]?.kind === "comment" && here[0].items.map(entryId)).toEqual(["m1"]);
   });
 
+  /* Plan 261003e, review S9: a wordless highlight has nothing to say in the
+     margin, as a bare bookmark has not — but a coloured comment with words, or
+     a coloured one that asked the AI, still does. */
+  it("leaves a wordless highlight out, and keeps coloured comments that say something", () => {
+    const comments = [
+      { id: "h1", blockId: "spya-aaaaa2", createdAt: "t", status: "none", colour: "yellow" },
+      { id: "h2", blockId: "spya-aaaaa2", createdAt: "t", body: "why", status: "none", colour: "green" },
+      { id: "h3", blockId: "spya-aaaaa2", createdAt: "t", status: "none", colour: "pink", threadId: "t7" },
+    ] as unknown as MarginComment[];
+    const here = marginaliaNotes(null, quoted, null, { comments }).get("spya-aaaaa2") ?? [];
+    expect(here[0]?.kind === "comment" && here[0].items.map((e) => [e.as, entryId(e)])).toEqual([
+      ["comment", "h2"],
+      ["comment-ai", "h3"],
+    ]);
+  });
+
   /* *Save & ask* with an empty box is allowed (AnnotateDialog): no words, no
      answer, but a conversation. It is not a bare bookmark. GPT Sol, plan 261002j. */
   it("keeps a wordless comment that asked the AI", () => {

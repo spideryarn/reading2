@@ -1,0 +1,1250 @@
+diff --git a/docs/plans/261003d-paperwork-in-every-whole-piece-mode-plan-review-prompt.md b/docs/plans/261003d-paperwork-in-every-whole-piece-mode-plan-review-prompt.md
+new file mode 100644
+index 000000000..4c92fcd50
+--- /dev/null
++++ b/docs/plans/261003d-paperwork-in-every-whole-piece-mode-plan-review-prompt.md
+@@ -0,0 +1,13 @@
++You are reviewing a plan before it is built, in the repo at the current directory (Spideryarn, an AI-assisted reading app). Read-only: do not edit files.
++
++The plan: docs/plans/261003d-paperwork-in-every-whole-piece-mode.md
++Prior work it extends (read these): src/paperwork.ts; docs/plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md; docs/project/prompting-guide.md (esp. § Measuring a prompt change); tests/plain-words-coverage.test.ts (the template for the proposed coverage test).
++The prompts it changes: src/sketch.ts, src/illustrated.ts, src/faq.ts, src/quiz.ts, src/ideas.ts, src/quotes.ts, src/glossary.ts, src/timeline.ts, src/arc.ts. Version stamps and how a bump shows to readers: grep for PROMPT_VERSION / *_VERSION in those files and their isStale / outdated logic in src/store/pg.ts.
++
++Please check, with file:line evidence:
++1. Mode choice: is any included mode wrong to include (paperwork is its legitimate content), or any excluded one wrong to exclude? Check the exclusion reasons against the code.
++2. The two new kinds' wording ("pick", "part"): will they cause collateral loss of real content (e.g. a glossary person who is also argued with in the body; a timeline event the body narrates that also appears in a funding line; quiz/faq), or conflict with each prompt's existing rules? Is "part" right for arc given arc's own first/last-part rules, and its output schema?
++3. Stamps: is bumping each right, including quiz given its own note at src/quiz.ts ~585? Does any bump have a cost the plan misses (e.g. regenerating something automatically and spending money, an illustrated/sketch dependency, tests pinning a value, client bundles comparing a version)?
++4. The coverage test design: would detecting articleWithIds( / articleText( by syntax find the right files? What would it miss?
++5. The measurement: is the block-citation screen sound per mode (does each mode's output actually carry block ids — check quotes, glossary, sketch, ideas, faq, quiz, timeline, arc output types)? Is the arm design enough? Anything cheaper and just as convincing?
++Rank findings P0/P1/P2, concise. End with a one-line verdict.
+diff --git a/docs/plans/261003d-paperwork-in-every-whole-piece-mode-plan-review-sol.md b/docs/plans/261003d-paperwork-in-every-whole-piece-mode-plan-review-sol.md
+new file mode 100644
+index 000000000..a4ea129ad
+--- /dev/null
++++ b/docs/plans/261003d-paperwork-in-every-whole-piece-mode-plan-review-sol.md
+@@ -0,0 +1,32 @@
++No P0.
++
++### P1
++
++- **Debate is wrongly excluded.** Its identity search and claim search are separate calls: pass A receives only title/byline metadata, while pass B independently receives the full article and asks the model to “pick a few claims” ([src/debate.ts:1894](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/debate.ts:1894), [src/debate.ts:1916](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/debate.ts:1916), [src/debate.ts:1279](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/debate.ts:1279)). Apply `pick` only to `CLAIMS_SYSTEM`; it cannot interfere with identity search. “Low risk” and a pinned stamp are not principled exemptions. This would require `debate/5→6` and updating its literal assertion ([tests/debate.test.ts:1302](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/tests/debate.test.ts:1302)). The other exclusions are defensible: citations, referee work, asked modes, cross-references/title claims, and labels each legitimately consume paperwork.
++
++- **Illustrated can still repaint an old, paperwork-bearing Sketch.** Its prompt requires one plate for every supplied scene ([src/illustrated.ts:819](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/illustrated.ts:819)), but an older Sketch is merely `outdated`, not source-stale. Illustrated’s readiness check ignores `outdated` ([src/web/useIllustrated.ts:456](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/web/useIllustrated.ts:456)), and the server refuses only a source-stale Sketch ([src/pipeline.ts:4311](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/pipeline.ts:4311)). Thus “Paint again” can combine “leave paperwork out” with “paint every old scene.” Require a current Sketch, offer redraw-then-paint when it is outdated, or explicitly define how an inherited paperwork scene is handled. The eval must test this migration path, not only Illustrated paired with a freshly generated same-arm Sketch.
++
++- **The Arc stamp has an unacknowledged automatic cost.** Contrary to “Arc is regenerated only when the pipeline runs,” opening any owned article with an older Arc automatically queues an unforced Arc job ([src/web/useArc.ts:163](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/web/useArc.ts:163)). Its own freshness check also rejects a version mismatch ([src/arc.ts:283](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/arc.ts:283)). So `arc/6→7` spends money automatically, once per affected article when its owner next opens it. The bump is semantically right, but the plan must acknowledge and accept that rollout.
++
++- **The block-id screen is not sound as one generic “item” test.** It is sound for FAQ, Quiz, Ideas and Timeline, whose items require anchored passages/occurrences, and for stored Quotes, whose `blockId` is derived by code ([src/types.ts:4765](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/types.ts:4765), [src/types.ts:4583](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/types.ts:4583), [src/types.ts:859](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/types.ts:859), [src/types.ts:3941](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/types.ts:3941), [src/types.ts:1038](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/types.ts:1038)). But:
++
++  - Sketch nodes have optional blocks, while captions, labels, regions and edges have none ([src/sketch-scene.ts:124](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/sketch-scene.ts:124)).
++  - Illustrated vignettes are anchored, but plate titles and the image composition prompt are not ([src/illustrated-plate.ts:298](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/illustrated-plate.ts:298), [src/illustrated-plate.ts:367](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/illustrated-plate.ts:367)).
++  - Glossary entries do have computed `blocks`; saying they cite none throws away the strongest available screen ([src/types.ts:598](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/types.ts:598), [src/glossary.ts:693](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/glossary.ts:693)).
++  - Arc entries have a block range, so a paperwork-only part can be classified deterministically rather than by regex ([src/types.ts:313](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/types.ts:313)).
++
++  Define a per-mode extractor and separately read unanchored prose. Mark only blocks that are wholly paperwork; the shared rule expressly makes mixed funding/method/limit passages content ([src/paperwork.ts:89](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/paperwork.ts:89)).
++
++### P2
++
++- **`pick` is broadly correct, but “Take nothing from it” is unnecessarily absolute.** The by-role clause and the explicit “someone the content also names” sentence protect the examples in the question: a body-discussed person remains a glossary candidate; a body-narrated event remains a timeline event; funding used as method/evidence/limit is content. Still, the wording could prevent using a bibliography’s full name or alias to disambiguate a person independently selected from the body. Safer: “Choose no item solely from paperwork; anchor every selected item in content,” while retaining the present FAQ/Quiz/evidence prohibition.
++
++- **`part` is the right Arc kind and its schema can carry it, but reconcile the exceptions explicitly.** Arc requires one string per physical part and pairs it by index, so a label such as “The references.” fits ([src/arc.ts:105](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/arc.ts:105), [src/arc.ts:206](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/arc.ts:206), [src/arc.ts:309](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/arc.ts:309)). But it otherwise requires every sentence to be relational, bans part titles, and gives the physical first/last parts special jobs ([src/arc.ts:129](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/arc.ts:129), [src/arc.ts:133](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/arc.ts:133), [src/arc.ts:146](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/arc.ts:146)). State that the label is an exception to all three and test leading and trailing paperwork parts.
++
++- **The coverage test is a useful default, not a complete detector.** Bare-identifier AST matching ([tests/plain-words-coverage.test.ts:52](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/tests/plain-words-coverage.test.ts:52)) misses renamed imports, member calls, wrappers, pre-rendered article strings, and custom renderers such as Structure/Labels. It also catches non-prompt uses such as `crossrefs-fingerprint`. Keep it, but add a known prompt-files-without-a-call list like the plain-words test and document false positives as well as false negatives.
++
++- **All nine proposed bumps are semantically justified, including Quiz.** This changes what may be a question, exactly the threshold its comment sets ([src/quiz.ts:585](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/quiz.ts:585)). Implementation must bump Sketch in `sketch-scene.ts`, Illustrated in `illustrated-plate.ts`, and Arc in `arc-version.ts`, because those import-free constants are also client-facing ([src/sketch-scene.ts:57](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/sketch-scene.ts:57), [src/illustrated-plate.ts:132](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/illustrated-plate.ts:132), [src/arc-version.ts:1](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/arc-version.ts:1)). Update Quiz’s literal test ([tests/quiz.test.ts:140](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/tests/quiz.test.ts:140)). Also note that Illustrated’s version is part of its input fingerprint, so the bump reports existing plates stale as well as outdated ([src/illustrated.ts:246](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/illustrated.ts:246)); regenerating Quotes can break saved quote links unless exactly the same words are selected again ([src/quotes.ts:1642](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/quotes.ts:1642)).
++
++- **Arm design is adequate but the judging gate is too narrow.** One `after` draw is consistent with the guide; add `after-2` only on a close result. However, judging only mode/article cells with baseline paperwork cannot detect collateral loss in clean cells. Blind-read at least one representative pair per mode plus every baseline leak and the scaling boundary. For Illustrated, inject its supported stub painter so only the production brief call is paid for ([src/illustrated.ts:1102](/home/greg/code/spideryarn2/.claude/worktrees/fbk930hy-paperwork-all-modes/src/illustrated.ts:1102)); that is cheaper and equally probative for this prompt change.
++
++**Verdict: revise before build—chiefly add Debate, fix the Illustrated dependency, acknowledge Arc’s automatic spend, and make the measurement mode-specific.**
+\ No newline at end of file
+diff --git a/docs/plans/261003d-paperwork-in-every-whole-piece-mode.md b/docs/plans/261003d-paperwork-in-every-whole-piece-mode.md
+new file mode 100644
+index 000000000..827011b15
+--- /dev/null
++++ b/docs/plans/261003d-paperwork-in-every-whole-piece-mode.md
+@@ -0,0 +1,241 @@
++# The paperwork rule in every mode that writes from the whole piece
++
++The second half of report `spya-k930hy` (Greg, admin; `scripts/feedback-reporter.ts` exited 0),
++queue entry `qi-qczrxnye`:
++
++> The structure, summary, tweet thread, and other such modes don't really need to include summaries
++> of stuff like acknowledgements or conflicts of interest or affiliations or, you know, stuff like
++> that that isn't really the content of the paper.
++>
++> — Greg, 2026-10-01, [SPIDERYARN-READING2-8M](https://greg-detre.sentry.io/issues/SPIDERYARN-READING2-8M)
++
++The first half shipped as
++[261001p](261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md): one shared section,
++`paperwork(kind)` in `src/paperwork.ts`, in Summary, Tweets and both structure-step prompts, and the
++takeaway lean. [261003c](261003c-summary-and-structure-skip-the-front-matter.md) then widened the
++list to the title block and the reference list. 261001p's § Deferred named the rest: *"Sketch,
++FAQ, Quiz, Ideas, Trajectory, Debate, Illustrated … the shared `paperwork()` makes each of them a
++one-line import plus its own measurement."* This is that. Prompt changes, so
++[prompting-guide.md](../project/prompting-guide.md) governs.
++
++## Which modes, and why those
++
++A survey of every prompt that is handed the whole article (`articleWithIds` or `articleText`). What
++reaches the model today: `blocks.filter(isBodyEvidence)` removes only blocks stage 3 marked
++`supplement` (detected notes and bibliography). The title block, the authors, affiliations,
++acknowledgements, funding, disclosures, ethics and data statements all reach every one of them.
++
++| mode | what it writes | how paperwork would leak | kind |
++|---|---|---|---|
++| Sketch (`src/sketch.ts`) | the argument as boxes and arrows | an "Authors" or "Funding" box; today's line even allows one, *"draw it once, muted"* | `summary` |
++| Illustrated (`src/illustrated.ts`) | the Sketch, painted | follows the sketch, but sees the article too | `summary` |
++| FAQ (`src/faq.ts`) | the questions a careful reader asks, answered from the piece | "Who funded this study?" | `pick` (new) |
++| Quiz (`src/quiz.ts`) | recall questions | "Where do the authors work?" | `pick` |
++| Ideas (`src/ideas.ts`) | the propositions the piece assumes or introduces | a disclosure or ethics approval as an "assumed" idea | `pick` |
++| Quotes (`src/quotes.ts`) | the lines worth keeping | a warm line from the acknowledgements | `pick` |
++| Glossary (`src/glossary.ts`) | terms and people the reader needs | funders, institutions, thanked people as entries | `pick` |
++| Timeline (`src/timeline.ts`) | dates the story narrates | received/accepted dates, a grant's years. Its own *"EXCLUDE the piece's own dates"* covers publication, not the rest | `pick` |
++| Arc (`src/arc.ts`) | one sentence per part, shown in Structure › Expanded | a part that is only References or Acknowledgements must get a sentence, and gets a summary of it | `part` (new) |
++
++**Left out, with the reason** (each also listed in the coverage test below):
++
++- **The paperwork is the content:** Citations (the reference list is its subject), the referee
++  candidates prompt (needs the authors and affiliations), referee criteria (ethics, data
++  availability and conflicts are what a reviewer checks), and the metadata readers
++  (`paper-metadata`, `pdf-authors`, `pdf-frontmatter`, `citation-*`).
++- **Asked modes, where the reader decides:** Chat, Remember, Live, Explain, Search. A reader may ask
++  "who funded this?", and the answer is in the paperwork.
++- **Low risk, not worth a stamp:** Skim (sees only the quotes, ideas and outline, never the
++  article, so it inherits from Quotes and Ideas), Debate (its claims search; the identity half
++  needs title and authors, and the stamp is pinned in two tests), Cross-references, Labels,
++  referee claims (the title is a claim there). Named here so the next reader does not have to
++  re-derive it.
++
++## The change
++
++### 1. Two more kinds in `paperwork(kind)`
++
++Today there are `"summary"` (leave it out) and `"structure"` (keep the node, label it). Question-
++and item-writing prompts read "do not summarise it" as not about them, so:
++
++- **`"pick"`** — *Take nothing from it: no question, answer, idea, quote, term, person, organisation
++  or date comes from a passage that is only paperwork. A person or organisation who appears only
++  there is not part of the piece.*
++- **`"part"`** — for Arc: *A part that is only paperwork still gets its sentence, because there is
++  one per part: a short plain label of what it is ("The references."), with no claim. The rules
++  for the first and last part apply to the first and last parts that are content.*
++
++The list and the by-role clause stay shared; only the kind's sentence differs, as before.
++
++### 2. Each prompt interpolates it beside `plainWords(...)`
++
++One line per prompt, and three existing lines reconciled so the prompt gives one rule, not two:
++
++- **Sketch**: *"If the article has a part that is apparatus — notes, bibliography,
++  acknowledgements — leave it out or draw it once, muted, at the bottom"* becomes *"…notes, and the
++  paperwork below — leave it out."* The muted box was the leak.
++- **Timeline**: the piece's own dates rule stays (it is about the author's reporting, which is not
++  paperwork); the paperwork section covers received/accepted/grant dates.
++- **Glossary**: *"the article's own title, or the author's name"* stays; the section adds the rest.
++
++### 3. A coverage test, so the next mode gets it by default
++
++`tests/paperwork-coverage.test.ts`, the shape of `tests/plain-words-coverage.test.ts`: every
++`src/` file that hands a model the whole article (`articleWithIds(` or `articleText(`, found by
++syntax) calls `paperwork(` or is in `PAPERWORK_EXEMPT` in `src/paperwork.ts` with its reason. Seen
++red first, by deleting one interpolation. And a line in [mode.md](../project/mode.md)'s checklist.
++
++**What it cannot see:** a file with two prompts passes if either carries it (Debate's would, if it
++were not exempt), and a prompt that reads the article some other way (the structure step numbers
++its own blocks) is invisible. A default, not a proof — the same limits plain-words' test states.
++
++### 4. Stamps
++
++Bump each prompt stamp the text reaches, so a stored output reads *outdated* and Metadata offers to
++write it again, as 261001p did for Tweets: `sketch/4→5`, `illustrated/5→6`, `faq/5→6`,
++`quiz/6→7`, `ideas/4→5`, `quotes/8→9`, `glossary/7→8`, `timeline/4→5`, `arc/6→7`. Nothing is
++rebuilt; each stored output gets a *Write it again* button. Arc is regenerated only when the
++pipeline runs (stage 5b), so new articles and re-runs.
++
++**Quiz is the one judgement call.** Its own note says a bump is for when *what a question is*
++changes, not for a wording fix, because the button lands in front of every reader with a quiz.
++This does change what a question may be about, so it bumps; the alternative is that no stored quiz
++ever gets the rule.
++
++**The simpler option passed over:** paste the rule only into the three Greg's report and the
++deferral named (Sketch, FAQ, Quiz). The leak is the same in the other six, and the coverage test is
++what stops a tenth mode needing its own report.
++
++**The bigger option passed over, still deferred:** mark paperwork blocks `supplement` at stage 3,
++so no model sees them (261001p § Deferred). Deterministic and total, but it changes what counts as
++body for every stage and every asked mode, which is where readers legitimately want the paperwork.
++
++## Measuring it
++
++prompting-guide.md § Measuring a prompt change, with a sharper screen than 261001p had, because
++most of these modes cite blocks:
++
++- **Articles:** the four local papers 261001p used (`entropy-24-00930-spya-pywwkq`,
++  `source-spya-f550ta`, `analog-cognition-and-consciousness-4-28-26-spya-f03kqf`, and
++  `scaling-hypothesis` as the boundary case, where OpenAI's funding is argument).
++- **Paperwork blocks marked by hand**, per article, from the local blocks, in the harness (as 261003c
++  marked each abstract).
++- **Arms:** `before`, `before-2` (the control) on the parent commit; `after` on this one; an
++  `after-2` if the first pair is close.
++- **What runs:** production's `generate*` for each of the nine, no profile, `power: "standard"`.
++  An extension of `evals/paperwork/run.ts` (`--set modes`), recording each prompt source's hash.
++- **The screen:** for each output item, its cited blocks; an item whose blocks are *all* paperwork
++  is a paperwork item. Count per mode per arm, and item counts overall (a large drop would mean the
++  rule ate content). For Glossary and Arc, which cite no blocks, the 261001p regex, every hit read.
++- **Blind judge** only where the `before` arms show paperwork items: pairs per mode and article,
++  shuffled with `blindCoin`, asking which spends less on paperwork and whether either lost or bent
++  something of the piece's content. Against the control.
++- **The boundary:** on `scaling-hypothesis`, the funding-as-argument passages must still appear.
++- **Read the outputs anyway.** Budget about $15.
++
++## What GPT Sol's plan review changed
++
++[261003d-…-plan-review-sol.md](261003d-paperwork-in-every-whole-piece-mode-plan-review-sol.md): no
++P0, four P1s, all taken. The sections above are the plan as first written; the code differs here:
++
++- **P1, Debate is in.** Its identity pass sees only the title and byline, so the rule cannot hurt
++  it; its claims pass (`CLAIMS_SYSTEM`) reads the whole article and picks claims, so it takes
++  `paperwork("pick")`. `debate/5 → debate/6`, and its pinned test moves. **Not measured**: each run
++  is a paid web search per claim, and the text it gains is the same `pick` section measured on six
++  other modes. Said here rather than implied.
++- **P1, Illustrated and an older Sketch.** Paint again on a Sketch that is only *outdated* still
++  paints every scene, so a muted paperwork box from `sketch/4` could reach the plate. Rather than
++  refusing an outdated Sketch (a product change), Illustrated's per-node instruction now says a
++  node that is only paperwork, *"which an older sketch may still have, gets nothing: leave it out of
++  the picture"*. Nothing in the code requires a vignette per node, so leaving one out is valid.
++- **P1, Arc's bump spends money on its own.** The plan said Arc is rewritten only when the pipeline
++  runs. Wrong: an owner opening an article whose arc is older queues a new one
++  (`src/web/useArc.ts`). So `arc/7` costs one Sonnet call per article, once, when its owner next
++  opens it. Accepted: Arc is the one mode where the `before` arm showed paperwork in the output
++  (below), and this is how every earlier Arc bump reached readers. Said in `src/arc.ts`'s history.
++- **P1, a screen per mode.** The harness reads each mode's own anchors — FAQ's passages, Quiz's
++  evidence, Ideas' and Timeline's occurrences, a quote's block, a glossary entry's blocks, a vignette's
++  block, a sketch node's block, an arc entry's range — and puts the unanchored prose (captions, plate
++  titles, the image prompt) through the word screen.
++- **P2s taken:** `pick` says *choose nothing from it alone; every item must come from the content*
++  rather than an absolute *take nothing*; `part` named the three Arc rules it was an exception to
++  (relational, no part titles, first/last part) — and was then replaced by the measurement, which
++  found the label broke Arc's sentence count (Ledger); the coverage test's header names its false
++  positives too; the client-facing stamps live in `sketch-scene.ts`, `illustrated-plate.ts` and
++  `arc-version.ts`, and moved there. Illustrated's version is in its input fingerprint, so its plates
++  read stale as well as outdated — the same as every Illustrated bump.
++- **Noted, not changed:** writing Quotes again can break a saved link to a quote unless the same
++  words are chosen again. That is true of every *Write them again*, and the reader chooses it.
++
++## Ledger
++
++Four papers, the nine modes through production's own `generate*` (no profile, standard power),
++results under `evals/results/paperwork-modes/`, harness `evals/paperwork/modes.ts`. Arms: `before`
++and `before-2` on the old prompts (same prompt hashes, checked); `after` on the first wording;
++`after-2` on the final one; `after-3`, one paper, to test a failure (below). Plus targeted
++repeats of Arc and Quiz from scratch copies of the old and new prompt files, since removed. About
++$12 in all.
++
++### What the old prompts did
++
++**On these papers, eight of the nine modes already left the paperwork out.** The block screen found
++no item anchored only in paperwork in Sketch, Illustrated, FAQ, Quiz, Ideas, Quotes, Glossary or
++Timeline, in either old arm, and every word-screen hit read as body content. The one exception the
++judges found was Timeline on `scaling-hypothesis`, spending two events on the essay's own editor's
++note and follow-up post. So for most modes this change is a guard — against the article Greg was
++reading, which has nine authors and an AstraZeneca disclosure — not a fix of something these four
++papers show.
++
++**Arc is where it leaked**, because Arc owes one sentence per part and Structure gives the
++paperwork its own parts: *"Only the authors and their disclosures stand before the argument itself
++begins."*, *"what follows are only pointers outward, not further argument."*
++
++### Arc: the first wording failed, and what replaced it
++
++The plan's `"part"` kind made a paperwork part's sentence a plain label. It failed in a way the
++plan did not foresee: on `entropy-24`, whose first part is the title block *and* the abstract, the
++model wrote the label and then a second opening sentence, so **3 answers in 36** had one sentence
++too many and Arc refused them (`buildArc`). The old prompt did this **0 times in 14**. The guard
++sentence *"the label IS that part's one sentence"* did not help (1 in 10).
++
++The replacement is simpler: Arc's sentence is *where the argument stands as this part opens*, which
++is as true of a paperwork part as any other. So a paperwork part keeps its ordinary sentence —
++what is at stake at the start, what is settled at the end — and the sentence may not mention the
++paperwork. **16 of 16** well-formed on `entropy-24`, and 0 malformed in every later run.
++
++| paperwork in the Arc sentence | old prompt | new prompt |
++|---|---|---|
++| `analog-cognition`, the opening part (authors, disclosures) | 2 of 2 | 1 of 7 |
++| `scaling-hypothesis`, the closing part (links) | 2 of 2 | 0 of 1 |
++| `source` (ball lightning), the closing part (data, interests, thanks), by my reading | about 6 of 8 | about 4 of 8, and lighter: the conclusion leads |
++
++Reduced, not removed. The rest belongs to the deterministic option deferred above.
++
++### A failure that was load, not the prompt
++
++The two full `after` arms lost half of Quiz's questions on `source` (10 and 14 dropped as
++*unquoted*: the evidence quote not found in the passage named), and `after-2`'s FAQ there failed
++outright on 14 block ids that are not in the article. Neither old arm did it. In isolation it does
++not reproduce: **Quiz 5 of 5 clean on each prompt, old and new; FAQ 5 of 5 clean on the new**, and
++`after-3` (the same paper alone, all nine modes) was clean. Both bad runs were inside a burst of 36
++concurrent calls. Recorded as seen, not chased: it is not this change, but a model that cites ids
++it was not shown under load is worth knowing about.
++
++### The blind read
++
++Two Opus judges, each reading one `pairs.md` only, 12 pairs (one per mode, Arc on all four
++papers), keys balanced 7 : 5, unblinded afterwards.
++
++| | less paperwork (new : old : tie) | preferred (new : old : tie) |
++|---|---|---|
++| new (`after-2`) vs old (`before`) | **3 : 0 : 9** — Timeline's editor's notes, Arc's closing "pointers", Arc on ball lightning | 7 : 5 : 0 |
++| control, old vs old (`before-2` vs `before`) | 1 : 0 : 11 (one draw happened to skip the editor's note) | 7 : 2 : 3 |
++
++**Paperwork goes down where there was some, and preference is inside the control's spread**, so no
++quality effect either way: neither judge's worst faults (an invented date in a new Timeline; Quiz
++and FAQ questions whose passages do not answer them, on both sides) is a paperwork effect, and the
++control produced faults of the same kinds. **The boundary held**: on `scaling-hypothesis` the new
++prompts keep OpenAI's funding as argument — the *"lacking anything like DM's long-term funding"*
++quote and OpenAI LP in the Glossary.
++
++Debate was not measured (above).
+diff --git a/docs/project/mode.md b/docs/project/mode.md
+index d37542e5d..d5961186c 100644
+--- a/docs/project/mode.md
++++ b/docs/project/mode.md
+@@ -452,7 +452,10 @@ Then the residue nothing refuses at compile time:
+ 
+ A new mode's prompt takes the shared plain-words rule, `plainWords(...)`, naming each kind of text
+ it writes — [prompting-guide.md](prompting-guide.md) is the rule, the trade-off and how to measure a
+-change. If the model answers in JSON, the request sends a strict schema through
++change. If it is handed the whole article, it also takes `paperwork(kind)`, so the authors' list,
++the acknowledgements and the funding stay out of what it writes, or it is listed in
++`PAPERWORK_EXEMPT` with the reason (`tests/paperwork-coverage.test.ts` holds both) —
++[prompting-guide.md](prompting-guide.md). If the model answers in JSON, the request sends a strict schema through
+ `withMessagesJsonSchema` (or `withChatJsonSchema`) — no `enum` of block ids, and the ids still
+ resolved after the parse — [prompting-guide.md § What the model writes back](prompting-guide.md).
+ 
+diff --git a/docs/project/prompting-guide.md b/docs/project/prompting-guide.md
+index 85d6a5269..601548e2e 100644
+--- a/docs/project/prompting-guide.md
++++ b/docs/project/prompting-guide.md
+@@ -103,10 +103,16 @@ ${PROFILE_RULES}`;
+   reference list are paperwork when they only identify the piece or record how it was produced,
+   published or sourced, and content when the piece uses them. `"summary"` leaves it out;
+   `"structure"` keeps the node a table of contents must have and labels it, and labels a node that
+-  is only the front abstract the same way.
+-  Summary, Tweets and both structure-step prompts carry it; the evidence is
+-  [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md) and
+-  [261003c](../plans/261003c-summary-and-structure-skip-the-front-matter.md).
++  is only the front abstract the same way; `"pick"` chooses no question, quote, idea, term or date
++  from it; `"part"` keeps Arc's one sentence for a paperwork part, about the argument and never the
++  paperwork (a label broke Arc's sentence count).
++  Every prompt handed the whole article carries it, or is in `PAPERWORK_EXEMPT` in the same file
++  with its reason — Citations, the referee prompts, and the modes that answer the reader, who may
++  ask who funded it. `tests/paperwork-coverage.test.ts` holds that, the way the plain-words test
++  does. The evidence is
++  [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md),
++  [261003c](../plans/261003c-summary-and-structure-skip-the-front-matter.md) and
++  [261003d](../plans/261003d-paperwork-in-every-whole-piece-mode.md).
+ - **No words for a reader, no rule.** A prompt whose output is a verdict, a URL, ids or a verbatim
+   transcription is listed in `PLAIN_WORDS_EXEMPT` in the same file, with its reason. A transcriber
+   told to prefer common words is a transcriber invited to tidy.
+diff --git a/evals/paperwork/modes.ts b/evals/paperwork/modes.ts
+new file mode 100644
+index 000000000..d73750aa6
+--- /dev/null
++++ b/evals/paperwork/modes.ts
+@@ -0,0 +1,302 @@
++/**
++ * **Do the whole-piece modes leave the paperwork out?** —
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md § Measuring it.
++ *
++ * ```
++ * npx tsx evals/paperwork/modes.ts generate --arm before   <slug>...   # paid, on the parent commit
++ * npx tsx evals/paperwork/modes.ts generate --arm before-2 <slug>...   # the same prompt again: the wobble
++ * npx tsx evals/paperwork/modes.ts generate --arm after    <slug>...   # paid, on the commit with the change
++ * npx tsx evals/paperwork/modes.ts report                              # free: the screens, per arm
++ * npx tsx evals/paperwork/modes.ts pairs --a before --b after-2        # free: a blind side-by-side, and its key
++ * ```
++ *
++ * The arms are separated in time, not in code, as in evals/paperwork/run.ts: `generate` calls each
++ * mode's production `generate*` (no profile, standard power) and records a hash of each prompt
++ * source beside the answer. Illustrated is given the same arm's sketch and a stub painter, so only
++ * its brief is paid for.
++ *
++ * **The screen.** Each mode's output is a list of items; an item's block ids are every `spya-xxxxxx`
++ * string inside it. An item whose ids are all in `PAPERWORK` below is a paperwork item. An item
++ * with no ids at all (glossary entries, arc sentences, sketch nodes) is screened by the
++ * `PAPERWORK_WORDS` regex from run.ts instead, and every hit is printed to be read. A screen, not
++ * the evidence.
++ *
++ * Reads the local database, writes nothing there beyond the `ai_calls` rows every call records.
++ * Output under `evals/results/paperwork-modes/<arm>/`.
++ */
++
++import fs from "node:fs";
++import path from "node:path";
++import { createHash } from "node:crypto";
++import { loadEnvLocal } from "../../src/env.js";
++import { PAPERWORK as PAPERWORK_WORDS } from "./run.js";
++import { blindCoin } from "../plain-words/run.js";
++
++const REPO = path.join(import.meta.dirname, "..", "..");
++const OUT = path.join(REPO, "evals", "results", "paperwork-modes");
++
++/**
++ * **Each paper's paperwork, by block id**, read by hand from the local blocks: the title block,
++ * authors, affiliations, correspondence, dates, keywords, and the closing statements and reference
++ * heading. The abstract is not paperwork. `scaling-hypothesis` has none to mark: it is the
++ * boundary case, where OpenAI's funding is the argument, and is read by hand.
++ */
++export const PAPERWORK: Record<string, readonly string[]> = {
++  "entropy-24-00930-spya-pywwkq": [
++    "spya-ekjksy", "spya-edcccm", "spya-mt3bd6", "spya-y66sc5",
++    "spya-xxjenw", "spya-r2n8q4", "spya-w58dm6", "spya-pnjdke", "spya-gajhn8",
++  ],
++  "source-spya-f550ta": [
++    "spya-ncu3br", "spya-a78j46", "spya-fdhbc4", "spya-km36dw", "spya-z5sy7j", "spya-wz5tp8",
++    "spya-yp8uzp", "spya-hmaju2", "spya-uwwn77", "spya-x4e2cg", "spya-rcbx2w",
++  ],
++  "analog-cognition-and-consciousness-4-28-26-spya-f03kqf": [
++    "spya-ac3022", "spya-a4brsd", "spya-xjmw8e", "spya-fptvt6", "spya-c65bhn", "spya-jzm2f5",
++    "spya-nvcvg4", "spya-pd4bk8", "spya-rmrvzr", "spya-yqq2ck", "spya-dxrj27", "spya-sq6h79",
++  ],
++};
++
++const MODES = ["sketch", "illustrated", "faq", "quiz", "ideas", "quotes", "glossary", "timeline", "arc"] as const;
++type Mode = (typeof MODES)[number];
++const SOURCES = [...MODES.map((m) => `${m}.ts`), "paperwork.ts"];
++
++interface ArmFile {
++  slug: string;
++  arm: string;
++  sourceSha256: Record<string, string>;
++  outputs: Partial<Record<Mode, unknown>>;
++}
++
++const BLOCK_ID = /spya-[a-z0-9]{6}/g;
++
++function failed(x: unknown): x is { error: string } {
++  return typeof x === "object" && x !== null && !Array.isArray(x) && "error" in x;
++}
++
++/**
++ * **One mode's items, each with the blocks it is anchored to** (GPT Sol's plan review, P1-4: one
++ * generic walk is not sound). `anchors` is empty for prose with no block — a sketch caption, a
++ * plate title, the image prompt — which only the word screen can see. Arc's anchor is its range's
++ * two ends: a part is paperwork when both ends are, which a part running from the title block
++ * into the abstract is not.
++ */
++interface Item {
++  anchors: string[];
++  text: string;
++}
++
++// biome-ignore lint/suspicious/noExplicitAny: an eval reading its own JSON back
++type J = any;
++
++export function itemsOf(mode: Mode, output: J): Item[] {
++  const ids = (x: unknown) => [...new Set(JSON.stringify(x ?? "").match(BLOCK_ID) ?? [])];
++  const plain = (text: unknown): Item => ({ anchors: [], text: String(text ?? "") });
++  const anchored = (x: J, at: unknown): Item => ({ anchors: ids(at), text: JSON.stringify(x).replace(BLOCK_ID, "") });
++  switch (mode) {
++    case "sketch": {
++      const s = output.sketch;
++      return [
++        plain(s.title),
++        plain(s.caption),
++        ...s.scenes.flatMap((sc: J) => [
++          plain(sc.caption),
++          ...sc.items.filter((i: J) => i.kind === "node").map((i: J) => anchored({ text: i.text }, i.block)),
++          ...sc.items.filter((i: J) => i.kind !== "node" && i.text).map((i: J) => plain(i.text)),
++        ]),
++      ];
++    }
++    case "illustrated":
++      return output.illustrated.plates.flatMap((p: J) => [
++        plain(p.title),
++        plain(p.prompt),
++        ...p.vignettes.map((v: J) => anchored({ quote: v.quote, depicts: v.depicts, title: v.title }, v.block)),
++      ]);
++    case "faq":
++      return output.faq.questions.map((q: J) => anchored(q, q.passages));
++    case "quiz":
++      return output.quiz.questions.map((q: J) => anchored(q, q.evidence));
++    case "ideas":
++      return output.ideas.ideas.map((i: J) => anchored(i, i.occurrences));
++    case "quotes":
++      return output.quotes.quotes.map((q: J) => anchored({ text: q.text, reason: q.reason }, q.blockId));
++    case "glossary":
++      return output.glossary.entries.map((e: J) => anchored(e, e.blocks));
++    case "timeline":
++      return output.timeline.events.map((e: J) => anchored(e, e.occurrences));
++    case "arc":
++      return output.arc.entries.map((e: J) => anchored({ text: e.text }, e.range));
++  }
++}
++
++async function generate(arm: string, slugs: string[]): Promise<void> {
++  loadEnvLocal();
++  const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
++  const { loadArticle } = await import("../../src/store/index.js");
++  const { closeDb } = await import("../../src/db/client.js");
++  const { generateSketch } = await import("../../src/sketch.js");
++  const { generateIllustrated } = await import("../../src/illustrated.js");
++  const { generateFaq } = await import("../../src/faq.js");
++  const { generateQuiz } = await import("../../src/quiz.js");
++  const { generateIdeas } = await import("../../src/ideas.js");
++  const { generateQuotes } = await import("../../src/quotes.js");
++  const { generateGlossary } = await import("../../src/glossary.js");
++  const { generateTimeline } = await import("../../src/timeline.js");
++  const { generateArc } = await import("../../src/arc.js");
++
++  const sourceSha256 = Object.fromEntries(
++    SOURCES.filter((f) => fs.existsSync(path.join(REPO, "src", f))).map((f) => [
++      f,
++      createHash("sha256").update(fs.readFileSync(path.join(REPO, "src", f))).digest("hex"),
++    ]),
++  );
++  const attempt = async <T>(f: () => Promise<T>): Promise<T | { error: string }> => {
++    try {
++      return await f();
++    } catch (err) {
++      return { error: err instanceof Error ? err.message : String(err) };
++    }
++  };
++
++  fs.mkdirSync(path.join(OUT, arm), { recursive: true });
++  await runAsOwner(environmentOwnerId(), async () => {
++    await Promise.all(
++      slugs.map(async (slug) => {
++        const out = path.join(OUT, arm, `${slug}.json`);
++        if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${path.relative(REPO, out)}`);
++        const article = { ...(await loadArticle(slug)), slug };
++        const power = "standard" as const;
++        const [sketch, faq, quiz, ideas, quotes, glossary, timeline, arc] = await Promise.all([
++          attempt(() => generateSketch({ article, power })),
++          attempt(() => generateFaq({ article, power })),
++          attempt(() => generateQuiz({ article, power })),
++          attempt(() => generateIdeas({ article, previous: null, power })),
++          attempt(() => generateQuotes({ article, previous: null, power })),
++          attempt(() => generateGlossary({ article, previous: null, power })),
++          attempt(() => generateTimeline({ article, previous: null, power })),
++          attempt(() => generateArc({ article, power })),
++        ]);
++        const illustrated = failed(sketch)
++          ? { error: "no sketch" }
++          : await attempt(() =>
++              generateIllustrated({
++                article,
++                sketch: (sketch as { sketch: Parameters<typeof generateIllustrated>[0]["sketch"] }).sketch,
++                power,
++                draw: async () => ({ image: new Uint8Array([0]), mediaType: "image/png", usdCost: 0 }),
++              }),
++            );
++        const file: ArmFile = {
++          slug,
++          arm,
++          sourceSha256,
++          outputs: { sketch, illustrated, faq, quiz, ideas, quotes, glossary, timeline, arc },
++        };
++        fs.writeFileSync(out, JSON.stringify(file, null, 2));
++        console.log(`${arm} ${slug}: ${MODES.filter((m) => failed(file.outputs[m])).join(", ") || "all modes"}${MODES.some((m) => failed(file.outputs[m])) ? " FAILED" : " written"}`);
++      }),
++    );
++  });
++  await closeDb();
++}
++
++function report(): void {
++  const arms = fs.existsSync(OUT) ? fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory()) : [];
++  const rows: string[] = ["arm\tslug\tmode\titems\tpaperwork-by-id\tpaperwork-by-words"];
++  const hits: string[] = [];
++  const totals: Record<string, [number, number, number]> = {};
++  for (const arm of arms.sort()) {
++    for (const f of fs.readdirSync(path.join(OUT, arm)).filter((x) => x.endsWith(".json")).sort()) {
++      const file = JSON.parse(fs.readFileSync(path.join(OUT, arm, f), "utf8")) as ArmFile;
++      const marked = new Set(PAPERWORK[file.slug] ?? []);
++      for (const mode of MODES) {
++        const output = file.outputs[mode];
++        if (failed(output)) {
++          rows.push(`${arm}\t${file.slug}\t${mode}\tERROR ${output.error.slice(0, 60)}`);
++          continue;
++        }
++        const items = itemsOf(mode, output);
++        let byId = 0;
++        let byWords = 0;
++        for (const { anchors, text } of items) {
++          if (anchors.length > 0 && marked.size > 0 && anchors.every((id) => marked.has(id))) {
++            byId++;
++            hits.push(`[id]    ${arm} ${file.slug} ${mode}: ${text.slice(0, 240)}`);
++          } else if (PAPERWORK_WORDS.test(text)) {
++            byWords++;
++            hits.push(`[words] ${arm} ${file.slug} ${mode}: ${text.slice(0, 240)}`);
++          }
++        }
++        rows.push(`${arm}\t${file.slug}\t${mode}\t${items.length}\t${byId}\t${byWords}`);
++        const k = `${arm}\t${mode}`;
++        totals[k] = totals[k] ?? [0, 0, 0];
++        const sum = totals[k];
++        sum[0] += items.length;
++        sum[1] += byId;
++        sum[2] += byWords;
++      }
++    }
++  }
++  console.log(rows.join("\n"));
++  console.log("\nTotals over the articles:\narm\tmode\titems\tpaperwork-by-id\tpaperwork-by-words");
++  for (const [k, [n, a, b]] of Object.entries(totals).sort()) console.log(`${k}\t${n}\t${a}\t${b}`);
++  console.log("\nEvery hit, to be read:\n");
++  console.log(hits.join("\n"));
++}
++
++/**
++ * **A blind side-by-side of two arms** (GPT Sol's plan review, P2: a pair per mode, not only where
++ * the screen fired, because collateral loss shows in clean cells). Mode i is read on article
++ * i mod 4, and Arc on every article, since Arc is where the `before` arm showed paperwork.
++ */
++function pairs(a: string, b: string): void {
++  const coin = blindCoin(261003);
++  const slugs = Object.keys(PAPERWORK).concat("scaling-hypothesis");
++  const read = (arm: string, slug: string) =>
++    JSON.parse(fs.readFileSync(path.join(OUT, arm, `${slug}.json`), "utf8")) as ArmFile;
++  const cells: [Mode, string][] = MODES.flatMap((mode, i) =>
++    mode === "arc" ? slugs.map((s) => [mode, s] as [Mode, string]) : [[mode, slugs[i % slugs.length]!] as [Mode, string]],
++  );
++  const lines = [
++    "# Blind pairs\n",
++    "Each pair is one mode's output for one article, from two versions of its prompt. For each, say (a) which side spends less on the article's paperwork — its title block, authors, affiliations, acknowledgements, funding, disclosures, data statements, references — or tie; (b) whether either side has lost something of the piece's actual content that the other keeps, or bent or invented a claim, naming it; (c) which you would rather a reader got, or tie. Funding or authors that the piece's argument is about are content, not paperwork.\n",
++  ];
++  const key: { id: string; mode: Mode; slug: string; left: string; right: string }[] = [];
++  const render = (mode: Mode, out: unknown) =>
++    failed(out) ? null : itemsOf(mode, out).map((it) => `- ${it.text}`).join("\n");
++  for (const [mode, slug] of cells) {
++    const xa = render(mode, read(a, slug).outputs[mode]);
++    const xb = render(mode, read(b, slug).outputs[mode]);
++    if (xa === null || xb === null) continue;
++    const id = `P${key.length + 1}`;
++    const aLeft = coin();
++    key.push({ id, mode, slug, left: aLeft ? a : b, right: aLeft ? b : a });
++    lines.push(`## ${id} — ${mode} of \`${slug}\`\n\n### Left\n\n${aLeft ? xa : xb}\n\n### Right\n\n${aLeft ? xb : xa}\n`);
++  }
++  const dir = path.join(OUT, `pairs-${a}-vs-${b}`);
++  if (fs.existsSync(dir)) throw new Error(`refusing to overwrite ${path.relative(REPO, dir)}`);
++  fs.mkdirSync(dir, { recursive: true });
++  fs.writeFileSync(path.join(dir, "pairs.md"), lines.join("\n"));
++  fs.writeFileSync(path.join(dir, "key.json"), `${JSON.stringify(key, null, 2)}\n`);
++  const leftA = key.filter((k) => k.left === a).length;
++  console.log(`${key.length} pairs in ${path.relative(REPO, dir)}; ${a} on the left in ${leftA}, on the right in ${key.length - leftA}`);
++}
++
++if (import.meta.url === `file://${process.argv[1]}`) {
++  const [cmd, ...rest] = process.argv.slice(2);
++  const at = rest.indexOf("--arm");
++  const arm = at >= 0 ? rest[at + 1] : undefined;
++  const positional = rest.filter((x, i) => !x.startsWith("--") && rest[i - 1] !== "--arm");
++  if (cmd === "generate") {
++    if (!arm || !/^[a-z0-9-]+$/.test(arm) || positional.length === 0) throw new Error("generate --arm <arm> <slug>...");
++    await generate(arm, positional);
++  } else if (cmd === "report") {
++    report();
++  } else if (cmd === "pairs") {
++    const fa = rest[rest.indexOf("--a") + 1];
++    const fb = rest[rest.indexOf("--b") + 1];
++    if (!rest.includes("--a") || !rest.includes("--b") || !fa || !fb) throw new Error("pairs --a <arm> --b <arm>");
++    pairs(fa, fb);
++  } else {
++    throw new Error("usage: generate | report (see the header)");
++  }
++}
+diff --git a/src/arc-version.ts b/src/arc-version.ts
+index d3e3e4164..bb78d018d 100644
+--- a/src/arc-version.ts
++++ b/src/arc-version.ts
+@@ -7,7 +7,7 @@
+  * an older prompt wrote stays on screen while the owner's open writes a new
+  * one. docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
+  */
+-export const ARC_PROMPT_VERSION = "arc/6";
++export const ARC_PROMPT_VERSION = "arc/7";
+ 
+ const numberOf = (version: string | undefined): number | null => {
+   const m = /^arc\/(\d+)$/.exec(version ?? "");
+diff --git a/src/arc.ts b/src/arc.ts
+index ba282184f..da6d563a9 100644
+--- a/src/arc.ts
++++ b/src/arc.ts
+@@ -57,6 +57,7 @@ import { isBodyEvidence } from "./block-policy.js";
+ import { partsOf } from "./tree-parts.js";
+ export { partsOf };
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
+ import { ARC_PROMPT_VERSION } from "./arc-version.js";
+ 
+@@ -78,6 +79,13 @@ import { ARC_PROMPT_VERSION } from "./arc-version.js";
+  * 20. Measured in evals/arc-length/run.ts;
+  * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
+  *
++ * `arc/7`, 2026-10-03: the prompt gained the shared paperwork section,
++ * `paperwork("part")` from src/paperwork.ts, so a part that is only paperwork
++ * gets a sentence about the argument rather than about the paperwork (Greg, 2026-10-01,
++ * spya-k930hy). **The bump spends money on its own**: an owner opening an
++ * article with an older arc queues a new one (src/web/useArc.ts), one call per
++ * article. Accepted in docs/plans/261003d-paperwork-in-every-whole-piece-mode.md.
++ *
+  * Lives in src/arc-version.ts, which imports nothing, so the reader can compare
+  * a payload's arc against it (useArc.ts) without bundling this file.
+  */
+@@ -154,6 +162,8 @@ RULES
+ 
+ ${plainWords("explain")}
+ 
++${paperwork("part")}
++
+ OUTPUT
+ 
+ JSON only, no prose, no code fence:
+diff --git a/src/debate.ts b/src/debate.ts
+index cccd597c8..6b365ae7b 100644
+--- a/src/debate.ts
++++ b/src/debate.ts
+@@ -178,6 +178,7 @@ import { anyLost, distinctSources, isDebateBears, isDebateDocument } from "./typ
+ import { articleShingles, isArticleText, isCopy, shingleOverlap } from "./shingles.js";
+ import type { ArticleBlockText, ShingleOverlap } from "./shingles.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ import { log } from "./log.js";
+ import {
+   DEBATE_SYNTHESIS_OUTPUT_SCHEMA,
+@@ -214,8 +215,12 @@ export type {
+  * `debate/4`, 2026-09-30: a third, search-free call reads the kept rows and stores the themes they share and the key sources as `synthesis` (SPIDERYARN-READING2-6M; docs/plans/260930j-debate-themes-and-key-sources.md). The two passes' prompts are unchanged, so a row means what it meant under `debate/3`.
+  *
+  * `debate/5`, 2026-10-02: pass A looks for the work that **cites** the article and says something about it, scholarly papers included, and searches by its title; its witness must contain the title or address in full; and both passes are told to copy an extract's own mistakes (a split word, a stray space, `*`) rather than tidy them. Greg asked for who has cited a piece, for and against (SPIDERYARN-READING2-9D); measured on the old prompt, the right replies were found and then lost to exactly those two checks. No check in code changed. docs/plans/261002i-debate-leads-with-who-has-cited-this-article.md.
++ *
++ * `debate/6`, 2026-10-03: Pass B (`CLAIMS_SYSTEM`) only; the prompt gained the shared paperwork section,
++ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+  */
+-export const PROMPT_VERSION = "debate/5";
++export const PROMPT_VERSION = "debate/6";
+ 
+ /* ------------------------------------------------------------ the four caps --
+    **Their scope is stated because it is otherwise ambiguous** (Sol's F22): one
+@@ -1315,6 +1320,8 @@ ranking by prominence is applied to what you return, and the reader is told so.
+ 
+ ${plainWords("explain")}
+ 
++${paperwork("pick")}
++
+ ANSWER FORMAT
+ 
+ Say nothing else. Answer with one fenced block and close it:
+diff --git a/src/faq.ts b/src/faq.ts
+index 18faa069c..0298180f8 100644
+--- a/src/faq.ts
++++ b/src/faq.ts
+@@ -64,6 +64,7 @@ import {
+ } from "./source-hash.js";
+ import { budgetFor, truncationFailure } from "./token-budget.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ import {
+   type DifficultyCentralityDrops,
+   noDifficultyCentralityDrops,
+@@ -96,8 +97,12 @@ export type { Faq, FaqDropped, FaqPassage, FaqQuestion } from "./types.js";
+  *
+  * `faq/5`, 2026-10-02: the request gained `FAQ_OUTPUT_SCHEMA`; the prompt
+  * text is unchanged.
++ *
++ * `faq/6`, 2026-10-03: the prompt gained the shared paperwork section,
++ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+  */
+-export const PROMPT_VERSION = "faq/5";
++export const PROMPT_VERSION = "faq/6";
+ 
+ /** The only hard number on quantity. The prompt's budget is an upper bound under it. */
+ export const MAX_QUESTIONS = 12;
+@@ -552,6 +557,8 @@ empty list. A padded question is worse than a missing one.
+ 
+ ${plainWords("ask")}
+ 
++${paperwork("pick")}
++
+ OUTPUT
+ 
+ JSON only, no prose, no code fence:
+diff --git a/src/glossary.ts b/src/glossary.ts
+index 767161411..ce070baf6 100644
+--- a/src/glossary.ts
++++ b/src/glossary.ts
+@@ -69,6 +69,7 @@ import { articleText } from "./article-prompt.js";
+ import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
+ import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ import {
+   type DifficultyCentralityDrops,
+   noDifficultyCentralityDrops,
+@@ -109,8 +110,12 @@ import type { ArtifactStore } from "./store/artifacts.js";
+  *
+  * `glossary/7`, 2026-10-02: the request gained `GLOSSARY_OUTPUT_SCHEMA`; the
+  * prompt text is unchanged.
++ *
++ * `glossary/8`, 2026-10-03: the prompt gained the shared paperwork section,
++ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+  */
+-export const PROMPT_VERSION = "glossary/7";
++export const PROMPT_VERSION = "glossary/8";
+ 
+ /**
+  * The most entries one call may return.
+@@ -1161,6 +1166,8 @@ Nothing else may be omitted.
+ 
+ ${plainWords()}
+ 
++${paperwork("pick")}
++
+ ${PROFILE_RULES}`;
+ 
+ /**
+diff --git a/src/ideas.ts b/src/ideas.ts
+index 0107ef718..a18ba7bbe 100644
+--- a/src/ideas.ts
++++ b/src/ideas.ts
+@@ -81,6 +81,7 @@ import { articleWithIds } from "./article-prompt.js";
+ import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
+ import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ import type {
+   Block,
+   BlockId,
+@@ -104,8 +105,12 @@ import type { ArtifactStore } from "./store/artifacts.js";
+  *
+  * `ideas/4`, 2026-10-02: the request gained `IDEAS_OUTPUT_SCHEMA`; the prompt
+  * text is unchanged.
++ *
++ * `ideas/5`, 2026-10-03: the prompt gained the shared paperwork section,
++ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+  */
+-export const PROMPT_VERSION = "ideas/4";
++export const PROMPT_VERSION = "ideas/5";
+ 
+ /** The most ideas one call may return. A piece does not have forty. */
+ export const MAX_IDEAS = 10;
+@@ -777,6 +782,8 @@ two, return two.
+ 
+ ${plainWords("explain")}
+ 
++${paperwork("pick")}
++
+ ${PROFILE_RULES}`;
+ 
+ /**
+diff --git a/src/illustrated-plate.ts b/src/illustrated-plate.ts
+index 00ff4aca7..89f42f643 100644
+--- a/src/illustrated-plate.ts
++++ b/src/illustrated-plate.ts
+@@ -154,8 +154,12 @@ import type { BlockId } from "./types.js";
+  *
+  * `illustrated/5`, 2026-10-02: the brief-writing request gained
+  * `ILLUSTRATED_BRIEF_OUTPUT_SCHEMA`; the prompt text is unchanged.
++ *
++ * `illustrated/6`, 2026-10-03: the prompt gained the shared paperwork section,
++ * `paperwork("summary")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+  */
+-export const ILLUSTRATED_VERSION = "illustrated/5";
++export const ILLUSTRATED_VERSION = "illustrated/6";
+ 
+ /**
+  * **How many of the article's figures one plate may be handed.** With the
+diff --git a/src/illustrated.ts b/src/illustrated.ts
+index 47a8208db..4ce128a90 100644
+--- a/src/illustrated.ts
++++ b/src/illustrated.ts
+@@ -128,6 +128,7 @@ import type { Sketch, SketchItem, SketchScene } from "./sketch-scene.js";
+ import { budgetFor, truncationFailure } from "./token-budget.js";
+ import type { Meta } from "./types.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ 
+ /**
+  * Bumped whenever SYSTEM or `renderPrompt` changes what the model is asked —
+@@ -528,6 +529,8 @@ not go in the picture.
+ For every node in the sketch scene, before you compose anything, pick ONE CONCRETE THING drawn from a
+ specific passage of the article — an example the author gives, an image they use, an incident, a
+ named person, a number, an object — and quote that passage. Never a symbol for the section's topic.
++A node that is only the piece's paperwork (below), which an older sketch may still have, gets
++nothing: leave it out of the picture.
+ 
+ A section about anthropomorphism illustrated as "a human silhouette with a question mark" is worth
+ nothing; the same section illustrated as the specific thing the author actually described is worth
+@@ -620,6 +623,8 @@ where a reader can hold it against the article, and it is not shortened or repla
+ 
+ ${plainWords("explain")}
+ 
++${paperwork("summary")}
++
+ ## Output
+ 
+ Reply with JSON and nothing else:
+diff --git a/src/paperwork.ts b/src/paperwork.ts
+index 4daaed5fd..cce2b79f9 100644
+--- a/src/paperwork.ts
++++ b/src/paperwork.ts
+@@ -1,5 +1,7 @@
+ /**
+- * **The paperwork rule, once, for every prompt that summarises the whole piece.**
++ * **The paperwork rule, once, for every prompt that writes from the whole piece.** Which prompts
++ * carry it and which are exempt, and why, is `PAPERWORK_EXEMPT` below and
++ * tests/paperwork-coverage.test.ts (docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+  *
+  * > The structure, summary, tweet thread, and other such modes don't really need to include
+  * > summaries of stuff like acknowledgements or conflicts of interest or affiliations or, you know,
+@@ -11,7 +13,10 @@
+  * (src/plain-words.ts), the same way. The list of what counts as paperwork is the shared half, so
+  * the next mode that needs it gets the same list rather than another copy; what a prompt does with
+  * a paperwork passage is the kind's half, because a summary can leave it out and a table of
+- * contents cannot: every block must be covered by a node (src/tree-invariants.ts).
++ * contents cannot: every block must be covered by a node (src/tree-invariants.ts). Nor can Arc,
++ * which owes one sentence per part, so under `"part"` a paperwork part keeps its ordinary
++ * sentence about the argument and the sentence never mentions the paperwork. A label was tried
++ * first and broke Arc's sentence count (plan 261003d § Ledger).
+  *
+  * **Paperwork by role, not by label** (GPT Sol's plan review, P1-1). A funder can be part of the
+  * argument — a sponsor's role that qualifies the evidence, an ethics constraint that shaped the
+@@ -27,7 +32,11 @@ export type PaperworkKind =
+   /** A summary or a thread: leave it out. */
+   | "summary"
+   /** A table of contents: the node stays, labelled, and nothing else mentions it. */
+-  | "structure";
++  | "structure"
++  /** A prompt that picks items out of the piece (questions, quotes, ideas, terms, dates): none from it. */
++  | "pick"
++  /** One sentence per part, as Arc writes: about the argument, never the paperwork. */
++  | "part";
+ 
+ const KINDS: Record<PaperworkKind, string> = {
+   summary: `Leave it out: do not summarise it, spend a sentence on it, or present it as
+@@ -39,6 +48,16 @@ above, its gist is a short plain label of WHAT it is ("The authors and
+ where they work.", "Funding and conflict-of-interest statements."), never what
+ it says, with no word floor and no claim. Leave "question" empty on it, at any
+ depth. Gists outside that node, the root's included, ignore the paperwork.`,
++  pick: `Choose nothing from it alone: every question, answer, idea, quote, term,
++person, organisation or date you choose must come from the piece's content.
++Someone who appears only in the paperwork — a funder, an institution, a person
++thanked — is not part of the piece; someone the content also names is, for what
++the content says.`,
++  part: `A part that is only paperwork, or opens or closes with it, still gets its one
++sentence by the usual rules: where the ARGUMENT stands as that part opens. At
++the start, that is what is at stake; at the end, what the piece has settled and
++what it has not. It never mentions the paperwork — no sources, data, thanks,
++funding, interests, authors or record — and neither does any other sentence.`,
+ };
+ 
+ /**
+@@ -91,3 +110,23 @@ evidence, reasoning, method or a limit on its findings — a funder's role that
+ it says may bias the result, an ethics rule that shaped the study, an article
+ ABOUT research funding — it is content, and the usual rules apply.${kind === "structure" ? `\n\n${STRUCTURE_ABSTRACT}` : ""}`;
+ }
++
++/**
++ * **Prompts handed the whole article that do not carry the rule, and why.**
++ * tests/paperwork-coverage.test.ts fails for a file that calls `articleWithIds(` or `articleText(`
++ * and neither calls `paperwork(` nor is listed here. Plan
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md § Which modes.
++ */
++export const PAPERWORK_EXEMPT: Record<string, string> = {
++  "src/citations.ts": "the reference list is what it reads; the paperwork is its content",
++  "src/citation-investigate.ts": "investigates one citation, which lives in the reference list",
++  "src/converse.ts": "chat, Remember and the tutorial answer the reader, who may ask who funded it",
++  "src/live.ts": "talks with the reader, who may ask about the authors or the funding",
++  "src/explain.ts": "explains the passage the reader chose, which may be the acknowledgements",
++  "src/search.ts": "finds what the reader searched for, which may be the funding",
++  "src/quiz-mark.ts": "marks the reader's answer to a question Quiz already chose",
++  "src/crossrefs.ts": "links one passage to another; a link into the paperwork is rare and harmless",
++  "src/crossrefs-fingerprint.ts": "renders the article only to hash it for crossrefs.ts",
++  "src/referee-claims-run.ts": "for a peer reviewer, for whom the title's claims are claims",
++  "src/referee-criteria-run.ts": "ethics, data availability and conflicts are what a reviewer checks",
++};
+diff --git a/src/quiz.ts b/src/quiz.ts
+index 629b424ab..e7fede2c6 100644
+--- a/src/quiz.ts
++++ b/src/quiz.ts
+@@ -158,6 +158,7 @@ import {
+ } from "./source-hash.js";
+ import { budgetFor, truncationFailure } from "./token-budget.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ import { hashProfile } from "./profile.js";
+ import type {
+   Block,
+@@ -204,8 +205,12 @@ import type {
+  *
+  * `quiz/6`, 2026-10-02: the request gained `QUIZ_OUTPUT_SCHEMA`; the prompt
+  * text is unchanged.
++ *
++ * `quiz/7`, 2026-10-03: the prompt gained the shared paperwork section,
++ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+  */
+-export const PROMPT_VERSION = "quiz/6";
++export const PROMPT_VERSION = "quiz/7";
+ 
+ /**
+  * The most questions one batch may carry into the artefact.
+@@ -827,6 +832,8 @@ too; do not spend half the steps on its first third.
+ 
+ ${plainWords("ask", "explain")}
+ 
++${paperwork("pick")}
++
+ OUTPUT
+ 
+ JSON only, no prose, no code fence. The questions in the order the reader walks
+diff --git a/src/quotes.ts b/src/quotes.ts
+index 16450a1bf..c3c2101ee 100644
+--- a/src/quotes.ts
++++ b/src/quotes.ts
+@@ -102,6 +102,7 @@ import { articleText } from "./article-prompt.js";
+ import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
+ import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ import {
+   MAX_QUOTES_TOTAL,
+   type Block,
+@@ -162,8 +163,12 @@ import type { ArtifactStore } from "./store/artifacts.js";
+  *
+  * `quotes/8`, 2026-10-02: the answer is constrained by `QUOTES_OUTPUT_SCHEMA`;
+  * the prompt text and the post-parse quote and score checks are unchanged.
++ *
++ * `quotes/9`, 2026-10-03: the prompt gained the shared paperwork section,
++ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+  */
+-export const PROMPT_VERSION = "quotes/8";
++export const PROMPT_VERSION = "quotes/9";
+ 
+ /**
+  * The most quotes one call may return — **one pass**, not the whole list.
+@@ -1440,6 +1445,8 @@ JSON only, no prose, no code fence:
+ 
+ ${plainWords("explain")}
+ 
++${paperwork("pick")}
++
+ ${PROFILE_RULES}`;
+ 
+ /**
+diff --git a/src/sketch-scene.ts b/src/sketch-scene.ts
+index 0b13fe658..94549723b 100644
+--- a/src/sketch-scene.ts
++++ b/src/sketch-scene.ts
+@@ -60,8 +60,12 @@ import type { BlockId } from "./types.js";
+  *
+  * `sketch/4`, 2026-10-02: the model answer is constrained by the schema in
+  * src/sketch.ts. The prompt and this reader's semantic checks are unchanged.
++ *
++ * `sketch/5`, 2026-10-03: the prompt gained the shared paperwork section,
++ * `paperwork("summary")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+  */
+-export const SKETCH_VERSION = "sketch/4";
++export const SKETCH_VERSION = "sketch/5";
+ 
+ /**
+  * The canvas the model draws on, in its own units.
+diff --git a/src/sketch.ts b/src/sketch.ts
+index d4db0f505..0f0bfa04c 100644
+--- a/src/sketch.ts
++++ b/src/sketch.ts
+@@ -47,6 +47,7 @@ import {
+ } from "./messages-structured-output.js";
+ import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ import {
+   accept,
+   CANVAS_W,
+@@ -400,8 +401,8 @@ Rules that make the difference between a picture and a mess:
+     of contents again.
+   - Do not label a node with its section number. The reader cannot see the
+     contents page and does not care.
+-  - If the article has a part that is apparatus — notes, bibliography,
+-    acknowledgements — leave it out or draw it once, muted, at the bottom.
++  - If the article has a part that is apparatus — notes, or the paperwork
++    below — leave it out.
+ 
+ BEING HONEST
+ 
+@@ -433,6 +434,8 @@ JSON only, no prose, no code fence, keys in this order:
+ 
+ ${plainWords("explain", "landmark")}
+ 
++${paperwork("summary")}
++
+ ${PROFILE_RULES}`;
+ 
+ /** One line per part, with the block a click on it should land on. */
+diff --git a/src/timeline.ts b/src/timeline.ts
+index 62f86e365..dc631acd3 100644
+--- a/src/timeline.ts
++++ b/src/timeline.ts
+@@ -151,6 +151,7 @@ import type {
+ } from "./types.js";
+ import type { ArtifactStore } from "./store/artifacts.js";
+ import { plainWords } from "./plain-words.js";
++import { paperwork } from "./paperwork.js";
+ 
+ /**
+  * Bumped whenever the prompt changes in a way that changes what an *event* is.
+@@ -162,8 +163,12 @@ import { plainWords } from "./plain-words.js";
+  *
+  * `timeline/4`, 2026-10-02: the request gained `TIMELINE_OUTPUT_SCHEMA`; the
+  * prompt text is unchanged.
++ *
++ * `timeline/5`, 2026-10-03: the prompt gained the shared paperwork section,
++ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+  */
+-export const PROMPT_VERSION = "timeline/4";
++export const PROMPT_VERSION = "timeline/5";
+ 
+ /**
+  * The most events one call may carry into the artefact.
+@@ -1088,6 +1093,8 @@ FIVE WAYS TO GET THIS WRONG
+ 
+ ${plainWords("landmark")}
+ 
++${paperwork("pick")}
++
+ OUTPUT
+ 
+ JSON only, no prose, no code fence:
+diff --git a/tests/debate.test.ts b/tests/debate.test.ts
+index bbf64c366..777a478de 100644
+--- a/tests/debate.test.ts
++++ b/tests/debate.test.ts
+@@ -1301,7 +1301,7 @@ describe("what the prompts insist on", () => {
+ 
+ describe("the stamp and the failure copy", () => {
+   it("has a prompt version that is one constant", () => {
+-    expect(PROMPT_VERSION).toBe("debate/5");
++    expect(PROMPT_VERSION).toBe("debate/6");
+   });
+ 
+   /**
+diff --git a/tests/paperwork-coverage.test.ts b/tests/paperwork-coverage.test.ts
+new file mode 100644
+index 000000000..16139a93e
+--- /dev/null
++++ b/tests/paperwork-coverage.test.ts
+@@ -0,0 +1,94 @@
++/**
++ * **Every prompt handed the whole article carries the paperwork rule, or says why not.**
++ *
++ * Greg, 2026-10-01: *"The structure, summary, tweet thread, and other such modes don't really need
++ * to include summaries of stuff like acknowledgements or conflicts of interest or affiliations"*.
++ * `paperwork(kind)` in src/paperwork.ts is the rule; this makes it the default, the way
++ * tests/plain-words-coverage.test.ts does for plain words. A new file that renders the whole
++ * article for a model (`articleWithIds(` or `articleText(`) is red here until it calls
++ * `paperwork(` or is added to `PAPERWORK_EXEMPT` with its reason.
++ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md.
++ *
++ * **What it cannot see**: it works on files, not prompts, so a file with two prompts passes if
++ * either carries the rule (Debate's identity pass rides on its claims pass, which is right); it
++ * finds the article by two bare function names, so a renamed import, a wrapper, an article string
++ * built elsewhere or a renderer of its own (the structure step numbers its own blocks; Labels) is
++ * invisible. **And what it over-sees**: a file that renders the article only to hash it
++ * (`crossrefs-fingerprint.ts`) is caught too, and is exempt with that reason. A default, not a
++ * proof — GPT Sol's plan review, P2.
++ */
++import fs from "node:fs";
++import path from "node:path";
++import { describe, expect, it } from "vitest";
++import { PAPERWORK_EXEMPT } from "../src/paperwork.js";
++import { parseSource, walkAst, type AstNode } from "./helpers/ts-ast.js";
++
++const ROOT = path.join(import.meta.dirname, "..");
++const WHOLE_ARTICLE = new Set(["articleWithIds", "articleText"]);
++
++function facts(source: string): { wholeArticle: boolean; paperwork: boolean } {
++  let wholeArticle = false;
++  let paperwork = false;
++  walkAst(parseSource(source).program, (node) => {
++    if (node.type !== "CallExpression") return;
++    const callee = node.callee as AstNode | undefined;
++    if (callee?.type !== "Identifier" || typeof callee.name !== "string") return;
++    if (WHOLE_ARTICLE.has(callee.name)) wholeArticle = true;
++    if (callee.name === "paperwork") paperwork = true;
++  });
++  return { wholeArticle, paperwork };
++}
++
++function files(dir: string): string[] {
++  return fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((e) => {
++    const rel = path.join(dir, e.name);
++    if (e.isDirectory()) return files(rel);
++    return e.name.endsWith(".ts") && !e.name.endsWith(".d.ts") ? [rel] : [];
++  });
++}
++
++function uncovered(sources: ReadonlyMap<string, string>): string[] {
++  return [...sources]
++    .filter(([f, s]) => !PAPERWORK_EXEMPT[f] && facts(s).wholeArticle && !facts(s).paperwork)
++    .map(([f]) => f);
++}
++
++describe("the paperwork rule is the default for every whole-article prompt", () => {
++  const all = files("src").filter((f) => f !== "src/article-prompt.ts" && !f.startsWith("src/web/"));
++  const sources = new Map(all.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "utf-8")]));
++
++  it("finds the whole-article prompts it is meant to find", () => {
++    /* A scan that finds nothing passes everything. */
++    const found = all.filter((f) => facts(sources.get(f)!).wholeArticle);
++    for (const f of ["src/sketch.ts", "src/quiz.ts", "src/glossary.ts", "src/citations.ts", "src/arc.ts"]) {
++      expect(found, f).toContain(f);
++    }
++  });
++
++  it("every whole-article prompt carries the rule or is exempt with a reason", () => {
++    expect(
++      uncovered(sources),
++      "add paperwork(kind) to the prompt, or a reason to PAPERWORK_EXEMPT in src/paperwork.ts",
++    ).toEqual([]);
++  });
++
++  it("every exemption names a file that exists, reads the whole article, and does not carry the rule", () => {
++    for (const [f, why] of Object.entries(PAPERWORK_EXEMPT)) {
++      const source = sources.get(f);
++      expect(source, `${f} does not exist`).toBeDefined();
++      expect(facts(source!).wholeArticle, `${f} no longer reads the whole article`).toBe(true);
++      expect(facts(source!).paperwork, `${f} carries the rule, so drop its exemption`).toBe(false);
++      expect(why.length, f).toBeGreaterThan(10);
++    }
++  });
++
++  it("would reject a new whole-article file until it carries the rule", () => {
++    expect(uncovered(new Map([["src/new-mode.ts", "const s = articleWithIds(meta, blocks);"]]))).toEqual([
++      "src/new-mode.ts",
++    ]);
++    expect(uncovered(new Map([["src/new-mode.ts", "// articleWithIds(meta, blocks)"]]))).toEqual([]);
++    expect(
++      uncovered(new Map([["src/new-mode.ts", ["const s = `$", "{paperwork('pick')}`; articleText(meta, blocks);"].join("")]])),
++    ).toEqual([]);
++  });
++});
+diff --git a/tests/quiz.test.ts b/tests/quiz.test.ts
+index 3b7d8e4bb..4086fb231 100644
+--- a/tests/quiz.test.ts
++++ b/tests/quiz.test.ts
+@@ -138,7 +138,7 @@ describe("the path is the model's order", () => {
+   });
+ 
+   it("stamps the new prompt version", () => {
+-    expect(PROMPT_VERSION).toBe("quiz/6");
++    expect(PROMPT_VERSION).toBe("quiz/7");
+   });
+ });
+ 

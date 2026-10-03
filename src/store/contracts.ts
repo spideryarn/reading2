@@ -66,6 +66,7 @@ import type {
   ChatMessage,
   ChatThread,
   Comment,
+  HighlightColour,
   FeedbackCursor,
   FeedbackFrom,
   FeedbackDiagnostics,
@@ -427,6 +428,7 @@ export interface GlossaryStore {
  * | `blockId`, `quote`, `start`, `createdAt` | `create` only       |
  * | `body`                               | `create`, `patchBody`  |
  * | `criterionId`, `valence`             | `create`, `patchMark`  |
+ * | `colour`                             | `create`, `patchColour` |
  * | `updatedAt`                          | `patchBody`, `patchMark`, server-set |
  * | `threadId`                           | `linkThread`, once, from absent |
  * | `status`, `answer`, `citations`, `searches`, `model`, `error` | `beginAnswer` and `patch` |
@@ -540,6 +542,17 @@ export interface CommentStore {
    * does, which src/routes.ts answers with a 404.
    */
   patchMark(slug: string, id: string, mark: MarkPatch): Promise<Comment>;
+
+  /**
+   * The reader recoloured a highlight, or removed its colour (`null`). Writes
+   * `colour`, nothing else — a recolour is not an edit of the words, so
+   * `updatedAt` is left alone.
+   *
+   * Throws `NotAnExplanation(id, "missing")` for an unknown id (404), and
+   * `ColourNeedsWords` for a whole-block comment (409): a colour needs words to
+   * paint. docs/plans/261003e-span-highlights-with-a-colour.md, review S4.
+   */
+  patchColour(slug: string, id: string, colour: HighlightColour | null): Promise<Comment>;
 
   /**
    * Point a comment at the conversation it started. Compare-and-set from absent.

@@ -71,7 +71,7 @@ export type MarginaliaNote =
  * never gets here.
  */
 export type MarginEntry =
-  | { as: Exclude<CommentKind, "bookmark">; comment: MarginComment }
+  | { as: Exclude<CommentKind, "bookmark" | "highlight">; comment: MarginComment }
   | { as: "question"; asked: AskedQuestion };
 
 /**
@@ -285,11 +285,16 @@ function groupedNotes(
      say, the gutter already marks its block, and in the browser a column of
      lone "Bookmark" stamps read as noise (2026-10-02). "Bare" is
      `commentKind`'s bookmark, so a wordless comment that asked the AI (it has a
-     `threadId`) still shows — GPT Sol, P1 on plan 261002j. */
+     `threadId`) still shows — GPT Sol, P1 on plan 261002j.
+     **Nor a wordless highlight** (2026-10-03, plan 261003e S9), for the same
+     reason: its colour is already on the words, and there is nothing to say
+     beside them. A coloured comment with words or an AI answer is a `comment`
+     or `comment-ai` and still shows. */
   for (const comment of more.comments ?? []) {
     if ("criterionId" in comment && comment.criterionId !== undefined) continue;
     const as = commentKind(comment);
-    if (as !== "bookmark" && index.has(comment.blockId)) put(comment.blockId, "comment", { as, comment });
+    if (as === "bookmark" || as === "highlight") continue;
+    if (index.has(comment.blockId)) put(comment.blockId, "comment", { as, comment });
   }
   /* **The questions asked from a passage, in the same line as its comments**:
      Greg named them as the third kind of the same thing (9H), and a second line

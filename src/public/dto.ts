@@ -941,6 +941,7 @@ function publicComments(comments: readonly Comment[]): PublicComment[] {
       createdAt: comment.createdAt,
       ...opt(comment, "body"),
       ...opt(comment, "answer"),
+      ...opt(comment, "colour"),
       ...publicCitations(comment.citations),
     }),
   );

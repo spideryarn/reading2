@@ -450,6 +450,43 @@ export const articleVisibilityChanges = spideryarn.table(
 );
 
 /**
+ * **The reader's own tags on an article** — one row per (article, tag).
+ *
+ * Reader state, so keyed on `articles` and not on a revision: a re-extraction
+ * must not untag anything (the shelf-state block on `articles` says why). No
+ * `owner_id`, because ownership comes through the article (src/owner.ts), and
+ * it cascades with the article because a tag on nothing means nothing.
+ *
+ * **Stored lowercase, so the tag is its own identity** and the primary key is
+ * all the uniqueness there is: no second spelling of one tag to race over.
+ * src/tags.ts § `normaliseTag` is the same rule in TypeScript and runs first;
+ * the CHECK holds it for any writer that skips it. Plan
+ * docs/plans/261003d-your-own-tags-on-articles-on-the-shelf-and-the-metadata-page.md.
+ *
+ * A table rather than a `text[]` on `articles`: a per-element check and "every
+ * tag this reader uses, with counts" are a constraint and a `group by` here,
+ * and an `unnest` with no constraint there.
+ */
+export const articleTags = spideryarn.table(
+  "article_tags",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    tag: text("tag").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.tag] }),
+    /** src/tags.ts § `normaliseTag`: TAG_MAX_LENGTH, trimmed, lowercase, no comma, no control. */
+    check(
+      "article_tags_spelling",
+      sql`char_length(${t.tag}) between 1 and 40 and ${t.tag} = btrim(${t.tag}) and ${t.tag} = lower(${t.tag}) and ${t.tag} !~ '[,[:cntrl:]]' and ${t.tag} !~ '\\s\\s'`,
+    ),
+  ],
+);
+
+/**
  * One extraction of one article. **Immutable in its text** once published.
  *
  * The pipeline builds a *draft* and publishes it in one step, so a reader sees
@@ -1883,6 +1920,16 @@ export const comments = spideryarn.table(
      * field that clamps negatives to zero (`validateHits`, src/search.ts).
      */
     valence: integer("valence"),
+
+    /**
+     * **The highlight's colour**, by name — or null, which is every comment
+     * made before 2026-10-03 and every one made without picking a colour, and
+     * which draws today's underline. A highlight is a comment with a colour,
+     * not a second kind of object (docs/plans/261003e-span-highlights-with-a-colour.md).
+     * Stored by name rather than hex so the palette can be retuned without a
+     * migration; the names are `HIGHLIGHT_COLOURS` in src/types.ts.
+     */
+    colour: text("colour"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -1913,6 +1960,17 @@ export const comments = spideryarn.table(
      * shapes in TypeScript; this makes them impossible in the database.
      */
     check("comments_body_nonempty", sql`${t.body} is null or length(btrim(${t.body})) > 0`),
+    /** The closed vocabulary, written out by hand like `comments_status`. */
+    check(
+      "comments_colour",
+      sql`${t.colour} is null or ${t.colour} in ('yellow','green','blue','pink')`,
+    ),
+    /**
+     * A colour needs words to paint. A whole-block row has none, and inline
+     * drawing skips it, so a coloured one would be a "highlight" that shows
+     * nothing (plan 261003e, review S4).
+     */
+    check("comments_colour_needs_quote", sql`${t.colour} is null or ${t.quote} is not null`),
     /**
      * Points at the IDENTITY. This is the whole design: the block's text can
      * vanish in a re-extraction and this row survives, because identities are

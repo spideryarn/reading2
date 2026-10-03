@@ -559,6 +559,9 @@ export async function exportArticle(
            hand-written list. */
         criterionId: row.criterionId,
         valence: row.valence,
+        /* A highlight's colour, added 2026-10-03 — and another hand-listed
+           field, so another line that had to be remembered here. */
+        colour: row.colour,
         status: row.status,
         answer: row.answer,
         citations: row.citations,
@@ -885,6 +888,11 @@ export async function exportArticle(
     await put("glossary_hidden_entries", "glossary-hidden.json", {
       hidden: rows.glossaryHiddenEntries.map((row) => row.entryId),
     });
+  }
+
+  /* The reader's own tags — plan 261003d. */
+  if (rows.articleTags.length) {
+    await put("article_tags", "tags.json", { tags: rows.articleTags.map((row) => row.tag) });
   }
 
   logger.info({ slug, files: written.length, tables: wroteFrom.size }, "article exported");

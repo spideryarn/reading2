@@ -33,7 +33,8 @@ file-by-file list, and the thing to edit when the layout changes.
     content/          revision.json, stamped.html, extracted.html, blocks.json,
                       block-identities.json, assets.json
     augmentations/    tree, glossary, glossary-lookups, ideas, quotes, timeline, quiz, sketch, arc,
-                      tweets, labels, comments, chat, searches, referee-claims, referee-criteria
+                      tweets, labels, comments, chat, searches, referee-claims, referee-criteria,
+                      tags (your own, since 261003d)
 
 **Every file is optional and absent when there is nothing in it** — an article nobody chatted about
 has no `chat.json` — except `index.html`, `manifest.json`, `article.json`, `README.md`,

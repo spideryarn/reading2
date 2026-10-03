@@ -10,6 +10,7 @@ import {
   MARK_KIND_LABEL,
   commentKind,
   commentsByBlock,
+  earnsMarker,
   orderComments,
   passageOf,
   positionOf,
@@ -239,9 +240,31 @@ describe("commentKind", () => {
     expect(commentKind({ body: "theirs", answer: "an answer" })).toBe("comment-ai");
   });
 
+  /* Plan 261003e, review S9: comment-ai > comment > highlight > bookmark. A
+     colour is how a comment looks; the words and the answer are what it says. */
+  it("calls a wordless coloured comment a highlight, and nothing else one", () => {
+    expect(commentKind({ status: "none", colour: "yellow" })).toBe("highlight");
+    expect(commentKind({ status: "none", colour: "yellow", body: "mine" })).toBe("comment");
+    expect(commentKind({ status: "none", colour: "yellow", threadId: "t1" })).toBe("comment-ai");
+    expect(commentKind({ status: "none", colour: "yellow", body: "mine", threadId: "t1" })).toBe(
+      "comment-ai",
+    );
+    expect(commentKind({ colour: "pink", answer: "an answer" })).toBe("comment-ai");
+    /* A visitor's copy: no status, but a colour crosses. */
+    expect(commentKind({ colour: "green" })).toBe("highlight");
+  });
+
+  it("gives every kind but a wordless highlight the ✳", () => {
+    expect(earnsMarker({ status: "none", colour: "yellow" })).toBe(false);
+    expect(earnsMarker({ status: "none" })).toBe(true);
+    expect(earnsMarker({ status: "none", colour: "yellow", body: "mine" })).toBe(true);
+    expect(earnsMarker({ status: "none", colour: "yellow", threadId: "t1" })).toBe(true);
+  });
+
   it("has one label per kind, the question's included", () => {
     expect(MARK_KIND_LABEL).toEqual({
       bookmark: "Bookmark",
+      highlight: "Highlight",
       comment: "Comment",
       "comment-ai": "Comment + AI",
       question: "Question",

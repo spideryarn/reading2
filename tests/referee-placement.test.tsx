@@ -423,6 +423,7 @@ function CommentHarness({ placing, comment }: { placing: boolean; comment: Comme
       onEdit: (body: string | null) => void comments.edit(comment.id, body),
       onPlace: (mark: { criterionId: string | null; valence: number | null }) =>
         void comments.place(comment.id, mark),
+      onRecolour: () => {},
       error: comments.error,
     },
   });

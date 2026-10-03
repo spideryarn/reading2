@@ -15,7 +15,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { Comment, CommentAnchor } from "./types.js";
+import type { Comment, CommentAnchor, HighlightColour } from "./types.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { assertSlug } from "./slug.js";
@@ -100,6 +100,13 @@ interface NewCommentFields {
    */
   criterionId?: string;
   valence?: number;
+  /**
+   * **The highlight's colour**, already checked by the route against
+   * `HIGHLIGHT_COLOURS`, and only ever on a selection-anchored comment — the
+   * route refuses one on a whole-block bookmark, and
+   * `comments_colour_needs_quote` refuses it again. Absent for none.
+   */
+  colour?: HighlightColour;
 }
 
 /**
@@ -189,6 +196,19 @@ export class NotAnExplanation extends Error {
     );
     this.name = "NotAnExplanation";
     this.status = why === "missing" ? 404 : 409;
+  }
+}
+
+/**
+ * Thrown by `patchColour` for a whole-block comment. A colour needs words to
+ * paint, and a whole-block row has none (plan 261003e, review S4). A 409 with
+ * a fixed sentence, carried on `status` for the reason `CommentIdTaken` gives.
+ */
+export class ColourNeedsWords extends Error {
+  readonly status = 409;
+  constructor(readonly id: string) {
+    super(`Comment ${id} is on the whole paragraph, so it has no words to colour`);
+    this.name = "ColourNeedsWords";
   }
 }
 

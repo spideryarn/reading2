@@ -131,6 +131,7 @@ sent to anybody. Now:
 | `view` | `cards` (the default) or `table` — the same list, painted the other way | push | `?view=table` |
 | `show` | `all` (the default) or `unread`, which is "never opened" | push | `?show=unread` |
 | `topics` | the chosen topics' keys, ANDed. A key not among the shelf's topics is never applied while they load, and is dropped — with `replace` — once they have — [shelf-terms.md](shelf-terms.md) | push | `?topics=memory,neural network` |
+| `tags` | the reader's own tags chosen in the Tags row, ANDed with each other and with `topics`. A tag no article in scope carries is ignored, and never rewritten away — [shelf-terms.md § Your own tags, in the row above](shelf-terms.md#your-own-tags-in-the-row-above) | push | `?tags=ai,memory` |
 | `archived` | `1` when the **Include archived** chip is on: the archived articles join the shelf's one list — sorted, narrowed, searched (passages too) and counted with it, each marked — and the topics' scope — [shelf-terms.md](shelf-terms.md) | push | `?archived=1` |
 | `topicsView` | `detail` for one row per topic; absent is the row of pills — [shelf-terms.md](shelf-terms.md) | push | `?topicsView=detail` |
 

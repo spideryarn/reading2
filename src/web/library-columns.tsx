@@ -40,6 +40,7 @@ import { exactly, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
+import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
 import { articleTitleVoice, gistVoice, type Voice, voiceClass, withVoice } from "./voice.js";
@@ -407,7 +408,11 @@ function TitleCell({
             <span className="tw:ml-1.5 tw:rounded tw:border tw:border-border tw:px-1 tw:py-0.5">
               fixture
             </span>
-          )}
+          )}{" "}
+          {/* The reader's own tags, and the way to add one — the card's
+              control (ShelfTags.tsx), at the end of this line, which is always
+              drawn: `sub` always carries the minutes. Plan 261003d. */}
+          <ShelfTags entry={entry} shelf={shelf} />
         </span>
       )}
     </>

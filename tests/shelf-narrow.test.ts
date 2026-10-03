@@ -15,6 +15,7 @@ import {
   isArchived,
   narrowBeforeTopics,
   narrowShelf,
+  tagFacets,
   topicCounts,
   topicMembers,
   type ShelfTerm,
@@ -135,5 +136,43 @@ describe("isArchived", () => {
   it("reads the server's archivedAt, and nothing else", () => {
     expect(isArchived(entry("x", { archivedAt: "2026-09-20T00:00:00.000Z" }))).toBe(true);
     expect(isArchived(entry("x"))).toBe(false);
+  });
+});
+
+/* The reader's own tags as facets — plan 261003d. */
+describe("tagFacets", () => {
+  const shelf = [
+    entry("a", { tags: ["ai", "memory"] }),
+    entry("b", { tags: ["ai"] }),
+    entry("c", { tags: ["buddhism"] }),
+    entry("d"), // a row cached before tags existed: none
+  ];
+
+  it("makes one facet per tag in scope, most-used first, then by name", () => {
+    expect(tagFacets(shelf).map((t) => [t.key, t.articles.map((a) => a.slug)])).toEqual([
+      ["ai", ["a", "b"]],
+      ["buddhism", ["c"]],
+      ["memory", ["a"]],
+    ]);
+  });
+
+  it("narrows with topics by the one AND rule", () => {
+    const tags = tagFacets(shelf);
+    const topic: ShelfTerm = {
+      key: "t",
+      label: "t",
+      articles: [
+        { slug: "b", count: 1 },
+        { slug: "c", count: 1 },
+      ],
+    };
+    const members = [...topicMembers([topic], ["t"]), ...topicMembers(tags, ["ai"])];
+    expect(narrowShelf(shelf, { query: "", unread: false, topics: members }).map((e) => e.slug)).toEqual([
+      "b",
+    ]);
+  });
+
+  it("ignores a chosen tag no article in scope carries, rather than emptying the shelf", () => {
+    expect(chosenTopics(["ai", "gone"], tagFacets(shelf))).toEqual(["ai"]);
   });
 });
