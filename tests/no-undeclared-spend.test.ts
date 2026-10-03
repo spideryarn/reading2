@@ -246,6 +246,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "The other half: whether `keywords` is honoured, which cannot be established by reading the session back — it is accepted and not echoed. Speaks a sentence and checks the terms come back spelled right. Same exception, same reason.",
   "evals/live/gpt-live-spike.mts":
     "Whether live conversation should move to gpt-live-1 (docs/investigations/261002r-gpt-live-spike.md). Opens realtime sessions through src/live.ts's mint, and gpt-live-1 sessions over its own WebSocket with the API key, and buys text-to-speech for the spoken questions. Same exception as its two siblings: a live session has no response body for declaredFetch to wrap. A full run is about ten dollars.",
+  "scripts/spike-live-push-to-talk.ts":
+    "Whether tap to talk's push-to-talk events do what OpenAI documents, and what background voices do to semantic VAD (docs/plans/261003d-tap-to-talk-when-noise-holds-the-live-turn-open.md § The spike). One realtime session over its own WebSocket with the API key, plus text-to-speech for its test sentences. Same exception as the live evals: a live session has no response body for declaredFetch to wrap. A few cents a run.",
   "src/web/live/useLiveConversation.ts":
     "The browser half. It posts an SDP offer to api.openai.com with an EPHEMERAL token our server minted — the API key is not in this bundle and cannot be. Caught because the matcher is hostname-based, which is right: this is the file to look at if that ever stops being true.",
 };
