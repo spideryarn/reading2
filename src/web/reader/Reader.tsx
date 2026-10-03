@@ -137,7 +137,8 @@ import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { modePress } from "./mode-press.js";
-import { bandCoversProse, bandShapeFor, fitView } from "../layout.js";
+import { bandCoversProse, bandShapeFor, fitView, NARROW_WINDOW_MAX } from "../layout.js";
+import { media } from "../media.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
 import { BandBackChip } from "../BandBackChip.js";
@@ -600,13 +601,21 @@ export function Reader({
   // table's ResizeObserver hears nothing (GPT Sol, plan review of 261002h,
   // finding 1).
   //
-  // `showCrumbs` since 2026-10-03: on a narrow window the bar is taller while
-  // it holds the breadcrumb (crumbs.css § a narrow window), so its height
-  // follows `showCrumbs`, not `showBar`. A signed-in reader of somebody else's
-  // article keeps the View-only chip's bar while the breadcrumb comes and goes
-  // (a mode opening over the prose hides it), and the rows move under an
-  // unchanged `showBar` (GPT Sol, plan review of 261003n, F1).
-  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${showCrumbs ? 1 : 0}`;
+  // `tallCrumbsBar` since 2026-10-03: on a narrow window the bar is taller
+  // while it holds the breadcrumb (crumbs.css § a narrow window), so its
+  // height follows this state rather than `showBar`. A signed-in reader of
+  // somebody else's article keeps the View-only chip's bar while the
+  // breadcrumb comes and goes, and the rows move under an unchanged `showBar`
+  // (GPT Sol, plan review of 261003n, F1).
+  //
+  // The width predicate is the CSS media query's, not `windowWidth`: that
+  // value is the page beside a classic scrollbar, while media queries ask the
+  // viewport. Raw `showCrumbs` was briefly keyed here and made a wide visitor's
+  // one-line breadcrumb look like a reflow, restoring `?at=` and moving them to
+  // the section start under an unchanged 44px bar (261003h postmortem).
+  const tallCrumbsBar =
+    showCrumbs && media(`(max-width: ${NARROW_WINDOW_MAX}px)`);
+  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${tallCrumbsBar ? 1 : 0}`;
 
   /**
    * **Is the prose on screen, for the reading-time recorder** — only this

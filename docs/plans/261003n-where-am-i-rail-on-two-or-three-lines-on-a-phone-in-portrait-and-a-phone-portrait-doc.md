@@ -193,6 +193,24 @@ review answered, browser check at three widths. Doc: `tests/doc-links.test.ts` g
 ## Progress
 
 - 2026-10-03: plan written; trawl for stage 3 started.
+- 2026-10-03: **GPT Sol's code review of `84ad9e8bd`: proceed**, with fixes
+  ([review](261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc-code-review-sol.md)).
+  One round.
+  - **F7 (P1, fixed by Sol):** raw `showCrumbs` in `layoutKey` told the position tracker a *wide*
+    window had reflowed when its 44px bar had not changed, which with `?at=` set moves the reader to
+    the start of their section. The key now carries "the bar is the tall one". Postmortem:
+    [261003h](../postmortems/261003h-a-layout-key-must-name-a-layout-change.md). Sol asked
+    `window.matchMedia` directly, which jsdom does not have; I changed it to `media()` from
+    `media.ts`, which exists for exactly that.
+  - **F8 (P2, fixed):** the new query carries the `spine-width-check` marker after all.
+  - **F9, F10 (fixed):** `phone-and-touch.md` had wrong or over-general signposts and restated
+    contracts. Sol replaced the policy lines with labels and links. **Partly overruled (a P2):** I
+    put a plain sentence back on four of them, each checked against its owner, because Greg asked
+    for "what policies we're applying" and a label does not say one.
+  - **F2 stands, for Greg:** the rows are 28 and 39px to press. 44px each would be an 89px bar.
+  - **F3 answered by evidence Sol did not have:** at 320 with the chip the crumbs get 183px and
+    only the ancestor is cut; the longer "sign-in unconfirmed" chip never shares the bar with the
+    breadcrumb in the state that could be posed (no breadcrumb is drawn there).
 - 2026-10-03: stages 2 and 3 built. **How the layout ended up:** no grid and no count from React.
   The list stays the one-line row it is on a wide window, 28px tall; the current section's `li` is
   taken out of flow and laid under it, so no number of ancestors can push it down. One DOM change:

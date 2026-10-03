@@ -17,10 +17,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { allSheets, enclosing, readerSheets, stripComments } from "./helpers/stylesheets.js";
-import { GIST_MIN, PROSE_MIN, SPINE_W } from "../src/web/layout.js";
+import { NARROW_WINDOW_MAX } from "../src/web/layout.js";
 
 /** § a narrow window's query, from the constants spine-width.test.ts pins it to. */
-const NARROW = `@media (max-width: ${GIST_MIN + PROSE_MIN + SPINE_W - 1}px)`;
+const NARROW = `@media (max-width: ${NARROW_WINDOW_MAX}px)`;
 const HOLDS_CRUMBS = ":root:has(:where(.reader) > .controls > .crumbs)";
 
 const sheet = readerSheets().find((s) => s.path.endsWith("/crumbs.css"));
@@ -62,5 +62,6 @@ describe("the breadcrumb's narrow rules", () => {
     const clamps = chains(crumbs, /-webkit-line-clamp:\s*2;/g);
     expect(clamps.length).toBe(1);
     expect(clamps[0]?.[0]).toContain("[aria-current]");
+    expect(clamps[0]?.slice(1)).toEqual([NARROW]);
   });
 });

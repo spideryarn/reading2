@@ -93,16 +93,19 @@ class NoResizeObserver {
 Object.assign(globalThis, { ResizeObserver: NoResizeObserver });
 Object.defineProperty(window, "matchMedia", {
   writable: true,
-  value: (query: string) => ({
-    matches: false,
-    media: query,
-    addEventListener() {},
-    removeEventListener() {},
-    addListener() {},
-    removeListener() {},
-    onchange: null,
-    dispatchEvent: () => false,
-  }),
+  value: (query: string) => {
+    const maxWidth = query.match(/^\(max-width:\s*(\d+)px\)$/);
+    return {
+      matches: maxWidth ? window.innerWidth <= Number(maxWidth[1]) : false,
+      media: query,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      onchange: null,
+      dispatchEvent: () => false,
+    };
+  },
 });
 Object.defineProperty(window, "scrollTo", { writable: true, value: () => {} });
 if (!(globalThis as { CSS?: unknown }).CSS) {
@@ -373,5 +376,33 @@ describe("the headings breadcrumb", () => {
     const without = layoutKeys.at(-1);
 
     expect(without, "the bar changed height, so the key must change").not.toBe(withCrumbs);
+  });
+
+  /**
+   * The key above is about geometry, not breadcrumb visibility by itself. On a
+   * wide window the View-only bar is already present and remains 44px whether
+   * or not Experimental adds the one-line breadcrumb. Treating that as a
+   * reflow makes `useReadingPosition` restore `?at=` and moves a reader who was
+   * part-way through the section back to its start (261003h postmortem).
+   */
+  it("a wide signed-in visitor's one-line breadcrumb does not change layoutKey", async () => {
+    vi.stubGlobal("innerWidth", 768);
+    owns = false;
+    experimentalSince = null;
+    await open();
+    expect(host.querySelector(".reader > .controls > .mode.on"), "the View-only chip").not.toBeNull();
+    expect(crumbs(), "Experimental off: no breadcrumb").toBeNull();
+    const without = layoutKeys.at(-1);
+    expect(without).toBeDefined();
+
+    await act(async () => root.unmount());
+    resetExperimental();
+    experimentalSince = "2026-10-02T00:00:00.000Z";
+    root = createRoot(host);
+    await open();
+    expect(host.querySelector(".reader > .controls > .mode.on"), "the chip keeps the bar").not.toBeNull();
+    expect(crumbs(), "Experimental on: the one-line breadcrumb").not.toBeNull();
+
+    expect(layoutKeys.at(-1), "the 44px bar and article geometry did not change").toBe(without);
   });
 });

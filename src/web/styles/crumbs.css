@@ -113,8 +113,8 @@
    that grew as the reader crossed a heading would move the article under
    them mid-scroll. `--bar-h` is raised only while the bar holds this, so a
    visitor's chip-only bar keeps the default, and `--bar-bottom` and
-   `--bar-hide` follow it (tokens.css). `layoutKey` in Reader.tsx carries
-   `showCrumbs` for the same reason.
+   `--bar-hide` follow it (tokens.css). `layoutKey` in Reader.tsx carries the
+   same effective tall-bar state for that reason.
 
    **Each row is one press target with no dead strip between**: the ancestors'
    line (28px), and the rest for the current section whether its text takes
@@ -122,10 +122,11 @@
    Both are below touch.md's 44px, and the only fix is more height on the
    screen with least.
 
-   The query is narrow-window.css § a narrow window's, and it carries no
-   `spine-width-check` marker because tests/crumbs-narrow.test.ts pins it to
-   the same sum.
+   The query is narrow-window.css § a narrow window's; its marker is checked
+   against layout.ts's constants by tests/spine-width.test.ts, and
+   tests/crumbs-narrow.test.ts checks that this is the file's only query.
    docs/plans/261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc.md */
+/* spine-width-check: GIST_MIN + PROSE_MIN + SPINE_W - 1 */
 @media (max-width: 731px) {
   /* (0,3,0), over `:root` in tokens.css. The `:has()` argument is the one in
      shell.css's guard that keeps this bar on screen. */

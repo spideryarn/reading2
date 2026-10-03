@@ -29,9 +29,10 @@ Plan, GPT Sol's reviews, the experiment and its screenshots:
 - **The rail is three lines on a narrow window.** The headings breadcrumb puts the parts above on
   the first line and the section you are in on up to two more, in a bar 68px tall where it was 44.
   Before, a phone showed the part as its number alone and cut every long section title.
-- **Only a phone in portrait gets it**, and that is what the screenshots decided. Three shapes
-  were shot at eight widths: one line cuts crumbs at 430px and below and nowhere wider, so an iPad
-  and a landscape phone are unchanged. Two lines still cut the section at 320; three never did.
+- **Only a narrow window gets it.** Three shapes were shot at eight widths: one line cuts crumbs at
+  430px and below and nowhere wider, so the tested iPad and landscape-phone widths are unchanged; a
+  desktop window dragged equally narrow gets the same treatment. Two lines still cut the section at
+  320; three never did.
 - **A map doc**: [phone-and-touch.md](../project/phone-and-touch.md). Greg's words on phones, iPads
   and fingers, quoted and dated; every policy in one line with the doc that owns it; and a table of
   where the code branches on the device. [touch.md](../project/touch.md) and

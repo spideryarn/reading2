@@ -3,10 +3,11 @@
 Up: [reading-view-overview.md](reading-view-overview.md)
 
 **What is different on a phone, on an iPad and under a finger, what Greg has asked for, and where
-the code that does it lives.** This doc is a map. It restates nothing: every policy below is one
-line and a link to the doc that owns it, and the two that own most of them are
+the code that does it lives.** This doc is a map: each policy below is a line, or just a label, and a route to the doc that
+owns it, and the two that own most of them are
 [touch.md](touch.md) (what a finger does) and [narrow-windows.md](narrow-windows.md) (what a narrow
-window gives up). Change a policy there, and add its line here.
+window gives up). Greg's words are copied here deliberately — the documentation policy's quotation
+exception — with their source beside them.
 
 It exists because Greg asked for it, 2026-10-03 (`spya-ub4jnc`):
 
@@ -14,29 +15,25 @@ It exists because Greg asked for it, 2026-10-03 (`spya-ub4jnc`):
 > iPhone or portrait iPhone specifically, with signposts to where we're doing stuff that's
 > iPhone-specific and what policies we're applying that are specific to touch devices and whatever,
 > and capturing my intent from previous conversations and feedback reports and stuff like that.
+>
+> — Greg, 2026-10-03 (`spya-ub4jnc`,
+> [note](../user-feedback/261003_1538-where-am-i-rail-three-lines-on-a-phone-and-a-phone-and-touch-map.md))
 
-## There are three questions, not one device
+## There is no one phone switch
 
-Nothing in the code asks "is this an iPhone?" to decide a layout. It asks one of three separate
-questions, and a phone in portrait is simply the device that answers yes to all of them:
-
-| The question | How it is asked | What depends on it |
-|---|---|---|
-| **Is the window narrow?** | the window's width, in `layout.ts` arithmetic and one media query | which columns fit; whether a mode covers the article |
-| **Is the pointer a finger?** | `(pointer: coarse)`, `(any-pointer: coarse)`, `(hover: none)`, `pointerType` | how big a control is; tap-to-reveal instead of hover |
-| **Is the screen cut into?** | `env(safe-area-inset-*)` | where the bars start under a notch or a clock |
-
-So an iPad in portrait is a finger in a wide window, a narrow desktop window is a mouse in a narrow
-one, and each gets only its own half. Before adding a rule, decide which question it answers.
+The code branches separately on available width and height, pointer and hover capabilities, physical
+screen size, safe-area insets, the visual viewport and — for the installation hint — iOS. A phone in
+portrait triggers several of those; a narrow desktop window or an iPad triggers only some. The table
+below is the inventory. Before adding a rule, decide which condition it actually needs.
 `pointer` against `any-pointer` is the choice that goes wrong most often:
 [touch.md § How big a thing has to be to press it](touch.md#how-big-a-thing-has-to-be-to-press-it).
 
 ## What Greg has said
 
-His words, oldest first. Each is quoted where it was first written down; follow the link for the
-rest of what he said and what was done.
+His words, grouped by the question they answer. Follow each source for the rest of what he said and
+what was done.
 
-**The phone is second to a larger screen, and it should say so once.**
+**The phone is second to a larger screen, and the shelf should say so.**
 
 > Spideryarn does not work that well on a mobile phone. It works, but because of the small screen
 > the experience is suboptimal.
@@ -64,10 +61,11 @@ rest of what he said and what was done.
 
 **Every bit of the screen counts, in both directions.**
 
-> let's make portrait and landscape consistent for small devices, because every centimetre of real
-> estate in either dimension is valuable
+> Let's make portrait and landscape consistent for small devices, because every centimetre of real
+> estate in either dimension is valuable.
 >
-> — Greg, 2026-08-27 (quoted in `styles/narrow-window.css` § a small device)
+> — Greg, 2026-08-27
+> ([plan](../plans/260827t-mobile-reading-view.md))
 
 > especially on mobile we want the margins either side of the text to be minimal, to maximise the
 > space we have for the text.
@@ -89,7 +87,8 @@ are.**
 > The rail at the top that shows where I am is especially valuable on iPhone in portrait mode
 > because I can't show the structure mode and the text at the same time.
 >
-> — Greg, 2026-10-03 (`spya-ub4jnc`)
+> — Greg, 2026-10-03 (`spya-ub4jnc`,
+> [note](../user-feedback/261003_1538-where-am-i-rail-three-lines-on-a-phone-and-a-phone-and-touch-map.md))
 
 **A short landscape band should spend its height on the result, not on its own header.**
 
@@ -111,13 +110,23 @@ are.**
 
 > We're going to want to read on an iPad a lot.
 >
-> — Greg, 2026-08-26 ([touch.md](touch.md))
+> — Greg, 2026-08-26
+> ([research](../research/260826f-ipad-touch-scrolling.md))
 
-**Things have to be big enough, and far enough apart, for a finger.** He has said this five times,
-of the bottom bar (2026-08-28), the gutter icons (2026-09-04 and again on 2026-10-03, *"I feel like
-I've asked this at least once before"*), the shelf's menu and the close cross (2026-10-01). All
-five are in [touch.md](touch.md) and
-[narrow-windows.md § What a control owes a finger](narrow-windows.md#what-a-control-owes-a-finger).
+**Things have to be big enough, and far enough apart, for a finger.**
+
+> Please, can we slightly increase the vertical gap between the icons in the gutter next to a block,
+> you know, the permalink and the comment and the question. I feel like I've asked this at least once
+> before. It's just a little bit hard to touch them with a finger on an iPad.
+>
+> — Greg, 2026-10-03 (`spya-kwgem6`,
+> [note](../user-feedback/261003_0931-gutter-icons-further-apart-for-a-finger.md))
+
+The same intent appears in the bottom-bar ask
+([2026-08-28](../plans/260828av-mobile-screen-real-estate.md)), the first gutter ask
+([2026-09-04](../plans/260904b-gutter-help-button-and-detached-streaming-chat.md)), and the shelf-menu
+and close-cross reports
+([2026-10-01](../user-feedback/261001_1920-ipad-touch-targets-shelf-actions-close-crosses-band-scrollbar.md)).
 
 **Hover has to have a tap.**
 
@@ -131,57 +140,61 @@ five are in [touch.md](touch.md) and
 
 **A narrow window (a phone in portrait, or any window that small)**
 
-- **A mode covers the article instead of sitting beside it** when the two will not fit. A link in the mode steps it aside to show the passage, with a chip to come back.
+- **A mode covers the article when the two will not fit side by side**, and a passage link in it
+  steps the mode aside to show the passage, with a chip to come back. Some controls deliberately
+  stay in the band: Skim's arrows are the first.
   [narrow-windows.md § The reading view's narrow window](narrow-windows.md#the-reading-views-narrow-window-which-is-a-different-problem),
   [touch.md § A passage link in a covering band shows the passage](touch.md#a-passage-link-in-a-covering-band-shows-the-passage).
-  The one exception is Skim's arrows, which stay in Skim: [skim.md](skim.md).
-- **One banner, once**, saying both will not fit and naming Plain as the way back; a second on the
-  shelf, which asks about the device rather than the window.
+  The mode-specific routes are [skim.md § What shipped](skim.md#what-shipped) and
+  [diagram.md § Interaction](diagram.md#interaction).
+- **Phone and fit notices:** why the reader and shelf ask different questions, and when each stops.
   [touch.md § One banner, once, when both will not fit](touch.md#one-banner-once-when-both-will-not-fit).
-- **The headings breadcrumb runs to three lines**, where on wider windows it is one:
-  the ancestors on the first, the section you are in on up to two more. The bar's height is fixed
-  for the width, so crossing a heading never moves the article. It is not drawn while a mode
-  covers the article. Its two rows are smaller to press than the rule below asks, and
-  `styles/crumbs.css` § a narrow window says why. [experimental-features.md](experimental-features.md),
+- **The headings breadcrumb runs to three lines in a taller bar**, where a wider window has one.
+  The height is fixed for the width, so crossing a heading never moves the article, and it is not
+  drawn while a mode covers the article.
+  [experimental-features.md § What is behind it today](experimental-features.md#what-is-behind-it-today),
+  [narrow-windows.md § The reading view's narrow window](narrow-windows.md#the-reading-views-narrow-window-which-is-a-different-problem),
   [261003n](../plans/261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc.md).
-- **Rows wrap rather than shrink; a bar that cannot fit scrolls sideways rather than dropping
-  controls.** [narrow-windows.md § Narrow windows: wrap, do not shrink](narrow-windows.md#narrow-windows-wrap-do-not-shrink).
-- **The margins beside the prose are minimal.**
-  [narrow-windows.md](narrow-windows.md), and `styles/narrow-window.css` for the gutters.
+- **Overflow in narrow rows and bars:** which surface wraps and which scrolls.
+  [narrow-windows.md § Narrow windows: wrap, do not shrink](narrow-windows.md#narrow-windows-wrap-do-not-shrink).
+- **The prose gutters:** what gives way when horizontal space is scarce.
+  [narrow-windows.md § The reading view's narrow window](narrow-windows.md#the-reading-views-narrow-window-which-is-a-different-problem),
+  and `styles/narrow-window.css` for the gutters.
 
 **A small device, either way up**
 
-- **The bottom bar leaves while you read forwards and comes back when you scroll back.** The top
-  bar does that at every width, except while it holds the breadcrumb.
-  [touch.md § How big a thing has to be to press it](touch.md#how-big-a-thing-has-to-be-to-press-it).
-- **A band's order buttons are one line that scrolls sideways on a touch screen**, and Quotes
-  draws no head row above them, so a short landscape band spends its height on the result.
-  [quotes.md](quotes.md),
+- **The bars leave while you read forwards and come back when you scroll back.** The top bar does
+  it at every width, and stays put while it holds the breadcrumb; the bottom bar does it only here.
+  `styles/shell.css` § the bar that leaves owns the top bar; `styles/narrow-window.css` § a small
+  device owns the bottom bar. [touch.md](touch.md) owns the finger-facing intent.
+- **Short mode bands:** the order controls' press and overflow rules, and Quotes' head-row decision.
+  [quotes.md § The orders, and the bar](quotes.md#the-orders-and-the-bar),
   [touch.md § And it did not reach the mode bands](touch.md#and-it-did-not-reach-the-mode-bands).
 
 **A finger**
 
-- **Big enough to press**, and only for a coarse *primary* pointer.
+- **Press-target sizing:** the primary-pointer rule and the named hybrid-device exceptions.
   [narrow-windows.md § What a control owes a finger](narrow-windows.md#what-a-control-owes-a-finger).
-- **The first tap shows what hover would have shown; the second acts.** The left rail, the gutter,
-  glossary terms, links, the shelf's actions.
-  [touch.md § The gutter, and the row a finger is on](touch.md#the-gutter-and-the-row-a-finger-is-on),
-  [links.md](links.md), [tooltips.md](tooltips.md).
+- **Tap versus hover:** the meaning of a tap on each surface, including the cases that act at once.
+  [touch.md § What happens where](touch.md#what-happens-where),
+  [links.md § On a coarse pointer](links.md#on-a-coarse-pointer-the-first-tap-reveals-and-the-second-opens),
+  [tooltips.md § What the card says](tooltips.md#what-the-card-says-and-why-that).
 - **The prose scrolls natively, one axis at a time.**
   [touch.md § Why the prose is untouched](touch.md#why-the-prose-is-untouched).
-- **A selection made by a finger gets a button**, because iPadOS shows its own menu and no
-  `mouseup` arrives. [touch.md § A finger's selection gets a button](touch.md#a-fingers-selection-gets-a-button).
-- **Enter on a soft keyboard sends, and the keyboard goes away.** A text field is large enough that iOS does
-  not zoom into it. [touch.md § What the Enter key promises](touch.md#what-the-enter-key-promises).
-- **A mode says its name when pressed**, since there is no hover to ask.
+- **Touch selections:** where their action lives when mouse-oriented events do not arrive.
+  [touch.md § A finger's selection gets a button](touch.md#a-fingers-selection-gets-a-button).
+- **Text fields and the soft keyboard:** Enter semantics, dismissal, and iOS's focus zoom.
+  [touch.md § What the Enter key promises](touch.md#what-the-enter-key-promises).
+- **Mode names without hover:** the pressed-mode announcement.
   [touch.md § A mode says its name when you press it](touch.md#a-mode-says-its-name-when-you-press-it).
 
 **The screen itself**
 
-- **Nothing may assume the page starts at a safe pixel.** The bars sit below the clock and inside
-  the notch. [narrow-windows.md](narrow-windows.md), last section.
-- **Installed to the Home Screen there is no Back button and no browser chrome**, so every jump
-  needs its own way back, and a link must not open over the app. [links.md](links.md).
+- **Safe areas:** which layout tokens own the clock, notch and home indicator.
+  [narrow-windows.md § The screen is bigger than the window](narrow-windows.md#the-screen-is-bigger-than-the-window-envsafe-area-inset-).
+- **Installed-app navigation:** the way back after a jump and the rule for outbound links.
+  [url-state.md § The way back lives until you leave the article](url-state.md#the-way-back-lives-until-you-leave-the-article),
+  [links.md § Every link that leaves the app opens a new tab](links.md#every-link-that-leaves-the-app-opens-a-new-tab).
 
 ## Where the code branches
 
@@ -190,29 +203,30 @@ existing question already answers it.
 
 | What | Where | Note |
 |---|---|---|
-| **a narrow window** | `styles/narrow-window.css` § a narrow window; the same query in `styles/crumbs.css`, `styles/feedback.css`, `styles/dock-quick-search.css` | the number is derived from `layout.ts`'s constants, not chosen, and `tests/spine-width.test.ts` pins it |
+| **the reading view's narrow window** | `styles/narrow-window.css` § a narrow window; `styles/crumbs.css` § a narrow window | the query is derived from `layout.ts`'s constants and its copies carry the markers checked by `tests/spine-width.test.ts` |
+| other narrow UI | `styles/feedback.css`; the width arm in `styles/dock-quick-search.css` | local adaptations at the reading view's boundary; quick search also asks whether the pointer is coarse |
 | **a small device**, narrow or short | `styles/narrow-window.css` § a small device | the bottom bar's hiding. The `max-height` half is what catches a landscape phone |
 | **a mode covers the article** | `layout.ts` § `bandCoversProse`; `Reader.tsx` writes `.band-covers` | arithmetic, not a media query, because it moves with `?spine=0` |
 | which columns fit | `layout.ts` § `fitView`, `fitMode`; `reader/measure.ts` § `useWindowWidth` | the width is the page's less the notch, and is re-measured on rotation |
 | the bottom bar's fit | `dock-fit.ts`, `styles/dock-fit.css` | measured, not a breakpoint |
 | **a phone**, as a device | `small-screen-hint.ts` § `isPhone` | a coarse pointer and a small *screen*, not window, so rotating does not change the answer |
-| **iOS**, by user agent | `install-hint.ts` | the only user-agent test that changes what is drawn: the Add to Home Screen hint |
-| size for a finger | `@media (pointer: coarse)` in `narrow-window.css` § a coarse pointer, and in `footnotes`, `glossary`, `citations`, `quotes`, `referee`, `crumbs` | primary pointer only |
+| **iOS**, by `navigator.userAgent` | `install-hint.ts`, `InstallHint.tsx` | the Add to Home Screen hint; other engine checks use different signals (`userAgentData` or `navigator.vendor`) |
+| size for a finger | `@media (pointer: coarse)` in `narrow-window.css` § a coarse pointer, and in `footnotes`, `glossary`, `citations`, `quotes`, `referee` | primary pointer only |
 | rules a touchscreen laptop needs too | `@media (any-pointer: coarse)` in `narrow-window.css` (the 16px field, `touch-action` on the prose), `close.css`, `summary.css`, `gutter.css` | |
-| hover that must not stick | `@media (hover: hover)` / `(hover: none)` in `gutter`, `prose`, `quotes`, `glossary`, `debate`, `chat-actions` | iOS keeps `:hover` on after a tap |
+| hover-only styling and touch fallbacks | `@media (hover: hover)` / `(hover: none)` in `gutter`, `prose`, `quotes`, `glossary`, `debate`, `chat-actions` | the glossary, Quotes and gutter guards also stop iOS's post-tap `:hover` from looking selected |
 | tap against hover, in JS | `useHoverCard.ts`, `useTapReveal.ts`, `Spine.tsx`, `BlockGutter.tsx` | `pointerType`, with `detail` as the fallback: since iOS 18.2 a finger's click can say `mouse` |
 | a finger's selection | `TouchSelectionChip.tsx` | |
 | the on-screen keyboard | `useVisualViewport.ts` (`--kb-inset`, `putKeyboardAway`); `index.html` (`interactive-widget`) | [feedback.md](feedback.md) has the `dvh` story |
 | the notch and the clock | `styles/tokens.css` (`--safe-*`), `safe-area.ts`, `index.html` (`viewport-fit=cover`) | |
-| the two banners | `SmallScreenHint.tsx`, `InstallHint.tsx`, `small-screen-hint.ts` | |
+| the two size notices | `SmallScreenHint.tsx`, `ShelfPhoneHint.tsx`, `small-screen-hint.ts` | the installation hint is the iOS row above, not one of these two |
 | long-press and scrollbar fixes | `-webkit-touch-callout` in `styles/dock.css` and `annotations.css`; `scrollbar-color` in `styles/mode-band.css` | the second is for iPadOS, whose scroll indicator was invisible on a band |
-| one-line order rows | `OrderGroup.tsx`, `styles/glossary.css` | |
+| one-line order rows | `OrderGroup.tsx`, `styles/glossary.css`, `styles/quotes.css` | |
 | measuring a real phone | `ViewportProbe.tsx`, opened with `?probe=1` | a diagnostic: it records what the visual viewport does on the device |
 
 ## Checking it
 
-A phone-width window does not exist on a desktop browser, and an emulated one has no notch and no
-keyboard: [browser-testing.md](browser-testing.md) and
+A phone-width desktop window is not a phone, and emulation has no real notch or keyboard:
+[browser-testing.md](browser-testing.md) and
 [browser-testing-playwright.md](browser-testing-playwright.md) say what to use instead, and
 [touch.md § What only a real iPad can tell us](touch.md#what-only-a-real-ipad-can-tell-us) says
 what no emulation can show.
