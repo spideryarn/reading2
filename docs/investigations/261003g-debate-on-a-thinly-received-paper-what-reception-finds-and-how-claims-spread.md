@@ -11,7 +11,7 @@ six paid runs, $1.29, two runs an arm. Read the counts as direction, not as rate
 ## What was run
 
 `npm run eval:debate -- run --slug <slug>` on the box: production's own `generateDebate`, journalled
-to `output/debate-runs/` (gitignored). Each journal was then replayed with
+to `output/debate-runs/` (gitignored; the six journals are kept on the box, in the primary checkout's `output/debate-runs/2026-10-03T21-5*`). Each journal was then replayed with
 `npm run eval:debate -- replay --run <dir> --rows`. The `--rows` flag is new here and lists every
 kept row with its identification level or its claim.
 
