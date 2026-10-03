@@ -1125,10 +1125,10 @@ export function makeInvestigateCitation(
         }
         yield { type: "stage", stage: "reading-paper" };
         /* **Both settled before the answer starts** (plan 261003m stage 2,
-           Sol F4): `reading` releases the allowance the moment its stream
-           ends, so nothing may still be running by then. `allSettled`, not
-           `all`: when the paper read throws, the influence call is still
-           awaited before the `finally` below frees the slot. */
+           Sol F4): `reading` releases the allowance when its stream ends.
+           `allSettled` awaits the influence result even when the paper read
+           throws. On timeout, that result means the wait ended and the request
+           was aborted; a transport ignoring abort can continue in the background. */
         const [paperRead, influence] = await Promise.allSettled([
           readThePaper(prepared),
           readTheInfluence(prepared, findings),
@@ -1151,7 +1151,7 @@ export function makeInvestigateCitation(
       { article, context, matched, model, contextHash, allowed }: Awaited<ReturnType<typeof prepare>>,
       paper: Awaited<ReturnType<typeof readThePaper>>,
       findings: DigFindings,
-      /** Already settled: nothing of it is running while this streams. */
+      /** Already settled, including a timeout result; late request results are ignored. */
       influence: InfluenceOutcome,
     ): AsyncGenerator<InvestigateEvent> {
       const request = investigateRequest({

@@ -573,7 +573,7 @@ memory. Code keeps the number only when all of this holds
 
 - the page is one of those shown, and its address and title are copied from the search result,
   never from the model;
-- **the page is about this work, not one that merely mentions it**: its title names the work by
+- **the page's title names this work**, by
   the quick check's title rule (`resultIsTheWork` with no identifier anchor: the title begins with
   the work's; "Comment on …", "… - Review" and an untitled result are refused);
 - the words are found in that page's own extract by the strict pass (`verifyQuote`: at least six
@@ -581,8 +581,9 @@ memory. Code keeps the number only when all of this holds
 - the number is finite and within 0–1.
 
 No call is made when no page shown has a title naming the work, since nothing it answered could be
-kept. The call has its own 20-second deadline, is settled before the answer starts so it cannot
-outlive the press's allowance, and is best-effort: a refusal, the deadline, an unreadable answer or
+kept. The wait has its own 20-second deadline and ends before the streamed answer starts. The
+deadline aborts the request, but cannot force a transport ignoring abort to stop; a late result
+is ignored. It is best-effort: a refusal, the deadline, an unreadable answer or
 a failed check stores no influence and never fails the press. The press's log line says
 `influenceKept`, and `influenceWhy` when not.
 

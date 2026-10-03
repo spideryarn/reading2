@@ -202,7 +202,7 @@ hides on every list. Not built; as built, only an unknown row is judged on relev
 | F1 (P1) | title-anywhere plus quote-anywhere does not show whose standing the quote is about | the source must be a page about the work (`resultIsTheWork`'s rule); the remaining limit is stated on the row and here; Sol's counter-example is a test |
 | F2 | `findQuote` defaults to the forgiving pass | the strict pass, bounded, a 0–1 CHECK, `withChatJsonSchema`, all fields required-nullable |
 | F3 | a call started straight after the search could judge a stale row under a fresh fingerprint | it runs after the final `prepare()`, on `prepared.context` |
-| F4 | a parallel call could outlive the allowance | it settles before the stream starts, beside the passages call |
+| F4 | a parallel call could outlive the allowance | its result is awaited before the streamed answer, beside the passages call; timeout aborts the request and ends the wait, but a transport ignoring abort may continue (stage-2 review F16) |
 | F5 | a search result need not have a title | moot for a kept source (F1 needs a title), and the title is copied by code and left out of the presence CHECK |
 | F6 | the web value needs one read path, and chat and the order menu read the list's field | `effectiveInfluence`, used by all of them; the list's field is never overwritten |
 | F7 | no version on the new assessment | `influence_version` |

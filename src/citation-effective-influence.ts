@@ -35,7 +35,7 @@ import type { CitationInvestigation } from "./types.js";
  * that makes an older number untrustworthy; every stored one then stops being
  * read, and *Dig deeper again* writes a new one.
  */
-export const INFLUENCE_VERSION = "citation-influence/1";
+export const INFLUENCE_VERSION = "citation-influence/2";
 
 export type EffectiveInfluence =
   | {

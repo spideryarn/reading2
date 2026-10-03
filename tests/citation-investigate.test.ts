@@ -1560,7 +1560,7 @@ describe("the work's influence, from the press's own search (plan 261003m stage 
     expect(h.saved[0]).not.toHaveProperty("influence");
   });
 
-  it("is settled before the answer starts, and nothing of it runs after the allowance is released (Sol F4)", async () => {
+  it("settles a successful call before the answer starts and the allowance is released (Sol F4)", async () => {
     const h = harness({
       deltas: ["An answer."],
       search: FOUND,
@@ -1574,6 +1574,28 @@ describe("the work's influence, from the press's own search (plan 261003m stage 
     expect(at("answer")).toBeGreaterThan(at("influence-settled"));
     expect(at("released")).toBeGreaterThan(at("answer"));
     expect(h.saved[0]?.influence).toEqual(KEPT);
+  });
+
+  it("drops a late result after timeout; a transport ignoring abort can outlive the allowance", async () => {
+    let resolveCall!: (reply: unknown) => void;
+    const pending = new Promise<unknown>((resolve) => { resolveCall = resolve; });
+    const h = harness({
+      deltas: ["An answer."],
+      search: FOUND,
+      influenceReply: () => pending,
+      influenceTimeoutMs: 20,
+    });
+    const { error } = await drain((await h.investigate(SLUG, ID, null)).stream());
+    /* Complete the ignored request too, so the witness leaves no pending work. */
+    const settledAtRelease = h.timeline.includes("influence-settled");
+    resolveCall(GOOD);
+    await pending;
+    await Promise.resolve();
+    expect(error).toBeNull();
+    expect(settledAtRelease).toBe(false);
+    expect(h.timeline.indexOf("influence-settled")).toBeGreaterThan(h.timeline.indexOf("released"));
+    expect(h.saved).toHaveLength(1);
+    expect(h.saved[0]).not.toHaveProperty("influence");
   });
 
   it("runs beside the paper's passages call, not after it", async () => {
