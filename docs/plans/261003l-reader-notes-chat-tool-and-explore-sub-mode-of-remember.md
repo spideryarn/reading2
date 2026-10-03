@@ -273,12 +273,11 @@ Choices the plan left open:
   prompts were dumped before and after and compared byte for byte.
 - **Chip order**: Recall, Tutorial, Explore, Quiz, the three conversations together.
 
-The migration is `drizzle/20261003182913_explore_thread_kind.sql`, generated and additive. **It is
-not applied to the shared local database yet**: `db:migrate` refused, correctly, because that
-database already holds `20261003170347_store_when_it_happened`, which reached `dev` after this
-worktree branched. After `dev` is merged in, this migration is regenerated on top of it
-([database.md § Two worktrees generated at once](../project/database.md#two-worktrees-generated-at-once)),
-so its name will change. The Postgres tests ran green in the private lane, which builds its
-database from this tree's `drizzle/`.
+The migration is **`drizzle/20261003184359_explore_thread_kind.sql`**, generated and additive: it
+drops and re-adds `chat_threads_kind` with `'explore'` in the list, and creates the partial unique
+index `chat_threads_one_explore`. It was first generated as `20261003182913_…`, before
+`20261003170347_store_when_it_happened` reached this worktree, and was regenerated after merging
+`dev` ([database.md § Two worktrees generated at once](../project/database.md#two-worktrees-generated-at-once)).
+Applied to the local database only (`Target: postgresql://postgres@127.0.0.1:54362/postgres`).
 
 Not done here: the eval and its investigation, the browser check, and the code review.
