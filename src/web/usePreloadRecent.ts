@@ -21,8 +21,11 @@ export function usePreloadRecent(articles: readonly LibraryEntry[] | null): void
   /* A string, so a re-render with the same five and the same payload-bearing
      shelf fields is not a new effect. `revisionId` alone is insufficient: a
      rename and visibility/archive changes live on the article row. */
-  const key =
-    articles === null
+  /* `Array.isArray`, not `=== null`: a preload is an extra, and nothing about
+     it may break the shelf. Five shelf tests whose stubs answer `/api/library`
+     with no list at all went red on `.filter` of `undefined`. The shelf itself
+     tolerates that with `articles ?? []`, and so does this. */
+  const key = !Array.isArray(articles)
       ? null
       : JSON.stringify(
           recentlyOpenedEntries(articles).map((article) => [
