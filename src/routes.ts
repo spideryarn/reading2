@@ -4798,8 +4798,9 @@ const pullingClaims = new Set<string>();
  */
 /**
  * What the older of two overlapping runs is told when the newer one is still
- * being answered. **Never stored**: the row is the newer run's, and this is
- * only the last frame of a stream whose answer had nowhere to go. Without it
+ * being answered, or answered different blocks. **Never stored**: the row is
+ * the newer run's, and this is only the last frame of a stream whose answer
+ * had nowhere to go. Without it
  * that stream simply stopped, and the panel said the claims "stopped arriving",
  * which blames the connection for something the reader did.
  */
@@ -4899,17 +4900,22 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
     const stored = await refereeClaimsStore.finish(slug, patch, attempt);
     /* `null` means the run is not this call's to finish any more, and what the
        reader is told depends on what is there instead. Nothing: the article's
-       data went away, and silence is right. A finished row: a newer run (or the
-       sweep) got there first, and that row is the truth, so it is what `done`
-       carries. A `pending` row: a newer run is still out, this tab cannot
+       data went away, and silence is right. A finished row about the same
+       blocks: a newer run (or the sweep) got there first, so `done` carries it.
+       Different blocks: this tab still displays the original article, so the
+       newer answer's citations need a reload to resolve against its prose.
+       A `pending` row: a newer run is still out, this tab cannot
        follow its stream, and saying so beats a stream that just stops — the
        panel would call that a dropped connection. Never a resurrection, never
        an overwrite. */
     if (stored) frame("done", stored);
     else {
       const current = await refereeClaimsStore.load(slug);
-      if (current && current.status !== "pending") frame("done", current);
-      else if (current) frame("done", { ...current, status: "error", error: CLAIMS_SUPERSEDED });
+      if (current && current.status !== "pending" && current.sourceHash === row.sourceHash) {
+        frame("done", current);
+      } else if (current) {
+        frame("done", { ...current, status: "error", claims: [], error: CLAIMS_SUPERSEDED });
+      }
     }
   } catch (storeErr) {
     log("store").error(

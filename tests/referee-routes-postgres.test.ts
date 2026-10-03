@@ -69,6 +69,7 @@ import { loadEnvLocal } from "../src/env.js";
 import type { Claim } from "../src/referee-claims.js";
 import type { RefereeResult } from "../src/referee-criteria.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
+import { hashBlocks } from "../src/source-hash.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -302,7 +303,7 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
 
   it("hands an older run the newer run's finished answer rather than its own", async () => {
     duringClaimsRun = async () => {
-      const { attempt } = await asTestOwner(() => refereeClaimsStore.begin(SLUG, "feedfacefeedface"));
+      const { attempt } = await asTestOwner(() => refereeClaimsStore.begin(SLUG, hashBlocks(article.blocks)));
       await asTestOwner(() =>
         refereeClaimsStore.finish(SLUG, { status: "done", claims: [], model: "the-newer-run" }, attempt),
       );
@@ -318,6 +319,35 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
     const stored = await asTestOwner(() => refereeClaimsStore.load(SLUG));
     expect(stored?.model).toBe("the-newer-run");
     expect(stored?.claims).toEqual([]);
+  });
+
+  it("asks an older tab to reload instead of handing it an answer about different blocks", async () => {
+    const newerHash = "feedfacefeedface";
+    expect(hashBlocks(article.blocks)).not.toBe(newerHash);
+    duringClaimsRun = async () => {
+      /* The new revision's fingerprint is enough to reproduce the handoff:
+         this request still holds the original blocks, and the newer answer
+         must stay in the store until the tab reloads its article too. */
+      const { attempt } = await asTestOwner(() => refereeClaimsStore.begin(SLUG, newerHash));
+      await asTestOwner(() =>
+        refereeClaimsStore.finish(SLUG, { status: "done", claims: [CLAIM], model: "the-newer-revision" }, attempt),
+      );
+    };
+    try {
+      const posted = await call("POST", `/api/referee/claims/${SLUG}`);
+      const done = frame(posted.text, "done");
+      expect(done?.status).toBe("error");
+      expect(done?.error).toBe(CLAIMS_SUPERSEDED);
+      expect(done?.claims).toEqual([]);
+    } finally {
+      duringClaimsRun = null;
+    }
+    const stored = await asTestOwner(() => refereeClaimsStore.load(SLUG));
+    expect(stored?.status).toBe("done");
+    expect(stored?.sourceHash).toBe(newerHash);
+    expect(stored?.claims).toEqual([CLAIM]);
+    expect(stored?.model).toBe("the-newer-revision");
+    expect(stored?.error).toBeUndefined();
   });
 
   it("refuses a slug that is not an article, before a header is written", async () => {

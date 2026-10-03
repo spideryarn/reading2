@@ -379,10 +379,12 @@ export async function ownedArticleIdentity(
 /**
  * **Take the article row, so nothing else in this article writes until we commit.**
  *
- * A serialising lock on a row that is already known to exist, held by four
- * stores that keep one run or one thread per article: chat, searches, referee
- * claims and referee criteria all read the current state and then write a new
- * one, and two requests doing that at once would otherwise both win.
+ * A serialising lock on a row that is already known to exist, held by three
+ * stores that keep runs or one thread per article: chat, searches and referee
+ * criteria all read the current state and then write a new one, and two
+ * requests doing that at once would otherwise both win. (Referee claims held
+ * it until 2026-10-03, for a fingerprint read its `begin` no longer makes; its
+ * write is one upsert.)
  *
  * **It is safe only because the id came from `articleIdForOwned`**, so the row
  * is there to be locked. `select … for update` locks the rows the statement
