@@ -34,6 +34,7 @@ import { AlertTriangle, Camera, CheckCircle2, Clock } from "lucide-react";
 import type { AdminFeedbackDetail, AdminFeedbackReport, FeedbackKind } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
 import { exactly, timeAgo } from "./relative-time.js";
 
 /**
@@ -165,7 +166,7 @@ function Screenshot({ ownerId, id, bytes }: { ownerId: string; id: string; bytes
         /* `res.ok` before `blob()`: an error body is perfectly good bytes, and
            without this the reader would get a broken image rather than the
            sentence saying what went wrong. */
-        if (!res.ok) throw new Error(`The screenshot did not load (${res.status}).`);
+        if (!res.ok) throw new ReaderFacingError(`The screenshot did not load (${res.status}).`);
         const made = URL.createObjectURL(await res.blob());
         if (live) setUrl(made);
         else URL.revokeObjectURL(made);
