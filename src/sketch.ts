@@ -47,6 +47,7 @@ import {
 } from "./messages-structured-output.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 import {
   accept,
   CANVAS_W,
@@ -400,8 +401,8 @@ Rules that make the difference between a picture and a mess:
     of contents again.
   - Do not label a node with its section number. The reader cannot see the
     contents page and does not care.
-  - If the article has a part that is apparatus — notes, bibliography,
-    acknowledgements — leave it out or draw it once, muted, at the bottom.
+  - If the article has a part that is apparatus — notes, or the paperwork
+    below — leave it out.
 
 BEING HONEST
 
@@ -432,6 +433,8 @@ JSON only, no prose, no code fence, keys in this order:
 }
 
 ${plainWords("explain", "landmark")}
+
+${paperwork("summary")}
 
 ${PROFILE_RULES}`;
 

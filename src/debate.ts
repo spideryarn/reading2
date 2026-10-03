@@ -178,6 +178,7 @@ import { anyLost, distinctSources, isDebateBears, isDebateDocument } from "./typ
 import { articleShingles, isArticleText, isCopy, shingleOverlap } from "./shingles.js";
 import type { ArticleBlockText, ShingleOverlap } from "./shingles.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 import { log } from "./log.js";
 import {
   DEBATE_SYNTHESIS_OUTPUT_SCHEMA,
@@ -214,8 +215,12 @@ export type {
  * `debate/4`, 2026-09-30: a third, search-free call reads the kept rows and stores the themes they share and the key sources as `synthesis` (SPIDERYARN-READING2-6M; docs/plans/260930j-debate-themes-and-key-sources.md). The two passes' prompts are unchanged, so a row means what it meant under `debate/3`.
  *
  * `debate/5`, 2026-10-02: pass A looks for the work that **cites** the article and says something about it, scholarly papers included, and searches by its title; its witness must contain the title or address in full; and both passes are told to copy an extract's own mistakes (a split word, a stray space, `*`) rather than tidy them. Greg asked for who has cited a piece, for and against (SPIDERYARN-READING2-9D); measured on the old prompt, the right replies were found and then lost to exactly those two checks. No check in code changed. docs/plans/261002i-debate-leads-with-who-has-cited-this-article.md.
+ *
+ * `debate/6`, 2026-10-03: Pass B (`CLAIMS_SYSTEM`) only; the prompt gained the shared paperwork section,
+ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
+ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
  */
-export const PROMPT_VERSION = "debate/5";
+export const PROMPT_VERSION = "debate/6";
 
 /* ------------------------------------------------------------ the four caps --
    **Their scope is stated because it is otherwise ambiguous** (Sol's F22): one
@@ -1314,6 +1319,8 @@ Prefer named authors and established venues where you have the choice. No
 ranking by prominence is applied to what you return, and the reader is told so.
 
 ${plainWords("explain")}
+
+${paperwork("pick")}
 
 ANSWER FORMAT
 

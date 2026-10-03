@@ -57,6 +57,7 @@ import { isBodyEvidence } from "./block-policy.js";
 import { partsOf } from "./tree-parts.js";
 export { partsOf };
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
 import { ARC_PROMPT_VERSION } from "./arc-version.js";
 
@@ -77,6 +78,13 @@ import { ARC_PROMPT_VERSION } from "./arc-version.js";
  * words at every version, plain-words rule or not, and the head shows about
  * 20. Measured in evals/arc-length/run.ts;
  * docs/plans/261002g-marginalia-head-in-plain-words-and-every-note-says-where-it-came-from.md § 2.
+ *
+ * `arc/7`, 2026-10-03: the prompt gained the shared paperwork section,
+ * `paperwork("part")` from src/paperwork.ts, so a part that is only paperwork
+ * gets a sentence about the argument rather than about the paperwork (Greg, 2026-10-01,
+ * spya-k930hy). **The bump spends money on its own**: an owner opening an
+ * article with an older arc queues a new one (src/web/useArc.ts), one call per
+ * article. Accepted in docs/plans/261003d-paperwork-in-every-whole-piece-mode.md.
  *
  * Lives in src/arc-version.ts, which imports nothing, so the reader can compare
  * a payload's arc against it (useArc.ts) without bundling this file.
@@ -153,6 +161,8 @@ RULES
 - Say what the ARTICLE argues, not what a reader should feel. No advice.
 
 ${plainWords("explain")}
+
+${paperwork("part")}
 
 OUTPUT
 
