@@ -31,7 +31,7 @@ and the drawing.
   as a **reach in sixteenths of the rail**, `readReach`, on the same scale, so a level is always the
   reach's quarter and the boundaries below are where they were.
 - **On the spine it is an area chart on its side**, since 2026-10-03: a semi-opaque area in a colour
-  of its own (`--read-time`) from the left edge out to each block's reach, and an opaque line down
+  of its own (`--read-time`) from the left edge out to each block's reach, and a translucent line down
   its right-hand edge. An unread stretch has neither. Before that it was four widths of a faint
   `--ink` bar, which read as a paler part tint.
 
@@ -48,6 +48,20 @@ and the drawing.
 
   [261003j](../plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md).
   spine-marks.ts § `readingAreaPaths`, spine.css § reading time.
+- **The chart is a curve, and quiet.** Its first version stepped at every block and was the loudest
+  thing on the rail. Now the outline eases from one block's reach to the next, and in and out at
+  the ends of a read stretch, and both the area and the line are fainter. It still draws nothing in
+  a stretch you have not read; what the curve costs is that a little-read block beside a much-read
+  one is drawn slightly fuller than it is.
+
+  > We recently added the cyan kind of horizontal levels to the spine to indicate what we've read. I
+  > wonder, well, firstly, I think the cyan is too opaque to visible somehow, so it kind of drowns
+  > other stuff out. Secondly, I was wondering, what if we were to smooth it a bit so it'd be a bit
+  > more like a curve and less like a bunch of blocks, like skyscrapers on a skyline.
+  >
+  > — Greg, 2026-10-03 (spya-bguwsn)
+
+  [261003o](../plans/261003o-spine-reading-chart-quieter-and-smoothed-into-a-curve.md).
 - **Each level's elapsed-time threshold doubles**: 0.35, 0.7, 1.4 and 2.8 of the reading time. A
   glance draws nothing, one brisk read is faint, and full strength takes a slow read or nearly
   three. 0.7 is a boundary because it is the quiz's "read".

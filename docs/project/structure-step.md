@@ -229,7 +229,9 @@ for legacy and direct ranged-builder inputs and is no longer production telemetr
 **And an answer that still cannot become a tree is asked for once more, inside the step** — any
 failure of `treeFrom` (parse, build, supplement, invariants) on a freshly bought answer, if the
 step's deadline leaves room for a second call as long as the first, and never after a truncation, a
-refusal or an abort. Two calls is the worst case; `wholeDocumentCalls` says which happened. Long answers
+refusal or an abort. Two answers is the worst case; `wholeDocumentCalls` says which happened. (Each
+may be more than one network request since 2026-10-03, when a dropped connection began to be
+retried in the gateway: [ai-gateway.md § transport retry](ai-gateway.md#transport-retry).) Long answers
 have more places for one local fault, and the reader pressing Retry was the retry loop:
 [261001s](../plans/261001s-fb93-long-pdf-hierarchy-asks-again.md).
 

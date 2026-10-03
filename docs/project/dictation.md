@@ -378,6 +378,13 @@ chat, the comment follow-up, annotate, quiz and Feedback — and
 the exception on purpose: ⌘+Enter there saves prose to a field the arriving transcript will overwrite
 a second later, and the next blur saves it again, so there is nothing to lose.
 
+**The guard is for a press, not for a box that is going away.** The annotate box stores a draft on
+its way out (the ×, Escape, another selection, an unmount), and that store has neither guard: the
+press is refused because better words are about to arrive, and at an exit nothing better will —
+unmounting aborts the transcription — so the choice is the words the reader could see, or none. The
+kept recording is still offered back in that passage's next box. Arbitrated by Opus, 2026-10-03;
+[comments.md § The box a selection opens](comments.md#the-selection-box).
+
 **And if the box lives in a component that stays mounted when it disappears** — a dialog whose
 parent renders it open *or* shut, as `FeedbackButton` does — closing it unmounts nothing, so
 `useDictation`'s cleanup never runs and the microphone keeps recording behind a shut dialog. One
@@ -571,9 +578,12 @@ passed over, and GPT Sol's review.
   (`sweepDictations`, at startup). Not on a lapsed session. [privacy.md § On the reader's own
   device](privacy.md#on-the-readers-own-device-until-the-words-arrive).
 
-**Not covered**: the words once they are in the box. The audio is forgotten when the transcript
-lands, so a tab that dies between that and Send loses the text as it would lose typed text. Keeping
-the Feedback draft itself is the next step, and is named in the plan.
+**Usually not covered**: the words once they are in the box. The audio is forgotten when the
+transcript lands, so a tab that dies between that and Send loses the text as it would lose typed
+text. The annotate box is the one exception for an ordinary close or reload: its `pagehide` handler
+makes a best-effort save of the visible field ([comments.md § The box a selection
+opens](comments.md#the-selection-box)); a crash or killed browser still fires no event. Keeping the
+Feedback draft itself is the next step, and is named in the plan.
 
 ## The ways it fails
 

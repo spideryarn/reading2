@@ -1145,11 +1145,11 @@ export function leavingFetch(input: string, init: RequestInit = {}): void {
   if (!input.startsWith("/api/")) return;
 
   /* **Browsers cap the total body of all in-flight `keepalive` requests at
-     about 64KiB, and reject over it.** Nothing here comes close — the only
-     caller is the reader profile, capped near 1,500 characters — but this
-     function is generic and swallows its own failures by design, so a future
-     caller sending something large would fail completely silently. Better to
-     say so in the console than to be that silent. GPT Sol, 2026-08-27. */
+     about 64KiB, and reject over it.** None of the current callers — reader
+     profile, reading time and comment drafts — comes close, but this function
+     is generic and swallows its own failures by design, so a future caller
+     sending something large would fail completely silently. Better to say so
+     in the console than to be that silent. GPT Sol, 2026-08-27. */
   const method = (init.method ?? "GET").toUpperCase();
   const body = init.body;
   if (typeof body === "string" && body.length > KEEPALIVE_LIMIT) {

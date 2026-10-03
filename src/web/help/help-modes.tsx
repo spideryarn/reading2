@@ -130,7 +130,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Select some words</strong> to get a comment box with an{" "}
-            <strong>Also ask the AI about it</strong> tick-box.
+            <strong>Ask AI</strong> button.
           </li>
         </ul>
         <p>Chat is only for whoever added the article; on someone else’s shared article its button is dimmed.</p>
