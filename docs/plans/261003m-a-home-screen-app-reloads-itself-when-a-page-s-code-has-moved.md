@@ -149,7 +149,7 @@ it asked.
 - [x] Stage 1 — GPT Sol reviews this plan (`--sandbox review`): build it with changes, six findings, all taken.
 - [x] Stage 2 — failing tests, then `stale-shell.ts`, `LazyPage.tsx`, docs. Gates: `npm test` on the
       touched suites, `npm run typecheck`, lint on touched files, the WebKit reproduction.
-- [ ] Stage 3 — GPT Sol reviews the code (`--sandbox workspace-write`); postmortem; feedback note;
+- [x] Stage 3 — GPT Sol reviews the code (`--sandbox workspace-write`); postmortem; feedback note;
       queue entries for the two deferrals; push to `dev`.
 
 ## GPT Sol's plan review, and what changed
@@ -199,3 +199,5 @@ made*. Its diff was read line by line.
 
 Sol could not run the full suite (its sandbox has no database) and wrote that a pre-review run was
 green. **No full run had been made at that point**; the one that counts is the one below.
+
+Full `npm test` after merging `origin/dev`, 2026-10-03 20:57–21:52 BST: 1,494 files passed, 1 skipped, exit 0.
