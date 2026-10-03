@@ -587,7 +587,7 @@ const INFLUENCE_UNKNOWN_NOTE_SHARED =
  * its web search returns. A look, not a promise: a press that finds no page
  * about the work saying how well known it is leaves the row unknown.
  */
-export const INFLUENCE_UNKNOWN_NOTE = `${INFLUENCE_UNKNOWN_NOTE_SHARED} Dig deeper looks for it on the web, and fills it in when a page about the work says how well known it is.`;
+export const INFLUENCE_UNKNOWN_NOTE = `${INFLUENCE_UNKNOWN_NOTE_SHARED} Dig deeper looks for it on the web, and fills it in when a page about the work says how well known it is. Most searches find no such page.`;
 
 /**
  * **A piece that cites nothing is a real answer**, not an error, and no retry is

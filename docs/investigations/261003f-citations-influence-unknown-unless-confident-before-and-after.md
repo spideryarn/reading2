@@ -12,7 +12,8 @@ a sensible amount of the time, and are the works it still scores actually well k
 **The short answer.** About half the rows now say unknown, where none did. The numbers that remain
 are the same numbers as before. An outside check of a sample found 17 of 24 scored works about
 right and one too high, and 10 of 12 unknown works fair to call unknown; it did not call a famous,
-titled work unknown.
+titled work unknown. *Dig deeper* filling influence in from the web, stage 2, found nothing for
+13 of 13 works in its probe.
 
 ## Method
 
@@ -94,4 +95,46 @@ reading another's number against a count, not a ground truth.
   influence; it judges such a row on its relevance alone (the plan's stage 1, item 4).
 - One scored work in 24 was too high, and it was a recent paper with press coverage. A number from
   memory is still a number from memory; the band's (i) goes on saying so.
-- *Dig deeper* filling the number in from the web is stage 2, measured separately below once built.
+- *Dig deeper* filling the number in from the web is stage 2, measured below.
+
+## Stage 2's probe: does Dig deeper find a work's influence on the web?
+
+**Nearly never: 0 of 13.** `evals/citations-influence-dig.ts` runs the press's own forced search
+(`searchFirst`, aimed as a press aims it) and then the `citation-influence` call and its checks,
+storing nothing. Results: `evals/results/citations-influence/dig-1-*.json`. About 20 cents.
+
+| work | pages | pages whose title names the work | outcome |
+|---|---|---|---|
+| Freeth et al. 2006, *Decoding the ancient Greek astronomical calculator…* | 5 | 1 (nature.com) | the model said null |
+| Price 1974, *Gears from the Greeks* | 5 | 0 | no call |
+| Jones 2017, *A Portable Cosmos* | 5 | 2 (MIT Press bookstore, BMCR) | the model said null |
+| Parker 1950, *The Calendars of Ancient Egypt* | 5 | 0 | no call |
+| Wright 2005, *a new gearing scheme* | 5 | 0 | no call |
+| Evans et al. 2010, *Solar anomaly and planetary displays…* | 5 | 0 | no call |
+| Carman & Evans 2014, *On the epoch of the Antikythera mechanism…* | 2 | 0 | no call |
+| Needham, *Science and Civilisation in China* | 5 | 0 | no call |
+| Brown et al. 2020, *Language Models are Few-Shot Learners* | 5 | 0 | no call |
+| Kaplan et al. 2020, *Scaling Laws for Neural Language Models* | 5 | 1 | the model said null |
+| Sutton, *The Bitter Lesson* | 5 | 0 | no call |
+| *EfficientNet* | 5 | 0 | no call |
+| *Hestness et al 2017* | 3 | 0 | no call |
+
+Two separate reasons, and fixing the first would not fix the second:
+
+1. **The identity rule is strict** (the page's title must begin with the work's title, backed by
+   the first author or the year). Ten works had no such page among five results; Wikipedia's
+   article on the Antikythera mechanism is not a page about Freeth's paper. The rule is strict on
+   purpose (GPT Sol's plan review, F1): a looser one takes another paper's citation count for this
+   one.
+2. **A page about the work does not say how well known it is.** In the three cases with such a
+   page it was the paper's own page or a bookshop's, and its extract is the abstract or the blurb.
+   The model was right to say null.
+
+**What this means.** The mechanism is safe and nearly free (no call is made in the common case),
+and it almost never fills anything in. A search for a work is the wrong place to look for its
+standing. The source that states it directly is a citation count from a registry: Crossref returns
+one for any DOI and the app already calls Crossref. That is the plan's open question for Greg,
+[Q-crossref-count].
+
+The probe's file does not record the pages' titles, only whether each named the work, so which
+titles failed the rule and why is not in the results.

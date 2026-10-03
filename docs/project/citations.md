@@ -600,8 +600,14 @@ number being read without hiding the answers beside them. **`CITATION_INVESTIGAT
 bumped**, because the streamed answer's prompt did not change; an answer kept before this has no
 influence, and *Dig deeper again* looks for one. The streamed answer is not told the number.
 
-How often a press finds one is not yet measured: `evals/citations-influence-dig.ts` is the probe,
-and the first results go in
+**It rarely finds one, measured.** The probe (`evals/citations-influence-dig.ts`, 2026-10-03) ran
+the press's own search and this call on 13 works, most of them well known: **none was filled in**.
+For 10 no page's title named the work, so no call was made; for 3 the work's own page came back
+and said nothing about its standing, because a search for a work returns the work, and an abstract
+does not say how famous it is. So today *Dig deeper* leaves influence as it was nearly every time.
+A source that does say, such as a registry's citation count, is the open question in
+[261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md);
+the numbers are in
 [261003f](../investigations/261003f-citations-influence-unknown-unless-confident-before-and-after.md).
 
 **The prompt forbids quotation marks outright** since 2026-09-30. Allowing them round the article's
