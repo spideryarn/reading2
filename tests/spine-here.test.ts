@@ -301,8 +301,11 @@ describe("the current section in the spine", () => {
        come after *every* part — not merely the first, which is all an
        `indexOf` would have pinned — and before the first element of each layer
        that has to stay on top of it: the L2 hairline marking its own top edge,
-       the search marks, the hit targets, and the viewport band. */
-    for (const c of ["spine-part", "spine-tick", "spine-matches", "spine-hit", "spine-viewport"]) {
+       the search marks, the hit targets, and the viewport band — which since
+       2026-10-03 is a child of `.spine-viewport-track`, the track-height
+       wrapper that moves it, so the wrapper is what holds its slot here
+       (Spine.tsx § scroll position). */
+    for (const c of ["spine-part", "spine-tick", "spine-matches", "spine-hit", "spine-viewport-track"]) {
       expect(first(c), `the fixture should render a ${c}`).toBeGreaterThanOrEqual(0);
     }
     expect(ringAt, "after every part").toBeGreaterThan(last("spine-part"));
@@ -311,7 +314,7 @@ describe("the current section in the spine", () => {
        hides the hits inside the section the reader is actually reading. */
     expect(ringAt, "under the search marks").toBeLessThan(first("spine-matches"));
     expect(ringAt, "under the hit targets").toBeLessThan(first("spine-hit"));
-    expect(ringAt, "under the viewport band").toBeLessThan(first("spine-viewport"));
+    expect(ringAt, "under the viewport band").toBeLessThan(first("spine-viewport-track"));
   });
 
   it("is decorative — the accessible name is already on the button", async () => {

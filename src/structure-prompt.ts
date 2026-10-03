@@ -110,7 +110,11 @@ import type { Block } from "./types.js";
    that starts-only shape with an unrolled JSON schema. Existing trees stay as
    they are; the new stamp affects new articles and explicit regenerations only.
    docs/plans/261001s-structure-answer-writes-code-to-correct-an-id.md § Stage 2. */
-export const PROMPT_VERSION = "toc/11";
+/* **`toc/12`, 2026-10-03**: the shared paperwork rule names the title block and
+   the reference list, and a node that is only the front abstract gets the
+   paperwork node's label and no question (Greg, spya-abs6bj). New articles
+   only, as before. docs/plans/261003c-summary-and-structure-skip-the-front-matter.md. */
+export const PROMPT_VERSION = "toc/12";
 
 /**
  * How hard the model thinks before it starts writing.

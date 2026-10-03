@@ -838,7 +838,7 @@ close, which is how that survives.
 About 34% of the window is main-thread task time Chromium does not attribute to script, layout or
 style — the same before and after — and nobody knows what it is. Paint, compositing commit,
 hit-testing and event dispatch all live there. It is also the whole remaining gap over the ~12%
-floor, so **it is where the next investigation goes.**
+floor, so **it is where the next investigation goes.** **Found, 2026-10-03** — § Scrolling again, below.
 
 The instruments for it, neither tried: a Chrome trace, or `SystemInfo.getProcessInfo` on the
 **browser-level** CDP socket, which reports cumulative `cpuTime` per process across all its threads
@@ -1390,6 +1390,26 @@ production build, of which script is about 9%, style about 8% and layout under 1
 compositing, hit-testing — and only a device trace can say what the corresponding work costs an
 iPad's CPU or GPU. Finding it needs a trace with paint rectangles; `LayerTree.layerPainted` does
 not fire under headless.
+
+## Scrolling again, 2026-10-03 — most of the unattributed bucket was the spine's band
+
+Most of the "unclassified" third of a scroll (§ What is left, and it is not script) has a name now. A Chrome
+trace over a fixed gesture found the spine's viewport band moved by an inline `top` on every frame,
+and that write the only tracked invalidation in ~460 of ~550 paints a gesture under iPad emulation.
+It now moves by `transform` inside a track-height wrapper with `will-change: transform`
+([`Spine.tsx`](../../src/web/Spine.tsx) § the scroll effect). Same harness and gesture: Paint events
+~550 → 53, raster tasks ~640 → 160, the main thread's CPU per scrolled pixel roughly halved at
+iPad size; desktop runs were too uneven to claim a gain. The numbers, what they cannot say about an iPad, and the three
+smaller costs left in the queue are in
+[261003a-what-a-scroll-frame-costs-in-the-reading-view.md](../investigations/261003a-what-a-scroll-frame-costs-in-the-reading-view.md).
+
+**The instrument is new:** [`scripts/trace-scroll.ts`](../../scripts/trace-scroll.ts) — a trace
+clipped to marks the page writes, per-cause style and paint attribution, `/proc` CPU per 1000 px, and
+which elements own a composited layer and how often each was repainted. Its recipe, before and after
+builds included, is the `before-v2/README.md` beside the investigation. Two things it learned the hard
+way: `Input.synthesizeScrollGesture` does not move the page under headless mobile emulation (it prints
+`movedPx` for that reason), and Chrome 152 reports no paint damage, so "what repainted" is layer
+repaint counts, not area.
 
 ## Where the pieces are
 

@@ -348,9 +348,35 @@
 }
 
 /* How much of the article is on screen, and where. Drawn over everything and
-   deliberately not interactive. */
+   deliberately not interactive.
+
+   **It never moves; its wrapper does.** The band was positioned by an inline
+   `top` in %, written every scroll frame, and that was layout + paint + raster
+   on every frame — in a Chrome trace the only tracked invalidation in ~460 of
+   ~550 paints a gesture; with the transform, 53
+   (docs/investigations/261003a-what-a-scroll-frame-costs-in-the-reading-view.md).
+   Now Spine.tsx § scroll position slides `.spine-viewport-track` by
+   `translateY(%)`, and the band sits at `top: 0` inside it with the same
+   percentage height (of the wrapper, which is the track's height) and the same
+   floor as before.
+
+   The wrapper is `inset: 0` so that its own height is the track's — that is
+   what makes a percentage translate land where the percentage `top` did, and
+   follow a resize or the bar flip's `top` transition with no measurement.
+   `will-change` asks for its own layer, so a move is a compositor update
+   rather than a paint (a hint, which a browser may decline). It is the last
+   child of the track, where the band was, and draws nothing itself, so the
+   band paints in the same order as before; `pointer-events: none` on both
+   means the full-track wrapper intercepts nothing over the hit targets. */
+.spine-viewport-track {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform;
+}
 .spine-viewport {
   position: absolute;
+  top: 0;
   left: 0;
   right: 0;
   min-height: 2px;

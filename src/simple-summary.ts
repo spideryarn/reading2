@@ -158,8 +158,12 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * from outside the field, whatever the profile claims, with few terms and one
  * phrase of method; every level opens on the piece's goal or question (Greg,
  * spya-rpqqxb; plan 261002h).
+ *
+ * `simple-prompt/6` (2026-10-03): the shared paperwork rule names the title
+ * block and the reference list as paperwork (Greg, spya-abs6bj; plan
+ * 261003c). The abstract rule beside it is Structure's alone.
  */
-export const SIMPLE_PROMPT_VERSION = "simple-prompt/5";
+export const SIMPLE_PROMPT_VERSION = "simple-prompt/6";
 
 /** The prompt a stored summary was written with; a row from before the field is the first. */
 export function simplePromptVersion(simple: SimpleSummary): string {

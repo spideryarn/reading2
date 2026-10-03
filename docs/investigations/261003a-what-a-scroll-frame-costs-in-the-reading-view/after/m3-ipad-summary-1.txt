@@ -1,0 +1,355 @@
+# npx tsx /home/greg/code/spideryarn2/.claude/worktrees/fb-m0mcqb-ipad-scroll-paint/scripts/trace-scroll.ts --local-sign-in --email referee-test-260901@example.com --sign-in-via http://localhost:5492/ --settle 20 --rest 30 --device ipad --url http://localhost:5491/read/replication-crisis-spya-hrjamq?mode=summary --out /tmp/claude-1000/-home-greg-code-spideryarn2/2ad69e0b-306d-4c33-9b25-1e596d2ed4ca/scratchpad/m3-ipad-summary-1 
+# cwd /home/greg/code/spideryarn2/.claude/worktrees/fb-m0mcqb-ipad-scroll-paint  commit 40e232dc9  load at start 11.54 12.18 14.56
+signed in locally (referee-test-260901@example.com)
+carried 1 storage keys to http://localhost:5491
+device ipad 1194x834@2; settling 20s…
+page: 551 rows, 22840 nodes, 80998px tall — "Replication crisis en.wikipedia.org /wiki/Replication_crisis Contribut"
+bundle: index-DtsEa6ML.js
+scroll/touch/wheel listeners on window/document/html/body:
+  window resize NOT-passive src/web/OnScreenLinksStyle.tsx:60
+  window resize NOT-passive src/web/useHoverCard.ts:731
+  window resize NOT-passive src/web/DockQuickSearch.tsx:157
+  window resize NOT-passive src/web/reader/measure.ts:51
+  window resize NOT-passive src/web/reader/measure.ts:161
+  window resize NOT-passive src/web/Spine.tsx:611
+  window scroll passive src/web/OnScreenLinksStyle.tsx:60
+  window scroll passive src/web/scroll.ts:516
+  window scroll passive src/web/reader/useReadingPosition.ts:190
+  window scroll passive src/web/Spine.tsx:743
+  window wheel passive src/web/keynav.ts:464
+  window pointerdown passive src/web/keynav.ts:464
+  document scroll passive capture src/web/useHoverCard.ts:731
+  document pointerdown NOT-passive src/web/useHoverCard.ts:532
+  document pointermove passive src/web/useHoverCard.ts:606
+
+gesture: {"kind":"touch swipe 600px in 20 moves x 16ms, held before lift (no fling)","events":24,"requestedPx":14400,"movedPx":14040,"reversals":3,"wallMs":28509,"target":"img < a < figure < span.zoomable < div.prose"}
+HEADLINE: {"gestureS":28.51,"gestureSFromMarks":28.51,"windowSource":"marks","deliveredPx":14040,"scrollEventsDispatched":480,"mainBusyS":17.89,"procRendererS":23.13,"procRendererMainS":17.89,"procGpuS":8.69,"per1000px":{"mainBusyS":1.274,"procRendererS":1.647,"procRendererMainS":1.274},"paints":53,"inlinePaintsExclusive":2,"inlinePaintsMixed":25,"rasterTasks":166,"styleRecalcs":661,"styleSwaps":144}
+  gesture 28.51s (marks 28.51s), 14040px delivered, 480 scroll events; CPU: main-thread busy 17.89s, /proc renderer 23.13s (main thread 17.89s); per 1000px: busy 1.274s, /proc renderer 1.647s, /proc main 1.274s
+composited layers (LayerTree): 14. Per layer during the gesture: paintCount delta (how many times Chrome repainted that layer's content), and layerPainted events with their summed damage rects in viewports — this Chrome emitted NO layerPainted events, so there is no damage area; paintCount is the evidence:
+  layer 16    parent -     (no node)                          0x0  paints Δ0, layerPainted 0 (0.0 vp)  reasons []
+  layer 17    parent 16    #document                          1194x834 no-content  paints Δ0, layerPainted 0 (0.0 vp)  reasons ["OverflowScrolling"]
+  layer 38    parent 16    #document                          1194x80999  paints Δ26, layerPainted 0 (0.0 vp)  reasons ["RootScroller","OverflowScrolling"]
+  layer 39    parent 16    aside.mode-band.summ.has-about     448x726  paints Δ1, layerPainted 0 (0.0 vp)  reasons ["Overlap"]
+  layer 40    parent 16    div.summ-scroll.simple-scroll      447x667 no-content  paints Δ0, layerPainted 0 (0.0 vp)  reasons ["OverflowScrolling"]
+  layer 41    parent 16    div.summ-scroll.simple-scroll      447x667  paints Δ1, layerPainted 0 (0.0 vp)  reasons ["Overlap"]
+  layer 42    parent 16    aside.spine                        12x834  paints Δ17, layerPainted 0 (0.0 vp)  reasons ["Overlap"]
+  layer 46    parent 16    div.spine-viewport-track           11x834  paints Δ1, layerPainted 0 (0.0 vp)  reasons ["WillChangeTransform"]
+  layer 43    parent 16    div.mode-herald-slot               448x726 no-content  paints Δ0, layerPainted 0 (0.0 vp)  reasons ["Overlap"]
+  layer 44    parent 16    div.install-hint                   1194x108  paints Δ1, layerPainted 0 (0.0 vp)  reasons ["Overlap"]
+  layer 45    parent 16    div.dock.dock-fit-3                1194x51  paints Δ1, layerPainted 0 (0.0 vp)  reasons ["Overlap"]
+  layer 13    parent 16    (no node)                          1194x834 no-content  paints Δ0, layerPainted 0 (0.0 vp)  reasons ["Viewport"]
+  layer 14    parent 16    (no node)                          1190x4  paints Δ0, layerPainted 0 (0.0 vp)  reasons ["Scrollbar"]
+  layer 15    parent 16    (no node)                          4x830  paints Δ0, layerPainted 0 (0.0 vp)  reasons ["Scrollbar"]
+  .spine: OWN LAYER 42
+  .spine-viewport: no layer of its own (painted into an ancestor's)
+  .mode-band: OWN LAYER 39
+  .spine-here: no layer of its own (painted into an ancestor's)
+/proc CPU during scroll, % of one core: {"byType":{"renderer":81.6,"gpu-process":30.5,"browser":8.6,"utility":0.8},"byThread":{"renderer:chrome":62.9,"gpu-process:VizCompositorTh":29.3,"renderer:Compositor":11.2,"renderer:ThreadPoolForeg":6.2,"gpu-process:Chrome_ChildIOT":1.1,"renderer:Chrome_ChildIOT":0.9,"gpu-process:chrome":0.1,"renderer:PerfettoTrace":0.1}}
+/proc CPU at rest (30s): {"byType":{"browser":0.4,"renderer":0.3,"utility":0.2,"gpu-process":0.1},"byThread":{"renderer:chrome":0.2,"renderer:PerfettoTrace":0.1,"renderer:ThreadPoolForeg":0.1}}
+running animations after rest: 0
+nodes: {"5":"#document","15":"html","160":"div.reader.spine-on","162":"aside.spine","165":"div.masthead","170":"aside.mode-band.summ.has-about","172":"div.mode-herald-slot","173":"div.install-hint","175":"div.dock.dock-fit-3","179":"div.spine-part.active","181":"div.spine-part","183":"div.spine-part","185":"div.spine-part","187":"div.spine-part","189":"div.spine-part","199":"(gone)","248":"button.spine-hit","249":"button.spine-hit","250":"button.spine-hit","251":"button.spine-hit","252":"button.spine-hit","253":"button.spine-hit","254":"button.spine-hit","255":"button.spine-hit","299":"div.spine-viewport-track","301":"div.masthead-inner","516":"a.blk-permalink","692":"a.blk-permalink","902":"span.zoomable","904":"span.zoomable","956":"a.blk-permalink","1056":"span.zoomable","1084":"span.zoomable","1086":"span.zoomable","1113":"span.zoomable","1115":"span.zoomable","1201":"a.blk-permalink","1263":"span.zoomable","1432":"a.blk-permalink","1588":"a.blk-permalink","2343":"th.text.pin-right","2360":"div.summ-scroll.simple-scroll","2361":"div.gloss-empty","2492":"a.blk-permalink","19133":"div.spine-here"}
+
+=== SCROLL: 28512ms window (marks), renderer pid 1788866, main frame 437DD61DC638ADD8F6617630D7CAF797; renderer main thread busy 17891.5ms
+frames: {"BeginFrame":1711,"DrawFrame":997,"BeginMainThreadFrame":1239,"Commit":1771,"ActivateLayerTree":501,"DroppedFrame":665,"NeedsBeginFrameChanged":1,"FireAnimationFrame":1923,"UpdateLayoutTree":661,"Layout":37,"PrePaint":1850,"Paint":53,"Layerize":1239,"UpdateLayer":3675,"ScrollLayer":480,"HitTest":587}
+frame states: {"?":2737}
+paint: 53 Paint events in 30 main-thread tasks (cull rects, median 15.74 viewports per task — a cull rect is what Paint may walk, NOT what was repainted or rasterised; see LayerTree below for damage)
+  Paint events by node: #document×30, th.text.pin-right×2, div.spine-here×2, div.spine-viewport-track×1, span.zoomable×1, span.zoomable×1, span.zoomable×1, span.zoomable×1, span.zoomable×1, span.zoomable×1, span.zoomable×1, span.zoomable×1
+raster: 166 RasterTasks, 129.5ms; 15 image decodes
+stylesheet swaps (StyleEngine::scheduleInvalidationsForRuleSets): 144, 2363ms
+paints temporally associated with inline-style invalidations: 2 exclusive, 25 mixed with another cause
+style recalcs by cause (classes are exclusive; "a + b" is a mixed class — tracked invalidations only):
+    140×   2415.5ms       0 el  no tracked invalidation
+      4×   1301.1ms   66116 el  data-bars flip
+        nodes: html×4
+     13×    334.9ms     235 el  :has() + inline style + other: attr aria-current  [MIXED]
+        nodes: div.reader.spine-on×52, html×26, div.spine-here×20, button.spine-hit×8, button.spine-hit×7, button.spine-hit×6
+     13×    313.7ms      78 el  :has()
+        nodes: div.reader.spine-on×52, html×26
+    480×     95.6ms     480 el  inline style
+        nodes: div.spine-viewport-track×480
+      2×     46.3ms      26 el  :has() + inline style + other: attr aria-current + other: attr class  [MIXED]
+        nodes: div.reader.spine-on×8, div.spine-here×4, html×4, div.spine-part.active×2, div.spine-part×2, button.spine-hit×2
+      1×     27.7ms       9 el  :has() + inline style + other: Node was inserted into tree + other: attr aria-current  [MIXED]
+        nodes: div.reader.spine-on×4, html×2, div.spine-viewport-track×1, div.spine-here×1, button.spine-hit×1
+      7×     21.9ms      27 el  other: :-webkit-any-link
+        nodes: a.blk-permalink×1, a.blk-permalink×1, a.blk-permalink×1, a.blk-permalink×1, a.blk-permalink×1, a.blk-permalink×1
+      1×     13.1ms       0 el  layout invalidation only
+paints by cause (classes are exclusive; "a + b" is a mixed class — tracked invalidations only):
+     10×    177.5ms       0 el  :has() + inline style + other: attr aria-current  [MIXED]
+        nodes: div.spine-viewport-track×153, div.reader.spine-on×48, html×24, div.spine-here×14, button.spine-hit×6, button.spine-hit×6
+      5×    101.3ms       0 el  :has() + inline style + other: :-webkit-any-link  [MIXED]
+        nodes: div.spine-viewport-track×66, div.reader.spine-on×20, html×10, a.blk-permalink×1, a.blk-permalink×1, a.blk-permalink×1
+     25×     72.1ms       0 el  no tracked invalidation
+      2×     48.6ms       0 el  inline style
+        nodes: div.spine-viewport-track×23
+      2×     40.2ms       0 el  :has() + inline style  [MIXED]
+        nodes: div.spine-viewport-track×72, div.reader.spine-on×8, html×4
+      2×     38.5ms       0 el  :has() + inline style + other: attr aria-current + other: attr class  [MIXED]
+        nodes: div.spine-viewport-track×41, div.reader.spine-on×12, html×6, div.spine-here×4, div.spine-part.active×2, div.spine-part×2
+      2×     32.6ms       0 el  :has() + data-bars flip + inline style + other: attr aria-current  [MIXED]
+        nodes: div.spine-viewport-track×62, div.reader.spine-on×8, html×6, div.spine-here×4, button.spine-hit×1, button.spine-hit×1
+      1×     21.6ms       0 el  :has() + data-bars flip + inline style  [MIXED]
+        nodes: div.spine-viewport-track×14, div.reader.spine-on×4, html×3
+      1×     19.1ms       0 el  data-bars flip + inline style  [MIXED]
+        nodes: div.spine-viewport-track×6, html×1
+      1×     16.4ms       0 el  :has() + inline style + other: :-webkit-any-link + other: attr aria-current  [MIXED]
+        nodes: div.spine-viewport-track×13, div.reader.spine-on×8, html×4, div.spine-here×2, a.blk-permalink×1, button.spine-hit×1
+      1×      9.9ms       0 el  :has() + inline style + other: Node was inserted into tree + other: attr aria-current  [MIXED]
+        nodes: div.reader.spine-on×4, html×2, div.spine-viewport-track×1, div.spine-here×1, button.spine-hit×1
+      1×      9.5ms       0 el  :has() + other: :-webkit-any-link  [MIXED]
+        nodes: div.reader.spine-on×4, html×2, a.blk-permalink×1
+HitTest by caller (caller, count, ms): [["Chrome ad heuristics (headless artefact?)",56,226.4],["input event targeting",507,3182.8]]
+thread renderer:CrRendererMain: busy 17891.5ms (62.8% of window)
+      3409.2ms self     563×  HitTest
+      3406.8ms self    6853×  FunctionCall
+      2363.0ms self     144×  StyleEngine::scheduleInvalidationsForRuleSets
+      1932.5ms self     520×  Document::recalcStyle
+      1256.1ms self     500×  PaintArtifactCompositor::Update
+       556.3ms self      53×  Paint
+       330.4ms self    1265×  PageAnimator::serviceScriptedAnimations
+       303.8ms self    1747×  Blink.CompositingInputs.UpdateTime
+       282.3ms self    9394×  RunTask
+       281.4ms self    1239×  WebFrameWidgetImpl::UpdateLifecycle
+       279.4ms self    9394×  ThreadControllerImpl::RunTask
+       233.5ms self    9029×  BlinkScheduler_PerformMicrotaskCheckpoint
+       217.4ms self   35092×  Document::UpdateStyleAndLayout
+       209.5ms self    1316×  CullRectUpdate
+       185.8ms self   35092×  Blink.ForcedStyleAndLayout.UpdateTime
+       181.5ms self    1747×  Blink.PrePaint.UpdateTime
+       166.2ms self    1239×  Commit
+       141.1ms self   36942×  LocalFrameView::UpdateStyleAndLayout
+       138.1ms self    1325×  EventDispatch
+       102.6ms self      29×  Document::updateStyleInvalidationIfNeeded
+       102.2ms self    1239×  LayerTreeHost::WaitForCommitCompletion
+        96.0ms self    1239×  ProxyMain::BeginMainFrame
+        94.2ms self    2468×  AsyncTask Run
+        90.7ms self    2479×  IntersectionObserverController::computeIntersections
+        82.0ms self    1239×  Blink.Paint.UpdateTime
+        67.9ms self     562×  LatencyInfo.Flow
+        59.5ms self       4×  V8.GC_HEAP_EMBEDDER_TRACING_EPILOGUE
+        53.6ms self     144×  StyleEngine::updateActiveStyleSheets
+        52.1ms self    1316×  LocalFrameView::RunPaintLifecyclePhase
+        50.8ms self     661×  Document::updateStyle
+thread pid1788798:VizCompositorThread: busy 8288.2ms (29.1% of window)
+      6878.9ms self   33182×  SoftwareRenderer::DoDrawQuad
+       488.8ms self    9740×  Graphics.Pipeline
+       224.7ms self    1019×  DirectRenderer::DrawRenderPass
+       130.6ms self    6113×  ThreadControllerImpl::RunTask
+        94.8ms self    1878×  Receive mojo message
+        88.7ms self    1854×  SimpleWatcher::OnHandleReady
+        71.2ms self    6113×  RunTask
+        54.5ms self    1023×  Surface::ActivateFrame
+        48.0ms self    1710×  DelayBasedBeginFrameSource::OnTimerTick
+        44.9ms self    1500×  DisplayScheduler::BeginFrame
+thread renderer:Compositor: busy 2926ms (10.3% of window)
+       499.0ms self    4447×  Graphics.Pipeline
+       229.9ms self   12300×  ThreadControllerImpl::RunTask
+       209.5ms self    3890×  EpollEvent
+       133.1ms self    4508×  SimpleWatcher::OnHandleReady
+       132.8ms self   12300×  RunTask
+       127.9ms self    1711×  Scheduler::BeginImplFrame
+       116.3ms self    4508×  Receive mojo message
+        92.2ms self    1172×  TileManager::AssignGpuMemoryToTiles
+        90.3ms self    2915×  LatencyInfo.Flow
+        73.9ms self     997×  LayerTreeHostImpl::CalculateRenderPasses
+thread renderer:ThreadPoolForegroundWorker: busy 2668.6ms (9.4% of window)
+      1152.0ms self     841×  ThreadPool_RunTask
+      1018.0ms self      51×  V8.GC_MC_BACKGROUND_MARKING
+       121.7ms self     166×  DisplayItemList::Raster
+       110.3ms self      68×  V8.GC_MC_BACKGROUND_SWEEPING
+        89.6ms self      19×  V8.GC_MC_BACKGROUND_EVACUATE_COPY
+        89.3ms self      38×  V8.GC_SCAVENGER_BACKGROUND_SCAVENGE_PARALLEL
+        38.4ms self      26×  V8.GC_MC_BACKGROUND_EVACUATE_UPDATE_POINTERS
+         5.8ms self     166×  ZeroCopyRasterBuffer::Playback
+         5.3ms self       1×  V8.GC_BACKGROUND_SAFEPOINT
+         5.2ms self       1×  V8.GC_BACKGROUND_UNPARK
+thread pid1788756:CrBrowserMain: busy 1153.9ms (4.0% of window)
+       272.6ms self    6258×  ThreadControllerImpl::RunTask
+       262.0ms self    1775×  Receive mojo message
+       106.2ms self    6258×  RunTask
+       102.3ms self    1118×  Receive mojo reply
+        71.8ms self    2784×  LatencyInfo.Flow
+        47.1ms self    1430×  SimpleWatcher::OnHandleReady
+        38.7ms self    1128×  InputRouterImpl::FilterAndSendWebInputEvent
+        35.0ms self     528×  RenderWidgetHostInputEventRouter::ProcessAckedTouchEvent
+        16.7ms self     528×  GestureProvider::OnTouchEvent
+        16.3ms self     156×  UpdateLayer
+thread pid1788756:Chrome_DevToolsHandlerThread: busy 313.6ms (1.1% of window)
+       226.5ms self    1775×  ThreadControllerImpl::RunTask
+        62.4ms self     533×  EpollEvent
+        24.7ms self    1775×  RunTask
+thread pid1788756:Chrome_IOThread: busy 306.9ms (1.1% of window)
+       204.9ms self    2662×  EpollEvent
+        41.5ms self    1141×  SimpleWatcher::OnHandleReady
+        33.8ms self    2657×  ThreadControllerImpl::RunTask
+        22.7ms self    2657×  RunTask
+         3.5ms self      39×  Receive mojo message
+thread pid1788798:Chrome_ChildIOThread: busy 203.3ms (0.7% of window)
+       189.2ms self    2104×  EpollEvent
+         4.8ms self     150×  Receive mojo message
+         3.7ms self     151×  SimpleWatcher::OnHandleReady
+         2.6ms self      40×  ThreadControllerImpl::RunTask
+         1.7ms self      81×  Scheduler::ScheduleTask
+thread renderer:Chrome_ChildIOThread: busy 154.3ms (0.5% of window)
+        77.4ms self    1571×  ThreadControllerImpl::RunTask
+        54.6ms self     707×  EpollEvent
+        21.6ms self    1571×  RunTask
+thread pid1788756:ThreadPoolForegroundWorker: busy 147.9ms (0.5% of window)
+       147.3ms self    4093×  ThreadPool_RunTask
+thread pid1788756:CompositorTileWorker: busy 41ms (0.1% of window)
+        26.1ms self     104×  DisplayItemList::Raster
+         4.0ms self     104×  ZeroCopyRasterBuffer::Playback
+         3.9ms self     104×  RasterTask
+         3.0ms self     208×  SingleThreadTaskGraphRunner::RunTaskWithLockAcquired
+         1.6ms self     104×  RasterizerTaskImpl::RunOnWorkerThread
+         1.3ms self     182×  cc::SingleThreadTaskGraphRunner::RunTask
+thread renderer:PerfettoTrace: busy 29ms (0.1% of window)
+        14.6ms self     228×  ThreadControllerImpl::RunTask
+         5.5ms self     108×  SimpleWatcher::OnHandleReady
+         4.4ms self     228×  RunTask
+         3.0ms self      57×  Receive mojo message
+         1.5ms self      52×  Receive mojo reply
+thread pid1788756:PerfettoTrace: busy 21.6ms (0.1% of window)
+         6.3ms self      57×  Receive mojo message
+         6.2ms self     142×  ThreadControllerImpl::RunTask
+         5.5ms self      84×  SimpleWatcher::OnHandleReady
+         2.7ms self     142×  RunTask
+invalidations: {"StyleRecalcInvalidationTracking":932,"ScheduleStyleInvalidationTracking":103,"StyleInvalidatorInvalidationTracking":195,"LayoutInvalidationTracking":85}
+     481  StyleRecalc | DIV class='spine-viewport-track' | Inline CSS style declaration was mutated
+     101  StyleRecalc | BUTTON class='spine-hit' | Inline CSS style declaration was mutated
+      58  StyleRecalc | DIV class='reader spine-on' | Affected by :has()
+      58  ScheduleStyle | DIV class='reader spine-on' | has
+      58  StyleRecalc | HTML | Affected by :has()
+      51  Layout | BUTTON class='spine-hit' | Style changed
+      49  StyleRecalc | DIV class='spine-tick' | Inline CSS style declaration was mutated
+      30  ScheduleStyle | BUTTON class='spine-hit' | aria-current
+      30  StyleInvalidator | BUTTON class='spine-hit' | Invalidation set invalidates self
+      30  StyleRecalc | BUTTON class='spine-hit' | Related style rule
+      30  StyleInvalidator | BUTTON class='spine-hit' | Element has pending invalidation list
+      29  StyleInvalidator | DIV class='reader spine-on' | Element has pending invalidation list
+      29  StyleInvalidator | DIV class='masthead' | Invalidation set matched class
+      29  StyleRecalc | DIV class='masthead' | Related style rule
+      29  StyleInvalidator | DIV class='masthead-inner' | Invalidation set matched class
+      29  StyleRecalc | DIV class='masthead-inner' | Related style rule
+      29  StyleInvalidator | DIV class='gloss-empty' | Invalidation set matched class
+      29  StyleRecalc | DIV class='gloss-empty' | Related style rule
+      28  StyleRecalc | DIV class='spine-here' | Inline CSS style declaration was mutated
+      16  StyleRecalc | DIV class='spine-part' | Inline CSS style declaration was mutated
+      14  Layout | DIV class='spine-here' | Style changed
+       8  Layout | DIV class='spine-part' | Style changed
+       7  ScheduleStyle | A class='blk-permalink' | -webkit-any-link
+       7  StyleInvalidator | A class='blk-permalink' | Invalidation set invalidates self
+       7  StyleRecalc | A class='blk-permalink' | Related style rule
+       5  Layout | #text | Style changed
+       4  ScheduleStyle | HTML | data-bars
+       4  StyleInvalidator | HTML | Invalidation set invalidates self
+       4  StyleRecalc | HTML | Related style rule
+       4  StyleInvalidator | DIV class='spine-part active' | Invalidation set invalidates self
+EventDispatch (type, count, ms): [["scroll",480,198.3],["touchmove",411,92.7],["load",146,14.8],["pointerover",24,14.2],["pointerdown",24,7],["pointercancel",24,6.8],["touchend",24,6.6],["pointerout",24,5.9],["gotpointercapture",24,5.7],["pointermove",24,3.2],["touchstart",24,2],["lostpointercapture",24,1.8],["pointerleave",24,0.8],["scrollend",24,0.4],["gesturetapdown",24,0.3]]
+FunctionCall (count, inclusive ms):
+     480×   2702.6ms  r @ src/web/reader/useReadingPosition.ts:154
+     481×   1521.6ms  a @ src/web/OnScreenLinksStyle.tsx:53
+     298×    428.6ms  D @ node_modules/scheduler/cjs/scheduler.production.js:121
+     586×    378.0ms  (anon) @ node_modules/react-dom/cjs/react-dom-client.production.js:12089
+     480×    202.1ms  s @ src/web/Spine.tsx:715
+      26×     60.4ms  r @ node_modules/nuqs/dist/debounce-Ynq26WfO.js:77
+     966×     59.9ms  up @ node_modules/react-dom/cjs/react-dom-client.production.js:15280
+     481×     47.1ms  o @ src/web/OnScreenLinksStyle.tsx:60
+     480×     32.3ms  l @ src/web/scroll.ts:484
+     480×     25.5ms  u @ src/web/scroll.ts:516
+     480×     21.0ms  s @ src/web/reader/useReadingPosition.ts:190
+     480×     20.2ms  c @ src/web/Spine.tsx:743
+     480×     18.5ms  j @ src/web/useHoverCard.ts:731
+       1×     13.3ms  (anon) @ src/web/Spine.tsx:616
+     242×     11.3ms  dp @ node_modules/react-dom/cjs/react-dom-client.production.js:15297
+     192×      9.1ms  lp @ node_modules/react-dom/cjs/react-dom-client.production.js:15263
+      24×      3.4ms  T @ src/web/useHoverCard.ts:532
+      24×      2.4ms  m @ src/web/BlockLinkCard.tsx:463
+      24×      1.4ms  h @ src/web/BlockLinkCard.tsx:472
+       4×      1.2ms  (anon) @ src/web/jobEngine.ts:556
+      24×      0.9ms  D @ src/web/useHoverCard.ts:618
+      24×      0.8ms  E @ src/web/useHoverCard.ts:606
+       4×      0.6ms  a @ src/web/scroll.ts:437
+      24×      0.5ms  f @ src/web/useHoverCard.ts:450
+      24×      0.4ms  f @ src/web/keynav.ts:464
+      24×      0.3ms  F @ src/web/useHoverCard.ts:888
+       8×      0.1ms  next @ :0:0
+       4×      0.1ms  entries @ :0:0
+       4×      0.1ms  (anon) @ :0:0
+       1×      0.1ms  i @ src/web/reader/measure.ts:59
+timers: fired 39, rAF fired 1923, rAF requested 1923
+  install   13× once 300ms Ce @ node_modules/nuqs/dist/debounce-Ynq26WfO.js:81
+  install   13× once 0ms Ce @ node_modules/nuqs/dist/debounce-Ynq26WfO.js:81
+  install    4× once 400ms s @ src/web/scroll.ts:468
+  install    4× once 1500ms (anon) @ src/web/lib/api.ts:1082
+  install    4× once 8000ms k @ src/web/jobEngine.ts:556
+scroll-named events:
+    3974  ScrollTree::SetScrollOffset [CrRendererMain]
+    1850  RootScrollerController::PerformRootScrollerSelection [CrRendererMain]
+    1239  ScrollTree::CollectScrollDeltas [Compositor]
+     997  Scroll Delta This Frame [Compositor]
+     960  ScrollNodeWithViewportSpaceDelta [Compositor]
+     960  ScrollTree::ScrollBy [Compositor]
+     960  ScrollTree::SetScrollOffset [Compositor]
+     960  InputLatency::GestureScrollUpdate [CrBrowserMain]
+     960  ScrollJankV4 [Compositor]
+     587  ScrollPredictor::ResampleScrollEvents [Compositor]
+     504  NotifyDidScroll [CrRendererMain]
+     480  InputHandlerProxy::HandleGestureScrollUpdate [Compositor]
+     480  InputHandler::ScrollUpdate [Compositor]
+     480  InputHandler::ScrollLatchedScroller [Compositor]
+     480  InputHandlerProxy::HandleGestureScrollUpdate_Result [Compositor]
+     480  CollectScrollDeltas [Compositor]
+     480  ScrollableArea::SetScrollOffset [CrRendererMain]
+     480  ScrollableArea::scrollOffsetChanged [CrRendererMain]
+     480  PaintLayerScrollableArea::UpdateScrollOffset [CrRendererMain]
+     480  ScrollLayer [CrRendererMain]
+     480  Real scroll update input generation [Compositor]
+      50  InputHandler::ClearCurrentlyScrollingNode [Compositor]
+      48  RenderWidgetHostInputEventRouter::CancelScrollBubblingIfConflicting [CrBrowserMain]
+      48  InputLatency::GestureScrollBegin [CrBrowserMain]
+      48  InputLatency::GestureScrollEnd [CrBrowserMain]
+      33  LayerTreeHostImpl::SetNeedsAnimateForScrollbarAnimation [Compositor]
+      26  Scroll Delta This Frame [CrBrowserMain]
+      24  PassthroughTouchEventQueue::PrependTouchScrollNotification [CrBrowserMain]
+      24  InputHandlerProxy::HandleGestureScrollBegin [Compositor]
+      24  InputHandler::ScrollBegin [Compositor]
+main-thread scroll hints: 
+  Scheduler::BeginImplFrame: "main_thread_missed_last_deadline":false
+  Scheduler::BeginImplFrame: "main_thread_missed_last_deadline":true
+
+=== REST: 30009ms window (marks), renderer pid 1788866, main frame 437DD61DC638ADD8F6617630D7CAF797; renderer main thread busy 31.6ms
+frames: {"BeginFrame":0,"DrawFrame":0,"BeginMainThreadFrame":0,"Commit":0,"ActivateLayerTree":0,"DroppedFrame":0,"NeedsBeginFrameChanged":0,"FireAnimationFrame":0,"UpdateLayoutTree":0,"Layout":0,"PrePaint":0,"Paint":0,"Layerize":0,"UpdateLayer":0,"ScrollLayer":0,"HitTest":0}
+frame states: {}
+paint: 0 Paint events in 0 main-thread tasks (cull rects, median 0 viewports per task — a cull rect is what Paint may walk, NOT what was repainted or rasterised; see LayerTree below for damage)
+  Paint events by node: 
+raster: 0 RasterTasks, 0ms; 0 image decodes
+stylesheet swaps (StyleEngine::scheduleInvalidationsForRuleSets): 0, 0ms
+paints temporally associated with inline-style invalidations: 0 exclusive, 0 mixed with another cause
+style recalcs by cause (classes are exclusive; "a + b" is a mixed class — tracked invalidations only):
+paints by cause (classes are exclusive; "a + b" is a mixed class — tracked invalidations only):
+HitTest by caller (caller, count, ms): []
+thread renderer:CrRendererMain: busy 31.6ms (0.1% of window)
+         8.6ms self     204×  BlinkScheduler_PerformMicrotaskCheckpoint
+         7.2ms self     204×  RunTask
+         6.8ms self     204×  ThreadControllerImpl::RunTask
+         3.2ms self      18×  RunMicrotasks
+         1.8ms self       4×  SimpleWatcher::OnHandleReady
+         1.3ms self      21×  FunctionCall
+         1.1ms self       4×  ResourceFetcher::requestResource
+invalidations: {}
+EventDispatch (type, count, ms): []
+FunctionCall (count, inclusive ms):
+       4×      0.9ms  (anon) @ src/web/jobEngine.ts:556
+       8×      0.1ms  next @ :0:0
+       4×      0.1ms  entries @ :0:0
+       4×      0.1ms  (anon) @ :0:0
+       1×      0.1ms  (anon) @ node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:4445
+timers: fired 9, rAF fired 0, rAF requested 0
+  install    4× once 1500ms (anon) @ src/web/lib/api.ts:1082
+  install    4× once 8000ms k @ src/web/jobEngine.ts:556
+scroll-named events:
+       1  trace-scroll:start [CrRendererMain]
+main-thread scroll hints: none found in args
+
+wrote /tmp/claude-1000/-home-greg-code-spideryarn2/2ad69e0b-306d-4c33-9b25-1e596d2ed4ca/scratchpad/m3-ipad-summary-1.scroll.trace.json, /tmp/claude-1000/-home-greg-code-spideryarn2/2ad69e0b-306d-4c33-9b25-1e596d2ed4ca/scratchpad/m3-ipad-summary-1.rest.trace.json, /tmp/claude-1000/-home-greg-code-spideryarn2/2ad69e0b-306d-4c33-9b25-1e596d2ed4ca/scratchpad/m3-ipad-summary-1.summary.json
